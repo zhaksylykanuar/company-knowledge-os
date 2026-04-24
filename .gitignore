@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+secrets/
+raw_storage/
+obsidian_vault/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+*.log
