@@ -4,12 +4,13 @@ import json
 import re
 from pathlib import Path
 
-from app.agents.runner import get_agent_runner
 from app.connectors.google_drive import download_file_text, list_ai_inbox_files
 from app.db.base import AsyncSessionLocal
 from app.db.models import AuditLog, IngestedEvent
 from app.db.task_models import ExtractedTask as ExtractedTaskModel
 from app.events.schemas import EventEnvelope
+from app.services.chunking import chunk_text
+from app.agents.llm_runner import LLMAgentRunner
 
 router = APIRouter(prefix="/v1/drive", tags=["drive"])
 
@@ -74,13 +75,21 @@ async def drive_backfill() -> dict:
             text = download_file_text(f["id"])
             raw_content_ref = save_drive_raw_snapshot(f, text)
 
-            runner = get_agent_runner()
-            extraction = await runner.extract(
-                source_document_id=f["id"],
-                chunk_id="chunk_0",
-                raw_object_ref=raw_content_ref,
-                text=text,
-            )
+            chunks = chunk_text(text)
+
+            runner = LLMAgentRunner()
+            all_tasks = []
+
+            for chunk in chunks:
+                extraction = await runner.extract(
+                    source_document_id=f["id"],
+                    chunk_id=chunk.chunk_id,
+                    raw_object_ref=raw_content_ref,
+                    text=chunk.text,
+                )
+
+                for task in extraction.tasks:
+                    all_tasks.append(task)
 
             event.raw_object_ref = raw_content_ref
 
@@ -97,12 +106,12 @@ async def drive_backfill() -> dict:
                     **event.payload,
                     "raw_content_ref": raw_content_ref,
                     "text_preview": text[:500],
-                    "extraction": extraction.model_dump(),
+                    "extraction": {"tasks": [task.model_dump() for task in all_tasks]},
                 },
             )
 
             session.add(row)
-            for task in extraction.tasks:
+            for task in all_tasks:
                 session.add(
                     ExtractedTaskModel(
                         title=task.title,
@@ -132,8 +141,9 @@ async def drive_backfill() -> dict:
                     "duplicate": False,
                     "event_id": event.event_id,
                     "source_object_id": event.source_object_id,
-                    "tasks_found": len(extraction.tasks),
-                    "extraction": extraction.model_dump(),
+                    "chunks_found": len(chunks),
+                    "tasks_found": len(all_tasks),
+                    "extraction": {"tasks": [task.model_dump() for task in all_tasks]},
                 }
             )
 
