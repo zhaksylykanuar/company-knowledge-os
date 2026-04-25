@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.evidence_validator import validate_evidence
 from app.agents.runner import get_agent_runner
+from app.services.extraction_processor import process_document_chunks
 
 router = APIRouter(prefix="/v1/extraction", tags=["extraction"])
 
@@ -27,3 +28,12 @@ async def extract_demo(payload: ExtractionDemoRequest) -> dict:
     )
     validate_evidence(result)
     return result.model_dump()
+
+
+@router.post("/process-document", status_code=202)
+async def process_document(source_document_id: str) -> dict:
+    result = await process_document_chunks(source_document_id)
+    return {
+        "processed": True,
+        **result,
+    }
