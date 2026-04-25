@@ -1,65 +1,84 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query, status
 from sqlalchemy import select
-import json
-import re
-from pathlib import Path
 
-from app.connectors.google_drive import download_file_text, list_ai_inbox_files
 from app.db.base import AsyncSessionLocal
 from app.db.models import AuditLog, IngestedEvent
-from app.db.task_models import ExtractedTask as ExtractedTaskModel
+from app.db.source_models import DocumentChunk, SourceDocument
 from app.events.schemas import EventEnvelope
 from app.services.chunking import chunk_text
-from app.agents.llm_runner import LLMAgentRunner
+from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json, write_text
 
 router = APIRouter(prefix="/v1/drive", tags=["drive"])
 
 
-def _safe_path_part(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-") or "unknown"
+def list_ai_inbox_files() -> list[dict]:
+    from app.connectors.google_drive import list_ai_inbox_files as _list_ai_inbox_files
+
+    return _list_ai_inbox_files()
 
 
-def save_drive_raw_snapshot(file_metadata: dict, text: str) -> str:
-    file_id = _safe_path_part(file_metadata["id"])
-    modified_time = _safe_path_part(file_metadata.get("modifiedTime", "unknown"))
+def download_file_text(file_id: str, mime_type: str | None = None) -> str:
+    from app.connectors.google_drive import download_file_text as _download_file_text
 
-    snapshot_dir = Path("raw_storage") / "drive" / file_id / modified_time
-    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    return _download_file_text(file_id, mime_type)
 
-    (snapshot_dir / "metadata.json").write_text(
-        json.dumps(file_metadata, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+
+def build_drive_event(file_metadata: dict) -> EventEnvelope:
+    return EventEnvelope(
+        event_type="drive.file.discovered",
+        source_system="drive",
+        source_object_id=file_metadata["id"],
+        idempotency_key=f"drive:file:{file_metadata['id']}:{file_metadata.get('modifiedTime')}",
+        raw_object_ref=(
+            f"raw://drive/{file_metadata['id']}/"
+            f"{file_metadata.get('modifiedTime', 'unknown')}/metadata.json"
+        ),
+        payload=file_metadata,
     )
-    (snapshot_dir / "content.txt").write_text(text, encoding="utf-8")
-
-    return f"raw://drive/{file_id}/{modified_time}/content.txt"
 
 
-@router.post("/backfill")
-async def drive_backfill() -> dict:
+def save_drive_raw_snapshot(file_metadata: dict, text: str) -> tuple[str, str]:
+    file_id = safe_path_part(file_metadata["id"])
+    modified_time = safe_path_part(file_metadata.get("modifiedTime", "unknown"))
+    snapshot_dir = raw_storage_root() / "drive" / file_id / modified_time
+
+    write_json(snapshot_dir / "metadata.json", file_metadata)
+    write_text(snapshot_dir / "content.txt", text)
+
+    metadata_ref = f"raw://drive/{file_id}/{modified_time}/metadata.json"
+    content_ref = f"raw://drive/{file_id}/{modified_time}/content.txt"
+    return metadata_ref, content_ref
+
+
+@router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
+async def drive_backfill(persist: bool = Query(True)) -> dict:
     files = list_ai_inbox_files()
-
+    events = []
     saved = 0
     duplicates = 0
-    events = []
+
+    if not persist:
+        for file_metadata in files:
+            event = build_drive_event(file_metadata)
+            events.append(event.model_dump(mode="json"))
+        return {"discovered": len(files), "saved": 0, "duplicates": 0, "events": events}
 
     async with AsyncSessionLocal() as session:
-        for f in files:
-            event = EventEnvelope(
-                event_type="drive.file.discovered",
-                source_system="drive",
-                source_object_id=f["id"],
-                idempotency_key=f"drive:file:{f['id']}:{f.get('modifiedTime')}",
-                raw_object_ref=f"raw://drive/{f['id']}/metadata.json",
-                payload=f,
+        session.add(
+            AuditLog(
+                event_type="drive.backfill.started",
+                actor="system",
+                correlation_id="system",
+                trace_id="system",
+                payload={"files": len(files)},
             )
+        )
 
+        for file_metadata in files:
+            event = build_drive_event(file_metadata)
             existing = await session.scalar(
-                select(IngestedEvent).where(
-                    IngestedEvent.idempotency_key == event.idempotency_key
-                )
+                select(IngestedEvent).where(IngestedEvent.idempotency_key == event.idempotency_key)
             )
-
             if existing:
                 duplicates += 1
                 events.append(
@@ -72,64 +91,79 @@ async def drive_backfill() -> dict:
                 )
                 continue
 
-            text = download_file_text(f["id"])
-            raw_content_ref = save_drive_raw_snapshot(f, text)
-
+            text = download_file_text(file_metadata["id"], file_metadata.get("mimeType"))
+            metadata_ref, content_ref = save_drive_raw_snapshot(file_metadata, text)
+            content_hash = sha256_text(text)
+            source_document_id = f"drive:{file_metadata['id']}:{content_hash[:12]}"
             chunks = chunk_text(text)
 
-            runner = LLMAgentRunner()
-            all_tasks = []
+            event.raw_object_ref = metadata_ref
+            event.payload = {
+                **event.payload,
+                "raw_content_ref": content_ref,
+                "content_hash": content_hash,
+                "source_document_id": source_document_id,
+                "chunks_found": len(chunks),
+                "text_preview": text[:500],
+            }
 
-            for chunk in chunks:
-                extraction = await runner.extract(
-                    source_document_id=f["id"],
-                    chunk_id=chunk.chunk_id,
-                    raw_object_ref=raw_content_ref,
-                    text=chunk.text,
+            session.add(
+                IngestedEvent(
+                    event_id=event.event_id,
+                    event_type=event.event_type,
+                    source_system=event.source_system,
+                    source_object_id=event.source_object_id,
+                    idempotency_key=event.idempotency_key,
+                    correlation_id=event.correlation_id,
+                    trace_id=event.trace_id,
+                    raw_object_ref=event.raw_object_ref,
+                    payload=event.payload,
                 )
-
-                for task in extraction.tasks:
-                    all_tasks.append(task)
-
-            event.raw_object_ref = raw_content_ref
-
-            row = IngestedEvent(
-                event_id=event.event_id,
-                event_type=event.event_type,
-                source_system=event.source_system,
-                source_object_id=event.source_object_id,
-                idempotency_key=event.idempotency_key,
-                correlation_id=event.correlation_id,
-                trace_id=event.trace_id,
-                raw_object_ref=event.raw_object_ref,
-                payload={
-                    **event.payload,
-                    "raw_content_ref": raw_content_ref,
-                    "text_preview": text[:500],
-                    "extraction": {"tasks": [task.model_dump() for task in all_tasks]},
-                },
             )
-
-            session.add(row)
-            for task in all_tasks:
+            existing_doc = await session.scalar(
+                select(SourceDocument).where(SourceDocument.source_document_id == source_document_id)
+            )
+            if not existing_doc:
                 session.add(
-                    ExtractedTaskModel(
-                        title=task.title,
-                        confidence=task.confidence,
-                        source_event_id=event.event_id,
-                        evidence_refs=[ref.model_dump() for ref in task.evidence_refs],
+                    SourceDocument(
+                        source_document_id=source_document_id,
+                        source_system="drive",
+                        source_object_id=file_metadata["id"],
+                        title=file_metadata.get("name"),
+                        source_url=file_metadata.get("webViewLink"),
+                        mime_type=file_metadata.get("mimeType"),
+                        raw_object_ref=content_ref,
+                        content_hash=content_hash,
+                        modified_at=file_metadata.get("modifiedTime"),
+                        metadata_json=file_metadata,
                     )
                 )
+                for chunk in chunks:
+                    session.add(
+                        DocumentChunk(
+                            source_document_id=source_document_id,
+                            chunk_id=chunk.chunk_id,
+                            source_system="drive",
+                            source_object_id=file_metadata["id"],
+                            raw_object_ref=content_ref,
+                            text=chunk.text,
+                            start_char=chunk.start_char,
+                            end_char=chunk.end_char,
+                            content_hash=sha256_text(chunk.text),
+                            metadata_json={"source_url": file_metadata.get("webViewLink")},
+                        )
+                    )
             session.add(
                 AuditLog(
                     event_type="drive.file.discovered",
                     actor="system",
                     correlation_id=event.correlation_id,
                     trace_id=event.trace_id,
+                    after_ref=event.event_id,
                     payload={
                         "idempotency_key": event.idempotency_key,
                         "source_object_id": event.source_object_id,
-                        "name": f.get("name"),
+                        "name": file_metadata.get("name"),
                     },
                 )
             )
@@ -141,17 +175,11 @@ async def drive_backfill() -> dict:
                     "duplicate": False,
                     "event_id": event.event_id,
                     "source_object_id": event.source_object_id,
+                    "source_document_id": source_document_id,
                     "chunks_found": len(chunks),
-                    "tasks_found": len(all_tasks),
-                    "extraction": {"tasks": [task.model_dump() for task in all_tasks]},
                 }
             )
 
         await session.commit()
 
-    return {
-        "discovered": len(files),
-        "saved": saved,
-        "duplicates": duplicates,
-        "events": events,
-    }
+    return {"discovered": len(files), "saved": saved, "duplicates": duplicates, "events": events}

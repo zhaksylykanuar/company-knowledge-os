@@ -15,6 +15,10 @@ class AuditLog(Base):
     actor: Mapped[str | None] = mapped_column(String(255), nullable=True)
     correlation_id: Mapped[str] = mapped_column(String(120), index=True)
     trace_id: Mapped[str] = mapped_column(String(120), index=True)
+    before_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    after_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    agent_run_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    approval_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
