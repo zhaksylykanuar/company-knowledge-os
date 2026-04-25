@@ -24,6 +24,7 @@ if config.config_file_name is not None:
 
 from app.db.base import Base
 import app.db.models  # noqa: F401
+import app.db.task_models  # noqa: F401
 
 target_metadata = Base.metadata
 

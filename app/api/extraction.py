@@ -1,19 +1,27 @@
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
 
 from app.agents.runner import get_agent_runner
 
 router = APIRouter(prefix="/v1/extraction", tags=["extraction"])
 
 
+class ExtractionDemoRequest(BaseModel):
+    text: str = Field(min_length=1)
+    source_document_id: str = "doc_demo"
+    chunk_id: str = "chunk_demo"
+    raw_object_ref: str = "raw://demo"
+
+
 @router.post("/demo")
-async def extract_demo(payload: dict) -> dict:
+async def extract_demo(payload: ExtractionDemoRequest) -> dict:
     runner = get_agent_runner()
 
     result = await runner.extract(
-        source_document_id=payload.get("source_document_id", "doc_demo"),
-        chunk_id=payload.get("chunk_id", "chunk_demo"),
-        raw_object_ref=payload.get("raw_object_ref", "raw://demo"),
-        text=payload["text"],
+        source_document_id=payload.source_document_id,
+        chunk_id=payload.chunk_id,
+        raw_object_ref=payload.raw_object_ref,
+        text=payload.text,
     )
 
     return result.model_dump()

@@ -1,8 +1,10 @@
+import io
 from pathlib import Path
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
 
 from app.core.config import settings
 
@@ -19,7 +21,8 @@ def get_drive_service():
 
     if not creds or not creds.valid:
         flow = InstalledAppFlow.from_client_secrets_file(
-            settings.google_client_secrets_file, SCOPES
+            settings.google_client_secrets_file,
+            SCOPES,
         )
         creds = flow.run_local_server(port=8080)
 
@@ -44,3 +47,23 @@ def list_ai_inbox_files(page_size: int = 50) -> list[dict]:
     ).execute()
 
     return response.get("files", [])
+
+
+def download_file_text(file_id: str) -> str:
+    service = get_drive_service()
+
+    request = service.files().get_media(fileId=file_id)
+
+    file = io.BytesIO()
+    downloader = MediaIoBaseDownload(file, request)
+
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+
+    content = file.getvalue()
+
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError:
+        return ""

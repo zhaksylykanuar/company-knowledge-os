@@ -15,11 +15,3 @@ async def health():
 app.include_router(events_router, prefix="/v1/events", tags=["events"])
 app.include_router(drive_router)
 app.include_router(extraction_router)
-
-from app.db.base import engine, Base
-
-
-@app.on_event("startup")
-async def on_startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
