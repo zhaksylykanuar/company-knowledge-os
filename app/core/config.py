@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     google_client_secrets_file: str = "./secrets/google_oauth_client.json"
     google_token_file: str = "./secrets/google_token.json"
+    google_drive_ai_inbox_folder_id: str | None = None
 
     obsidian_vault_path: str = "./obsidian_vault"
 
