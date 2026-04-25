@@ -41,6 +41,17 @@ class RuleBasedAgentRunner:
         text: str,
         source_url: str | None = None,
     ) -> ExtractionResult:
+
+        def _extract_signal_line(keywords: list[str], fallback: str) -> str:
+            for line in text.splitlines():
+                clean_line = line.strip()
+                if not clean_line:
+                    continue
+                lower_line = clean_line.lower()
+                if any(keyword in lower_line for keyword in keywords):
+                    return clean_line[:300]
+            return fallback[:300].strip()
+
         lowered = text.lower()
         evidence = EvidenceRef(
             source_document_id=source_document_id,
@@ -70,9 +81,14 @@ class RuleBasedAgentRunner:
             if due_match:
                 due_date = due_match.group(1).strip()
 
+            task_title = _extract_signal_line(
+                ["todo", "нужно", "deadline", "задача", "follow up"],
+                text,
+            )
+
             tasks.append(
                 ExtractedTask(
-                    title=text[:120].strip(),
+                    title=task_title,
                     owner=owner,
                     due_date=due_date,
                     confidence=0.6,
@@ -82,10 +98,12 @@ class RuleBasedAgentRunner:
 
         has_decision_signal = any(word in lowered for word in ["decision", "decided", "решили"])
         if has_decision_signal:
+            decision_title = _extract_signal_line(["decision", "decided", "решили"], text)
+
             decisions.append(
                 ExtractedDecision(
-                    title=text[:120].strip(),
-                    decision=text[:500].strip(),
+                    title=decision_title,
+                    decision=decision_title,
                     confidence=0.55,
                     evidence_refs=[evidence],
                 )
@@ -94,9 +112,11 @@ class RuleBasedAgentRunner:
         has_risk_signal = any(word in lowered for word in ["risk", "blocker", "риск", "блокер"])
         if has_risk_signal:
             severity = "high" if any(word in lowered for word in ["critical", "крит", "high"]) else "medium"
+            risk_title = _extract_signal_line(["risk", "blocker", "риск", "блокер"], text)
+
             risks.append(
                 ExtractedRisk(
-                    title=text[:120].strip(),
+                    title=risk_title,
                     severity=severity,
                     confidence=0.55,
                     evidence_refs=[evidence],
