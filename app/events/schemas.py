@@ -6,14 +6,8 @@ from pydantic import BaseModel, Field
 
 
 SourceSystem = Literal[
-    "drive",
-    "gmail",
-    "jira",
-    "github",
-    "gitlab",
-    "bitbucket",
-    "telegram",
-    "internal",
+    "drive", "gmail", "jira", "github", "gitlab",
+    "bitbucket", "telegram", "internal",
 ]
 
 

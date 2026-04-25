@@ -11,6 +11,10 @@ class EvidenceRef(BaseModel):
 
 class ExtractedTask(BaseModel):
     title: str
+    owner: str | None = None
+    due_date: str | None = None
+    task_type: str = "task"
+
     confidence: float = Field(ge=0.0, le=1.0)
     evidence_refs: list[EvidenceRef]
 
