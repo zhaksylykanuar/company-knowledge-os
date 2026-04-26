@@ -46,6 +46,8 @@ async def process_document_chunks(source_document_id: str) -> dict:
                         due_date=task.due_date,
                         confidence=task.confidence,
                         source_event_id=chunk.chunk_id,
+                        source_document_id=chunk.source_document_id,
+                        chunk_id=chunk.chunk_id,
                         evidence_refs=[ref.model_dump() for ref in task.evidence_refs],
                     )
                 )
@@ -59,6 +61,8 @@ async def process_document_chunks(source_document_id: str) -> dict:
                         owner=decision.owner,
                         confidence=decision.confidence,
                         source_event_id=chunk.chunk_id,
+                        source_document_id=chunk.source_document_id,
+                        chunk_id=chunk.chunk_id,
                         evidence_refs=[ref.model_dump() for ref in decision.evidence_refs],
                     )
                 )
@@ -71,6 +75,8 @@ async def process_document_chunks(source_document_id: str) -> dict:
                         severity=risk.severity,
                         confidence=risk.confidence,
                         source_event_id=chunk.chunk_id,
+                        source_document_id=chunk.source_document_id,
+                        chunk_id=chunk.chunk_id,
                         evidence_refs=[ref.model_dump() for ref in risk.evidence_refs],
                     )
                 )
