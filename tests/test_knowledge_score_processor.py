@@ -1,16 +1,15 @@
 from uuid import uuid4
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.db.base import AsyncSessionLocal
 from app.db.score_models import KnowledgeScore
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.db.task_models import ExtractedDecision, ExtractedRisk, ExtractedTask
 from app.services.knowledge_score_processor import process_knowledge_scores
-from app.services.knowledge_search import search_knowledge
 
 
-async def _cleanup_search_fixture(source_document_id: str) -> None:
+async def _cleanup_score_fixture(source_document_id: str) -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(
             delete(KnowledgeScore).where(
@@ -45,7 +44,7 @@ async def _cleanup_search_fixture(source_document_id: str) -> None:
         await session.commit()
 
 
-async def _insert_search_fixture(
+async def _insert_score_fixture(
     *,
     unique: str,
     source_document_id: str,
@@ -55,7 +54,7 @@ async def _insert_search_fixture(
         {
             "source_document_id": source_document_id,
             "chunk_id": chunk_id,
-            "quote": f"QAZTWIN evidence quote {unique}",
+            "quote": f"QAZTWIN score evidence quote {unique}",
         }
     ]
 
@@ -64,12 +63,12 @@ async def _insert_search_fixture(
             SourceDocument(
                 source_document_id=source_document_id,
                 source_system="test",
-                source_object_id=f"object-{unique}",
-                title=f"ABC Manufacturing QAZTWIN note {unique}",
-                source_url=f"test://source/{unique}",
+                source_object_id=f"score-object-{unique}",
+                title=f"ABC Manufacturing QAZTWIN score note {unique}",
+                source_url=f"test://score-source/{unique}",
                 mime_type="text/plain",
-                raw_object_ref=f"raw://{unique}",
-                content_hash=f"doc-hash-{unique}",
+                raw_object_ref=f"raw://score/{unique}",
+                content_hash=f"score-doc-hash-{unique}",
                 modified_at=None,
                 metadata_json={},
             )
@@ -79,15 +78,17 @@ async def _insert_search_fixture(
                 source_document_id=source_document_id,
                 chunk_id=chunk_id,
                 source_system="test",
-                source_object_id=f"object-{unique}",
-                raw_object_ref=f"raw://{unique}",
+                source_object_id=f"score-object-{unique}",
+                raw_object_ref=f"raw://score/{unique}",
                 text=(
                     f"Client ABC Manufacturing discussed QAZTWIN onboarding {unique}. "
-                    "SCADA integration must start read-only."
+                    "TODO: send proposal to client next week. "
+                    "Risk: client is worried about IT security and SCADA access. "
+                    "Decision: start with read-only data collection."
                 ),
                 start_char=0,
-                end_char=120,
-                content_hash=f"chunk-hash-{unique}",
+                end_char=260,
+                content_hash=f"score-chunk-hash-{unique}",
                 metadata_json={},
             )
         )
@@ -97,7 +98,7 @@ async def _insert_search_fixture(
                 status="open",
                 item_type="task",
                 owner=None,
-                due_date="next week",
+                due_date="2026-04-27",
                 confidence=0.9,
                 source_event_id=chunk_id,
                 source_document_id=source_document_id,
@@ -107,8 +108,11 @@ async def _insert_search_fixture(
         )
         session.add(
             ExtractedRisk(
-                title=f"Risk: client is worried about IT security {unique}",
-                severity="medium",
+                title=(
+                    "Risk: client is worried about IT security "
+                    f"and SCADA access {unique}"
+                ),
+                severity="high",
                 confidence=0.8,
                 source_event_id=chunk_id,
                 source_document_id=source_document_id,
@@ -119,7 +123,10 @@ async def _insert_search_fixture(
         session.add(
             ExtractedDecision(
                 title=f"Decision: start with read-only data collection {unique}",
-                decision=f"Start with read-only data collection before write actions {unique}",
+                decision=(
+                    "Start with read-only data collection before write actions "
+                    f"{unique}"
+                ),
                 owner=None,
                 confidence=0.95,
                 source_event_id=chunk_id,
@@ -128,96 +135,97 @@ async def _insert_search_fixture(
                 evidence_refs=evidence_refs,
             )
         )
-
         await session.commit()
 
 
-async def test_search_knowledge_returns_chunks_and_extracted_items() -> None:
-    unique = f"search-{uuid4().hex}"
+async def _load_scores(source_document_id: str) -> list[KnowledgeScore]:
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(KnowledgeScore).where(
+                KnowledgeScore.source_document_id == source_document_id
+            )
+        )
+        return list(result.scalars().all())
+
+
+async def test_process_knowledge_scores_creates_explainable_scores() -> None:
+    unique = f"score-{uuid4().hex}"
     source_document_id = f"test-doc-{unique}"
     chunk_id = f"test-chunk-{unique}"
 
-    await _cleanup_search_fixture(source_document_id)
+    await _cleanup_score_fixture(source_document_id)
 
     try:
-        await _insert_search_fixture(
+        await _insert_score_fixture(
             unique=unique,
             source_document_id=source_document_id,
             chunk_id=chunk_id,
         )
 
-        result = await search_knowledge(query=unique, limit=20)
-        matching_results = [
-            item
-            for item in result["results"]
-            if item["source_document_id"] == source_document_id
-        ]
-
-        result_types = {item["result_type"] for item in matching_results}
-
-        assert result["query"] == unique
-        assert {"chunk", "task", "risk", "decision"}.issubset(result_types)
-        assert len(matching_results) == 4
-
-        for item in matching_results:
-            assert item["source_document_id"] == source_document_id
-            assert item["chunk_id"] == chunk_id
-            assert item["evidence_refs"]
-
-    finally:
-        await _cleanup_search_fixture(source_document_id)
-
-
-async def test_search_knowledge_empty_query_returns_no_results() -> None:
-    result = await search_knowledge(query="   ")
-
-    assert result["query"] == ""
-    assert result["terms"] == []
-    assert result["counts"]["total"] == 0
-    assert result["results"] == []
-
-async def test_search_knowledge_includes_scores_when_available() -> None:
-    unique = f"search-score-{uuid4().hex}"
-    source_document_id = f"test-doc-{unique}"
-    chunk_id = f"test-chunk-{unique}"
-
-    await _cleanup_search_fixture(source_document_id)
-
-    try:
-        await _insert_search_fixture(
-            unique=unique,
-            source_document_id=source_document_id,
-            chunk_id=chunk_id,
-        )
-
-        score_result = await process_knowledge_scores(
+        result = await process_knowledge_scores(
             source_document_id=source_document_id
         )
-        result = await search_knowledge(query=unique, limit=20)
 
-        matching_results = [
-            item
-            for item in result["results"]
-            if item["source_document_id"] == source_document_id
-        ]
+        scores = await _load_scores(source_document_id)
+        scores_by_type = {score.entity_type: score for score in scores}
 
-        scores_by_type = {
-            item["result_type"]: item["score"]
-            for item in matching_results
+        assert result["source_document_id"] == source_document_id
+        assert result["scores_created"] == 3
+        assert result["scores_updated"] == 0
+        assert result["tasks_scored"] == 1
+        assert result["risks_scored"] == 1
+        assert result["decisions_scored"] == 1
+
+        assert set(scores_by_type) == {"task", "risk", "decision"}
+
+        for score in scores:
+            assert score.source_document_id == source_document_id
+            assert score.chunk_id == chunk_id
+            assert score.attention_score > 0
+            assert score.reasons
+            assert score.evidence_refs
+            assert score.evidence_refs[0]["chunk_id"] == chunk_id
+
+        risk_reason_codes = {
+            reason["code"] for reason in scores_by_type["risk"].reasons
         }
-
-        assert score_result["scores_created"] == 3
-        assert scores_by_type["chunk"] is None
-
-        for result_type in ("task", "risk", "decision"):
-            score = scores_by_type[result_type]
-
-            assert score is not None
-            assert score["entity_type"] == result_type
-            assert score["attention_score"] > 0
-            assert score["reasons"]
-            assert score["evidence_refs"]
-            assert score["evidence_refs"][0]["chunk_id"] == chunk_id
+        assert "high_severity_risk" in risk_reason_codes
+        assert "security_or_access_context" in risk_reason_codes
 
     finally:
-        await _cleanup_search_fixture(source_document_id)
+        await _cleanup_score_fixture(source_document_id)
+
+
+async def test_process_knowledge_scores_is_idempotent() -> None:
+    unique = f"score-{uuid4().hex}"
+    source_document_id = f"test-doc-{unique}"
+    chunk_id = f"test-chunk-{unique}"
+
+    await _cleanup_score_fixture(source_document_id)
+
+    try:
+        await _insert_score_fixture(
+            unique=unique,
+            source_document_id=source_document_id,
+            chunk_id=chunk_id,
+        )
+
+        first_result = await process_knowledge_scores(
+            source_document_id=source_document_id
+        )
+        second_result = await process_knowledge_scores(
+            source_document_id=source_document_id
+        )
+
+        scores = await _load_scores(source_document_id)
+
+        assert first_result["scores_created"] == 3
+        assert first_result["scores_updated"] == 0
+
+        assert second_result["scores_created"] == 0
+        assert second_result["scores_updated"] == 3
+
+        assert len(scores) == 3
+
+    finally:
+        await _cleanup_score_fixture(source_document_id)

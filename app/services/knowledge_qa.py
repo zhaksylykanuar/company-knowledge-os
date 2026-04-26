@@ -341,6 +341,26 @@ async def _recent_decisions(limit: int) -> list[dict[str, Any]]:
         ]
 
 
+def _attention_score(item: dict[str, Any]) -> float:
+    score = item.get("score")
+
+    if not isinstance(score, dict):
+        return 0.0
+
+    raw_attention_score = score.get("attention_score")
+
+    try:
+        return float(raw_attention_score)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _prioritize_scored_results(
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return sorted(items, key=_attention_score, reverse=True)
+
+
 def _collect_sources(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
     sources: list[dict[str, Any]] = []
     seen: set[tuple[str | None, str | None, str | None]] = set()
@@ -426,9 +446,9 @@ async def ask_knowledge(question: str, limit: int = DEFAULT_ASK_LIMIT) -> dict[s
         if answer_type in {"overview", "decisions"} and not decisions:
             decisions = await _recent_decisions(limit)
 
-    tasks = _dedupe_results(tasks, limit)
-    risks = _dedupe_results(risks, limit)
-    decisions = _dedupe_results(decisions, limit)
+    tasks = _dedupe_results(_prioritize_scored_results(tasks), limit)
+    risks = _dedupe_results(_prioritize_scored_results(risks), limit)
+    decisions = _dedupe_results(_prioritize_scored_results(decisions), limit)
     supporting_chunks = _dedupe_results(supporting_chunks, limit)
 
     return {
