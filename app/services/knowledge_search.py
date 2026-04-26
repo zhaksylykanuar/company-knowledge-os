@@ -7,6 +7,7 @@ from sqlalchemy import or_, select
 
 from app.db.base import AsyncSessionLocal
 from app.db.source_models import DocumentChunk, SourceDocument
+from app.db.score_models import KnowledgeScore
 from app.db.task_models import ExtractedDecision, ExtractedRisk, ExtractedTask
 
 DEFAULT_LIMIT = 20
@@ -122,6 +123,23 @@ def _chunk_evidence_refs(
     ]
 
 
+
+def _score_payload(score: KnowledgeScore | None) -> dict[str, Any] | None:
+    if score is None:
+        return None
+
+    return {
+        "entity_type": score.entity_type,
+        "entity_id": score.entity_id,
+        "importance_score": score.importance_score,
+        "urgency_score": score.urgency_score,
+        "risk_score": score.risk_score,
+        "confidence_score": score.confidence_score,
+        "attention_score": score.attention_score,
+        "reasons": score.reasons or [],
+        "evidence_refs": score.evidence_refs or [],
+    }
+
 def _chunk_result(
     chunk: DocumentChunk,
     document: SourceDocument | None,
@@ -142,6 +160,7 @@ def _chunk_result(
             "source_object_id": chunk.source_object_id,
         },
         "evidence_refs": _chunk_evidence_refs(chunk=chunk, document=document),
+        "score": None,
     }
 
 
@@ -152,6 +171,7 @@ def _extracted_result(
     document: SourceDocument | None,
     preview_text: str,
     metadata: dict[str, Any],
+    score: KnowledgeScore | None = None,
 ) -> dict[str, Any]:
     evidence_refs = item.evidence_refs or []
 
@@ -172,8 +192,53 @@ def _extracted_result(
         "confidence": item.confidence,
         "metadata": metadata,
         "evidence_refs": evidence_refs,
+        "score": _score_payload(score),
     }
 
+
+
+async def _score_maps(
+    session: Any,
+    *,
+    task_ids: list[str],
+    risk_ids: list[str],
+    decision_ids: list[str],
+) -> dict[str, dict[str, KnowledgeScore]]:
+    score_maps: dict[str, dict[str, KnowledgeScore]] = {
+        "task": {},
+        "risk": {},
+        "decision": {},
+    }
+    filters = []
+
+    if task_ids:
+        filters.append(
+            (KnowledgeScore.entity_type == "task")
+            & KnowledgeScore.entity_id.in_(task_ids)
+        )
+
+    if risk_ids:
+        filters.append(
+            (KnowledgeScore.entity_type == "risk")
+            & KnowledgeScore.entity_id.in_(risk_ids)
+        )
+
+    if decision_ids:
+        filters.append(
+            (KnowledgeScore.entity_type == "decision")
+            & KnowledgeScore.entity_id.in_(decision_ids)
+        )
+
+    if not filters:
+        return score_maps
+
+    rows = await session.execute(select(KnowledgeScore).where(or_(*filters)))
+
+    for score in rows.scalars().all():
+        if score.entity_type in score_maps:
+            score_maps[score.entity_type][score.entity_id] = score
+
+    return score_maps
 
 async def search_knowledge(query: str, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
     cleaned_query = query.strip()
@@ -288,7 +353,21 @@ async def search_knowledge(query: str, limit: int = DEFAULT_LIMIT) -> dict[str, 
             .limit(limit)
         )
 
-        chunks = [_chunk_result(chunk, document) for chunk, document in chunk_rows.all()]
+        chunk_row_items = chunk_rows.all()
+        task_row_items = task_rows.all()
+        risk_row_items = risk_rows.all()
+        decision_row_items = decision_rows.all()
+
+        score_maps = await _score_maps(
+            session,
+            task_ids=[str(task.id) for task, _document in task_row_items],
+            risk_ids=[str(risk.id) for risk, _document in risk_row_items],
+            decision_ids=[
+                str(decision.id) for decision, _document in decision_row_items
+            ],
+        )
+
+        chunks = [_chunk_result(chunk, document) for chunk, document in chunk_row_items]
 
         tasks = [
             _extracted_result(
@@ -302,8 +381,9 @@ async def search_knowledge(query: str, limit: int = DEFAULT_LIMIT) -> dict[str, 
                     "owner": task.owner,
                     "due_date": task.due_date,
                 },
+                score=score_maps["task"].get(str(task.id)),
             )
-            for task, document in task_rows.all()
+            for task, document in task_row_items
         ]
 
         risks = [
@@ -315,8 +395,9 @@ async def search_knowledge(query: str, limit: int = DEFAULT_LIMIT) -> dict[str, 
                 metadata={
                     "severity": risk.severity,
                 },
+                score=score_maps["risk"].get(str(risk.id)),
             )
-            for risk, document in risk_rows.all()
+            for risk, document in risk_row_items
         ]
 
         decisions = [
@@ -329,8 +410,9 @@ async def search_knowledge(query: str, limit: int = DEFAULT_LIMIT) -> dict[str, 
                     "decision": decision.decision,
                     "owner": decision.owner,
                 },
+                score=score_maps["decision"].get(str(decision.id)),
             )
-            for decision, document in decision_rows.all()
+            for decision, document in decision_row_items
         ]
 
     results.extend(chunks)

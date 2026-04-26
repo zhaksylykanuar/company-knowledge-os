@@ -1,15 +1,22 @@
 from uuid import uuid4
 
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 
 from app.db.base import AsyncSessionLocal
+from app.db.score_models import KnowledgeScore
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.db.task_models import ExtractedDecision, ExtractedRisk, ExtractedTask
 from app.services.knowledge_qa import ask_knowledge
+from app.services.knowledge_score_processor import process_knowledge_scores
 
 
 async def _cleanup_ask_fixture(source_document_id: str) -> None:
     async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(KnowledgeScore).where(
+                KnowledgeScore.source_document_id == source_document_id
+            )
+        )
         await session.execute(
             delete(ExtractedTask).where(
                 ExtractedTask.source_document_id == source_document_id
@@ -239,3 +246,77 @@ async def test_ask_knowledge_uses_recent_fallback_for_generic_decisions() -> Non
 
     finally:
         await _cleanup_ask_fixture(source_document_id)
+
+async def test_ask_knowledge_prioritizes_scored_risks_by_attention() -> None:
+    shared_query = f"qa-priority-{uuid4().hex}"
+    high_source_document_id = f"test-doc-high-{shared_query}"
+    high_chunk_id = f"test-chunk-high-{shared_query}"
+    low_source_document_id = f"test-doc-low-{shared_query}"
+    low_chunk_id = f"test-chunk-low-{shared_query}"
+
+    await _cleanup_ask_fixture(high_source_document_id)
+    await _cleanup_ask_fixture(low_source_document_id)
+
+    try:
+        await _insert_ask_fixture(
+            unique=f"{shared_query}-high",
+            source_document_id=high_source_document_id,
+            chunk_id=high_chunk_id,
+        )
+        await _insert_ask_fixture(
+            unique=f"{shared_query}-low",
+            source_document_id=low_source_document_id,
+            chunk_id=low_chunk_id,
+        )
+
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                update(ExtractedRisk)
+                .where(ExtractedRisk.source_document_id == high_source_document_id)
+                .values(
+                    title=(
+                        "Risk: client has high concern about IT security, "
+                        f"SCADA access, and write actions {shared_query}"
+                    ),
+                    severity="high",
+                    confidence=0.9,
+                )
+            )
+            await session.execute(
+                update(ExtractedRisk)
+                .where(ExtractedRisk.source_document_id == low_source_document_id)
+                .values(
+                    title=f"Risk: minor internal note {shared_query}",
+                    severity="low",
+                    confidence=0.9,
+                )
+            )
+            await session.commit()
+
+        await process_knowledge_scores(source_document_id=high_source_document_id)
+        await process_knowledge_scores(source_document_id=low_source_document_id)
+
+        result = await ask_knowledge(
+            question=f"какие риски по {shared_query}?",
+            limit=10,
+        )
+
+        matching_risks = [
+            item
+            for item in result["relevant_risks"]
+            if item["source_document_id"]
+            in {high_source_document_id, low_source_document_id}
+        ]
+
+        assert len(matching_risks) == 2
+        assert matching_risks[0]["source_document_id"] == high_source_document_id
+        assert matching_risks[1]["source_document_id"] == low_source_document_id
+
+        high_score = matching_risks[0]["score"]
+        low_score = matching_risks[1]["score"]
+
+        assert high_score["attention_score"] > low_score["attention_score"]
+
+    finally:
+        await _cleanup_ask_fixture(high_source_document_id)
+        await _cleanup_ask_fixture(low_source_document_id)
