@@ -131,19 +131,21 @@ def map_connector_payload_to_ingested_event(
     if contract_errors:
         raise ConnectorPayloadValidationError("; ".join(contract_errors))
 
+    event_id = build_connector_event_id(
+        source_system=source_system,
+        event_type=event_type,
+        source_object_id=source_object_id,
+        idempotency_key=idempotency_key,
+    )
+
     return IngestedEventReadyPayload(
-        event_id=build_connector_event_id(
-            source_system=source_system,
-            event_type=event_type,
-            source_object_id=source_object_id,
-            idempotency_key=idempotency_key,
-        ),
+        event_id=event_id,
         event_type=event_type,
         source_system=source_system,
         source_object_id=source_object_id,
         idempotency_key=idempotency_key,
-        correlation_id=_optional_string(connector_payload, "correlation_id"),
-        trace_id=_optional_string(connector_payload, "trace_id"),
+        correlation_id=_optional_string(connector_payload, "correlation_id") or f"corr_{event_id}",
+        trace_id=_optional_string(connector_payload, "trace_id") or f"trace_{event_id}",
         raw_object_ref=raw_object_ref,
         payload=payload,
     )
