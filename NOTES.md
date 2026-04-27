@@ -103,6 +103,22 @@
 - source_events preserve raw_object_ref and evidence_refs for fixture-based events
 - no production code changes, DB changes, migrations, API changes, external API calls, tokens, webhooks, or write actions
 
+### Connector payload mapper / ingestion boundary
+- Sprint 04J completed
+- deterministic connector payload mapper added
+- connector payload dicts now map to IngestedEvent-ready fields
+- stable deterministic event_id generation added
+- mapper validates source_system, source_object_type, event_type, idempotency_key, raw_object_ref, and payload
+- mapper reuses integration source registry contracts
+- invalid connector payloads fail before DB writes
+- deterministic fallback correlation_id and trace_id added
+- internal connector ingestion boundary added
+- connector payload dict → mapper → IngestedEvent DB row → SourceEvent DB row is now tested
+- repeated payload ingestion is idempotent
+- all 10 connector fixtures are covered
+- no API endpoint changes, migrations, real external API calls, tokens, webhooks, external write actions, or LLM access to connector layer
+
+
 
 
 ## Current state
@@ -125,6 +141,7 @@ FounderOS now also has this integration-event foundation:
 
 GitHub / Jira / Telegram connector payload later
 → raw_storage
+→ connector payload mapper
 → ingested_events
 → integration source registry contract validation
 → source_events
@@ -138,10 +155,19 @@ safe fixture payload
 → SourceEvent
 → evidence_refs / raw_object_ref preserved
 
+Connector ingestion boundary now proves:
+
+connector payload dict
+→ deterministic mapper
+→ IngestedEvent DB row
+→ SourceEvent DB row
+→ idempotent repeated ingestion
+
+
 
 Current health on main:
 - uv run ruff check . passes
-- uv run pytest -q passes with 71 tests
+- uv run pytest -q passes with 97 tests
 - ./scripts/check_no_secrets.sh passes
 - FastAPI routes: HAS_SEARCH True, HAS_ASK True, HAS_SCORE True, HAS_ATTENTION True
 - Alembic current/head: 8c2b0a4d9f1e
@@ -152,6 +178,8 @@ Current health on main:
 - PR #14 merged with merge commit c0dd599
 - PR #15 merged with merge commit 948707a
 - PR #16 merged with merge commit 21b953d
+- PR #18 merged with merge commit 870f55a
+- PR #19 merged with merge commit 20bafd7
 
 Latest merged work:
 - Sprint 04D: deterministic knowledge scoring layer
@@ -162,6 +190,7 @@ Latest merged work:
 - Sprint 04G: source_events foundation for future integration-aware event ingestion
 - Sprint 04H: integration source registry and source event contract validation
 - Sprint 04I: connector payload fixtures and normalization coverage
+- Sprint 04J: connector payload mapper and raw event ingestion boundary
 
 ## Useful commands
 
@@ -180,27 +209,26 @@ Export Obsidian vault:
 
 Recommended next sprint:
 
-### Sprint 04J — Connector payload mapper and raw event ingestion boundary
+### Sprint 04K — SourceEvent read model and development event projection
 
 Goal:
-- add deterministic mapper from connector payload dicts to IngestedEvent-ready fields
-- keep raw payload first
-- validate source_system, source_object_type, event_type, idempotency_key, raw_object_ref, and payload
-- reuse existing integration source registry contracts
-- support GitHub/Jira/Telegram fixture payloads
-- prepare future connector polling/webhook layer without adding real connectors yet
-- keep all tests deterministic
-- no real API calls
+- make source_events easier to query and inspect
+- add deterministic read/query helpers for source_events
+- prepare development projections from GitHub/Jira/Telegram SourceEvents
+- keep all projections evidence-backed
+- preserve raw_object_ref and evidence_refs
+- keep extraction deterministic first
+- no real external API calls
 - no tokens
 - no webhooks yet
 - no external write actions
+- no LLM in connector layer
 
 Possible output:
-- app/integrations/payload_mapper.py
-- deterministic payload validation errors
-- tests proving fixtures map to IngestedEvent-ready data
-- tests proving invalid connector payloads fail before DB writes
-- optional service function: connector payload → IngestedEvent → SourceEvent
+- source_events query service
+- tests for filtering by source_system, source_object_type, event_type, and source_object_id
+- deterministic development event projection DTOs
+- tests mapping GitHub/Jira/Telegram SourceEvents into read-friendly development facts
 - no real API calls
 - no webhook server yet unless explicitly approved
 - no NOTES.md changes without separate approval
