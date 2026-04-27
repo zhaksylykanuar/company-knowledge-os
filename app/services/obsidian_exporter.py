@@ -264,9 +264,9 @@ def task_to_obsidian_entity(
         entity_type="task",
         entity_id=_required_entity_id(task),
         title=_entity_title(task, fallback="Untitled task"),
-        source_document_id=getattr(task, "source_document_id", None),
-        chunk_id=getattr(task, "chunk_id", None),
-        evidence_refs=_safe_evidence_refs(getattr(task, "evidence_refs", None)),
+        source_document_id=_source_document_id(task, score),
+        chunk_id=_chunk_id(task, score),
+        evidence_refs=_entity_evidence_refs(task, score),
         metadata={
             "status": getattr(task, "status", None),
             "item_type": getattr(task, "item_type", None),
@@ -287,9 +287,9 @@ def risk_to_obsidian_entity(
         entity_type="risk",
         entity_id=_required_entity_id(risk),
         title=_entity_title(risk, fallback="Untitled risk"),
-        source_document_id=getattr(risk, "source_document_id", None),
-        chunk_id=getattr(risk, "chunk_id", None),
-        evidence_refs=_safe_evidence_refs(getattr(risk, "evidence_refs", None)),
+        source_document_id=_source_document_id(risk, score),
+        chunk_id=_chunk_id(risk, score),
+        evidence_refs=_entity_evidence_refs(risk, score),
         metadata={
             "severity": getattr(risk, "severity", None),
             "confidence": getattr(risk, "confidence", None),
@@ -307,9 +307,9 @@ def decision_to_obsidian_entity(
         entity_type="decision",
         entity_id=_required_entity_id(decision),
         title=_entity_title(decision, fallback="Untitled decision"),
-        source_document_id=getattr(decision, "source_document_id", None),
-        chunk_id=getattr(decision, "chunk_id", None),
-        evidence_refs=_safe_evidence_refs(getattr(decision, "evidence_refs", None)),
+        source_document_id=_source_document_id(decision, score),
+        chunk_id=_chunk_id(decision, score),
+        evidence_refs=_entity_evidence_refs(decision, score),
         metadata={
             "decision": getattr(decision, "decision", None),
             "owner": getattr(decision, "owner", None),
@@ -317,6 +317,44 @@ def decision_to_obsidian_entity(
         },
         score=score_to_dict(score),
     )
+
+
+def _source_document_id(entity: Any, score: Any | None) -> str | None:
+    return (
+        getattr(entity, "source_document_id", None)
+        or getattr(score, "source_document_id", None)
+        or _first_evidence_ref_value(entity, score, "source_document_id")
+    )
+
+
+def _chunk_id(entity: Any, score: Any | None) -> str | None:
+    return (
+        getattr(entity, "chunk_id", None)
+        or getattr(score, "chunk_id", None)
+        or _first_evidence_ref_value(entity, score, "chunk_id")
+    )
+
+
+def _entity_evidence_refs(entity: Any, score: Any | None) -> list[dict[str, Any]]:
+    refs = _safe_evidence_refs(getattr(entity, "evidence_refs", None))
+
+    if refs:
+        return refs
+
+    return _safe_evidence_refs(getattr(score, "evidence_refs", None))
+
+
+def _first_evidence_ref_value(
+    entity: Any,
+    score: Any | None,
+    key: str,
+) -> str | None:
+    for ref in _entity_evidence_refs(entity, score):
+        value = ref.get(key)
+        if value:
+            return str(value)
+
+    return None
 
 
 def _required_entity_id(entity: Any) -> str:
