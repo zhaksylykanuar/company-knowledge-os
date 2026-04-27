@@ -459,3 +459,97 @@ def test_write_obsidian_entities_does_not_overwrite_duplicate_titles(tmp_path) -
         _expected_entity_path("Tasks", "TODO same title", "task", "2"),
     }
     assert len(list((tmp_path / "Tasks").glob("TODO same title*.md"))) == 2
+
+def test_entity_mapping_falls_back_to_score_evidence_when_entity_evidence_missing() -> None:
+    task = SimpleNamespace(
+        id=14,
+        title="TODO: fallback evidence",
+        status="open",
+        item_type="task",
+        owner=None,
+        due_date=None,
+        confidence=0.7,
+        source_document_id=None,
+        chunk_id=None,
+        evidence_refs=[],
+    )
+    score = SimpleNamespace(
+        entity_type="task",
+        **_entity_key("task", "14"),
+        importance_score=0.5,
+        urgency_score=0.4,
+        risk_score=0.1,
+        confidence_score=0.7,
+        attention_score=0.38,
+        source_document_id="doc_from_score",
+        chunk_id="chunk_from_score",
+        reasons=[{"code": "open_task"}],
+        evidence_refs=[
+            {
+                "source_document_id": "doc_from_score",
+                "chunk_id": "chunk_from_score",
+                "quote": "TODO: fallback evidence",
+            }
+        ],
+    )
+
+    entity = task_to_obsidian_entity(task=task, score=score)
+
+    assert entity.source_document_id == "doc_from_score"
+    assert entity.chunk_id == "chunk_from_score"
+    assert entity.evidence_refs == [
+        {
+            "source_document_id": "doc_from_score",
+            "chunk_id": "chunk_from_score",
+            "quote": "TODO: fallback evidence",
+        }
+    ]
+
+    markdown = render_entity_markdown(entity)
+
+    assert "doc_from_score" in markdown
+    assert "chunk_from_score" in markdown
+    assert "TODO: fallback evidence" in markdown
+
+def test_entity_mapping_falls_back_to_evidence_ref_ids_for_frontmatter() -> None:
+    task = SimpleNamespace(
+        id=15,
+        title="TODO: fallback frontmatter evidence",
+        status="open",
+        item_type="task",
+        owner=None,
+        due_date=None,
+        confidence=0.7,
+        source_document_id=None,
+        chunk_id=None,
+        evidence_refs=[
+            {
+                "source_document_id": "doc_from_entity_ref",
+                "chunk_id": "chunk_from_entity_ref",
+                "quote": "TODO: fallback frontmatter evidence",
+            }
+        ],
+    )
+    score = SimpleNamespace(
+        entity_type="task",
+        **_entity_key("task", "15"),
+        importance_score=0.5,
+        urgency_score=0.4,
+        risk_score=0.1,
+        confidence_score=0.7,
+        attention_score=0.38,
+        source_document_id=None,
+        chunk_id=None,
+        reasons=[{"code": "open_task"}],
+        evidence_refs=[],
+    )
+
+    entity = task_to_obsidian_entity(task=task, score=score)
+
+    assert entity.source_document_id == "doc_from_entity_ref"
+    assert entity.chunk_id == "chunk_from_entity_ref"
+
+    markdown = render_entity_markdown(entity)
+
+    assert 'source_document_id: "doc_from_entity_ref"' in markdown
+    assert 'chunk_id: "chunk_from_entity_ref"' in markdown
