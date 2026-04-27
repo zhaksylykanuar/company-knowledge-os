@@ -16,6 +16,7 @@ from app.db.base import Base  # noqa: E402
 import app.db.gmail_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402
 import app.db.source_models  # noqa: F401,E402
+import app.db.event_models  # noqa: F401,E402
 import app.db.score_models  # noqa: F401,E402
 import app.db.task_models  # noqa: F401,E402
 
