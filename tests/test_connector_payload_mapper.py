@@ -49,8 +49,8 @@ def test_connector_payload_mapper_maps_all_fixtures_to_ingested_event_ready_payl
         "source_system": fixture["source_system"],
         "source_object_id": fixture["source_object_id"],
         "idempotency_key": fixture["idempotency_key"],
-        "correlation_id": None,
-        "trace_id": None,
+        "correlation_id": f"corr_{mapped.event_id}",
+        "trace_id": f"trace_{mapped.event_id}",
         "raw_object_ref": fixture["raw_object_ref"],
         "payload": fixture["payload"],
     }
