@@ -1,0 +1,15 @@
+{
+  "source_system": "github",
+  "source_object_type": "issue",
+  "source_object_id": "qaztwin/company-knowledge-os/issues/202",
+  "event_type": "github.issue.opened",
+  "idempotency_key": "github-issue-202-opened-2026-04-27T10:00:00Z",
+  "raw_object_ref": "raw://github/events/issue_opened_202.json",
+  "payload": {
+    "source_object_type": "issue",
+    "title": "Track Jira connector payload mapping",
+    "summary": "A GitHub issue was opened to track Jira connector payload mapping.",
+    "actor_external_id": "github:user-202",
+    "source_url": "https://example.invalid/qaztwin/company-knowledge-os/issues/202"
+  }
+}

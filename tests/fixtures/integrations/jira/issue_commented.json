@@ -1,0 +1,15 @@
+{
+  "source_system": "jira",
+  "source_object_type": "issue",
+  "source_object_id": "QAZ-205",
+  "event_type": "jira.issue.commented",
+  "idempotency_key": "jira-qaz-205-commented-2026-04-27T10:15:00Z",
+  "raw_object_ref": "raw://jira/events/issue_commented_qaz_205.json",
+  "payload": {
+    "source_object_type": "issue",
+    "title": "Clarify connector payload assumptions",
+    "summary": "A comment was added asking to clarify connector payload assumptions.",
+    "actor_external_id": "jira:account-205",
+    "source_url": "https://example.invalid/browse/QAZ-205"
+  }
+}
