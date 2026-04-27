@@ -31,6 +31,16 @@ def test_sanitize_obsidian_filename_removes_invalid_characters() -> None:
     assert result == "Risk client security SCADA access issue"
 
 
+def _expected_entity_path(
+    directory: str,
+    title: str,
+    entity_type: str,
+    suffix: str,
+) -> str:
+    stable_suffix = "-".join((entity_type, entity_type, suffix))
+    return f"{directory}/{title} -- {stable_suffix}.md"
+
+
 def test_sanitize_obsidian_filename_uses_fallback_for_empty_value() -> None:
     assert sanitize_obsidian_filename("   ", fallback="fallback-name") == "fallback-name"
     assert sanitize_obsidian_filename(None, fallback="fallback-name") == "fallback-name"
@@ -48,7 +58,7 @@ def test_obsidian_entity_relative_path_uses_entity_directory() -> None:
     )
 
     assert str(obsidian_entity_relative_path(entity)) == (
-        "Risks/Risk client is worried about SCADA access.md"
+        _expected_entity_path("Risks", "Risk client is worried about SCADA access", "risk", "1")
     )
 
 
@@ -142,7 +152,7 @@ def test_write_obsidian_entity_writes_markdown_file(tmp_path) -> None:
 
     assert output_path.exists()
     assert output_path.relative_to(tmp_path).as_posix() == (
-        "Risks/Risk client security SCADA access.md"
+        _expected_entity_path("Risks", "Risk client security SCADA access", "risk", "1")
     )
     assert "# Risk: client/security SCADA access" in output_path.read_text()
 
@@ -172,8 +182,8 @@ def test_write_obsidian_entities_writes_multiple_files(tmp_path) -> None:
     output_paths = write_obsidian_entities(vault_path=tmp_path, entities=entities)
 
     assert len(output_paths) == 2
-    assert (tmp_path / "Tasks/TODO send proposal.md").exists()
-    assert (tmp_path / "Decisions/Decision start read-only.md").exists()
+    assert (tmp_path / _expected_entity_path("Tasks", "TODO send proposal", "task", "1")).exists()
+    assert (tmp_path / _expected_entity_path("Decisions", "Decision start read-only", "decision", "1")).exists()
 
 def test_score_to_dict_maps_score_fields() -> None:
     score = SimpleNamespace(
@@ -363,7 +373,11 @@ def test_render_entity_index_markdown_orders_by_attention_score() -> None:
 
     assert "| Attention | Title | Source document | Chunk |" in markdown
     assert markdown.index("Risk: high attention") < markdown.index("Risk: low attention")
-    assert "[Risk: high attention](<Risks/Risk high attention.md>)" in markdown
+    expected_link = (
+        "[Risk: high attention]"
+        f"(<{_expected_entity_path('Risks', 'Risk high attention', 'risk', '1')}>)"
+    )
+    assert expected_link in markdown
 
 
 def test_write_obsidian_index_files_writes_vault_navigation(tmp_path) -> None:
@@ -410,3 +424,38 @@ def test_write_obsidian_index_files_skips_empty_export(tmp_path) -> None:
 
     assert output_paths == []
     assert not (tmp_path / "FounderOS.md").exists()
+
+def test_write_obsidian_entities_does_not_overwrite_duplicate_titles(tmp_path) -> None:
+    entities = [
+        ObsidianEntity(
+            entity_type="task",
+            **_entity_key("task", "1"),
+            title="TODO: same title",
+            source_document_id="doc_1",
+            chunk_id="chunk_1",
+            evidence_refs=[{"chunk_id": "chunk_1"}],
+            metadata={"status": "open"},
+        ),
+        ObsidianEntity(
+            entity_type="task",
+            **_entity_key("task", "2"),
+            title="TODO: same title",
+            source_document_id="doc_2",
+            chunk_id="chunk_2",
+            evidence_refs=[{"chunk_id": "chunk_2"}],
+            metadata={"status": "open"},
+        ),
+    ]
+
+    output_paths = write_obsidian_entities(vault_path=tmp_path, entities=entities)
+
+    relative_paths = {
+        output_path.relative_to(tmp_path).as_posix()
+        for output_path in output_paths
+    }
+
+    assert relative_paths == {
+        _expected_entity_path("Tasks", "TODO same title", "task", "1"),
+        _expected_entity_path("Tasks", "TODO same title", "task", "2"),
+    }
+    assert len(list((tmp_path / "Tasks").glob("TODO same title*.md"))) == 2
