@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.event_models import SourceEvent
 from app.db.models import IngestedEvent
+from app.integrations.source_registry import validate_source_event_contract
+
+
+class SourceEventContractValidationError(ValueError):
+    pass
 
 
 KNOWN_SOURCE_SYSTEMS = {
@@ -122,6 +127,16 @@ async def normalize_ingested_event_to_source_event(
         event_type=ingested_event.event_type,
         payload=payload,
     )
+
+    contract_errors = validate_source_event_contract(
+        source_system=ingested_event.source_system,
+        source_object_type=source_object_type,
+        event_type=ingested_event.event_type,
+        payload=payload,
+    )
+    if contract_errors:
+        raise SourceEventContractValidationError("; ".join(contract_errors))
+
     source_event_key = _build_source_event_key(
         source_system=ingested_event.source_system,
         source_object_type=source_object_type,
