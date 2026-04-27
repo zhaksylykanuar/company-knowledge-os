@@ -56,8 +56,12 @@ def obsidian_entity_relative_path(entity: ObsidianEntity) -> Path:
         entity.title,
         fallback=f"{entity.entity_type}-{entity.entity_id}",
     )
+    stable_suffix = sanitize_obsidian_filename(
+        f"{entity.entity_type}-{entity.entity_id}",
+        fallback=f"{entity.entity_type}-unknown",
+    )
 
-    return Path(directory) / f"{filename}.md"
+    return Path(directory) / f"{filename} -- {stable_suffix}.md"
 
 
 def render_entity_markdown(entity: ObsidianEntity) -> str:
