@@ -1,0 +1,15 @@
+{
+  "source_system": "github",
+  "source_object_type": "commit",
+  "source_object_id": "qaztwin/company-knowledge-os/commit/abc1234",
+  "event_type": "github.commit.pushed",
+  "idempotency_key": "github-commit-abc1234-pushed-2026-04-27T10:05:00Z",
+  "raw_object_ref": "raw://github/events/commit_pushed_abc1234.json",
+  "payload": {
+    "source_object_type": "commit",
+    "title": "Add connector mapping tests",
+    "summary": "A commit was pushed with connector mapping tests.",
+    "actor_external_id": "github:user-203",
+    "source_url": "https://example.invalid/qaztwin/company-knowledge-os/commit/abc1234"
+  }
+}

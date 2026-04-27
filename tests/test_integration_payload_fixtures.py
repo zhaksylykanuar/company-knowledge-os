@@ -7,13 +7,20 @@ from tests.integration_fixture_loader import (
 
 def test_fixture_loader_lists_safe_connector_fixtures() -> None:
     assert [path.name for path in list_integration_fixtures("github")] == [
-        "pull_request_opened.json"
+        "check_run_completed.json",
+        "commit_pushed.json",
+        "issue_opened.json",
+        "pull_request_opened.json",
     ]
     assert [path.name for path in list_integration_fixtures("jira")] == [
-        "issue_status_changed.json"
+        "issue_commented.json",
+        "issue_status_changed.json",
+        "sprint_started.json",
     ]
     assert [path.name for path in list_integration_fixtures("telegram")] == [
-        "command_received.json"
+        "approval_received.json",
+        "command_received.json",
+        "message_received.json",
     ]
 
 

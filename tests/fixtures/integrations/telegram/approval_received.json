@@ -1,0 +1,14 @@
+{
+  "source_system": "telegram",
+  "source_object_type": "approval_response",
+  "source_object_id": "telegram-chat-100/message-502",
+  "event_type": "telegram.approval.received",
+  "idempotency_key": "telegram-approval-502-received-2026-04-27T10:30:00Z",
+  "raw_object_ref": "raw://telegram/events/approval_received_502.json",
+  "payload": {
+    "source_object_type": "approval_response",
+    "text": "approve PR summary draft",
+    "summary": "Founder approved a proposed action response in Telegram.",
+    "actor_external_id": "telegram:user-100"
+  }
+}
