@@ -89,6 +89,21 @@
 - invalid source events are rejected before source_events rows are created
 - no DB changes, migrations, external API calls, tokens, webhooks, or write actions
 
+### Connector payload fixtures / normalization coverage
+- Sprint 04I completed
+- safe connector payload fixtures added for GitHub, Jira, and Telegram
+- total fixtures: 10
+- GitHub fixtures cover pull_request, issue, commit, and check_run
+- Jira fixtures cover issue status change, issue comment, and sprint start
+- Telegram fixtures cover command, message, and approval response
+- deterministic fixture loader added
+- fixtures pass integration source registry contract validation
+- normalization tests prove fixture → IngestedEvent → SourceEvent flow
+- normalization tests cover all 10 fixtures automatically
+- source_events preserve raw_object_ref and evidence_refs for fixture-based events
+- no production code changes, DB changes, migrations, API changes, external API calls, tokens, webhooks, or write actions
+
+
 
 ## Current state
 
@@ -115,9 +130,18 @@ GitHub / Jira / Telegram connector payload later
 → source_events
 → future extracted development entities / scoring / attention
 
+Connector payload test coverage now proves:
+
+safe fixture payload
+→ IngestedEvent
+→ integration source registry contract validation
+→ SourceEvent
+→ evidence_refs / raw_object_ref preserved
+
+
 Current health on main:
 - uv run ruff check . passes
-- uv run pytest -q passes with 58 tests
+- uv run pytest -q passes with 71 tests
 - ./scripts/check_no_secrets.sh passes
 - FastAPI routes: HAS_SEARCH True, HAS_ASK True, HAS_SCORE True, HAS_ATTENTION True
 - Alembic current/head: 8c2b0a4d9f1e
@@ -125,6 +149,9 @@ Current health on main:
 - PR #9 merged with merge commit c0b936f
 - PR #11 merged with merge commit 0daecf6
 - PR #12 merged with merge commit 45e8ee5
+- PR #14 merged with merge commit c0dd599
+- PR #15 merged with merge commit 948707a
+- PR #16 merged with merge commit 21b953d
 
 Latest merged work:
 - Sprint 04D: deterministic knowledge scoring layer
@@ -134,6 +161,7 @@ Latest merged work:
 - Sprint 04F: deterministic daily briefing / attention dashboard foundation
 - Sprint 04G: source_events foundation for future integration-aware event ingestion
 - Sprint 04H: integration source registry and source event contract validation
+- Sprint 04I: connector payload fixtures and normalization coverage
 
 ## Useful commands
 
@@ -152,28 +180,27 @@ Export Obsidian vault:
 
 Recommended next sprint:
 
-### Sprint 04I — Connector payload fixtures and normalization coverage
+### Sprint 04J — Connector payload mapper and raw event ingestion boundary
 
 Goal:
-- add safe sample payload fixtures for GitHub, Jira, and Telegram
-- cover GitHub pull requests, issues, commits, and check runs
-- cover Jira issues, status changes, comments, and sprints
-- cover Telegram commands, messages, and approval responses
-- prove payload → IngestedEvent → contract validation → SourceEvent flow
-- keep all fixtures secret-free
+- add deterministic mapper from connector payload dicts to IngestedEvent-ready fields
+- keep raw payload first
+- validate source_system, source_object_type, event_type, idempotency_key, raw_object_ref, and payload
+- reuse existing integration source registry contracts
+- support GitHub/Jira/Telegram fixture payloads
+- prepare future connector polling/webhook layer without adding real connectors yet
 - keep all tests deterministic
 - no real API calls
+- no tokens
 - no webhooks yet
 - no external write actions
 
 Possible output:
-- tests/fixtures/integrations/github/*.json
-- tests/fixtures/integrations/jira/*.json
-- tests/fixtures/integrations/telegram/*.json
-- deterministic fixture loader
-- normalization tests for each source
-- source_events evidence_refs coverage
-- contract validation failure tests
+- app/integrations/payload_mapper.py
+- deterministic payload validation errors
+- tests proving fixtures map to IngestedEvent-ready data
+- tests proving invalid connector payloads fail before DB writes
+- optional service function: connector payload → IngestedEvent → SourceEvent
 - no real API calls
 - no webhook server yet unless explicitly approved
 - no NOTES.md changes without separate approval
