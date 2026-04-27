@@ -1,0 +1,15 @@
+{
+  "source_system": "jira",
+  "source_object_type": "issue",
+  "source_object_id": "QAZ-204",
+  "event_type": "jira.issue.status_changed",
+  "idempotency_key": "jira-qaz-204-status-changed-2026-04-27T09:10:00Z",
+  "raw_object_ref": "raw://jira/events/issue_status_changed_qaz_204.json",
+  "payload": {
+    "source_object_type": "issue",
+    "title": "Prepare connector payload fixtures",
+    "summary": "Issue moved from In Progress to Review.",
+    "actor_external_id": "jira:account-204",
+    "source_url": "https://example.invalid/browse/QAZ-204"
+  }
+}

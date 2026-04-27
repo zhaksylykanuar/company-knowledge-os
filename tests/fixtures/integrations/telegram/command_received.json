@@ -1,0 +1,14 @@
+{
+  "source_system": "telegram",
+  "source_object_type": "command",
+  "source_object_id": "telegram-chat-100/message-500",
+  "event_type": "telegram.command.received",
+  "idempotency_key": "telegram-command-briefing-2026-04-27T09:20:00Z",
+  "raw_object_ref": "raw://telegram/events/command_received_500.json",
+  "payload": {
+    "source_object_type": "command",
+    "text": "/briefing",
+    "summary": "Founder requested the latest briefing from Telegram.",
+    "actor_external_id": "telegram:user-100"
+  }
+}
