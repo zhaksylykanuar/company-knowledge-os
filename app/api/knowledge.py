@@ -5,6 +5,7 @@ from app.services.knowledge_ingestion import ingest_text
 from app.services.knowledge_qa import ask_knowledge
 from app.services.knowledge_search import search_knowledge
 from app.services.knowledge_score_processor import process_knowledge_scores
+from app.services.knowledge_attention import get_attention_dashboard
 
 router = APIRouter(prefix="/v1/knowledge", tags=["knowledge"])
 
@@ -66,3 +67,14 @@ async def score_knowledge_endpoint(payload: ScoreKnowledgeRequest) -> dict:
         "processed": True,
         **result,
     }
+
+
+@router.get("/attention")
+async def get_knowledge_attention(
+    limit: int = 10,
+    source_document_id: str | None = None,
+) -> dict:
+    return await get_attention_dashboard(
+        limit=limit,
+        source_document_id=source_document_id,
+    )
