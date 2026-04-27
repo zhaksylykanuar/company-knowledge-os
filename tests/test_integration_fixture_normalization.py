@@ -7,14 +7,25 @@ from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
 from app.db.models import IngestedEvent
 from app.services.source_events import normalize_ingested_event_to_source_event
-from tests.integration_fixture_loader import load_integration_fixture
+from tests.integration_fixture_loader import (
+    list_integration_fixtures,
+    load_integration_fixture,
+)
 
 
-FIXTURE_REFS = [
-    ("github", "pull_request_opened.json"),
-    ("jira", "issue_status_changed.json"),
-    ("telegram", "command_received.json"),
-]
+def _all_fixture_refs() -> list[tuple[str, str]]:
+    fixture_refs: list[tuple[str, str]] = []
+
+    for source_system in ("github", "jira", "telegram"):
+        fixture_refs.extend(
+            (source_system, fixture_path.name)
+            for fixture_path in list_integration_fixtures(source_system)
+        )
+
+    return fixture_refs
+
+
+FIXTURE_REFS = _all_fixture_refs()
 
 
 @pytest.mark.asyncio
