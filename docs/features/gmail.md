@@ -15,6 +15,8 @@
 - Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.
 - Gmail messages with readable `text/plain` body content, or `text/html` body content when no plain text exists, are converted into `source_documents` and `document_chunks`.
 - Gmail messages without readable body text are skipped for document/chunk creation.
+- Gmail `persist=true` backfill creates SourceEvent rows for new ingested message events when registry-required fields are present.
+- Gmail messages without a real Subject header do not get SourceEvent rows in this ticket; no subject is invented.
 
 ## Invariants
 

@@ -28,6 +28,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - status: implemented
   - scope: add a generic deterministic SourceEvent read model; defer development-specific projections.
 
+- FOS-006B: Normalize Drive/Gmail backfill events into SourceEvents
+  - status: implemented
+  - scope: derive SourceEvent rows for valid new Drive/Gmail ingested events.
+
 - FOS-007: Add API auth/rate-limit/signature-validation plan
   - status: planned
   - scope: define and implement API boundary protections.

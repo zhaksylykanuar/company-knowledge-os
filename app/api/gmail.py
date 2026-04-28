@@ -13,6 +13,7 @@ from app.db.source_models import DocumentChunk, SourceDocument
 from app.events.schemas import EventEnvelope
 from app.services.chunking import chunk_text
 from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json
+from app.services.source_events import normalize_ingested_event_to_source_event
 
 router = APIRouter(prefix="/v1/gmail", tags=["gmail"])
 
@@ -311,19 +312,21 @@ async def gmail_backfill(
                 msg, raw_ref
             )
 
-            session.add(
-                IngestedEvent(
-                    event_id=event.event_id,
-                    event_type=event.event_type,
-                    source_system=event.source_system,
-                    source_object_id=event.source_object_id,
-                    idempotency_key=event.idempotency_key,
-                    correlation_id=event.correlation_id,
-                    trace_id=event.trace_id,
-                    raw_object_ref=event.raw_object_ref,
-                    payload=event.payload,
-                )
+            ingested_event = IngestedEvent(
+                event_id=event.event_id,
+                event_type=event.event_type,
+                source_system=event.source_system,
+                source_object_id=event.source_object_id,
+                idempotency_key=event.idempotency_key,
+                correlation_id=event.correlation_id,
+                trace_id=event.trace_id,
+                raw_object_ref=event.raw_object_ref,
+                payload=event.payload,
             )
+            session.add(ingested_event)
+            await session.flush()
+            if event.payload.get("subject"):
+                await normalize_ingested_event_to_source_event(session, ingested_event)
             if msg.get("threadId"):
                 existing_thread = await session.scalar(
                     select(GmailThread).where(GmailThread.thread_id == msg["threadId"])

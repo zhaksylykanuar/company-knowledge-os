@@ -3,6 +3,7 @@ import base64
 from fastapi.testclient import TestClient
 
 import app.api.gmail as gmail_api
+from app.db.models import IngestedEvent
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.integrations.source_registry import validate_source_event_contract
 from app.main import app
@@ -24,6 +25,9 @@ class FakeAsyncSession:
 
     def add(self, item: object) -> None:
         self.added.append(item)
+
+    async def flush(self) -> None:
+        return None
 
     async def commit(self) -> None:
         return None
@@ -178,7 +182,12 @@ def test_build_gmail_document_records_skips_messages_without_readable_body() -> 
 
 def test_gmail_backfill_persist_creates_source_document_and_chunk(monkeypatch, tmp_path):
     added: list[object] = []
+    normalized: list[IngestedEvent] = []
     readable_text = "Hello from Gmail body.\nDecision: use the document chunk path."
+
+    async def fake_normalize(session, ingested_event):
+        normalized.append(ingested_event)
+        return None
 
     monkeypatch.setattr(
         gmail_api,
@@ -208,6 +217,7 @@ def test_gmail_backfill_persist_creates_source_document_and_chunk(monkeypatch, t
     )
     monkeypatch.setattr(gmail_api, "raw_storage_root", lambda: tmp_path)
     monkeypatch.setattr(gmail_api, "AsyncSessionLocal", _fake_session_factory(added))
+    monkeypatch.setattr(gmail_api, "normalize_ingested_event_to_source_event", fake_normalize)
 
     with TestClient(app) as client:
         response = client.post("/v1/gmail/backfill?max_results=1&persist=true")
@@ -240,3 +250,71 @@ def test_gmail_backfill_persist_creates_source_document_and_chunk(monkeypatch, t
     assert chunks[0].metadata_json["message_id"] == "m1"
     assert chunks[0].metadata_json["thread_id"] == "t1"
     assert chunks[0].metadata_json["subject"] == "FounderOS weekly update"
+
+    assert len(normalized) == 1
+    ingested_event = normalized[0]
+    assert ingested_event in added
+    assert ingested_event.event_type == "gmail.message.ingested"
+    assert ingested_event.source_system == "gmail"
+    assert ingested_event.source_object_id == "m1"
+    assert ingested_event.raw_object_ref == raw_ref
+    assert ingested_event.payload["source_object_type"] == "message"
+    assert ingested_event.payload["subject"] == "FounderOS weekly update"
+
+
+def test_gmail_backfill_persist_skips_source_event_without_subject(monkeypatch, tmp_path):
+    added: list[object] = []
+    normalized: list[IngestedEvent] = []
+    readable_text = "Readable body without a subject should still persist raw data."
+
+    async def fake_normalize(session, ingested_event):
+        normalized.append(ingested_event)
+        return None
+
+    monkeypatch.setattr(
+        gmail_api,
+        "list_messages",
+        lambda query="in:inbox OR in:sent", max_results=10: [{"id": "m2"}],
+    )
+    monkeypatch.setattr(
+        gmail_api,
+        "get_message",
+        lambda mid: {
+            "id": mid,
+            "threadId": "t2",
+            "historyId": "h2",
+            "labelIds": ["INBOX"],
+            "snippet": "ignored snippet",
+            "payload": {
+                "mimeType": "text/plain",
+                "headers": [
+                    {"name": "From", "value": "founder@example.com"},
+                    {"name": "To", "value": "team@example.com"},
+                ],
+                "body": {"data": _gmail_body_data(readable_text)},
+            },
+        },
+    )
+    monkeypatch.setattr(gmail_api, "raw_storage_root", lambda: tmp_path)
+    monkeypatch.setattr(gmail_api, "AsyncSessionLocal", _fake_session_factory(added))
+    monkeypatch.setattr(gmail_api, "normalize_ingested_event_to_source_event", fake_normalize)
+
+    with TestClient(app) as client:
+        response = client.post("/v1/gmail/backfill?max_results=1&persist=true")
+
+    assert response.status_code == 202
+    assert response.json()["saved"] == 1
+    assert normalized == []
+
+    raw_ref = "raw://gmail/m2/h2/message.json"
+    ingested_event = next(item for item in added if isinstance(item, IngestedEvent))
+    source_document = next(item for item in added if isinstance(item, SourceDocument))
+
+    assert (tmp_path / "gmail" / "m2" / "h2" / "message.json").exists()
+    assert ingested_event.event_type == "gmail.message.ingested"
+    assert ingested_event.raw_object_ref == raw_ref
+    assert ingested_event.payload["source_object_type"] == "message"
+    assert "subject" not in ingested_event.payload
+    assert source_document.source_system == "gmail"
+    assert source_document.source_object_id == "m2"
+    assert source_document.title is None

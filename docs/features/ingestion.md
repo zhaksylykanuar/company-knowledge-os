@@ -16,6 +16,7 @@
 - Gmail backfill saves raw messages, threads, messages, and attachment metadata.
 - Gmail backfill creates source documents and chunks when a raw message contains readable body text.
 - Drive/Gmail emitted ingestion events use registry-compatible event names and payload fields.
+- Drive/Gmail persist flows normalize valid new `IngestedEvent` rows into `SourceEvent` rows.
 - Connector payloads can map into `IngestedEvent` and then `SourceEvent`.
 
 ## Invariants

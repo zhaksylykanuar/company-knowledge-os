@@ -13,6 +13,7 @@
 - File content is downloaded/exported as text when supported.
 - Raw metadata/content are saved before creating source documents and chunks.
 - Drive emits registry-compatible `drive.file.ingested` events with `source_object_type` and `title`.
+- Drive `persist=true` backfill creates SourceEvent rows for new ingested file events.
 
 ## Invariants
 

@@ -17,6 +17,7 @@
 - Existing SourceEvent rows can be projected into a deterministic read model for internal services.
 - The read model exposes normalized identifiers, event time, title/summary, raw refs, trace/correlation IDs, evidence refs, and a whitelisted payload subset when payload is supplied.
 - Drive/Gmail emitted ingestion event names are registry-compatible.
+- New non-duplicate Drive/Gmail backfill events are normalized into SourceEvent rows when they satisfy registry contracts.
 
 ## Invariants
 
@@ -31,5 +32,6 @@
 ## Known Gaps
 
 - No public SourceEvent query/read API is visible yet.
+- Duplicate or legacy Drive/Gmail ingested events are not repaired into SourceEvent rows by backfill.
 - GitHub/Jira/Telegram real connectors are planned, not implemented.
 - Development event projection DTOs are planned, not implemented.
