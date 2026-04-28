@@ -12,6 +12,7 @@
 - Search queries chunks, tasks, risks, and decisions.
 - Q&A composes deterministic answers from search and recent fallback logic.
 - Search results include evidence refs and score payloads when available.
+- Search, ask, and attention endpoints are sensitive and should require auth outside local/dev.
 
 ## Invariants
 

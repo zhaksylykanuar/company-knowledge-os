@@ -10,4 +10,7 @@ External providers -> backend connectors -> event bus -> source of truth -> agen
 Prompt injection, token leakage, accidental write, duplicate retries, unsupported claims, webhook spoofing.
 
 ## Controls
-Read-only scopes first, backend-only tokens, raw storage, evidence validation, idempotency, webhook signature validation, Telegram approval, append-only audit logs.
+Read-only scopes first, backend-only tokens, raw storage, evidence validation, idempotency, planned webhook signature validation, planned approval enforcement, append-only audit logs.
+
+## API boundary plan
+Endpoint-level auth, rate limiting, webhook signature validation, and write/action approval enforcement are planned in `docs/security/api-boundary.md`. Current work defines the policy only; enforcement is not yet implemented.

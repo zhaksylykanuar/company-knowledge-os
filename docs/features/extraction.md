@@ -15,6 +15,7 @@
 - Optional LLM extraction exists behind configuration.
 - Evidence validation rejects extracted items without evidence refs.
 - Document-derived extractions leave `source_event_id` empty and use `source_document_id`, `chunk_id`, and `evidence_refs` for provenance.
+- Extraction endpoints are sensitive and should require auth outside local/dev.
 
 ## Invariants
 

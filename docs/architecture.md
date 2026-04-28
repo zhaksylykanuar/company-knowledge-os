@@ -39,3 +39,7 @@ Drive / Gmail / manual text / future connector payloads
 - LLM output must be validated before persistence.
 - If evidence is missing, return `null`, an empty array, or `insufficient evidence`.
 - LLM must not directly mutate production data.
+
+## API Boundary
+
+Endpoint-level auth, rate limiting, webhook signature validation, and write/action approval enforcement are planned in `security/api-boundary.md`. Current connector posture remains read-only first, and future write/action endpoints must be authenticated, feature-flagged, and explicitly approval-gated.

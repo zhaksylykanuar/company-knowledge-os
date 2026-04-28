@@ -18,6 +18,7 @@
 - The read model exposes normalized identifiers, event time, title/summary, raw refs, trace/correlation IDs, evidence refs, and a whitelisted payload subset when payload is supplied.
 - Drive/Gmail emitted ingestion event names are registry-compatible.
 - New non-duplicate Drive/Gmail backfill events are normalized into SourceEvent rows when they satisfy registry contracts.
+- SourceEvent persistence from external inputs requires future API auth and webhook signature validation boundaries.
 
 ## Invariants
 

@@ -18,6 +18,7 @@
 - Drive/Gmail emitted ingestion events use registry-compatible event names and payload fields.
 - Drive/Gmail persist flows normalize valid new `IngestedEvent` rows into `SourceEvent` rows.
 - Connector payloads can map into `IngestedEvent` and then `SourceEvent`.
+- Persisted external events require future API auth and webhook signature boundaries before production exposure.
 
 ## Invariants
 

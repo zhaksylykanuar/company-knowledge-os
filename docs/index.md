@@ -13,6 +13,10 @@ Navigation map for future Codex sessions.
 - `backlog.md`: small FOS tickets.
 - `../SECURITY_BASELINE.md`: threat model and security baseline.
 
+## Security Docs
+
+- `security/api-boundary.md`: API auth, rate-limit, signature-validation, and approval-boundary plan.
+
 ## Feature Docs
 
 - `features/ingestion.md`: raw/document/event ingestion.

@@ -23,6 +23,13 @@
 - Every extracted task/risk/decision must have `evidence_refs`.
 - Never persist unsupported claims.
 
+## API Boundary Rules
+
+- New endpoints must be classified as public, protected, webhook, or write/action.
+- Protected endpoints require auth in production.
+- Webhook endpoints require signature or secret-token validation before persistence.
+- Never log secrets, API keys, authorization headers, or webhook signatures.
+
 ## AI Rules
 
 - LLM outputs used in pipelines must be strict JSON.

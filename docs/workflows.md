@@ -28,6 +28,13 @@
 - Run `git status --short`.
 - Do not edit generated Obsidian vault files.
 
+## API Security Workflow
+
+1. Classify the endpoint as public, protected, webhook, or write/action.
+2. Define auth, signature-validation, and rate-limit expectations.
+3. Add focused tests when enforcement is implemented.
+4. Update `SECURITY_BASELINE.md` and the relevant feature docs.
+
 ## Forbidden Without Explicit Approval
 
 - Large refactors.
