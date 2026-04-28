@@ -9,7 +9,7 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - scope: add AGENTS, CLAUDE, and operational docs.
 
 - FOS-002: Replace unstable Python hash() in manual ingestion with SHA-256
-  - status: planned
+  - status: implemented
   - scope: make manual `content_hash` stable across processes.
 
 - FOS-003: Fix document extraction provenance semantics around source_event_id

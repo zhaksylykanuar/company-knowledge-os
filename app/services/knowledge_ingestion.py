@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.source_models import SourceDocument, DocumentChunk
 from app.services.chunking import chunk_text
+from app.services.raw_storage import sha256_text
 
 
 def _now():
@@ -70,7 +71,7 @@ async def ingest_text(
             title=title,
             source_url=None,
             raw_object_ref=raw_ref,
-            content_hash=str(abs(hash(text))),
+            content_hash=sha256_text(text),
             modified_at=_now().isoformat(),
             metadata_json=metadata,
         )
@@ -94,7 +95,7 @@ async def ingest_text(
                     text=chunk.text,
                     start_char=chunk.start_char,
                     end_char=chunk.end_char,
-                    content_hash=str(abs(hash(chunk.text))),
+                    content_hash=sha256_text(chunk.text),
                     metadata_json={"chunk_index": idx},
                 )
             )
