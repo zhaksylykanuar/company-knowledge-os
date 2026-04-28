@@ -18,6 +18,7 @@
 ## Invariants
 
 - Source events are derived from raw ingested events.
+- SourceEvent IDs must not be confused with DocumentChunk IDs.
 - Source event creation must be deterministic.
 - Contract-invalid events must fail before source event persistence.
 - Projections must preserve `raw_object_ref` and evidence links.

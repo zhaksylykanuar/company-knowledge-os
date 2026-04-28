@@ -13,7 +13,7 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - scope: make manual `content_hash` stable across processes.
 
 - FOS-003: Fix document extraction provenance semantics around source_event_id
-  - status: planned
+  - status: implemented
   - scope: avoid storing chunk IDs in fields that imply SourceEvent IDs.
 
 - FOS-004: Align Drive/Gmail event names with source registry contracts

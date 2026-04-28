@@ -27,5 +27,7 @@
 - Raw storage + Postgres are the source of truth.
 - Obsidian is export-only.
 - Extracted tasks/risks/decisions require `evidence_refs`.
+- `source_event_id` is for actual SourceEvent linkage when present.
+- Document-derived provenance belongs in `source_document_id`, `chunk_id`, and `evidence_refs`.
 - Source-event projections must preserve `raw_object_ref` and evidence links.
 - Missing evidence means no persisted fact.

@@ -13,6 +13,7 @@
 - Rule-based extraction is deterministic and default.
 - Optional LLM extraction exists behind configuration.
 - Evidence validation rejects extracted items without evidence refs.
+- Document-derived extractions leave `source_event_id` empty and use `source_document_id`, `chunk_id`, and `evidence_refs` for provenance.
 
 ## Invariants
 
@@ -24,5 +25,4 @@
 
 ## Known Gaps
 
-- Document extraction currently has confusing `source_event_id` semantics.
 - LLM extraction needs strict operational review before production use.
