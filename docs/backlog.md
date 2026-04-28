@@ -25,8 +25,8 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - scope: make Gmail content participate in extraction/search pipeline.
 
 - FOS-006: Add or clarify SourceEvent read model / development event projection
-  - status: planned
-  - scope: query and project GitHub/Jira/Telegram source events deterministically.
+  - status: implemented
+  - scope: add a generic deterministic SourceEvent read model; defer development-specific projections.
 
 - FOS-007: Add API auth/rate-limit/signature-validation plan
   - status: planned
