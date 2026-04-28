@@ -21,7 +21,7 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - scope: make emitted event types compatible with registry validation.
 
 - FOS-005: Convert Gmail raw messages into SourceDocument/chunks
-  - status: planned
+  - status: implemented
   - scope: make Gmail content participate in extraction/search pipeline.
 
 - FOS-006: Add or clarify SourceEvent read model / development event projection

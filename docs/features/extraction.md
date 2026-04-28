@@ -10,6 +10,7 @@
 ## Current Behavior
 
 - Document chunks are processed into tasks, risks, and decisions.
+- Gmail messages with readable body text enter extraction through the same document chunk path.
 - Rule-based extraction is deterministic and default.
 - Optional LLM extraction exists behind configuration.
 - Evidence validation rejects extracted items without evidence refs.

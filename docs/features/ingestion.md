@@ -14,6 +14,7 @@
 - Manual text documents and chunks use SHA-256 content hashes.
 - Drive backfill saves raw metadata/content, creates source documents and chunks.
 - Gmail backfill saves raw messages, threads, messages, and attachment metadata.
+- Gmail backfill creates source documents and chunks when a raw message contains readable body text.
 - Drive/Gmail emitted ingestion events use registry-compatible event names and payload fields.
 - Connector payloads can map into `IngestedEvent` and then `SourceEvent`.
 
@@ -26,4 +27,4 @@
 
 ## Known Gaps
 
-- Gmail raw messages are not yet converted into `SourceDocument` and chunks.
+- Gmail attachment content is not yet ingested into `SourceDocument` and chunks.

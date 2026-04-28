@@ -1,13 +1,44 @@
+import base64
+import binascii
+import re
+from html.parser import HTMLParser
+
 from fastapi import APIRouter, Query, status
 from sqlalchemy import select
 
 from app.db.base import AsyncSessionLocal
 from app.db.gmail_models import GmailAttachment, GmailMessage, GmailThread
 from app.db.models import AuditLog, IngestedEvent
+from app.db.source_models import DocumentChunk, SourceDocument
 from app.events.schemas import EventEnvelope
-from app.services.raw_storage import raw_storage_root, safe_path_part, write_json
+from app.services.chunking import chunk_text
+from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json
 
 router = APIRouter(prefix="/v1/gmail", tags=["gmail"])
+
+
+class _ReadableHtmlParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() in {"br", "div", "li", "p", "tr"}:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in {"div", "li", "p", "tr"}:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if data:
+            self.parts.append(data)
+
+    def get_text(self) -> str:
+        text = "".join(self.parts)
+        text = re.sub(r"[ \t\r\f\v]+", " ", text)
+        lines = [line.strip() for line in text.splitlines()]
+        return "\n".join(line for line in lines if line).strip()
 
 
 def list_messages(query: str = "in:inbox OR in:sent", max_results: int = 20) -> list[dict]:
@@ -33,6 +64,153 @@ def extract_subject(msg: dict) -> str | None:
                 return value.strip()
             return None
     return None
+
+
+def extract_gmail_headers(msg: dict) -> dict[str, str]:
+    wanted = {"subject", "from", "to", "cc", "date"}
+    headers: dict[str, str] = {}
+    for header in ((msg.get("payload") or {}).get("headers") or []):
+        if not isinstance(header, dict):
+            continue
+        name = header.get("name")
+        value = header.get("value")
+        if not isinstance(name, str) or not isinstance(value, str):
+            continue
+        normalized = name.lower()
+        if normalized in wanted and value.strip() and normalized not in headers:
+            headers[normalized] = value.strip()
+    return headers
+
+
+def _decode_gmail_body_data(data: object) -> str | None:
+    if not isinstance(data, str) or not data.strip():
+        return None
+    padded = data + ("=" * ((4 - len(data) % 4) % 4))
+    try:
+        decoded = base64.urlsafe_b64decode(padded.encode("ascii"))
+    except (binascii.Error, UnicodeEncodeError, ValueError):
+        return None
+    text = decoded.decode("utf-8", errors="replace").strip()
+    return text or None
+
+
+def _html_to_readable_text(html: str) -> str | None:
+    parser = _ReadableHtmlParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:
+        return None
+    text = parser.get_text()
+    return text or None
+
+
+def _is_attachment_part(part: dict) -> bool:
+    filename = part.get("filename")
+    if isinstance(filename, str) and filename.strip():
+        return True
+    body = part.get("body") or {}
+    return isinstance(body, dict) and bool(body.get("attachmentId"))
+
+
+def _iter_decoded_body_parts(part: dict, mime_type: str) -> list[str]:
+    if not isinstance(part, dict) or _is_attachment_part(part):
+        return []
+
+    found: list[str] = []
+    part_mime_type = part.get("mimeType")
+    body = part.get("body") or {}
+    if part_mime_type == mime_type and isinstance(body, dict):
+        decoded = _decode_gmail_body_data(body.get("data"))
+        if decoded:
+            found.append(decoded)
+
+    for child in part.get("parts", []) or []:
+        found.extend(_iter_decoded_body_parts(child, mime_type))
+    return found
+
+
+def extract_readable_gmail_body_text(msg: dict) -> str | None:
+    payload = msg.get("payload") or {}
+    plain_parts = _iter_decoded_body_parts(payload, "text/plain")
+    if plain_parts:
+        text = "\n\n".join(part.strip() for part in plain_parts if part.strip()).strip()
+        return text or None
+
+    html_parts = _iter_decoded_body_parts(payload, "text/html")
+    readable_html_parts = [
+        readable for part in html_parts if (readable := _html_to_readable_text(part)) is not None
+    ]
+    text = "\n\n".join(readable_html_parts).strip()
+    return text or None
+
+
+def build_gmail_document_metadata(msg: dict, raw_ref: str) -> dict:
+    headers = extract_gmail_headers(msg)
+    metadata = {
+        "message_id": msg["id"],
+        "thread_id": msg.get("threadId"),
+        "history_id": msg.get("historyId"),
+        "label_ids": msg.get("labelIds", []),
+        "raw_object_ref": raw_ref,
+    }
+    for header_name in ("subject", "from", "to", "cc", "date"):
+        if header_name in headers:
+            metadata[header_name] = headers[header_name]
+    return metadata
+
+
+def build_gmail_document_records(
+    msg: dict, raw_ref: str
+) -> tuple[SourceDocument | None, list[DocumentChunk], str | None]:
+    readable_text = extract_readable_gmail_body_text(msg)
+    if readable_text is None:
+        return None, [], None
+
+    content_hash = sha256_text(readable_text)
+    source_document_id = f"gmail:{msg['id']}:{content_hash[:12]}"
+    payload = msg.get("payload") or {}
+    metadata = build_gmail_document_metadata(msg, raw_ref)
+    subject = metadata.get("subject")
+
+    source_document = SourceDocument(
+        source_document_id=source_document_id,
+        source_system="gmail",
+        source_object_id=msg["id"],
+        title=subject,
+        source_url=None,
+        mime_type=payload.get("mimeType"),
+        raw_object_ref=raw_ref,
+        content_hash=content_hash,
+        modified_at=str(msg["internalDate"]) if msg.get("internalDate") is not None else None,
+        metadata_json=metadata,
+    )
+
+    document_chunks = []
+    for index, chunk in enumerate(chunk_text(readable_text)):
+        chunk_metadata = {
+            "message_id": msg["id"],
+            "thread_id": msg.get("threadId"),
+            "chunk_index": index,
+        }
+        if subject:
+            chunk_metadata["subject"] = subject
+        document_chunks.append(
+            DocumentChunk(
+                source_document_id=source_document_id,
+                chunk_id=chunk.chunk_id,
+                source_system="gmail",
+                source_object_id=msg["id"],
+                raw_object_ref=raw_ref,
+                text=chunk.text,
+                start_char=chunk.start_char,
+                end_char=chunk.end_char,
+                content_hash=sha256_text(chunk.text),
+                metadata_json=chunk_metadata,
+            )
+        )
+
+    return source_document, document_chunks, readable_text
 
 
 def build_gmail_event(msg: dict) -> EventEnvelope:
@@ -129,6 +307,9 @@ async def gmail_backfill(
             raw_ref = save_gmail_raw_message(msg)
             event.raw_object_ref = raw_ref
             event.payload = {**event.payload, "raw_object_ref": raw_ref}
+            source_document, document_chunks, _readable_text = build_gmail_document_records(
+                msg, raw_ref
+            )
 
             session.add(
                 IngestedEvent(
@@ -172,6 +353,17 @@ async def gmail_backfill(
                         payload=event.payload,
                     )
                 )
+
+            if source_document is not None:
+                existing_doc = await session.scalar(
+                    select(SourceDocument).where(
+                        SourceDocument.source_document_id == source_document.source_document_id
+                    )
+                )
+                if not existing_doc:
+                    session.add(source_document)
+                    for chunk in document_chunks:
+                        session.add(chunk)
 
             for attachment in iter_attachment_metadata(msg):
                 existing_attachment = await session.scalar(
