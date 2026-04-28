@@ -12,6 +12,7 @@
 - Drive files can be listed from a configured AI_INBOX folder.
 - File content is downloaded/exported as text when supported.
 - Raw metadata/content are saved before creating source documents and chunks.
+- Drive emits registry-compatible `drive.file.ingested` events with `source_object_type` and `title`.
 
 ## Invariants
 
@@ -22,6 +23,5 @@
 
 ## Known Gaps
 
-- Drive event names need alignment with source registry contracts.
 - Webhook/PubSub handling is not visible as implemented.
 - Binary/non-text extraction behavior is unknown.

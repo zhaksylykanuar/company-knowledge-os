@@ -22,21 +22,41 @@ def get_message(message_id: str) -> dict:
     return _get_message(message_id)
 
 
+def extract_subject(msg: dict) -> str | None:
+    for header in ((msg.get("payload") or {}).get("headers") or []):
+        if not isinstance(header, dict):
+            continue
+        name = header.get("name")
+        value = header.get("value")
+        if isinstance(name, str) and name.lower() == "subject":
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            return None
+    return None
+
+
 def build_gmail_event(msg: dict) -> EventEnvelope:
     history_id = msg.get("historyId", "unknown")
+    subject = extract_subject(msg)
+    payload = {
+        "source_object_type": "message",
+        "id": msg["id"],
+        "threadId": msg.get("threadId"),
+        "historyId": history_id,
+        "labelIds": msg.get("labelIds", []),
+        "snippet": msg.get("snippet", ""),
+    }
+
+    if subject is not None:
+        payload["subject"] = subject
+
     return EventEnvelope(
-        event_type="gmail.message.discovered",
+        event_type="gmail.message.ingested",
         source_system="gmail",
         source_object_id=msg["id"],
         idempotency_key=f"gmail:message:{msg['id']}:{history_id}",
         raw_object_ref=f"raw://gmail/{msg['id']}/{history_id}/message.json",
-        payload={
-            "id": msg["id"],
-            "threadId": msg.get("threadId"),
-            "historyId": history_id,
-            "labelIds": msg.get("labelIds", []),
-            "snippet": msg.get("snippet", ""),
-        },
+        payload=payload,
     )
 
 
@@ -183,7 +203,7 @@ async def gmail_backfill(
                 )
             session.add(
                 AuditLog(
-                    event_type="gmail.message.discovered",
+                    event_type=event.event_type,
                     actor="system",
                     correlation_id=event.correlation_id,
                     trace_id=event.trace_id,

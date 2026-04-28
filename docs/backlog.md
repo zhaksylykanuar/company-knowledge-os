@@ -17,7 +17,7 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - scope: avoid storing chunk IDs in fields that imply SourceEvent IDs.
 
 - FOS-004: Align Drive/Gmail event names with source registry contracts
-  - status: planned
+  - status: implemented
   - scope: make emitted event types compatible with registry validation.
 
 - FOS-005: Convert Gmail raw messages into SourceDocument/chunks

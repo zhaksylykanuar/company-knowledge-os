@@ -12,6 +12,7 @@
 - Gmail messages can be listed and fetched with read-only scope.
 - Raw Gmail messages are stored under raw storage.
 - Threads, messages, and attachment metadata are persisted.
+- Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.
 
 ## Invariants
 
@@ -23,5 +24,4 @@
 ## Known Gaps
 
 - Gmail bodies are not yet converted into source documents and chunks.
-- Gmail event names need alignment with source registry contracts.
 - Webhook/PubSub handling is not visible as implemented.

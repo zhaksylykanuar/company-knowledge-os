@@ -14,10 +14,12 @@
 - Valid payloads can be persisted as `ingested_events`.
 - `ingested_events` can be normalized into `source_events`.
 - Source events preserve raw refs, trace metadata, and evidence refs.
+- Drive/Gmail emitted ingestion event names are registry-compatible.
 
 ## Invariants
 
 - Source events are derived from raw ingested events.
+- Connector event names must match registry contracts.
 - SourceEvent IDs must not be confused with DocumentChunk IDs.
 - Source event creation must be deterministic.
 - Contract-invalid events must fail before source event persistence.

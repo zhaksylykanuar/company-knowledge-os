@@ -25,7 +25,7 @@ def download_file_text(file_id: str, mime_type: str | None = None) -> str:
 
 def build_drive_event(file_metadata: dict) -> EventEnvelope:
     return EventEnvelope(
-        event_type="drive.file.discovered",
+        event_type="drive.file.ingested",
         source_system="drive",
         source_object_id=file_metadata["id"],
         idempotency_key=f"drive:file:{file_metadata['id']}:{file_metadata.get('modifiedTime')}",
@@ -33,7 +33,11 @@ def build_drive_event(file_metadata: dict) -> EventEnvelope:
             f"raw://drive/{file_metadata['id']}/"
             f"{file_metadata.get('modifiedTime', 'unknown')}/metadata.json"
         ),
-        payload=file_metadata,
+        payload={
+            **file_metadata,
+            "source_object_type": "file",
+            "title": file_metadata.get("name"),
+        },
     )
 
 
@@ -155,7 +159,7 @@ async def drive_backfill(persist: bool = Query(True)) -> dict:
                     )
             session.add(
                 AuditLog(
-                    event_type="drive.file.discovered",
+                    event_type=event.event_type,
                     actor="system",
                     correlation_id=event.correlation_id,
                     trace_id=event.trace_id,

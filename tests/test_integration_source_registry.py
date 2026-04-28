@@ -40,6 +40,50 @@ def test_github_pull_request_contract_accepts_valid_payload() -> None:
     assert errors == []
 
 
+def test_drive_file_contract_accepts_ingested_payload() -> None:
+    errors = validate_source_event_contract(
+        source_system="drive",
+        source_object_type="file",
+        event_type="drive.file.ingested",
+        payload={"title": "demo.txt"},
+    )
+
+    assert errors == []
+
+
+def test_gmail_message_contract_accepts_ingested_payload() -> None:
+    errors = validate_source_event_contract(
+        source_system="gmail",
+        source_object_type="message",
+        event_type="gmail.message.ingested",
+        payload={"subject": "FounderOS weekly update"},
+    )
+
+    assert errors == []
+
+
+def test_drive_and_gmail_contracts_reject_discovered_event_names() -> None:
+    drive_errors = validate_source_event_contract(
+        source_system="drive",
+        source_object_type="file",
+        event_type="drive.file.discovered",
+        payload={"title": "demo.txt"},
+    )
+    gmail_errors = validate_source_event_contract(
+        source_system="gmail",
+        source_object_type="message",
+        event_type="gmail.message.discovered",
+        payload={"subject": "FounderOS weekly update"},
+    )
+
+    assert drive_errors == [
+        "unsupported event_type for drive.file: drive.file.discovered"
+    ]
+    assert gmail_errors == [
+        "unsupported event_type for gmail.message: gmail.message.discovered"
+    ]
+
+
 def test_jira_issue_contract_rejects_missing_required_fields() -> None:
     errors = validate_source_event_contract(
         source_system="jira",
