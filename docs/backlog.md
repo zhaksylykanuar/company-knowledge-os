@@ -1,0 +1,37 @@
+# Backlog
+
+Small FOS tickets. Keep tickets scoped and update status when work changes behavior.
+
+## Tickets
+
+- FOS-001: Create project operating system docs/control files
+  - status: implemented
+  - scope: add AGENTS, CLAUDE, and operational docs.
+
+- FOS-002: Replace unstable Python hash() in manual ingestion with SHA-256
+  - status: planned
+  - scope: make manual `content_hash` stable across processes.
+
+- FOS-003: Fix document extraction provenance semantics around source_event_id
+  - status: planned
+  - scope: avoid storing chunk IDs in fields that imply SourceEvent IDs.
+
+- FOS-004: Align Drive/Gmail event names with source registry contracts
+  - status: planned
+  - scope: make emitted event types compatible with registry validation.
+
+- FOS-005: Convert Gmail raw messages into SourceDocument/chunks
+  - status: planned
+  - scope: make Gmail content participate in extraction/search pipeline.
+
+- FOS-006: Add or clarify SourceEvent read model / development event projection
+  - status: planned
+  - scope: query and project GitHub/Jira/Telegram source events deterministically.
+
+- FOS-007: Add API auth/rate-limit/signature-validation plan
+  - status: planned
+  - scope: define and implement API boundary protections.
+
+- FOS-008: Improve search beyond simple ILIKE later
+  - status: planned
+  - scope: evaluate full-text, trigram, or embedding-based retrieval.
