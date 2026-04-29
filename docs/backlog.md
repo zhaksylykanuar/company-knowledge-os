@@ -41,12 +41,12 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - scope: document scope, non-goals, files, tests, invariants, and ticket split for auth config.
 
 - FOS-007A-impl: Add API key/auth config and dependency
-  - status: planned
+  - status: implemented
   - scope: add auth-related config and a reusable API key dependency/helper without endpoint enforcement.
   - non-goals: no endpoint protection, middleware, rate limiting, webhook signature validation, migrations, or production data mutation.
-  - likely files: `app/core/config.py`, `app/api/auth.py` or `app/api/dependencies.py`, focused auth dependency tests, `docs/security/api-boundary.md`, `docs/backlog.md`.
-  - test plan: cover config defaults, missing key rejected when invoked, wrong key rejected, valid key accepted, no secret material in errors/logs, and `/health` remaining public when route enforcement is added later.
-  - security: keep raw storage and Postgres as source of truth, Obsidian export-only, no direct LLM production mutation, strict JSON validation for LLM pipeline outputs, no repo secrets, constant-time API key comparison, and fail-closed behavior outside local/dev when auth is enabled but the key is missing.
+  - implementation: adds `api_auth_enabled`, `api_auth_key`, `api_auth_header_name`, and a reusable API key dependency/helper for later route wiring.
+  - tests: cover config defaults, disabled auth, missing key, wrong key, valid key, missing configured key fail-closed behavior, generic errors, custom header name, and `/health` remaining public.
+  - security: keep raw storage and Postgres as source of truth, Obsidian export-only, no direct LLM production mutation, strict JSON validation for LLM pipeline outputs, no repo secrets, constant-time API key comparison, and fail-closed behavior when auth is enabled but the key is missing.
 
 - FOS-007B: Enforce auth on protected internal endpoints
   - status: planned

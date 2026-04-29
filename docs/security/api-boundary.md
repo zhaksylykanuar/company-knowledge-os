@@ -2,7 +2,7 @@
 
 ## Status
 
-- Endpoint-level auth: planned
+- Endpoint-level auth: planned; reusable API key config/dependency is implemented but not enforced
 - Rate limiting: planned
 - Webhook signature validation: planned
 - Write/action approval boundary: planned
@@ -86,16 +86,27 @@ FOS-007A is split so planning stays separate from implementation:
 
 ### Scope
 
-- Add auth-related configuration in a later implementation step.
-- Add a reusable API key dependency/helper in a later implementation step.
+- Add auth-related configuration without route enforcement.
+- Add a reusable API key dependency/helper for later route wiring.
 - Keep existing endpoint behavior unchanged until FOS-007B.
 - Use existing FastAPI and Pydantic settings capabilities; add no new package unless proven necessary.
 
-### Likely Implementation Files
+### Implementation Status
+
+- FOS-007A-impl adds `api_auth_enabled`, `api_auth_key`, and `api_auth_header_name`.
+- FOS-007A-impl adds a reusable API key dependency/helper for later route wiring.
+- No production routes are protected yet.
+- FOS-007B will attach the dependency to selected routes after explicit approval.
+- No middleware, rate limiting, webhook signature validation, migrations, or new dependencies are added.
+- No secrets are committed; configuration docs must use placeholders such as `API_AUTH_KEY=<set-in-environment>`.
+- API key comparison uses constant-time comparison.
+- Auth enabled without a configured key fails closed.
+
+### Implementation Files
 
 - `app/core/config.py`
-- `app/api/auth.py` or `app/api/dependencies.py`
-- Focused auth dependency tests.
+- `app/api/auth.py`
+- `tests/test_api_auth.py`
 - `docs/security/api-boundary.md`
 - `docs/backlog.md`
 
