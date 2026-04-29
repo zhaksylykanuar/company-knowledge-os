@@ -104,3 +104,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: preview includes persisted tasks, risks, and decisions with `evidence_refs`, source document/chunk IDs, short evidence snippets from stored evidence quotes, and existing score metadata when available.
   - non-goals: no existing endpoint behavior changes, LLM behavior changes, new LLM calls, fabricated facts/evidence, dependencies, migrations, middleware, rate limiting, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: preview skips any extracted entity without `evidence_refs`; the endpoint remains protected by existing API auth.
+
+- FOS-011: Add MVP manual knowledge quickstart
+  - status: implemented
+  - scope: add a small docs-only quickstart for the current FOS-009/FOS-010 manual knowledge flow.
+  - behavior: documents local prerequisites, the one-step manual processing endpoint, evidence-backed preview fields, follow-up search/ask/attention/export checks, troubleshooting, and safety notes.
+  - non-goals: no code, tests, endpoint behavior changes, LLM behavior changes, dependencies, migrations, middleware, rate limiting, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: examples use placeholders only and reinforce raw storage plus Postgres as source of truth, Obsidian export-only behavior, and evidence-backed extraction invariants.

@@ -11,6 +11,7 @@ Navigation map for future Codex sessions.
 - `coding-rules.md`: repository coding rules.
 - `data-model.md`: operational data model.
 - `backlog.md`: small FOS tickets.
+- `mvp-quickstart.md`: manual MVP knowledge processing quickstart.
 - `../SECURITY_BASELINE.md`: threat model and security baseline.
 
 ## Security Docs
