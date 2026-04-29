@@ -118,3 +118,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: documents planned source inputs, source-of-truth boundaries, daily digest flow, Telegram Q&A flow, digest sections, safety/privacy requirements, and current implemented versus planned status.
   - non-goals: no Telegram implementation, digest implementation, connector implementation, code, tests, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: reinforces raw storage plus Postgres as source of truth, Obsidian export-only behavior, strict JSON validation, evidence-backed extraction, no direct LLM production mutation, and placeholder-only examples.
+
+- FOS-013: Add source activity digest builder
+  - status: implemented
+  - scope: add a small deterministic internal digest builder for stored `SourceEvent` activity in an explicit timezone-aware time window.
+  - behavior: returns the requested window, source/event/object-type counts, traceable source activity entries, and evidence refs without raw body text or inferred tasks/risks/decisions.
+  - non-goals: no Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision inference, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: reads persisted source activity only, requires explicit aware datetimes, keeps raw storage plus Postgres as source of truth, includes evidence pointers, and does not call OpenAI/ChatGPT.

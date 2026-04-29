@@ -6,6 +6,7 @@
 - Daily digest generation: planned
 - Telegram delivery: planned
 - Telegram Q&A: planned
+- Internal deterministic source activity digest builder: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -130,6 +131,10 @@ Implemented today:
   decisions.
 - Deterministic search, ask, scoring, attention dashboard, and Obsidian export
   surfaces for stored knowledge.
+- FOS-013 adds an internal deterministic source activity digest builder for an
+  explicit timezone-aware time window. It summarizes stored `SourceEvent` rows
+  only, includes source/event counts and traceable source activity entries, and
+  does not infer decisions, tasks, or risks.
 
 Not implemented today:
 
@@ -141,3 +146,4 @@ Not implemented today:
 - GitHub repository connector.
 - Calendar connector.
 - Full production Gmail/Drive sync.
+- LLM summarization for digests.
