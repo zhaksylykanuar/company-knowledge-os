@@ -23,6 +23,7 @@ These endpoints should require API key or equivalent auth outside local/dev:
 - `/v1/drive/backfill`
 - `/v1/gmail/backfill`
 - `/v1/knowledge/ingest-text`
+- `/v1/knowledge/ingest-text-process`
 - `/v1/knowledge/score`
 - `/v1/extraction/*`
 
@@ -154,6 +155,7 @@ FOS-007B is split so route enforcement is planned before implementation:
 - `/v1/drive/backfill`
 - `/v1/gmail/backfill`
 - `/v1/knowledge/ingest-text`
+- `/v1/knowledge/ingest-text-process`
 - `/v1/knowledge/score`
 - `/v1/knowledge/search`
 - `/v1/knowledge/ask`

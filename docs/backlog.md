@@ -89,3 +89,11 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
 - FOS-008: Improve search beyond simple ILIKE later
   - status: planned
   - scope: evaluate full-text, trigram, or embedding-based retrieval.
+
+- FOS-009: Add one-step manual knowledge processing endpoint
+  - status: implemented
+  - scope: add `POST /v1/knowledge/ingest-text-process` for MVP manual text processing.
+  - implementation: reuses existing manual ingestion, deterministic extraction, and score processing for the new document.
+  - behavior: returns document/raw refs, chunk count, extraction counts, score counts, evidence summary, and next-step endpoint hints.
+  - non-goals: no existing endpoint behavior changes, LLM behavior changes, new LLM calls, dependencies, migrations, middleware, rate limiting, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: endpoint is under the existing protected knowledge router; `/health` remains public; extracted tasks/risks/decisions still require `evidence_refs`.

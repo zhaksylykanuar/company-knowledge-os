@@ -1,13 +1,17 @@
 from sqlalchemy import select
 
 from app.agents.evidence_validator import validate_evidence
-from app.agents.runner import get_agent_runner
+from app.agents.runner import AgentRunner, get_agent_runner
 from app.db.base import AsyncSessionLocal
 from app.db.source_models import DocumentChunk
 from app.db.task_models import ExtractedDecision, ExtractedRisk, ExtractedTask
 
 
-async def process_document_chunks(source_document_id: str) -> dict:
+async def process_document_chunks(
+    source_document_id: str,
+    *,
+    runner: AgentRunner | None = None,
+) -> dict:
     """
     Process all chunks for one source document and persist extracted facts.
 
@@ -15,7 +19,7 @@ async def process_document_chunks(source_document_id: str) -> dict:
     It works on already-ingested document_chunks from Drive/manual/Gmail.
     """
 
-    runner = get_agent_runner()
+    runner = runner or get_agent_runner()
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(

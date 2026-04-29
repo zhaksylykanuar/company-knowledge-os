@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from app.services.knowledge_ingestion import ingest_text
+from app.services.knowledge_pipeline import ingest_text_and_process
 from app.services.knowledge_qa import ask_knowledge
 from app.services.knowledge_search import search_knowledge
 from app.services.knowledge_score_processor import process_knowledge_scores
@@ -44,6 +45,19 @@ async def ingest_text_endpoint(payload: IngestTextRequest) -> dict:
         "accepted": True,
         **result,
     }
+
+
+@router.post("/ingest-text-process", status_code=202)
+async def ingest_text_process_endpoint(payload: IngestTextRequest) -> dict:
+    return await ingest_text_and_process(
+        title=payload.title,
+        text=payload.text,
+        source_type=payload.source_type,
+        project_key=payload.project_key,
+        client_key=payload.client_key,
+        people=payload.people,
+        tags=payload.tags,
+    )
 
 
 @router.get("/search")
