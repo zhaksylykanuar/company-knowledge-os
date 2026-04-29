@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 from hashlib import sha256
 from typing import Any
 
@@ -15,6 +17,24 @@ class SourceEventContractValidationError(ValueError):
     pass
 
 
+@dataclass(frozen=True)
+class SourceEventReadModel:
+    source_event_id: str
+    source_system: str
+    source_object_type: str
+    source_object_id: str
+    event_type: str
+    event_time: datetime | None
+    title: str | None
+    summary: str | None
+    source_url: str | None
+    raw_object_ref: str
+    trace_id: str | None
+    correlation_id: str | None
+    evidence_refs: list[dict[str, Any]]
+    payload_subset: dict[str, str]
+
+
 KNOWN_SOURCE_SYSTEMS = {
     "drive",
     "gmail",
@@ -25,6 +45,17 @@ KNOWN_SOURCE_SYSTEMS = {
     "telegram",
     "internal",
 }
+
+READ_MODEL_PAYLOAD_FIELDS = (
+    "title",
+    "subject",
+    "name",
+    "summary",
+    "description",
+    "text",
+    "source_url",
+    "actor_external_id",
+)
 
 
 def _clean_string(value: Any) -> str | None:
@@ -108,6 +139,52 @@ def _extract_summary(payload: dict[str, Any]) -> str | None:
             return value
 
     return None
+
+
+def _copy_evidence_refs(evidence_refs: Any) -> list[dict[str, Any]]:
+    if not isinstance(evidence_refs, list):
+        return []
+
+    return [dict(ref) for ref in evidence_refs if isinstance(ref, dict)]
+
+
+def _build_payload_subset(payload: dict[str, Any] | None) -> dict[str, str]:
+    if payload is None:
+        return {}
+
+    subset: dict[str, str] = {}
+    for field in READ_MODEL_PAYLOAD_FIELDS:
+        value = _clean_string(payload.get(field))
+        if value:
+            subset[field] = value
+    return subset
+
+
+def project_source_event_read_model(
+    source_event: SourceEvent,
+    *,
+    ingested_payload: dict[str, Any] | None = None,
+) -> SourceEventReadModel:
+    """Project an existing SourceEvent into a deterministic service read model."""
+
+    metadata = source_event.metadata_json if isinstance(source_event.metadata_json, dict) else {}
+
+    return SourceEventReadModel(
+        source_event_id=source_event.source_event_id,
+        source_system=source_event.source_system,
+        source_object_type=source_event.source_object_type,
+        source_object_id=source_event.source_object_id,
+        event_type=source_event.event_type,
+        event_time=source_event.source_event_ts or source_event.created_at,
+        title=source_event.title,
+        summary=source_event.summary,
+        source_url=source_event.source_url,
+        raw_object_ref=source_event.raw_object_ref,
+        trace_id=_clean_string(metadata.get("trace_id")),
+        correlation_id=_clean_string(metadata.get("correlation_id")),
+        evidence_refs=_copy_evidence_refs(source_event.evidence_refs),
+        payload_subset=_build_payload_subset(ingested_payload),
+    )
 
 
 async def normalize_ingested_event_to_source_event(
