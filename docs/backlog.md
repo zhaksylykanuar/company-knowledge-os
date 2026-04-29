@@ -97,3 +97,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: returns document/raw refs, chunk count, extraction counts, score counts, evidence summary, and next-step endpoint hints.
   - non-goals: no existing endpoint behavior changes, LLM behavior changes, new LLM calls, dependencies, migrations, middleware, rate limiting, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: endpoint is under the existing protected knowledge router; `/health` remains public; extracted tasks/risks/decisions still require `evidence_refs`.
+
+- FOS-010: Add evidence preview to one-step knowledge processing
+  - status: implemented
+  - scope: return a small `extracted_items_preview` from `POST /v1/knowledge/ingest-text-process`.
+  - behavior: preview includes persisted tasks, risks, and decisions with `evidence_refs`, source document/chunk IDs, short evidence snippets from stored evidence quotes, and existing score metadata when available.
+  - non-goals: no existing endpoint behavior changes, LLM behavior changes, new LLM calls, fabricated facts/evidence, dependencies, migrations, middleware, rate limiting, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: preview skips any extracted entity without `evidence_refs`; the endpoint remains protected by existing API auth.

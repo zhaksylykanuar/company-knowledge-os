@@ -150,6 +150,20 @@ async def test_ingest_text_process_endpoint_processes_manual_text_with_evidence_
         assert payload["evidence_summary"]["all_extracted_entities_have_evidence_refs"] is True
         assert payload["evidence_summary"]["source_chunk_ids"]
         assert payload["evidence_summary"]["sample_evidence_refs"]
+        assert len(payload["extracted_items_preview"]) == 3
+        assert {
+            item["kind"] for item in payload["extracted_items_preview"]
+        } == {"task", "risk", "decision"}
+        for item in payload["extracted_items_preview"]:
+            assert item["title"]
+            assert item["source_document_id"] == document_id
+            assert item["chunk_id"]
+            assert item["evidence_refs"]
+            assert item["evidence_snippet"]
+            assert item["score"] is not None
+            assert item["score"]["attention_score"] > 0
+            assert item["score"]["reasons"]
+
         assert payload["next_steps"]["search"] == "GET /v1/knowledge/search?q=<query>"
         assert payload["next_steps"]["ask"] == "POST /v1/knowledge/ask"
         assert payload["next_steps"]["attention"] == "GET /v1/knowledge/attention"
@@ -207,6 +221,7 @@ async def test_ingest_text_process_endpoint_reports_zero_counts_without_signals(
             "source_chunk_ids": [],
             "sample_evidence_refs": [],
         }
+        assert payload["extracted_items_preview"] == []
 
     finally:
         await _cleanup_pipeline_fixture(document_id)
@@ -234,6 +249,7 @@ async def test_existing_ingest_text_endpoint_remains_unchanged(monkeypatch, tmp_
         assert "raw_ref" in payload
         assert "extraction_counts" not in payload
         assert "score_counts" not in payload
+        assert "extracted_items_preview" not in payload
 
     finally:
         await _cleanup_pipeline_fixture(document_id)
@@ -274,6 +290,7 @@ async def test_ingest_text_process_endpoint_auth_and_health_behavior(
         document_id = payload["document_id"]
         assert payload["processed"] is True
         assert payload["extraction_counts"]["total"] == 3
+        assert payload["extracted_items_preview"]
 
     finally:
         await _cleanup_pipeline_fixture(document_id)
