@@ -69,11 +69,54 @@ Rate limits are planned for:
 ## Rollout Plan
 
 - FOS-007: docs/security plan only.
-- FOS-007A: add config flags and API key dependency.
-- FOS-007B: protect internal ingestion/extraction/knowledge endpoints.
+- FOS-007A-docs-plan: document the auth config boundary and implementation split.
+- FOS-007A-impl: add config flags and reusable API key dependency, without attaching it to routes.
+- FOS-007B: protect selected internal ingestion/extraction/knowledge endpoints after explicit approval.
 - FOS-007C: add rate limiting.
 - FOS-007D: add webhook signature validation when webhook routes exist.
 - FOS-007E: define write/action approval enforcement before any write endpoints.
+
+## FOS-007A Plan
+
+FOS-007A is split so planning stays separate from implementation:
+
+- FOS-007A-docs-plan: this docs-only ticket.
+- FOS-007A-impl: add auth-related config and a reusable API key dependency/helper, but do not attach it to routes.
+- FOS-007B: attach the dependency to selected routes after explicit approval.
+
+### Scope
+
+- Add auth-related configuration in a later implementation step.
+- Add a reusable API key dependency/helper in a later implementation step.
+- Keep existing endpoint behavior unchanged until FOS-007B.
+- Use existing FastAPI and Pydantic settings capabilities; add no new package unless proven necessary.
+
+### Likely Implementation Files
+
+- `app/core/config.py`
+- `app/api/auth.py` or `app/api/dependencies.py`
+- Focused auth dependency tests.
+- `docs/security/api-boundary.md`
+- `docs/backlog.md`
+
+### Later Test Plan
+
+- Config defaults keep local development non-breaking.
+- Missing API key is rejected when the dependency is invoked.
+- Wrong API key is rejected when the dependency is invoked.
+- Valid API key is accepted when the dependency is invoked.
+- Error messages and logs do not expose secret material.
+- `/health` remains public when route enforcement is added later.
+
+### Security Invariants
+
+- Raw storage and Postgres remain the source of truth.
+- Obsidian remains export-only.
+- LLMs must not directly mutate production data.
+- LLM pipeline outputs must remain strict JSON and validated before persistence.
+- No secrets are committed to the repo; docs use placeholders such as `<set-in-environment>`.
+- API key comparison must use constant-time comparison.
+- Outside local/dev, auth must fail closed when enabled but the configured key is missing.
 
 ## Non-Goals
 
@@ -82,3 +125,8 @@ Rate limits are planned for:
 - No new dependencies in this ticket.
 - No provider webhook routes in this ticket.
 - No OAuth scope changes in this ticket.
+- No endpoint protection in FOS-007A-docs-plan.
+- No rate limiting in FOS-007A-docs-plan.
+- No webhook signature validation in FOS-007A-docs-plan.
+- No migrations in FOS-007A-docs-plan.
+- No production data mutation in FOS-007A-docs-plan.
