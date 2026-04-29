@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     enable_write_actions: bool = False
     enable_obsidian_export: bool = True
     require_approval_for_writes: bool = True
+
+    api_auth_enabled: bool = False
+    api_auth_key: SecretStr | str | None = None
+    api_auth_header_name: str = "X-FounderOS-API-Key"
 
     openai_api_key: str | None = None
 
