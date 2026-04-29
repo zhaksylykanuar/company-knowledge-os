@@ -53,13 +53,13 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - scope: document selected protected routes, public routes, expected behavior, tests, non-goals, and ticket split for route auth enforcement.
 
 - FOS-007B-impl: Enforce auth on protected internal endpoints
-  - status: planned
+  - status: implemented
   - scope: attach the reusable auth dependency to selected internal ingestion, extraction, and knowledge endpoints after explicit approval.
   - protected routes: `/v1/events`, `/v1/drive/backfill`, `/v1/gmail/backfill`, `/v1/knowledge/ingest-text`, `/v1/knowledge/score`, `/v1/knowledge/search`, `/v1/knowledge/ask`, `/v1/knowledge/attention`, and `/v1/extraction/*`.
   - public routes: keep `/health` public.
   - non-goals: no middleware, rate limiting, webhook signature validation, migrations, dependencies, repo secrets, production data mutation, or direct LLM production mutation.
   - behavior: auth disabled preserves current behavior; auth enabled fails closed without a configured key; missing or wrong request keys reject; valid request key allows.
-  - likely files: `app/main.py` for central router-level wiring or individual `app/api/*.py` files for endpoint-level granularity, `tests/test_api_route_auth.py`, `docs/security/api-boundary.md`, and `docs/backlog.md`.
+  - implementation: attaches the existing FOS-007A dependency at router include level in `app/main.py`.
   - tests: cover `/health` public with auth enabled, protected route missing configured key, missing request key, wrong key, valid key, auth disabled behavior, generic errors, and use of the existing FOS-007A dependency/helper.
 
 - FOS-007C: Add rate limiting

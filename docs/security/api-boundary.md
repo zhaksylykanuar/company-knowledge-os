@@ -2,7 +2,7 @@
 
 ## Status
 
-- Endpoint-level auth: planned; reusable API key config/dependency is implemented but not enforced
+- Endpoint-level auth: implemented for selected protected API routes
 - Rate limiting: planned
 - Webhook signature validation: planned
 - Write/action approval boundary: planned
@@ -72,7 +72,7 @@ Rate limits are planned for:
 - FOS-007A-docs-plan: document the auth config boundary and implementation split.
 - FOS-007A-impl: add config flags and reusable API key dependency, without attaching it to routes.
 - FOS-007B-docs-plan: document the route auth enforcement scope and implementation split.
-- FOS-007B-impl: protect selected internal ingestion/extraction/knowledge endpoints after explicit approval.
+- FOS-007B-impl: protect selected internal ingestion/extraction/knowledge endpoints.
 - FOS-007C: add rate limiting.
 - FOS-007D: add webhook signature validation when webhook routes exist.
 - FOS-007E: define write/action approval enforcement before any write endpoints.
@@ -171,10 +171,18 @@ FOS-007B is split so route enforcement is planned before implementation:
 - Auth enabled and request key valid: protected routes allow the request.
 - `/health` remains public even when auth is enabled.
 
+### Implementation Status
+
+- FOS-007B-impl attaches the existing FOS-007A API key dependency to selected production API routers.
+- `/health` remains public.
+- Auth disabled keeps default behavior non-breaking.
+- Auth enabled protects selected production routes.
+- No middleware, rate limiting, webhook signature validation, migrations, or new dependencies are added.
+- No secrets are committed to the repo.
+
 ### Likely Implementation Files
 
-- `app/main.py` if router-level dependencies are applied centrally.
-- Individual `app/api/*.py` files if endpoint-level granularity is required.
+- `app/main.py`
 - `tests/test_api_route_auth.py`
 - `docs/security/api-boundary.md`
 - `docs/backlog.md`
