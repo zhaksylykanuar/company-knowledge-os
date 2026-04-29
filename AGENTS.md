@@ -15,6 +15,15 @@ Operational rules for Codex and other AI agents working in FounderOS.
 - Inspect at most 8 implementation files before planning unless the task clearly requires more.
 - If more files are needed, explain why before expanding scope.
 
+## Default Git Workflow
+
+- Default to solo trunk-based work for small focused tickets.
+- Work directly on `main` after `git pull --ff-only origin main`.
+- Make one scoped change, run focused checks, commit locally, and report for human review.
+- Do not push until the human explicitly says to push.
+- Do not create branches or Draft PRs for routine docs, config, test, or small implementation tickets.
+- Use a branch and PR for migrations, dependency or lockfile changes, large refactors, raw storage or Postgres persistence behavior changes, LLM pipeline persistence behavior changes, production data mutation logic, risky auth/security changes, large diffs, or any change that needs CI or external review before merge.
+
 ## Core Invariants
 
 - Raw storage + Postgres are the source of truth.
