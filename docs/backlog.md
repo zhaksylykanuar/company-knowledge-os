@@ -111,3 +111,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: documents local prerequisites, the one-step manual processing endpoint, evidence-backed preview fields, follow-up search/ask/attention/export checks, troubleshooting, and safety notes.
   - non-goals: no code, tests, endpoint behavior changes, LLM behavior changes, dependencies, migrations, middleware, rate limiting, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: examples use placeholders only and reinforce raw storage plus Postgres as source of truth, Obsidian export-only behavior, and evidence-backed extraction invariants.
+
+- FOS-012: Add Telegram digest product contract
+  - status: implemented
+  - scope: add a docs-only future product and architecture contract for Telegram as an interface and daily digest delivery mechanism.
+  - behavior: documents planned source inputs, source-of-truth boundaries, daily digest flow, Telegram Q&A flow, digest sections, safety/privacy requirements, and current implemented versus planned status.
+  - non-goals: no Telegram implementation, digest implementation, connector implementation, code, tests, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: reinforces raw storage plus Postgres as source of truth, Obsidian export-only behavior, strict JSON validation, evidence-backed extraction, no direct LLM production mutation, and placeholder-only examples.

@@ -25,6 +25,7 @@ Navigation map for future Codex sessions.
 - `features/extraction.md`: task/risk/decision extraction.
 - `features/retrieval.md`: search and Q&A.
 - `features/attention.md`: scoring and attention dashboard.
+- `features/telegram-digest.md`: future Telegram interface and daily digest contract.
 - `features/obsidian-export.md`: read-only Obsidian export.
 - `features/gmail.md`: Gmail connector status.
 - `features/drive.md`: Drive connector status.
