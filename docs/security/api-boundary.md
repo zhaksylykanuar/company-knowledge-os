@@ -71,7 +71,8 @@ Rate limits are planned for:
 - FOS-007: docs/security plan only.
 - FOS-007A-docs-plan: document the auth config boundary and implementation split.
 - FOS-007A-impl: add config flags and reusable API key dependency, without attaching it to routes.
-- FOS-007B: protect selected internal ingestion/extraction/knowledge endpoints after explicit approval.
+- FOS-007B-docs-plan: document the route auth enforcement scope and implementation split.
+- FOS-007B-impl: protect selected internal ingestion/extraction/knowledge endpoints after explicit approval.
 - FOS-007C: add rate limiting.
 - FOS-007D: add webhook signature validation when webhook routes exist.
 - FOS-007E: define write/action approval enforcement before any write endpoints.
@@ -129,6 +130,78 @@ FOS-007A is split so planning stays separate from implementation:
 - API key comparison must use constant-time comparison.
 - Outside local/dev, auth must fail closed when enabled but the configured key is missing.
 
+## FOS-007B Plan
+
+FOS-007B is split so route enforcement is planned before implementation:
+
+- FOS-007B-docs-plan: this docs-only ticket.
+- FOS-007B-impl: attach the existing FOS-007A dependency to selected routes after explicit approval.
+- Later tickets, only if explicitly approved: rate limiting, webhook signatures, and a broader auth or identity model.
+
+### Scope
+
+- Attach the existing FOS-007A reusable API key dependency/helper to selected production API routes in a later implementation ticket.
+- Keep `/health` public.
+- Use existing config: `api_auth_enabled`, `api_auth_key`, and `api_auth_header_name`.
+- Add no new dependencies.
+- Add no middleware.
+
+### Candidate Protected Routes
+
+- `/v1/events`
+- `/v1/drive/backfill`
+- `/v1/gmail/backfill`
+- `/v1/knowledge/ingest-text`
+- `/v1/knowledge/score`
+- `/v1/knowledge/search`
+- `/v1/knowledge/ask`
+- `/v1/knowledge/attention`
+- `/v1/extraction/*`
+
+### Public Routes
+
+- `/health`
+
+### Expected Later Behavior
+
+- Auth disabled: protected routes continue to behave as they do today.
+- Auth enabled and configured key missing: protected routes fail closed with a generic auth error.
+- Auth enabled and request key missing: protected routes reject the request.
+- Auth enabled and request key wrong: protected routes reject the request.
+- Auth enabled and request key valid: protected routes allow the request.
+- `/health` remains public even when auth is enabled.
+
+### Likely Implementation Files
+
+- `app/main.py` if router-level dependencies are applied centrally.
+- Individual `app/api/*.py` files if endpoint-level granularity is required.
+- `tests/test_api_route_auth.py`
+- `docs/security/api-boundary.md`
+- `docs/backlog.md`
+
+### Later Test Plan
+
+- `/health` remains public with auth enabled.
+- Protected route rejects missing configured key when auth is enabled.
+- Protected route rejects missing request key.
+- Protected route rejects wrong key.
+- Protected route accepts valid key.
+- Auth disabled keeps protected routes reachable.
+- Error responses do not include configured or provided key values.
+- Route wiring uses the existing FOS-007A dependency/helper.
+
+### Security Invariants
+
+- Raw storage and Postgres remain the source of truth.
+- Obsidian remains export-only.
+- Extracted tasks, risks, and decisions require `evidence_refs`.
+- Hallucinated facts must not be persisted.
+- LLM pipeline outputs must remain strict JSON and validated before persistence.
+- LLMs must not directly mutate production data.
+- No secrets are committed to the repo.
+- API key comparison remains constant-time through the existing helper.
+- Auth fails closed when enabled but the configured key is missing.
+
 ## Non-Goals
 
 - No auth implementation in this ticket.
@@ -141,3 +214,5 @@ FOS-007A is split so planning stays separate from implementation:
 - No webhook signature validation in FOS-007A-docs-plan.
 - No migrations in FOS-007A-docs-plan.
 - No production data mutation in FOS-007A-docs-plan.
+- No route auth implementation in FOS-007B-docs-plan.
+- No endpoint behavior changes in FOS-007B-docs-plan.
