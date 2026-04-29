@@ -3,7 +3,7 @@
 ## Status
 
 - Endpoint-level auth: implemented for selected protected API routes
-- Rate limiting: planned
+- Rate limiting: planned; boundary plan documented
 - Webhook signature validation: planned
 - Write/action approval boundary: planned
 - Read-only connector posture: implemented for Drive/Gmail wrappers; partial for future connectors
@@ -73,7 +73,9 @@ Rate limits are planned for:
 - FOS-007A-impl: add config flags and reusable API key dependency, without attaching it to routes.
 - FOS-007B-docs-plan: document the route auth enforcement scope and implementation split.
 - FOS-007B-impl: protect selected internal ingestion/extraction/knowledge endpoints.
-- FOS-007C: add rate limiting.
+- FOS-007C-docs-plan: document the rate limiting boundary and implementation questions.
+- FOS-007C-impl-design: choose edge/app/shared-state strategy if needed.
+- FOS-007C-impl: implement rate limiting only after explicit approval.
 - FOS-007D: add webhook signature validation when webhook routes exist.
 - FOS-007E: define write/action approval enforcement before any write endpoints.
 
@@ -210,6 +212,75 @@ FOS-007B is split so route enforcement is planned before implementation:
 - API key comparison remains constant-time through the existing helper.
 - Auth fails closed when enabled but the configured key is missing.
 
+## FOS-007C Plan
+
+FOS-007C is split so rate limiting boundaries are planned before implementation:
+
+- FOS-007C-docs-plan: this docs-only ticket.
+- FOS-007C-impl-design: choose an edge, reverse proxy, app-layer, shared-state, or combined strategy if needed.
+- FOS-007C-impl: implement rate limiting only after explicit approval.
+
+### Scope
+
+- Plan rate limiting boundaries for protected API routes.
+- Keep `/health` public and either unthrottled or very lightly protected only by infrastructure in a later ticket.
+- Document candidate endpoint categories and suggested limit classes.
+- Document implementation questions before coding.
+- Change no endpoint behavior in this docs-plan ticket.
+
+### Candidate Route Categories
+
+- Ingestion/write-like routes: `/v1/events`, `/v1/drive/backfill`, `/v1/gmail/backfill`, and `/v1/knowledge/ingest-text`.
+- Expensive AI/search/knowledge routes: `/v1/knowledge/score`, `/v1/knowledge/search`, `/v1/knowledge/ask`, and `/v1/knowledge/attention`.
+- Extraction routes: `/v1/extraction/*`.
+- Public health route: `/health` remains public.
+
+### Suggested Limit Classes
+
+- Ingestion/write-like routes: conservative write-oriented limits to prevent accidental bulk ingestion or repeated backfills.
+- Expensive AI/search/knowledge routes: stricter cost-oriented limits, especially for ask, score, and broad search patterns.
+- Extraction routes: job-oriented limits that account for document size and downstream processing cost.
+- Public health route: no app-layer limit by default; later infrastructure can add a very light health limit if needed.
+
+### Later Implementation Considerations
+
+- Avoid naive per-process production rate limiting unless explicitly accepted as temporary/dev-only.
+- Decide whether rate limiting belongs at the edge/reverse proxy, app layer, or both.
+- If app-layer limits need shared state, explicitly plan storage and dependency implications before implementation.
+- Rate limit keys should be based on authenticated API key identity or trusted client identity, not untrusted headers alone.
+- Errors should be generic and must not expose secret material.
+- Implementation must not weaken FOS-007A/FOS-007B auth behavior.
+
+### Likely Later Implementation Files
+
+- `app/main.py` or `app/api/*.py` if route-level integration is needed.
+- `app/api/rate_limit.py` or equivalent helper if app-layer implementation is approved.
+- `tests/test_api_rate_limit.py`
+- `docs/security/api-boundary.md`
+- `docs/backlog.md`
+
+### Later Focused Test Plan
+
+- `/health` remains public.
+- Auth-disabled behavior remains non-breaking unless rate limiting is explicitly enabled.
+- Protected routes receive expected rate limit behavior when enabled.
+- Limit exceeded returns a generic 429 response.
+- Rate limit errors do not expose API keys or secret values.
+- Rate limiting does not bypass or duplicate API key auth.
+- No direct LLM or production data mutation is introduced by rate limiting.
+
+### Security Invariants
+
+- Raw storage and Postgres remain the source of truth.
+- Obsidian remains export-only.
+- Extracted tasks, risks, and decisions require `evidence_refs`.
+- Hallucinated facts must not be persisted.
+- LLM pipeline outputs must remain strict JSON and validated before persistence.
+- LLMs must not directly mutate production data.
+- No secrets are committed to the repo.
+- API auth remains enforced on protected routes from FOS-007B.
+- Rate limiting must not become a substitute for auth.
+
 ## Non-Goals
 
 - No auth implementation in this ticket.
@@ -224,3 +295,9 @@ FOS-007B is split so route enforcement is planned before implementation:
 - No production data mutation in FOS-007A-docs-plan.
 - No route auth implementation in FOS-007B-docs-plan.
 - No endpoint behavior changes in FOS-007B-docs-plan.
+- No rate limiting implementation in FOS-007C-docs-plan.
+- No middleware in FOS-007C-docs-plan.
+- No dependency or lockfile changes in FOS-007C-docs-plan.
+- No endpoint behavior changes in FOS-007C-docs-plan.
+- No migrations or persistence/storage changes in FOS-007C-docs-plan.
+- No production data mutation in FOS-007C-docs-plan.

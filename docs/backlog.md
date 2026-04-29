@@ -62,9 +62,21 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - implementation: attaches the existing FOS-007A dependency at router include level in `app/main.py`.
   - tests: cover `/health` public with auth enabled, protected route missing configured key, missing request key, wrong key, valid key, auth disabled behavior, generic errors, and use of the existing FOS-007A dependency/helper.
 
-- FOS-007C: Add rate limiting
+- FOS-007C-docs-plan: Plan rate limiting boundary
+  - status: implemented
+  - scope: document rate limiting boundaries for protected API routes without behavior changes.
+  - candidate categories: ingestion/write-like routes (`/v1/events`, `/v1/drive/backfill`, `/v1/gmail/backfill`, `/v1/knowledge/ingest-text`), expensive AI/search/knowledge routes (`/v1/knowledge/score`, `/v1/knowledge/search`, `/v1/knowledge/ask`, `/v1/knowledge/attention`), extraction routes (`/v1/extraction/*`), and public health (`/health`).
+  - non-goals: no implementation, middleware, dependency or lockfile changes, endpoint behavior changes, migrations, persistence/storage changes, production data mutation, repo secrets, or direct LLM production mutation.
+  - implementation questions: choose edge, reverse proxy, app-layer, or combined limits before coding; avoid naive per-process production limits unless explicitly accepted as temporary/dev-only; plan shared-state or dependency implications before implementation.
+  - security: rate limit keys should be based on authenticated API key identity or trusted client identity, not untrusted headers alone; errors must be generic and must not expose secret material; rate limiting must not weaken or replace FOS-007A/FOS-007B auth.
+
+- FOS-007C-impl-design: Choose rate limiting implementation strategy
   - status: planned
-  - scope: add endpoint-appropriate request limits.
+  - scope: decide edge/app/shared-state strategy, config surface, storage implications, and focused test strategy before implementation.
+
+- FOS-007C-impl: Add rate limiting
+  - status: planned
+  - scope: implement endpoint-appropriate request limits only after explicit approval.
 
 - FOS-007D: Add webhook signature validation when webhook routes exist
   - status: planned
