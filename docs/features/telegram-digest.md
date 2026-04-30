@@ -9,6 +9,7 @@
 - Internal deterministic source activity digest builder: implemented
 - Protected source activity digest API: implemented
 - Protected rendered source activity digest text API: implemented
+- Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -113,6 +114,8 @@ trusted facts.
 - Use placeholders such as `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and
   `YOUR_API_KEY` in examples.
 - Telegram bot tokens and chat IDs must stay backend-only.
+- Telegram bot tokens and chat IDs must stay out of the repo, and `.env` must
+  not be committed.
 - LLMs must not directly mutate production data.
 - LLM outputs used in pipelines must be strict JSON and validated before
   persistence.
@@ -146,12 +149,17 @@ Implemented today:
   activity digest output.
 - FOS-017 exposes rendered deterministic source activity digest text through the
   protected `GET /v1/digest/source-activity/text` API endpoint.
+- FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
+  text only. It can build plain `sendMessage` payloads, split long text into
+  Telegram-safe chunks, and send chunks through an injected transport.
 
 Not implemented today:
 
 - Telegram bot/interface.
+- Telegram bot webhook.
+- Telegram polling or `getUpdates`.
 - Scheduled daily digest generation.
-- Telegram delivery.
+- End-to-end scheduled Telegram digest delivery.
 - Telegram Q&A.
 - Jira connector.
 - GitHub repository connector.
@@ -164,3 +172,5 @@ Not implemented today:
   source activity endpoint.
 - Telegram delivery, scheduler, connector, or digest inference logic behind the
   rendered source activity text endpoint.
+- Scheduler, connector, inbound Q&A, LLM summarization, or digest inference
+  logic in the Telegram outbound delivery adapter.

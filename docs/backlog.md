@@ -153,3 +153,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: accepts explicit timezone-aware `start_at` and `end_at` query params plus a bounded `limit`, returns deterministic `text/plain` source activity digest output, and preserves the existing JSON digest endpoint behavior.
   - non-goals: no Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision/commitment/recommendation inference, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: uses the existing protected API auth boundary, reads persisted `SourceEvent` data only through the digest builder, rejects naive or inverted windows, omits raw source bodies, and does not call OpenAI/ChatGPT.
+
+- FOS-018: Add Telegram delivery adapter
+  - status: implemented
+  - scope: add a small outbound Telegram `sendMessage` adapter for already-rendered plain digest text.
+  - behavior: validates non-empty token, chat ID, and text; splits long text into ordered Telegram-safe chunks; builds plain payloads without `parse_mode`; sends chunks through an injected transport; and returns safe delivery status, counts, message IDs, and failure summary.
+  - non-goals: no Telegram webhook, polling, inbound Q&A, scheduler, connector implementation, digest building, LLM calls, LLM summarization, task/risk/decision/commitment/recommendation inference, dependencies, migrations, API routes, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: keeps bot tokens out of result/error summaries, uses placeholders in tests/docs only, makes tests use fake transports, and does not store Telegram delivery results in the database.
