@@ -230,3 +230,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: documents the default solo trunk flow, lightweight docs-only command profile, small code change checks, stricter sensitive Google/raw storage/security checks, branch/PR triggers for risky work, and command hygiene that avoids unnecessary author or private metadata output.
   - non-goals: no code, tests, runtime behavior changes, external API calls, app startup, Gmail backfill, Drive backfill, connector calls, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: keeps docs-only work on minimal git and diff checks, preserves stricter guardrail/redaction/limit checks for sensitive changes, and reinforces no secrets in the repo or task output.
+
+- FOS-031: Test Google preflight isolation
+  - status: implemented
+  - scope: add focused regression coverage proving the protected Google manual backfill preflight endpoint remains isolated from Gmail, Drive, and Google API connector paths.
+  - behavior: adds offline test coverage that fails if preflight imports connector modules, calls Gmail or Drive route connector wrappers, or returns private marker values instead of safe readiness fields, blocker codes, bounded limits, and notes.
+  - non-goals: no runtime behavior changes, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, Gmail backfill, Drive backfill, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: uses monkeypatched test-only marker values and connector traps only; keeps preflight verification deterministic, offline, and free of real provider metadata or raw source content.

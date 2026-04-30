@@ -1,3 +1,5 @@
+import builtins
+
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
@@ -137,6 +139,86 @@ def test_default_state_reports_gmail_and_drive_disabled_without_connector_calls(
         "no_google_api_calls_made",
         "production_sync_not_implemented",
     ]
+
+
+def test_preflight_does_not_import_connectors_or_expose_private_markers(monkeypatch) -> None:
+    private_markers = [
+        "PRIVATE_SECRET_MARKER",
+        "PRIVATE_TOKEN_MARKER",
+        "PRIVATE_PROVIDER_MARKER",
+        "PRIVATE_QUERY_MARKER",
+        "PRIVATE_BOUNDARY_MARKER",
+        "PRIVATE_FILE_MARKER",
+        "PRIVATE_CONTACT_MARKER",
+        "PRIVATE_SNIPPET_MARKER",
+        "PRIVATE_SUBJECT_MARKER",
+        "PRIVATE_LINK_MARKER",
+        "PRIVATE_RAW_MARKER",
+    ]
+    _set_google_backfill(
+        monkeypatch,
+        gmail_enabled=True,
+        gmail_query=private_markers[3],
+        drive_enabled=True,
+        folder_id=private_markers[4],
+    )
+    _set_google_credential_paths(
+        monkeypatch,
+        client_secrets_file=private_markers[0],
+        gmail_token_file=private_markers[1],
+        drive_token_file=private_markers[1],
+    )
+
+    def fail_connector_call(*args: object, **kwargs: object) -> None:
+        raise AssertionError("preflight must not call connector paths")
+
+    monkeypatch.setattr(gmail_api, "list_messages", fail_connector_call)
+    monkeypatch.setattr(gmail_api, "get_message", fail_connector_call)
+    monkeypatch.setattr(drive_api, "list_ai_inbox_files", fail_connector_call)
+    monkeypatch.setattr(drive_api, "download_file_text", fail_connector_call)
+
+    blocked_import_prefixes = (
+        "app.connectors.gmail",
+        "app.connectors.google_drive",
+        "google_auth_oauthlib.flow",
+        "googleapiclient.discovery",
+    )
+    real_import = builtins.__import__
+
+    def fail_connector_import(
+        name: str,
+        globals: dict | None = None,
+        locals: dict | None = None,
+        fromlist: tuple | list = (),
+        level: int = 0,
+    ) -> object:
+        if any(
+            name == blocked or name.startswith(f"{blocked}.")
+            for blocked in blocked_import_prefixes
+        ):
+            raise AssertionError("preflight must not import connector or Google client modules")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fail_connector_import)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/google/backfill/preflight",
+            params={
+                "gmail_query": private_markers[3],
+                "gmail_max_results": 1,
+                "drive_max_results": 1,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["notes"] == [
+        "preflight_only",
+        "no_google_api_calls_made",
+        "production_sync_not_implemented",
+    ]
+    for marker in private_markers:
+        assert marker not in response.text
 
 
 def test_enabled_gmail_missing_or_blank_query_reports_not_ready(monkeypatch) -> None:
