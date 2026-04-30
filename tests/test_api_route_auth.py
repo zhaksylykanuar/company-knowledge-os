@@ -57,6 +57,40 @@ def _route_dependency_calls(path: str, method: str) -> list[object]:
     raise AssertionError(f"route not found: {method} {path}")
 
 
+def _trap_google_connector_paths(monkeypatch, *, message: str) -> None:
+    def fail_connector_call(*args: object, **kwargs: object) -> None:
+        raise AssertionError(message)
+
+    monkeypatch.setattr(gmail_api, "list_messages", fail_connector_call)
+    monkeypatch.setattr(gmail_api, "get_message", fail_connector_call)
+    monkeypatch.setattr(drive_api, "list_ai_inbox_files", fail_connector_call)
+    monkeypatch.setattr(drive_api, "download_file_text", fail_connector_call)
+
+    blocked_import_prefixes = (
+        "app.connectors.gmail",
+        "app.connectors.google_drive",
+        "google_auth_oauthlib.flow",
+        "googleapiclient.discovery",
+    )
+    real_import = builtins.__import__
+
+    def fail_connector_import(
+        name: str,
+        globals: dict | None = None,
+        locals: dict | None = None,
+        fromlist: tuple | list = (),
+        level: int = 0,
+    ) -> object:
+        if any(
+            name == blocked or name.startswith(f"{blocked}.")
+            for blocked in blocked_import_prefixes
+        ):
+            raise AssertionError(message)
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fail_connector_import)
+
+
 def test_health_remains_public_when_auth_enabled(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
 
@@ -147,38 +181,10 @@ def test_google_backfill_routes_reject_unauthenticated_before_connector_paths(
         "google_drive_ai_inbox_folder_id",
         private_markers[4],
     )
-
-    def fail_connector_call(*args: object, **kwargs: object) -> None:
-        raise AssertionError("unauthenticated backfill must not call connector paths")
-
-    monkeypatch.setattr(gmail_api, "list_messages", fail_connector_call)
-    monkeypatch.setattr(gmail_api, "get_message", fail_connector_call)
-    monkeypatch.setattr(drive_api, "list_ai_inbox_files", fail_connector_call)
-    monkeypatch.setattr(drive_api, "download_file_text", fail_connector_call)
-
-    blocked_import_prefixes = (
-        "app.connectors.gmail",
-        "app.connectors.google_drive",
-        "google_auth_oauthlib.flow",
-        "googleapiclient.discovery",
+    _trap_google_connector_paths(
+        monkeypatch,
+        message="unauthenticated backfill must not reach Google connector paths",
     )
-    real_import = builtins.__import__
-
-    def fail_connector_import(
-        name: str,
-        globals: dict | None = None,
-        locals: dict | None = None,
-        fromlist: tuple | list = (),
-        level: int = 0,
-    ) -> object:
-        if any(
-            name == blocked or name.startswith(f"{blocked}.")
-            for blocked in blocked_import_prefixes
-        ):
-            raise AssertionError("unauthenticated backfill must not import connector modules")
-        return real_import(name, globals, locals, fromlist, level)
-
-    monkeypatch.setattr(builtins, "__import__", fail_connector_import)
 
     with TestClient(app) as client:
         gmail_response = client.post(
@@ -197,6 +203,67 @@ def test_google_backfill_routes_reject_unauthenticated_before_connector_paths(
     for response in (gmail_response, drive_response):
         assert response.status_code == 401
         assert response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+        assert "test-api-key" not in response.text
+        for marker in private_markers:
+            assert marker not in response.text
+
+
+def test_google_backfill_routes_reject_authenticated_when_disabled_before_connector_paths(
+    monkeypatch,
+) -> None:
+    _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
+    private_markers = [
+        "PRIVATE_DISABLED_SECRET_MARKER",
+        "PRIVATE_DISABLED_TOKEN_MARKER",
+        "PRIVATE_DISABLED_PROVIDER_MARKER",
+        "PRIVATE_DISABLED_QUERY_MARKER",
+        "PRIVATE_DISABLED_BOUNDARY_MARKER",
+        "PRIVATE_DISABLED_FILE_MARKER",
+        "PRIVATE_DISABLED_LINK_MARKER",
+        "PRIVATE_DISABLED_RAW_MARKER",
+    ]
+    monkeypatch.setattr(gmail_api.settings, "google_client_secrets_file", private_markers[0])
+    monkeypatch.setattr(gmail_api.settings, "google_gmail_token_file", private_markers[1])
+    monkeypatch.setattr(drive_api.settings, "google_token_file", private_markers[1])
+    monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", False)
+    monkeypatch.setattr(
+        gmail_api.settings,
+        "google_gmail_backfill_query",
+        private_markers[3],
+    )
+    monkeypatch.setattr(drive_api.settings, "google_drive_backfill_enabled", False)
+    monkeypatch.setattr(
+        drive_api.settings,
+        "google_drive_ai_inbox_folder_id",
+        private_markers[4],
+    )
+    _trap_google_connector_paths(
+        monkeypatch,
+        message="disabled backfill must not reach Google connector paths",
+    )
+
+    headers = {"X-FounderOS-API-Key": "test-api-key"}
+    with TestClient(app) as client:
+        gmail_response = client.post(
+            "/v1/gmail/backfill",
+            params={
+                "persist": "false",
+                "max_results": 1,
+                "query": private_markers[3],
+            },
+            headers=headers,
+        )
+        drive_response = client.post(
+            "/v1/drive/backfill",
+            params={"persist": "false", "max_results": 1},
+            headers=headers,
+        )
+
+    assert gmail_response.status_code == 403
+    assert gmail_response.json() == {"detail": "Gmail backfill is disabled."}
+    assert drive_response.status_code == 403
+    assert drive_response.json() == {"detail": "Google Drive backfill is disabled."}
+    for response in (gmail_response, drive_response):
         assert "test-api-key" not in response.text
         for marker in private_markers:
             assert marker not in response.text
