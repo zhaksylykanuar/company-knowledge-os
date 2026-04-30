@@ -223,3 +223,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: documents that FOS-029 is preflight-only, forbids Gmail and Drive backfill route calls, explains that `persist=false` can still call connector paths, identifies `GET /v1/google/backfill/preflight` as the only intended endpoint for a later human-approved local readiness check, and limits recorded results to readiness booleans, blocker codes, bounded limits, and notes.
   - non-goals: no code, tests, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, Gmail backfill, Drive backfill, connector calls, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: forbids recording secrets, credential contents, token values, local credential paths, local token paths, provider IDs, email addresses, subjects, snippets, Drive filenames, Drive links, private Gmail queries, Drive folder IDs, or raw source content; requires local credentials to stay outside repo tracking and API auth to be enabled before a later protected local check.
+
+- FOS-030: Document lightweight solo trunk check profiles
+  - status: implemented
+  - scope: add docs-only process guidance for lean risk-based solo trunk checks.
+  - behavior: documents the default solo trunk flow, lightweight docs-only command profile, small code change checks, stricter sensitive Google/raw storage/security checks, branch/PR triggers for risky work, and command hygiene that avoids unnecessary author or private metadata output.
+  - non-goals: no code, tests, runtime behavior changes, external API calls, app startup, Gmail backfill, Drive backfill, connector calls, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: keeps docs-only work on minimal git and diff checks, preserves stricter guardrail/redaction/limit checks for sensitive changes, and reinforces no secrets in the repo or task output.
