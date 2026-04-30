@@ -23,6 +23,9 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
   bounded to a small result window.
 - Local manual Gmail and Drive backfill testing must follow the safe runbook in
   `../runbooks/google-local-backfill.md`.
+- The protected `GET /v1/google/backfill/preflight` endpoint can validate local
+  Gmail and Drive guardrail readiness without calling Google APIs or returning
+  private query, folder, token, or credential values.
 - GitHub repositories, including `qaztwin`: registry contracts, fixtures, and
   connector payload mapping exist, but there is no real production GitHub
   connector or webhook endpoint yet.

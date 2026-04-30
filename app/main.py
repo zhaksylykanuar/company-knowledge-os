@@ -6,6 +6,7 @@ from app.api.drive import router as drive_router
 from app.api.events import router as events_router
 from app.api.extraction import router as extraction_router
 from app.api.gmail import router as gmail_router
+from app.api.google import router as google_router
 from app.api.health import router as health_router
 from app.api.knowledge import router as knowledge_router
 
@@ -22,6 +23,7 @@ app.include_router(
 )
 app.include_router(drive_router, dependencies=protected_api_dependencies)
 app.include_router(gmail_router, dependencies=protected_api_dependencies)
+app.include_router(google_router, dependencies=protected_api_dependencies)
 app.include_router(extraction_router, dependencies=protected_api_dependencies)
 app.include_router(knowledge_router, dependencies=protected_api_dependencies)
 app.include_router(digest_router, dependencies=protected_api_dependencies)

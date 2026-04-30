@@ -195,3 +195,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: documents current default-off guardrails, Gmail explicit safe query requirements, blocked broad Gmail query, Drive folder boundary, bounded `max_results`, placeholder curl examples, post-backfill digest verification, stop conditions, and remaining production gaps.
   - non-goals: no code, tests, runtime behavior changes, real Google calls, OAuth implementation, credential storage, webhooks, scheduler, production sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: reinforces that `.env` stays local and ignored, real credentials must not be committed or logged, raw storage plus Postgres remain source of truth, and API responses must not expose raw full email bodies or raw full document contents.
+
+- FOS-025: Add Google backfill preflight endpoint
+  - status: implemented
+  - scope: add a protected local readiness endpoint for Gmail and Google Drive manual backfill guardrails.
+  - behavior: `GET /v1/google/backfill/preflight` reports safe readiness booleans, bounded result limits, blocker codes, and preflight notes for Gmail and Drive without calling Google APIs or connector paths.
+  - non-goals: no real Gmail/Drive connection, OAuth implementation, credential storage, webhooks, scheduler, production sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, Gmail/Drive sync behavior changes, or Obsidian/raw storage manual edits.
+  - security: keeps Gmail query values, Drive folder IDs, token paths, credentials, private emails, and private file names out of responses, errors, docs examples, and tests.

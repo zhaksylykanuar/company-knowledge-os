@@ -60,6 +60,26 @@ Before any future local manual backfill test:
 - Do not use the broad Gmail query `in:inbox OR in:sent`.
 - Do not add or use a sync-all Drive behavior.
 
+## Guardrail Preflight
+
+Before calling either manual backfill route, use the protected preflight endpoint
+to validate local guardrail readiness without calling Google APIs:
+
+```bash
+curl -G http://localhost:8000/v1/google/backfill/preflight \
+  -H "X-FounderOS-API-Key: YOUR_API_KEY" \
+  --data-urlencode "gmail_query=YOUR_SAFE_GMAIL_QUERY" \
+  --data-urlencode "gmail_max_results=1" \
+  --data-urlencode "drive_max_results=1"
+```
+
+`GET /v1/google/backfill/preflight` reports safe readiness booleans, blocker
+codes, bounded result limits, and whether Gmail/Drive are enabled. It does not
+call Gmail, Drive, OAuth, or connector code. It does not echo the Gmail query,
+Drive folder ID, token paths, credentials, private emails, or private file
+names. `overall_ready` is true only when both Gmail and Drive guardrails are
+ready for a bounded manual backfill check.
+
 ## Gmail Safe Manual Backfill
 
 Endpoint:

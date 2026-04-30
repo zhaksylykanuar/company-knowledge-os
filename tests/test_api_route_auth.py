@@ -10,6 +10,7 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/events", "POST"),
     ("/v1/drive/backfill", "POST"),
     ("/v1/gmail/backfill", "POST"),
+    ("/v1/google/backfill/preflight", "GET"),
     ("/v1/knowledge/ingest-text", "POST"),
     ("/v1/knowledge/ingest-text-process", "POST"),
     ("/v1/knowledge/score", "POST"),
