@@ -9,6 +9,9 @@ from app.integrations.source_registry import validate_source_event_contract
 from app.main import app
 from app.services.raw_storage import sha256_text
 
+SAFE_GMAIL_QUERY = "label:founderos-test"
+BROAD_GMAIL_QUERY = "in:inbox OR in:sent"
+
 
 class FakeAsyncSession:
     def __init__(self, added: list[object]) -> None:
@@ -44,11 +47,92 @@ def _gmail_body_data(text: str) -> str:
     return base64.urlsafe_b64encode(text.encode("utf-8")).decode("ascii").rstrip("=")
 
 
-def test_gmail_backfill_contract(monkeypatch):
+def _enable_gmail_backfill(monkeypatch, *, configured_query: str | None = None) -> None:
+    monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", True)
+    monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_query", configured_query)
+
+
+def test_gmail_backfill_rejects_when_disabled_without_calling_connector(monkeypatch) -> None:
+    monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", False)
+
+    def fail_list_messages(query: str, max_results: int) -> list[dict]:
+        raise AssertionError("disabled Gmail backfill must not call connector path")
+
+    monkeypatch.setattr(gmail_api, "list_messages", fail_list_messages)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "false", "query": SAFE_GMAIL_QUERY},
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Gmail backfill is disabled."}
+
+
+def test_enabled_gmail_backfill_rejects_missing_blank_or_broad_query(monkeypatch) -> None:
+    _enable_gmail_backfill(monkeypatch)
+
+    def fail_list_messages(query: str, max_results: int) -> list[dict]:
+        raise AssertionError("invalid Gmail query must not call connector path")
+
+    monkeypatch.setattr(gmail_api, "list_messages", fail_list_messages)
+
+    with TestClient(app) as client:
+        missing = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "false"},
+        )
+        blank = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "false", "query": "  "},
+        )
+        broad = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "false", "query": BROAD_GMAIL_QUERY},
+        )
+
+    assert missing.status_code == 400
+    assert missing.json() == {"detail": "Gmail backfill requires an explicit safe query."}
+    assert blank.status_code == 400
+    assert blank.json() == {"detail": "Gmail backfill requires an explicit safe query."}
+    assert broad.status_code == 400
+    assert broad.json() == {
+        "detail": "Gmail backfill query is too broad; choose a narrower query."
+    }
+
+
+def test_enabled_gmail_backfill_can_use_configured_safe_query(monkeypatch) -> None:
+    seen_queries: list[str] = []
+    _enable_gmail_backfill(monkeypatch, configured_query=SAFE_GMAIL_QUERY)
+
+    def fake_list_messages(query: str, max_results: int) -> list[dict]:
+        seen_queries.append(query)
+        return []
+
     monkeypatch.setattr(
         gmail_api,
         "list_messages",
-        lambda query="in:inbox OR in:sent", max_results=10: [{"id": "m1"}],
+        fake_list_messages,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "false"},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["discovered"] == 0
+    assert seen_queries == [SAFE_GMAIL_QUERY]
+
+
+def test_gmail_backfill_contract(monkeypatch):
+    _enable_gmail_backfill(monkeypatch)
+    monkeypatch.setattr(
+        gmail_api,
+        "list_messages",
+        lambda query=SAFE_GMAIL_QUERY, max_results=10: [{"id": "m1"}],
     )
     monkeypatch.setattr(
         gmail_api,
@@ -67,7 +151,10 @@ def test_gmail_backfill_contract(monkeypatch):
         },
     )
     with TestClient(app) as client:
-        response = client.post("/v1/gmail/backfill?max_results=1&persist=false")
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "false", "query": SAFE_GMAIL_QUERY},
+        )
     assert response.status_code == 202
     body = response.json()
     event = body["events"][0]
@@ -184,6 +271,7 @@ def test_gmail_backfill_persist_creates_source_document_and_chunk(monkeypatch, t
     added: list[object] = []
     normalized: list[IngestedEvent] = []
     readable_text = "Hello from Gmail body.\nDecision: use the document chunk path."
+    _enable_gmail_backfill(monkeypatch)
 
     async def fake_normalize(session, ingested_event):
         normalized.append(ingested_event)
@@ -192,7 +280,7 @@ def test_gmail_backfill_persist_creates_source_document_and_chunk(monkeypatch, t
     monkeypatch.setattr(
         gmail_api,
         "list_messages",
-        lambda query="in:inbox OR in:sent", max_results=10: [{"id": "m1"}],
+        lambda query=SAFE_GMAIL_QUERY, max_results=10: [{"id": "m1"}],
     )
     monkeypatch.setattr(
         gmail_api,
@@ -220,7 +308,10 @@ def test_gmail_backfill_persist_creates_source_document_and_chunk(monkeypatch, t
     monkeypatch.setattr(gmail_api, "normalize_ingested_event_to_source_event", fake_normalize)
 
     with TestClient(app) as client:
-        response = client.post("/v1/gmail/backfill?max_results=1&persist=true")
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "true", "query": SAFE_GMAIL_QUERY},
+        )
 
     assert response.status_code == 202
     body = response.json()
@@ -266,6 +357,7 @@ def test_gmail_backfill_persist_skips_source_event_without_subject(monkeypatch, 
     added: list[object] = []
     normalized: list[IngestedEvent] = []
     readable_text = "Readable body without a subject should still persist raw data."
+    _enable_gmail_backfill(monkeypatch)
 
     async def fake_normalize(session, ingested_event):
         normalized.append(ingested_event)
@@ -274,7 +366,7 @@ def test_gmail_backfill_persist_skips_source_event_without_subject(monkeypatch, 
     monkeypatch.setattr(
         gmail_api,
         "list_messages",
-        lambda query="in:inbox OR in:sent", max_results=10: [{"id": "m2"}],
+        lambda query=SAFE_GMAIL_QUERY, max_results=10: [{"id": "m2"}],
     )
     monkeypatch.setattr(
         gmail_api,
@@ -300,7 +392,10 @@ def test_gmail_backfill_persist_skips_source_event_without_subject(monkeypatch, 
     monkeypatch.setattr(gmail_api, "normalize_ingested_event_to_source_event", fake_normalize)
 
     with TestClient(app) as client:
-        response = client.post("/v1/gmail/backfill?max_results=1&persist=true")
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "true", "query": SAFE_GMAIL_QUERY},
+        )
 
     assert response.status_code == 202
     assert response.json()["saved"] == 1

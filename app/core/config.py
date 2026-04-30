@@ -25,6 +25,9 @@ class Settings(BaseSettings):
 
     google_client_secrets_file: str = "./secrets/google_oauth_client.json"
     google_token_file: str = "./secrets/google_token.json"
+    google_gmail_backfill_enabled: bool = False
+    google_gmail_backfill_query: str | None = None
+    google_drive_backfill_enabled: bool = False
     google_drive_ai_inbox_folder_id: str | None = None
     google_pubsub_topic: str | None = None
     google_pubsub_subscription: str | None = None

@@ -4,12 +4,17 @@
 
 - Gmail read-only API wrapper: implemented
 - Gmail raw backfill: partial
+- Gmail backfill activation/query guardrail: implemented
 - Gmail message to SourceDocument/chunks: implemented for readable message bodies
 - Gmail write actions: planned and approval-gated
 
 ## Current Behavior
 
 - Gmail messages can be listed and fetched with read-only scope.
+- Gmail backfill is disabled by default and must be explicitly enabled before
+  the route calls connector code.
+- Enabled Gmail backfill requires a narrower explicit query or configured safe
+  query. The historical broad `in:inbox OR in:sent` query is rejected.
 - Raw Gmail messages are stored under raw storage.
 - Threads, messages, and attachment metadata are persisted.
 - Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.
@@ -29,3 +34,5 @@
 
 - Gmail attachment content ingestion is not implemented; attachments remain metadata-only.
 - Webhook/PubSub handling is not visible as implemented.
+- Production Gmail sync, pagination, incremental history sync, and OAuth
+  hardening are not implemented.

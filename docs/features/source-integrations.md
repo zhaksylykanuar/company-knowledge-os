@@ -11,11 +11,14 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
 - Gmail: partial read-only foundation. The repo can list/fetch messages with
   read-only OAuth, store raw messages, persist Gmail read models, create source
   documents and chunks for readable message bodies, and normalize valid new
-  message events into `SourceEvent` rows.
+  message events into `SourceEvent` rows. Gmail backfill is default-off and
+  requires an explicit safe query or configured safe query before connector
+  calls are made.
 - Google Drive: partial read-only foundation. The repo can list a configured
   Drive AI inbox folder, download/export text content when supported, store raw
   snapshots, create source documents and chunks, and normalize valid new file
-  events into `SourceEvent` rows.
+  events into `SourceEvent` rows. Drive backfill is default-off and still
+  requires the configured AI inbox folder boundary.
 - GitHub repositories, including `qaztwin`: registry contracts, fixtures, and
   connector payload mapping exist, but there is no real production GitHub
   connector or webhook endpoint yet.
@@ -162,6 +165,9 @@ Use placeholders only in docs and tests, for example:
 - Each provider must have a scope or allowlist boundary.
 - There must be no "sync everything" default.
 - Start read-only.
+- Gmail backfill must not silently use the broad historical
+  `in:inbox OR in:sent` query; use a narrower explicit or configured query.
+- Drive backfill must stay bounded to the configured AI inbox folder.
 - Persist raw snapshots and source events first.
 - Extraction, digest, and Q&A must use stored data, not live API responses.
 - Failures must be visible through logs, audit records, or returned status; they

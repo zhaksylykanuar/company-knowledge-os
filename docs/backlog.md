@@ -167,3 +167,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: documents current source readiness, source-of-truth rules, stable source identity fields, credential and secret handling expectations, per-source credential categories, activation/allowlist rules, webhook/sync safety, evidence requirements, and recommended connection order.
   - non-goals: no code, tests, real connector implementation, OAuth flow, webhook, scheduler, Telegram inbound bot/Q&A, external API calls, runtime behavior changes, dependencies, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: reinforces that `.env` stays ignored and local, production secrets belong in a secret manager or deployment secret store, provider scopes should be least-privilege and allowlisted, tokens must not appear in logs/errors/docs/tests/Telegram messages, and extraction/digest/Q&A must run from stored evidence-backed data.
+
+- FOS-021: Add Google integration activation guardrails
+  - status: implemented
+  - scope: make existing Gmail and Google Drive backfill routes default-off and add minimal scope guardrails before real credentials are used.
+  - behavior: adds default-disabled Gmail and Drive backfill settings; Gmail backfill rejects missing, blank, or historical broad `in:inbox OR in:sent` queries before connector calls; Drive backfill rejects disabled use and missing folder boundary before connector calls.
+  - non-goals: no real Google API calls in tests, OAuth implementation, webhook, scheduler, pagination, incremental sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: keeps Google access read-only first, prevents accidental broad Gmail sync, keeps Drive bounded to the configured AI inbox folder, uses safe default-off `.env.example` placeholders, and preserves existing route auth.

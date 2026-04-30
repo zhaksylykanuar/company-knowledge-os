@@ -6,6 +6,7 @@
 - One-step manual text processing: implemented
 - Drive read-only backfill: partial
 - Gmail raw read-only backfill: partial
+- Google Gmail/Drive backfill activation guardrails: implemented
 - Connector payload ingestion boundary: implemented
 - External write actions: planned
 
@@ -21,6 +22,7 @@
 - Gmail backfill creates source documents and chunks when a raw message contains readable body text.
 - Drive/Gmail emitted ingestion events use registry-compatible event names and payload fields.
 - Drive/Gmail persist flows normalize valid new `IngestedEvent` rows into `SourceEvent` rows.
+- Gmail and Drive backfill routes are default-off. Gmail requires a narrower explicit or configured query, and Drive requires the configured AI inbox folder boundary.
 - Connector payloads can map into `IngestedEvent` and then `SourceEvent`.
 - Persisted external events require future API auth and webhook signature boundaries before production exposure.
 - Future real source connectivity must follow the credentials, source identity, activation, and allowlist contract in `source-integrations.md`.
@@ -37,3 +39,4 @@
 ## Known Gaps
 
 - Gmail attachment content is not yet ingested into `SourceDocument` and chunks.
+- Production Gmail/Drive sync, OAuth hardening, pagination, incremental sync, webhooks, and scheduler jobs are not implemented.

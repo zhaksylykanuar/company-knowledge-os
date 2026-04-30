@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.models import AuditLog, IngestedEvent
 from app.db.source_models import DocumentChunk, SourceDocument
@@ -10,6 +11,20 @@ from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_te
 from app.services.source_events import normalize_ingested_event_to_source_event
 
 router = APIRouter(prefix="/v1/drive", tags=["drive"])
+
+
+def _require_drive_backfill_enabled() -> None:
+    if not settings.google_drive_backfill_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Google Drive backfill is disabled.",
+        )
+
+    if not settings.google_drive_ai_inbox_folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google Drive backfill requires GOOGLE_DRIVE_AI_INBOX_FOLDER_ID.",
+        )
 
 
 def list_ai_inbox_files() -> list[dict]:
@@ -57,6 +72,7 @@ def save_drive_raw_snapshot(file_metadata: dict, text: str) -> tuple[str, str]:
 
 @router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
 async def drive_backfill(persist: bool = Query(True)) -> dict:
+    _require_drive_backfill_enabled()
     files = list_ai_inbox_files()
     events = []
     saved = 0

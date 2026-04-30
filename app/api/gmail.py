@@ -3,9 +3,10 @@ import binascii
 import re
 from html.parser import HTMLParser
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.gmail_models import GmailAttachment, GmailMessage, GmailThread
 from app.db.models import AuditLog, IngestedEvent
@@ -16,6 +17,38 @@ from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_te
 from app.services.source_events import normalize_ingested_event_to_source_event
 
 router = APIRouter(prefix="/v1/gmail", tags=["gmail"])
+
+BROAD_GMAIL_BACKFILL_QUERY = "in:inbox OR in:sent"
+
+
+def _normalize_gmail_query(query: str) -> str:
+    return " ".join(query.casefold().split())
+
+
+def _safe_gmail_backfill_query(query: str | None) -> str:
+    if not settings.google_gmail_backfill_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Gmail backfill is disabled.",
+        )
+
+    selected_query = query if query is not None else settings.google_gmail_backfill_query
+    cleaned_query = selected_query.strip() if isinstance(selected_query, str) else ""
+    if not cleaned_query:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Gmail backfill requires an explicit safe query.",
+        )
+
+    if _normalize_gmail_query(cleaned_query) == _normalize_gmail_query(
+        BROAD_GMAIL_BACKFILL_QUERY
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Gmail backfill query is too broad; choose a narrower query.",
+        )
+
+    return cleaned_query
 
 
 class _ReadableHtmlParser(HTMLParser):
@@ -273,10 +306,11 @@ def iter_attachment_metadata(msg: dict) -> list[dict]:
 @router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
 async def gmail_backfill(
     max_results: int = Query(10, ge=1, le=100),
-    query: str = Query("in:inbox OR in:sent"),
+    query: str | None = Query(None),
     persist: bool = Query(True),
 ) -> dict:
-    refs = list_messages(query=query, max_results=max_results)
+    safe_query = _safe_gmail_backfill_query(query)
+    refs = list_messages(query=safe_query, max_results=max_results)
     events = []
     saved = 0
     duplicates = 0

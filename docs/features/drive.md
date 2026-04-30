@@ -4,12 +4,16 @@
 
 - Google Drive read-only API wrapper: implemented
 - AI_INBOX backfill: partial
+- Drive backfill activation/folder guardrail: implemented
 - Drive file to SourceDocument/chunks: implemented
 - Drive write actions: planned and approval-gated
 
 ## Current Behavior
 
 - Drive files can be listed from a configured AI_INBOX folder.
+- Drive backfill is disabled by default and must be explicitly enabled before
+  the route calls connector code.
+- Enabled Drive backfill still requires the configured AI_INBOX folder boundary.
 - File content is downloaded/exported as text when supported.
 - Raw metadata/content are saved before creating source documents and chunks.
 - Drive emits registry-compatible `drive.file.ingested` events with `source_object_type` and `title`.
@@ -26,3 +30,5 @@
 
 - Webhook/PubSub handling is not visible as implemented.
 - Binary/non-text extraction behavior is unknown.
+- Production Drive sync, pagination, incremental sync, and OAuth hardening are
+  not implemented.

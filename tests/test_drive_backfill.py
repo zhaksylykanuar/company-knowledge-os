@@ -5,6 +5,8 @@ from app.db.models import IngestedEvent
 from app.integrations.source_registry import validate_source_event_contract
 from app.main import app
 
+DRIVE_FOLDER_ID = "drive-folder-test"
+
 
 class FakeAsyncSession:
     def __init__(self, added: list[object]) -> None:
@@ -36,7 +38,46 @@ def _fake_session_factory(added: list[object]):
     return factory
 
 
+def _enable_drive_backfill(monkeypatch, *, folder_id: str | None = DRIVE_FOLDER_ID) -> None:
+    monkeypatch.setattr(drive_api.settings, "google_drive_backfill_enabled", True)
+    monkeypatch.setattr(drive_api.settings, "google_drive_ai_inbox_folder_id", folder_id)
+
+
+def test_drive_backfill_rejects_when_disabled_without_calling_connector(monkeypatch) -> None:
+    monkeypatch.setattr(drive_api.settings, "google_drive_backfill_enabled", False)
+    monkeypatch.setattr(drive_api.settings, "google_drive_ai_inbox_folder_id", DRIVE_FOLDER_ID)
+
+    def fail_list_ai_inbox_files() -> list[dict]:
+        raise AssertionError("disabled Drive backfill must not call connector path")
+
+    monkeypatch.setattr(drive_api, "list_ai_inbox_files", fail_list_ai_inbox_files)
+
+    with TestClient(app) as client:
+        response = client.post("/v1/drive/backfill?persist=false")
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Google Drive backfill is disabled."}
+
+
+def test_enabled_drive_backfill_requires_folder_boundary(monkeypatch) -> None:
+    _enable_drive_backfill(monkeypatch, folder_id=None)
+
+    def fail_list_ai_inbox_files() -> list[dict]:
+        raise AssertionError("Drive backfill without folder boundary must not call connector path")
+
+    monkeypatch.setattr(drive_api, "list_ai_inbox_files", fail_list_ai_inbox_files)
+
+    with TestClient(app) as client:
+        response = client.post("/v1/drive/backfill?persist=false")
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": "Google Drive backfill requires GOOGLE_DRIVE_AI_INBOX_FOLDER_ID."
+    }
+
+
 def test_drive_backfill_contract(monkeypatch):
+    _enable_drive_backfill(monkeypatch)
     monkeypatch.setattr(
         drive_api,
         "list_ai_inbox_files",
@@ -64,6 +105,7 @@ def test_drive_backfill_contract(monkeypatch):
 def test_drive_backfill_persist_normalizes_new_ingested_event(monkeypatch, tmp_path):
     added: list[object] = []
     normalized: list[IngestedEvent] = []
+    _enable_drive_backfill(monkeypatch)
 
     async def fake_normalize(session, ingested_event):
         normalized.append(ingested_event)
