@@ -258,3 +258,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: adds offline authenticated route coverage for `POST /v1/gmail/backfill` and `POST /v1/drive/backfill` with backfill enable flags false, connector import and route-wrapper traps, and assertions that rejected responses do not echo private marker values.
   - non-goals: no enabled backfill success tests, runtime behavior changes, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: uses monkeypatched test-only auth, feature flags, and marker values only; keeps disabled-gate verification deterministic, offline, and free of real provider metadata or raw source content.
+
+- FOS-035: Google foundation readiness lock
+  - status: implemented
+  - scope: add the final operator-facing no-real-credentials foundation checklist before local Google credential setup.
+  - behavior: documents what is safe before credentials, the first protected preflight-only real step, human preconditions before real preflight, what may follow successful preflight, and stop conditions for auth, connector, metadata, query, folder, git, and limit issues.
+  - non-goals: no code, tests, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, Gmail backfill, Drive backfill, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: keeps the final foundation batch docs-only, reinforces API auth, redaction, disabled-by-default, no-sync-all, narrow-query, folder-boundary, and `max_results=1` first-real-backfill constraints before any real local Google API use.

@@ -114,6 +114,67 @@ Stop immediately and investigate if any of these happen:
 - Any secret or local path appears in logs or docs.
 - Any backfill route is accidentally called.
 
+## FOS-035 Google Foundation Readiness Lock
+
+This is the final no-real-credentials foundation lock before a human configures
+local Google access. It is meant to keep the first real run boring,
+observable, and reversible.
+
+Safe before credentials are configured:
+
+- Offline unit and route tests for preflight, auth gates, disabled gates,
+  limits, query/folder guardrails, and response redaction.
+- Docs-only checks such as `git diff --name-only` and `git diff --check`.
+- Review of the preflight implementation and tests.
+- No Google API calls, OAuth flows, Gmail/Drive connector construction,
+  credential file reads, token file reads, or real backfill requests.
+
+First real step after the human configures local credentials:
+
+- Run only the protected `GET /v1/google/backfill/preflight` endpoint.
+- Do not call `POST /v1/gmail/backfill`.
+- Do not call `POST /v1/drive/backfill`.
+- Do not use a broad Gmail query.
+- Do not use sync-all Drive behavior.
+- Do not run any persistence-changing backfill.
+
+Before that real preflight, the human must confirm:
+
+- Credentials are stored outside repo tracking.
+- Local API auth is enabled for the protected check.
+- The API key is not committed, logged, printed, or pasted into tickets.
+- A narrow Gmail query is chosen but not recorded in docs, output, tickets, or
+  chat.
+- A Drive folder boundary is chosen but not recorded in docs, output, tickets,
+  or chat.
+- The git tree is clean before and after the check.
+- No credential or token files are modified unexpectedly. Token file changes
+  are expected only if the human intentionally completes local OAuth.
+
+After a successful real preflight:
+
+- The first Gmail test must be separately human-approved, use
+  `max_results=1`, and use only the chosen narrow query.
+- The first Drive test must be separately human-approved, use
+  `max_results=1`, and stay inside the chosen folder boundary.
+- Treat `persist=false` as a real Google API call. It avoids local
+  persistence, but connector listing or fetching may still happen.
+- Inspect only redacted API response metadata.
+- Never paste private response content into docs, issues, chat, or logs.
+
+Stop immediately if any of these happen:
+
+- API auth is unexpectedly disabled.
+- Preflight tries to instantiate Gmail or Drive connectors.
+- Any Google API call happens during preflight.
+- Any response or log shows secrets, credential paths, provider IDs, email
+  addresses, subjects, snippets, Drive filenames, Drive links, private queries,
+  folder IDs, or raw source content.
+- The git tree becomes dirty unexpectedly.
+- A broad Gmail query is used.
+- The Drive folder boundary is missing.
+- `max_results` is greater than 1 for the first real backfill test.
+
 ## Guardrail Preflight
 
 Before calling either manual backfill route, use the protected preflight endpoint
