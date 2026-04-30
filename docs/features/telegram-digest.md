@@ -53,6 +53,8 @@ The future digest should be able to draw from evidence-backed data derived from:
 Each source must preserve raw input before downstream processing. Connector data
 must be normalized into stored source events, source documents, and chunks before
 it can be trusted by extraction, retrieval, Q&A, or digest workflows.
+Future real source connectivity must follow the credentials, source identity,
+activation, and allowlist contract in `source-integrations.md`.
 
 ## Planned Daily Digest Flow
 

@@ -160,3 +160,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: validates non-empty token, chat ID, and text; splits long text into ordered Telegram-safe chunks; builds plain payloads without `parse_mode`; sends chunks through an injected transport; and returns safe delivery status, counts, message IDs, and failure summary.
   - non-goals: no Telegram webhook, polling, inbound Q&A, scheduler, connector implementation, digest building, LLM calls, LLM summarization, task/risk/decision/commitment/recommendation inference, dependencies, migrations, API routes, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: keeps bot tokens out of result/error summaries, uses placeholders in tests/docs only, makes tests use fake transports, and does not store Telegram delivery results in the database.
+
+- FOS-019: Add source integration credentials contract
+  - status: implemented
+  - scope: add a docs/config-contract for future real source connectivity before connecting external services.
+  - behavior: documents current source readiness, source-of-truth rules, stable source identity fields, credential and secret handling expectations, per-source credential categories, activation/allowlist rules, webhook/sync safety, evidence requirements, and recommended connection order.
+  - non-goals: no code, tests, real connector implementation, OAuth flow, webhook, scheduler, Telegram inbound bot/Q&A, external API calls, runtime behavior changes, dependencies, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: reinforces that `.env` stays ignored and local, production secrets belong in a secret manager or deployment secret store, provider scopes should be least-privilege and allowlisted, tokens must not appear in logs/errors/docs/tests/Telegram messages, and extraction/digest/Q&A must run from stored evidence-backed data.
