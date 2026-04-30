@@ -7,6 +7,7 @@
 - Telegram delivery: planned
 - Telegram Q&A: planned
 - Internal deterministic source activity digest builder: implemented
+- Protected source activity digest API: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -135,6 +136,9 @@ Implemented today:
   explicit timezone-aware time window. It summarizes stored `SourceEvent` rows
   only, includes source/event counts and traceable source activity entries, and
   does not infer decisions, tasks, or risks.
+- FOS-014 exposes that deterministic source activity digest through the
+  protected `GET /v1/digest/source-activity` API endpoint for explicit
+  timezone-aware windows.
 
 Not implemented today:
 
@@ -147,3 +151,5 @@ Not implemented today:
 - Calendar connector.
 - Full production Gmail/Drive sync.
 - LLM summarization for digests.
+- Telegram delivery, scheduler, connector, or digest inference logic behind the
+  source activity endpoint.

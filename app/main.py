@@ -1,6 +1,7 @@
 from fastapi import Depends, FastAPI
 
 from app.api.auth import require_api_key
+from app.api.digest import router as digest_router
 from app.api.drive import router as drive_router
 from app.api.events import router as events_router
 from app.api.extraction import router as extraction_router
@@ -23,3 +24,4 @@ app.include_router(drive_router, dependencies=protected_api_dependencies)
 app.include_router(gmail_router, dependencies=protected_api_dependencies)
 app.include_router(extraction_router, dependencies=protected_api_dependencies)
 app.include_router(knowledge_router, dependencies=protected_api_dependencies)
+app.include_router(digest_router, dependencies=protected_api_dependencies)

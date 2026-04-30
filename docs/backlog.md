@@ -125,3 +125,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: returns the requested window, source/event/object-type counts, traceable source activity entries, and evidence refs without raw body text or inferred tasks/risks/decisions.
   - non-goals: no Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision inference, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: reads persisted source activity only, requires explicit aware datetimes, keeps raw storage plus Postgres as source of truth, includes evidence pointers, and does not call OpenAI/ChatGPT.
+
+- FOS-014: Expose source activity digest endpoint
+  - status: implemented
+  - scope: add a small protected `GET /v1/digest/source-activity` API endpoint around the FOS-013 deterministic digest builder.
+  - behavior: accepts explicit timezone-aware `start_at` and `end_at` query params plus a bounded `limit`, returns the requested window, source/event/object-type counts, traceable source activity entries, and evidence refs.
+  - non-goals: no Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision inference, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: uses the existing protected API auth boundary, reads persisted `SourceEvent` data only, rejects naive or inverted windows, omits raw source bodies, and does not call OpenAI/ChatGPT.
