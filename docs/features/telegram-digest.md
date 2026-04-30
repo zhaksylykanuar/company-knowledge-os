@@ -139,6 +139,8 @@ Implemented today:
 - FOS-014 exposes that deterministic source activity digest through the
   protected `GET /v1/digest/source-activity` API endpoint for explicit
   timezone-aware windows.
+- FOS-015 documents a safe manual quickstart check for that endpoint in
+  `docs/mvp-quickstart.md`.
 
 Not implemented today:
 

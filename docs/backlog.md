@@ -132,3 +132,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: accepts explicit timezone-aware `start_at` and `end_at` query params plus a bounded `limit`, returns the requested window, source/event/object-type counts, traceable source activity entries, and evidence refs.
   - non-goals: no Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision inference, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: uses the existing protected API auth boundary, reads persisted `SourceEvent` data only, rejects naive or inverted windows, omits raw source bodies, and does not call OpenAI/ChatGPT.
+
+- FOS-015: Add digest API manual quickstart
+  - status: implemented
+  - scope: add docs-only manual verification guidance for `GET /v1/digest/source-activity`.
+  - behavior: documents protected endpoint usage, timezone-aware `start_at` and `end_at`, bounded `limit`, response fields, empty digest behavior, and troubleshooting for auth and window validation.
+  - non-goals: no code, tests, Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision inference, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: examples use placeholders only and reinforce that the endpoint reads stored `SourceEvent` data without raw body output, LLM calls, Telegram delivery, or inferred digest claims.

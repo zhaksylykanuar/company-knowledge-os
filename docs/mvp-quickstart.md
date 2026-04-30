@@ -140,6 +140,38 @@ curl "http://localhost:8000/v1/knowledge/attention?limit=10" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY"
 ```
 
+Source activity digest:
+
+```bash
+curl -G http://localhost:8000/v1/digest/source-activity \
+  -H "X-FounderOS-API-Key: YOUR_API_KEY" \
+  --data-urlencode "start_at=2026-01-01T00:00:00+00:00" \
+  --data-urlencode "end_at=2026-01-02T00:00:00+00:00" \
+  --data-urlencode "limit=20"
+```
+
+`GET /v1/digest/source-activity` is a protected manual check for stored source
+activity. It reads existing `SourceEvent` rows only and requires explicit ISO
+datetimes with timezone in `start_at` and `end_at`. The optional `limit` is
+bounded by the API.
+
+The digest response includes:
+
+- `digest_type`: `source_activity`.
+- `window`: the requested `start_at` and `end_at`.
+- `counts`: total count plus counts by source system, event type, and source
+  object type.
+- `entries`: limited source activity entries with source identifiers, event
+  time, title, source URL when available, and `evidence_refs`.
+- `metadata`: entry limit, returned entry count, truncation flag, source model,
+  and `llm_used`.
+
+An empty window is valid and returns an empty digest. The endpoint does not call
+an LLM, generate a human-written summary, infer decisions, tasks, risks,
+commitments, or recommendations, send anything to Telegram, or implement a daily
+scheduler. It does not expose raw full email bodies, raw transcript text,
+secrets, or large source contents.
+
 Export the processed document to the local Obsidian vault output:
 
 ```bash
@@ -162,6 +194,13 @@ data.
 - Empty `extracted_items_preview`: the submitted text may not contain task, risk,
   or decision signals, or extracted entities without usable `evidence_refs` were
   skipped.
+- Digest `400` with `start_at must be timezone-aware` or
+  `end_at must be timezone-aware`: include an explicit timezone, such as
+  `+00:00`, in the digest timestamp.
+- Digest `400` with `end_at must be after start_at`: choose a digest window
+  where `start_at` is earlier than `end_at`.
+- Empty digest: no stored `SourceEvent` rows exist in the selected time window,
+  or the selected window does not match the source activity timestamps.
 - Database connection errors: ensure `docker compose up -d postgres redis` is
   running and migrations have been applied.
 
