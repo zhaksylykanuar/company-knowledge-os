@@ -146,3 +146,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: formats the digest title, explicit window, counts, limited source activity entries, truncation metadata, evidence refs, and empty-state message as plain text.
   - non-goals: no Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision/commitment/recommendation inference, API behavior changes, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: renderer uses the provided digest dict only, avoids DB/API/LLM access, whitelists rendered evidence ref fields, omits raw body-like fields, and labels output as source activity only.
+
+- FOS-017: Expose source activity digest text endpoint
+  - status: implemented
+  - scope: add a protected `GET /v1/digest/source-activity/text` endpoint around the FOS-013 digest builder and FOS-016 text renderer.
+  - behavior: accepts explicit timezone-aware `start_at` and `end_at` query params plus a bounded `limit`, returns deterministic `text/plain` source activity digest output, and preserves the existing JSON digest endpoint behavior.
+  - non-goals: no Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision/commitment/recommendation inference, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: uses the existing protected API auth boundary, reads persisted `SourceEvent` data only through the digest builder, rejects naive or inverted windows, omits raw source bodies, and does not call OpenAI/ChatGPT.

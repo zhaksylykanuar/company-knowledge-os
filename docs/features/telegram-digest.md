@@ -8,6 +8,7 @@
 - Telegram Q&A: planned
 - Internal deterministic source activity digest builder: implemented
 - Protected source activity digest API: implemented
+- Protected rendered source activity digest text API: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -143,6 +144,8 @@ Implemented today:
   `docs/mvp-quickstart.md`.
 - FOS-016 adds a deterministic non-LLM text renderer for existing source
   activity digest output.
+- FOS-017 exposes rendered deterministic source activity digest text through the
+  protected `GET /v1/digest/source-activity/text` API endpoint.
 
 Not implemented today:
 
@@ -159,3 +162,5 @@ Not implemented today:
   rendering.
 - Telegram delivery, scheduler, connector, or digest inference logic behind the
   source activity endpoint.
+- Telegram delivery, scheduler, connector, or digest inference logic behind the
+  rendered source activity text endpoint.

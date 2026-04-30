@@ -152,6 +152,36 @@ async def test_source_activity_digest_endpoint_returns_empty_digest(
     }
 
 
+async def test_source_activity_digest_text_endpoint_returns_empty_plain_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/v1/digest/source-activity/text",
+            params={
+                "start_at": "2124-01-01T00:00:00+00:00",
+                "end_at": "2124-01-02T00:00:00+00:00",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "Source activity digest" in response.text
+    assert (
+        "Window: 2124-01-01T00:00:00+00:00 to 2124-01-02T00:00:00+00:00"
+        in response.text
+    )
+    assert "Total events: 0" in response.text
+    assert "Entries: none" in response.text
+    assert "No source activity found for this window." in response.text
+    assert "does not infer decisions, tasks, or risks" in response.text
+
+
 async def test_source_activity_digest_endpoint_filters_events_and_preserves_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -221,6 +251,77 @@ async def test_source_activity_digest_endpoint_filters_events_and_preserves_evid
         await _cleanup_digest_fixture(unique)
 
 
+async def test_source_activity_digest_text_endpoint_filters_events_and_preserves_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_auth(monkeypatch, enabled=False, key=None)
+    unique = uuid4().hex
+    raw_body = (
+        "Full raw source body should not appear in the digest text API response. "
+        "This is fixture-only content."
+    )
+    await _cleanup_digest_fixture(unique)
+
+    try:
+        inside_id = await _insert_source_event(
+            unique=unique,
+            suffix="inside_text",
+            source_system="gmail",
+            source_object_type="message",
+            event_type="gmail.message.ingested",
+            event_time=_utc(2124, 2, 1, 12),
+            title="Digest text API Gmail subject",
+            summary=raw_body,
+            payload={"text": raw_body},
+        )
+        outside_id = await _insert_source_event(
+            unique=unique,
+            suffix="outside_text",
+            source_system="drive",
+            source_object_type="file",
+            event_type="drive.file.ingested",
+            event_time=_utc(2124, 2, 3, 12),
+            title="Outside digest text API window",
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.get(
+                "/v1/digest/source-activity/text",
+                params={
+                    "start_at": "2124-02-01T00:00:00+00:00",
+                    "end_at": "2124-02-02T00:00:00+00:00",
+                    "limit": "10",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/plain")
+        assert (
+            "Window: 2124-02-01T00:00:00+00:00 to 2124-02-02T00:00:00+00:00"
+            in response.text
+        )
+        assert "Source systems:" in response.text
+        assert "- gmail:" in response.text
+        assert "Event types:" in response.text
+        assert "- gmail.message.ingested:" in response.text
+        assert "Source object types:" in response.text
+        assert "- message:" in response.text
+        assert inside_id in response.text
+        assert outside_id not in response.text
+        assert "Digest text API Gmail subject" in response.text
+        assert "Outside digest text API window" not in response.text
+        assert "kind=source_event" in response.text
+        assert f"source_event_id={inside_id}" in response.text
+        assert raw_body not in response.text
+        assert "does not infer decisions, tasks, or risks" in response.text
+
+    finally:
+        await _cleanup_digest_fixture(unique)
+
+
 async def test_source_activity_digest_endpoint_rejects_naive_window(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -235,6 +336,27 @@ async def test_source_activity_digest_endpoint_rejects_naive_window(
             params={
                 "start_at": "2122-01-01T00:00:00",
                 "end_at": "2122-01-02T00:00:00+00:00",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "start_at must be timezone-aware"}
+
+
+async def test_source_activity_digest_text_endpoint_rejects_naive_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/v1/digest/source-activity/text",
+            params={
+                "start_at": "2124-03-01T00:00:00",
+                "end_at": "2124-03-02T00:00:00+00:00",
             },
         )
 
@@ -263,6 +385,27 @@ async def test_source_activity_digest_endpoint_rejects_invalid_window_order(
     assert response.json() == {"detail": "end_at must be after start_at"}
 
 
+async def test_source_activity_digest_text_endpoint_rejects_invalid_window_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/v1/digest/source-activity/text",
+            params={
+                "start_at": "2124-03-02T00:00:00+00:00",
+                "end_at": "2124-03-01T00:00:00+00:00",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "end_at must be after start_at"}
+
+
 async def test_source_activity_digest_endpoint_requires_api_key_when_auth_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -277,6 +420,28 @@ async def test_source_activity_digest_endpoint_requires_api_key_when_auth_enable
             params={
                 "start_at": "2123-01-01T00:00:00+00:00",
                 "end_at": "2123-01-02T00:00:00+00:00",
+            },
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert "test-api-key" not in response.text
+
+
+async def test_source_activity_digest_text_endpoint_requires_api_key_when_auth_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/v1/digest/source-activity/text",
+            params={
+                "start_at": "2124-04-01T00:00:00+00:00",
+                "end_at": "2124-04-02T00:00:00+00:00",
             },
         )
 

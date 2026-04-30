@@ -172,6 +172,23 @@ commitments, or recommendations, send anything to Telegram, or implement a daily
 scheduler. It does not expose raw full email bodies, raw transcript text,
 secrets, or large source contents.
 
+Rendered source activity digest text:
+
+```bash
+curl -G http://localhost:8000/v1/digest/source-activity/text \
+  -H "X-FounderOS-API-Key: YOUR_API_KEY" \
+  --data-urlencode "start_at=2026-01-01T00:00:00+00:00" \
+  --data-urlencode "end_at=2026-01-02T00:00:00+00:00" \
+  --data-urlencode "limit=20"
+```
+
+`GET /v1/digest/source-activity/text` is the protected plain-text rendering of
+the same deterministic source activity digest. It uses the same timezone-aware
+window validation and bounded `limit` as the JSON endpoint, calls the existing
+non-LLM renderer, and returns `text/plain`. The text is source activity only: it
+does not add a human-written summary, infer decisions, tasks, or risks, send
+anything to Telegram, or expose raw full source bodies.
+
 Export the processed document to the local Obsidian vault output:
 
 ```bash
@@ -201,6 +218,8 @@ data.
   where `start_at` is earlier than `end_at`.
 - Empty digest: no stored `SourceEvent` rows exist in the selected time window,
   or the selected window does not match the source activity timestamps.
+- Empty rendered digest text: the selected source activity window is valid, but
+  no stored `SourceEvent` rows exist for that window.
 - Database connection errors: ensure `docker compose up -d postgres redis` is
   running and migrations have been applied.
 

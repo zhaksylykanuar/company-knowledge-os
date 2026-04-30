@@ -19,6 +19,7 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/extraction/demo", "POST"),
     ("/v1/extraction/process-document", "POST"),
     ("/v1/digest/source-activity", "GET"),
+    ("/v1/digest/source-activity/text", "GET"),
 }
 
 
