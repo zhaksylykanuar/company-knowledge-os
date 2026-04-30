@@ -237,3 +237,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: adds offline test coverage that fails if preflight imports connector modules, calls Gmail or Drive route connector wrappers, or returns private marker values instead of safe readiness fields, blocker codes, bounded limits, and notes.
   - non-goals: no runtime behavior changes, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, Gmail backfill, Drive backfill, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: uses monkeypatched test-only marker values and connector traps only; keeps preflight verification deterministic, offline, and free of real provider metadata or raw source content.
+
+- FOS-032: Enforce Google preflight auth coverage
+  - status: implemented
+  - scope: add focused regression coverage proving the protected Google manual backfill preflight endpoint is guarded by API auth before real local Google credentials are used.
+  - behavior: extends the existing preflight auth test so unauthenticated requests are rejected when API auth is enabled, authenticated requests are accepted with test-only auth configuration, connector paths are trapped, and rejected responses do not echo private marker values.
+  - non-goals: no runtime behavior changes, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, Gmail backfill, Drive backfill, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: uses monkeypatched test-only auth and Google readiness values only; keeps auth verification deterministic, offline, and free of real provider metadata or raw source content.
