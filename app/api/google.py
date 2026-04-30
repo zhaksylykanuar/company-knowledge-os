@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Query
@@ -25,6 +26,19 @@ DRIVE_BLOCKER_DISABLED = "drive_backfill_disabled"
 DRIVE_BLOCKER_FOLDER_BOUNDARY_MISSING = "drive_folder_boundary_missing"
 DRIVE_BLOCKER_MAX_RESULTS_INVALID = "drive_max_results_invalid"
 
+GOOGLE_CREDENTIAL_BLOCKER_CLIENT_SECRETS_NOT_CONFIGURED = (
+    "google_client_secrets_not_configured"
+)
+GOOGLE_CREDENTIAL_BLOCKER_CLIENT_SECRETS_FILE_MISSING = (
+    "google_client_secrets_file_missing"
+)
+GOOGLE_CREDENTIAL_BLOCKER_GMAIL_TOKEN_PATH_NOT_CONFIGURED = (
+    "google_gmail_token_path_not_configured"
+)
+GOOGLE_CREDENTIAL_BLOCKER_DRIVE_TOKEN_PATH_NOT_CONFIGURED = (
+    "google_drive_token_path_not_configured"
+)
+
 
 class GmailBackfillPreflight(BaseModel):
     enabled: bool
@@ -46,11 +60,32 @@ class DriveBackfillPreflight(BaseModel):
     blockers: list[str]
 
 
+class GoogleCredentialsPreflight(BaseModel):
+    client_secrets_configured: bool
+    client_secrets_file_present: bool
+    gmail_token_configured: bool
+    gmail_token_file_present: bool
+    drive_token_configured: bool
+    drive_token_file_present: bool
+    ready: bool
+    blockers: list[str]
+    notes: list[str]
+
+
 class GoogleBackfillPreflightResponse(BaseModel):
     overall_ready: bool
     gmail: GmailBackfillPreflight
     drive: DriveBackfillPreflight
+    google_credentials: GoogleCredentialsPreflight
     notes: list[str]
+
+
+def _configured_path_value(value: object) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _configured_file_present(path_value: str) -> bool:
+    return Path(path_value).is_file() if path_value else False
 
 
 def _select_gmail_query(gmail_query: str | None) -> tuple[QuerySource, str]:
@@ -118,6 +153,47 @@ def _build_drive_preflight(max_results: int) -> DriveBackfillPreflight:
     )
 
 
+def _build_google_credentials_preflight() -> GoogleCredentialsPreflight:
+    client_secrets_path = _configured_path_value(settings.google_client_secrets_file)
+    gmail_token_path = _configured_path_value(settings.google_gmail_token_file)
+    drive_token_path = _configured_path_value(settings.google_token_file)
+
+    client_secrets_configured = bool(client_secrets_path)
+    client_secrets_file_present = _configured_file_present(client_secrets_path)
+    gmail_token_configured = bool(gmail_token_path)
+    gmail_token_file_present = _configured_file_present(gmail_token_path)
+    drive_token_configured = bool(drive_token_path)
+    drive_token_file_present = _configured_file_present(drive_token_path)
+
+    blockers: list[str] = []
+    if not client_secrets_configured:
+        blockers.append(GOOGLE_CREDENTIAL_BLOCKER_CLIENT_SECRETS_NOT_CONFIGURED)
+    elif not client_secrets_file_present:
+        blockers.append(GOOGLE_CREDENTIAL_BLOCKER_CLIENT_SECRETS_FILE_MISSING)
+    if not gmail_token_configured:
+        blockers.append(GOOGLE_CREDENTIAL_BLOCKER_GMAIL_TOKEN_PATH_NOT_CONFIGURED)
+    if not drive_token_configured:
+        blockers.append(GOOGLE_CREDENTIAL_BLOCKER_DRIVE_TOKEN_PATH_NOT_CONFIGURED)
+
+    return GoogleCredentialsPreflight(
+        client_secrets_configured=client_secrets_configured,
+        client_secrets_file_present=client_secrets_file_present,
+        gmail_token_configured=gmail_token_configured,
+        gmail_token_file_present=gmail_token_file_present,
+        drive_token_configured=drive_token_configured,
+        drive_token_file_present=drive_token_file_present,
+        ready=not blockers,
+        blockers=blockers,
+        notes=[
+            "credential_presence_only",
+            "credential_contents_not_read",
+            "file_presence_does_not_prove_credential_validity",
+            "token_files_may_be_created_by_local_oauth",
+            "production_oauth_storage_not_implemented",
+        ],
+    )
+
+
 @router.get("/backfill/preflight")
 async def google_backfill_preflight(
     gmail_query: str | None = Query(None),
@@ -134,10 +210,12 @@ async def google_backfill_preflight(
 ) -> GoogleBackfillPreflightResponse:
     gmail = _build_gmail_preflight(gmail_query, gmail_max_results)
     drive = _build_drive_preflight(drive_max_results)
+    google_credentials = _build_google_credentials_preflight()
     return GoogleBackfillPreflightResponse(
-        overall_ready=gmail.ready and drive.ready,
+        overall_ready=gmail.ready and drive.ready and google_credentials.ready,
         gmail=gmail,
         drive=drive,
+        google_credentials=google_credentials,
         notes=[
             "preflight_only",
             "no_google_api_calls_made",

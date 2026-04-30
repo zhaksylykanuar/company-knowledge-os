@@ -19,7 +19,9 @@
 - Manual Drive backfill uses a safe default of 10 files per request and a hard
   API maximum of 50 files per request.
 - The protected Google preflight endpoint can validate Drive backfill readiness
-  without calling Drive APIs and without returning the configured folder ID.
+  and safe local Google credential file presence without calling Drive APIs,
+  reading credential contents, or returning the configured folder ID,
+  credential paths, token paths, or credential values.
 - Local manual Drive backfill testing should follow
   `../runbooks/google-local-backfill.md`.
 - File content is downloaded/exported as text when supported.
@@ -38,5 +40,5 @@
 
 - Webhook/PubSub handling is not visible as implemented.
 - Binary/non-text extraction behavior is unknown.
-- Production Drive sync, pagination, incremental sync, and OAuth hardening are
-  not implemented.
+- Production Drive sync, pagination, incremental sync, token refresh,
+  production token storage, and OAuth hardening are not implemented.

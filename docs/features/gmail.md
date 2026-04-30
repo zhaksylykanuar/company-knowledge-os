@@ -20,7 +20,9 @@
 - Manual Gmail backfill uses a safe default of 10 messages per request and a
   hard API maximum of 50 messages per request.
 - The protected Google preflight endpoint can validate Gmail backfill readiness
-  without calling Gmail APIs and without returning the query value.
+  and safe local Google credential file presence without calling Gmail APIs,
+  reading credential contents, or returning the query value, credential paths,
+  token paths, or credential values.
 - Local manual Gmail backfill testing should follow
   `../runbooks/google-local-backfill.md`.
 - Raw Gmail messages are stored under raw storage.
@@ -42,5 +44,5 @@
 
 - Gmail attachment content ingestion is not implemented; attachments remain metadata-only.
 - Webhook/PubSub handling is not visible as implemented.
-- Production Gmail sync, pagination, incremental history sync, and OAuth
-  hardening are not implemented.
+- Production Gmail sync, pagination, incremental history sync, token refresh,
+  production token storage, and OAuth hardening are not implemented.

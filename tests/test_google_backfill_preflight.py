@@ -31,6 +31,22 @@ def _set_google_backfill(
     monkeypatch.setattr(google_api.settings, "google_drive_ai_inbox_folder_id", folder_id)
 
 
+def _set_google_credential_paths(
+    monkeypatch,
+    *,
+    client_secrets_file: str,
+    gmail_token_file: str,
+    drive_token_file: str,
+) -> None:
+    monkeypatch.setattr(
+        google_api.settings,
+        "google_client_secrets_file",
+        client_secrets_file,
+    )
+    monkeypatch.setattr(google_api.settings, "google_gmail_token_file", gmail_token_file)
+    monkeypatch.setattr(google_api.settings, "google_token_file", drive_token_file)
+
+
 def test_google_backfill_preflight_is_protected(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
 
@@ -48,8 +64,15 @@ def test_google_backfill_preflight_is_protected(monkeypatch) -> None:
 
 def test_default_state_reports_gmail_and_drive_disabled_without_connector_calls(
     monkeypatch,
+    tmp_path,
 ) -> None:
     _set_google_backfill(monkeypatch)
+    _set_google_credential_paths(
+        monkeypatch,
+        client_secrets_file=str(tmp_path / "missing-client-secrets.json"),
+        gmail_token_file=str(tmp_path / "missing-gmail-token.json"),
+        drive_token_file=str(tmp_path / "missing-drive-token.json"),
+    )
 
     def fail_list_messages(*, query: str, max_results: int) -> list[dict]:
         raise AssertionError("preflight must not call Gmail connector path")
@@ -88,6 +111,25 @@ def test_default_state_reports_gmail_and_drive_disabled_without_connector_calls(
         "blockers": [
             google_api.DRIVE_BLOCKER_DISABLED,
             google_api.DRIVE_BLOCKER_FOLDER_BOUNDARY_MISSING,
+        ],
+    }
+    assert body["google_credentials"] == {
+        "client_secrets_configured": True,
+        "client_secrets_file_present": False,
+        "gmail_token_configured": True,
+        "gmail_token_file_present": False,
+        "drive_token_configured": True,
+        "drive_token_file_present": False,
+        "ready": False,
+        "blockers": [
+            google_api.GOOGLE_CREDENTIAL_BLOCKER_CLIENT_SECRETS_FILE_MISSING,
+        ],
+        "notes": [
+            "credential_presence_only",
+            "credential_contents_not_read",
+            "file_presence_does_not_prove_credential_validity",
+            "token_files_may_be_created_by_local_oauth",
+            "production_oauth_storage_not_implemented",
         ],
     }
     assert body["notes"] == [
@@ -241,12 +283,20 @@ def test_drive_invalid_max_results_are_rejected(monkeypatch) -> None:
     assert too_large.status_code == 422
 
 
-def test_overall_ready_requires_gmail_and_drive_ready(monkeypatch) -> None:
+def test_overall_ready_requires_gmail_and_drive_ready(monkeypatch, tmp_path) -> None:
+    client_secrets_file = tmp_path / "client-secrets.json"
+    client_secrets_file.write_text("dummy", encoding="utf-8")
     _set_google_backfill(
         monkeypatch,
         gmail_enabled=True,
         drive_enabled=True,
         folder_id=DRIVE_FOLDER_ID,
+    )
+    _set_google_credential_paths(
+        monkeypatch,
+        client_secrets_file=str(client_secrets_file),
+        gmail_token_file=str(tmp_path / "missing-gmail-token.json"),
+        drive_token_file=str(tmp_path / "missing-drive-token.json"),
     )
 
     with TestClient(app) as client:
@@ -262,15 +312,146 @@ def test_overall_ready_requires_gmail_and_drive_ready(monkeypatch) -> None:
     assert both_ready.json()["overall_ready"] is True
 
 
-def test_response_does_not_echo_private_query_folder_or_token_like_values(monkeypatch) -> None:
+def test_overall_ready_requires_google_credential_file_readiness(monkeypatch, tmp_path) -> None:
+    client_secrets_file = tmp_path / "private-client-secrets.json"
+    gmail_token_file = tmp_path / "private-gmail-token.json"
+    drive_token_file = tmp_path / "private-drive-token.json"
+    client_secrets_file.write_text("dummy client secrets content", encoding="utf-8")
+    _set_google_backfill(
+        monkeypatch,
+        gmail_enabled=True,
+        drive_enabled=True,
+        folder_id=DRIVE_FOLDER_ID,
+    )
+    _set_google_credential_paths(
+        monkeypatch,
+        client_secrets_file=str(client_secrets_file),
+        gmail_token_file=str(gmail_token_file),
+        drive_token_file=str(drive_token_file),
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/v1/google/backfill/preflight",
+            params={"gmail_query": SAFE_GMAIL_QUERY},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["gmail"]["ready"] is True
+    assert body["drive"]["ready"] is True
+    assert body["google_credentials"]["ready"] is True
+    assert body["google_credentials"]["client_secrets_file_present"] is True
+    assert body["google_credentials"]["gmail_token_file_present"] is False
+    assert body["google_credentials"]["drive_token_file_present"] is False
+    assert body["overall_ready"] is True
+
+
+def test_google_credential_presence_reports_files_without_echoing_paths_or_contents(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    client_secrets_file = tmp_path / "private-client-secrets.json"
+    gmail_token_file = tmp_path / "private-gmail-token.json"
+    drive_token_file = tmp_path / "private-drive-token.json"
+    client_secret_content = "dummy-client-secret-content-that-must-not-appear"
+    gmail_token_content = "dummy-gmail-token-content-that-must-not-appear"
+    drive_token_content = "dummy-drive-token-content-that-must-not-appear"
+    _set_google_backfill(monkeypatch)
+    _set_google_credential_paths(
+        monkeypatch,
+        client_secrets_file=str(client_secrets_file),
+        gmail_token_file=str(gmail_token_file),
+        drive_token_file=str(drive_token_file),
+    )
+
+    with TestClient(app) as client:
+        missing = client.get("/v1/google/backfill/preflight")
+
+    assert missing.status_code == 200
+    missing_body = missing.json()["google_credentials"]
+    assert missing_body["client_secrets_configured"] is True
+    assert missing_body["client_secrets_file_present"] is False
+    assert missing_body["gmail_token_configured"] is True
+    assert missing_body["gmail_token_file_present"] is False
+    assert missing_body["drive_token_configured"] is True
+    assert missing_body["drive_token_file_present"] is False
+    assert missing_body["ready"] is False
+    assert missing_body["blockers"] == [
+        google_api.GOOGLE_CREDENTIAL_BLOCKER_CLIENT_SECRETS_FILE_MISSING
+    ]
+
+    client_secrets_file.write_text(client_secret_content, encoding="utf-8")
+    gmail_token_file.write_text(gmail_token_content, encoding="utf-8")
+    drive_token_file.write_text(drive_token_content, encoding="utf-8")
+
+    with TestClient(app) as client:
+        present = client.get("/v1/google/backfill/preflight")
+
+    assert present.status_code == 200
+    present_body = present.json()["google_credentials"]
+    assert present_body["client_secrets_file_present"] is True
+    assert present_body["gmail_token_file_present"] is True
+    assert present_body["drive_token_file_present"] is True
+    assert present_body["ready"] is True
+    assert present_body["blockers"] == []
+
+    for response in (missing, present):
+        assert str(client_secrets_file) not in response.text
+        assert str(gmail_token_file) not in response.text
+        assert str(drive_token_file) not in response.text
+        assert client_secret_content not in response.text
+        assert gmail_token_content not in response.text
+        assert drive_token_content not in response.text
+
+
+def test_google_credential_preflight_reports_blank_paths_safely(monkeypatch) -> None:
+    _set_google_backfill(monkeypatch)
+    _set_google_credential_paths(
+        monkeypatch,
+        client_secrets_file=" ",
+        gmail_token_file=" ",
+        drive_token_file=" ",
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/v1/google/backfill/preflight")
+
+    assert response.status_code == 200
+    credentials = response.json()["google_credentials"]
+    assert credentials["client_secrets_configured"] is False
+    assert credentials["client_secrets_file_present"] is False
+    assert credentials["gmail_token_configured"] is False
+    assert credentials["gmail_token_file_present"] is False
+    assert credentials["drive_token_configured"] is False
+    assert credentials["drive_token_file_present"] is False
+    assert credentials["ready"] is False
+    assert credentials["blockers"] == [
+        google_api.GOOGLE_CREDENTIAL_BLOCKER_CLIENT_SECRETS_NOT_CONFIGURED,
+        google_api.GOOGLE_CREDENTIAL_BLOCKER_GMAIL_TOKEN_PATH_NOT_CONFIGURED,
+        google_api.GOOGLE_CREDENTIAL_BLOCKER_DRIVE_TOKEN_PATH_NOT_CONFIGURED,
+    ]
+
+
+def test_response_does_not_echo_private_query_folder_or_token_like_values(
+    monkeypatch,
+    tmp_path,
+) -> None:
     private_query = "from:private-person@example.com label:private-source"
     private_folder_id = "private-drive-folder-id"
     token_like_value = "token-value-that-must-not-be-returned"
+    client_secrets_file = tmp_path / "private-client-secrets.json"
+    client_secrets_file.write_text("dummy", encoding="utf-8")
     _set_google_backfill(
         monkeypatch,
         gmail_enabled=True,
         drive_enabled=True,
         folder_id=private_folder_id,
+    )
+    monkeypatch.setattr(
+        google_api.settings,
+        "google_client_secrets_file",
+        str(client_secrets_file),
     )
     monkeypatch.setattr(google_api.settings, "google_token_file", token_like_value)
     monkeypatch.setattr(google_api.settings, "google_gmail_token_file", token_like_value)
@@ -287,3 +468,4 @@ def test_response_does_not_echo_private_query_folder_or_token_like_values(monkey
     assert "private-person@example.com" not in response.text
     assert private_folder_id not in response.text
     assert token_like_value not in response.text
+    assert str(client_secrets_file) not in response.text

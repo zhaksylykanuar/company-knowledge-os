@@ -202,3 +202,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: `GET /v1/google/backfill/preflight` reports safe readiness booleans, bounded result limits, blocker codes, and preflight notes for Gmail and Drive without calling Google APIs or connector paths.
   - non-goals: no real Gmail/Drive connection, OAuth implementation, credential storage, webhooks, scheduler, production sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, Gmail/Drive sync behavior changes, or Obsidian/raw storage manual edits.
   - security: keeps Gmail query values, Drive folder IDs, token paths, credentials, private emails, and private file names out of responses, errors, docs examples, and tests.
+
+- FOS-027: Add Google credential preflight checks
+  - status: implemented
+  - scope: extend the protected Google manual backfill preflight endpoint with safe local Google credential file presence checks.
+  - behavior: reports whether the configured Google client secrets path, Gmail token path, and Drive token path are non-blank and whether the corresponding files are present, without reading file contents or validating credential JSON.
+  - non-goals: no real Gmail/Drive connection, Google API calls, OAuth flow, credential storage, token refresh, production OAuth hardening, webhooks, scheduler, production sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, Gmail/Drive sync behavior changes, or Obsidian/raw storage manual edits.
+  - security: does not return credential paths, token paths, credential values, token values, Gmail query values, Drive folder IDs, private emails, or private file names; file presence is documented as local preflight only and not proof of credential validity.

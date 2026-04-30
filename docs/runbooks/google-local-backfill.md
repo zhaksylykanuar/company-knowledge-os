@@ -74,11 +74,20 @@ curl -G http://localhost:8000/v1/google/backfill/preflight \
 ```
 
 `GET /v1/google/backfill/preflight` reports safe readiness booleans, blocker
-codes, bounded result limits, and whether Gmail/Drive are enabled. It does not
-call Gmail, Drive, OAuth, or connector code. It does not echo the Gmail query,
-Drive folder ID, token paths, credentials, private emails, or private file
-names. `overall_ready` is true only when both Gmail and Drive guardrails are
-ready for a bounded manual backfill check.
+codes, bounded result limits, whether Gmail/Drive are enabled, and safe local
+Google credential file presence. It checks only whether configured client
+secret and token file paths are non-blank and whether those files are present;
+it does not read file contents or validate credential JSON. Missing Gmail or
+Drive token files are reported separately because the current local connector
+can create token files during a future manual OAuth flow.
+
+The preflight does not call Gmail, Drive, OAuth, or connector code. It does not
+echo credential paths, token paths, the Gmail query, Drive folder ID,
+credentials, private emails, or private file names. File presence does not
+prove credential validity, token freshness, token refresh support, production
+OAuth hardening, or production token storage. `overall_ready` is true only when
+Gmail guardrails, Drive guardrails, and the local credential file presence
+checks are ready for a bounded manual backfill check.
 
 ## Gmail Safe Manual Backfill
 
