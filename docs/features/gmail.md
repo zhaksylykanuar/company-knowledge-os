@@ -6,6 +6,7 @@
 - Gmail raw backfill: partial
 - Gmail backfill activation/query guardrail: implemented
 - Gmail manual backfill limit guardrail: implemented
+- Gmail manual backfill response redaction: implemented
 - Google manual backfill preflight: implemented for safe guardrail inspection
 - Gmail message to SourceDocument/chunks: implemented for readable message bodies
 - Gmail write actions: planned and approval-gated
@@ -19,6 +20,9 @@
   query. The historical broad `in:inbox OR in:sent` query is rejected.
 - Manual Gmail backfill uses a safe default of 10 messages per request and a
   hard API maximum of 50 messages per request.
+- Manual Gmail backfill responses are redacted by default and return safe
+  counts/status fields instead of snippets, subjects, email addresses,
+  attachment names, provider message IDs, thread IDs, or raw event payloads.
 - The protected Google preflight endpoint can validate Gmail backfill readiness
   and safe local Google credential file presence without calling Gmail APIs,
   reading credential contents, or returning the query value, credential paths,

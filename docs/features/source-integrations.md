@@ -14,13 +14,15 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
   message events into `SourceEvent` rows. Gmail backfill is default-off and
   requires an explicit safe query or configured safe query before connector
   calls are made. Manual backfill requests are bounded to a small result
-  window.
+  window, and manual backfill API responses are redacted to safe counts/status
+  fields.
 - Google Drive: partial read-only foundation. The repo can list a configured
   Drive AI inbox folder, download/export text content when supported, store raw
   snapshots, create source documents and chunks, and normalize valid new file
   events into `SourceEvent` rows. Drive backfill is default-off and still
   requires the configured AI inbox folder boundary. Manual backfill requests are
-  bounded to a small result window.
+  bounded to a small result window, and manual backfill API responses are
+  redacted to safe counts/status fields.
 - Local manual Gmail and Drive backfill testing must follow the safe runbook in
   `../runbooks/google-local-backfill.md`.
 - The protected `GET /v1/google/backfill/preflight` endpoint can validate local

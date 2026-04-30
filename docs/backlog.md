@@ -209,3 +209,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: reports whether the configured Google client secrets path, Gmail token path, and Drive token path are non-blank and whether the corresponding files are present, without reading file contents or validating credential JSON.
   - non-goals: no real Gmail/Drive connection, Google API calls, OAuth flow, credential storage, token refresh, production OAuth hardening, webhooks, scheduler, production sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, Gmail/Drive sync behavior changes, or Obsidian/raw storage manual edits.
   - security: does not return credential paths, token paths, credential values, token values, Gmail query values, Drive folder IDs, private emails, or private file names; file presence is documented as local preflight only and not proof of credential validity.
+
+- FOS-028: Redact Google backfill response metadata
+  - status: implemented
+  - scope: make existing Gmail and Google Drive manual backfill API responses safe before first controlled real Google backfill.
+  - behavior: keeps persistence and processing behavior unchanged, but returns redacted counts/status fields instead of raw event payloads, snippets, subjects, email addresses, attachment names, file names, Drive links, provider object IDs, document previews, or external metadata.
+  - non-goals: no real Gmail/Drive connection, Google API calls, OAuth flow, credential storage, token refresh, production OAuth hardening, webhooks, scheduler, production sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, Gmail/Drive sync broadening, or Obsidian/raw storage manual edits.
+  - security: manual backfill verification should use safe counts/status plus stored `SourceEvent` and digest checks; responses must not expose raw source content or sensitive provider metadata.

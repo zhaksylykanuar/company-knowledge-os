@@ -186,6 +186,32 @@ def test_enabled_gmail_backfill_rejects_invalid_limits_without_calling_connector
 
 def test_gmail_backfill_contract(monkeypatch):
     _enable_gmail_backfill(monkeypatch)
+    msg = {
+        "id": "m1",
+        "threadId": "t1",
+        "historyId": "h1",
+        "labelIds": ["INBOX"],
+        "snippet": "hello",
+        "payload": {
+            "headers": [
+                {"name": "Subject", "value": "FounderOS weekly update"},
+            ],
+        },
+    }
+    event = gmail_api.build_gmail_event(msg)
+
+    assert event.idempotency_key == "gmail:message:m1:h1"
+    assert event.source_system == "gmail"
+    assert event.event_type == "gmail.message.ingested"
+    assert event.payload["source_object_type"] == "message"
+    assert event.payload["subject"] == "FounderOS weekly update"
+    assert validate_source_event_contract(
+        source_system=event.source_system,
+        source_object_type=event.payload["source_object_type"],
+        event_type=event.event_type,
+        payload=event.payload,
+    ) == []
+
     monkeypatch.setattr(
         gmail_api,
         "list_messages",
@@ -214,24 +240,34 @@ def test_gmail_backfill_contract(monkeypatch):
         )
     assert response.status_code == 202
     body = response.json()
-    event = body["events"][0]
-    payload = event["payload"]
+    assert body["provider"] == "gmail"
+    assert body["persist"] is False
+    assert body["max_results"] == 1
+    assert body["redacted"] is True
+    assert body["discovered"] == 1
+    assert body["saved"] == 0
+    assert body["duplicates"] == 0
+    assert body["events"] == [
+        {
+            "accepted": True,
+            "persisted": False,
+            "redacted": True,
+            "source_system": "gmail",
+            "source_object_type": "message",
+            "event_type": "gmail.message.ingested",
+        }
+    ]
+    assert "FounderOS weekly update" not in response.text
+    assert "hello" not in response.text
 
-    assert event["idempotency_key"] == "gmail:message:m1:h1"
-    assert event["source_system"] == "gmail"
-    assert event["event_type"] == "gmail.message.ingested"
-    assert payload["source_object_type"] == "message"
-    assert payload["subject"] == "FounderOS weekly update"
-    assert validate_source_event_contract(
-        source_system=event["source_system"],
-        source_object_type=payload["source_object_type"],
-        event_type=event["event_type"],
-        payload=payload,
-    ) == []
 
-
-def test_gmail_backfill_response_omits_raw_full_body_content(monkeypatch):
-    raw_body = "Private Gmail body text that should not be returned by the API response."
+def test_gmail_backfill_response_redacts_sensitive_metadata(monkeypatch):
+    raw_body = "PRIVATE_GMAIL_BODY_DO_NOT_RETURN"
+    private_snippet = "PRIVATE_SNIPPET_DO_NOT_RETURN"
+    private_subject = "PRIVATE_SUBJECT_DO_NOT_RETURN"
+    private_sender = "private-founder-subject@example.test"
+    private_recipient = "private-recipient@example.test"
+    private_attachment_name = "PRIVATE_ATTACHMENT_NAME_DO_NOT_RETURN.pdf"
     _enable_gmail_backfill(monkeypatch)
 
     monkeypatch.setattr(
@@ -247,13 +283,25 @@ def test_gmail_backfill_response_omits_raw_full_body_content(monkeypatch):
             "threadId": "t-private",
             "historyId": "h-private",
             "labelIds": ["INBOX"],
-            "snippet": "safe metadata snippet",
+            "snippet": private_snippet,
             "payload": {
-                "mimeType": "text/plain",
+                "mimeType": "multipart/mixed",
                 "headers": [
-                    {"name": "Subject", "value": "Safe metadata only"},
+                    {"name": "Subject", "value": private_subject},
+                    {"name": "From", "value": private_sender},
+                    {"name": "To", "value": private_recipient},
                 ],
-                "body": {"data": _gmail_body_data(raw_body)},
+                "parts": [
+                    {
+                        "mimeType": "text/plain",
+                        "body": {"data": _gmail_body_data(raw_body)},
+                    },
+                    {
+                        "filename": private_attachment_name,
+                        "mimeType": "application/pdf",
+                        "body": {"attachmentId": "attachment-private"},
+                    },
+                ],
             },
         },
     )
@@ -265,9 +313,22 @@ def test_gmail_backfill_response_omits_raw_full_body_content(monkeypatch):
         )
 
     assert response.status_code == 202
-    assert response.json()["events"][0]["payload"]["subject"] == "Safe metadata only"
+    body = response.json()
+    assert body["provider"] == "gmail"
+    assert body["redacted"] is True
+    assert body["discovered"] == 1
+    assert body["events"][0]["redacted"] is True
     assert raw_body not in response.text
     assert _gmail_body_data(raw_body) not in response.text
+    assert private_snippet not in response.text
+    assert private_subject not in response.text
+    assert private_sender not in response.text
+    assert private_recipient not in response.text
+    assert private_attachment_name not in response.text
+    assert "payload" not in body["events"][0]
+    assert "idempotency_key" not in body["events"][0]
+    assert "source_object_id" not in body["events"][0]
+    assert "thread_id" not in body["events"][0]
 
 
 def test_extract_readable_gmail_body_text_prefers_nested_plain_text() -> None:
@@ -413,6 +474,18 @@ def test_gmail_backfill_persist_creates_source_document_and_chunk(monkeypatch, t
     assert response.status_code == 202
     body = response.json()
     assert body["saved"] == 1
+    assert body["provider"] == "gmail"
+    assert body["redacted"] is True
+    assert body["events"][0]["persisted"] is True
+    assert body["events"][0]["duplicate"] is False
+    assert body["events"][0]["event_id"].startswith("evt_")
+    assert "m1" not in response.text
+    assert "t1" not in response.text
+    assert "ignored snippet" not in response.text
+    assert "FounderOS weekly update" not in response.text
+    assert "founder@example.com" not in response.text
+    assert "team@example.com" not in response.text
+    assert readable_text not in response.text
 
     source_document = next(item for item in added if isinstance(item, SourceDocument))
     chunks = [item for item in added if isinstance(item, DocumentChunk)]

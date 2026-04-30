@@ -127,12 +127,27 @@ def test_enabled_drive_backfill_uses_safe_default_limit(monkeypatch) -> None:
 def test_drive_backfill_contract(monkeypatch):
     seen_limits: list[int] = []
     _enable_drive_backfill(monkeypatch)
+    file_metadata = {
+        "id": "file1",
+        "name": "demo.txt",
+        "modifiedTime": "2026-01-01T00:00:00Z",
+    }
+    event = drive_api.build_drive_event(file_metadata)
+
+    assert event.idempotency_key == "drive:file:file1:2026-01-01T00:00:00Z"
+    assert event.event_type == "drive.file.ingested"
+    assert event.payload["source_object_type"] == "file"
+    assert event.payload["title"] == "demo.txt"
+    assert validate_source_event_contract(
+        source_system=event.source_system,
+        source_object_type=event.payload["source_object_type"],
+        event_type=event.event_type,
+        payload=event.payload,
+    ) == []
 
     def fake_list_ai_inbox_files(*, max_results: int) -> list[dict]:
         seen_limits.append(max_results)
-        return [
-            {"id": "file1", "name": "demo.txt", "modifiedTime": "2026-01-01T00:00:00Z"}
-        ]
+        return [file_metadata]
 
     monkeypatch.setattr(
         drive_api,
@@ -143,20 +158,26 @@ def test_drive_backfill_contract(monkeypatch):
         response = client.post(f"/v1/drive/backfill?persist=false&max_results={SAFE_DRIVE_LIMIT}")
     assert response.status_code == 202
     body = response.json()
-    event = body["events"][0]
-    payload = event["payload"]
-
-    assert event["idempotency_key"] == "drive:file:file1:2026-01-01T00:00:00Z"
-    assert event["event_type"] == "drive.file.ingested"
-    assert payload["source_object_type"] == "file"
-    assert payload["title"] == "demo.txt"
-    assert validate_source_event_contract(
-        source_system=event["source_system"],
-        source_object_type=payload["source_object_type"],
-        event_type=event["event_type"],
-        payload=payload,
-    ) == []
+    assert body["provider"] == "drive"
+    assert body["persist"] is False
+    assert body["max_results"] == SAFE_DRIVE_LIMIT
+    assert body["redacted"] is True
+    assert body["discovered"] == 1
+    assert body["saved"] == 0
+    assert body["duplicates"] == 0
+    assert body["events"] == [
+        {
+            "accepted": True,
+            "persisted": False,
+            "redacted": True,
+            "source_system": "drive",
+            "source_object_type": "file",
+            "event_type": "drive.file.ingested",
+        }
+    ]
     assert seen_limits == [SAFE_DRIVE_LIMIT]
+    assert "file1" not in response.text
+    assert "demo.txt" not in response.text
 
 
 def test_drive_backfill_persist_normalizes_new_ingested_event(monkeypatch, tmp_path):
@@ -189,7 +210,16 @@ def test_drive_backfill_persist_normalizes_new_ingested_event(monkeypatch, tmp_p
         response = client.post("/v1/drive/backfill?persist=true")
 
     assert response.status_code == 202
-    assert response.json()["saved"] == 1
+    body = response.json()
+    assert body["saved"] == 1
+    assert body["provider"] == "drive"
+    assert body["redacted"] is True
+    assert body["events"][0]["persisted"] is True
+    assert body["events"][0]["duplicate"] is False
+    assert body["events"][0]["event_id"].startswith("evt_")
+    assert "file1" not in response.text
+    assert "demo.txt" not in response.text
+    assert "Drive text" not in response.text
     assert len(normalized) == 1
 
     ingested_event = normalized[0]
@@ -210,7 +240,10 @@ def test_drive_backfill_persist_normalizes_new_ingested_event(monkeypatch, tmp_p
 def test_drive_backfill_response_omits_raw_full_document_content(monkeypatch, tmp_path):
     added: list[object] = []
     normalized: list[IngestedEvent] = []
-    raw_content = "Private Drive document content that should not appear in the API response."
+    raw_content = "PRIVATE_DRIVE_DOCUMENT_CONTENT_DO_NOT_RETURN"
+    private_file_name = "PRIVATE_DRIVE_FILENAME_DO_NOT_RETURN"
+    private_web_view_link = "https://drive.example.test/private-link-do-not-return"
+    private_web_content_link = "https://drive.example.test/private-content-do-not-return"
     _enable_drive_backfill(monkeypatch)
 
     async def fake_normalize(session, ingested_event):
@@ -223,9 +256,11 @@ def test_drive_backfill_response_omits_raw_full_document_content(monkeypatch, tm
         lambda max_results: [
             {
                 "id": "file-private",
-                "name": "safe-drive-metadata.txt",
+                "name": private_file_name,
                 "modifiedTime": "2026-01-01T00:00:00Z",
                 "mimeType": "text/plain",
+                "webViewLink": private_web_view_link,
+                "webContentLink": private_web_content_link,
             }
         ],
     )
@@ -244,5 +279,16 @@ def test_drive_backfill_response_omits_raw_full_document_content(monkeypatch, tm
         )
 
     assert response.status_code == 202
-    assert response.json()["saved"] == 1
+    body = response.json()
+    assert body["provider"] == "drive"
+    assert body["redacted"] is True
+    assert body["saved"] == 1
+    assert body["events"][0]["redacted"] is True
     assert raw_content not in response.text
+    assert private_file_name not in response.text
+    assert private_web_view_link not in response.text
+    assert private_web_content_link not in response.text
+    assert "file-private" not in response.text
+    assert "source_document_id" not in body["events"][0]
+    assert "source_object_id" not in body["events"][0]
+    assert "payload" not in body["events"][0]

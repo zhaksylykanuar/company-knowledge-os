@@ -6,6 +6,7 @@
 - AI_INBOX backfill: partial
 - Drive backfill activation/folder guardrail: implemented
 - Drive manual backfill limit guardrail: implemented
+- Drive manual backfill response redaction: implemented
 - Google manual backfill preflight: implemented for safe guardrail inspection
 - Drive file to SourceDocument/chunks: implemented
 - Drive write actions: planned and approval-gated
@@ -18,6 +19,9 @@
 - Enabled Drive backfill still requires the configured AI_INBOX folder boundary.
 - Manual Drive backfill uses a safe default of 10 files per request and a hard
   API maximum of 50 files per request.
+- Manual Drive backfill responses are redacted by default and return safe
+  counts/status fields instead of file names, titles, Drive links, provider
+  file IDs, raw event payloads, or document content.
 - The protected Google preflight endpoint can validate Drive backfill readiness
   and safe local Google credential file presence without calling Drive APIs,
   reading credential contents, or returning the configured folder ID,

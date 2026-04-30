@@ -27,6 +27,9 @@
   limit; it is not a production pagination or incremental sync flow.
 - Drive manual backfill is additionally bounded to a safe per-request result
   limit; it is not a production pagination or incremental sync flow.
+- Gmail and Drive manual backfill API responses are redacted to safe
+  counts/status fields; use stored `SourceEvent` and digest checks to verify
+  detailed source activity.
 - Local manual Gmail and Drive backfill checks should follow
   `../runbooks/google-local-backfill.md`.
 - Connector payloads can map into `IngestedEvent` and then `SourceEvent`.

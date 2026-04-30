@@ -305,6 +305,48 @@ def iter_attachment_metadata(msg: dict) -> list[dict]:
     return found
 
 
+def _redacted_gmail_backfill_item(
+    *,
+    persisted: bool,
+    duplicate: bool | None = None,
+    event_id: str | None = None,
+) -> dict:
+    item = {
+        "accepted": True,
+        "persisted": persisted,
+        "redacted": True,
+        "source_system": "gmail",
+        "source_object_type": "message",
+        "event_type": "gmail.message.ingested",
+    }
+    if duplicate is not None:
+        item["duplicate"] = duplicate
+    if event_id is not None:
+        item["event_id"] = event_id
+    return item
+
+
+def _redacted_gmail_backfill_response(
+    *,
+    discovered: int,
+    saved: int,
+    duplicates: int,
+    max_results: int,
+    persist: bool,
+    events: list[dict],
+) -> dict:
+    return {
+        "provider": "gmail",
+        "persist": persist,
+        "max_results": max_results,
+        "redacted": True,
+        "discovered": discovered,
+        "saved": saved,
+        "duplicates": duplicates,
+        "events": events,
+    }
+
+
 @router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
 async def gmail_backfill(
     max_results: int = Query(
@@ -326,7 +368,7 @@ async def gmail_backfill(
         event = build_gmail_event(msg)
 
         if not persist:
-            events.append(event.model_dump(mode="json"))
+            events.append(_redacted_gmail_backfill_item(persisted=False))
             continue
 
         async with AsyncSessionLocal() as session:
@@ -336,12 +378,11 @@ async def gmail_backfill(
             if existing:
                 duplicates += 1
                 events.append(
-                    {
-                        "accepted": True,
-                        "duplicate": True,
-                        "event_id": existing.event_id,
-                        "source_object_id": event.source_object_id,
-                    }
+                    _redacted_gmail_backfill_item(
+                        persisted=True,
+                        duplicate=True,
+                        event_id=existing.event_id,
+                    )
                 )
                 continue
 
@@ -450,13 +491,18 @@ async def gmail_backfill(
 
             saved += 1
             events.append(
-                {
-                    "accepted": True,
-                    "duplicate": False,
-                    "event_id": event.event_id,
-                    "source_object_id": event.source_object_id,
-                    "thread_id": msg.get("threadId"),
-                }
+                _redacted_gmail_backfill_item(
+                    persisted=True,
+                    duplicate=False,
+                    event_id=event.event_id,
+                )
             )
 
-    return {"discovered": len(refs), "saved": saved, "duplicates": duplicates, "events": events}
+    return _redacted_gmail_backfill_response(
+        discovered=len(refs),
+        saved=saved,
+        duplicates=duplicates,
+        max_results=max_results,
+        persist=persist,
+        events=events,
+    )

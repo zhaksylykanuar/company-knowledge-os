@@ -109,7 +109,10 @@ Activation and guardrails:
 - The historical broad query `in:inbox OR in:sent` is rejected.
 - `max_results=0`, negative values, and values above 50 are rejected before the
   connector path.
-- The API response must not include raw full email body content.
+- The API response is intentionally redacted. It returns safe counts/status
+  fields only and must not include raw full email body content, snippets,
+  subjects, email addresses, attachment names, provider message IDs, or thread
+  IDs.
 
 Start with a dry manual check before persistence:
 
@@ -144,8 +147,9 @@ Activation and guardrails:
 - Sync-all Drive behavior is not allowed.
 - `max_results=0`, negative values, and values above 50 are rejected before the
   connector path.
-- The API response must not include raw full document contents or large source
-  contents.
+- The API response is intentionally redacted. It returns safe counts/status
+  fields only and must not include raw full document contents, file names,
+  titles, Drive links, provider file IDs, or large source contents.
 
 Start with a dry manual check before persistence:
 
@@ -192,6 +196,9 @@ Check that:
 
 - The selected window is explicit and timezone-aware.
 - Source activity appears only for the expected bounded manual test.
+- Manual backfill responses use safe counts/status fields; verify detailed
+  stored activity through `SourceEvent` and digest checks instead of response
+  metadata.
 - Entries include evidence refs or equivalent source pointers.
 - Responses do not expose raw full email bodies or raw full document contents.
 - Digest output is source activity only and does not infer decisions, tasks, or

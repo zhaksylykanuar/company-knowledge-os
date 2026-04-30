@@ -77,6 +77,48 @@ def save_drive_raw_snapshot(file_metadata: dict, text: str) -> tuple[str, str]:
     return metadata_ref, content_ref
 
 
+def _redacted_drive_backfill_item(
+    *,
+    persisted: bool,
+    duplicate: bool | None = None,
+    event_id: str | None = None,
+) -> dict:
+    item = {
+        "accepted": True,
+        "persisted": persisted,
+        "redacted": True,
+        "source_system": "drive",
+        "source_object_type": "file",
+        "event_type": "drive.file.ingested",
+    }
+    if duplicate is not None:
+        item["duplicate"] = duplicate
+    if event_id is not None:
+        item["event_id"] = event_id
+    return item
+
+
+def _redacted_drive_backfill_response(
+    *,
+    discovered: int,
+    saved: int,
+    duplicates: int,
+    max_results: int,
+    persist: bool,
+    events: list[dict],
+) -> dict:
+    return {
+        "provider": "drive",
+        "persist": persist,
+        "max_results": max_results,
+        "redacted": True,
+        "discovered": discovered,
+        "saved": saved,
+        "duplicates": duplicates,
+        "events": events,
+    }
+
+
 @router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
 async def drive_backfill(
     persist: bool = Query(True),
@@ -93,10 +135,16 @@ async def drive_backfill(
     duplicates = 0
 
     if not persist:
-        for file_metadata in files:
-            event = build_drive_event(file_metadata)
-            events.append(event.model_dump(mode="json"))
-        return {"discovered": len(files), "saved": 0, "duplicates": 0, "events": events}
+        for _file_metadata in files:
+            events.append(_redacted_drive_backfill_item(persisted=False))
+        return _redacted_drive_backfill_response(
+            discovered=len(files),
+            saved=0,
+            duplicates=0,
+            max_results=max_results,
+            persist=persist,
+            events=events,
+        )
 
     async with AsyncSessionLocal() as session:
         session.add(
@@ -117,12 +165,11 @@ async def drive_backfill(
             if existing:
                 duplicates += 1
                 events.append(
-                    {
-                        "accepted": True,
-                        "duplicate": True,
-                        "event_id": existing.event_id,
-                        "source_object_id": event.source_object_id,
-                    }
+                    _redacted_drive_backfill_item(
+                        persisted=True,
+                        duplicate=True,
+                        event_id=existing.event_id,
+                    )
                 )
                 continue
 
@@ -206,16 +253,20 @@ async def drive_backfill(
 
             saved += 1
             events.append(
-                {
-                    "accepted": True,
-                    "duplicate": False,
-                    "event_id": event.event_id,
-                    "source_object_id": event.source_object_id,
-                    "source_document_id": source_document_id,
-                    "chunks_found": len(chunks),
-                }
+                _redacted_drive_backfill_item(
+                    persisted=True,
+                    duplicate=False,
+                    event_id=event.event_id,
+                )
             )
 
         await session.commit()
 
-    return {"discovered": len(files), "saved": saved, "duplicates": duplicates, "events": events}
+    return _redacted_drive_backfill_response(
+        discovered=len(files),
+        saved=saved,
+        duplicates=duplicates,
+        max_results=max_results,
+        persist=persist,
+        events=events,
+    )
