@@ -31,6 +31,10 @@ Navigation map for future Codex sessions.
 - `features/gmail.md`: Gmail connector status.
 - `features/drive.md`: Drive connector status.
 
+## Runbooks
+
+- `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
+
 ## Agent Workflows
 
 - `agents/ingestion-agent.md`

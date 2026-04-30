@@ -21,6 +21,8 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
   events into `SourceEvent` rows. Drive backfill is default-off and still
   requires the configured AI inbox folder boundary. Manual backfill requests are
   bounded to a small result window.
+- Local manual Gmail and Drive backfill testing must follow the safe runbook in
+  `../runbooks/google-local-backfill.md`.
 - GitHub repositories, including `qaztwin`: registry contracts, fixtures, and
   connector payload mapping exist, but there is no real production GitHub
   connector or webhook endpoint yet.

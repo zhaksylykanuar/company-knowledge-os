@@ -18,6 +18,8 @@
   query. The historical broad `in:inbox OR in:sent` query is rejected.
 - Manual Gmail backfill uses a safe default of 10 messages per request and a
   hard API maximum of 50 messages per request.
+- Local manual Gmail backfill testing should follow
+  `../runbooks/google-local-backfill.md`.
 - Raw Gmail messages are stored under raw storage.
 - Threads, messages, and attachment metadata are persisted.
 - Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.

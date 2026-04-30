@@ -17,6 +17,8 @@
 - Enabled Drive backfill still requires the configured AI_INBOX folder boundary.
 - Manual Drive backfill uses a safe default of 10 files per request and a hard
   API maximum of 50 files per request.
+- Local manual Drive backfill testing should follow
+  `../runbooks/google-local-backfill.md`.
 - File content is downloaded/exported as text when supported.
 - Raw metadata/content are saved before creating source documents and chunks.
 - Drive emits registry-compatible `drive.file.ingested` events with `source_object_type` and `title`.

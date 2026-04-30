@@ -188,3 +188,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: keeps Drive backfill default-off and folder-gated; uses a default limit of 10 files and a hard maximum of 50 files; rejects zero, negative, too-large limits, or blank folder boundaries before connector calls; and keeps raw full document content out of API responses.
   - non-goals: no real Drive connection, OAuth implementation, webhook, scheduler, pagination, incremental sync, Gmail changes, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: keeps Drive bounded to the configured AI inbox folder, passes only bounded limits to the connector path, and preserves raw storage plus Postgres as source of truth.
+
+- FOS-024: Add Google local backfill runbook
+  - status: implemented
+  - scope: add docs-only local credentials and safe manual backfill guidance for Gmail and Google Drive.
+  - behavior: documents current default-off guardrails, Gmail explicit safe query requirements, blocked broad Gmail query, Drive folder boundary, bounded `max_results`, placeholder curl examples, post-backfill digest verification, stop conditions, and remaining production gaps.
+  - non-goals: no code, tests, runtime behavior changes, real Google calls, OAuth implementation, credential storage, webhooks, scheduler, production sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: reinforces that `.env` stays local and ignored, real credentials must not be committed or logged, raw storage plus Postgres remain source of truth, and API responses must not expose raw full email bodies or raw full document contents.
