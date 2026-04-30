@@ -174,3 +174,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: adds default-disabled Gmail and Drive backfill settings; Gmail backfill rejects missing, blank, or historical broad `in:inbox OR in:sent` queries before connector calls; Drive backfill rejects disabled use and missing folder boundary before connector calls.
   - non-goals: no real Google API calls in tests, OAuth implementation, webhook, scheduler, pagination, incremental sync, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: keeps Google access read-only first, prevents accidental broad Gmail sync, keeps Drive bounded to the configured AI inbox folder, uses safe default-off `.env.example` placeholders, and preserves existing route auth.
+
+- FOS-022: Harden Gmail backfill limits
+  - status: implemented
+  - scope: make the existing manual Gmail backfill path more bounded before real user Gmail credentials are connected.
+  - behavior: keeps Gmail backfill default-off and query-gated; uses a default limit of 10 messages and a hard maximum of 50 messages; rejects zero, negative, or too-large limits before connector calls; and keeps raw full message body content out of API responses.
+  - non-goals: no real Gmail connection, OAuth implementation, webhook, scheduler, pagination, incremental sync, Google Drive changes, GitHub/Jira/Calendar/Telegram inbound implementation, LLM calls, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: requires a narrow explicit or configured query, blocks the historical broad `in:inbox OR in:sent` query, passes only bounded limits to the connector path, and preserves raw storage plus Postgres as source of truth.

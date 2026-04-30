@@ -13,7 +13,8 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
   documents and chunks for readable message bodies, and normalize valid new
   message events into `SourceEvent` rows. Gmail backfill is default-off and
   requires an explicit safe query or configured safe query before connector
-  calls are made.
+  calls are made. Manual backfill requests are bounded to a small result
+  window.
 - Google Drive: partial read-only foundation. The repo can list a configured
   Drive AI inbox folder, download/export text content when supported, store raw
   snapshots, create source documents and chunks, and normalize valid new file
@@ -167,6 +168,8 @@ Use placeholders only in docs and tests, for example:
 - Start read-only.
 - Gmail backfill must not silently use the broad historical
   `in:inbox OR in:sent` query; use a narrower explicit or configured query.
+- Gmail manual backfill must stay bounded to the configured API limit and is
+  not a production pagination or incremental sync mechanism.
 - Drive backfill must stay bounded to the configured AI inbox folder.
 - Persist raw snapshots and source events first.
 - Extraction, digest, and Q&A must use stored data, not live API responses.

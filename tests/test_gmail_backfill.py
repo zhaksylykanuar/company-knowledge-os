@@ -11,6 +11,7 @@ from app.services.raw_storage import sha256_text
 
 SAFE_GMAIL_QUERY = "label:founderos-test"
 BROAD_GMAIL_QUERY = "in:inbox OR in:sent"
+SAFE_GMAIL_LIMIT = 7
 
 
 class FakeAsyncSession:
@@ -103,11 +104,11 @@ def test_enabled_gmail_backfill_rejects_missing_blank_or_broad_query(monkeypatch
 
 
 def test_enabled_gmail_backfill_can_use_configured_safe_query(monkeypatch) -> None:
-    seen_queries: list[str] = []
+    seen_calls: list[tuple[str, int]] = []
     _enable_gmail_backfill(monkeypatch, configured_query=SAFE_GMAIL_QUERY)
 
     def fake_list_messages(query: str, max_results: int) -> list[dict]:
-        seen_queries.append(query)
+        seen_calls.append((query, max_results))
         return []
 
     monkeypatch.setattr(
@@ -119,12 +120,68 @@ def test_enabled_gmail_backfill_can_use_configured_safe_query(monkeypatch) -> No
     with TestClient(app) as client:
         response = client.post(
             "/v1/gmail/backfill",
-            params={"max_results": 1, "persist": "false"},
+            params={"max_results": SAFE_GMAIL_LIMIT, "persist": "false"},
         )
 
     assert response.status_code == 202
     assert response.json()["discovered"] == 0
-    assert seen_queries == [SAFE_GMAIL_QUERY]
+    assert seen_calls == [(SAFE_GMAIL_QUERY, SAFE_GMAIL_LIMIT)]
+
+
+def test_enabled_gmail_backfill_uses_safe_default_limit(monkeypatch) -> None:
+    seen_calls: list[tuple[str, int]] = []
+    _enable_gmail_backfill(monkeypatch, configured_query=SAFE_GMAIL_QUERY)
+
+    def fake_list_messages(query: str, max_results: int) -> list[dict]:
+        seen_calls.append((query, max_results))
+        return []
+
+    monkeypatch.setattr(gmail_api, "list_messages", fake_list_messages)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"persist": "false"},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["discovered"] == 0
+    assert seen_calls == [
+        (SAFE_GMAIL_QUERY, gmail_api.GMAIL_BACKFILL_DEFAULT_MAX_RESULTS)
+    ]
+
+
+def test_enabled_gmail_backfill_rejects_invalid_limits_without_calling_connector(
+    monkeypatch,
+) -> None:
+    _enable_gmail_backfill(monkeypatch)
+
+    def fail_list_messages(query: str, max_results: int) -> list[dict]:
+        raise AssertionError("invalid Gmail limit must not call connector path")
+
+    monkeypatch.setattr(gmail_api, "list_messages", fail_list_messages)
+
+    with TestClient(app) as client:
+        zero = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 0, "persist": "false", "query": SAFE_GMAIL_QUERY},
+        )
+        negative = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": -1, "persist": "false", "query": SAFE_GMAIL_QUERY},
+        )
+        too_large = client.post(
+            "/v1/gmail/backfill",
+            params={
+                "max_results": gmail_api.GMAIL_BACKFILL_MAX_RESULTS + 1,
+                "persist": "false",
+                "query": SAFE_GMAIL_QUERY,
+            },
+        )
+
+    assert zero.status_code == 422
+    assert negative.status_code == 422
+    assert too_large.status_code == 422
 
 
 def test_gmail_backfill_contract(monkeypatch):
@@ -171,6 +228,46 @@ def test_gmail_backfill_contract(monkeypatch):
         event_type=event["event_type"],
         payload=payload,
     ) == []
+
+
+def test_gmail_backfill_response_omits_raw_full_body_content(monkeypatch):
+    raw_body = "Private Gmail body text that should not be returned by the API response."
+    _enable_gmail_backfill(monkeypatch)
+
+    monkeypatch.setattr(
+        gmail_api,
+        "list_messages",
+        lambda query=SAFE_GMAIL_QUERY, max_results=10: [{"id": "m-private"}],
+    )
+    monkeypatch.setattr(
+        gmail_api,
+        "get_message",
+        lambda mid: {
+            "id": mid,
+            "threadId": "t-private",
+            "historyId": "h-private",
+            "labelIds": ["INBOX"],
+            "snippet": "safe metadata snippet",
+            "payload": {
+                "mimeType": "text/plain",
+                "headers": [
+                    {"name": "Subject", "value": "Safe metadata only"},
+                ],
+                "body": {"data": _gmail_body_data(raw_body)},
+            },
+        },
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "false", "query": SAFE_GMAIL_QUERY},
+        )
+
+    assert response.status_code == 202
+    assert response.json()["events"][0]["payload"]["subject"] == "Safe metadata only"
+    assert raw_body not in response.text
+    assert _gmail_body_data(raw_body) not in response.text
 
 
 def test_extract_readable_gmail_body_text_prefers_nested_plain_text() -> None:

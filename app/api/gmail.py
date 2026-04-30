@@ -19,6 +19,8 @@ from app.services.source_events import normalize_ingested_event_to_source_event
 router = APIRouter(prefix="/v1/gmail", tags=["gmail"])
 
 BROAD_GMAIL_BACKFILL_QUERY = "in:inbox OR in:sent"
+GMAIL_BACKFILL_DEFAULT_MAX_RESULTS = 10
+GMAIL_BACKFILL_MAX_RESULTS = 50
 
 
 def _normalize_gmail_query(query: str) -> str:
@@ -75,7 +77,7 @@ class _ReadableHtmlParser(HTMLParser):
         return "\n".join(line for line in lines if line).strip()
 
 
-def list_messages(query: str = "in:inbox OR in:sent", max_results: int = 20) -> list[dict]:
+def list_messages(*, query: str, max_results: int) -> list[dict]:
     from app.connectors.gmail import list_messages as _list_messages
 
     return _list_messages(query=query, max_results=max_results)
@@ -305,7 +307,11 @@ def iter_attachment_metadata(msg: dict) -> list[dict]:
 
 @router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
 async def gmail_backfill(
-    max_results: int = Query(10, ge=1, le=100),
+    max_results: int = Query(
+        GMAIL_BACKFILL_DEFAULT_MAX_RESULTS,
+        ge=1,
+        le=GMAIL_BACKFILL_MAX_RESULTS,
+    ),
     query: str | None = Query(None),
     persist: bool = Query(True),
 ) -> dict:
