@@ -60,6 +60,60 @@ Before any future local manual backfill test:
 - Do not use the broad Gmail query `in:inbox OR in:sent`.
 - Do not add or use a sync-all Drive behavior.
 
+## FOS-029 Controlled Local Preflight Checklist
+
+FOS-029 is preflight-only and docs/checklist-only. It is the controlled
+readiness step before any real Gmail or Drive manual backfill is attempted.
+
+Do not run these actions during FOS-029:
+
+- Do not call `POST /v1/gmail/backfill`.
+- Do not call `POST /v1/drive/backfill`.
+- Do not call Google APIs, OAuth flows, Gmail connectors, or Drive connectors.
+- Do not start a local app session that points at real Google services.
+- Do not treat `persist=false` as a no-Google dry run. The current backfill
+  routes may still list or fetch through connector paths before deciding
+  whether to persist local records.
+
+The only intended endpoint for the first real local readiness check is
+`GET /v1/google/backfill/preflight`, and only in a later human-approved local
+run after the human confirms local credentials are configured safely. That
+preflight endpoint is intended to report local readiness without calling Google
+APIs.
+
+For the first later real local preflight, the human must confirm:
+
+- Local credentials are stored outside repo tracking.
+- API auth is enabled for the protected local check.
+- A narrow Gmail query has been chosen but is not recorded in docs, tickets,
+  logs, or chat.
+- A Drive folder boundary has been chosen but is not recorded in docs, tickets,
+  logs, or chat.
+- First later backfill tickets will start with `max_results=1`.
+- The git tree is clean before and after the check.
+
+Record only safe preflight fields:
+
+- Pass/fail readiness booleans.
+- Blocker code names.
+- Bounded result limits and whether those limits are allowed.
+- Preflight notes.
+
+Do not record or capture secrets, credential contents, token values, local
+credential paths, local token paths, provider IDs, email addresses, subjects,
+snippets, Drive filenames, Drive links, private Gmail queries, Drive folder
+IDs, or raw source content.
+
+Stop immediately and investigate if any of these happen:
+
+- The git tree is dirty before or after the check.
+- API auth is unexpectedly disabled for a protected local check.
+- A connector or Google API call happens unexpectedly.
+- Any private metadata appears in output.
+- Any credential or token file is modified unexpectedly.
+- Any secret or local path appears in logs or docs.
+- Any backfill route is accidentally called.
+
 ## Guardrail Preflight
 
 Before calling either manual backfill route, use the protected preflight endpoint
