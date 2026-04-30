@@ -244,3 +244,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: extends the existing preflight auth test so unauthenticated requests are rejected when API auth is enabled, authenticated requests are accepted with test-only auth configuration, connector paths are trapped, and rejected responses do not echo private marker values.
   - non-goals: no runtime behavior changes, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, Gmail backfill, Drive backfill, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: uses monkeypatched test-only auth and Google readiness values only; keeps auth verification deterministic, offline, and free of real provider metadata or raw source content.
+
+- FOS-033: Enforce Google backfill auth gates
+  - status: implemented
+  - scope: add focused regression coverage proving Gmail and Drive manual backfill routes reject unauthenticated requests before connector paths can run.
+  - behavior: adds offline route-auth coverage for `POST /v1/gmail/backfill` and `POST /v1/drive/backfill` with API auth enabled, connector import and route-wrapper traps, and assertions that rejected responses stay generic and do not echo private marker values.
+  - non-goals: no authenticated backfill success tests, runtime behavior changes, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: uses monkeypatched test-only auth and marker values only; keeps backfill auth-gate verification deterministic, offline, and free of real provider metadata or raw source content.
