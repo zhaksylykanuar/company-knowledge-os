@@ -139,3 +139,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: documents protected endpoint usage, timezone-aware `start_at` and `end_at`, bounded `limit`, response fields, empty digest behavior, and troubleshooting for auth and window validation.
   - non-goals: no code, tests, Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision inference, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: examples use placeholders only and reinforce that the endpoint reads stored `SourceEvent` data without raw body output, LLM calls, Telegram delivery, or inferred digest claims.
+
+- FOS-016: Render source activity digest text
+  - status: implemented
+  - scope: add a deterministic non-LLM text renderer for existing source activity digest output.
+  - behavior: formats the digest title, explicit window, counts, limited source activity entries, truncation metadata, evidence refs, and empty-state message as plain text.
+  - non-goals: no Telegram implementation, scheduler, connector implementation, LLM calls, LLM summarization, task/risk/decision/commitment/recommendation inference, API behavior changes, dependencies, migrations, middleware, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
+  - security: renderer uses the provided digest dict only, avoids DB/API/LLM access, whitelists rendered evidence ref fields, omits raw body-like fields, and labels output as source activity only.

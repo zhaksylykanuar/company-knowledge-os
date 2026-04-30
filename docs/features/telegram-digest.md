@@ -141,6 +141,8 @@ Implemented today:
   timezone-aware windows.
 - FOS-015 documents a safe manual quickstart check for that endpoint in
   `docs/mvp-quickstart.md`.
+- FOS-016 adds a deterministic non-LLM text renderer for existing source
+  activity digest output.
 
 Not implemented today:
 
@@ -153,5 +155,7 @@ Not implemented today:
 - Calendar connector.
 - Full production Gmail/Drive sync.
 - LLM summarization for digests.
+- Decision, task, risk, commitment, or recommendation inference in digest
+  rendering.
 - Telegram delivery, scheduler, connector, or digest inference logic behind the
   source activity endpoint.
