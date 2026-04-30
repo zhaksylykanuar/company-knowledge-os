@@ -25,6 +25,8 @@
 - Gmail and Drive backfill routes are default-off. Gmail requires a narrower explicit or configured query, and Drive requires the configured AI inbox folder boundary.
 - Gmail manual backfill is additionally bounded to a safe per-request result
   limit; it is not a production pagination or incremental sync flow.
+- Drive manual backfill is additionally bounded to a safe per-request result
+  limit; it is not a production pagination or incremental sync flow.
 - Connector payloads can map into `IngestedEvent` and then `SourceEvent`.
 - Persisted external events require future API auth and webhook signature boundaries before production exposure.
 - Future real source connectivity must follow the credentials, source identity, activation, and allowlist contract in `source-integrations.md`.

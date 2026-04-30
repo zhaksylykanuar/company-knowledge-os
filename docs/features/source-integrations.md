@@ -19,7 +19,8 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
   Drive AI inbox folder, download/export text content when supported, store raw
   snapshots, create source documents and chunks, and normalize valid new file
   events into `SourceEvent` rows. Drive backfill is default-off and still
-  requires the configured AI inbox folder boundary.
+  requires the configured AI inbox folder boundary. Manual backfill requests are
+  bounded to a small result window.
 - GitHub repositories, including `qaztwin`: registry contracts, fixtures, and
   connector payload mapping exist, but there is no real production GitHub
   connector or webhook endpoint yet.
@@ -171,6 +172,8 @@ Use placeholders only in docs and tests, for example:
 - Gmail manual backfill must stay bounded to the configured API limit and is
   not a production pagination or incremental sync mechanism.
 - Drive backfill must stay bounded to the configured AI inbox folder.
+- Drive manual backfill must stay bounded to the configured API limit and is not
+  a production pagination or incremental sync mechanism.
 - Persist raw snapshots and source events first.
 - Extraction, digest, and Q&A must use stored data, not live API responses.
 - Failures must be visible through logs, audit records, or returned status; they

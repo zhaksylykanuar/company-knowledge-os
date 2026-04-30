@@ -5,6 +5,7 @@
 - Google Drive read-only API wrapper: implemented
 - AI_INBOX backfill: partial
 - Drive backfill activation/folder guardrail: implemented
+- Drive manual backfill limit guardrail: implemented
 - Drive file to SourceDocument/chunks: implemented
 - Drive write actions: planned and approval-gated
 
@@ -14,6 +15,8 @@
 - Drive backfill is disabled by default and must be explicitly enabled before
   the route calls connector code.
 - Enabled Drive backfill still requires the configured AI_INBOX folder boundary.
+- Manual Drive backfill uses a safe default of 10 files per request and a hard
+  API maximum of 50 files per request.
 - File content is downloaded/exported as text when supported.
 - Raw metadata/content are saved before creating source documents and chunks.
 - Drive emits registry-compatible `drive.file.ingested` events with `source_object_type` and `title`.

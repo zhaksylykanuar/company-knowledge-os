@@ -12,25 +12,32 @@ from app.services.source_events import normalize_ingested_event_to_source_event
 
 router = APIRouter(prefix="/v1/drive", tags=["drive"])
 
+DRIVE_BACKFILL_DEFAULT_MAX_RESULTS = 10
+DRIVE_BACKFILL_MAX_RESULTS = 50
 
-def _require_drive_backfill_enabled() -> None:
+
+def _require_drive_backfill_enabled() -> str:
     if not settings.google_drive_backfill_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Google Drive backfill is disabled.",
         )
 
-    if not settings.google_drive_ai_inbox_folder_id:
+    folder_id = settings.google_drive_ai_inbox_folder_id
+    cleaned_folder_id = folder_id.strip() if isinstance(folder_id, str) else ""
+    if not cleaned_folder_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Google Drive backfill requires GOOGLE_DRIVE_AI_INBOX_FOLDER_ID.",
         )
 
+    return cleaned_folder_id
 
-def list_ai_inbox_files() -> list[dict]:
+
+def list_ai_inbox_files(*, max_results: int) -> list[dict]:
     from app.connectors.google_drive import list_ai_inbox_files as _list_ai_inbox_files
 
-    return _list_ai_inbox_files()
+    return _list_ai_inbox_files(page_size=max_results)
 
 
 def download_file_text(file_id: str, mime_type: str | None = None) -> str:
@@ -71,9 +78,16 @@ def save_drive_raw_snapshot(file_metadata: dict, text: str) -> tuple[str, str]:
 
 
 @router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
-async def drive_backfill(persist: bool = Query(True)) -> dict:
+async def drive_backfill(
+    persist: bool = Query(True),
+    max_results: int = Query(
+        DRIVE_BACKFILL_DEFAULT_MAX_RESULTS,
+        ge=1,
+        le=DRIVE_BACKFILL_MAX_RESULTS,
+    ),
+) -> dict:
     _require_drive_backfill_enabled()
-    files = list_ai_inbox_files()
+    files = list_ai_inbox_files(max_results=max_results)
     events = []
     saved = 0
     duplicates = 0
