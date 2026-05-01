@@ -21,6 +21,9 @@ router = APIRouter(prefix="/v1/gmail", tags=["gmail"])
 BROAD_GMAIL_BACKFILL_QUERY = "in:inbox OR in:sent"
 GMAIL_BACKFILL_DEFAULT_MAX_RESULTS = 10
 GMAIL_BACKFILL_MAX_RESULTS = 50
+GMAIL_BACKFILL_STATUS_COMPLETED = "completed"
+GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES = "completed_with_failures"
+GMAIL_BACKFILL_STATUS_PERSIST_FAILED = "persist_failed"
 
 
 def _normalize_gmail_query(query: str) -> str:
@@ -308,11 +311,14 @@ def iter_attachment_metadata(msg: dict) -> list[dict]:
 def _redacted_gmail_backfill_item(
     *,
     persisted: bool,
+    accepted: bool = True,
     duplicate: bool | None = None,
     event_id: str | None = None,
+    status: str | None = None,
+    error_code: str | None = None,
 ) -> dict:
     item = {
-        "accepted": True,
+        "accepted": accepted,
         "persisted": persisted,
         "redacted": True,
         "source_system": "gmail",
@@ -323,6 +329,10 @@ def _redacted_gmail_backfill_item(
         item["duplicate"] = duplicate
     if event_id is not None:
         item["event_id"] = event_id
+    if status is not None:
+        item["status"] = status
+    if error_code is not None:
+        item["error_code"] = error_code
     return item
 
 
@@ -331,6 +341,7 @@ def _redacted_gmail_backfill_response(
     discovered: int,
     saved: int,
     duplicates: int,
+    failed: int,
     max_results: int,
     persist: bool,
     events: list[dict],
@@ -343,6 +354,12 @@ def _redacted_gmail_backfill_response(
         "discovered": discovered,
         "saved": saved,
         "duplicates": duplicates,
+        "failed": failed,
+        "status": (
+            GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES
+            if failed
+            else GMAIL_BACKFILL_STATUS_COMPLETED
+        ),
         "events": events,
     }
 
@@ -362,6 +379,7 @@ async def gmail_backfill(
     events = []
     saved = 0
     duplicates = 0
+    failed = 0
 
     for ref in refs:
         msg = get_message(ref["id"])
@@ -372,122 +390,141 @@ async def gmail_backfill(
             continue
 
         async with AsyncSessionLocal() as session:
-            existing = await session.scalar(
-                select(IngestedEvent).where(IngestedEvent.idempotency_key == event.idempotency_key)
-            )
-            if existing:
-                duplicates += 1
-                events.append(
-                    _redacted_gmail_backfill_item(
-                        persisted=True,
-                        duplicate=True,
-                        event_id=existing.event_id,
+            try:
+                existing = await session.scalar(
+                    select(IngestedEvent).where(
+                        IngestedEvent.idempotency_key == event.idempotency_key
                     )
                 )
-                continue
+                if existing:
+                    duplicates += 1
+                    events.append(
+                        _redacted_gmail_backfill_item(
+                            persisted=True,
+                            duplicate=True,
+                            event_id=existing.event_id,
+                        )
+                    )
+                    continue
 
-            raw_ref = save_gmail_raw_message(msg)
-            event.raw_object_ref = raw_ref
-            event.payload = {**event.payload, "raw_object_ref": raw_ref}
-            source_document, document_chunks, _readable_text = build_gmail_document_records(
-                msg, raw_ref
-            )
-
-            ingested_event = IngestedEvent(
-                event_id=event.event_id,
-                event_type=event.event_type,
-                source_system=event.source_system,
-                source_object_id=event.source_object_id,
-                idempotency_key=event.idempotency_key,
-                correlation_id=event.correlation_id,
-                trace_id=event.trace_id,
-                raw_object_ref=event.raw_object_ref,
-                payload=event.payload,
-            )
-            session.add(ingested_event)
-            await session.flush()
-            if event.payload.get("subject"):
-                await normalize_ingested_event_to_source_event(session, ingested_event)
-            if msg.get("threadId"):
-                existing_thread = await session.scalar(
-                    select(GmailThread).where(GmailThread.thread_id == msg["threadId"])
+                raw_ref = save_gmail_raw_message(msg)
+                event.raw_object_ref = raw_ref
+                event.payload = {**event.payload, "raw_object_ref": raw_ref}
+                source_document, document_chunks, _readable_text = build_gmail_document_records(
+                    msg, raw_ref
                 )
-                if not existing_thread:
+
+                ingested_event = IngestedEvent(
+                    event_id=event.event_id,
+                    event_type=event.event_type,
+                    source_system=event.source_system,
+                    source_object_id=event.source_object_id,
+                    idempotency_key=event.idempotency_key,
+                    correlation_id=event.correlation_id,
+                    trace_id=event.trace_id,
+                    raw_object_ref=event.raw_object_ref,
+                    payload=event.payload,
+                )
+                session.add(ingested_event)
+                await session.flush()
+                if event.payload.get("subject"):
+                    await normalize_ingested_event_to_source_event(session, ingested_event)
+                if msg.get("threadId"):
+                    existing_thread = await session.scalar(
+                        select(GmailThread).where(GmailThread.thread_id == msg["threadId"])
+                    )
+                    if not existing_thread:
+                        session.add(
+                            GmailThread(
+                                thread_id=msg["threadId"],
+                                history_id=msg.get("historyId"),
+                                raw_object_ref=raw_ref,
+                                metadata_json={"message_id": msg["id"]},
+                            )
+                        )
+
+                existing_message = await session.scalar(
+                    select(GmailMessage).where(GmailMessage.message_id == msg["id"])
+                )
+                if not existing_message:
                     session.add(
-                        GmailThread(
-                            thread_id=msg["threadId"],
+                        GmailMessage(
+                            message_id=msg["id"],
+                            thread_id=msg.get("threadId"),
                             history_id=msg.get("historyId"),
+                            snippet=msg.get("snippet"),
+                            label_ids=msg.get("labelIds", []),
                             raw_object_ref=raw_ref,
-                            metadata_json={"message_id": msg["id"]},
+                            payload=event.payload,
                         )
                     )
 
-            existing_message = await session.scalar(
-                select(GmailMessage).where(GmailMessage.message_id == msg["id"])
-            )
-            if not existing_message:
-                session.add(
-                    GmailMessage(
-                        message_id=msg["id"],
-                        thread_id=msg.get("threadId"),
-                        history_id=msg.get("historyId"),
-                        snippet=msg.get("snippet"),
-                        label_ids=msg.get("labelIds", []),
-                        raw_object_ref=raw_ref,
-                        payload=event.payload,
+                if source_document is not None:
+                    existing_doc = await session.scalar(
+                        select(SourceDocument).where(
+                            SourceDocument.source_document_id
+                            == source_document.source_document_id
+                        )
                     )
-                )
+                    if not existing_doc:
+                        session.add(source_document)
+                        for chunk in document_chunks:
+                            session.add(chunk)
 
-            if source_document is not None:
-                existing_doc = await session.scalar(
-                    select(SourceDocument).where(
-                        SourceDocument.source_document_id == source_document.source_document_id
+                for attachment in iter_attachment_metadata(msg):
+                    existing_attachment = await session.scalar(
+                        select(GmailAttachment).where(
+                            GmailAttachment.message_id == attachment["message_id"],
+                            GmailAttachment.attachment_id == attachment["attachment_id"],
+                        )
                     )
-                )
-                if not existing_doc:
-                    session.add(source_document)
-                    for chunk in document_chunks:
-                        session.add(chunk)
-
-            for attachment in iter_attachment_metadata(msg):
-                existing_attachment = await session.scalar(
-                    select(GmailAttachment).where(
-                        GmailAttachment.message_id == attachment["message_id"],
-                        GmailAttachment.attachment_id == attachment["attachment_id"],
+                    if existing_attachment:
+                        continue
+                    session.add(
+                        GmailAttachment(
+                            message_id=attachment["message_id"],
+                            attachment_id=attachment["attachment_id"],
+                            filename=attachment.get("filename"),
+                            mime_type=attachment.get("mime_type"),
+                            size=attachment.get("size"),
+                            metadata_json=attachment,
+                        )
                     )
-                )
-                if existing_attachment:
-                    continue
-                session.add(
-                    GmailAttachment(
-                        message_id=attachment["message_id"],
-                        attachment_id=attachment["attachment_id"],
-                        filename=attachment.get("filename"),
-                        mime_type=attachment.get("mime_type"),
-                        size=attachment.get("size"),
-                        metadata_json=attachment,
+                    session.add(
+                        AuditLog(
+                            event_type="gmail.attachment.detected",
+                            actor="system",
+                            correlation_id=event.correlation_id,
+                            trace_id=event.trace_id,
+                            payload=attachment,
+                        )
                     )
-                )
                 session.add(
                     AuditLog(
-                        event_type="gmail.attachment.detected",
+                        event_type=event.event_type,
                         actor="system",
                         correlation_id=event.correlation_id,
                         trace_id=event.trace_id,
-                        payload=attachment,
+                        after_ref=event.event_id,
+                        payload={"idempotency_key": event.idempotency_key, "message_id": msg["id"]},
                     )
                 )
-            session.add(
-                AuditLog(
-                    event_type=event.event_type,
-                    actor="system",
-                    correlation_id=event.correlation_id,
-                    trace_id=event.trace_id,
-                    after_ref=event.event_id,
-                    payload={"idempotency_key": event.idempotency_key, "message_id": msg["id"]},
+                await session.commit()
+            except Exception:
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
+                failed += 1
+                events.append(
+                    _redacted_gmail_backfill_item(
+                        accepted=False,
+                        persisted=False,
+                        status=GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
+                        error_code=GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
+                    )
                 )
-            )
-            await session.commit()
+                continue
 
             saved += 1
             events.append(
@@ -502,6 +539,7 @@ async def gmail_backfill(
         discovered=len(refs),
         saved=saved,
         duplicates=duplicates,
+        failed=failed,
         max_results=max_results,
         persist=persist,
         events=events,

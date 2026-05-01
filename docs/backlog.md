@@ -265,3 +265,10 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - behavior: documents what is safe before credentials, the first protected preflight-only real step, human preconditions before real preflight, what may follow successful preflight, and stop conditions for auth, connector, metadata, query, folder, git, and limit issues.
   - non-goals: no code, tests, real credentials, credential file reads, token file reads, Google API calls, OAuth flow, local app startup against real services, Gmail backfill, Drive backfill, production sync, dependencies, migrations, repo secrets, production data mutation, or Obsidian/raw storage manual edits.
   - security: keeps the final foundation batch docs-only, reinforces API auth, redaction, disabled-by-default, no-sync-all, narrow-query, folder-boundary, and `max_results=1` first-real-backfill constraints before any real local Google API use.
+
+- FOS-036: Fix Gmail persisted backfill 500 after persistence
+  - status: implemented
+  - scope: stabilize bounded Gmail persisted backfill response when an individual message persistence step fails after earlier items have already been processed.
+  - behavior: converts per-message persistence failures into redacted failure counts/items while preserving successful and duplicate counts, so the bounded route can return safe `202` metadata instead of aborting the whole response.
+  - non-goals: no real Google API calls, OAuth, real credentials, token reads, Drive behavior changes, migrations, dependency changes, production data mutation in tests, Obsidian export, or raw storage manual edits.
+  - security: uses offline fake-data regression coverage only; does not expose exception messages, provider IDs, source object IDs, subjects, snippets, emails, query text, raw refs, or raw content in responses.

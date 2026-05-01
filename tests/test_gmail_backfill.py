@@ -36,6 +36,9 @@ class FakeAsyncSession:
     async def commit(self) -> None:
         return None
 
+    async def rollback(self) -> None:
+        return None
+
 
 def _fake_session_factory(added: list[object]):
     def factory() -> FakeAsyncSession:
@@ -583,3 +586,101 @@ def test_gmail_backfill_persist_skips_source_event_without_subject(monkeypatch, 
     assert source_document.source_system == "gmail"
     assert source_document.source_object_id == "m2"
     assert source_document.title is None
+
+
+def test_gmail_backfill_persist_reports_per_item_failure_safely(monkeypatch, tmp_path):
+    added: list[object] = []
+    state = {"flush_calls": 0, "rollbacks": 0}
+    unsafe_error_marker = "OFFLINE_PERSISTENCE_FAILURE_MARKER_DO_NOT_RETURN"
+    unsafe_body_marker = "OFFLINE_BODY_MARKER_DO_NOT_RETURN"
+    _enable_gmail_backfill(monkeypatch)
+
+    class FailingOnceSession(FakeAsyncSession):
+        async def flush(self) -> None:
+            state["flush_calls"] += 1
+            if state["flush_calls"] == 3:
+                raise RuntimeError(unsafe_error_marker)
+
+        async def rollback(self) -> None:
+            state["rollbacks"] += 1
+
+    def failing_session_factory() -> FailingOnceSession:
+        return FailingOnceSession(added)
+
+    refs = [{"id": f"offline-message-{index}"} for index in range(5)]
+    messages = {
+        ref["id"]: {
+            "id": ref["id"],
+            "threadId": f"offline-thread-{index}",
+            "historyId": f"offline-history-{index}",
+            "labelIds": ["OFFLINE_LABEL"],
+            "payload": {
+                "mimeType": "text/plain",
+                "headers": [],
+                "body": {"data": _gmail_body_data(f"{unsafe_body_marker}-{index}")},
+            },
+        }
+        for index, ref in enumerate(refs)
+    }
+
+    monkeypatch.setattr(
+        gmail_api,
+        "list_messages",
+        lambda query=SAFE_GMAIL_QUERY, max_results=5: refs[:max_results],
+    )
+    monkeypatch.setattr(gmail_api, "get_message", lambda mid: messages[mid])
+    monkeypatch.setattr(gmail_api, "raw_storage_root", lambda: tmp_path)
+    monkeypatch.setattr(gmail_api, "AsyncSessionLocal", failing_session_factory)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 5, "persist": "true", "query": SAFE_GMAIL_QUERY},
+        )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["provider"] == "gmail"
+    assert body["persist"] is True
+    assert body["max_results"] == 5
+    assert body["redacted"] is True
+    assert body["discovered"] == 5
+    assert body["saved"] == 4
+    assert body["duplicates"] == 0
+    assert body["failed"] == 1
+    assert body["status"] == gmail_api.GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES
+    assert state["flush_calls"] == 5
+    assert state["rollbacks"] == 1
+
+    successful_items = [
+        item for item in body["events"] if item.get("status") != "persist_failed"
+    ]
+    failed_items = [
+        item for item in body["events"] if item.get("status") == "persist_failed"
+    ]
+    assert len(successful_items) == 4
+    assert len(failed_items) == 1
+    assert failed_items[0] == {
+        "accepted": False,
+        "persisted": False,
+        "redacted": True,
+        "source_system": "gmail",
+        "source_object_type": "message",
+        "event_type": "gmail.message.ingested",
+        "status": gmail_api.GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
+        "error_code": gmail_api.GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
+    }
+    assert all(item["redacted"] is True for item in body["events"])
+    assert all("source_object_id" not in item for item in body["events"])
+    assert all("raw_object_ref" not in item for item in body["events"])
+    assert len(list((tmp_path / "gmail").glob("*/*/message.json"))) == 5
+
+    for unsafe_marker in (
+        unsafe_error_marker,
+        unsafe_body_marker,
+        "offline-message-",
+        "offline-thread-",
+        "offline-history-",
+        SAFE_GMAIL_QUERY,
+    ):
+        assert unsafe_marker not in response.text
