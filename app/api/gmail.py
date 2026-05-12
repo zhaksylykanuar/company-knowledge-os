@@ -23,6 +23,8 @@ GMAIL_BACKFILL_DEFAULT_MAX_RESULTS = 10
 GMAIL_BACKFILL_MAX_RESULTS = 50
 GMAIL_BACKFILL_STATUS_COMPLETED = "completed"
 GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES = "completed_with_failures"
+GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED = "connector_failed"
+GMAIL_BACKFILL_STATUS_FETCH_FAILED = "fetch_failed"
 GMAIL_BACKFILL_STATUS_PERSIST_FAILED = "persist_failed"
 
 
@@ -54,6 +56,13 @@ def _safe_gmail_backfill_query(query: str | None) -> str:
         )
 
     return cleaned_query
+
+
+def _gmail_dependency_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_424_FAILED_DEPENDENCY,
+        detail="Gmail backfill dependency is unavailable.",
+    )
 
 
 class _ReadableHtmlParser(HTMLParser):
@@ -375,15 +384,31 @@ async def gmail_backfill(
     persist: bool = Query(True),
 ) -> dict:
     safe_query = _safe_gmail_backfill_query(query)
-    refs = list_messages(query=safe_query, max_results=max_results)
+    try:
+        refs = list_messages(query=safe_query, max_results=max_results)
+    except Exception:
+        raise _gmail_dependency_unavailable()
+
     events = []
     saved = 0
     duplicates = 0
     failed = 0
 
     for ref in refs:
-        msg = get_message(ref["id"])
-        event = build_gmail_event(msg)
+        try:
+            msg = get_message(ref["id"])
+            event = build_gmail_event(msg)
+        except Exception:
+            failed += 1
+            events.append(
+                _redacted_gmail_backfill_item(
+                    accepted=False,
+                    persisted=False,
+                    status=GMAIL_BACKFILL_STATUS_FETCH_FAILED,
+                    error_code=GMAIL_BACKFILL_STATUS_FETCH_FAILED,
+                )
+            )
+            continue
 
         if not persist:
             events.append(_redacted_gmail_backfill_item(persisted=False))

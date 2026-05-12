@@ -154,6 +154,27 @@ def test_enabled_gmail_backfill_uses_safe_default_limit(monkeypatch) -> None:
     ]
 
 
+def test_gmail_backfill_connector_failure_returns_safe_non_500(monkeypatch) -> None:
+    unsafe_marker = "PRIVATE_CONNECTOR_FAILURE_MARKER_DO_NOT_RETURN"
+    monkeypatch.setattr(gmail_api.settings, "api_auth_enabled", False)
+    _enable_gmail_backfill(monkeypatch, configured_query=SAFE_GMAIL_QUERY)
+
+    def fail_list_messages(query: str, max_results: int) -> list[dict]:
+        raise FileNotFoundError(unsafe_marker)
+
+    monkeypatch.setattr(gmail_api, "list_messages", fail_list_messages)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"persist": "true"},
+        )
+
+    assert response.status_code == gmail_api.status.HTTP_424_FAILED_DEPENDENCY
+    assert response.json() == {"detail": "Gmail backfill dependency is unavailable."}
+    assert unsafe_marker not in response.text
+
+
 def test_enabled_gmail_backfill_rejects_invalid_limits_without_calling_connector(
     monkeypatch,
 ) -> None:
