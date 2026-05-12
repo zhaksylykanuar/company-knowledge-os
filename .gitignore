@@ -1,6 +1,11 @@
 .env
 .env.*
 !.env.example
+!.env.operator.example
+.env.operator
+.env.local
+.env.runtime
+.env.secrets
 secrets/
 raw_storage/
 obsidian_vault/
