@@ -132,6 +132,90 @@ def parse_attention_triage_result(value: str | bytes | Mapping[str, Any]) -> Att
     return AttentionTriageResult.model_validate(parsed)
 
 
+OPENAI_ATTENTION_TRIAGE_SYSTEM_PROMPT = (
+    "You are an AI attention triage agent for a professional work operating system.\n"
+    "Your job is to decide whether a source activity item deserves the user's attention.\n\n"
+    "Do not classify based only on keywords.\n"
+    "Use the whole context: sender, participants, source, thread history, message content, "
+    "project relevance, known contacts, deadlines, requests, and prior user feedback.\n\n"
+    "Do not invent facts.\n"
+    "If uncertain, classify as review_optional.\n"
+    "Never hide something that could reasonably require a work action.\n"
+    "Return strict JSON only."
+)
+
+
+def _json_dump(value: Mapping[str, Any]) -> str:
+    return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+
+
+def _truncate_text(value: Any, max_chars: int) -> Any:
+    if isinstance(value, str):
+        if max_chars <= 0:
+            return ""
+        return value[:max_chars]
+    if isinstance(value, list):
+        return [_truncate_text(item, max_chars) for item in value]
+    if isinstance(value, dict):
+        return {
+            str(key): _truncate_text(item, max_chars)
+            for key, item in value.items()
+            if item is not None
+        }
+    return value
+
+
+def _activity_prompt_payload(
+    activity: NormalizedActivityItem,
+    *,
+    max_text_chars: int,
+) -> dict[str, Any]:
+    payload = activity.model_dump(mode="json")
+    payload["clean_text_preview"] = _truncate_text(
+        payload.get("clean_text_preview"),
+        max_text_chars,
+    )
+    payload["thread_summary"] = _truncate_text(payload.get("thread_summary"), max_text_chars)
+    payload["source_metadata"] = _truncate_text(payload.get("source_metadata"), max_text_chars)
+    payload["link_count"] = len(activity.links)
+    payload.pop("links", None)
+    return payload
+
+
+def _context_prompt_payload(
+    context: AttentionContext,
+    *,
+    max_text_chars: int,
+) -> dict[str, Any]:
+    return _truncate_text(context.model_dump(mode="json"), max_text_chars)
+
+
+def _response_output_text(response: Any) -> str | bytes | Mapping[str, Any]:
+    if isinstance(response, str | bytes):
+        return response
+    if isinstance(response, Mapping):
+        for key in ("output_text", "text", "content"):
+            value = response.get(key)
+            if isinstance(value, str | bytes | Mapping):
+                return value
+    output_text = getattr(response, "output_text", None)
+    if isinstance(output_text, str | bytes):
+        return output_text
+    raise ValueError("provider response did not include output text")
+
+
+def _call_openai_compatible_client(client: Any, payload: Mapping[str, Any]) -> Any:
+    if callable(client):
+        return client(dict(payload))
+
+    responses = getattr(client, "responses", None)
+    create = getattr(responses, "create", None)
+    if callable(create):
+        return create(**payload)
+
+    raise RuntimeError("OpenAI-compatible client must be callable or expose responses.create")
+
+
 def _policy_reason(reason: str, policy_note: str) -> str:
     cleaned = " ".join(reason.strip().split())
     if not cleaned:
@@ -277,6 +361,127 @@ class MockAttentionTriageProvider:
         if isinstance(value, AttentionTriageResult):
             return value
         return parse_attention_triage_result(value)
+
+
+class OpenAIAttentionTriageProvider:
+    """OpenAI-compatible scaffold with injected-client execution only."""
+
+    def __init__(
+        self,
+        *,
+        client: Any | None = None,
+        enabled: bool = False,
+        model: str | None = None,
+        max_text_chars: int = 6000,
+        min_confidence_to_hide: float = DEFAULT_ATTENTION_TRIAGE_MIN_CONFIDENCE_TO_HIDE,
+        review_threshold: float = DEFAULT_ATTENTION_TRIAGE_REVIEW_THRESHOLD,
+        fallback_provider: AttentionTriageProvider | None = None,
+    ) -> None:
+        self.client = client
+        self.enabled = enabled
+        self.model = model or "gpt-4o-mini"
+        self.max_text_chars = max(0, int(max_text_chars))
+        self.min_confidence_to_hide = min_confidence_to_hide
+        self.review_threshold = review_threshold
+        self.fallback_provider = fallback_provider or ConservativeFallbackAttentionTriageProvider()
+
+    def classify_activity(
+        self,
+        activity: NormalizedActivityItem,
+        context: AttentionContext,
+    ) -> AttentionTriageResult:
+        if not self.enabled or self.client is None:
+            return self.fallback_provider.classify_activity(activity, context)
+
+        payload = self._request_payload(activity, context)
+        for _attempt in range(2):
+            try:
+                response = _call_openai_compatible_client(self.client, payload)
+                result = parse_attention_triage_result(_response_output_text(response))
+            except Exception:
+                continue
+
+            return apply_attention_confidence_policy(
+                result,
+                min_confidence_to_hide=self.min_confidence_to_hide,
+                review_threshold=self.review_threshold,
+            )
+
+        return self.fallback_provider.classify_activity(activity, context)
+
+    def _request_payload(
+        self,
+        activity: NormalizedActivityItem,
+        context: AttentionContext,
+    ) -> dict[str, Any]:
+        activity_json = _json_dump(
+            _activity_prompt_payload(activity, max_text_chars=self.max_text_chars)
+        )
+        context_json = _json_dump(
+            _context_prompt_payload(context, max_text_chars=self.max_text_chars)
+        )
+        return {
+            "model": self.model,
+            "input": [
+                {
+                    "role": "system",
+                    "content": OPENAI_ATTENTION_TRIAGE_SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "Activity item:\n"
+                        f"{activity_json}\n\n"
+                        "User/work context:\n"
+                        f"{context_json}\n\n"
+                        "Return only JSON matching the schema."
+                    ),
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "attention_triage_result",
+                    "strict": True,
+                    "schema": AttentionTriageResult.model_json_schema(),
+                }
+            },
+        }
+
+
+def build_attention_triage_provider(
+    settings: Any,
+    *,
+    client: Any | None = None,
+) -> AttentionTriageProvider:
+    fallback = ConservativeFallbackAttentionTriageProvider()
+    if getattr(settings, "attention_triage_enabled", False) is not True:
+        return fallback
+
+    provider_name = str(getattr(settings, "attention_triage_provider", "openai")).casefold()
+    if provider_name != "openai":
+        return fallback
+
+    if client is None:
+        return fallback
+
+    return OpenAIAttentionTriageProvider(
+        client=client,
+        enabled=True,
+        model=getattr(settings, "attention_triage_model", None),
+        max_text_chars=getattr(settings, "attention_triage_max_text_chars", 6000),
+        min_confidence_to_hide=getattr(
+            settings,
+            "attention_triage_min_confidence_to_hide",
+            DEFAULT_ATTENTION_TRIAGE_MIN_CONFIDENCE_TO_HIDE,
+        ),
+        review_threshold=getattr(
+            settings,
+            "attention_triage_review_threshold",
+            DEFAULT_ATTENTION_TRIAGE_REVIEW_THRESHOLD,
+        ),
+        fallback_provider=fallback,
+    )
 
 
 class AttentionTriageAgent:

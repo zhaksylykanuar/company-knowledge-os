@@ -23,6 +23,16 @@
 - The current implementation includes mocked and conservative fallback providers only. It does not call external APIs.
 - OpenAI or Llama-compatible providers can be wired in a later slice once explicitly enabled and configured.
 
+## OpenAI Provider Scaffold
+
+- FOS-042 adds an OpenAI-compatible `AttentionTriageProvider` scaffold.
+- The scaffold is disabled by default and is not wired into email thread rebuilding or digest rendering.
+- It accepts an injected client for tests or future runtime wiring; it does not create a live provider client by default.
+- Provider output is parsed as strict JSON and validated against `AttentionTriageResult`.
+- Invalid JSON, invalid enum values, extra fields, provider errors, disabled config, or missing injected clients fall back to conservative triage.
+- The confidence policy still prevents low-confidence output from being silently hidden.
+- No external provider calls happen unless a later slice explicitly enables and wires a client.
+
 ## Invariants
 
 - Attention items must remain evidence-backed.
