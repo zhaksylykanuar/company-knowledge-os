@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import html
 import re
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import getaddresses, parsedate_to_datetime
 from hashlib import sha256
-from typing import Any, Iterable
+from typing import Any, Iterable, Protocol
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,8 +21,62 @@ EMAIL_SOURCE_GMAIL = "gmail"
 
 THREAD_STATUS_NEEDS_MY_REPLY = "needs_my_reply"
 THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY = "waiting_for_external_reply"
+THREAD_STATUS_MANUAL_ACTION_REQUIRED = "manual_action_required"
 THREAD_STATUS_RESOLVED = "resolved"
 THREAD_STATUS_INFORMATIONAL = "informational"
+THREAD_STATUS_HIDDEN = "hidden"
+
+TRIAGE_CATEGORY_WORK_ACTION = "work_action"
+TRIAGE_CATEGORY_WORK_WAITING = "work_waiting"
+TRIAGE_CATEGORY_WORK_INFO = "work_info"
+TRIAGE_CATEGORY_MANUAL_ACTION = "manual_action"
+TRIAGE_CATEGORY_CALENDAR_UPDATE = "calendar_update"
+TRIAGE_CATEGORY_SECURITY_ALERT = "security_alert"
+TRIAGE_CATEGORY_MARKETING = "marketing"
+TRIAGE_CATEGORY_NEWSLETTER = "newsletter"
+TRIAGE_CATEGORY_SOCIAL_NETWORK = "social_network"
+TRIAGE_CATEGORY_AUTOMATED_NOTIFICATION = "automated_notification"
+TRIAGE_CATEGORY_NOISE = "noise"
+TRIAGE_CATEGORY_UNKNOWN = "unknown"
+
+TRIAGE_ACTION_REPLY_REQUIRED = "reply_required"
+TRIAGE_ACTION_MANUAL_ACTION_REQUIRED = "manual_action_required"
+TRIAGE_ACTION_WAITING_EXTERNAL_REPLY = "waiting_external_reply"
+TRIAGE_ACTION_NO_ACTION_REQUIRED = "no_action_required"
+TRIAGE_ACTION_REVIEW_OPTIONAL = "review_optional"
+
+TRIAGE_PRIORITY_HIGH = "high"
+TRIAGE_PRIORITY_MEDIUM = "medium"
+TRIAGE_PRIORITY_LOW = "low"
+TRIAGE_PRIORITY_HIDDEN = "hidden"
+
+TRIAGE_CATEGORIES = {
+    TRIAGE_CATEGORY_WORK_ACTION,
+    TRIAGE_CATEGORY_WORK_WAITING,
+    TRIAGE_CATEGORY_WORK_INFO,
+    TRIAGE_CATEGORY_MANUAL_ACTION,
+    TRIAGE_CATEGORY_CALENDAR_UPDATE,
+    TRIAGE_CATEGORY_SECURITY_ALERT,
+    TRIAGE_CATEGORY_MARKETING,
+    TRIAGE_CATEGORY_NEWSLETTER,
+    TRIAGE_CATEGORY_SOCIAL_NETWORK,
+    TRIAGE_CATEGORY_AUTOMATED_NOTIFICATION,
+    TRIAGE_CATEGORY_NOISE,
+    TRIAGE_CATEGORY_UNKNOWN,
+}
+TRIAGE_ACTION_TYPES = {
+    TRIAGE_ACTION_REPLY_REQUIRED,
+    TRIAGE_ACTION_MANUAL_ACTION_REQUIRED,
+    TRIAGE_ACTION_WAITING_EXTERNAL_REPLY,
+    TRIAGE_ACTION_NO_ACTION_REQUIRED,
+    TRIAGE_ACTION_REVIEW_OPTIONAL,
+}
+TRIAGE_PRIORITIES = {
+    TRIAGE_PRIORITY_HIGH,
+    TRIAGE_PRIORITY_MEDIUM,
+    TRIAGE_PRIORITY_LOW,
+    TRIAGE_PRIORITY_HIDDEN,
+}
 
 MESSAGE_DIRECTION_FROM_ME = "from_me"
 MESSAGE_DIRECTION_FROM_EXTERNAL = "from_external"
@@ -32,6 +87,7 @@ SUMMARY_PREVIEW_MAX_CHARS = 180
 
 _SUBJECT_PREFIX_RE = re.compile(r"^\s*(?:(?:re|fw|fwd)(?:\[\d+\])?\s*:\s*)+", re.IGNORECASE)
 _MESSAGE_ID_RE = re.compile(r"<([^>]+)>")
+_ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\ufeff]")
 _SYSTEM_LOCAL_PARTS = {
     "no-reply",
     "noreply",
@@ -40,6 +96,97 @@ _SYSTEM_LOCAL_PARTS = {
     "notification",
     "notifications",
 }
+_AUTOMATED_SENDER_TOKENS = (
+    "noreply",
+    "no-reply",
+    "notification",
+    "notifications",
+    "automated",
+    "calendar",
+)
+_SOCIAL_TOKENS = (
+    "linkedin",
+    "facebook",
+    "instagram",
+    "twitter",
+    "x.com",
+    "social",
+)
+_MARKETING_PHRASES = (
+    "your post is ready",
+    "build your digital twin",
+    "activate it",
+    "let your network know",
+    "recommendations",
+)
+_MANUAL_ACTION_PHRASES = (
+    "badge is ready",
+    "your badge is ready",
+    "ticket is ready",
+    "your ticket is ready",
+    "access is ready",
+    "access ready",
+    "registration is ready",
+    "your registration is ready",
+    "ready for pickup",
+    "ready to access",
+)
+_SECURITY_TOKENS = (
+    "security alert",
+    "security notice",
+    "new sign-in",
+    "new signin",
+    "new login",
+    "suspicious",
+    "password",
+    "two-factor",
+    "2fa",
+)
+_SECURITY_NO_ACTION_PHRASES = (
+    "if this was you, no action is required",
+    "if this was you no action is required",
+    "if this was you, no action needed",
+    "if this was you no action needed",
+    "если это вы, ничего делать не нужно",
+)
+_DIRECT_WORK_REQUEST_PHRASES = (
+    "can you",
+    "could you",
+    "please",
+    "need your",
+    "needs your",
+    "needs a reply",
+    "needs an operator reply",
+    "do you",
+    "what do you think",
+    "let me know",
+    "confirm",
+    "approve",
+    "review",
+    "send over",
+    "share",
+    "next steps",
+    "question",
+    "request",
+)
+_WORK_INFO_TOKENS = (
+    "project",
+    "proposal",
+    "customer",
+    "client",
+    "roadmap",
+    "launch",
+    "integration",
+    "contract",
+)
+_URGENT_TOKENS = (
+    "urgent",
+    "asap",
+    "today",
+    "tomorrow",
+    "deadline",
+    "blocked",
+)
 
 
 @dataclass(frozen=True)
@@ -59,6 +206,46 @@ class EmailMessageSnapshot:
     label_ids: tuple[str, ...]
     snippet: str | None = None
     body_preview: str | None = None
+    headers: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class EmailTriageResult:
+    category: str
+    action_type: str
+    priority: str
+    show_in_digest: bool
+    reason: str
+    confidence: float
+
+
+class EmailSemanticTriageClassifier(Protocol):
+    """Optional strict-JSON semantic triage interface; not called by default."""
+
+    def classify(self, payload: dict[str, Any]) -> EmailTriageResult | None:
+        ...
+
+
+SEMANTIC_TRIAGE_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "category",
+        "action_type",
+        "priority",
+        "show_in_digest",
+        "reason",
+        "confidence",
+    ],
+    "properties": {
+        "category": {"type": "string", "enum": sorted(TRIAGE_CATEGORIES)},
+        "action_type": {"type": "string", "enum": sorted(TRIAGE_ACTION_TYPES)},
+        "priority": {"type": "string", "enum": sorted(TRIAGE_PRIORITIES)},
+        "show_in_digest": {"type": "boolean"},
+        "reason": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -78,6 +265,12 @@ class EmailThreadStateCandidate:
     status: str
     days_without_reply: int | None
     messages_count: int
+    triage_category: str
+    triage_action_type: str
+    triage_priority: str
+    show_in_digest: bool
+    triage_reason: str
+    triage_confidence: float
     evidence_refs: list[dict[str, Any]]
     metadata_json: dict[str, Any]
     computed_at: datetime
@@ -88,6 +281,10 @@ class EmailThreadRebuildResult:
     thread_states_built: int
     messages_considered: int
     status_counts: dict[str, int]
+    triage_category_counts: dict[str, int]
+    action_type_counts: dict[str, int]
+    priority_counts: dict[str, int]
+    show_in_digest_counts: dict[str, int]
 
 
 @dataclass
@@ -118,7 +315,9 @@ class _UnionFind:
 def _clean_string(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
-    cleaned = " ".join(value.strip().split())
+    cleaned = html.unescape(value)
+    cleaned = _ZERO_WIDTH_RE.sub("", cleaned)
+    cleaned = " ".join(cleaned.strip().split())
     return cleaned or None
 
 
@@ -130,7 +329,11 @@ def _short_preview(value: Any, *, max_chars: int = SUMMARY_PREVIEW_MAX_CHARS) ->
     if len(cleaned) <= max_chars:
         return cleaned
 
-    truncated = cleaned[: max_chars - 3].rstrip()
+    limit = max(1, max_chars - 3)
+    truncated = cleaned[:limit].rstrip()
+    word_boundary = truncated.rfind(" ")
+    if word_boundary >= max(40, limit // 2):
+        truncated = truncated[:word_boundary].rstrip()
     return f"{truncated}..."
 
 
@@ -187,6 +390,361 @@ def parse_email_addresses(value: Any) -> tuple[str, ...]:
 def parse_email_me_addresses(value: str | None = None) -> set[str]:
     configured = settings.email_me_addresses if value is None else value
     return set(parse_email_addresses(configured))
+
+
+def _parse_config_values(value: str | None) -> set[str]:
+    if not value:
+        return set()
+
+    return {
+        cleaned.casefold()
+        for item in re.split(r"[,;\n]+", value)
+        if (cleaned := " ".join(item.strip().split()))
+    }
+
+
+def _sender_domain(address: str | None) -> str | None:
+    if not address or "@" not in address:
+        return None
+    domain = address.rsplit("@", 1)[1].strip().casefold()
+    return domain or None
+
+
+def _sender_local_part(address: str | None) -> str:
+    if not address or "@" not in address:
+        return ""
+    return address.split("@", 1)[0].casefold()
+
+
+def _domain_matches(domain: str | None, configured_domains: set[str]) -> bool:
+    if not domain:
+        return False
+
+    return any(
+        domain == configured or domain.endswith(f".{configured}")
+        for configured in configured_domains
+    )
+
+
+def _address_matches(address: str | None, configured_addresses: set[str]) -> bool:
+    return bool(address and address.casefold() in configured_addresses)
+
+
+def _message_headers(message: EmailMessageSnapshot) -> dict[str, str]:
+    return {
+        str(key).casefold(): _clean_string(value) or ""
+        for key, value in message.headers.items()
+    }
+
+
+def _header_value(message: EmailMessageSnapshot, name: str) -> str:
+    return _message_headers(message).get(name.casefold(), "")
+
+
+def _combined_message_text(message: EmailMessageSnapshot) -> str:
+    parts = (
+        message.subject,
+        message.snippet,
+        message.body_preview,
+        _header_value(message, "content-type"),
+    )
+    return " ".join(part.casefold() for part in (_clean_string(part) for part in parts) if part)
+
+
+def _contains_any(text: str, phrases: Iterable[str]) -> bool:
+    return any(phrase.casefold() in text for phrase in phrases)
+
+
+def _has_newsletter_headers(message: EmailMessageSnapshot) -> bool:
+    headers = _message_headers(message)
+    precedence = headers.get("precedence", "").casefold()
+    return bool(headers.get("list-unsubscribe")) or precedence == "bulk"
+
+
+def _is_automation_sender(address: str | None) -> bool:
+    local_part = _sender_local_part(address)
+    full_address = (address or "").casefold()
+    return any(token in local_part or token in full_address for token in _AUTOMATED_SENDER_TOKENS)
+
+
+def _is_calendar_update(message: EmailMessageSnapshot) -> bool:
+    sender = (message.from_address or "").casefold()
+    text = _combined_message_text(message)
+    subject = (_clean_string(message.subject) or "").casefold()
+    return (
+        "calendar.google.com" in sender
+        or "google calendar" in text
+        or "text/calendar" in text
+        or subject.startswith("invitation:")
+        or subject.startswith("updated invitation:")
+        or subject.startswith("canceled invitation:")
+        or "calendar" in _sender_local_part(message.from_address)
+    )
+
+
+def _is_social_notification(message: EmailMessageSnapshot) -> bool:
+    sender = (message.from_address or "").casefold()
+    text = _combined_message_text(message)
+    return _contains_any(sender, _SOCIAL_TOKENS) or _contains_any(text, _SOCIAL_TOKENS)
+
+
+def _is_security_alert(message: EmailMessageSnapshot) -> bool:
+    sender = (message.from_address or "").casefold()
+    text = _combined_message_text(message)
+    return (
+        "security" in _sender_local_part(message.from_address)
+        or "security" in sender
+        or _contains_any(text, _SECURITY_TOKENS)
+    )
+
+
+def _is_security_no_action(message: EmailMessageSnapshot) -> bool:
+    return _contains_any(_combined_message_text(message), _SECURITY_NO_ACTION_PHRASES)
+
+
+def _is_manual_action_ready(message: EmailMessageSnapshot) -> bool:
+    return _contains_any(_combined_message_text(message), _MANUAL_ACTION_PHRASES)
+
+
+def _is_marketing_promotion(message: EmailMessageSnapshot) -> bool:
+    return _contains_any(_combined_message_text(message), _MARKETING_PHRASES)
+
+
+def _looks_direct_work_request(
+    message: EmailMessageSnapshot,
+    *,
+    important_keywords: set[str],
+) -> bool:
+    text = _combined_message_text(message)
+    if "?" in text:
+        return True
+    if _contains_any(text, _DIRECT_WORK_REQUEST_PHRASES):
+        return True
+    return any(keyword in text for keyword in important_keywords)
+
+
+def _looks_work_info(
+    message: EmailMessageSnapshot,
+    *,
+    important_keywords: set[str],
+) -> bool:
+    text = _combined_message_text(message)
+    return _contains_any(text, _WORK_INFO_TOKENS) or any(
+        keyword in text for keyword in important_keywords
+    )
+
+
+def _priority_for_work_request(
+    message: EmailMessageSnapshot,
+    *,
+    important_sender: bool,
+) -> str:
+    text = _combined_message_text(message)
+    if important_sender or _contains_any(text, _URGENT_TOKENS):
+        return TRIAGE_PRIORITY_HIGH
+    return TRIAGE_PRIORITY_MEDIUM
+
+
+def _triage_result(
+    *,
+    category: str,
+    action_type: str,
+    priority: str,
+    show_in_digest: bool,
+    reason: str,
+    confidence: float,
+) -> EmailTriageResult:
+    safe_category = category if category in TRIAGE_CATEGORIES else TRIAGE_CATEGORY_UNKNOWN
+    safe_action_type = (
+        action_type if action_type in TRIAGE_ACTION_TYPES else TRIAGE_ACTION_REVIEW_OPTIONAL
+    )
+    safe_priority = priority if priority in TRIAGE_PRIORITIES else TRIAGE_PRIORITY_LOW
+    safe_confidence = min(1.0, max(0.0, float(confidence)))
+    if safe_confidence < 0.65 and not show_in_digest:
+        show_in_digest = True
+        safe_priority = TRIAGE_PRIORITY_LOW
+
+    return EmailTriageResult(
+        category=safe_category,
+        action_type=safe_action_type,
+        priority=safe_priority,
+        show_in_digest=show_in_digest,
+        reason=reason,
+        confidence=safe_confidence,
+    )
+
+
+def classify_email_thread_triage(
+    messages: list[EmailMessageSnapshot],
+    *,
+    last_message_direction: str,
+) -> EmailTriageResult:
+    if not messages:
+        return _triage_result(
+            category=TRIAGE_CATEGORY_UNKNOWN,
+            action_type=TRIAGE_ACTION_REVIEW_OPTIONAL,
+            priority=TRIAGE_PRIORITY_LOW,
+            show_in_digest=True,
+            reason="empty_thread",
+            confidence=0.0,
+        )
+
+    last_message = messages[-1]
+    sender = last_message.from_address
+    sender_domain = _sender_domain(sender)
+    important_senders = _parse_config_values(settings.email_important_senders)
+    important_domains = _parse_config_values(settings.email_important_domains)
+    marketing_blocklist = _parse_config_values(settings.email_marketing_sender_blocklist)
+    important_keywords = _parse_config_values(settings.email_important_project_keywords)
+    important_sender = _address_matches(sender, important_senders) or _domain_matches(
+        sender_domain,
+        important_domains,
+    )
+
+    if _address_matches(sender, marketing_blocklist) or _domain_matches(
+        sender_domain,
+        marketing_blocklist,
+    ):
+        return _triage_result(
+            category=TRIAGE_CATEGORY_MARKETING,
+            action_type=TRIAGE_ACTION_REVIEW_OPTIONAL,
+            priority=TRIAGE_PRIORITY_HIDDEN,
+            show_in_digest=False,
+            reason="marketing_sender_blocklist",
+            confidence=0.95,
+        )
+
+    if _is_calendar_update(last_message):
+        return _triage_result(
+            category=TRIAGE_CATEGORY_CALENDAR_UPDATE,
+            action_type=TRIAGE_ACTION_NO_ACTION_REQUIRED,
+            priority=TRIAGE_PRIORITY_HIDDEN,
+            show_in_digest=False,
+            reason="calendar_update",
+            confidence=0.9,
+        )
+
+    if _is_social_notification(last_message):
+        return _triage_result(
+            category=TRIAGE_CATEGORY_SOCIAL_NETWORK,
+            action_type=TRIAGE_ACTION_REVIEW_OPTIONAL,
+            priority=TRIAGE_PRIORITY_HIDDEN,
+            show_in_digest=False,
+            reason="social_notification",
+            confidence=0.9,
+        )
+
+    if _is_security_alert(last_message):
+        if _is_security_no_action(last_message):
+            return _triage_result(
+                category=TRIAGE_CATEGORY_SECURITY_ALERT,
+                action_type=TRIAGE_ACTION_NO_ACTION_REQUIRED,
+                priority=TRIAGE_PRIORITY_HIDDEN,
+                show_in_digest=False,
+                reason="security_alert_no_action_required",
+                confidence=0.9,
+            )
+        return _triage_result(
+            category=TRIAGE_CATEGORY_SECURITY_ALERT,
+            action_type=TRIAGE_ACTION_MANUAL_ACTION_REQUIRED,
+            priority=TRIAGE_PRIORITY_HIGH,
+            show_in_digest=True,
+            reason="security_alert_requires_review",
+            confidence=0.9,
+        )
+
+    if _is_manual_action_ready(last_message):
+        return _triage_result(
+            category=TRIAGE_CATEGORY_MANUAL_ACTION,
+            action_type=TRIAGE_ACTION_MANUAL_ACTION_REQUIRED,
+            priority=TRIAGE_PRIORITY_MEDIUM,
+            show_in_digest=True,
+            reason="manual_action_ready",
+            confidence=0.86,
+        )
+
+    if _has_newsletter_headers(last_message):
+        return _triage_result(
+            category=TRIAGE_CATEGORY_NEWSLETTER,
+            action_type=TRIAGE_ACTION_REVIEW_OPTIONAL,
+            priority=TRIAGE_PRIORITY_HIDDEN,
+            show_in_digest=False,
+            reason="newsletter_headers",
+            confidence=0.95,
+        )
+
+    if _is_marketing_promotion(last_message):
+        return _triage_result(
+            category=TRIAGE_CATEGORY_MARKETING,
+            action_type=TRIAGE_ACTION_REVIEW_OPTIONAL,
+            priority=TRIAGE_PRIORITY_HIDDEN,
+            show_in_digest=False,
+            reason="marketing_promotion_phrase",
+            confidence=0.85,
+        )
+
+    if _is_automation_sender(sender):
+        return _triage_result(
+            category=TRIAGE_CATEGORY_AUTOMATED_NOTIFICATION,
+            action_type=TRIAGE_ACTION_NO_ACTION_REQUIRED,
+            priority=TRIAGE_PRIORITY_HIDDEN,
+            show_in_digest=False,
+            reason="automated_sender",
+            confidence=0.8,
+        )
+
+    if last_message_direction == MESSAGE_DIRECTION_FROM_ME:
+        return _triage_result(
+            category=TRIAGE_CATEGORY_WORK_WAITING,
+            action_type=TRIAGE_ACTION_WAITING_EXTERNAL_REPLY,
+            priority=TRIAGE_PRIORITY_MEDIUM,
+            show_in_digest=True,
+            reason="last_message_from_me",
+            confidence=0.78,
+        )
+
+    if last_message_direction == MESSAGE_DIRECTION_FROM_EXTERNAL:
+        if _looks_direct_work_request(
+            last_message,
+            important_keywords=important_keywords,
+        ):
+            return _triage_result(
+                category=TRIAGE_CATEGORY_WORK_ACTION,
+                action_type=TRIAGE_ACTION_REPLY_REQUIRED,
+                priority=_priority_for_work_request(
+                    last_message,
+                    important_sender=important_sender,
+                ),
+                show_in_digest=True,
+                reason="external_work_request",
+                confidence=0.78,
+            )
+        if _looks_work_info(last_message, important_keywords=important_keywords):
+            return _triage_result(
+                category=TRIAGE_CATEGORY_WORK_INFO,
+                action_type=TRIAGE_ACTION_REVIEW_OPTIONAL,
+                priority=TRIAGE_PRIORITY_LOW,
+                show_in_digest=True,
+                reason="work_like_information",
+                confidence=0.6,
+            )
+        return _triage_result(
+            category=TRIAGE_CATEGORY_UNKNOWN,
+            action_type=TRIAGE_ACTION_REVIEW_OPTIONAL,
+            priority=TRIAGE_PRIORITY_LOW,
+            show_in_digest=True,
+            reason="uncertain_external_message",
+            confidence=0.55,
+        )
+
+    return _triage_result(
+        category=TRIAGE_CATEGORY_UNKNOWN,
+        action_type=TRIAGE_ACTION_REVIEW_OPTIONAL,
+        priority=TRIAGE_PRIORITY_LOW,
+        show_in_digest=True,
+        reason="unknown_message_direction",
+        confidence=0.5,
+    )
 
 
 def _participant_key(address: str) -> str:
@@ -293,7 +851,25 @@ def classify_thread_status(
     last_message_direction: str,
     *,
     informational: bool = False,
+    triage_action_type: str | None = None,
+    show_in_digest: bool = True,
+    triage_priority: str | None = None,
 ) -> str:
+    if triage_action_type == TRIAGE_ACTION_REPLY_REQUIRED:
+        return THREAD_STATUS_NEEDS_MY_REPLY
+    if triage_action_type == TRIAGE_ACTION_WAITING_EXTERNAL_REPLY:
+        return THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY
+    if triage_action_type == TRIAGE_ACTION_MANUAL_ACTION_REQUIRED:
+        return THREAD_STATUS_MANUAL_ACTION_REQUIRED
+    if triage_action_type == TRIAGE_ACTION_NO_ACTION_REQUIRED:
+        if not show_in_digest or triage_priority == TRIAGE_PRIORITY_HIDDEN:
+            return THREAD_STATUS_HIDDEN
+        return THREAD_STATUS_INFORMATIONAL
+    if triage_action_type == TRIAGE_ACTION_REVIEW_OPTIONAL:
+        if not show_in_digest or triage_priority == TRIAGE_PRIORITY_HIDDEN:
+            return THREAD_STATUS_HIDDEN
+        return THREAD_STATUS_INFORMATIONAL
+
     if informational or last_message_direction == MESSAGE_DIRECTION_UNKNOWN:
         return THREAD_STATUS_INFORMATIONAL
     if last_message_direction == MESSAGE_DIRECTION_FROM_EXTERNAL:
@@ -454,8 +1030,15 @@ def _build_thread_state_candidate(
     first_message = messages[0]
     last_message = messages[-1]
     last_direction = _last_message_direction(last_message, me_addresses=me_addresses)
+    triage = classify_email_thread_triage(messages, last_message_direction=last_direction)
     informational = _looks_informational(last_message)
-    status = classify_thread_status(last_direction, informational=informational)
+    status = classify_thread_status(
+        last_direction,
+        informational=informational,
+        triage_action_type=triage.action_type,
+        show_in_digest=triage.show_in_digest,
+        triage_priority=triage.priority,
+    )
     subject_display = _subject_display(messages)
     subject_normalized = normalize_email_subject(subject_display)
     last_message_summary = _message_summary(
@@ -482,6 +1065,12 @@ def _build_thread_state_candidate(
         status=status,
         days_without_reply=compute_days_without_reply(last_message.message_at, now),
         messages_count=len(messages),
+        triage_category=triage.category,
+        triage_action_type=triage.action_type,
+        triage_priority=triage.priority,
+        show_in_digest=triage.show_in_digest,
+        triage_reason=triage.reason,
+        triage_confidence=triage.confidence,
         evidence_refs=_thread_evidence_refs(messages),
         metadata_json={
             "grouping_strategy": group.grouping_strategy,
@@ -501,6 +1090,7 @@ def _build_thread_state_candidate(
                 me_addresses=me_addresses,
             ),
             "resolved_status_supported": True,
+            "triage_classifier": "deterministic_v1",
         },
         computed_at=now,
     )
@@ -694,6 +1284,44 @@ def _value_from_sources(
     return None
 
 
+def _headers_from_value(value: Any) -> dict[str, str]:
+    if isinstance(value, dict):
+        return {
+            str(key).casefold(): cleaned
+            for key, raw_value in value.items()
+            if (cleaned := _clean_string(raw_value))
+        }
+
+    if isinstance(value, list):
+        headers: dict[str, str] = {}
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            name = _clean_string(item.get("name"))
+            header_value = _clean_string(item.get("value"))
+            if name and header_value:
+                headers[name.casefold()] = header_value
+        return headers
+
+    return {}
+
+
+def _headers_from_sources(metadata: dict[str, Any], payload: dict[str, Any]) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for value in (
+        metadata.get("headers"),
+        payload.get("headers"),
+        _value_from_sources(metadata, payload, "payload_headers"),
+    ):
+        headers.update(_headers_from_value(value))
+
+    nested_payload = payload.get("payload")
+    if isinstance(nested_payload, dict):
+        headers.update(_headers_from_value(nested_payload.get("headers")))
+
+    return headers
+
+
 def _snapshot_from_gmail_message(
     message: GmailMessage,
     documents_by_message_id: dict[str, SourceDocument],
@@ -736,6 +1364,7 @@ def _snapshot_from_gmail_message(
                 "preview",
             )
         ),
+        headers=_headers_from_sources(metadata, payload),
     )
 
 
@@ -786,6 +1415,12 @@ def _thread_state_values(candidate: EmailThreadStateCandidate) -> dict[str, Any]
         "status": candidate.status,
         "days_without_reply": candidate.days_without_reply,
         "messages_count": candidate.messages_count,
+        "triage_category": candidate.triage_category,
+        "triage_action_type": candidate.triage_action_type,
+        "triage_priority": candidate.triage_priority,
+        "show_in_digest": candidate.show_in_digest,
+        "triage_reason": candidate.triage_reason,
+        "triage_confidence": candidate.triage_confidence,
         "evidence_refs": candidate.evidence_refs,
         "metadata_json": candidate.metadata_json,
         "computed_at": candidate.computed_at,
@@ -834,6 +1469,12 @@ async def rebuild_email_thread_states_from_stored_gmail(
         thread_states_built=upserted,
         messages_considered=len(messages),
         status_counts=dict(Counter(candidate.status for candidate in candidates)),
+        triage_category_counts=dict(Counter(candidate.triage_category for candidate in candidates)),
+        action_type_counts=dict(Counter(candidate.triage_action_type for candidate in candidates)),
+        priority_counts=dict(Counter(candidate.triage_priority for candidate in candidates)),
+        show_in_digest_counts=dict(
+            Counter(str(candidate.show_in_digest).lower() for candidate in candidates)
+        ),
     )
 
 
@@ -842,6 +1483,7 @@ async def get_active_email_thread_states(
     limit: int = 20,
     statuses: tuple[str, ...] = (
         THREAD_STATUS_NEEDS_MY_REPLY,
+        THREAD_STATUS_MANUAL_ACTION_REQUIRED,
         THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY,
         THREAD_STATUS_INFORMATIONAL,
     ),

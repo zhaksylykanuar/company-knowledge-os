@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     google_gmail_token_file: str = "./secrets/google_gmail_token.json"
 
     email_me_addresses: str | None = None
+    email_digest_show_low_priority: bool = False
+    email_digest_show_marketing: bool = False
+    email_digest_show_automated: bool = False
+    email_digest_debug_triage: bool = False
+    email_digest_debug_evidence: bool = False
+    email_important_senders: str | None = None
+    email_important_domains: str | None = None
+    email_marketing_sender_blocklist: str | None = None
+    email_important_project_keywords: str | None = None
 
     jira_base_url: str | None = None
     jira_email: str | None = None

@@ -18,16 +18,28 @@ SAFE_EVIDENCE_REF_KEYS = (
 )
 
 EMAIL_THREAD_GROUP_LABELS = (
-    ("needs_my_reply", "Needs my reply"),
-    ("waiting_for_external_reply", "Waiting for external reply"),
-    ("informational", "Informational"),
+    ("work_actions", "Work actions requiring my attention"),
+    ("manual_actions", "Manual actions"),
+    ("waiting_external_reply", "Waiting for external reply"),
+    ("work_info", "Work info / recently relevant"),
+    ("review_optional", "Review optional"),
 )
 
 EMAIL_THREAD_STATUS_LABELS = {
     "needs_my_reply": "Needs my reply",
     "waiting_for_external_reply": "Waiting for external reply",
+    "manual_action_required": "Manual action required",
     "informational": "Informational",
+    "hidden": "Hidden",
     "resolved": "Resolved",
+}
+
+EMAIL_THREAD_ACTION_LABELS = {
+    "reply_required": "Reply required",
+    "manual_action_required": "Manual action required",
+    "waiting_external_reply": "Waiting for external reply",
+    "no_action_required": "No action required",
+    "review_optional": "Review optional",
 }
 
 
@@ -179,41 +191,59 @@ def _format_email_thread_item(
     index: int,
     *,
     debug_evidence: bool,
+    debug_triage: bool,
 ) -> list[str]:
     item = _mapping(value)
     subject = _string_value(item.get("subject"), fallback="Subject unavailable")
-    last_message_at = _string_value(item.get("last_message_at"))
-    status = _format_status(item.get("status"))
-    status_key = _string_value(item.get("status"), fallback="informational")
-    last_message_from = _string_value(item.get("last_message_from"), fallback="unknown sender")
-    last_message_to = _string_value(item.get("last_message_to"), fallback="unknown recipient")
-    participants = _string_value(item.get("participants"), fallback="unknown participant")
-    summary = _string_value(item.get("summary"), fallback="Summary unavailable")
-    last_message_summary = _string_value(
-        item.get("last_message_summary"),
-        fallback="Summary unavailable",
+    action_type = _string_value(item.get("action_type"), fallback="review_optional")
+    action = EMAIL_THREAD_ACTION_LABELS.get(
+        action_type,
+        action_type.replace("_", " ").title(),
     )
+    priority = _string_value(item.get("priority"), fallback="low")
+    summary = _string_value(item.get("summary"), fallback="Summary unavailable")
     days_without_reply = _format_days(item.get("days_without_reply"))
 
-    wait_label = "Waiting for external reply"
-    if status_key == "needs_my_reply":
+    wait_label = "Age"
+    if action_type == "reply_required":
         wait_label = "Not answered for"
+    elif action_type == "waiting_external_reply":
+        wait_label = "Waiting for external reply"
 
     lines = [
-        f"{index}. Subject: {subject}",
-        f"   Status: {status}",
-        f"   Last message: {last_message_at} from {last_message_from}",
-        f"   Last message to: {last_message_to}",
-        f"   Participants: {participants}",
+        f"{index}. {subject}",
+        f"   Action: {action}",
+        f"   Priority: {priority}",
         f"   {wait_label}: {days_without_reply}",
         f"   Summary: {summary}",
-        f"   Last message summary: {last_message_summary}",
         f"   Evidence: {_format_evidence_summary(item.get('evidence'))}",
     ]
     if debug_evidence:
         lines.append(
             f"   Debug evidence refs: {_format_evidence_refs(item.get('evidence_refs'))}"
         )
+    if debug_triage:
+        triage = _mapping(item.get("triage"))
+        if not triage:
+            triage = {
+                "category": item.get("category"),
+                "action_type": item.get("action_type"),
+                "priority": item.get("priority"),
+                "show_in_digest": item.get("show_in_digest"),
+            }
+        triage_parts = [
+            f"category={_string_value(triage.get('category'))}",
+            f"action_type={_string_value(triage.get('action_type'))}",
+            f"priority={_string_value(triage.get('priority'))}",
+            f"show_in_digest={_string_value(triage.get('show_in_digest'))}",
+        ]
+        reason = _string_value(triage.get("reason"), fallback="")
+        confidence = _string_value(triage.get("confidence"), fallback="")
+        if reason:
+            triage_parts.append(f"reason={reason}")
+        if confidence:
+            triage_parts.append(f"confidence={confidence}")
+        lines.append(f"   Debug triage: {'; '.join(triage_parts)}")
 
     return lines
 
@@ -223,10 +253,13 @@ def _append_email_thread_section(
     value: Any,
     *,
     debug_evidence: bool,
+    debug_triage: bool,
 ) -> None:
     email_thread_intelligence = _mapping(value)
     groups = _email_thread_groups(email_thread_intelligence)
-    if not _has_email_thread_items(email_thread_intelligence):
+    hidden_summary = _mapping(email_thread_intelligence.get("hidden_low_priority_summary"))
+    hidden_counts = _count_items(hidden_summary.get("counts"))
+    if not _has_email_thread_items(email_thread_intelligence) and not hidden_counts:
         for note in _sequence(email_thread_intelligence.get("data_quality_notes")):
             lines.append(f"Email thread data quality note: {_string_value(note)}")
         return
@@ -248,8 +281,14 @@ def _append_email_thread_section(
                     item,
                     index,
                     debug_evidence=debug_evidence,
+                    debug_triage=debug_triage,
                 )
             )
+
+    if hidden_counts:
+        lines.append("Hidden low-priority email summary:")
+        for label, count in hidden_counts:
+            lines.append(f"- {count} {label}")
 
     for note in _sequence(email_thread_intelligence.get("data_quality_notes")):
         lines.append(f"Email thread data quality note: {_string_value(note)}")
@@ -264,7 +303,8 @@ def _append_source_event_data_quality_section(lines: list[str], value: Any) -> N
 def render_source_activity_digest_text(
     digest: Mapping[str, Any],
     *,
-    debug_evidence: bool = False,
+    debug_evidence: bool | None = False,
+    debug_triage: bool | None = False,
 ) -> str:
     """Render a source activity digest as deterministic plain text.
 
@@ -278,7 +318,8 @@ def render_source_activity_digest_text(
     entries = _sequence(digest.get("entries"))
     metadata = _mapping(digest.get("metadata"))
     source_event_data_quality = _mapping(digest.get("source_event_data_quality"))
-    effective_debug_evidence = debug_evidence or metadata.get("debug_evidence") is True
+    effective_debug_evidence = bool(debug_evidence) or metadata.get("debug_evidence") is True
+    effective_debug_triage = bool(debug_triage) or metadata.get("debug_triage") is True
 
     lines = [
         "Source activity digest",
@@ -295,6 +336,7 @@ def render_source_activity_digest_text(
         lines,
         email_thread_intelligence,
         debug_evidence=effective_debug_evidence,
+        debug_triage=effective_debug_triage,
     )
 
     entry_count = _string_value(metadata.get("entry_count"), fallback=str(len(entries)))

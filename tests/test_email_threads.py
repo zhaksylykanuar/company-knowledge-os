@@ -4,9 +4,28 @@ from app.services.email_threads import (
     MESSAGE_DIRECTION_FROM_EXTERNAL,
     MESSAGE_DIRECTION_FROM_ME,
     MESSAGE_DIRECTION_UNKNOWN,
+    THREAD_STATUS_HIDDEN,
     THREAD_STATUS_INFORMATIONAL,
+    THREAD_STATUS_MANUAL_ACTION_REQUIRED,
     THREAD_STATUS_NEEDS_MY_REPLY,
     THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY,
+    TRIAGE_ACTION_MANUAL_ACTION_REQUIRED,
+    TRIAGE_ACTION_NO_ACTION_REQUIRED,
+    TRIAGE_ACTION_REPLY_REQUIRED,
+    TRIAGE_ACTION_REVIEW_OPTIONAL,
+    TRIAGE_ACTION_WAITING_EXTERNAL_REPLY,
+    TRIAGE_CATEGORY_AUTOMATED_NOTIFICATION,
+    TRIAGE_CATEGORY_CALENDAR_UPDATE,
+    TRIAGE_CATEGORY_MANUAL_ACTION,
+    TRIAGE_CATEGORY_NEWSLETTER,
+    TRIAGE_CATEGORY_SECURITY_ALERT,
+    TRIAGE_CATEGORY_SOCIAL_NETWORK,
+    TRIAGE_CATEGORY_WORK_ACTION,
+    TRIAGE_CATEGORY_WORK_INFO,
+    TRIAGE_CATEGORY_WORK_WAITING,
+    TRIAGE_PRIORITY_HIGH,
+    TRIAGE_PRIORITY_HIDDEN,
+    TRIAGE_PRIORITY_MEDIUM,
     EmailMessageSnapshot,
     build_email_thread_state_candidates,
     compute_days_without_reply,
@@ -35,6 +54,7 @@ def _msg(
     references: tuple[str, ...] = (),
     snippet: str | None = None,
     body_preview: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> EmailMessageSnapshot:
     return EmailMessageSnapshot(
         message_id=message_id,
@@ -52,6 +72,7 @@ def _msg(
         label_ids=(),
         snippet=snippet,
         body_preview=body_preview,
+        headers=headers or {},
     )
 
 
@@ -156,6 +177,9 @@ def test_external_me_external_conversation_builds_one_thread_needing_my_reply() 
     assert candidates[0].messages_count == 3
     assert candidates[0].last_message_direction == MESSAGE_DIRECTION_FROM_EXTERNAL
     assert candidates[0].status == THREAD_STATUS_NEEDS_MY_REPLY
+    assert candidates[0].triage_category == TRIAGE_CATEGORY_WORK_ACTION
+    assert candidates[0].triage_action_type == TRIAGE_ACTION_REPLY_REQUIRED
+    assert candidates[0].show_in_digest is True
     assert candidates[0].days_without_reply == 1
     assert candidates[0].last_message_summary == "Fake external follow-up needs an operator reply."
     assert "Stored Gmail thread" not in candidates[0].thread_summary
@@ -188,7 +212,216 @@ def test_external_then_me_conversation_waits_for_external_reply() -> None:
 
     assert candidates[0].last_message_direction == MESSAGE_DIRECTION_FROM_ME
     assert candidates[0].status == THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY
+    assert candidates[0].triage_category == TRIAGE_CATEGORY_WORK_WAITING
+    assert candidates[0].triage_action_type == TRIAGE_ACTION_WAITING_EXTERNAL_REPLY
     assert candidates[0].days_without_reply == 1
+
+
+def test_external_client_question_triages_as_reply_required() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-client-question",
+                from_address="client@example.test",
+                snippet="Can you review the fake launch proposal today?",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.triage_category == TRIAGE_CATEGORY_WORK_ACTION
+    assert candidate.triage_action_type == TRIAGE_ACTION_REPLY_REQUIRED
+    assert candidate.triage_priority == TRIAGE_PRIORITY_HIGH
+    assert candidate.show_in_digest is True
+    assert candidate.status == THREAD_STATUS_NEEDS_MY_REPLY
+
+
+def test_newsletter_with_list_unsubscribe_is_hidden() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-newsletter",
+                from_address="updates@example.test",
+                subject="Fake newsletter",
+                snippet="Fake digest of updates.",
+                headers={"List-Unsubscribe": "<mailto:unsubscribe@example.test>"},
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.triage_category == TRIAGE_CATEGORY_NEWSLETTER
+    assert candidate.triage_action_type == TRIAGE_ACTION_REVIEW_OPTIONAL
+    assert candidate.triage_priority == TRIAGE_PRIORITY_HIDDEN
+    assert candidate.show_in_digest is False
+    assert candidate.status == THREAD_STATUS_HIDDEN
+
+
+def test_linkedin_notification_is_hidden_social_network() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-social",
+                from_address="notifications@linkedin.example.test",
+                subject="Fake LinkedIn notification",
+                snippet="Someone viewed your fake profile.",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.triage_category == TRIAGE_CATEGORY_SOCIAL_NETWORK
+    assert candidate.triage_action_type == TRIAGE_ACTION_REVIEW_OPTIONAL
+    assert candidate.triage_priority == TRIAGE_PRIORITY_HIDDEN
+    assert candidate.show_in_digest is False
+    assert candidate.status == THREAD_STATUS_HIDDEN
+
+
+def test_google_calendar_update_is_hidden_no_action() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-calendar",
+                from_address="calendar@example.test",
+                subject="Invitation: Fake planning sync",
+                snippet="Google Calendar fake event update.",
+                headers={"Content-Type": "text/calendar"},
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.triage_category == TRIAGE_CATEGORY_CALENDAR_UPDATE
+    assert candidate.triage_action_type == TRIAGE_ACTION_NO_ACTION_REQUIRED
+    assert candidate.triage_priority == TRIAGE_PRIORITY_HIDDEN
+    assert candidate.show_in_digest is False
+    assert candidate.status == THREAD_STATUS_HIDDEN
+
+
+def test_security_alert_no_action_needed_is_hidden() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-security-ok",
+                from_address="security@example.test",
+                subject="Security alert",
+                snippet="New sign-in detected. If this was you, no action is required.",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.triage_category == TRIAGE_CATEGORY_SECURITY_ALERT
+    assert candidate.triage_action_type == TRIAGE_ACTION_NO_ACTION_REQUIRED
+    assert candidate.triage_priority == TRIAGE_PRIORITY_HIDDEN
+    assert candidate.show_in_digest is False
+    assert candidate.status == THREAD_STATUS_HIDDEN
+
+
+def test_suspicious_security_alert_requires_manual_action() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-security-risk",
+                from_address="security@example.test",
+                subject="Security alert",
+                snippet="Suspicious login detected for a fake account. Review immediately.",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.triage_category == TRIAGE_CATEGORY_SECURITY_ALERT
+    assert candidate.triage_action_type == TRIAGE_ACTION_MANUAL_ACTION_REQUIRED
+    assert candidate.triage_priority == TRIAGE_PRIORITY_HIGH
+    assert candidate.show_in_digest is True
+    assert candidate.status == THREAD_STATUS_MANUAL_ACTION_REQUIRED
+
+
+def test_badge_ticket_access_ready_requires_manual_action_not_reply() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-badge",
+                from_address="no-reply@example.test",
+                subject="Your fake badge is ready",
+                snippet="Your badge is ready for pickup.",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.triage_category == TRIAGE_CATEGORY_MANUAL_ACTION
+    assert candidate.triage_action_type == TRIAGE_ACTION_MANUAL_ACTION_REQUIRED
+    assert candidate.triage_priority == TRIAGE_PRIORITY_MEDIUM
+    assert candidate.show_in_digest is True
+    assert candidate.status == THREAD_STATUS_MANUAL_ACTION_REQUIRED
+
+
+def test_no_reply_external_email_does_not_become_needs_my_reply() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-automated",
+                from_address="no-reply@example.test",
+                subject="Fake report ready",
+                snippet="Your fake report has been generated.",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.last_message_direction == MESSAGE_DIRECTION_FROM_EXTERNAL
+    assert candidate.triage_category == TRIAGE_CATEGORY_AUTOMATED_NOTIFICATION
+    assert candidate.triage_action_type == TRIAGE_ACTION_NO_ACTION_REQUIRED
+    assert candidate.status == THREAD_STATUS_HIDDEN
+    assert candidate.status != THREAD_STATUS_NEEDS_MY_REPLY
+
+
+def test_uncertain_work_like_email_is_review_optional_not_hidden() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-work-info",
+                from_address="partner@example.test",
+                subject="Fake project update",
+                snippet="Fake project status update for awareness.",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    candidate = candidates[0]
+    assert candidate.triage_category == TRIAGE_CATEGORY_WORK_INFO
+    assert candidate.triage_action_type == TRIAGE_ACTION_REVIEW_OPTIONAL
+    assert candidate.show_in_digest is True
+    assert candidate.status == THREAD_STATUS_INFORMATIONAL
 
 
 def test_days_without_reply_calculation() -> None:
@@ -310,6 +543,22 @@ def test_summary_prefers_stored_snippet_and_truncates() -> None:
     assert candidates[0].last_message_summary.endswith("...")
     assert "Stored Gmail thread" not in candidates[0].thread_summary
     assert candidates[0].metadata_json["summary_source"] == "stored_preview"
+
+
+def test_summary_cleans_html_entities_zero_width_and_whitespace() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-clean",
+                snippet="Fake&nbsp;client&#39;s\u200b update\n\nneeds\t review.",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    assert candidates[0].last_message_summary == "Fake client's update needs review."
 
 
 def test_summary_uses_body_preview_when_snippet_missing() -> None:

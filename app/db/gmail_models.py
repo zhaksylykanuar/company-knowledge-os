@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -69,6 +69,12 @@ class EmailThreadState(Base):
     status: Mapped[str] = mapped_column(String(60), default="informational", index=True)
     days_without_reply: Mapped[int | None] = mapped_column(Integer, nullable=True)
     messages_count: Mapped[int] = mapped_column(Integer, default=0)
+    triage_category: Mapped[str] = mapped_column(String(60), default="unknown")
+    triage_action_type: Mapped[str] = mapped_column(String(60), default="review_optional")
+    triage_priority: Mapped[str] = mapped_column(String(20), default="low")
+    show_in_digest: Mapped[bool] = mapped_column(Boolean, default=True)
+    triage_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    triage_confidence: Mapped[float] = mapped_column(Float, default=0.0)
     evidence_refs: Mapped[list[dict]] = mapped_column(JSON, default=list)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     computed_at: Mapped[datetime] = mapped_column(

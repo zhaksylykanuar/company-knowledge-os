@@ -69,6 +69,26 @@ optional and must not block Google health checks; when it is missing, thread
 state still builds but direction may remain `unknown` and status may be
 `informational`.
 
+Optional email digest triage keys:
+
+```text
+EMAIL_DIGEST_SHOW_LOW_PRIORITY
+EMAIL_DIGEST_SHOW_MARKETING
+EMAIL_DIGEST_SHOW_AUTOMATED
+EMAIL_DIGEST_DEBUG_TRIAGE
+EMAIL_DIGEST_DEBUG_EVIDENCE
+EMAIL_IMPORTANT_SENDERS
+EMAIL_IMPORTANT_DOMAINS
+EMAIL_MARKETING_SENDER_BLOCKLIST
+EMAIL_IMPORTANT_PROJECT_KEYWORDS
+```
+
+These keys are optional and default to safe, quiet digest behavior. Marketing,
+newsletter, social, calendar, automated, and no-action security emails are
+hidden from the main digest by default and summarized by count. Debug evidence
+and debug triage are off by default because they can expose raw refs or rule
+details intended only for explicit operator troubleshooting.
+
 ## Health Check
 
 Run the safe local FOS-036 check without launching Codex:

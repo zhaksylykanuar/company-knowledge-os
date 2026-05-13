@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
@@ -8,6 +9,7 @@ from sqlalchemy import case, desc, func, select
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
 from app.db.gmail_models import EmailThreadState
@@ -19,13 +21,68 @@ SOURCE_EVENT_DEDUPE_SCAN_MULTIPLIER = 10
 
 EMAIL_THREAD_STATUS_NEEDS_MY_REPLY = "needs_my_reply"
 EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY = "waiting_for_external_reply"
+EMAIL_THREAD_STATUS_MANUAL_ACTION_REQUIRED = "manual_action_required"
 EMAIL_THREAD_STATUS_INFORMATIONAL = "informational"
 EMAIL_THREAD_STATUS_RESOLVED = "resolved"
+EMAIL_THREAD_STATUS_HIDDEN = "hidden"
+
+EMAIL_TRIAGE_ACTION_REPLY_REQUIRED = "reply_required"
+EMAIL_TRIAGE_ACTION_MANUAL_ACTION_REQUIRED = "manual_action_required"
+EMAIL_TRIAGE_ACTION_WAITING_EXTERNAL_REPLY = "waiting_external_reply"
+EMAIL_TRIAGE_ACTION_NO_ACTION_REQUIRED = "no_action_required"
+EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL = "review_optional"
+
+EMAIL_TRIAGE_PRIORITY_HIGH = "high"
+EMAIL_TRIAGE_PRIORITY_MEDIUM = "medium"
+EMAIL_TRIAGE_PRIORITY_LOW = "low"
+EMAIL_TRIAGE_PRIORITY_HIDDEN = "hidden"
+
+EMAIL_TRIAGE_CATEGORY_WORK_ACTION = "work_action"
+EMAIL_TRIAGE_CATEGORY_WORK_WAITING = "work_waiting"
+EMAIL_TRIAGE_CATEGORY_WORK_INFO = "work_info"
+EMAIL_TRIAGE_CATEGORY_MANUAL_ACTION = "manual_action"
+EMAIL_TRIAGE_CATEGORY_CALENDAR_UPDATE = "calendar_update"
+EMAIL_TRIAGE_CATEGORY_SECURITY_ALERT = "security_alert"
+EMAIL_TRIAGE_CATEGORY_MARKETING = "marketing"
+EMAIL_TRIAGE_CATEGORY_NEWSLETTER = "newsletter"
+EMAIL_TRIAGE_CATEGORY_SOCIAL_NETWORK = "social_network"
+EMAIL_TRIAGE_CATEGORY_AUTOMATED_NOTIFICATION = "automated_notification"
+EMAIL_TRIAGE_CATEGORY_NOISE = "noise"
+EMAIL_TRIAGE_CATEGORY_UNKNOWN = "unknown"
+
+EMAIL_THREAD_GROUP_WORK_ACTIONS = "work_actions"
+EMAIL_THREAD_GROUP_MANUAL_ACTIONS = "manual_actions"
+EMAIL_THREAD_GROUP_WAITING_EXTERNAL_REPLY = "waiting_external_reply"
+EMAIL_THREAD_GROUP_WORK_INFO = "work_info"
+EMAIL_THREAD_GROUP_REVIEW_OPTIONAL = "review_optional"
+
 EMAIL_THREAD_GROUPS = (
-    EMAIL_THREAD_STATUS_NEEDS_MY_REPLY,
-    EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY,
-    EMAIL_THREAD_STATUS_INFORMATIONAL,
+    EMAIL_THREAD_GROUP_WORK_ACTIONS,
+    EMAIL_THREAD_GROUP_MANUAL_ACTIONS,
+    EMAIL_THREAD_GROUP_WAITING_EXTERNAL_REPLY,
+    EMAIL_THREAD_GROUP_WORK_INFO,
+    EMAIL_THREAD_GROUP_REVIEW_OPTIONAL,
 )
+
+MARKETING_TRIAGE_CATEGORIES = {
+    EMAIL_TRIAGE_CATEGORY_MARKETING,
+    EMAIL_TRIAGE_CATEGORY_NEWSLETTER,
+    EMAIL_TRIAGE_CATEGORY_SOCIAL_NETWORK,
+}
+AUTOMATED_TRIAGE_CATEGORIES = {
+    EMAIL_TRIAGE_CATEGORY_AUTOMATED_NOTIFICATION,
+    EMAIL_TRIAGE_CATEGORY_CALENDAR_UPDATE,
+}
+HIDDEN_EMAIL_CATEGORY_LABELS = {
+    EMAIL_TRIAGE_CATEGORY_MARKETING: "marketing/event promotion emails",
+    EMAIL_TRIAGE_CATEGORY_NEWSLETTER: "newsletter emails",
+    EMAIL_TRIAGE_CATEGORY_SOCIAL_NETWORK: "social network notifications",
+    EMAIL_TRIAGE_CATEGORY_CALENDAR_UPDATE: "calendar auto-updates",
+    EMAIL_TRIAGE_CATEGORY_AUTOMATED_NOTIFICATION: "automated notifications",
+    EMAIL_TRIAGE_CATEGORY_SECURITY_ALERT: "no-action security alerts",
+    EMAIL_TRIAGE_CATEGORY_NOISE: "noise emails",
+    EMAIL_TRIAGE_CATEGORY_UNKNOWN: "unknown low-priority emails",
+}
 
 
 def _require_aware_datetime(value: datetime, *, field_name: str) -> None:
@@ -153,6 +210,62 @@ def _email_thread_evidence_summary(email_thread: EmailThreadState) -> str:
     return "1 thread"
 
 
+def _email_thread_triage_category(email_thread: EmailThreadState) -> str:
+    return email_thread.triage_category or EMAIL_TRIAGE_CATEGORY_UNKNOWN
+
+
+def _email_thread_action_type(email_thread: EmailThreadState) -> str:
+    return email_thread.triage_action_type or EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL
+
+
+def _email_thread_priority(email_thread: EmailThreadState) -> str:
+    return email_thread.triage_priority or EMAIL_TRIAGE_PRIORITY_LOW
+
+
+def _email_thread_visible_by_config(email_thread: EmailThreadState) -> bool:
+    category = _email_thread_triage_category(email_thread)
+    priority = _email_thread_priority(email_thread)
+    show_in_digest = email_thread.show_in_digest is True
+
+    if category in MARKETING_TRIAGE_CATEGORIES:
+        return settings.email_digest_show_marketing is True
+    if category in AUTOMATED_TRIAGE_CATEGORIES:
+        return settings.email_digest_show_automated is True
+    if not show_in_digest or priority == EMAIL_TRIAGE_PRIORITY_HIDDEN:
+        return settings.email_digest_show_low_priority is True
+    return True
+
+
+def _email_thread_group_key(email_thread: EmailThreadState) -> str | None:
+    category = _email_thread_triage_category(email_thread)
+    action_type = _email_thread_action_type(email_thread)
+
+    if action_type == EMAIL_TRIAGE_ACTION_REPLY_REQUIRED:
+        return EMAIL_THREAD_GROUP_WORK_ACTIONS
+    if action_type == EMAIL_TRIAGE_ACTION_MANUAL_ACTION_REQUIRED:
+        return EMAIL_THREAD_GROUP_MANUAL_ACTIONS
+    if action_type == EMAIL_TRIAGE_ACTION_WAITING_EXTERNAL_REPLY:
+        return EMAIL_THREAD_GROUP_WAITING_EXTERNAL_REPLY
+    if category == EMAIL_TRIAGE_CATEGORY_WORK_INFO:
+        return EMAIL_THREAD_GROUP_WORK_INFO
+    if action_type == EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL:
+        return EMAIL_THREAD_GROUP_REVIEW_OPTIONAL
+    if action_type == EMAIL_TRIAGE_ACTION_NO_ACTION_REQUIRED and category not in (
+        EMAIL_TRIAGE_CATEGORY_NOISE,
+        EMAIL_TRIAGE_CATEGORY_UNKNOWN,
+    ):
+        return EMAIL_THREAD_GROUP_WORK_INFO
+    return None
+
+
+def _hidden_email_category_label(email_thread: EmailThreadState) -> str:
+    category = _email_thread_triage_category(email_thread)
+    return HIDDEN_EMAIL_CATEGORY_LABELS.get(
+        category,
+        f"{category.replace('_', ' ')} emails",
+    )
+
+
 def _safe_metadata_text(value: Any, *, fallback: str) -> str:
     if not isinstance(value, str):
         return fallback
@@ -236,12 +349,17 @@ def _email_thread_digest_item(
     *,
     generated_at: datetime,
     debug_evidence: bool,
+    debug_triage: bool,
 ) -> dict[str, Any]:
     item = {
         "subject": email_thread.subject_display
         or email_thread.subject_normalized
         or "Subject unavailable",
         "status": email_thread.status,
+        "category": _email_thread_triage_category(email_thread),
+        "action_type": _email_thread_action_type(email_thread),
+        "priority": _email_thread_priority(email_thread),
+        "show_in_digest": email_thread.show_in_digest is True,
         "last_message_at": _iso_datetime(email_thread.last_message_at),
         "last_message_from": _last_message_from_display(email_thread),
         "last_message_to": _last_message_to_display(email_thread),
@@ -257,6 +375,15 @@ def _email_thread_digest_item(
     }
     if debug_evidence:
         item["evidence_refs"] = _email_thread_evidence_refs(email_thread)
+    if debug_triage:
+        item["triage"] = {
+            "category": _email_thread_triage_category(email_thread),
+            "action_type": _email_thread_action_type(email_thread),
+            "priority": _email_thread_priority(email_thread),
+            "show_in_digest": email_thread.show_in_digest is True,
+            "reason": email_thread.triage_reason,
+            "confidence": email_thread.triage_confidence,
+        }
 
     return item
 
@@ -282,11 +409,21 @@ def _empty_email_thread_intelligence(
             "total": 0,
             "active": 0,
             "by_status": {},
+            "by_category": {},
+            "by_action_type": {},
+            "by_priority": {},
+            "by_show_in_digest": {},
         },
         "groups": {
-            EMAIL_THREAD_STATUS_NEEDS_MY_REPLY: [],
-            EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY: [],
-            EMAIL_THREAD_STATUS_INFORMATIONAL: [],
+            EMAIL_THREAD_GROUP_WORK_ACTIONS: [],
+            EMAIL_THREAD_GROUP_MANUAL_ACTIONS: [],
+            EMAIL_THREAD_GROUP_WAITING_EXTERNAL_REPLY: [],
+            EMAIL_THREAD_GROUP_WORK_INFO: [],
+            EMAIL_THREAD_GROUP_REVIEW_OPTIONAL: [],
+        },
+        "hidden_low_priority_summary": {
+            "total": 0,
+            "counts": {},
         },
         "data_quality_notes": data_quality_notes,
         "metadata": {
@@ -306,16 +443,29 @@ async def _build_email_thread_intelligence(
     limit: int,
     generated_at: datetime,
     debug_evidence: bool,
+    debug_triage: bool,
 ) -> dict[str, Any]:
-    status_priority = case(
-        (EmailThreadState.status == EMAIL_THREAD_STATUS_NEEDS_MY_REPLY, 0),
-        (EmailThreadState.status == EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY, 1),
-        (EmailThreadState.status == EMAIL_THREAD_STATUS_INFORMATIONAL, 2),
-        else_=3,
+    action_priority = case(
+        (EmailThreadState.triage_action_type == EMAIL_TRIAGE_ACTION_REPLY_REQUIRED, 0),
+        (
+            EmailThreadState.triage_action_type
+            == EMAIL_TRIAGE_ACTION_MANUAL_ACTION_REQUIRED,
+            1,
+        ),
+        (
+            EmailThreadState.triage_action_type
+            == EMAIL_TRIAGE_ACTION_WAITING_EXTERNAL_REPLY,
+            2,
+        ),
+        (EmailThreadState.triage_category == EMAIL_TRIAGE_CATEGORY_WORK_INFO, 3),
+        (EmailThreadState.triage_action_type == EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL, 4),
+        else_=5,
     )
-    selected_rows_limit = max(
-        limit * len(EMAIL_THREAD_GROUPS),
-        DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT,
+    priority_rank = case(
+        (EmailThreadState.triage_priority == EMAIL_TRIAGE_PRIORITY_HIGH, 0),
+        (EmailThreadState.triage_priority == EMAIL_TRIAGE_PRIORITY_MEDIUM, 1),
+        (EmailThreadState.triage_priority == EMAIL_TRIAGE_PRIORITY_LOW, 2),
+        else_=3,
     )
 
     try:
@@ -326,14 +476,13 @@ async def _build_email_thread_intelligence(
                     .where(EmailThreadState.source == "gmail")
                     .where(EmailThreadState.last_message_at >= start_at)
                     .where(EmailThreadState.last_message_at < end_at)
-                    .where(EmailThreadState.status.in_(EMAIL_THREAD_GROUPS))
                     .order_by(
-                        status_priority,
+                        action_priority,
+                        priority_rank,
                         desc(EmailThreadState.days_without_reply),
                         desc(EmailThreadState.last_message_at),
                         desc(EmailThreadState.id),
                     )
-                    .limit(selected_rows_limit)
                 )
             )
             .scalars()
@@ -357,39 +506,51 @@ async def _build_email_thread_intelligence(
             entry_limit=limit,
         )
 
-    groups = {
-        EMAIL_THREAD_STATUS_NEEDS_MY_REPLY: [],
-        EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY: [],
-        EMAIL_THREAD_STATUS_INFORMATIONAL: [],
-    }
+    groups: dict[str, list[dict[str, Any]]] = {group_key: [] for group_key in EMAIL_THREAD_GROUPS}
+    hidden_counts: Counter[str] = Counter()
     for row in rows:
-        groups[row.status].append(
+        visible = _email_thread_visible_by_config(row)
+        group_key = _email_thread_group_key(row)
+        if not visible or group_key is None:
+            hidden_counts[_hidden_email_category_label(row)] += 1
+            continue
+
+        groups[group_key].append(
             _email_thread_digest_item(
                 row,
                 generated_at=generated_at,
                 debug_evidence=debug_evidence,
+                debug_triage=debug_triage,
             )
         )
 
     active_count = sum(
-        len(groups[status])
-        for status in (
-            EMAIL_THREAD_STATUS_NEEDS_MY_REPLY,
-            EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY,
+        len(groups[group_key])
+        for group_key in (
+            EMAIL_THREAD_GROUP_WORK_ACTIONS,
+            EMAIL_THREAD_GROUP_MANUAL_ACTIONS,
+            EMAIL_THREAD_GROUP_WAITING_EXTERNAL_REPLY,
         )
     )
-    by_status = {
-        status: len(items)
-        for status, items in groups.items()
-        if items
-    }
-    for status, items in groups.items():
+    by_status = dict(Counter(row.status for row in rows if row.status))
+    by_category = dict(Counter(_email_thread_triage_category(row) for row in rows))
+    by_action_type = dict(Counter(_email_thread_action_type(row) for row in rows))
+    by_priority = dict(Counter(_email_thread_priority(row) for row in rows))
+    by_show_in_digest = dict(
+        Counter(str(row.show_in_digest is True).lower() for row in rows)
+    )
+
+    for group_key, items in groups.items():
         per_group_limit = (
             DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT
-            if status == EMAIL_THREAD_STATUS_INFORMATIONAL
+            if group_key
+            in (
+                EMAIL_THREAD_GROUP_WORK_INFO,
+                EMAIL_THREAD_GROUP_REVIEW_OPTIONAL,
+            )
             else limit
         )
-        groups[status] = sorted(
+        groups[group_key] = sorted(
             items,
             key=_email_thread_sort_key,
             reverse=True,
@@ -402,8 +563,16 @@ async def _build_email_thread_intelligence(
             "total": len(rows),
             "active": active_count,
             "by_status": by_status,
+            "by_category": by_category,
+            "by_action_type": by_action_type,
+            "by_priority": by_priority,
+            "by_show_in_digest": by_show_in_digest,
         },
         "groups": groups,
+        "hidden_low_priority_summary": {
+            "total": sum(hidden_counts.values()),
+            "counts": dict(sorted(hidden_counts.items())),
+        },
         "data_quality_notes": [
             "Raw Gmail source events are summarized in counts because EmailThreadState rows are available."
         ],
@@ -412,6 +581,7 @@ async def _build_email_thread_intelligence(
             "group_limit": limit,
             "informational_limit": DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT,
             "raw_gmail_entries_suppressed": True,
+            "debug_triage": debug_triage,
         },
     }
 
@@ -556,13 +726,24 @@ def _has_email_thread_items(email_thread_intelligence: dict[str, Any]) -> bool:
     )
 
 
+def _has_email_thread_rows(email_thread_intelligence: dict[str, Any]) -> bool:
+    counts = email_thread_intelligence.get("counts")
+    if not isinstance(counts, dict):
+        return False
+    try:
+        return int(counts.get("total", 0)) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 async def build_source_activity_digest(
     *,
     start_at: datetime,
     end_at: datetime,
     limit: int = DEFAULT_DIGEST_ENTRY_LIMIT,
     generated_at: datetime | None = None,
-    debug_evidence: bool = False,
+    debug_evidence: bool | None = None,
+    debug_triage: bool | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic digest of persisted source activity for a time window.
 
@@ -574,6 +755,8 @@ async def build_source_activity_digest(
     _require_aware_datetime(end_at, field_name="end_at")
     safe_generated_at = generated_at or datetime.now(timezone.utc)
     _require_aware_datetime(safe_generated_at, field_name="generated_at")
+    effective_debug_evidence = bool(debug_evidence) or settings.email_digest_debug_evidence
+    effective_debug_triage = bool(debug_triage) or settings.email_digest_debug_triage
 
     if end_at <= start_at:
         raise ValueError("end_at must be after start_at")
@@ -641,7 +824,8 @@ async def build_source_activity_digest(
             end_at=end_at,
             limit=safe_limit,
             generated_at=safe_generated_at,
-            debug_evidence=debug_evidence,
+            debug_evidence=effective_debug_evidence,
+            debug_triage=effective_debug_triage,
         )
 
     visible_source_events = _visible_source_events(
@@ -656,7 +840,7 @@ async def build_source_activity_digest(
         _digest_entry(
             source_event,
             seen_count=seen_count,
-            debug_evidence=debug_evidence,
+            debug_evidence=effective_debug_evidence,
         )
         for source_event, seen_count in limited_source_event_groups
     ]
@@ -689,7 +873,8 @@ async def build_source_activity_digest(
             "truncated": total_count > len(source_events)
             or len(source_event_groups) > len(limited_source_event_groups),
             "source_model": "source_events",
-            "debug_evidence": debug_evidence,
+            "debug_evidence": effective_debug_evidence,
+            "debug_triage": effective_debug_triage,
             "llm_used": False,
             "source_event_scan_limit": source_event_scan_limit,
             "source_event_scan_count": len(source_events),
@@ -701,7 +886,11 @@ async def build_source_activity_digest(
         },
     }
 
-    if has_gmail_source_activity or _has_email_thread_items(email_thread_intelligence):
+    if (
+        has_gmail_source_activity
+        or _has_email_thread_items(email_thread_intelligence)
+        or _has_email_thread_rows(email_thread_intelligence)
+    ):
         digest["email_thread_intelligence"] = email_thread_intelligence
 
     return digest

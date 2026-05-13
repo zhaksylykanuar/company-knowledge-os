@@ -57,6 +57,10 @@ async def _run() -> dict:
             "thread_states_built": 0,
             "messages_considered": 0,
             "status_counts": {},
+            "triage_category_counts": {},
+            "action_type_counts": {},
+            "priority_counts": {},
+            "show_in_digest_counts": {},
             "private_content_printed": False,
         }
 
@@ -65,6 +69,10 @@ async def _run() -> dict:
         "thread_states_built": result.thread_states_built,
         "messages_considered": result.messages_considered,
         "status_counts": result.status_counts,
+        "triage_category_counts": result.triage_category_counts,
+        "action_type_counts": result.action_type_counts,
+        "priority_counts": result.priority_counts,
+        "show_in_digest_counts": result.show_in_digest_counts,
         "private_content_printed": False,
     }
 

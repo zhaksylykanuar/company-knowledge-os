@@ -19,7 +19,8 @@ async def _build_source_activity_digest_response(
     start_at: datetime,
     end_at: datetime,
     limit: int,
-    debug_evidence: bool,
+    debug_evidence: bool | None,
+    debug_triage: bool | None,
 ) -> dict[str, Any]:
     try:
         return await build_source_activity_digest(
@@ -27,6 +28,7 @@ async def _build_source_activity_digest_response(
             end_at=end_at,
             limit=limit,
             debug_evidence=debug_evidence,
+            debug_triage=debug_triage,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -44,13 +46,15 @@ async def get_source_activity_digest(
         ge=1,
         le=MAX_DIGEST_ENTRY_LIMIT,
     ),
-    debug_evidence: bool = Query(default=False),
+    debug_evidence: bool | None = Query(default=None),
+    debug_triage: bool | None = Query(default=None),
 ) -> dict[str, Any]:
     return await _build_source_activity_digest_response(
         start_at=start_at,
         end_at=end_at,
         limit=limit,
         debug_evidence=debug_evidence,
+        debug_triage=debug_triage,
     )
 
 
@@ -63,14 +67,20 @@ async def get_source_activity_digest_text(
         ge=1,
         le=MAX_DIGEST_ENTRY_LIMIT,
     ),
-    debug_evidence: bool = Query(default=False),
+    debug_evidence: bool | None = Query(default=None),
+    debug_triage: bool | None = Query(default=None),
 ) -> PlainTextResponse:
     digest = await _build_source_activity_digest_response(
         start_at=start_at,
         end_at=end_at,
         limit=limit,
         debug_evidence=debug_evidence,
+        debug_triage=debug_triage,
     )
     return PlainTextResponse(
-        render_source_activity_digest_text(digest, debug_evidence=debug_evidence)
+        render_source_activity_digest_text(
+            digest,
+            debug_evidence=debug_evidence,
+            debug_triage=debug_triage,
+        )
     )

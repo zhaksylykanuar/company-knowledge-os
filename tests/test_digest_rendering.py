@@ -11,6 +11,7 @@ def _metadata(entry_count: int = 0) -> dict:
         "truncated": False,
         "source_model": "source_events",
         "debug_evidence": False,
+        "debug_triage": False,
         "llm_used": False,
     }
 
@@ -128,21 +129,50 @@ def _digest_with_email_threads() -> dict:
             "by_source_object_type": {"message": 2},
         },
         "email_thread_intelligence": {
-            "section_title": "Email threads requiring attention",
+            "section_title": "Email triage",
             "available": True,
             "counts": {
-                "total": 2,
-                "active": 2,
+                "total": 6,
+                "active": 3,
                 "by_status": {
                     "needs_my_reply": 1,
+                    "manual_action_required": 1,
                     "waiting_for_external_reply": 1,
+                },
+                "by_category": {
+                    "work_action": 1,
+                    "manual_action": 1,
+                    "work_waiting": 1,
+                    "newsletter": 1,
+                    "social_network": 1,
+                    "calendar_update": 1,
+                },
+                "by_action_type": {
+                    "reply_required": 1,
+                    "manual_action_required": 1,
+                    "waiting_external_reply": 1,
+                    "review_optional": 2,
+                    "no_action_required": 1,
+                },
+                "by_priority": {
+                    "high": 1,
+                    "medium": 2,
+                    "hidden": 3,
+                },
+                "by_show_in_digest": {
+                    "true": 3,
+                    "false": 3,
                 },
             },
             "groups": {
-                "needs_my_reply": [
+                "work_actions": [
                     {
                         "subject": "Fake customer follow-up",
                         "status": "needs_my_reply",
+                        "category": "work_action",
+                        "action_type": "reply_required",
+                        "priority": "high",
+                        "show_in_digest": True,
                         "last_message_at": "2125-01-01T12:00:00+00:00",
                         "last_message_from": "external sender",
                         "last_message_to": "me",
@@ -163,12 +193,51 @@ def _digest_with_email_threads() -> dict:
                                 "quote": "Fixture-only body must not render.",
                             }
                         ],
+                        "triage": {
+                            "category": "work_action",
+                            "action_type": "reply_required",
+                            "priority": "high",
+                            "show_in_digest": True,
+                            "reason": "external_work_request",
+                            "confidence": 0.78,
+                        },
                     }
                 ],
-                "waiting_for_external_reply": [
+                "manual_actions": [
+                    {
+                        "subject": "Fake badge ready",
+                        "status": "manual_action_required",
+                        "category": "manual_action",
+                        "action_type": "manual_action_required",
+                        "priority": "medium",
+                        "show_in_digest": True,
+                        "last_message_at": "2125-01-01T11:00:00+00:00",
+                        "last_message_from": "external sender",
+                        "last_message_to": "me",
+                        "last_message_direction": "from_external",
+                        "participants": "me, 1 external participant",
+                        "days_without_reply": 1,
+                        "messages_count": 1,
+                        "summary": "Fake badge is ready for pickup.",
+                        "last_message_summary": "Fake badge is ready for pickup.",
+                        "evidence": "1 thread, 1 message",
+                        "evidence_refs": [
+                            {
+                                "kind": "gmail_message",
+                                "source_system": "gmail",
+                                "source_object_id": "fake-message-3",
+                            }
+                        ],
+                    }
+                ],
+                "waiting_external_reply": [
                     {
                         "subject": "Fake proposal",
                         "status": "waiting_for_external_reply",
+                        "category": "work_waiting",
+                        "action_type": "waiting_external_reply",
+                        "priority": "medium",
+                        "show_in_digest": True,
                         "last_message_at": "2125-01-01T10:00:00+00:00",
                         "last_message_from": "me",
                         "last_message_to": "external participant",
@@ -189,7 +258,16 @@ def _digest_with_email_threads() -> dict:
                         ],
                     }
                 ],
-                "informational": [],
+                "work_info": [],
+                "review_optional": [],
+            },
+            "hidden_low_priority_summary": {
+                "total": 3,
+                "counts": {
+                    "calendar auto-updates": 1,
+                    "newsletter emails": 1,
+                    "social network notifications": 1,
+                },
             },
             "data_quality_notes": [
                 "Raw Gmail source events are summarized in counts because EmailThreadState rows are available."
@@ -197,10 +275,11 @@ def _digest_with_email_threads() -> dict:
             "metadata": {
                 "source_model": "email_thread_states",
                 "raw_gmail_entries_suppressed": True,
+                "debug_triage": False,
             },
         },
         "entries": [],
-        "metadata": _metadata(),
+        "metadata": _metadata() | {"debug_triage": False},
         "source_event_data_quality": _source_event_data_quality(),
     }
 
@@ -297,24 +376,33 @@ def test_render_source_activity_digest_text_does_not_claim_inferred_items() -> N
 def test_render_source_activity_digest_text_renders_email_thread_section() -> None:
     rendered = render_source_activity_digest_text(_digest_with_email_threads())
 
-    assert "Email threads requiring attention" in rendered
-    assert "Needs my reply:" in rendered
+    assert "Email triage" in rendered
+    assert "Work actions requiring my attention:" in rendered
+    assert "Manual actions:" in rendered
     assert "Waiting for external reply:" in rendered
-    assert rendered.index("Needs my reply:") < rendered.index("Waiting for external reply:")
-    assert "Subject: Fake customer follow-up" in rendered
-    assert "Status: Needs my reply" in rendered
-    assert "Last message: 2125-01-01T12:00:00+00:00 from external sender" in rendered
-    assert "Last message to: me" in rendered
-    assert "Participants: me, 1 external participant" in rendered
+    assert rendered.index("Work actions requiring my attention:") < rendered.index(
+        "Manual actions:"
+    )
+    assert rendered.index("Manual actions:") < rendered.index("Waiting for external reply:")
+    assert "1. Fake customer follow-up" in rendered
+    assert "Action: Reply required" in rendered
+    assert "Priority: high" in rendered
     assert "Not answered for: 4 days" in rendered
+    assert "1. Fake badge ready" in rendered
+    assert "Action: Manual action required" in rendered
+    assert "Priority: medium" in rendered
     assert "Waiting for external reply: 2 days" in rendered
     assert "Summary: 3-message thread. Latest: Fake customer asks for next steps." in rendered
-    assert "Last message summary: Fake customer asks for next steps." in rendered
     assert "Evidence: 1 thread, 3 messages" in rendered
+    assert "Hidden low-priority email summary:" in rendered
+    assert "- 1 calendar auto-updates" in rendered
+    assert "- 1 newsletter emails" in rendered
+    assert "- 1 social network notifications" in rendered
     assert "kind=gmail_message" not in rendered
     assert "source_object_id=fake-message-1" not in rendered
     assert "raw_object_ref=raw://fake-gmail/thread-1/message.json" not in rendered
     assert "quote=" not in rendered
+    assert "Debug triage:" not in rendered
 
 
 def test_render_source_activity_digest_text_debug_evidence_for_email_threads() -> None:
@@ -329,16 +417,42 @@ def test_render_source_activity_digest_text_debug_evidence_for_email_threads() -
     assert "raw_object_ref=raw://fake-gmail/thread-1/message.json" in rendered
 
 
+def test_render_source_activity_digest_text_debug_triage_for_email_threads() -> None:
+    rendered = render_source_activity_digest_text(
+        _digest_with_email_threads(),
+        debug_triage=True,
+    )
+
+    assert "Debug triage:" in rendered
+    assert "category=work_action" in rendered
+    assert "action_type=reply_required" in rendered
+    assert "reason=external_work_request" in rendered
+
+
 def test_render_source_activity_digest_text_falls_back_when_email_threads_empty() -> None:
     digest = _non_empty_digest()
     digest["email_thread_intelligence"] = {
         "section_title": "Email threads requiring attention",
         "available": True,
-        "counts": {"total": 0, "active": 0, "by_status": {}},
+        "counts": {
+            "total": 0,
+            "active": 0,
+            "by_status": {},
+            "by_category": {},
+            "by_action_type": {},
+            "by_priority": {},
+            "by_show_in_digest": {},
+        },
         "groups": {
-            "needs_my_reply": [],
-            "waiting_for_external_reply": [],
-            "informational": [],
+            "work_actions": [],
+            "manual_actions": [],
+            "waiting_external_reply": [],
+            "work_info": [],
+            "review_optional": [],
+        },
+        "hidden_low_priority_summary": {
+            "total": 0,
+            "counts": {},
         },
         "data_quality_notes": [
             "EmailThreadState has no rows for this digest window; raw Gmail source events are shown as fallback."

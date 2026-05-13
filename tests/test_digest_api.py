@@ -148,6 +148,7 @@ async def test_source_activity_digest_endpoint_returns_empty_digest(
     assert body["metadata"]["truncated"] is False
     assert body["metadata"]["source_model"] == "source_events"
     assert body["metadata"]["debug_evidence"] is False
+    assert body["metadata"]["debug_triage"] is False
     assert body["metadata"]["llm_used"] is False
     assert body["source_event_data_quality"] == {
         "hidden_mock_example_event_count": 0,
@@ -365,6 +366,30 @@ async def test_source_activity_digest_text_endpoint_debug_evidence_includes_raw_
 
     finally:
         await _cleanup_digest_fixture(unique)
+
+
+async def test_source_activity_digest_endpoint_debug_triage_sets_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/v1/digest/source-activity",
+            params={
+                "start_at": "2124-06-01T00:00:00+00:00",
+                "end_at": "2124-06-02T00:00:00+00:00",
+                "debug_triage": "true",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["metadata"]["debug_triage"] is True
+    assert body["metadata"]["debug_evidence"] is False
 
 
 async def test_source_activity_digest_endpoint_rejects_naive_window(

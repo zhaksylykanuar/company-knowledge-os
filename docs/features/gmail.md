@@ -36,13 +36,24 @@
   conversation using Gmail thread IDs first, then message-header relationships,
   then normalized subject plus overlapping participants.
 - The source activity digest uses `EmailThreadState` rows as the primary Gmail
-  output when thread states exist for the digest window. It groups active
-  conversations that need the operator's reply or are waiting on an external
-  reply, includes days without reply calculated from the digest generation
-  time, renders short deterministic summaries from stored snippets or safe
-  fallbacks, and keeps raw Gmail message activity to aggregate counts instead
-  of duplicating each message as a primary digest entry. Normal digest text
-  shows short evidence counts; raw evidence refs are debug-only.
+  output when thread states exist for the digest window. Each row includes
+  deterministic triage fields: `triage_category`, `triage_action_type`,
+  `triage_priority`, `show_in_digest`, `triage_reason`, and
+  `triage_confidence`. Thread `status` is derived from triage action type
+  rather than only the last sender.
+- Email triage separates technical reply state from business/action relevance.
+  Work questions become reply-required work actions, outbound work threads
+  become waiting-for-external-reply items, badge/ticket/access/registration
+  readiness becomes manual action, suspicious security alerts become high
+  priority manual action, and uncertain work-like messages remain visible for
+  optional review. Marketing, newsletters, social notifications, calendar
+  auto-updates, automated notifications, and no-action security alerts are
+  hidden from main digest sections by default and summarized by count.
+- The source activity digest email sections are ordered as: work actions
+  requiring attention, manual actions, waiting for external reply, work info /
+  recently relevant, review optional, and hidden low-priority email summary.
+  Normal digest text shows short evidence counts; raw evidence refs and triage
+  details are debug-only.
 - Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.
 - Gmail messages with readable `text/plain` body content, or `text/html` body content when no plain text exists, are converted into `source_documents` and `document_chunks`.
 - Gmail messages without readable body text are skipped for document/chunk creation.
@@ -55,6 +66,26 @@
 - Tokens must stay backend-only.
 - Raw messages must be stored before downstream processing.
 - Write actions require future explicit approval flow.
+- Email triage is deterministic by default and does not call Gmail, OpenAI, or
+  any other external API.
+
+## Operator Configuration
+
+Optional email digest keys:
+
+- `EMAIL_DIGEST_SHOW_LOW_PRIORITY=false`
+- `EMAIL_DIGEST_SHOW_MARKETING=false`
+- `EMAIL_DIGEST_SHOW_AUTOMATED=false`
+- `EMAIL_DIGEST_DEBUG_TRIAGE=false`
+- `EMAIL_DIGEST_DEBUG_EVIDENCE=false`
+- `EMAIL_IMPORTANT_SENDERS=`
+- `EMAIL_IMPORTANT_DOMAINS=`
+- `EMAIL_MARKETING_SENDER_BLOCKLIST=`
+- `EMAIL_IMPORTANT_PROJECT_KEYWORDS=`
+
+These keys are optional and must not block operator health checks. Allowlists
+and blocklists are comma-separated. Debug evidence can include raw refs, and
+debug triage can show rule names/confidence, so both remain off by default.
 
 ## Known Gaps
 
