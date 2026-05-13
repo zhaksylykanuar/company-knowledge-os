@@ -33,6 +33,15 @@
 - The confidence policy still prevents low-confidence output from being silently hidden.
 - No external provider calls happen unless a later slice explicitly enables and wires a client.
 
+## Email Attention Seam
+
+- FOS-043 adds a disabled, non-mutating seam from `EmailThreadState` to `NormalizedActivityItem`.
+- Existing email thread rows can now be classified through `AttentionTriageAgent` with fallback or injected mock providers.
+- The seam does not write `AttentionTriageResult` back to the database and does not change digest rendering.
+- The preview script uses conservative fallback behavior by default and prints only aggregate metadata.
+- Current source activity digest output still uses deterministic FOS-040 email triage fields as the source of truth.
+- A future slice may apply semantic attention triage to uncertain email cases behind explicit config.
+
 ## Invariants
 
 - Attention items must remain evidence-backed.
