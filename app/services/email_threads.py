@@ -28,7 +28,7 @@ MESSAGE_DIRECTION_FROM_EXTERNAL = "from_external"
 MESSAGE_DIRECTION_UNKNOWN = "unknown"
 
 SUMMARY_UNAVAILABLE = "Summary unavailable from stored metadata."
-THREAD_SUMMARY_TEMPLATE = "Stored Gmail thread with {messages_count} message(s)."
+SUMMARY_PREVIEW_MAX_CHARS = 180
 
 _SUBJECT_PREFIX_RE = re.compile(r"^\s*(?:(?:re|fw|fwd)(?:\[\d+\])?\s*:\s*)+", re.IGNORECASE)
 _MESSAGE_ID_RE = re.compile(r"<([^>]+)>")
@@ -57,6 +57,8 @@ class EmailMessageSnapshot:
     in_reply_to: tuple[str, ...]
     references: tuple[str, ...]
     label_ids: tuple[str, ...]
+    snippet: str | None = None
+    body_preview: str | None = None
 
 
 @dataclass(frozen=True)
@@ -118,6 +120,18 @@ def _clean_string(value: Any) -> str | None:
         return None
     cleaned = " ".join(value.strip().split())
     return cleaned or None
+
+
+def _short_preview(value: Any, *, max_chars: int = SUMMARY_PREVIEW_MAX_CHARS) -> str | None:
+    cleaned = _clean_string(value)
+    if cleaned is None:
+        return None
+
+    if len(cleaned) <= max_chars:
+        return cleaned
+
+    truncated = cleaned[: max_chars - 3].rstrip()
+    return f"{truncated}..."
 
 
 def _hash_value(value: str) -> str:
@@ -348,6 +362,88 @@ def _thread_evidence_refs(messages: list[EmailMessageSnapshot]) -> list[dict[str
     return evidence_refs
 
 
+def _sender_display(direction: str) -> str:
+    if direction == MESSAGE_DIRECTION_FROM_ME:
+        return "me"
+    if direction == MESSAGE_DIRECTION_FROM_EXTERNAL:
+        return "external sender"
+    return "unknown sender"
+
+
+def _recipient_display_labels(
+    message: EmailMessageSnapshot,
+    *,
+    me_addresses: set[str],
+) -> list[str]:
+    labels: list[str] = []
+    for address in (*message.to_addresses, *message.cc_addresses):
+        if address in me_addresses:
+            labels.append("me")
+        else:
+            labels.append("external participant")
+
+    return list(dict.fromkeys(labels))
+
+
+def _participants_display(
+    messages: list[EmailMessageSnapshot],
+    *,
+    me_addresses: set[str],
+) -> str:
+    participants = {
+        address
+        for message in messages
+        for address in _participant_addresses(message)
+    }
+    if not participants:
+        return "unknown participant"
+
+    includes_me = any(address in me_addresses for address in participants)
+    external_count = sum(1 for address in participants if address not in me_addresses)
+    parts = []
+    if includes_me:
+        parts.append("me")
+    if external_count == 1:
+        parts.append("1 external participant")
+    elif external_count > 1:
+        parts.append(f"{external_count} external participants")
+
+    return ", ".join(parts) if parts else "unknown participant"
+
+
+def _message_summary(
+    message: EmailMessageSnapshot,
+    *,
+    direction: str,
+    subject_display: str | None,
+) -> str:
+    preview = _short_preview(message.snippet) or _short_preview(message.body_preview)
+    if preview:
+        return preview
+
+    subject = _short_preview(subject_display, max_chars=120)
+    sender = _sender_display(direction)
+    if subject:
+        return f"Latest message from {sender} about {subject}."
+
+    return f"Latest message from {sender}."
+
+
+def _thread_summary(
+    messages: list[EmailMessageSnapshot],
+    *,
+    last_message_summary: str,
+) -> str:
+    messages_count = len(messages)
+    if messages_count <= 1:
+        return last_message_summary
+
+    return _short_preview(
+        f"{messages_count}-message thread. Latest: {last_message_summary}",
+        max_chars=SUMMARY_PREVIEW_MAX_CHARS,
+    ) or SUMMARY_UNAVAILABLE
+
+
 def _build_thread_state_candidate(
     group: _ThreadGroup,
     *,
@@ -362,6 +458,11 @@ def _build_thread_state_candidate(
     status = classify_thread_status(last_direction, informational=informational)
     subject_display = _subject_display(messages)
     subject_normalized = normalize_email_subject(subject_display)
+    last_message_summary = _message_summary(
+        last_message,
+        direction=last_direction,
+        subject_display=subject_display,
+    )
 
     return EmailThreadStateCandidate(
         source=EMAIL_SOURCE_GMAIL,
@@ -376,8 +477,8 @@ def _build_thread_state_candidate(
             _participant_key(last_message.from_address) if last_message.from_address else None
         ),
         last_message_direction=last_direction,
-        last_message_summary=SUMMARY_UNAVAILABLE,
-        thread_summary=THREAD_SUMMARY_TEMPLATE.format(messages_count=len(messages)),
+        last_message_summary=last_message_summary,
+        thread_summary=_thread_summary(messages, last_message_summary=last_message_summary),
         status=status,
         days_without_reply=compute_days_without_reply(last_message.message_at, now),
         messages_count=len(messages),
@@ -385,6 +486,20 @@ def _build_thread_state_candidate(
         metadata_json={
             "grouping_strategy": group.grouping_strategy,
             "summary_uses_private_content": False,
+            "summary_source": (
+                "stored_preview"
+                if last_message.snippet or last_message.body_preview
+                else "subject_direction_fallback"
+            ),
+            "last_message_from_display": _sender_display(last_direction),
+            "last_message_to_display": _recipient_display_labels(
+                last_message,
+                me_addresses=me_addresses,
+            ),
+            "participants_display": _participants_display(
+                messages,
+                me_addresses=me_addresses,
+            ),
             "resolved_status_supported": True,
         },
         computed_at=now,
@@ -609,6 +724,18 @@ def _snapshot_from_gmail_message(
         ),
         references=_parse_message_id_refs(_value_from_sources(metadata, payload, "references")),
         label_ids=tuple(str(item) for item in label_ids),
+        snippet=_short_preview(
+            message.snippet or _value_from_sources(metadata, payload, "snippet")
+        ),
+        body_preview=_short_preview(
+            _value_from_sources(
+                metadata,
+                payload,
+                "body_preview",
+                "text_preview",
+                "preview",
+            )
+        ),
     )
 
 

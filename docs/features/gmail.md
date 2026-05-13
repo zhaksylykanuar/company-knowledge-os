@@ -38,9 +38,11 @@
 - The source activity digest uses `EmailThreadState` rows as the primary Gmail
   output when thread states exist for the digest window. It groups active
   conversations that need the operator's reply or are waiting on an external
-  reply, includes days without reply and evidence refs, and keeps raw Gmail
-  message activity to aggregate counts instead of duplicating each message as a
-  primary digest entry.
+  reply, includes days without reply calculated from the digest generation
+  time, renders short deterministic summaries from stored snippets or safe
+  fallbacks, and keeps raw Gmail message activity to aggregate counts instead
+  of duplicating each message as a primary digest entry. Normal digest text
+  shows short evidence counts; raw evidence refs are debug-only.
 - Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.
 - Gmail messages with readable `text/plain` body content, or `text/html` body content when no plain text exists, are converted into `source_documents` and `document_chunks`.
 - Gmail messages without readable body text are skipped for document/chunk creation.

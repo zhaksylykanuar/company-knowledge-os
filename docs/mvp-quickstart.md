@@ -162,9 +162,11 @@ The digest response includes:
 - `counts`: total count plus counts by source system, event type, and source
   object type.
 - `entries`: limited source activity entries with source identifiers, event
-  time, title, source URL when available, and `evidence_refs`.
+  time, title, source URL when available, short evidence text, and debug-only
+  `evidence_refs` when `debug_evidence=true`.
 - `metadata`: entry limit, returned entry count, truncation flag, source model,
-  and `llm_used`.
+  generated time, debug evidence flag, duplicate-collapse metadata, and
+  `llm_used`.
 
 An empty window is valid and returns an empty digest. The endpoint does not call
 an LLM, generate a human-written summary, infer decisions, tasks, risks,
@@ -187,7 +189,9 @@ the same deterministic source activity digest. It uses the same timezone-aware
 window validation and bounded `limit` as the JSON endpoint, calls the existing
 non-LLM renderer, and returns `text/plain`. The text is source activity only: it
 does not add a human-written summary, infer decisions, tasks, or risks, send
-anything to Telegram, or expose raw full source bodies.
+anything to Telegram, or expose raw full source bodies. By default it renders
+short evidence counts only. Add `debug_evidence=true` only for local debugging
+when raw evidence refs are needed.
 
 Export the processed document to the local Obsidian vault output:
 

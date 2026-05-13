@@ -33,6 +33,8 @@ def _msg(
     message_id_header: str | None = None,
     in_reply_to: tuple[str, ...] = (),
     references: tuple[str, ...] = (),
+    snippet: str | None = None,
+    body_preview: str | None = None,
 ) -> EmailMessageSnapshot:
     return EmailMessageSnapshot(
         message_id=message_id,
@@ -48,6 +50,8 @@ def _msg(
         in_reply_to=in_reply_to,
         references=references,
         label_ids=(),
+        snippet=snippet,
+        body_preview=body_preview,
     )
 
 
@@ -118,33 +122,49 @@ def test_groups_by_normalized_subject_and_overlapping_participants_fallback() ->
     assert candidates[0].metadata_json["grouping_strategy"] == "subject_participants"
 
 
-def test_status_needs_my_reply_when_last_message_is_external() -> None:
+def test_external_me_external_conversation_builds_one_thread_needing_my_reply() -> None:
     candidates = build_email_thread_state_candidates(
         [
             _msg(
                 "m1",
+                provider_thread_id="thread-1",
+                from_address=EXTERNAL,
+                to=ME,
+                message_at=datetime(2026, 5, 10, 12, 0, tzinfo=timezone.utc),
+            ),
+            _msg(
+                "m2",
                 provider_thread_id="thread-1",
                 from_address=ME,
                 to=EXTERNAL,
                 message_at=datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc),
             ),
             _msg(
-                "m2",
+                "m3",
                 provider_thread_id="thread-1",
                 from_address=EXTERNAL,
                 to=ME,
                 message_at=datetime(2026, 5, 12, 12, 0, tzinfo=timezone.utc),
+                snippet="Fake external follow-up needs an operator reply.",
             ),
         ],
         me_addresses={ME},
         now=NOW,
     )
 
+    assert len(candidates) == 1
+    assert candidates[0].messages_count == 3
     assert candidates[0].last_message_direction == MESSAGE_DIRECTION_FROM_EXTERNAL
     assert candidates[0].status == THREAD_STATUS_NEEDS_MY_REPLY
+    assert candidates[0].days_without_reply == 1
+    assert candidates[0].last_message_summary == "Fake external follow-up needs an operator reply."
+    assert "Stored Gmail thread" not in candidates[0].thread_summary
+    assert candidates[0].metadata_json["last_message_from_display"] == "external sender"
+    assert candidates[0].metadata_json["last_message_to_display"] == ["me"]
+    assert candidates[0].metadata_json["participants_display"] == "me, 1 external participant"
 
 
-def test_status_waiting_for_external_reply_when_last_message_is_from_me() -> None:
+def test_external_then_me_conversation_waits_for_external_reply() -> None:
     candidates = build_email_thread_state_candidates(
         [
             _msg(
@@ -168,6 +188,7 @@ def test_status_waiting_for_external_reply_when_last_message_is_from_me() -> Non
 
     assert candidates[0].last_message_direction == MESSAGE_DIRECTION_FROM_ME
     assert candidates[0].status == THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY
+    assert candidates[0].days_without_reply == 1
 
 
 def test_days_without_reply_calculation() -> None:
@@ -178,6 +199,24 @@ def test_days_without_reply_calculation() -> None:
         )
         == 3
     )
+
+
+def test_candidate_days_without_reply_uses_provided_clock() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-1",
+                from_address=EXTERNAL,
+                to=ME,
+                message_at=datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+            ),
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    assert candidates[0].days_without_reply == 4
 
 
 def test_no_duplicate_thread_state_for_multiple_messages_in_same_conversation() -> None:
@@ -192,6 +231,34 @@ def test_no_duplicate_thread_state_for_multiple_messages_in_same_conversation() 
     )
 
     assert len(candidates) == 1
+    assert candidates[0].messages_count == 3
+
+
+def test_repeated_reply_forward_subjects_group_without_provider_thread_id() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg("m1", subject="Fake Launch Plan", provider_thread_id=None),
+            _msg(
+                "m2",
+                subject="Re: fake launch plan",
+                provider_thread_id=None,
+                from_address=ME,
+                to=EXTERNAL,
+            ),
+            _msg(
+                "m3",
+                subject="Fwd: RE: Fake Launch Plan",
+                provider_thread_id=None,
+                from_address=EXTERNAL,
+                to=ME,
+            ),
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].subject_normalized == "fake launch plan"
     assert candidates[0].messages_count == 3
 
 
@@ -215,5 +282,48 @@ def test_evidence_refs_are_present_without_private_summary_content() -> None:
 
     assert candidates[0].evidence_refs
     assert candidates[0].evidence_refs[0]["kind"] == "gmail_message"
-    assert candidates[0].last_message_summary == "Summary unavailable from stored metadata."
+    assert candidates[0].last_message_summary == (
+        "Latest message from external sender about Project update."
+    )
+    assert candidates[0].thread_summary == (
+        "Latest message from external sender about Project update."
+    )
     assert candidates[0].metadata_json["summary_uses_private_content"] is False
+
+
+def test_summary_prefers_stored_snippet_and_truncates() -> None:
+    long_snippet = " ".join(["Fake snippet content"] * 20)
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-1",
+                snippet=long_snippet,
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    assert candidates[0].last_message_summary.startswith("Fake snippet content")
+    assert len(candidates[0].last_message_summary) <= 180
+    assert candidates[0].last_message_summary.endswith("...")
+    assert "Stored Gmail thread" not in candidates[0].thread_summary
+    assert candidates[0].metadata_json["summary_source"] == "stored_preview"
+
+
+def test_summary_uses_body_preview_when_snippet_missing() -> None:
+    candidates = build_email_thread_state_candidates(
+        [
+            _msg(
+                "m1",
+                provider_thread_id="thread-1",
+                body_preview="Fake body preview from stored text.",
+            )
+        ],
+        me_addresses={ME},
+        now=NOW,
+    )
+
+    assert candidates[0].last_message_summary == "Fake body preview from stored text."
+    assert candidates[0].metadata_json["summary_source"] == "stored_preview"

@@ -156,6 +156,11 @@ Implemented today:
   without reply and evidence refs. When thread states exist for the digest
   window, raw Gmail message events remain represented by aggregate counts rather
   than duplicated as the primary email section.
+- FOS-039 makes the source activity digest operator-readable: the rendered text
+  includes generated time, explicit window, grouped email reply states,
+  deterministic short summaries, short normal-mode evidence counts, debug-only
+  raw refs, duplicate source-event collapse, and mock/example data-quality
+  notes.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

@@ -88,7 +88,7 @@ async def _insert_source_event(
                 actor_external_id=f"actor-{unique}",
                 title=title,
                 summary=summary,
-                source_url=f"https://example.invalid/{unique}/{suffix}",
+                source_url=None,
                 raw_object_ref=raw_object_ref,
                 evidence_refs=[
                     {
@@ -129,26 +129,29 @@ async def test_source_activity_digest_endpoint_returns_empty_digest(
         )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "digest_type": "source_activity",
-        "window": {
-            "start_at": "2120-01-01T00:00:00+00:00",
-            "end_at": "2120-01-02T00:00:00+00:00",
-        },
-        "counts": {
-            "total": 0,
-            "by_source_system": {},
-            "by_event_type": {},
-            "by_source_object_type": {},
-        },
-        "entries": [],
-        "metadata": {
-            "entry_limit": 20,
-            "entry_count": 0,
-            "truncated": False,
-            "source_model": "source_events",
-            "llm_used": False,
-        },
+    body = response.json()
+    assert body["digest_type"] == "source_activity"
+    assert body["window"] == {
+        "start_at": "2120-01-01T00:00:00+00:00",
+        "end_at": "2120-01-02T00:00:00+00:00",
+    }
+    assert body["counts"] == {
+        "total": 0,
+        "by_source_system": {},
+        "by_event_type": {},
+        "by_source_object_type": {},
+    }
+    assert body["entries"] == []
+    assert body["metadata"]["generated_at"]
+    assert body["metadata"]["entry_limit"] == 20
+    assert body["metadata"]["entry_count"] == 0
+    assert body["metadata"]["truncated"] is False
+    assert body["metadata"]["source_model"] == "source_events"
+    assert body["metadata"]["debug_evidence"] is False
+    assert body["metadata"]["llm_used"] is False
+    assert body["source_event_data_quality"] == {
+        "hidden_mock_example_event_count": 0,
+        "notes": [],
     }
 
 
@@ -172,6 +175,7 @@ async def test_source_activity_digest_text_endpoint_returns_empty_plain_text(
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/plain")
     assert "Source activity digest" in response.text
+    assert "Generated at:" in response.text
     assert (
         "Window: 2124-01-01T00:00:00+00:00 to 2124-01-02T00:00:00+00:00"
         in response.text
@@ -241,9 +245,8 @@ async def test_source_activity_digest_endpoint_filters_events_and_preserves_evid
         assert body["counts"]["by_source_system"]["gmail"] >= 1
         assert [entry["source_event_id"] for entry in matching_entries] == [inside_id]
         assert outside_id not in {entry["source_event_id"] for entry in body["entries"]}
-        assert matching_entries[0]["evidence_refs"]
-        assert matching_entries[0]["evidence_refs"][0]["kind"] == "source_event"
-        assert matching_entries[0]["evidence_refs"][0]["source_event_id"] == inside_id
+        assert matching_entries[0]["evidence"] == "1 event"
+        assert "evidence_refs" not in matching_entries[0]
         assert raw_body not in serialized
         assert body["metadata"]["llm_used"] is False
 
@@ -309,14 +312,56 @@ async def test_source_activity_digest_text_endpoint_filters_events_and_preserves
         assert "- gmail.message.ingested:" in response.text
         assert "Source object types:" in response.text
         assert "- message:" in response.text
-        assert inside_id in response.text
+        assert inside_id not in response.text
         assert outside_id not in response.text
         assert "Digest text API Gmail subject" in response.text
         assert "Outside digest text API window" not in response.text
-        assert "kind=source_event" in response.text
-        assert f"source_event_id={inside_id}" in response.text
+        assert "Evidence: 1 event" in response.text
+        assert "kind=source_event" not in response.text
+        assert f"source_event_id={inside_id}" not in response.text
         assert raw_body not in response.text
         assert "does not infer decisions, tasks, or risks" in response.text
+
+    finally:
+        await _cleanup_digest_fixture(unique)
+
+
+async def test_source_activity_digest_text_endpoint_debug_evidence_includes_raw_refs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_auth(monkeypatch, enabled=False, key=None)
+    unique = uuid4().hex
+    await _cleanup_digest_fixture(unique)
+
+    try:
+        inside_id = await _insert_source_event(
+            unique=unique,
+            suffix="debug_text",
+            source_system="drive",
+            source_object_type="file",
+            event_type="drive.file.ingested",
+            event_time=_utc(2124, 5, 1, 12),
+            title="Digest text API debug file",
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.get(
+                "/v1/digest/source-activity/text",
+                params={
+                    "start_at": "2124-05-01T00:00:00+00:00",
+                    "end_at": "2124-05-02T00:00:00+00:00",
+                    "limit": "10",
+                    "debug_evidence": "true",
+                },
+            )
+
+        assert response.status_code == 200
+        assert "Debug evidence refs:" in response.text
+        assert "kind=source_event" in response.text
+        assert f"source_event_id={inside_id}" in response.text
 
     finally:
         await _cleanup_digest_fixture(unique)

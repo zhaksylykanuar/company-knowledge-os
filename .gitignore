@@ -9,6 +9,7 @@
 secrets/
 raw_storage/
 obsidian_vault/
+operator_outputs/
 .venv/
 __pycache__/
 .pytest_cache/
