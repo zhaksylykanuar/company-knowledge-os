@@ -44,6 +44,16 @@ class Settings(BaseSettings):
     email_marketing_sender_blocklist: str | None = None
     email_important_project_keywords: str | None = None
 
+    attention_triage_enabled: bool = False
+    attention_triage_provider: str = "openai"
+    attention_triage_model: str | None = None
+    attention_triage_min_confidence_to_hide: float = 0.80
+    attention_triage_review_threshold: float = 0.55
+    attention_triage_max_text_chars: int = 6000
+    digest_show_hidden: bool = False
+    digest_debug_triage: bool = False
+    digest_debug_evidence: bool = False
+
     jira_base_url: str | None = None
     jira_email: str | None = None
     jira_api_token: str | None = None
