@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     google_pubsub_subscription: str | None = None
     google_gmail_token_file: str = "./secrets/google_gmail_token.json"
 
+    email_me_addresses: str | None = None
+
     jira_base_url: str | None = None
     jira_email: str | None = None
     jira_api_token: str | None = None

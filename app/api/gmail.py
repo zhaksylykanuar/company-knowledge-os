@@ -115,7 +115,16 @@ def extract_subject(msg: dict) -> str | None:
 
 
 def extract_gmail_headers(msg: dict) -> dict[str, str]:
-    wanted = {"subject", "from", "to", "cc", "date"}
+    wanted = {
+        "subject",
+        "from",
+        "to",
+        "cc",
+        "date",
+        "message-id",
+        "in-reply-to",
+        "references",
+    }
     headers: dict[str, str] = {}
     for header in ((msg.get("payload") or {}).get("headers") or []):
         if not isinstance(header, dict):

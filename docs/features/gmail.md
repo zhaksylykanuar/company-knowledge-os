@@ -31,6 +31,10 @@
   `../runbooks/google-local-backfill.md`.
 - Raw Gmail messages are stored under raw storage.
 - Threads, messages, and attachment metadata are persisted.
+- Deterministic email thread state can be rebuilt from stored Gmail rows with
+  no live Gmail or LLM calls. The MVP stores one state row per detected
+  conversation using Gmail thread IDs first, then message-header relationships,
+  then normalized subject plus overlapping participants.
 - Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.
 - Gmail messages with readable `text/plain` body content, or `text/html` body content when no plain text exists, are converted into `source_documents` and `document_chunks`.
 - Gmail messages without readable body text are skipped for document/chunk creation.
@@ -47,6 +51,7 @@
 ## Known Gaps
 
 - Gmail attachment content ingestion is not implemented; attachments remain metadata-only.
+- Email thread state is not wired into digest output yet.
 - Webhook/PubSub handling is not visible as implemented.
 - Production Gmail sync, pagination, incremental history sync, token refresh,
   production token storage, and OAuth hardening are not implemented.

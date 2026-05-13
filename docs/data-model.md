@@ -21,6 +21,8 @@
 - `extracted_decisions`: evidence-backed extracted decision records.
 - `knowledge_scores`: deterministic score payloads for extracted entities.
 - `source_events`: normalized connector event records linked to `ingested_events`.
+- `email_thread_states`: deterministic Gmail conversation state built from
+  stored Gmail rows for digest and source-intelligence workflows.
 
 ## Invariants
 

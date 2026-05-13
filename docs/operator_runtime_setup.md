@@ -57,6 +57,18 @@ Google enable flags. For digest generation, configure the database/raw storage
 runtime and enable LLM settings only when needed. For Telegram delivery,
 configure the Telegram bot and chat keys.
 
+Optional email thread-state key:
+
+```text
+EMAIL_ME_ADDRESSES
+```
+
+Use this only to help deterministic Gmail thread state classify whether the
+last message was from the operator or from an external participant. It is
+optional and must not block Google health checks; when it is missing, thread
+state still builds but direction may remain `unknown` and status may be
+`informational`.
+
 ## Health Check
 
 Run the safe local FOS-036 check without launching Codex:
