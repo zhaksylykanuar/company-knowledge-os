@@ -52,11 +52,13 @@ def _gmail_body_data(text: str) -> str:
 
 
 def _enable_gmail_backfill(monkeypatch, *, configured_query: str | None = None) -> None:
+    monkeypatch.setattr(gmail_api.settings, "api_auth_enabled", False)
     monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", True)
     monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_query", configured_query)
 
 
 def test_gmail_backfill_rejects_when_disabled_without_calling_connector(monkeypatch) -> None:
+    monkeypatch.setattr(gmail_api.settings, "api_auth_enabled", False)
     monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", False)
 
     def fail_list_messages(query: str, max_results: int) -> list[dict]:
@@ -170,8 +172,29 @@ def test_gmail_backfill_connector_failure_returns_safe_non_500(monkeypatch) -> N
             params={"persist": "true"},
         )
 
-    assert response.status_code == gmail_api.status.HTTP_424_FAILED_DEPENDENCY
-    assert response.json() == {"detail": "Gmail backfill dependency is unavailable."}
+    assert response.status_code == 202
+    body = response.json()
+    assert body["provider"] == "gmail"
+    assert body["persist"] is True
+    assert body["discovered"] == 0
+    assert body["processed"] == 1
+    assert body["accepted"] == 0
+    assert body["saved"] == 0
+    assert body["duplicates"] == 0
+    assert body["failed"] == 1
+    assert body["status"] == gmail_api.GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED
+    assert body["events"] == [
+        {
+            "accepted": False,
+            "persisted": False,
+            "redacted": True,
+            "source_system": "gmail",
+            "source_object_type": "message",
+            "event_type": "gmail.message.ingested",
+            "status": gmail_api.GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED,
+            "error_code": gmail_api.GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED,
+        }
+    ]
     assert unsafe_marker not in response.text
 
 
@@ -702,6 +725,81 @@ def test_gmail_backfill_persist_reports_per_item_failure_safely(monkeypatch, tmp
         "offline-message-",
         "offline-thread-",
         "offline-history-",
+        SAFE_GMAIL_QUERY,
+    ):
+        assert unsafe_marker not in response.text
+
+
+def test_gmail_backfill_persist_reports_session_open_failure_safely(monkeypatch, tmp_path):
+    unsafe_error_marker = "SESSION_OPEN_FAILURE_MARKER_DO_NOT_RETURN"
+    unsafe_body_marker = "SESSION_OPEN_BODY_MARKER_DO_NOT_RETURN"
+    _enable_gmail_backfill(monkeypatch)
+
+    class FailingEnterSession:
+        async def __aenter__(self):
+            raise RuntimeError(unsafe_error_marker)
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    monkeypatch.setattr(
+        gmail_api,
+        "list_messages",
+        lambda query=SAFE_GMAIL_QUERY, max_results=1: [{"id": "session-open-message"}],
+    )
+    monkeypatch.setattr(
+        gmail_api,
+        "get_message",
+        lambda mid: {
+            "id": mid,
+            "threadId": "session-open-thread",
+            "historyId": "session-open-history",
+            "labelIds": ["OFFLINE_LABEL"],
+            "payload": {
+                "mimeType": "text/plain",
+                "headers": [],
+                "body": {"data": _gmail_body_data(unsafe_body_marker)},
+            },
+        },
+    )
+    monkeypatch.setattr(gmail_api, "raw_storage_root", lambda: tmp_path)
+    monkeypatch.setattr(gmail_api, "AsyncSessionLocal", lambda: FailingEnterSession())
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={"max_results": 1, "persist": "true", "query": SAFE_GMAIL_QUERY},
+        )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["provider"] == "gmail"
+    assert body["persist"] is True
+    assert body["discovered"] == 1
+    assert body["processed"] == 1
+    assert body["accepted"] == 0
+    assert body["saved"] == 0
+    assert body["duplicates"] == 0
+    assert body["failed"] == 1
+    assert body["status"] == gmail_api.GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES
+    assert body["events"] == [
+        {
+            "accepted": False,
+            "persisted": False,
+            "redacted": True,
+            "source_system": "gmail",
+            "source_object_type": "message",
+            "event_type": "gmail.message.ingested",
+            "status": gmail_api.GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
+            "error_code": gmail_api.GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
+        }
+    ]
+    for unsafe_marker in (
+        unsafe_error_marker,
+        unsafe_body_marker,
+        "session-open-message",
+        "session-open-thread",
+        "session-open-history",
         SAFE_GMAIL_QUERY,
     ):
         assert unsafe_marker not in response.text

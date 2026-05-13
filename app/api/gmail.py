@@ -354,17 +354,22 @@ def _redacted_gmail_backfill_response(
     max_results: int,
     persist: bool,
     events: list[dict],
+    status_value: str | None = None,
 ) -> dict:
+    accepted = sum(1 for event in events if event.get("accepted") is True)
     return {
         "provider": "gmail",
         "persist": persist,
         "max_results": max_results,
         "redacted": True,
         "discovered": discovered,
+        "processed": len(events),
+        "accepted": accepted,
         "saved": saved,
         "duplicates": duplicates,
         "failed": failed,
-        "status": (
+        "status": status_value
+        or (
             GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES
             if failed
             else GMAIL_BACKFILL_STATUS_COMPLETED
@@ -387,7 +392,23 @@ async def gmail_backfill(
     try:
         refs = list_messages(query=safe_query, max_results=max_results)
     except Exception:
-        raise _gmail_dependency_unavailable()
+        return _redacted_gmail_backfill_response(
+            discovered=0,
+            saved=0,
+            duplicates=0,
+            failed=1,
+            max_results=max_results,
+            persist=persist,
+            events=[
+                _redacted_gmail_backfill_item(
+                    accepted=False,
+                    persisted=False,
+                    status=GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED,
+                    error_code=GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED,
+                )
+            ],
+            status_value=GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED,
+        )
 
     events = []
     saved = 0
@@ -414,8 +435,9 @@ async def gmail_backfill(
             events.append(_redacted_gmail_backfill_item(persisted=False))
             continue
 
-        async with AsyncSessionLocal() as session:
-            try:
+        session = None
+        try:
+            async with AsyncSessionLocal() as session:
                 existing = await session.scalar(
                     select(IngestedEvent).where(
                         IngestedEvent.idempotency_key == event.idempotency_key
@@ -535,30 +557,31 @@ async def gmail_backfill(
                     )
                 )
                 await session.commit()
-            except Exception:
+        except Exception:
+            if session is not None:
                 try:
                     await session.rollback()
                 except Exception:
                     pass
-                failed += 1
-                events.append(
-                    _redacted_gmail_backfill_item(
-                        accepted=False,
-                        persisted=False,
-                        status=GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
-                        error_code=GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
-                    )
-                )
-                continue
-
-            saved += 1
+            failed += 1
             events.append(
                 _redacted_gmail_backfill_item(
-                    persisted=True,
-                    duplicate=False,
-                    event_id=event.event_id,
+                    accepted=False,
+                    persisted=False,
+                    status=GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
+                    error_code=GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
                 )
             )
+            continue
+
+        saved += 1
+        events.append(
+            _redacted_gmail_backfill_item(
+                persisted=True,
+                duplicate=False,
+                event_id=event.event_id,
+            )
+        )
 
     return _redacted_gmail_backfill_response(
         discovered=len(refs),
