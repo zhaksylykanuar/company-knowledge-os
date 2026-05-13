@@ -4,14 +4,26 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.engine import Row
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
+from app.db.gmail_models import EmailThreadState
 
 DEFAULT_DIGEST_ENTRY_LIMIT = 20
 MAX_DIGEST_ENTRY_LIMIT = 50
+DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT = 3
+
+EMAIL_THREAD_STATUS_NEEDS_MY_REPLY = "needs_my_reply"
+EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY = "waiting_for_external_reply"
+EMAIL_THREAD_STATUS_INFORMATIONAL = "informational"
+EMAIL_THREAD_GROUPS = (
+    EMAIL_THREAD_STATUS_NEEDS_MY_REPLY,
+    EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY,
+    EMAIL_THREAD_STATUS_INFORMATIONAL,
+)
 
 
 def _require_aware_datetime(value: datetime, *, field_name: str) -> None:
@@ -77,6 +89,189 @@ def _source_event_evidence_refs(source_event: SourceEvent) -> list[dict[str, Any
     return evidence_refs
 
 
+def _json_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _email_thread_evidence_refs(email_thread: EmailThreadState) -> list[dict[str, Any]]:
+    evidence_refs = [
+        dict(evidence_ref)
+        for evidence_ref in _json_list(email_thread.evidence_refs)
+        if isinstance(evidence_ref, dict)
+    ]
+    if evidence_refs:
+        return evidence_refs
+
+    return [
+        {
+            "kind": "email_thread_state",
+            "source_system": email_thread.source,
+            "source_object_type": "email_thread_state",
+            "source_object_id": email_thread.thread_key,
+        }
+    ]
+
+
+def _email_thread_digest_item(email_thread: EmailThreadState) -> dict[str, Any]:
+    summary = email_thread.thread_summary or email_thread.last_message_summary
+    return {
+        "status": email_thread.status,
+        "last_message_at": _iso_datetime(email_thread.last_message_at),
+        "last_message_direction": email_thread.last_message_direction,
+        "days_without_reply": email_thread.days_without_reply,
+        "messages_count": email_thread.messages_count,
+        "summary": summary,
+        "evidence_refs": _email_thread_evidence_refs(email_thread),
+    }
+
+
+def _email_thread_sort_key(item: dict[str, Any]) -> tuple[int, str]:
+    days_without_reply = item.get("days_without_reply")
+    safe_days = days_without_reply if isinstance(days_without_reply, int) else -1
+    last_message_at = item.get("last_message_at")
+    safe_last_message_at = str(last_message_at) if last_message_at is not None else ""
+    return (safe_days, safe_last_message_at)
+
+
+def _empty_email_thread_intelligence(
+    *,
+    available: bool,
+    data_quality_notes: list[str],
+    entry_limit: int,
+) -> dict[str, Any]:
+    return {
+        "section_title": "Email threads requiring attention",
+        "available": available,
+        "counts": {
+            "total": 0,
+            "active": 0,
+            "by_status": {},
+        },
+        "groups": {
+            EMAIL_THREAD_STATUS_NEEDS_MY_REPLY: [],
+            EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY: [],
+            EMAIL_THREAD_STATUS_INFORMATIONAL: [],
+        },
+        "data_quality_notes": data_quality_notes,
+        "metadata": {
+            "source_model": "email_thread_states",
+            "group_limit": entry_limit,
+            "informational_limit": DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT,
+            "raw_gmail_entries_suppressed": False,
+        },
+    }
+
+
+async def _build_email_thread_intelligence(
+    *,
+    session,
+    start_at: datetime,
+    end_at: datetime,
+    limit: int,
+) -> dict[str, Any]:
+    status_priority = case(
+        (EmailThreadState.status == EMAIL_THREAD_STATUS_NEEDS_MY_REPLY, 0),
+        (EmailThreadState.status == EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY, 1),
+        (EmailThreadState.status == EMAIL_THREAD_STATUS_INFORMATIONAL, 2),
+        else_=3,
+    )
+    selected_rows_limit = max(
+        limit * len(EMAIL_THREAD_GROUPS),
+        DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT,
+    )
+
+    try:
+        rows = list(
+            (
+                await session.execute(
+                    select(EmailThreadState)
+                    .where(EmailThreadState.source == "gmail")
+                    .where(EmailThreadState.last_message_at >= start_at)
+                    .where(EmailThreadState.last_message_at < end_at)
+                    .where(EmailThreadState.status.in_(EMAIL_THREAD_GROUPS))
+                    .order_by(
+                        status_priority,
+                        desc(EmailThreadState.days_without_reply),
+                        desc(EmailThreadState.last_message_at),
+                        desc(EmailThreadState.id),
+                    )
+                    .limit(selected_rows_limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    except SQLAlchemyError:
+        return _empty_email_thread_intelligence(
+            available=False,
+            data_quality_notes=[
+                "EmailThreadState is unavailable; raw Gmail source events are shown as fallback."
+            ],
+            entry_limit=limit,
+        )
+
+    if not rows:
+        return _empty_email_thread_intelligence(
+            available=True,
+            data_quality_notes=[
+                "EmailThreadState has no rows for this digest window; raw Gmail source events are shown as fallback."
+            ],
+            entry_limit=limit,
+        )
+
+    groups = {
+        EMAIL_THREAD_STATUS_NEEDS_MY_REPLY: [],
+        EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY: [],
+        EMAIL_THREAD_STATUS_INFORMATIONAL: [],
+    }
+    for row in rows:
+        groups[row.status].append(_email_thread_digest_item(row))
+
+    active_count = sum(
+        len(groups[status])
+        for status in (
+            EMAIL_THREAD_STATUS_NEEDS_MY_REPLY,
+            EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY,
+        )
+    )
+    by_status = {
+        status: len(items)
+        for status, items in groups.items()
+        if items
+    }
+    for status, items in groups.items():
+        per_group_limit = (
+            DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT
+            if status == EMAIL_THREAD_STATUS_INFORMATIONAL
+            else limit
+        )
+        groups[status] = sorted(
+            items,
+            key=_email_thread_sort_key,
+            reverse=True,
+        )[:per_group_limit]
+
+    return {
+        "section_title": "Email threads requiring attention",
+        "available": True,
+        "counts": {
+            "total": len(rows),
+            "active": active_count,
+            "by_status": by_status,
+        },
+        "groups": groups,
+        "data_quality_notes": [
+            "Raw Gmail source events are summarized in counts because EmailThreadState rows are available."
+        ],
+        "metadata": {
+            "source_model": "email_thread_states",
+            "group_limit": limit,
+            "informational_limit": DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT,
+            "raw_gmail_entries_suppressed": True,
+        },
+    }
+
+
 def _digest_entry(source_event: SourceEvent) -> dict[str, Any]:
     return {
         "source_event_id": source_event.source_event_id,
@@ -90,6 +285,44 @@ def _digest_entry(source_event: SourceEvent) -> dict[str, Any]:
         "source_url": source_event.source_url,
         "evidence_refs": _source_event_evidence_refs(source_event),
     }
+
+
+def _should_suppress_source_event_entry(
+    source_event: SourceEvent,
+    *,
+    email_thread_intelligence: dict[str, Any],
+) -> bool:
+    metadata = email_thread_intelligence.get("metadata")
+    raw_gmail_entries_suppressed = (
+        isinstance(metadata, dict) and metadata.get("raw_gmail_entries_suppressed") is True
+    )
+    return raw_gmail_entries_suppressed and source_event.source_system == "gmail"
+
+
+def _visible_source_events(
+    source_events: Sequence[SourceEvent],
+    *,
+    email_thread_intelligence: dict[str, Any],
+) -> list[SourceEvent]:
+    return [
+        source_event
+        for source_event in source_events
+        if not _should_suppress_source_event_entry(
+            source_event,
+            email_thread_intelligence=email_thread_intelligence,
+        )
+    ]
+
+
+def _has_email_thread_items(email_thread_intelligence: dict[str, Any]) -> bool:
+    groups = email_thread_intelligence.get("groups")
+    if not isinstance(groups, dict):
+        return False
+
+    return any(
+        isinstance(groups.get(group_key), list) and bool(groups[group_key])
+        for group_key in EMAIL_THREAD_GROUPS
+    )
 
 
 async def build_source_activity_digest(
@@ -148,6 +381,10 @@ async def build_source_activity_digest(
             )
         ).all()
         source_object_type_count_pairs = _count_pairs(source_object_type_counts)
+        has_gmail_source_activity = any(
+            source_system == "gmail" and count > 0
+            for source_system, count in source_system_count_pairs
+        )
 
         source_events = list(
             (
@@ -162,9 +399,20 @@ async def build_source_activity_digest(
             .all()
         )
 
-    entries = [_digest_entry(source_event) for source_event in source_events]
+        email_thread_intelligence = await _build_email_thread_intelligence(
+            session=session,
+            start_at=start_at,
+            end_at=end_at,
+            limit=safe_limit,
+        )
 
-    return {
+    visible_source_events = _visible_source_events(
+        source_events,
+        email_thread_intelligence=email_thread_intelligence,
+    )
+    entries = [_digest_entry(source_event) for source_event in visible_source_events]
+
+    digest = {
         "digest_type": "source_activity",
         "window": {
             "start_at": start_at.isoformat(),
@@ -180,8 +428,13 @@ async def build_source_activity_digest(
         "metadata": {
             "entry_limit": safe_limit,
             "entry_count": len(entries),
-            "truncated": total_count > len(entries),
+            "truncated": total_count > len(source_events),
             "source_model": "source_events",
             "llm_used": False,
         },
     }
+
+    if has_gmail_source_activity or _has_email_thread_items(email_thread_intelligence):
+        digest["email_thread_intelligence"] = email_thread_intelligence
+
+    return digest

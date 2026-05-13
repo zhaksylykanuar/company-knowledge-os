@@ -86,6 +86,90 @@ def _non_empty_digest(raw_body: str = "Full raw source body should not render.")
     }
 
 
+def _digest_with_email_threads() -> dict:
+    return {
+        "digest_type": "source_activity",
+        "window": {
+            "start_at": "2125-01-01T00:00:00+00:00",
+            "end_at": "2125-01-02T00:00:00+00:00",
+        },
+        "counts": {
+            "total": 2,
+            "by_source_system": {"gmail": 2},
+            "by_event_type": {"gmail.message.ingested": 2},
+            "by_source_object_type": {"message": 2},
+        },
+        "email_thread_intelligence": {
+            "section_title": "Email threads requiring attention",
+            "available": True,
+            "counts": {
+                "total": 2,
+                "active": 2,
+                "by_status": {
+                    "needs_my_reply": 1,
+                    "waiting_for_external_reply": 1,
+                },
+            },
+            "groups": {
+                "needs_my_reply": [
+                    {
+                        "status": "needs_my_reply",
+                        "last_message_at": "2125-01-01T12:00:00+00:00",
+                        "last_message_direction": "from_external",
+                        "days_without_reply": 4,
+                        "messages_count": 3,
+                        "summary": "Fake customer follow-up needs a response.",
+                        "evidence_refs": [
+                            {
+                                "kind": "gmail_message",
+                                "source_system": "gmail",
+                                "source_object_type": "message",
+                                "source_object_id": "fake-message-1",
+                                "raw_object_ref": "raw://fake-gmail/thread-1/message.json",
+                                "quote": "Fixture-only body must not render.",
+                            }
+                        ],
+                    }
+                ],
+                "waiting_for_external_reply": [
+                    {
+                        "status": "waiting_for_external_reply",
+                        "last_message_at": "2125-01-01T10:00:00+00:00",
+                        "last_message_direction": "from_me",
+                        "days_without_reply": 2,
+                        "messages_count": 2,
+                        "summary": "Fake outbound proposal is waiting.",
+                        "evidence_refs": [
+                            {
+                                "kind": "gmail_message",
+                                "source_system": "gmail",
+                                "source_object_type": "message",
+                                "source_object_id": "fake-message-2",
+                            }
+                        ],
+                    }
+                ],
+                "informational": [],
+            },
+            "data_quality_notes": [
+                "Raw Gmail source events are summarized in counts because EmailThreadState rows are available."
+            ],
+            "metadata": {
+                "source_model": "email_thread_states",
+                "raw_gmail_entries_suppressed": True,
+            },
+        },
+        "entries": [],
+        "metadata": {
+            "entry_limit": 20,
+            "entry_count": 0,
+            "truncated": False,
+            "source_model": "source_events",
+            "llm_used": False,
+        },
+    }
+
+
 def test_render_source_activity_digest_text_renders_empty_state() -> None:
     rendered = render_source_activity_digest_text(_empty_digest())
 
@@ -142,6 +226,52 @@ def test_render_source_activity_digest_text_does_not_claim_inferred_items() -> N
     assert "Decisions:" not in rendered
     assert "Commitments:" not in rendered
     assert "does not infer decisions, tasks, or risks" in rendered
+
+
+def test_render_source_activity_digest_text_renders_email_thread_section() -> None:
+    rendered = render_source_activity_digest_text(_digest_with_email_threads())
+
+    assert "Email threads requiring attention" in rendered
+    assert "Needs my reply:" in rendered
+    assert "Waiting for external reply:" in rendered
+    assert rendered.index("Needs my reply:") < rendered.index("Waiting for external reply:")
+    assert "status=needs_my_reply" in rendered
+    assert "direction=from_external" in rendered
+    assert "Days without reply: 4" in rendered
+    assert "Messages: 3" in rendered
+    assert "Fake customer follow-up needs a response." in rendered
+    assert "kind=gmail_message" in rendered
+    assert "source_object_id=fake-message-1" in rendered
+    assert "raw_object_ref=raw://fake-gmail/thread-1/message.json" in rendered
+    assert "quote=" not in rendered
+
+
+def test_render_source_activity_digest_text_falls_back_when_email_threads_empty() -> None:
+    digest = _non_empty_digest()
+    digest["email_thread_intelligence"] = {
+        "section_title": "Email threads requiring attention",
+        "available": True,
+        "counts": {"total": 0, "active": 0, "by_status": {}},
+        "groups": {
+            "needs_my_reply": [],
+            "waiting_for_external_reply": [],
+            "informational": [],
+        },
+        "data_quality_notes": [
+            "EmailThreadState has no rows for this digest window; raw Gmail source events are shown as fallback."
+        ],
+        "metadata": {
+            "source_model": "email_thread_states",
+            "raw_gmail_entries_suppressed": False,
+        },
+    }
+
+    rendered = render_source_activity_digest_text(digest)
+
+    assert "Email threads requiring attention" not in rendered
+    assert "Email thread data quality note:" in rendered
+    assert "Entries: 1 shown, limit 1" in rendered
+    assert "Digest-safe subject" in rendered
 
 
 def test_render_source_activity_digest_text_does_not_import_external_services(

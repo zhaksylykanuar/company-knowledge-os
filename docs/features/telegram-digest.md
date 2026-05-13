@@ -151,6 +151,11 @@ Implemented today:
   activity digest output.
 - FOS-017 exposes rendered deterministic source activity digest text through the
   protected `GET /v1/digest/source-activity/text` API endpoint.
+- FOS-038 wires deterministic `EmailThreadState` rows into the source activity
+  digest so active Gmail conversations are grouped by reply state with days
+  without reply and evidence refs. When thread states exist for the digest
+  window, raw Gmail message events remain represented by aggregate counts rather
+  than duplicated as the primary email section.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

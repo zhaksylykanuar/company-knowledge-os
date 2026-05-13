@@ -10,6 +10,7 @@ from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
 from app.db.models import IngestedEvent
 from app.services.digest import build_source_activity_digest
+from app.services.digest import _visible_source_events
 
 
 def _utc(year: int, month: int, day: int, hour: int = 0) -> datetime:
@@ -96,6 +97,79 @@ async def _insert_source_event(
         await session.commit()
 
     return source_event_id
+
+
+def test_visible_source_events_suppresses_raw_gmail_when_thread_state_exists() -> None:
+    gmail_event = SourceEvent(
+        source_event_id="sevt_digest_fake_gmail",
+        source_event_key="gmail:message:fake",
+        ingested_event_id="evt_digest_fake_gmail",
+        event_type="gmail.message.ingested",
+        source_system="gmail",
+        source_object_type="message",
+        source_object_id="fake-gmail-object",
+        title="Fake Gmail source event",
+        raw_object_ref="raw://fake/gmail.json",
+        schema_version="1.0",
+    )
+    drive_event = SourceEvent(
+        source_event_id="sevt_digest_fake_drive",
+        source_event_key="drive:file:fake",
+        ingested_event_id="evt_digest_fake_drive",
+        event_type="drive.file.ingested",
+        source_system="drive",
+        source_object_type="file",
+        source_object_id="fake-drive-object",
+        title="Fake Drive source event",
+        raw_object_ref="raw://fake/drive.json",
+        schema_version="1.0",
+    )
+
+    visible_events = _visible_source_events(
+        [gmail_event, drive_event],
+        email_thread_intelligence={
+            "metadata": {"raw_gmail_entries_suppressed": True},
+            "groups": {
+                "needs_my_reply": [
+                    {
+                        "status": "needs_my_reply",
+                        "evidence_refs": [{"kind": "gmail_message"}],
+                    }
+                ],
+            },
+        },
+    )
+
+    assert visible_events == [drive_event]
+
+
+def test_visible_source_events_keeps_raw_gmail_when_thread_state_empty() -> None:
+    gmail_event = SourceEvent(
+        source_event_id="sevt_digest_fake_gmail_fallback",
+        source_event_key="gmail:message:fake-fallback",
+        ingested_event_id="evt_digest_fake_gmail_fallback",
+        event_type="gmail.message.ingested",
+        source_system="gmail",
+        source_object_type="message",
+        source_object_id="fake-gmail-object-fallback",
+        title="Fake Gmail fallback source event",
+        raw_object_ref="raw://fake/gmail-fallback.json",
+        schema_version="1.0",
+    )
+
+    visible_events = _visible_source_events(
+        [gmail_event],
+        email_thread_intelligence={
+            "metadata": {"raw_gmail_entries_suppressed": False},
+            "groups": {
+                "needs_my_reply": [],
+                "waiting_for_external_reply": [],
+                "informational": [],
+            },
+        },
+    )
+
+    assert visible_events == [gmail_event]
 
 
 async def test_build_source_activity_digest_returns_empty_digest_for_empty_window() -> None:

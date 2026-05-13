@@ -16,6 +16,12 @@ SAFE_EVIDENCE_REF_KEYS = (
     "chunk_id",
 )
 
+EMAIL_THREAD_GROUP_LABELS = (
+    ("needs_my_reply", "Needs my reply"),
+    ("waiting_for_external_reply", "Waiting for external reply"),
+    ("informational", "Informational / recently tracked"),
+)
+
 
 def _string_value(value: Any, *, fallback: str = "unknown") -> str:
     if value is None:
@@ -110,6 +116,60 @@ def _format_entry(value: Any, index: int) -> list[str]:
     return lines
 
 
+def _email_thread_groups(value: Any) -> Mapping[str, Any]:
+    email_thread_intelligence = _mapping(value)
+    return _mapping(email_thread_intelligence.get("groups"))
+
+
+def _has_email_thread_items(value: Any) -> bool:
+    groups = _email_thread_groups(value)
+    return any(_sequence(groups.get(group_key)) for group_key, _label in EMAIL_THREAD_GROUP_LABELS)
+
+
+def _format_email_thread_item(value: Any, index: int) -> list[str]:
+    item = _mapping(value)
+    summary = _string_value(item.get("summary"), fallback="Summary unavailable")
+    last_message_at = _string_value(item.get("last_message_at"))
+    status = _string_value(item.get("status"))
+    direction = _string_value(item.get("last_message_direction"))
+    days_without_reply = _string_value(item.get("days_without_reply"), fallback="unknown")
+    messages_count = _string_value(item.get("messages_count"), fallback="0")
+
+    return [
+        f"{index}. status={status} | last_message_at={last_message_at} | direction={direction}",
+        f"   Days without reply: {days_without_reply}",
+        f"   Messages: {messages_count}",
+        f"   Summary: {summary}",
+        f"   Evidence refs: {_format_evidence_refs(item.get('evidence_refs'))}",
+    ]
+
+
+def _append_email_thread_section(lines: list[str], value: Any) -> None:
+    email_thread_intelligence = _mapping(value)
+    groups = _email_thread_groups(email_thread_intelligence)
+    if not _has_email_thread_items(email_thread_intelligence):
+        for note in _sequence(email_thread_intelligence.get("data_quality_notes")):
+            lines.append(f"Email thread data quality note: {_string_value(note)}")
+        return
+
+    lines.append(
+        _string_value(
+            email_thread_intelligence.get("section_title"),
+            fallback="Email threads requiring attention",
+        )
+    )
+    for group_key, label in EMAIL_THREAD_GROUP_LABELS:
+        items = _sequence(groups.get(group_key))
+        if not items:
+            continue
+        lines.append(f"{label}:")
+        for index, item in enumerate(items, start=1):
+            lines.extend(_format_email_thread_item(item, index))
+
+    for note in _sequence(email_thread_intelligence.get("data_quality_notes")):
+        lines.append(f"Email thread data quality note: {_string_value(note)}")
+
+
 def render_source_activity_digest_text(digest: Mapping[str, Any]) -> str:
     """Render a source activity digest as deterministic plain text.
 
@@ -119,6 +179,7 @@ def render_source_activity_digest_text(digest: Mapping[str, Any]) -> str:
 
     window = _mapping(digest.get("window"))
     counts = _mapping(digest.get("counts"))
+    email_thread_intelligence = _mapping(digest.get("email_thread_intelligence"))
     entries = _sequence(digest.get("entries"))
     metadata = _mapping(digest.get("metadata"))
 
@@ -131,6 +192,7 @@ def render_source_activity_digest_text(digest: Mapping[str, Any]) -> str:
     _append_count_section(lines, "Source systems", counts.get("by_source_system"))
     _append_count_section(lines, "Event types", counts.get("by_event_type"))
     _append_count_section(lines, "Source object types", counts.get("by_source_object_type"))
+    _append_email_thread_section(lines, email_thread_intelligence)
 
     entry_count = _string_value(metadata.get("entry_count"), fallback=str(len(entries)))
     entry_limit = _string_value(metadata.get("entry_limit"), fallback="unknown")
