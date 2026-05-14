@@ -80,39 +80,31 @@ def _thread_state(**overrides: object) -> SimpleNamespace:
 def _result(
     *,
     attention_class: str,
-    action_type: str,
     priority: str,
     show_in_digest: bool = True,
     confidence: float = 0.90,
-    is_work_related: bool = True,
-    owner: str = "unknown",
-    section: str | None = None,
+    owner: str | None = "unknown",
+    recommended_action: str | None = None,
 ) -> dict:
-    if section is None:
-        section = {
-            "requires_my_attention": "Work actions requiring my attention",
-            "waiting_on_external": "Waiting for external reply",
-            "important_info": "Important project updates",
-            "review_optional": "Review optional",
-            "low_priority": "Review optional",
-            "hidden_noise": "Hidden low-priority summary",
+    if recommended_action is None:
+        recommended_action = {
+            "requires_my_attention": "reply to the relevant work request",
+            "manual_action": "complete the manual action",
+            "waiting_on_external": "wait for an external reply",
+            "important_info": "review the project update",
+            "review_optional": "review if relevant",
+            "no_action_required": "no action required",
         }[attention_class]
     return {
         "attention_class": attention_class,
-        "action_type": action_type,
         "priority": priority,
         "show_in_digest": show_in_digest,
         "confidence": confidence,
         "owner": owner,
-        "is_work_related": is_work_related,
-        "is_automated": False,
-        "is_marketing": attention_class == "hidden_noise",
-        "is_security_related": False,
-        "is_calendar_related": False,
         "deadline": None,
         "reason": "fake semantic triage",
-        "short_summary": "Fake summary",
-        "suggested_digest_section": section,
+        "recommended_action": recommended_action,
+        "evidence": [{"kind": "gmail_message", "message_id": "fake-message-id"}],
     }
 
 
@@ -158,21 +150,23 @@ def test_email_thread_state_maps_to_normalized_activity_item() -> None:
     activity = email_thread_state_to_activity_item(_thread_state())
 
     assert activity.source == "gmail"
-    assert activity.object_type == "email_thread"
-    assert activity.object_id == "gmail:thread:fake"
-    assert activity.last_activity_direction == "from_external"
-    assert activity.thread_message_count == 3
-    assert activity.last_actor == "external sender"
-    assert activity.recipients == ["me"]
+    assert activity.source_object_id == "gmail:thread:fake"
+    assert activity.activity_type == "email_thread.reply_required.from_external"
+    assert activity.actor == "external sender"
+    assert activity.related_people == ["fake-me", "fake-external"]
+    assert activity.safe_summary == "PRIVATE_THREAD_SUMMARY_DO_NOT_PRINT"
 
 
-def test_mapping_carries_safe_metadata_and_internal_evidence_refs() -> None:
+def test_mapping_carries_top_level_evidence_refs() -> None:
     activity = email_thread_state_to_activity_item(_thread_state())
 
-    assert activity.source_metadata["source_model"] == "email_thread_states"
-    assert activity.source_metadata["deterministic_action_type"] == "reply_required"
-    assert activity.source_metadata["evidence_ref_count"] == 1
-    assert activity.source_metadata["evidence_refs"][0]["kind"] == "gmail_message"
+    assert activity.evidence_refs == [
+        {
+            "kind": "gmail_message",
+            "message_id": "private-message-id",
+            "raw_object_ref": "raw://private-ref",
+        }
+    ]
 
 
 def test_batch_safe_output_does_not_include_private_values() -> None:
@@ -191,7 +185,7 @@ def test_default_classification_uses_fallback_when_attention_disabled() -> None:
     result = classify_email_thread_attention(_thread_state(), settings=_settings())
 
     assert result.attention_class == "review_optional"
-    assert result.action_type == "review_optional"
+    assert result.recommended_action == "review if relevant"
     assert result.show_in_digest is True
 
 
@@ -200,7 +194,6 @@ def test_injected_mock_provider_is_used_when_supplied() -> None:
         [
             _result(
                 attention_class="requires_my_attention",
-                action_type="reply_required",
                 priority="high",
                 owner="me",
             )
@@ -215,7 +208,7 @@ def test_injected_mock_provider_is_used_when_supplied() -> None:
     )
 
     assert result.attention_class == "requires_my_attention"
-    assert result.action_type == "reply_required"
+    assert result.recommended_action == "reply to the relevant work request"
     assert result.priority == "high"
     assert len(provider.calls) == 1
 
@@ -224,12 +217,11 @@ def test_low_confidence_mock_result_cannot_silently_hide_item() -> None:
     provider = MockAttentionTriageProvider(
         [
             _result(
-                attention_class="hidden_noise",
-                action_type="no_action_required",
-                priority="hidden",
+                attention_class="no_action_required",
+                priority="low",
                 show_in_digest=False,
                 confidence=0.30,
-                is_work_related=False,
+                owner=None,
             )
         ]
     )
@@ -241,21 +233,19 @@ def test_low_confidence_mock_result_cannot_silently_hide_item() -> None:
     )
 
     assert result.attention_class == "review_optional"
-    assert result.action_type == "review_optional"
     assert result.priority == "low"
     assert result.show_in_digest is True
 
 
-def test_high_confidence_hidden_noise_mock_result_can_hide() -> None:
+def test_high_confidence_no_action_mock_result_can_hide() -> None:
     provider = MockAttentionTriageProvider(
         [
             _result(
-                attention_class="hidden_noise",
-                action_type="no_action_required",
-                priority="hidden",
+                attention_class="no_action_required",
+                priority="low",
                 show_in_digest=False,
                 confidence=0.95,
-                is_work_related=False,
+                owner=None,
             )
         ]
     )
@@ -266,8 +256,8 @@ def test_high_confidence_hidden_noise_mock_result_can_hide() -> None:
         settings=_settings(),
     )
 
-    assert result.attention_class == "hidden_noise"
-    assert result.priority == "hidden"
+    assert result.attention_class == "no_action_required"
+    assert result.priority == "low"
     assert result.show_in_digest is False
 
 
@@ -293,17 +283,15 @@ def test_batch_classification_returns_aggregate_counts_only() -> None:
         [
             _result(
                 attention_class="requires_my_attention",
-                action_type="reply_required",
                 priority="high",
                 owner="me",
             ),
             _result(
-                attention_class="hidden_noise",
-                action_type="no_action_required",
-                priority="hidden",
+                attention_class="no_action_required",
+                priority="low",
                 show_in_digest=False,
                 confidence=0.95,
-                is_work_related=False,
+                owner=None,
             ),
         ]
     )
@@ -316,11 +304,14 @@ def test_batch_classification_returns_aggregate_counts_only() -> None:
 
     assert result.threads_considered == 2
     assert result.attention_class_counts == {
-        "hidden_noise": 1,
+        "no_action_required": 1,
         "requires_my_attention": 1,
     }
-    assert result.action_type_counts == {"no_action_required": 1, "reply_required": 1}
-    assert result.priority_counts == {"hidden": 1, "high": 1}
+    assert result.action_type_counts == {
+        "no action required": 1,
+        "reply to the relevant work request": 1,
+    }
+    assert result.priority_counts == {"low": 1, "high": 1}
     assert result.show_in_digest_counts == {"false": 1, "true": 1}
 
 
@@ -334,7 +325,6 @@ def test_existing_deterministic_email_thread_fields_are_not_mutated() -> None:
             [
                 _result(
                     attention_class="requires_my_attention",
-                    action_type="reply_required",
                     priority="high",
                 )
             ]

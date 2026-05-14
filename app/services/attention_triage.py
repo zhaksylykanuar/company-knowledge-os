@@ -9,24 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 AttentionClass = Literal[
     "requires_my_attention",
+    "manual_action",
     "waiting_on_external",
     "important_info",
     "review_optional",
-    "low_priority",
-    "hidden_noise",
-]
-ActionType = Literal[
-    "reply_required",
-    "manual_action_required",
-    "waiting_external_reply",
     "no_action_required",
-    "review_optional",
 ]
-Priority = Literal["high", "medium", "low", "hidden"]
-SourceType = Literal["gmail", "github", "jira", "google_drive", "calendar", "other"]
-ObjectType = Literal["email_thread", "pull_request", "issue", "document", "event", "message"]
-ActivityDirection = Literal["from_me", "from_external", "system", "unknown"]
-AttentionOwner = Literal["me", "external", "system", "nobody", "unknown"]
+Priority = Literal["high", "medium", "low"]
 FeedbackAction = Literal[
     "marked_important",
     "marked_noise",
@@ -53,23 +42,19 @@ class _StrictModel(BaseModel):
 
 
 class NormalizedActivityItem(_StrictModel):
-    source: SourceType
-    object_type: ObjectType
-    object_id: str
+    source: str
+    source_object_id: str
+    activity_type: str
     title: str | None = None
+    actor: str | None = None
     created_at: datetime | None = None
-    updated_at: datetime | None = None
-    last_activity_at: datetime | None = None
-    last_actor: str | None = None
-    last_activity_direction: ActivityDirection = "unknown"
-    participants: list[str] = Field(default_factory=list)
-    sender: str | None = None
-    recipients: list[str] = Field(default_factory=list)
-    thread_message_count: int = Field(default=0, ge=0)
-    clean_text_preview: str | None = None
-    thread_summary: str | None = None
-    source_metadata: dict[str, Any] = Field(default_factory=dict)
-    links: list[str] = Field(default_factory=list)
+    project: str | None = None
+    safe_summary: str | None = None
+    related_people: list[str] = Field(default_factory=list)
+    related_jira_keys: list[str] = Field(default_factory=list)
+    related_prs: list[str] = Field(default_factory=list)
+    related_files: list[str] = Field(default_factory=list)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AttentionTriageFeedback(_StrictModel):
@@ -97,20 +82,14 @@ class AttentionContext(_StrictModel):
 
 class AttentionTriageResult(_StrictModel):
     attention_class: AttentionClass
-    action_type: ActionType
     priority: Priority
     show_in_digest: bool
     confidence: float = Field(ge=0.0, le=1.0)
-    owner: AttentionOwner = "unknown"
-    is_work_related: bool = False
-    is_automated: bool = False
-    is_marketing: bool = False
-    is_security_related: bool = False
-    is_calendar_related: bool = False
-    deadline: str | None = None
     reason: str
-    short_summary: str
-    suggested_digest_section: DigestSection
+    recommended_action: str
+    owner: str | None
+    deadline: str | None
+    evidence: list[dict[str, Any]]
 
 
 class AttentionTriageProvider(Protocol):
@@ -171,15 +150,7 @@ def _activity_prompt_payload(
     max_text_chars: int,
 ) -> dict[str, Any]:
     payload = activity.model_dump(mode="json")
-    payload["clean_text_preview"] = _truncate_text(
-        payload.get("clean_text_preview"),
-        max_text_chars,
-    )
-    payload["thread_summary"] = _truncate_text(payload.get("thread_summary"), max_text_chars)
-    payload["source_metadata"] = _truncate_text(payload.get("source_metadata"), max_text_chars)
-    payload["link_count"] = len(activity.links)
-    payload.pop("links", None)
-    return payload
+    return _truncate_text(payload, max_text_chars)
 
 
 def _context_prompt_payload(
@@ -224,25 +195,25 @@ def _policy_reason(reason: str, policy_note: str) -> str:
 
 
 def _possibly_work_relevant(result: AttentionTriageResult) -> bool:
-    if result.is_work_related or result.owner in {"me", "external"}:
+    owner = (result.owner or "").casefold()
+    if owner in {"me", "external", "client", "team", "user", "operator"}:
         return True
-    if result.action_type in {
-        "reply_required",
-        "manual_action_required",
-        "waiting_external_reply",
-    }:
-        return True
-    return result.attention_class in {
+    if result.attention_class in {
         "requires_my_attention",
+        "manual_action",
         "waiting_on_external",
         "important_info",
-    }
+    }:
+        return True
+    recommended_action = result.recommended_action.casefold()
+    return any(
+        phrase in recommended_action
+        for phrase in ("reply", "approve", "decide", "follow up", "follow-up")
+    )
 
 
 def _review_priority(result: AttentionTriageResult) -> Priority:
-    if result.priority != "hidden":
-        return result.priority
-    return "medium" if _possibly_work_relevant(result) else "low"
+    return result.priority
 
 
 def apply_attention_confidence_policy(
@@ -262,10 +233,8 @@ def apply_attention_confidence_policy(
         return result.model_copy(
             update={
                 "attention_class": "review_optional",
-                "action_type": "review_optional",
                 "priority": _review_priority(result),
                 "show_in_digest": True,
-                "suggested_digest_section": "Review optional",
                 "reason": _policy_reason(
                     result.reason,
                     "medium confidence item was moved to review instead of hidden",
@@ -277,16 +246,20 @@ def apply_attention_confidence_policy(
     return result.model_copy(
         update={
             "attention_class": "review_optional",
-            "action_type": "review_optional",
             "priority": priority,
             "show_in_digest": True,
-            "suggested_digest_section": "Review optional",
             "reason": _policy_reason(
                 result.reason,
                 "low confidence item was kept visible for review",
             ),
         }
     )
+
+
+def _activity_is_from_user(activity: NormalizedActivityItem) -> bool:
+    actor = (activity.actor or "").casefold()
+    activity_type = activity.activity_type.casefold()
+    return actor == "me" or activity_type.endswith(".from_me") or activity_type.endswith(":from_me")
 
 
 class ConservativeFallbackAttentionTriageProvider:
@@ -299,31 +272,29 @@ class ConservativeFallbackAttentionTriageProvider:
     ) -> AttentionTriageResult:
         del context
 
-        if activity.last_activity_direction == "from_me":
+        if _activity_is_from_user(activity):
             return AttentionTriageResult(
                 attention_class="waiting_on_external",
-                action_type="waiting_external_reply",
                 priority="low",
                 show_in_digest=True,
                 confidence=0.60,
                 owner="external",
-                is_work_related=True,
                 reason="last activity is from the user; external response may still be pending",
-                short_summary=activity.title or "Waiting on external activity",
-                suggested_digest_section="Waiting for external reply",
+                recommended_action="wait for an external reply",
+                deadline=None,
+                evidence=activity.evidence_refs,
             )
 
         return AttentionTriageResult(
             attention_class="review_optional",
-            action_type="review_optional",
             priority="low",
             show_in_digest=True,
             confidence=0.50,
-            owner="unknown",
-            is_work_related=False,
+            owner=None,
             reason="fallback triage keeps uncertain activity visible",
-            short_summary=activity.title or "Activity needs optional review",
-            suggested_digest_section="Review optional",
+            recommended_action="review if relevant",
+            deadline=None,
+            evidence=activity.evidence_refs,
         )
 
 
@@ -348,8 +319,8 @@ class MockAttentionTriageProvider:
     ) -> AttentionTriageResult:
         self.calls.append((activity, context))
 
-        if activity.object_id in self._results_by_object_id:
-            return self._coerce(self._results_by_object_id[activity.object_id])
+        if activity.source_object_id in self._results_by_object_id:
+            return self._coerce(self._results_by_object_id[activity.source_object_id])
 
         if self._outputs:
             return self._coerce(self._outputs.pop(0))

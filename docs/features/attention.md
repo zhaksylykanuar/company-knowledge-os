@@ -17,8 +17,16 @@
 ## Universal Activity Triage
 
 - FOS-041 adds reusable contracts for a future universal attention triage layer.
+- FOS-044 aligns those contracts with the QazTwin Company Knowledge OS
+  playbook.
 - The layer normalizes source activity from Gmail, GitHub, Jira, Drive, calendar, and other sources into a common `NormalizedActivityItem`.
-- Providers return strict, schema-validated `AttentionTriageResult` objects with attention class, action type, priority, digest visibility, confidence, ownership, safety flags, and short summaries.
+- `NormalizedActivityItem` exposes `source`, `source_object_id`,
+  `activity_type`, `title`, `actor`, `created_at`, `project`, `safe_summary`,
+  `related_people`, `related_jira_keys`, `related_prs`, `related_files`, and
+  `evidence_refs`.
+- Providers return strict, schema-validated `AttentionTriageResult` objects
+  with `attention_class`, `priority`, `show_in_digest`, `confidence`, `reason`,
+  `recommended_action`, `owner`, `deadline`, and `evidence`.
 - The confidence policy prevents low-confidence items from being silently hidden; uncertain items stay visible as review optional.
 - The current implementation includes mocked and conservative fallback providers only. It does not call external APIs.
 - OpenAI or Llama-compatible providers can be wired in a later slice once explicitly enabled and configured.
@@ -40,6 +48,8 @@
 - The seam does not write `AttentionTriageResult` back to the database and does not change digest rendering.
 - The preview script uses conservative fallback behavior by default and prints only aggregate metadata.
 - Current source activity digest output still uses deterministic FOS-040 email triage fields as the source of truth.
+- FOS-044 does not wire digest rendering to `AttentionTriageResult`; current
+  digest behavior intentionally remains unchanged.
 - A future slice may apply semantic attention triage to uncertain email cases behind explicit config.
 
 ## Invariants

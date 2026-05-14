@@ -149,29 +149,25 @@ def _activity_source(thread_state: Any) -> str:
     return source if source in {"gmail", "github", "jira", "google_drive", "calendar"} else "gmail"
 
 
-def _source_metadata(thread_state: Any) -> dict[str, Any]:
-    participants = _list_attr(getattr(thread_state, "participants_json", None))
-    evidence_refs = _list_attr(getattr(thread_state, "evidence_refs", None))
-    return {
-        "source_model": "email_thread_states",
-        "status": _string_attr(getattr(thread_state, "status", None)),
-        "deterministic_triage_category": _string_attr(
-            getattr(thread_state, "triage_category", None)
-        ),
-        "deterministic_action_type": _string_attr(
-            getattr(thread_state, "triage_action_type", None)
-        ),
-        "deterministic_priority": _string_attr(getattr(thread_state, "triage_priority", None)),
-        "deterministic_show_in_digest": getattr(thread_state, "show_in_digest", None),
-        "deterministic_triage_confidence": getattr(thread_state, "triage_confidence", None),
-        "deterministic_triage_reason": _string_attr(
-            getattr(thread_state, "triage_reason", None)
-        ),
-        "days_without_reply": getattr(thread_state, "days_without_reply", None),
-        "participants_count": len(participants),
-        "evidence_refs": evidence_refs,
-        "evidence_ref_count": len(evidence_refs),
-    }
+def _activity_type(thread_state: Any) -> str:
+    direction = _activity_direction(thread_state)
+    action_type = _string_attr(getattr(thread_state, "triage_action_type", None))
+    if action_type:
+        return f"email_thread.{action_type}.{direction}"
+    return f"email_thread.{direction}"
+
+
+def _safe_summary(thread_state: Any, *, max_chars: int) -> str | None:
+    summary = _truncate(getattr(thread_state, "thread_summary", None), max_chars)
+    return summary or _truncate(getattr(thread_state, "last_message_summary", None), max_chars)
+
+
+def _evidence_refs(thread_state: Any) -> list[dict[str, Any]]:
+    return [
+        dict(evidence_ref)
+        for evidence_ref in _list_attr(getattr(thread_state, "evidence_refs", None))
+        if isinstance(evidence_ref, dict)
+    ]
 
 
 def email_thread_state_to_activity_item(
@@ -187,25 +183,18 @@ def email_thread_state_to_activity_item(
 
     return NormalizedActivityItem(
         source=_activity_source(thread_state),
-        object_type="email_thread",
-        object_id=thread_key,
+        source_object_id=thread_key,
+        activity_type=_activity_type(thread_state),
         title=subject,
+        actor=_last_actor_label(thread_state),
         created_at=_datetime_attr(getattr(thread_state, "created_at", None)),
-        updated_at=_datetime_attr(getattr(thread_state, "updated_at", None)),
-        last_activity_at=_datetime_attr(getattr(thread_state, "last_message_at", None)),
-        last_actor=_last_actor_label(thread_state),
-        last_activity_direction=_activity_direction(thread_state),
-        participants=_participant_labels(thread_state),
-        sender=_last_actor_label(thread_state),
-        recipients=_recipient_labels(thread_state),
-        thread_message_count=max(0, int(getattr(thread_state, "messages_count", 0) or 0)),
-        clean_text_preview=_truncate(
-            getattr(thread_state, "last_message_summary", None),
-            max_chars,
-        ),
-        thread_summary=_truncate(getattr(thread_state, "thread_summary", None), max_chars),
-        source_metadata=_source_metadata(thread_state),
-        links=[],
+        project=None,
+        safe_summary=_safe_summary(thread_state, max_chars=max_chars),
+        related_people=_participant_labels(thread_state),
+        related_jira_keys=[],
+        related_prs=[],
+        related_files=[],
+        evidence_refs=_evidence_refs(thread_state),
     )
 
 
@@ -265,7 +254,7 @@ def _aggregate_results(
     return EmailAttentionBatchResult(
         threads_considered=len(results),
         attention_class_counts=dict(Counter(result.attention_class for result in results)),
-        action_type_counts=dict(Counter(result.action_type for result in results)),
+        action_type_counts=dict(Counter(result.recommended_action for result in results)),
         priority_counts=dict(Counter(result.priority for result in results)),
         show_in_digest_counts=dict(
             Counter(str(result.show_in_digest).lower() for result in results)
