@@ -13,6 +13,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 from app.db.base import Base  # noqa: E402
+import app.db.attention_models  # noqa: F401,E402
 import app.db.gmail_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402
 import app.db.source_models  # noqa: F401,E402

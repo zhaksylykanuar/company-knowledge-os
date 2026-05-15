@@ -4,6 +4,7 @@
 
 - Deterministic scoring: implemented
 - Attention dashboard: implemented
+- Feedback storage: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
 
@@ -14,6 +15,8 @@
 - Attention dashboard reads existing scores and builds top items, tasks, risks, decisions, and sources.
 - Source activity digest email sectioning uses the attention triage contract
   through an in-memory deterministic projection.
+- Attention triage feedback can be stored and retrieved for future
+  `AttentionContext.recent_feedback` use.
 
 ## Universal Activity Triage
 
@@ -58,6 +61,14 @@
   before section mapping.
 - FOS-045 is email-only. It does not persist `AttentionTriageResult`, does not
   add schema or migrations, and does not call live providers.
+- FOS-046 adds provider-free DB-backed feedback storage and retrieval for the
+  playbook feedback actions: `marked_important`, `marked_noise`,
+  `marked_no_action`, `marked_reply_required`, `always_show_similar`, and
+  `always_hide_similar`.
+- Feedback is stored as user context for future triage calls, not as
+  fine-tuning data. API, CLI, and UI submission entrypoints are deferred.
+- `AttentionTriageResult` persistence remains deferred; feedback rows keep
+  `triage_result_id` nullable until a result table exists.
 - A future slice may apply semantic attention triage to uncertain email cases behind explicit config.
 
 ## Invariants
@@ -66,9 +77,14 @@
 - Scoring should be explainable through stored reasons.
 - Dashboard reads scored data; it should not silently create new facts.
 - LLM-backed activity triage must validate strict JSON before any future persistence or digest use.
+- Feedback storage must not write raw message bodies, provider payloads, or
+  generated triage results.
 
 ## Known Gaps
 
 - No scheduled digest is visible.
 - No Telegram delivery is implemented.
 - Score refresh is explicit, not automatic.
+- Feedback API, CLI, and UI controls are not implemented.
+- Stored feedback is not yet automatically loaded into live triage or digest
+  behavior.

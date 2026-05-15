@@ -8,6 +8,7 @@
 - Extracted tasks/risks/decisions: implemented
 - Knowledge scores: implemented
 - Source events: partial
+- Attention triage feedback: implemented
 - Approval/action execution tables: planned
 
 ## Core Tables
@@ -23,6 +24,10 @@
 - `source_events`: normalized connector event records linked to `ingested_events`.
 - `email_thread_states`: deterministic Gmail conversation state built from
   stored Gmail rows for digest and source-intelligence workflows.
+- `attention_triage_feedback`: user feedback events for future attention
+  triage context. Rows store `feedback_id`, optional `source`, required
+  `source_object_id`, nullable `triage_result_id`, `user_action`, and
+  `created_at`.
 
 ## Invariants
 
@@ -33,3 +38,9 @@
 - Document-derived provenance belongs in `source_document_id`, `chunk_id`, and `evidence_refs`.
 - Source-event projections must preserve `raw_object_ref` and evidence links.
 - Missing evidence means no persisted fact.
+- Attention feedback stores user intent only; it must not store raw source
+  bodies or provider payloads.
+- `source` on attention feedback is optional collision protection because
+  `source_object_id` may not be globally unique across connectors.
+- `triage_result_id` on attention feedback is nullable until
+  `AttentionTriageResult` persistence exists.
