@@ -132,17 +132,19 @@ def _digest_with_email_threads() -> dict:
             "section_title": "Email triage",
             "available": True,
             "counts": {
-                "total": 6,
+                "total": 7,
                 "active": 3,
                 "by_status": {
                     "needs_my_reply": 1,
                     "manual_action_required": 1,
                     "waiting_for_external_reply": 1,
+                    "informational": 1,
                 },
                 "by_category": {
                     "work_action": 1,
                     "manual_action": 1,
                     "work_waiting": 1,
+                    "work_info": 1,
                     "newsletter": 1,
                     "social_network": 1,
                     "calendar_update": 1,
@@ -151,16 +153,17 @@ def _digest_with_email_threads() -> dict:
                     "reply_required": 1,
                     "manual_action_required": 1,
                     "waiting_external_reply": 1,
-                    "review_optional": 2,
+                    "review_optional": 3,
                     "no_action_required": 1,
                 },
                 "by_priority": {
                     "high": 1,
                     "medium": 2,
+                    "low": 1,
                     "hidden": 3,
                 },
                 "by_show_in_digest": {
-                    "true": 3,
+                    "true": 4,
                     "false": 3,
                 },
             },
@@ -169,10 +172,12 @@ def _digest_with_email_threads() -> dict:
                     {
                         "subject": "Fake customer follow-up",
                         "status": "needs_my_reply",
+                        "attention_class": "requires_my_attention",
                         "category": "work_action",
                         "action_type": "reply_required",
                         "priority": "high",
                         "show_in_digest": True,
+                        "recommended_action": "reply to the email thread",
                         "last_message_at": "2125-01-01T12:00:00+00:00",
                         "last_message_from": "external sender",
                         "last_message_to": "me",
@@ -200,6 +205,12 @@ def _digest_with_email_threads() -> dict:
                             "show_in_digest": True,
                             "reason": "external_work_request",
                             "confidence": 0.78,
+                            "attention_class": "requires_my_attention",
+                            "attention_priority": "high",
+                            "attention_show_in_digest": True,
+                            "attention_reason": "external_work_request",
+                            "attention_confidence": 0.78,
+                            "recommended_action": "reply to the email thread",
                         },
                     }
                 ],
@@ -207,10 +218,12 @@ def _digest_with_email_threads() -> dict:
                     {
                         "subject": "Fake badge ready",
                         "status": "manual_action_required",
+                        "attention_class": "manual_action",
                         "category": "manual_action",
                         "action_type": "manual_action_required",
                         "priority": "medium",
                         "show_in_digest": True,
+                        "recommended_action": "complete the manual email action",
                         "last_message_at": "2125-01-01T11:00:00+00:00",
                         "last_message_from": "external sender",
                         "last_message_to": "me",
@@ -234,10 +247,12 @@ def _digest_with_email_threads() -> dict:
                     {
                         "subject": "Fake proposal",
                         "status": "waiting_for_external_reply",
+                        "attention_class": "waiting_on_external",
                         "category": "work_waiting",
                         "action_type": "waiting_external_reply",
                         "priority": "medium",
                         "show_in_digest": True,
+                        "recommended_action": "wait for an external reply",
                         "last_message_at": "2125-01-01T10:00:00+00:00",
                         "last_message_from": "me",
                         "last_message_to": "external participant",
@@ -258,7 +273,28 @@ def _digest_with_email_threads() -> dict:
                         ],
                     }
                 ],
-                "work_info": [],
+                "work_info": [
+                    {
+                        "subject": "Fake project update",
+                        "status": "informational",
+                        "attention_class": "important_info",
+                        "category": "work_info",
+                        "action_type": "review_optional",
+                        "priority": "low",
+                        "show_in_digest": True,
+                        "recommended_action": "review the project update",
+                        "last_message_at": "2125-01-01T09:00:00+00:00",
+                        "last_message_from": "external sender",
+                        "last_message_to": "me",
+                        "last_message_direction": "from_external",
+                        "participants": "me, 1 external participant",
+                        "days_without_reply": 1,
+                        "messages_count": 1,
+                        "summary": "Fake project status changed.",
+                        "last_message_summary": "Fake project status changed.",
+                        "evidence": "1 thread, 1 message",
+                    }
+                ],
                 "review_optional": [],
             },
             "hidden_low_priority_summary": {
@@ -380,10 +416,15 @@ def test_render_source_activity_digest_text_renders_email_thread_section() -> No
     assert "Work actions requiring my attention:" in rendered
     assert "Manual actions:" in rendered
     assert "Waiting for external reply:" in rendered
+    assert "Important project updates:" in rendered
+    assert "Work info / recently relevant:" not in rendered
     assert rendered.index("Work actions requiring my attention:") < rendered.index(
         "Manual actions:"
     )
     assert rendered.index("Manual actions:") < rendered.index("Waiting for external reply:")
+    assert rendered.index("Waiting for external reply:") < rendered.index(
+        "Important project updates:"
+    )
     assert "1. Fake customer follow-up" in rendered
     assert "Action: Reply required" in rendered
     assert "Priority: high" in rendered
@@ -392,6 +433,8 @@ def test_render_source_activity_digest_text_renders_email_thread_section() -> No
     assert "Action: Manual action required" in rendered
     assert "Priority: medium" in rendered
     assert "Waiting for external reply: 2 days" in rendered
+    assert "1. Fake project update" in rendered
+    assert "Summary: Fake project status changed." in rendered
     assert "Summary: 3-message thread. Latest: Fake customer asks for next steps." in rendered
     assert "Evidence: 1 thread, 3 messages" in rendered
     assert "Hidden low-priority email summary:" in rendered
@@ -426,7 +469,9 @@ def test_render_source_activity_digest_text_debug_triage_for_email_threads() -> 
     assert "Debug triage:" in rendered
     assert "category=work_action" in rendered
     assert "action_type=reply_required" in rendered
+    assert "attention_class=requires_my_attention" in rendered
     assert "reason=external_work_request" in rendered
+    assert "recommended_action=reply to the email thread" in rendered
 
 
 def test_render_source_activity_digest_text_falls_back_when_email_threads_empty() -> None:

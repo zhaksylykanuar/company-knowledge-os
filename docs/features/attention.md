@@ -12,7 +12,8 @@
 - Extracted tasks, risks, and decisions can be scored.
 - Scores include importance, urgency, risk, confidence, attention, reasons, and evidence refs.
 - Attention dashboard reads existing scores and builds top items, tasks, risks, decisions, and sources.
-- Source activity digest behavior still uses the existing deterministic triage path.
+- Source activity digest email sectioning uses the attention triage contract
+  through an in-memory deterministic projection.
 
 ## Universal Activity Triage
 
@@ -47,9 +48,16 @@
 - Existing email thread rows can now be classified through `AttentionTriageAgent` with fallback or injected mock providers.
 - The seam does not write `AttentionTriageResult` back to the database and does not change digest rendering.
 - The preview script uses conservative fallback behavior by default and prints only aggregate metadata.
-- Current source activity digest output still uses deterministic FOS-040 email triage fields as the source of truth.
+- Source activity digest output still uses deterministic FOS-040
+  `EmailThreadState` rows as source data.
 - FOS-044 does not wire digest rendering to `AttentionTriageResult`; current
   digest behavior intentionally remains unchanged.
+- FOS-045 wires email digest sectioning to an in-memory
+  `AttentionTriageResult` projection derived from existing deterministic
+  `EmailThreadState` fields. The projection applies the confidence policy
+  before section mapping.
+- FOS-045 is email-only. It does not persist `AttentionTriageResult`, does not
+  add schema or migrations, and does not call live providers.
 - A future slice may apply semantic attention triage to uncertain email cases behind explicit config.
 
 ## Invariants

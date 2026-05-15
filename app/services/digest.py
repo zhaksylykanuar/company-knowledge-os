@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
 from app.db.gmail_models import EmailThreadState
+from app.services.attention_triage import AttentionTriageResult
+from app.services.email_attention import email_thread_state_to_attention_result_for_digest
 
 DEFAULT_DIGEST_ENTRY_LIMIT = 20
 MAX_DIGEST_ENTRY_LIMIT = 50
@@ -236,26 +238,35 @@ def _email_thread_visible_by_config(email_thread: EmailThreadState) -> bool:
     return True
 
 
-def _email_thread_group_key(email_thread: EmailThreadState) -> str | None:
-    category = _email_thread_triage_category(email_thread)
-    action_type = _email_thread_action_type(email_thread)
-
-    if action_type == EMAIL_TRIAGE_ACTION_REPLY_REQUIRED:
+def _email_thread_group_key_from_attention_result(
+    result: AttentionTriageResult,
+) -> str | None:
+    if not result.show_in_digest:
+        return None
+    if result.attention_class == "requires_my_attention":
         return EMAIL_THREAD_GROUP_WORK_ACTIONS
-    if action_type == EMAIL_TRIAGE_ACTION_MANUAL_ACTION_REQUIRED:
+    if result.attention_class == "manual_action":
         return EMAIL_THREAD_GROUP_MANUAL_ACTIONS
-    if action_type == EMAIL_TRIAGE_ACTION_WAITING_EXTERNAL_REPLY:
+    if result.attention_class == "waiting_on_external":
         return EMAIL_THREAD_GROUP_WAITING_EXTERNAL_REPLY
-    if category == EMAIL_TRIAGE_CATEGORY_WORK_INFO:
+    if result.attention_class == "important_info":
         return EMAIL_THREAD_GROUP_WORK_INFO
-    if action_type == EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL:
+    if result.attention_class == "review_optional":
         return EMAIL_THREAD_GROUP_REVIEW_OPTIONAL
-    if action_type == EMAIL_TRIAGE_ACTION_NO_ACTION_REQUIRED and category not in (
-        EMAIL_TRIAGE_CATEGORY_NOISE,
-        EMAIL_TRIAGE_CATEGORY_UNKNOWN,
-    ):
-        return EMAIL_THREAD_GROUP_WORK_INFO
+    if result.attention_class == "no_action_required":
+        return EMAIL_THREAD_GROUP_REVIEW_OPTIONAL
     return None
+
+
+def _email_thread_action_type_from_attention_result(result: AttentionTriageResult) -> str:
+    return {
+        "requires_my_attention": EMAIL_TRIAGE_ACTION_REPLY_REQUIRED,
+        "manual_action": EMAIL_TRIAGE_ACTION_MANUAL_ACTION_REQUIRED,
+        "waiting_on_external": EMAIL_TRIAGE_ACTION_WAITING_EXTERNAL_REPLY,
+        "important_info": EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL,
+        "review_optional": EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL,
+        "no_action_required": EMAIL_TRIAGE_ACTION_NO_ACTION_REQUIRED,
+    }[result.attention_class]
 
 
 def _hidden_email_category_label(email_thread: EmailThreadState) -> str:
@@ -347,6 +358,7 @@ def _last_message_to_display(email_thread: EmailThreadState) -> str:
 def _email_thread_digest_item(
     email_thread: EmailThreadState,
     *,
+    attention_result: AttentionTriageResult,
     generated_at: datetime,
     debug_evidence: bool,
     debug_triage: bool,
@@ -356,10 +368,12 @@ def _email_thread_digest_item(
         or email_thread.subject_normalized
         or "Subject unavailable",
         "status": email_thread.status,
+        "attention_class": attention_result.attention_class,
         "category": _email_thread_triage_category(email_thread),
-        "action_type": _email_thread_action_type(email_thread),
-        "priority": _email_thread_priority(email_thread),
-        "show_in_digest": email_thread.show_in_digest is True,
+        "action_type": _email_thread_action_type_from_attention_result(attention_result),
+        "priority": attention_result.priority,
+        "show_in_digest": attention_result.show_in_digest,
+        "recommended_action": attention_result.recommended_action,
         "last_message_at": _iso_datetime(email_thread.last_message_at),
         "last_message_from": _last_message_from_display(email_thread),
         "last_message_to": _last_message_to_display(email_thread),
@@ -383,6 +397,12 @@ def _email_thread_digest_item(
             "show_in_digest": email_thread.show_in_digest is True,
             "reason": email_thread.triage_reason,
             "confidence": email_thread.triage_confidence,
+            "attention_class": attention_result.attention_class,
+            "attention_priority": attention_result.priority,
+            "attention_show_in_digest": attention_result.show_in_digest,
+            "attention_reason": attention_result.reason,
+            "attention_confidence": attention_result.confidence,
+            "recommended_action": attention_result.recommended_action,
         }
 
     return item
@@ -509,15 +529,19 @@ async def _build_email_thread_intelligence(
     groups: dict[str, list[dict[str, Any]]] = {group_key: [] for group_key in EMAIL_THREAD_GROUPS}
     hidden_counts: Counter[str] = Counter()
     for row in rows:
-        visible = _email_thread_visible_by_config(row)
-        group_key = _email_thread_group_key(row)
-        if not visible or group_key is None:
+        attention_result = email_thread_state_to_attention_result_for_digest(
+            row,
+            settings=settings,
+        )
+        group_key = _email_thread_group_key_from_attention_result(attention_result)
+        if group_key is None:
             hidden_counts[_hidden_email_category_label(row)] += 1
             continue
 
         groups[group_key].append(
             _email_thread_digest_item(
                 row,
+                attention_result=attention_result,
                 generated_at=generated_at,
                 debug_evidence=debug_evidence,
                 debug_triage=debug_triage,

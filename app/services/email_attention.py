@@ -18,11 +18,28 @@ from app.services.attention_triage import (
     AttentionTriageResult,
     ConservativeFallbackAttentionTriageProvider,
     NormalizedActivityItem,
+    apply_attention_confidence_policy,
 )
 from app.services.email_threads import parse_email_addresses
 
 DEFAULT_EMAIL_ATTENTION_PREVIEW_LIMIT = 20
 MAX_EMAIL_ATTENTION_PREVIEW_LIMIT = 50
+
+EMAIL_TRIAGE_ACTION_REPLY_REQUIRED = "reply_required"
+EMAIL_TRIAGE_ACTION_MANUAL_ACTION_REQUIRED = "manual_action_required"
+EMAIL_TRIAGE_ACTION_WAITING_EXTERNAL_REPLY = "waiting_external_reply"
+EMAIL_TRIAGE_ACTION_NO_ACTION_REQUIRED = "no_action_required"
+EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL = "review_optional"
+
+EMAIL_TRIAGE_PRIORITY_HIGH = "high"
+EMAIL_TRIAGE_PRIORITY_MEDIUM = "medium"
+EMAIL_TRIAGE_PRIORITY_LOW = "low"
+EMAIL_TRIAGE_PRIORITY_HIDDEN = "hidden"
+
+EMAIL_TRIAGE_CATEGORY_WORK_ACTION = "work_action"
+EMAIL_TRIAGE_CATEGORY_WORK_WAITING = "work_waiting"
+EMAIL_TRIAGE_CATEGORY_WORK_INFO = "work_info"
+EMAIL_TRIAGE_CATEGORY_MANUAL_ACTION = "manual_action"
 
 
 @dataclass(frozen=True)
@@ -93,6 +110,14 @@ def _string_attr(value: Any) -> str | None:
         return None
     cleaned = value.strip()
     return cleaned or None
+
+
+def _float_attr(value: Any, *, fallback: float = 0.0) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return min(1.0, max(0.0, parsed))
 
 
 def _participant_labels(thread_state: Any) -> list[str]:
@@ -170,6 +195,66 @@ def _evidence_refs(thread_state: Any) -> list[dict[str, Any]]:
     ]
 
 
+def _attention_priority(thread_state: Any) -> str:
+    priority = _string_attr(getattr(thread_state, "triage_priority", None))
+    if priority in {EMAIL_TRIAGE_PRIORITY_HIGH, EMAIL_TRIAGE_PRIORITY_MEDIUM}:
+        return priority
+    return EMAIL_TRIAGE_PRIORITY_LOW
+
+
+def _deterministic_show_in_digest(thread_state: Any) -> bool:
+    priority = _string_attr(getattr(thread_state, "triage_priority", None))
+    return (
+        getattr(thread_state, "show_in_digest", None) is True
+        and priority != EMAIL_TRIAGE_PRIORITY_HIDDEN
+    )
+
+
+def _attention_class_for_email_thread_state(thread_state: Any) -> str:
+    category = _string_attr(getattr(thread_state, "triage_category", None))
+    action_type = _string_attr(getattr(thread_state, "triage_action_type", None))
+    show_in_digest = _deterministic_show_in_digest(thread_state)
+
+    if category == EMAIL_TRIAGE_CATEGORY_WORK_INFO and show_in_digest:
+        return "important_info"
+    if action_type == EMAIL_TRIAGE_ACTION_REPLY_REQUIRED:
+        return "requires_my_attention"
+    if action_type == EMAIL_TRIAGE_ACTION_MANUAL_ACTION_REQUIRED:
+        return "manual_action"
+    if action_type == EMAIL_TRIAGE_ACTION_WAITING_EXTERNAL_REPLY:
+        return "waiting_on_external"
+    if category == EMAIL_TRIAGE_CATEGORY_WORK_ACTION and show_in_digest:
+        return "requires_my_attention"
+    if category == EMAIL_TRIAGE_CATEGORY_MANUAL_ACTION and show_in_digest:
+        return "manual_action"
+    if category == EMAIL_TRIAGE_CATEGORY_WORK_WAITING and show_in_digest:
+        return "waiting_on_external"
+    if action_type == EMAIL_TRIAGE_ACTION_NO_ACTION_REQUIRED or not show_in_digest:
+        return "no_action_required"
+    if action_type == EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL:
+        return "review_optional"
+    return "review_optional"
+
+
+def _recommended_action_for_attention_class(attention_class: str) -> str:
+    return {
+        "requires_my_attention": "reply to the email thread",
+        "manual_action": "complete the manual email action",
+        "waiting_on_external": "wait for an external reply",
+        "important_info": "review the project update",
+        "review_optional": "review if relevant",
+        "no_action_required": "no action required",
+    }[attention_class]
+
+
+def _owner_for_attention_class(attention_class: str) -> str | None:
+    if attention_class in {"requires_my_attention", "manual_action"}:
+        return "me"
+    if attention_class in {"waiting_on_external", "important_info"}:
+        return "external"
+    return None
+
+
 def email_thread_state_to_activity_item(
     thread_state: Any,
     *,
@@ -195,6 +280,47 @@ def email_thread_state_to_activity_item(
         related_prs=[],
         related_files=[],
         evidence_refs=_evidence_refs(thread_state),
+    )
+
+
+def email_thread_state_to_attention_result_for_digest(
+    thread_state: Any,
+    *,
+    settings: Any | None = None,
+) -> AttentionTriageResult:
+    """Project deterministic email thread fields into the playbook attention contract.
+
+    This adapter is intentionally in-memory and provider-free. It does not call
+    OpenAI, does not invoke AttentionTriageAgent, and does not mutate the source
+    EmailThreadState row.
+    """
+
+    max_chars = int(_setting(settings, "attention_triage_max_text_chars", 6000))
+    activity = email_thread_state_to_activity_item(thread_state, max_text_chars=max_chars)
+    attention_class = _attention_class_for_email_thread_state(thread_state)
+    confidence = _float_attr(getattr(thread_state, "triage_confidence", None), fallback=0.0)
+    reason = _string_attr(getattr(thread_state, "triage_reason", None)) or (
+        "deterministic_email_thread_triage"
+    )
+
+    result = AttentionTriageResult(
+        attention_class=attention_class,
+        priority=_attention_priority(thread_state),
+        show_in_digest=_deterministic_show_in_digest(thread_state),
+        confidence=confidence,
+        reason=reason,
+        recommended_action=_recommended_action_for_attention_class(attention_class),
+        owner=_owner_for_attention_class(attention_class),
+        deadline=None,
+        evidence=activity.evidence_refs,
+    )
+
+    return apply_attention_confidence_policy(
+        result,
+        min_confidence_to_hide=float(
+            _setting(settings, "attention_triage_min_confidence_to_hide", 0.80)
+        ),
+        review_threshold=float(_setting(settings, "attention_triage_review_threshold", 0.55)),
     )
 
 

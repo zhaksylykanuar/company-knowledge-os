@@ -6,12 +6,14 @@ from types import SimpleNamespace
 
 from app.services.attention_triage import (
     AttentionContext,
+    AttentionTriageAgent,
     MockAttentionTriageProvider,
 )
 from app.services.digest_rendering import render_source_activity_digest_text
 from app.services.email_attention import (
     classify_email_thread_attention,
     classify_email_thread_state_items,
+    email_thread_state_to_attention_result_for_digest,
     email_thread_state_to_activity_item,
 )
 
@@ -167,6 +169,87 @@ def test_mapping_carries_top_level_evidence_refs() -> None:
             "raw_object_ref": "raw://private-ref",
         }
     ]
+
+
+def test_digest_projection_maps_deterministic_fields_to_attention_result() -> None:
+    result = email_thread_state_to_attention_result_for_digest(_thread_state())
+
+    assert result.attention_class == "requires_my_attention"
+    assert result.priority == "high"
+    assert result.show_in_digest is True
+    assert result.recommended_action == "reply to the email thread"
+    assert result.owner == "me"
+    assert result.evidence == [
+        {
+            "kind": "gmail_message",
+            "message_id": "private-message-id",
+            "raw_object_ref": "raw://private-ref",
+        }
+    ]
+
+
+def test_digest_projection_maps_work_info_to_important_info() -> None:
+    result = email_thread_state_to_attention_result_for_digest(
+        _thread_state(
+            status="informational",
+            triage_category="work_info",
+            triage_action_type="no_action_required",
+            triage_priority="low",
+            show_in_digest=True,
+            triage_confidence=0.85,
+        )
+    )
+
+    assert result.attention_class == "important_info"
+    assert result.show_in_digest is True
+    assert result.recommended_action == "review the project update"
+
+
+def test_digest_projection_medium_confidence_hidden_moves_to_review_optional() -> None:
+    result = email_thread_state_to_attention_result_for_digest(
+        _thread_state(
+            status="hidden",
+            triage_category="marketing",
+            triage_action_type="review_optional",
+            triage_priority="hidden",
+            show_in_digest=False,
+            triage_confidence=0.70,
+        )
+    )
+
+    assert result.attention_class == "review_optional"
+    assert result.priority == "low"
+    assert result.show_in_digest is True
+
+
+def test_digest_projection_low_confidence_work_item_stays_visible() -> None:
+    result = email_thread_state_to_attention_result_for_digest(
+        _thread_state(
+            status="hidden",
+            triage_category="work_action",
+            triage_action_type="reply_required",
+            triage_priority="high",
+            show_in_digest=False,
+            triage_confidence=0.30,
+        )
+    )
+
+    assert result.attention_class == "review_optional"
+    assert result.priority == "medium"
+    assert result.show_in_digest is True
+
+
+def test_digest_projection_does_not_use_attention_agent_provider_path(
+    monkeypatch,
+) -> None:
+    def fail_if_called(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("digest projection must not invoke provider classification")
+
+    monkeypatch.setattr(AttentionTriageAgent, "classify_activity", fail_if_called)
+
+    result = email_thread_state_to_attention_result_for_digest(_thread_state())
+
+    assert result.attention_class == "requires_my_attention"
 
 
 def test_batch_safe_output_does_not_include_private_values() -> None:

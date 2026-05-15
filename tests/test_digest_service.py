@@ -11,6 +11,7 @@ from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
 from app.db.gmail_models import EmailThreadState
 from app.db.models import IngestedEvent
+from app.services.attention_triage import AttentionTriageAgent
 from app.services.digest import _visible_source_events, build_source_activity_digest
 
 
@@ -492,10 +493,52 @@ async def test_build_source_activity_digest_triage_sections_and_hidden_counts(
         )
         await _insert_email_thread_state(
             unique=unique,
+            suffix="work-info",
+            status="informational",
+            subject="Fake project update",
+            last_message_at=_utc(2125, 2, 1, 8),
+            stored_days_without_reply=1,
+            messages_count=1,
+            triage_category="work_info",
+            triage_action_type="no_action_required",
+            triage_priority="low",
+            show_in_digest=True,
+            triage_confidence=0.85,
+        )
+        await _insert_email_thread_state(
+            unique=unique,
+            suffix="optional",
+            status="informational",
+            subject="Fake optional review",
+            last_message_at=_utc(2125, 2, 1, 7),
+            stored_days_without_reply=1,
+            messages_count=1,
+            triage_category="unknown",
+            triage_action_type="review_optional",
+            triage_priority="low",
+            show_in_digest=True,
+            triage_confidence=0.85,
+        )
+        await _insert_email_thread_state(
+            unique=unique,
+            suffix="no-action-visible",
+            status="informational",
+            subject="Fake visible no-action notice",
+            last_message_at=_utc(2125, 2, 1, 6),
+            stored_days_without_reply=1,
+            messages_count=1,
+            triage_category="security_alert",
+            triage_action_type="no_action_required",
+            triage_priority="low",
+            show_in_digest=True,
+            triage_confidence=0.95,
+        )
+        await _insert_email_thread_state(
+            unique=unique,
             suffix="marketing",
             status="hidden",
             subject="Fake marketing promotion",
-            last_message_at=_utc(2125, 2, 1, 8),
+            last_message_at=_utc(2125, 2, 1, 5),
             stored_days_without_reply=1,
             messages_count=1,
             triage_category="marketing",
@@ -508,7 +551,7 @@ async def test_build_source_activity_digest_triage_sections_and_hidden_counts(
             suffix="newsletter",
             status="hidden",
             subject="Fake newsletter",
-            last_message_at=_utc(2125, 2, 1, 7),
+            last_message_at=_utc(2125, 2, 1, 4),
             stored_days_without_reply=1,
             messages_count=1,
             triage_category="newsletter",
@@ -521,7 +564,7 @@ async def test_build_source_activity_digest_triage_sections_and_hidden_counts(
             suffix="social",
             status="hidden",
             subject="Fake social network notice",
-            last_message_at=_utc(2125, 2, 1, 6),
+            last_message_at=_utc(2125, 2, 1, 3),
             stored_days_without_reply=1,
             messages_count=1,
             triage_category="social_network",
@@ -534,7 +577,7 @@ async def test_build_source_activity_digest_triage_sections_and_hidden_counts(
             suffix="calendar",
             status="hidden",
             subject="Fake calendar update",
-            last_message_at=_utc(2125, 2, 1, 5),
+            last_message_at=_utc(2125, 2, 1, 2),
             stored_days_without_reply=1,
             messages_count=1,
             triage_category="calendar_update",
@@ -547,7 +590,7 @@ async def test_build_source_activity_digest_triage_sections_and_hidden_counts(
             suffix="security-ok",
             status="hidden",
             subject="Fake no-action security alert",
-            last_message_at=_utc(2125, 2, 1, 4),
+            last_message_at=_utc(2125, 2, 1, 1),
             stored_days_without_reply=1,
             messages_count=1,
             triage_category="security_alert",
@@ -569,6 +612,8 @@ async def test_build_source_activity_digest_triage_sections_and_hidden_counts(
         manual_items = groups["manual_actions"]
         manual_subjects = {item["subject"] for item in manual_items}
         waiting_subjects = {item["subject"] for item in groups["waiting_external_reply"]}
+        info_subjects = {item["subject"] for item in groups["work_info"]}
+        review_subjects = {item["subject"] for item in groups["review_optional"]}
 
         assert "Fake client question" in work_subjects
         assert "Fake marketing promotion" not in work_subjects
@@ -582,6 +627,9 @@ async def test_build_source_activity_digest_triage_sections_and_hidden_counts(
             for item in manual_items
         )
         assert "Fake waiting proposal" in waiting_subjects
+        assert "Fake project update" in info_subjects
+        assert "Fake optional review" in review_subjects
+        assert "Fake visible no-action notice" in review_subjects
         assert "Fake calendar update" not in waiting_subjects
         assert email["hidden_low_priority_summary"]["counts"] == {
             "calendar auto-updates": 1,
@@ -592,6 +640,63 @@ async def test_build_source_activity_digest_triage_sections_and_hidden_counts(
         }
         assert "evidence_refs" not in groups["work_actions"][0]
         assert "triage" not in groups["work_actions"][0]
+
+    finally:
+        await _cleanup_digest_fixture(unique)
+
+
+async def test_build_source_activity_digest_attention_policy_controls_visibility() -> None:
+    unique = uuid4().hex
+    await _cleanup_digest_fixture(unique)
+
+    try:
+        await _insert_email_thread_state(
+            unique=unique,
+            suffix="medium-hidden",
+            status="hidden",
+            subject="Fake medium confidence hidden item",
+            last_message_at=_utc(2125, 2, 2, 12),
+            stored_days_without_reply=1,
+            messages_count=1,
+            triage_category="marketing",
+            triage_action_type="review_optional",
+            triage_priority="hidden",
+            show_in_digest=False,
+            triage_confidence=0.70,
+        )
+        await _insert_email_thread_state(
+            unique=unique,
+            suffix="low-hidden-work",
+            status="hidden",
+            subject="Fake low confidence work item",
+            last_message_at=_utc(2125, 2, 2, 11),
+            stored_days_without_reply=1,
+            messages_count=1,
+            triage_category="work_action",
+            triage_action_type="reply_required",
+            triage_priority="high",
+            show_in_digest=False,
+            triage_confidence=0.30,
+        )
+
+        digest = await build_source_activity_digest(
+            start_at=_utc(2125, 2, 2),
+            end_at=_utc(2125, 2, 3),
+            generated_at=_utc(2125, 2, 3),
+            limit=10,
+        )
+
+        email = digest["email_thread_intelligence"]
+        review_items = email["groups"]["review_optional"]
+        review_by_subject = {item["subject"]: item for item in review_items}
+
+        assert "Fake medium confidence hidden item" in review_by_subject
+        assert review_by_subject["Fake medium confidence hidden item"]["priority"] == "low"
+        assert review_by_subject["Fake medium confidence hidden item"]["show_in_digest"] is True
+        assert "Fake low confidence work item" in review_by_subject
+        assert review_by_subject["Fake low confidence work item"]["priority"] == "medium"
+        assert review_by_subject["Fake low confidence work item"]["show_in_digest"] is True
+        assert email["hidden_low_priority_summary"]["counts"] == {}
 
     finally:
         await _cleanup_digest_fixture(unique)
@@ -642,6 +747,12 @@ async def test_build_source_activity_digest_debug_triage_is_explicit(
             "show_in_digest": True,
             "reason": "external_work_request",
             "confidence": 0.78,
+            "attention_class": "requires_my_attention",
+            "attention_priority": "high",
+            "attention_show_in_digest": True,
+            "attention_reason": "external_work_request",
+            "attention_confidence": 0.78,
+            "recommended_action": "reply to the email thread",
         }
         assert debug_digest["metadata"]["debug_triage"] is True
 
@@ -761,6 +872,14 @@ async def test_build_source_activity_digest_omits_raw_body_text_and_does_not_imp
             summary=raw_body,
             payload={"text": raw_body},
         )
+        await _insert_email_thread_state(
+            unique=unique,
+            suffix="email-no-provider",
+            status="needs_my_reply",
+            last_message_at=_utc(2099, 2, 1, 11),
+            stored_days_without_reply=1,
+            messages_count=1,
+        )
 
         real_import = builtins.__import__
 
@@ -769,7 +888,11 @@ async def test_build_source_activity_digest_omits_raw_body_text_and_does_not_imp
                 raise AssertionError("digest builder must not import OpenAI")
             return real_import(name, *args, **kwargs)
 
+        def fail_if_provider_path_used(*_args, **_kwargs):
+            raise AssertionError("digest builder must not use provider classification")
+
         monkeypatch.setattr(builtins, "__import__", guarded_import)
+        monkeypatch.setattr(AttentionTriageAgent, "classify_activity", fail_if_provider_path_used)
 
         digest = await build_source_activity_digest(
             start_at=_utc(2099, 2, 1),

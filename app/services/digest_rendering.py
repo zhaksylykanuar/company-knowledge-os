@@ -21,7 +21,7 @@ EMAIL_THREAD_GROUP_LABELS = (
     ("work_actions", "Work actions requiring my attention"),
     ("manual_actions", "Manual actions"),
     ("waiting_external_reply", "Waiting for external reply"),
-    ("work_info", "Work info / recently relevant"),
+    ("work_info", "Important project updates"),
     ("review_optional", "Review optional"),
 )
 
@@ -237,12 +237,26 @@ def _format_email_thread_item(
             f"priority={_string_value(triage.get('priority'))}",
             f"show_in_digest={_string_value(triage.get('show_in_digest'))}",
         ]
+        if triage.get("attention_class") is not None:
+            triage_parts.append(f"attention_class={_string_value(triage.get('attention_class'))}")
+        if triage.get("attention_priority") is not None:
+            triage_parts.append(
+                f"attention_priority={_string_value(triage.get('attention_priority'))}"
+            )
+        if triage.get("attention_show_in_digest") is not None:
+            triage_parts.append(
+                "attention_show_in_digest="
+                f"{_string_value(triage.get('attention_show_in_digest'))}"
+            )
         reason = _string_value(triage.get("reason"), fallback="")
         confidence = _string_value(triage.get("confidence"), fallback="")
+        recommended_action = _string_value(triage.get("recommended_action"), fallback="")
         if reason:
             triage_parts.append(f"reason={reason}")
         if confidence:
             triage_parts.append(f"confidence={confidence}")
+        if recommended_action:
+            triage_parts.append(f"recommended_action={recommended_action}")
         lines.append(f"   Debug triage: {'; '.join(triage_parts)}")
 
     return lines

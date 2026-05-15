@@ -36,11 +36,13 @@
   conversation using Gmail thread IDs first, then message-header relationships,
   then normalized subject plus overlapping participants.
 - The source activity digest uses `EmailThreadState` rows as the primary Gmail
-  output when thread states exist for the digest window. Each row includes
+  source data when thread states exist for the digest window. Each row includes
   deterministic triage fields: `triage_category`, `triage_action_type`,
   `triage_priority`, `show_in_digest`, `triage_reason`, and
   `triage_confidence`. Thread `status` is derived from triage action type
-  rather than only the last sender.
+  rather than only the last sender. Digest sectioning projects those
+  deterministic fields into an in-memory `AttentionTriageResult` and applies
+  the shared confidence policy before mapping to sections.
 - Email triage separates technical reply state from business/action relevance.
   Work questions become reply-required work actions, outbound work threads
   become waiting-for-external-reply items, badge/ticket/access/registration
@@ -50,8 +52,8 @@
   auto-updates, automated notifications, and no-action security alerts are
   hidden from main digest sections by default and summarized by count.
 - The source activity digest email sections are ordered as: work actions
-  requiring attention, manual actions, waiting for external reply, work info /
-  recently relevant, review optional, and hidden low-priority email summary.
+  requiring attention, manual actions, waiting for external reply, important
+  project updates, review optional, and hidden low-priority email summary.
   Normal digest text shows short evidence counts; raw evidence refs and triage
   details are debug-only.
 - Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.
