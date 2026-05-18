@@ -18,6 +18,8 @@
   through an in-memory deterministic projection.
 - Attention triage feedback can be stored and retrieved for future
   `AttentionContext.recent_feedback` use.
+- Stored feedback is loaded as bounded advisory context for email triage calls
+  that classify existing `EmailThreadState` rows.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -73,6 +75,12 @@
   fine-tuning data. API, CLI, and UI submission entrypoints are deferred.
 - `AttentionTriageResult` persistence remains deferred; feedback rows keep
   `triage_result_id` nullable until a result table exists.
+- FOS-050 loads stored feedback into `AttentionContext.recent_feedback` for the
+  live email triage classification path. Feedback remains advisory context only:
+  it is not fine-tuning data, not a deterministic show/hide override, and it
+  does not mutate `EmailThreadState` rows.
+- FOS-050 does not change deterministic digest behavior. Email digest sectioning
+  still uses the in-memory deterministic projection from FOS-045.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -94,6 +102,6 @@
 - No Telegram delivery is implemented.
 - Score refresh is explicit, not automatic.
 - Feedback API, CLI, and UI controls are not implemented.
-- Stored feedback is not yet automatically loaded into live triage or digest
-  behavior.
+- Feedback API/buttons/action execution are not implemented.
+- Stored feedback is not wired into deterministic digest behavior.
 - GitHub/Jira/Drive digest integration is not implemented.

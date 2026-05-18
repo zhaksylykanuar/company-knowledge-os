@@ -11,6 +11,7 @@ from app.db.attention_models import AttentionTriageFeedbackRecord
 from app.services.attention_triage import AttentionTriageFeedback, FeedbackAction
 
 DEFAULT_ATTENTION_FEEDBACK_LIMIT = 20
+DEFAULT_ATTENTION_CONTEXT_FEEDBACK_LIMIT = 5
 MAX_ATTENTION_FEEDBACK_LIMIT = 100
 ATTENTION_FEEDBACK_ACTIONS = set(get_args(FeedbackAction))
 
@@ -145,3 +146,25 @@ async def get_recent_attention_triage_feedback(
     )
 
     return [_record_to_feedback(row) for row in rows]
+
+
+async def get_recent_feedback_for_source_object(
+    session: AsyncSession,
+    *,
+    source_object_id: str,
+    source: str | None = None,
+    limit: int = DEFAULT_ATTENTION_CONTEXT_FEEDBACK_LIMIT,
+) -> list[AttentionTriageFeedback]:
+    """Return bounded feedback rows for AttentionContext.recent_feedback.
+
+    Source filtering is service-level collision protection. The public
+    AttentionTriageFeedback DTO intentionally remains playbook-compatible and
+    does not expose the source field.
+    """
+
+    return await get_recent_attention_triage_feedback(
+        session,
+        source_object_id=source_object_id,
+        source=source,
+        limit=limit,
+    )

@@ -8,8 +8,10 @@ from sqlalchemy import delete, func, select
 from app.db.attention_models import AttentionTriageFeedbackRecord
 from app.db.base import AsyncSessionLocal, engine
 from app.services.attention_feedback import (
+    DEFAULT_ATTENTION_CONTEXT_FEEDBACK_LIMIT,
     MAX_ATTENTION_FEEDBACK_LIMIT,
     AttentionFeedbackValidationError,
+    get_recent_feedback_for_source_object,
     get_recent_attention_triage_feedback,
     record_attention_triage_feedback,
 )
@@ -320,6 +322,56 @@ async def test_recent_feedback_output_is_ready_for_attention_context() -> None:
 
         assert context.recent_feedback[0].source_object_id == f"feedback-object-{unique}"
         assert context.recent_feedback[0].user_action == "always_show_similar"
+
+    finally:
+        await _cleanup_attention_feedback(unique)
+
+
+@pytest.mark.asyncio
+async def test_context_feedback_helper_filters_by_source_and_uses_small_default_limit() -> None:
+    await _ensure_attention_feedback_table()
+    unique = uuid4().hex
+    await _cleanup_attention_feedback(unique)
+    base_time = datetime(2026, 5, 15, 14, 0, tzinfo=timezone.utc)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            for index in range(DEFAULT_ATTENTION_CONTEXT_FEEDBACK_LIMIT + 2):
+                await record_attention_triage_feedback(
+                    session,
+                    feedback_id=f"atfb_test_{unique}_gmail_{index}",
+                    source="gmail",
+                    source_object_id=f"feedback-object-{unique}",
+                    user_action="always_show_similar",
+                    created_at=base_time + timedelta(minutes=index),
+                )
+            await record_attention_triage_feedback(
+                session,
+                feedback_id=f"atfb_test_{unique}_drive",
+                source="drive",
+                source_object_id=f"feedback-object-{unique}",
+                user_action="always_hide_similar",
+                created_at=base_time + timedelta(minutes=20),
+            )
+            await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            context_feedback = await get_recent_feedback_for_source_object(
+                session,
+                source="gmail",
+                source_object_id=f"feedback-object-{unique}",
+            )
+
+        assert len(context_feedback) == DEFAULT_ATTENTION_CONTEXT_FEEDBACK_LIMIT
+        assert [item.user_action for item in context_feedback] == [
+            "always_show_similar",
+            "always_show_similar",
+            "always_show_similar",
+            "always_show_similar",
+            "always_show_similar",
+        ]
+        assert all(item.feedback_id.startswith(f"atfb_test_{unique}_gmail_") for item in context_feedback)
+        assert all(not hasattr(item, "source") for item in context_feedback)
 
     finally:
         await _cleanup_attention_feedback(unique)

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.services.attention_triage import (
     AttentionContext,
+    AttentionTriageFeedback,
     AttentionTriageAgent,
     AttentionTriageResult,
     ConservativeFallbackAttentionTriageProvider,
@@ -465,6 +466,44 @@ def test_openai_provider_enabled_with_fake_valid_json_returns_result() -> None:
     assert result.priority == "high"
     assert result.show_in_digest is True
     assert len(fake_client.calls) == 1
+    assert fake_client.calls[0]["text"]["format"]["strict"] is True
+
+
+def test_openai_provider_prompt_includes_recent_feedback_context() -> None:
+    fake_client = _FakeOpenAICompatibleClient(
+        [
+            json.dumps(
+                _result(
+                    attention_class="requires_my_attention",
+                    priority="high",
+                    owner="me",
+                )
+            )
+        ]
+    )
+    provider = OpenAIAttentionTriageProvider(
+        client=fake_client,
+        enabled=True,
+        model="fake-model",
+    )
+    context = AttentionContext(
+        recent_feedback=[
+            AttentionTriageFeedback(
+                feedback_id="atfb_test_prompt_context",
+                source_object_id="fake-openai-feedback",
+                triage_result_id=None,
+                user_action="marked_reply_required",
+                created_at=NOW,
+            )
+        ]
+    )
+
+    provider.classify_activity(_activity("fake-openai-feedback"), context)
+
+    user_payload = fake_client.calls[0]["input"][1]["content"]
+    assert "atfb_test_prompt_context" in user_payload
+    assert "marked_reply_required" in user_payload
+    assert '"recent_feedback":[' in user_payload
     assert fake_client.calls[0]["text"]["format"]["strict"] is True
 
 

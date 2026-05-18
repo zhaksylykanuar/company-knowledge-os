@@ -20,6 +20,7 @@ from app.services.attention_triage import (
     NormalizedActivityItem,
     apply_attention_confidence_policy,
 )
+from app.services.attention_feedback import get_recent_feedback_for_source_object
 from app.services.email_threads import parse_email_addresses
 
 DEFAULT_EMAIL_ATTENTION_PREVIEW_LIMIT = 20
@@ -340,6 +341,13 @@ def build_email_attention_context(
     )
 
 
+def _context_with_recent_feedback(
+    context: AttentionContext,
+    recent_feedback: Sequence[Any],
+) -> AttentionContext:
+    return context.model_copy(update={"recent_feedback": list(recent_feedback)})
+
+
 def _agent_for(
     *,
     provider: AttentionTriageProvider | None,
@@ -431,9 +439,22 @@ async def classify_email_thread_states(
         .limit(_safe_limit(limit))
     )
     thread_states = list(result.scalars().all())
-    return classify_email_thread_state_items(
-        thread_states,
-        provider=provider,
-        context=context,
-        settings=settings,
+    base_context = context or build_email_attention_context(settings=settings)
+    agent = _agent_for(provider=provider, settings=settings)
+    max_chars = int(_setting(settings, "attention_triage_max_text_chars", 6000))
+
+    results: list[AttentionTriageResult] = []
+    for thread_state in thread_states:
+        activity = email_thread_state_to_activity_item(thread_state, max_text_chars=max_chars)
+        recent_feedback = await get_recent_feedback_for_source_object(
+            session,
+            source=activity.source,
+            source_object_id=activity.source_object_id,
+        )
+        item_context = _context_with_recent_feedback(base_context, recent_feedback)
+        results.append(agent.classify_activity(activity, item_context))
+
+    return _aggregate_results(
+        results,
+        review_threshold=float(_setting(settings, "attention_triage_review_threshold", 0.55)),
     )

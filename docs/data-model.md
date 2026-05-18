@@ -46,6 +46,9 @@
   bodies or provider payloads.
 - `source` on attention feedback is optional collision protection because
   `source_object_id` may not be globally unique across connectors.
+- Feedback context loaders use `source` as a DB/service-level filter; the
+  public `AttentionTriageFeedback` DTO remains playbook-compatible and does not
+  expose `source`.
 - `triage_result_id` on attention feedback is nullable until
   `AttentionTriageResult` persistence exists.
 - Meeting artifacts must not mutate Jira, Obsidian, raw storage, or Postgres
