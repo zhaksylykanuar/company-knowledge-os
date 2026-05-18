@@ -14,6 +14,31 @@ Use this flow when you want to paste a small piece of safe company text into
 FounderOS and immediately inspect extracted tasks, risks, decisions, and their
 supporting evidence.
 
+## Manual Pilot Dry Run
+
+Before a 5-day manual pilot, run the provider-free synthetic readiness check:
+
+```bash
+.venv/bin/python scripts/pilot_dry_run.py --format json
+.venv/bin/python scripts/pilot_dry_run.py --format text
+```
+
+The command exercises the current MVP contracts with synthetic sample data only:
+
+- attention confidence policy, including low/medium confidence hidden items
+  moving to visible `review_optional`;
+- target digest section shape, with hidden low-priority output as counts only;
+- GitHub, Jira, and Drive activity normalization;
+- meeting transcript draft artifacts for summary, decisions, actions, risks,
+  questions, Jira draft tickets, and KB update drafts;
+- feedback context shape suitable for later `AttentionContext.recent_feedback`.
+
+It does not read `.env` files, inspect local private data, open DB sessions,
+call providers or source APIs, run ingestion, run migrations, write files,
+create Jira issues, send Telegram/Slack messages, or write KB/Obsidian output.
+Use it as the first pilot readiness check, then follow
+`docs/runbooks/manual-pilot.md` for the day-by-day manual pilot checklist.
+
 ## Prerequisites
 
 - Python 3.12 or newer.
