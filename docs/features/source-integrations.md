@@ -37,7 +37,9 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
 - Jira: registry contracts, fixtures, and connector payload mapping exist, but
   there is no real production Jira connector yet.
 - Calendar: planned for later.
-- Meeting transcripts: planned for later.
+- Meeting transcripts: provider-free draft artifact pipeline implemented for
+  already-supplied transcript text; upload/source ingestion remains planned for
+  later.
 - Telegram outbound delivery: implemented as a service adapter for
   already-rendered plain text.
 - Telegram inbound notes, Telegram Q&A, and daily scheduler: not implemented.
@@ -156,12 +158,16 @@ Use placeholders only in docs and tests, for example:
 
 ### Meeting Transcripts
 
-- Planned later.
+- FOS-048 implements a pure in-memory draft pipeline for transcript text that
+  has already been supplied with source refs.
 - Require a clear upload/source policy, source owner, and raw file handling
   rule before ingestion.
 - Store raw transcript files before chunking or extraction.
 - Avoid putting private transcript text in docs, tests, logs, or Telegram
   messages.
+- Meeting transcript drafts can include summaries, decisions, action items,
+  risks, open questions, Jira draft tickets, and KB update drafts. They are
+  inert drafts only and require human approval before any future write action.
 
 ### Telegram
 
@@ -199,6 +205,8 @@ Use placeholders only in docs and tests, for example:
 - Replay handling is required for webhook or queued delivery.
 - Provider timestamps and ingestion timestamps both matter.
 - LLM outputs must not directly mutate production data.
+- Meeting transcript Jira and KB outputs are drafts only. Jira issue creation,
+  KB/Obsidian writes, and approval/action execution remain deferred.
 - Scheduler and daily jobs are future work and must use explicit time windows.
 - Raw snapshots must be stored before extraction, digest, or Q&A use.
 
@@ -212,6 +220,8 @@ Use placeholders only in docs and tests, for example:
 - Q&A must retrieve stored evidence first.
 - If evidence is insufficient, Q&A must say so instead of guessing.
 - Evidence-free extracted items must not be presented as trusted knowledge.
+- Meeting decisions, action items, risks, Jira drafts, and KB update drafts
+  must include evidence refs before they can be shown as supported drafts.
 
 ## Recommended Connection Order
 

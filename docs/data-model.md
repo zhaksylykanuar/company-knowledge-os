@@ -9,6 +9,7 @@
 - Knowledge scores: implemented
 - Source events: partial
 - Attention triage feedback: implemented
+- Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
 ## Core Tables
@@ -28,6 +29,9 @@
   triage context. Rows store `feedback_id`, optional `source`, required
   `source_object_id`, nullable `triage_result_id`, `user_action`, and
   `created_at`.
+- Meeting transcript summaries, decisions, actions, risks, open questions,
+  Jira draft tickets, and KB update drafts are not stored in FOS-048. They are
+  strict in-memory draft schemas only.
 
 ## Invariants
 
@@ -44,3 +48,5 @@
   `source_object_id` may not be globally unique across connectors.
 - `triage_result_id` on attention feedback is nullable until
   `AttentionTriageResult` persistence exists.
+- Meeting artifacts must not mutate Jira, Obsidian, raw storage, or Postgres
+  until a future persistence and human approval/action model exists.
