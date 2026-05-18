@@ -6,7 +6,7 @@
 - IngestedEvent -> SourceEvent normalization: implemented
 - Integration source registry contracts: implemented
 - SourceEvent read model: implemented as a service-level projection
-- Development event projections: planned
+- GitHub/Jira/Drive activity normalization: implemented as pure mappings
 
 ## Current Behavior
 
@@ -16,6 +16,10 @@
 - Source events preserve raw refs, trace metadata, and evidence refs.
 - Existing SourceEvent rows can be projected into a deterministic read model for internal services.
 - The read model exposes normalized identifiers, event time, title/summary, raw refs, trace/correlation IDs, evidence refs, and a whitelisted payload subset when payload is supplied.
+- GitHub pull request, Jira issue, and Drive document source-event-like inputs
+  can be projected into `NormalizedActivityItem` objects for future attention
+  triage. These mappings are in-memory and do not call live source APIs,
+  providers, ingestion, or persistence.
 - The source activity digest collapses repeated visible source events by source
   system, object type, object id, and event type. Normal rendered output shows
   one item with a short evidence count and a `Seen N times` note when repeated.
@@ -24,6 +28,27 @@
 - Drive/Gmail emitted ingestion event names are registry-compatible.
 - New non-duplicate Drive/Gmail backfill events are normalized into SourceEvent rows when they satisfy registry contracts.
 - SourceEvent persistence from external inputs requires future API auth and webhook signature validation boundaries.
+
+## Activity Normalization
+
+- GitHub PR inputs include safe event identifiers, event type, title, summary,
+  source URL, actor, repository, PR number, assignees, requested reviewers, and
+  requested teams. Outputs use `source="github"`, activity types such as
+  `pull_request.review_requested`, `pull_request.assigned`, and
+  `pull_request.updated`, with safe PR refs and reviewer/team context.
+- Jira issue inputs include safe event identifiers, issue key, title, summary,
+  source URL, actor, assignee, project key, status, labels, and optional blocker
+  information. Outputs use `source="jira"`, activity types such as
+  `issue.assigned`, `issue.blocked`, and `issue.updated`, with Jira keys and
+  people refs.
+- Drive document inputs include safe event identifiers, document title/name,
+  summary, source URL or web view link, actor, document ID, modification time,
+  and optional project/topic hints. Outputs use `source="drive"` and
+  `activity_type="document.changed"`, with document refs in `related_files`.
+- `evidence_refs` are compact top-level refs only: source, source object ID,
+  event type, optional source event ID, optional raw payload ref, and safe source
+  URL or document identifiers. They must not include raw message bodies, raw
+  document bodies, or full provider payloads.
 
 ## Invariants
 
@@ -42,4 +67,5 @@
 - No public SourceEvent query/read API is visible yet.
 - Duplicate or legacy Drive/Gmail ingested events are not repaired into SourceEvent rows by backfill.
 - GitHub/Jira/Telegram real connectors are planned, not implemented.
-- Development event projection DTOs are planned, not implemented.
+- Live GitHub/Jira/Drive webhook handling and API polling are deferred.
+- GitHub/Jira/Drive digest integration is deferred.

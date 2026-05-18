@@ -5,6 +5,7 @@
 - Deterministic scoring: implemented
 - Attention dashboard: implemented
 - Feedback storage: implemented
+- GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
 
@@ -17,6 +18,9 @@
   through an in-memory deterministic projection.
 - Attention triage feedback can be stored and retrieved for future
   `AttentionContext.recent_feedback` use.
+- GitHub, Jira, and Drive source-event-like inputs can be mapped into
+  `NormalizedActivityItem` objects without calling live providers or source
+  APIs.
 
 ## Universal Activity Triage
 
@@ -69,6 +73,10 @@
   fine-tuning data. API, CLI, and UI submission entrypoints are deferred.
 - `AttentionTriageResult` persistence remains deferred; feedback rows keep
   `triage_result_id` nullable until a result table exists.
+- FOS-047 adds provider-free activity normalization for GitHub pull requests,
+  Jira issues, and Drive documents. This slice is mapping-only: it does not
+  call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
+  wire those sources into digest generation.
 - A future slice may apply semantic attention triage to uncertain email cases behind explicit config.
 
 ## Invariants
@@ -88,3 +96,4 @@
 - Feedback API, CLI, and UI controls are not implemented.
 - Stored feedback is not yet automatically loaded into live triage or digest
   behavior.
+- GitHub/Jira/Drive digest integration is not implemented.
