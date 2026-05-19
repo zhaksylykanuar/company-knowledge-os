@@ -5,6 +5,7 @@
 - Deterministic scoring: implemented
 - Attention dashboard: implemented
 - Feedback storage: implemented
+- Normalized activity item persistence foundation: implemented
 - Attention triage result persistence foundation: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
@@ -21,6 +22,8 @@
   `AttentionContext.recent_feedback` use.
 - Stored feedback is loaded as bounded advisory context for email triage calls
   that classify existing `EmailThreadState` rows.
+- Strictly validated `NormalizedActivityItem` records can be persisted as safe
+  metadata for future durable source-event-to-attention linkage.
 - Strictly validated `AttentionTriageResult` records can be persisted as safe
   metadata for future feedback linkage.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
@@ -90,6 +93,14 @@
   deterministic digest behavior, add feedback overrides, add API/CLI/UI
   controls, or add `normalized_activity_items` persistence. Feedback
   `triage_result_id` remains nullable and advisory.
+- FOS-052 adds provider-free `normalized_activity_items` persistence. It stores
+  only validated `NormalizedActivityItem` fields and evidence refs, plus an
+  optional `source_event_id` for durable source-event linkage; it does not store
+  prompts, raw source bodies, provider payloads, secrets, or unvalidated JSON.
+- FOS-052 does not auto-project live Gmail/GitHub/Jira/Drive/meeting events,
+  change deterministic digest behavior, add feedback behavior, add API/CLI/UI
+  controls, or add human approval/action flows. `AttentionTriageResult`
+  `activity_item_id` remains optional.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -104,6 +115,8 @@
 - LLM-backed activity triage must validate strict JSON before any future persistence or digest use.
 - Feedback storage must not write raw message bodies, provider payloads, or
   generated triage results.
+- Normalized activity persistence must only write validated cross-source
+  activity metadata and evidence refs.
 - Attention result persistence must only write validated result metadata and
   evidence refs.
 
@@ -116,5 +129,8 @@
 - Feedback API/buttons/action execution are not implemented.
 - Stored feedback is not wired into deterministic digest behavior.
 - Live email/provider triage results are not auto-persisted.
-- Normalized activity item persistence is not implemented.
+- Source events are not automatically projected into persisted normalized
+  activity items.
+- Persisted normalized activity items and attention results are not yet used as
+  digest inputs.
 - GitHub/Jira/Drive digest integration is not implemented.

@@ -6,13 +6,16 @@ from sqlalchemy import delete, func, select
 
 from app.db.attention_models import AttentionTriageFeedbackRecord, AttentionTriageResultRecord
 from app.db.base import AsyncSessionLocal, engine
+from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
+from app.db.models import IngestedEvent
 from app.services.attention_feedback import record_attention_triage_feedback
 from app.services.attention_results import (
     AttentionResultValidationError,
     get_attention_triage_result,
     record_attention_triage_result,
 )
-from app.services.attention_triage import AttentionTriageResult
+from app.services.attention_triage import AttentionTriageResult, NormalizedActivityItem
+from app.services.normalized_activity import record_normalized_activity_item
 
 
 class _FailingSession:
@@ -25,6 +28,9 @@ class _FailingSession:
 
 async def _ensure_attention_tables() -> None:
     async with engine.begin() as conn:
+        await conn.run_sync(IngestedEvent.__table__.create, checkfirst=True)
+        await conn.run_sync(SourceEvent.__table__.create, checkfirst=True)
+        await conn.run_sync(NormalizedActivityItemRecord.__table__.create, checkfirst=True)
         await conn.run_sync(AttentionTriageResultRecord.__table__.create, checkfirst=True)
         await conn.run_sync(AttentionTriageFeedbackRecord.__table__.create, checkfirst=True)
 
@@ -55,6 +61,11 @@ async def _cleanup_attention_result_fixture(unique: str) -> None:
                 )
             )
         )
+        await session.execute(
+            delete(NormalizedActivityItemRecord).where(
+                NormalizedActivityItemRecord.activity_item_id.like(f"nact_result_{unique}%")
+            )
+        )
         await session.commit()
 
 
@@ -78,6 +89,25 @@ def _result(**overrides: object) -> AttentionTriageResult:
     }
     defaults.update(overrides)
     return AttentionTriageResult.model_validate(defaults)
+
+
+def _activity(unique: str) -> NormalizedActivityItem:
+    return NormalizedActivityItem(
+        source="gmail",
+        source_object_id=f"gmail:test:result:{unique}",
+        activity_type="email_thread.reply_required.from_external",
+        title="Validated activity for attention result",
+        actor="external sender",
+        created_at=datetime(2026, 5, 19, 8, 30, tzinfo=timezone.utc),
+        safe_summary="Validated activity item for attention result linkage.",
+        evidence_refs=[
+            {
+                "kind": "gmail_message",
+                "message_id": "fake-message-id",
+                "raw_object_ref": "raw://gmail/fake/message.json",
+            }
+        ],
+    )
 
 
 @pytest.mark.asyncio
@@ -247,11 +277,17 @@ async def test_feedback_can_reference_stored_result_and_remains_nullable() -> No
 
     try:
         async with AsyncSessionLocal() as session:
+            stored_activity = await record_normalized_activity_item(
+                session,
+                activity_item_id=f"nact_result_{unique}",
+                activity=_activity(unique),
+            )
             stored = await record_attention_triage_result(
                 session,
                 triage_result_id=triage_result_id,
                 source="gmail",
                 source_object_id=f"gmail:test:result:{unique}",
+                activity_item_id=stored_activity.activity_item_id,
                 result=_result(),
             )
             linked_feedback = await record_attention_triage_feedback(
@@ -271,6 +307,7 @@ async def test_feedback_can_reference_stored_result_and_remains_nullable() -> No
             )
             await session.commit()
 
+        assert stored.activity_item_id == f"nact_result_{unique}"
         assert linked_feedback.triage_result_id == triage_result_id
         assert nullable_feedback.triage_result_id is None
 

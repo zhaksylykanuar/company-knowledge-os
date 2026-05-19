@@ -8,6 +8,7 @@
 - Extracted tasks/risks/decisions: implemented
 - Knowledge scores: implemented
 - Source events: partial
+- Normalized activity items: persistence foundation implemented
 - Attention triage results: persistence foundation implemented
 - Attention triage feedback: implemented
 - Meeting transcript artifacts: draft-only, not persisted
@@ -24,6 +25,12 @@
 - `extracted_decisions`: evidence-backed extracted decision records.
 - `knowledge_scores`: deterministic score payloads for extracted entities.
 - `source_events`: normalized connector event records linked to `ingested_events`.
+- `normalized_activity_items`: validated cross-source activity projections linked
+  to source/source object identifiers and optionally to a stored
+  `source_event_id`. Rows store `activity_item_id`, optional
+  `source_event_id`, source metadata, activity type, title, actor, activity
+  timestamp, project, safe summary, related people/Jira keys/PRs/files,
+  evidence refs, and record `created_at`.
 - `email_thread_states`: deterministic Gmail conversation state built from
   stored Gmail rows for digest and source-intelligence workflows.
 - `attention_triage_results`: validated attention triage outputs linked to a
@@ -48,6 +55,15 @@
 - Document-derived provenance belongs in `source_document_id`, `chunk_id`, and `evidence_refs`.
 - Source-event projections must preserve `raw_object_ref` and evidence links.
 - Missing evidence means no persisted fact.
+- Normalized activity item persistence stores only strict schema-validated
+  `NormalizedActivityItem` metadata and evidence refs. It must not store raw
+  source bodies, prompts, provider payloads, secrets, or unvalidated JSON blobs.
+- Durable activity linkage is now:
+  `source_events` -> `normalized_activity_items` ->
+  `attention_triage_results` -> `attention_triage_feedback`.
+- `source_event_id` on normalized activity items remains nullable for provider-
+  free tests and future activity sources that do not yet have a durable source
+  event row.
 - Attention feedback stores user intent only; it must not store raw source
   bodies or provider payloads.
 - `source` on attention feedback is optional collision protection because
@@ -61,7 +77,9 @@
 - `triage_result_id` on attention feedback remains nullable. Feedback can
   reference a stored attention triage result, but feedback remains advisory and
   does not force deterministic show/hide behavior.
-- Normalized activity items are still projection objects only; no
-  `normalized_activity_items` table exists yet.
+- Automatic projection from all source events into normalized activity rows is
+  still deferred. Digest rendering also remains based on the existing
+  deterministic/in-memory attention projection rather than persisted
+  normalized activity or persisted attention result rows.
 - Meeting artifacts must not mutate Jira, Obsidian, raw storage, or Postgres
   until a future persistence and human approval/action model exists.
