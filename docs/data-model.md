@@ -8,6 +8,7 @@
 - Extracted tasks/risks/decisions: implemented
 - Knowledge scores: implemented
 - Source events: partial
+- Attention triage results: persistence foundation implemented
 - Attention triage feedback: implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
@@ -25,6 +26,11 @@
 - `source_events`: normalized connector event records linked to `ingested_events`.
 - `email_thread_states`: deterministic Gmail conversation state built from
   stored Gmail rows for digest and source-intelligence workflows.
+- `attention_triage_results`: validated attention triage outputs linked to a
+  source and source object. Rows store `triage_result_id`, `source`,
+  `source_object_id`, optional future `activity_item_id`, attention class,
+  priority, digest visibility, confidence, reason, recommended action, owner,
+  deadline, evidence refs, and `created_at`.
 - `attention_triage_feedback`: user feedback events for future attention
   triage context. Rows store `feedback_id`, optional `source`, required
   `source_object_id`, nullable `triage_result_id`, `user_action`, and
@@ -49,7 +55,13 @@
 - Feedback context loaders use `source` as a DB/service-level filter; the
   public `AttentionTriageFeedback` DTO remains playbook-compatible and does not
   expose `source`.
-- `triage_result_id` on attention feedback is nullable until
-  `AttentionTriageResult` persistence exists.
+- Attention triage result persistence stores only strict schema-validated
+  result metadata and evidence refs. It must not store raw source bodies,
+  prompts, provider payloads, secrets, or unvalidated JSON blobs.
+- `triage_result_id` on attention feedback remains nullable. Feedback can
+  reference a stored attention triage result, but feedback remains advisory and
+  does not force deterministic show/hide behavior.
+- Normalized activity items are still projection objects only; no
+  `normalized_activity_items` table exists yet.
 - Meeting artifacts must not mutate Jira, Obsidian, raw storage, or Postgres
   until a future persistence and human approval/action model exists.

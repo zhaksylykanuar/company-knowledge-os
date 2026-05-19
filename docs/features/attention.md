@@ -5,6 +5,7 @@
 - Deterministic scoring: implemented
 - Attention dashboard: implemented
 - Feedback storage: implemented
+- Attention triage result persistence foundation: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -20,6 +21,8 @@
   `AttentionContext.recent_feedback` use.
 - Stored feedback is loaded as bounded advisory context for email triage calls
   that classify existing `EmailThreadState` rows.
+- Strictly validated `AttentionTriageResult` records can be persisted as safe
+  metadata for future feedback linkage.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -73,14 +76,20 @@
   `always_hide_similar`.
 - Feedback is stored as user context for future triage calls, not as
   fine-tuning data. API, CLI, and UI submission entrypoints are deferred.
-- `AttentionTriageResult` persistence remains deferred; feedback rows keep
-  `triage_result_id` nullable until a result table exists.
 - FOS-050 loads stored feedback into `AttentionContext.recent_feedback` for the
   live email triage classification path. Feedback remains advisory context only:
   it is not fine-tuning data, not a deterministic show/hide override, and it
   does not mutate `EmailThreadState` rows.
 - FOS-050 does not change deterministic digest behavior. Email digest sectioning
   still uses the in-memory deterministic projection from FOS-045.
+- FOS-051 adds provider-free `AttentionTriageResult` persistence. It stores
+  only validated result fields and evidence refs, plus source identifiers and
+  an optional future `activity_item_id`; it does not store prompts, raw source
+  bodies, provider payloads, or unvalidated JSON.
+- FOS-051 does not auto-persist live email/provider triage results, change
+  deterministic digest behavior, add feedback overrides, add API/CLI/UI
+  controls, or add `normalized_activity_items` persistence. Feedback
+  `triage_result_id` remains nullable and advisory.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -95,6 +104,8 @@
 - LLM-backed activity triage must validate strict JSON before any future persistence or digest use.
 - Feedback storage must not write raw message bodies, provider payloads, or
   generated triage results.
+- Attention result persistence must only write validated result metadata and
+  evidence refs.
 
 ## Known Gaps
 
@@ -104,4 +115,6 @@
 - Feedback API, CLI, and UI controls are not implemented.
 - Feedback API/buttons/action execution are not implemented.
 - Stored feedback is not wired into deterministic digest behavior.
+- Live email/provider triage results are not auto-persisted.
+- Normalized activity item persistence is not implemented.
 - GitHub/Jira/Drive digest integration is not implemented.
