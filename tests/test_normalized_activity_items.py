@@ -10,7 +10,9 @@ from app.db.models import IngestedEvent
 from app.services.attention_triage import NormalizedActivityItem
 from app.services.normalized_activity import (
     NormalizedActivityValidationError,
+    SourceEventActivityProjectionError,
     get_normalized_activity_item,
+    project_source_event_to_normalized_activity_item,
     record_normalized_activity_item,
 )
 
@@ -41,6 +43,20 @@ async def _cleanup_normalized_activity_fixture(unique: str) -> None:
             delete(NormalizedActivityItemRecord).where(
                 NormalizedActivityItemRecord.source_object_id.like(
                     f"github:test:activity:{unique}%"
+                )
+            )
+        )
+        await session.execute(
+            delete(NormalizedActivityItemRecord).where(
+                NormalizedActivityItemRecord.source_object_id.like(
+                    f"gmail:test:activity:{unique}%"
+                )
+            )
+        )
+        await session.execute(
+            delete(NormalizedActivityItemRecord).where(
+                NormalizedActivityItemRecord.source_event_id.like(
+                    f"sevt_activity_{unique}%"
                 )
             )
         )
@@ -100,7 +116,10 @@ async def _insert_source_event(unique: str) -> str:
                 payload={
                     "source_object_type": "pull_request",
                     "title": "Review persistence foundation",
+                    "summary": "Review the normalized activity bridge.",
+                    "actor_external_id": "github:fake-user",
                     "source_url": "https://example.test/company-knowledge-os/pull/52",
+                    "raw_body": "PRIVATE_RAW_PAYLOAD_DO_NOT_STORE",
                 },
             )
         )
@@ -115,6 +134,9 @@ async def _insert_source_event(unique: str) -> str:
                 source_object_type="pull_request",
                 source_object_id=f"github:test:activity:{unique}",
                 title="Review persistence foundation",
+                summary="Review the normalized activity bridge.",
+                source_url="https://example.test/company-knowledge-os/pull/52",
+                actor_external_id="github:fake-user",
                 raw_object_ref=f"raw://github/events/activity-{unique}.json",
                 evidence_refs=[
                     {
@@ -127,6 +149,58 @@ async def _insert_source_event(unique: str) -> str:
                 metadata_json={
                     "correlation_id": f"corr_activity_{unique}",
                     "trace_id": f"trace_activity_{unique}",
+                },
+                schema_version="1.0",
+            )
+        )
+        await session.commit()
+    return source_event_id
+
+
+async def _insert_unsupported_source_event(unique: str) -> str:
+    event_id = f"evt_activity_{unique}_unsupported"
+    source_event_id = f"sevt_activity_{unique}_unsupported"
+    async with AsyncSessionLocal() as session:
+        session.add(
+            IngestedEvent(
+                event_id=event_id,
+                event_type="gmail.message.ingested",
+                source_system="gmail",
+                source_object_id=f"gmail:test:activity:{unique}",
+                idempotency_key=f"idem_activity_{unique}_unsupported",
+                correlation_id=f"corr_activity_{unique}_unsupported",
+                trace_id=f"trace_activity_{unique}_unsupported",
+                raw_object_ref=f"raw://gmail/events/activity-{unique}.json",
+                payload={
+                    "source_object_type": "message",
+                    "title": "Unsupported message projection",
+                    "raw_body": "PRIVATE_RAW_PAYLOAD_DO_NOT_STORE",
+                },
+            )
+        )
+        await session.flush()
+        session.add(
+            SourceEvent(
+                source_event_id=source_event_id,
+                source_event_key=f"gmail:message:{unique}",
+                ingested_event_id=event_id,
+                event_type="gmail.message.ingested",
+                source_system="gmail",
+                source_object_type="message",
+                source_object_id=f"gmail:test:activity:{unique}",
+                title="Unsupported message projection",
+                raw_object_ref=f"raw://gmail/events/activity-{unique}.json",
+                evidence_refs=[
+                    {
+                        "kind": "ingested_event",
+                        "event_id": event_id,
+                        "source_system": "gmail",
+                        "source_object_id": f"gmail:test:activity:{unique}",
+                    }
+                ],
+                metadata_json={
+                    "correlation_id": f"corr_activity_{unique}_unsupported",
+                    "trace_id": f"trace_activity_{unique}_unsupported",
                 },
                 schema_version="1.0",
             )
@@ -297,6 +371,116 @@ async def test_normalized_activity_source_event_id_is_optional() -> None:
             await session.commit()
 
         assert stored.source_event_id is None
+
+    finally:
+        await _cleanup_normalized_activity_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_project_source_event_to_normalized_activity_item_persists_supported_event() -> None:
+    await _ensure_normalized_activity_tables()
+    unique = uuid4().hex
+    await _cleanup_normalized_activity_fixture(unique)
+    source_event_id = await _insert_source_event(unique)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            stored = await project_source_event_to_normalized_activity_item(
+                session,
+                source_event_id=source_event_id,
+            )
+            await session.commit()
+
+        assert stored.source_event_id == source_event_id
+        assert stored.source == "github"
+        assert stored.source_object_id == f"github:test:activity:{unique}"
+        assert stored.activity_type == "pull_request.updated"
+        assert stored.title == "Review persistence foundation"
+        assert stored.actor == "github:fake-user"
+        assert stored.safe_summary == "Review the normalized activity bridge."
+        assert {
+            "kind": "ingested_event",
+            "event_id": f"evt_activity_{unique}",
+            "source_system": "github",
+            "source_object_id": f"github:test:activity:{unique}",
+        } in stored.evidence_refs
+        assert any(
+            ref.get("source_event_id") == source_event_id
+            and ref.get("raw_payload_ref") == f"raw://github/events/activity-{unique}.json"
+            for ref in stored.evidence_refs
+        )
+
+        async with AsyncSessionLocal() as session:
+            record = await session.scalar(
+                select(NormalizedActivityItemRecord).where(
+                    NormalizedActivityItemRecord.source_event_id == source_event_id
+                )
+            )
+
+        assert record is not None
+        rendered_record = str(record.__dict__)
+        assert "PRIVATE_RAW_PAYLOAD_DO_NOT_STORE" not in rendered_record
+        assert not hasattr(record, "provider_payload")
+        assert not hasattr(record, "raw_payload")
+        assert not hasattr(record, "prompt")
+
+    finally:
+        await _cleanup_normalized_activity_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_project_source_event_to_normalized_activity_item_is_idempotent() -> None:
+    await _ensure_normalized_activity_tables()
+    unique = uuid4().hex
+    await _cleanup_normalized_activity_fixture(unique)
+    source_event_id = await _insert_source_event(unique)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            first = await project_source_event_to_normalized_activity_item(
+                session,
+                source_event_id=source_event_id,
+            )
+            second = await project_source_event_to_normalized_activity_item(
+                session,
+                source_event_id=source_event_id,
+            )
+            count = await session.scalar(
+                select(func.count(NormalizedActivityItemRecord.id)).where(
+                    NormalizedActivityItemRecord.source_event_id == source_event_id
+                )
+            )
+            await session.commit()
+
+        assert second.activity_item_id == first.activity_item_id
+        assert count == 1
+
+    finally:
+        await _cleanup_normalized_activity_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_project_source_event_to_normalized_activity_item_rejects_unsupported_event() -> None:
+    await _ensure_normalized_activity_tables()
+    unique = uuid4().hex
+    await _cleanup_normalized_activity_fixture(unique)
+    source_event_id = await _insert_unsupported_source_event(unique)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            with pytest.raises(SourceEventActivityProjectionError, match="cannot be projected"):
+                await project_source_event_to_normalized_activity_item(
+                    session,
+                    source_event_id=source_event_id,
+                )
+
+            count = await session.scalar(
+                select(func.count(NormalizedActivityItemRecord.id)).where(
+                    NormalizedActivityItemRecord.source_event_id == source_event_id
+                )
+            )
+            assert count == 0
+            await session.rollback()
 
     finally:
         await _cleanup_normalized_activity_fixture(unique)

@@ -8,7 +8,7 @@
 - Extracted tasks/risks/decisions: implemented
 - Knowledge scores: implemented
 - Source events: partial
-- Normalized activity items: persistence foundation implemented
+- Normalized activity items: persistence and source-event projection foundation implemented
 - Attention triage results: persistence foundation implemented
 - Attention triage feedback: implemented
 - Meeting transcript artifacts: draft-only, not persisted
@@ -58,6 +58,10 @@
 - Normalized activity item persistence stores only strict schema-validated
   `NormalizedActivityItem` metadata and evidence refs. It must not store raw
   source bodies, prompts, provider payloads, secrets, or unvalidated JSON blobs.
+- Provider-free source-event projection can persist one supported stored
+  `SourceEvent` as one validated `normalized_activity_items` row. Projection is
+  idempotent by `source_event_id`; repeating the projection returns the existing
+  activity row instead of creating duplicates.
 - Durable activity linkage is now:
   `source_events` -> `normalized_activity_items` ->
   `attention_triage_results` -> `attention_triage_feedback`.
@@ -77,9 +81,9 @@
 - `triage_result_id` on attention feedback remains nullable. Feedback can
   reference a stored attention triage result, but feedback remains advisory and
   does not force deterministic show/hide behavior.
-- Automatic projection from all source events into normalized activity rows is
-  still deferred. Digest rendering also remains based on the existing
-  deterministic/in-memory attention projection rather than persisted
-  normalized activity or persisted attention result rows.
+- Automatic batch projection from all source events into normalized activity
+  rows is still deferred. Persisted attention triage execution and digest
+  rendering from persisted normalized activity or persisted attention result
+  rows are also still deferred.
 - Meeting artifacts must not mutate Jira, Obsidian, raw storage, or Postgres
   until a future persistence and human approval/action model exists.

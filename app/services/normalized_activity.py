@@ -4,6 +4,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from hashlib import sha256
 from typing import Any
 from uuid import uuid4
 
@@ -11,11 +12,16 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.event_models import NormalizedActivityItemRecord
+from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.services.attention_triage import NormalizedActivityItem
+from app.services.source_activity import SourceActivityMappingError, source_event_to_activity_item
 
 
 class NormalizedActivityValidationError(ValueError):
+    pass
+
+
+class SourceEventActivityProjectionError(ValueError):
     pass
 
 
@@ -93,6 +99,11 @@ def _copy_string_list(value: list[str]) -> list[str]:
 
 def _copy_evidence_refs(value: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [dict(ref) for ref in value if isinstance(ref, dict)]
+
+
+def _source_event_projection_id(source_event_id: str) -> str:
+    digest = sha256(source_event_id.encode("utf-8")).hexdigest()
+    return f"nact_{digest[:32]}"
 
 
 def _record_to_read_model(record: NormalizedActivityItemRecord) -> StoredNormalizedActivityItem:
@@ -186,3 +197,131 @@ async def get_normalized_activity_item(
     if record is None:
         return None
     return _record_to_read_model(record)
+
+
+async def get_normalized_activity_item_for_source_event(
+    session: AsyncSession,
+    *,
+    source_event_id: str,
+) -> StoredNormalizedActivityItem | None:
+    record = await session.scalar(
+        select(NormalizedActivityItemRecord)
+        .where(
+            NormalizedActivityItemRecord.source_event_id
+            == _clean_required_string(
+                source_event_id,
+                field_name="source_event_id",
+            )
+        )
+        .order_by(NormalizedActivityItemRecord.id)
+    )
+    if record is None:
+        return None
+    return _record_to_read_model(record)
+
+
+def _source_event_payload(source_event: SourceEvent) -> dict[str, Any]:
+    return {
+        "source": source_event.source_system,
+        "source_system": source_event.source_system,
+        "source_event_id": source_event.source_event_id,
+        "source_object_type": source_event.source_object_type,
+        "source_object_id": source_event.source_object_id,
+        "event_type": source_event.event_type,
+        "event_time": source_event.source_event_ts or source_event.created_at,
+        "title": source_event.title,
+        "summary": source_event.summary,
+        "source_url": source_event.source_url,
+        "actor_external_id": source_event.actor_external_id,
+        "raw_object_ref": source_event.raw_object_ref,
+    }
+
+
+def _merged_source_event_evidence_refs(
+    *,
+    activity: NormalizedActivityItem,
+    source_event: SourceEvent,
+) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = [
+        dict(ref)
+        for ref in activity.evidence_refs
+        if isinstance(ref, dict)
+    ]
+    if isinstance(source_event.evidence_refs, list):
+        refs.extend(
+            dict(ref)
+            for ref in source_event.evidence_refs
+            if isinstance(ref, dict)
+        )
+
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    unique_refs: list[dict[str, Any]] = []
+    for ref in refs:
+        marker = tuple(sorted((str(key), str(value)) for key, value in ref.items()))
+        if marker in seen:
+            continue
+        seen.add(marker)
+        unique_refs.append(ref)
+    return unique_refs
+
+
+def _source_event_to_validated_activity(source_event: SourceEvent) -> NormalizedActivityItem:
+    try:
+        activity = source_event_to_activity_item(_source_event_payload(source_event))
+    except SourceActivityMappingError as exc:
+        raise SourceEventActivityProjectionError(
+            "source event cannot be projected to normalized activity"
+        ) from exc
+
+    return NormalizedActivityItem.model_validate(
+        {
+            **activity.model_dump(),
+            "evidence_refs": _merged_source_event_evidence_refs(
+                activity=activity,
+                source_event=source_event,
+            ),
+        }
+    )
+
+
+async def project_source_event_to_normalized_activity_item(
+    session: AsyncSession,
+    *,
+    source_event_id: str | None = None,
+    source_event: SourceEvent | None = None,
+) -> StoredNormalizedActivityItem:
+    """Project one stored SourceEvent into one persisted NormalizedActivityItem.
+
+    This bridge is provider-free and idempotent by source_event_id. It reuses the
+    existing source activity mapper and the normalized activity persistence
+    service, so invalid or unsupported source event shapes fail before any new
+    normalized_activity_items row is inserted.
+    """
+
+    if source_event is None:
+        cleaned_source_event_id = _clean_required_string(
+            source_event_id,
+            field_name="source_event_id",
+        )
+        source_event = await session.scalar(
+            select(SourceEvent).where(SourceEvent.source_event_id == cleaned_source_event_id)
+        )
+        if source_event is None:
+            raise SourceEventActivityProjectionError("source event was not found")
+    elif source_event_id is not None and source_event.source_event_id != source_event_id:
+        raise SourceEventActivityProjectionError("source_event_id does not match source_event")
+
+    existing = await get_normalized_activity_item_for_source_event(
+        session,
+        source_event_id=source_event.source_event_id,
+    )
+    if existing is not None:
+        return existing
+
+    activity = _source_event_to_validated_activity(source_event)
+    return await record_normalized_activity_item(
+        session,
+        activity=activity,
+        source_event_id=source_event.source_event_id,
+        activity_item_id=_source_event_projection_id(source_event.source_event_id),
+    )

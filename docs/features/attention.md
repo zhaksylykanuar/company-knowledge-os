@@ -24,6 +24,8 @@
   that classify existing `EmailThreadState` rows.
 - Strictly validated `NormalizedActivityItem` records can be persisted as safe
   metadata for future durable source-event-to-attention linkage.
+- Supported stored `SourceEvent` rows can be projected provider-free into
+  persisted normalized activity rows idempotently by `source_event_id`.
 - Strictly validated `AttentionTriageResult` records can be persisted as safe
   metadata for future feedback linkage.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
@@ -101,6 +103,14 @@
   change deterministic digest behavior, add feedback behavior, add API/CLI/UI
   controls, or add human approval/action flows. `AttentionTriageResult`
   `activity_item_id` remains optional.
+- FOS-053 adds a provider-free bridge from one stored supported `SourceEvent`
+  to one persisted `NormalizedActivityItem`. The bridge reuses the existing
+  source activity mapping, validates through the shared
+  `NormalizedActivityItem` contract, preserves safe evidence refs and
+  `source_event_id`, and is idempotent by `source_event_id`.
+- FOS-053 does not run attention triage over persisted activities, change
+  deterministic digest behavior, add feedback behavior, ingest live provider
+  data, add API/CLI/UI controls, or add human approval/action flows.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -129,7 +139,7 @@
 - Feedback API/buttons/action execution are not implemented.
 - Stored feedback is not wired into deterministic digest behavior.
 - Live email/provider triage results are not auto-persisted.
-- Source events are not automatically projected into persisted normalized
+- Source events are not automatically batch-projected into persisted normalized
   activity items.
 - Persisted normalized activity items and attention results are not yet used as
   digest inputs.
