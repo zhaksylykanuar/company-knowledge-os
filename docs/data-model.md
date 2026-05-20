@@ -9,7 +9,8 @@
 - Knowledge scores: implemented
 - Source events: partial
 - Normalized activity items: persistence and source-event projection foundation implemented
-- Attention triage results: persistence foundation implemented
+- Attention triage results: persistence and single-activity triage bridge
+  foundation implemented
 - Attention triage feedback: implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
@@ -35,7 +36,7 @@
   stored Gmail rows for digest and source-intelligence workflows.
 - `attention_triage_results`: validated attention triage outputs linked to a
   source and source object. Rows store `triage_result_id`, `source`,
-  `source_object_id`, optional future `activity_item_id`, attention class,
+  `source_object_id`, optional `activity_item_id`, attention class,
   priority, digest visibility, confidence, reason, recommended action, owner,
   deadline, evidence refs, and `created_at`.
 - `attention_triage_feedback`: user feedback events for future attention
@@ -78,12 +79,20 @@
 - Attention triage result persistence stores only strict schema-validated
   result metadata and evidence refs. It must not store raw source bodies,
   prompts, provider payloads, secrets, or unvalidated JSON blobs.
+- Provider-free persisted activity triage can classify one stored
+  `normalized_activity_items` row through the shared `AttentionTriageAgent`
+  contract and persist one linked `attention_triage_results` row. The service
+  loads bounded recent feedback into `AttentionContext.recent_feedback` as
+  advisory context only.
+- Persisted activity triage is service-level idempotent by `activity_item_id`;
+  repeating triage for the same activity returns the existing linked attention
+  result instead of creating a duplicate.
 - `triage_result_id` on attention feedback remains nullable. Feedback can
   reference a stored attention triage result, but feedback remains advisory and
   does not force deterministic show/hide behavior.
 - Automatic batch projection from all source events into normalized activity
-  rows is still deferred. Persisted attention triage execution and digest
-  rendering from persisted normalized activity or persisted attention result
-  rows are also still deferred.
+  rows is still deferred. Batch persisted attention triage,
+  retriage/versioning, and digest rendering from persisted normalized activity
+  or persisted attention result rows are also still deferred.
 - Meeting artifacts must not mutate Jira, Obsidian, raw storage, or Postgres
   until a future persistence and human approval/action model exists.

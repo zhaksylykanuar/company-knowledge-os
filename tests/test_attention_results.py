@@ -11,10 +11,16 @@ from app.db.models import IngestedEvent
 from app.services.attention_feedback import record_attention_triage_feedback
 from app.services.attention_results import (
     AttentionResultValidationError,
+    get_attention_triage_result_for_activity_item,
     get_attention_triage_result,
     record_attention_triage_result,
+    triage_normalized_activity_item,
 )
-from app.services.attention_triage import AttentionTriageResult, NormalizedActivityItem
+from app.services.attention_triage import (
+    AttentionTriageResult,
+    MockAttentionTriageProvider,
+    NormalizedActivityItem,
+)
 from app.services.normalized_activity import record_normalized_activity_item
 
 
@@ -91,23 +97,25 @@ def _result(**overrides: object) -> AttentionTriageResult:
     return AttentionTriageResult.model_validate(defaults)
 
 
-def _activity(unique: str) -> NormalizedActivityItem:
-    return NormalizedActivityItem(
-        source="gmail",
-        source_object_id=f"gmail:test:result:{unique}",
-        activity_type="email_thread.reply_required.from_external",
-        title="Validated activity for attention result",
-        actor="external sender",
-        created_at=datetime(2026, 5, 19, 8, 30, tzinfo=timezone.utc),
-        safe_summary="Validated activity item for attention result linkage.",
-        evidence_refs=[
+def _activity(unique: str, **overrides: object) -> NormalizedActivityItem:
+    defaults = {
+        "source": "gmail",
+        "source_object_id": f"gmail:test:result:{unique}",
+        "activity_type": "email_thread.reply_required.from_external",
+        "title": "Validated activity for attention result",
+        "actor": "external sender",
+        "created_at": datetime(2026, 5, 19, 8, 30, tzinfo=timezone.utc),
+        "safe_summary": "Validated activity item for attention result linkage.",
+        "evidence_refs": [
             {
                 "kind": "gmail_message",
                 "message_id": "fake-message-id",
                 "raw_object_ref": "raw://gmail/fake/message.json",
             }
         ],
-    )
+    }
+    defaults.update(overrides)
+    return NormalizedActivityItem.model_validate(defaults)
 
 
 @pytest.mark.asyncio
@@ -162,6 +170,257 @@ async def test_record_attention_triage_result_persists_and_reads_back_valid_resu
         assert not hasattr(record, "provider_payload")
         assert not hasattr(record, "raw_text")
         assert not hasattr(record, "prompt")
+
+    finally:
+        await _cleanup_attention_result_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_triage_normalized_activity_item_persists_linked_result() -> None:
+    await _ensure_attention_tables()
+    unique = uuid4().hex
+    await _cleanup_attention_result_fixture(unique)
+    activity = _activity(
+        unique,
+        safe_summary="PRIVATE_RAW_EMAIL_TEXT_DO_NOT_STORE",
+    )
+    expected_result = _result(evidence=activity.evidence_refs)
+    provider = MockAttentionTriageProvider([expected_result])
+
+    try:
+        async with AsyncSessionLocal() as session:
+            stored_activity = await record_normalized_activity_item(
+                session,
+                activity_item_id=f"nact_result_{unique}",
+                activity=activity,
+            )
+            stored = await triage_normalized_activity_item(
+                session,
+                activity_item_id=stored_activity.activity_item_id,
+                provider=provider,
+            )
+            await session.commit()
+
+        assert stored.activity_item_id == stored_activity.activity_item_id
+        assert stored.source == "gmail"
+        assert stored.source_object_id == f"gmail:test:result:{unique}"
+        assert stored.to_attention_triage_result() == expected_result
+        assert stored.evidence_refs == activity.evidence_refs
+        assert len(provider.calls) == 1
+
+        async with AsyncSessionLocal() as session:
+            read_back = await get_attention_triage_result_for_activity_item(
+                session,
+                activity_item_id=stored_activity.activity_item_id,
+            )
+            record = await session.scalar(
+                select(AttentionTriageResultRecord).where(
+                    AttentionTriageResultRecord.activity_item_id
+                    == stored_activity.activity_item_id
+                )
+            )
+
+        assert read_back is not None
+        assert read_back.triage_result_id == stored.triage_result_id
+        assert record is not None
+        rendered_record = str(record.__dict__)
+        assert "PRIVATE_RAW_EMAIL_TEXT_DO_NOT_STORE" not in rendered_record
+        assert not hasattr(record, "provider_payload")
+        assert not hasattr(record, "raw_payload")
+        assert not hasattr(record, "raw_text")
+        assert not hasattr(record, "prompt")
+
+    finally:
+        await _cleanup_attention_result_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_triage_normalized_activity_item_is_idempotent_without_second_provider_call() -> None:
+    await _ensure_attention_tables()
+    unique = uuid4().hex
+    await _cleanup_attention_result_fixture(unique)
+    provider = MockAttentionTriageProvider([_result()])
+
+    try:
+        async with AsyncSessionLocal() as session:
+            stored_activity = await record_normalized_activity_item(
+                session,
+                activity_item_id=f"nact_result_{unique}",
+                activity=_activity(unique),
+            )
+            first = await triage_normalized_activity_item(
+                session,
+                activity_item_id=stored_activity.activity_item_id,
+                provider=provider,
+            )
+            second = await triage_normalized_activity_item(
+                session,
+                activity_item_id=stored_activity.activity_item_id,
+                provider=provider,
+            )
+            count = await session.scalar(
+                select(func.count(AttentionTriageResultRecord.id)).where(
+                    AttentionTriageResultRecord.activity_item_id
+                    == stored_activity.activity_item_id
+                )
+            )
+            await session.commit()
+
+        assert second.triage_result_id == first.triage_result_id
+        assert second.activity_item_id == stored_activity.activity_item_id
+        assert count == 1
+        assert len(provider.calls) == 1
+
+    finally:
+        await _cleanup_attention_result_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_triage_normalized_activity_item_missing_activity_fails_before_provider_call() -> None:
+    await _ensure_attention_tables()
+    unique = uuid4().hex
+    await _cleanup_attention_result_fixture(unique)
+    missing_activity_item_id = f"nact_result_{unique}_missing"
+    provider = MockAttentionTriageProvider([_result()])
+
+    try:
+        async with AsyncSessionLocal() as session:
+            with pytest.raises(AttentionResultValidationError, match="not found"):
+                await triage_normalized_activity_item(
+                    session,
+                    activity_item_id=missing_activity_item_id,
+                    provider=provider,
+                )
+
+            count = await session.scalar(
+                select(func.count(AttentionTriageResultRecord.id)).where(
+                    AttentionTriageResultRecord.activity_item_id == missing_activity_item_id
+                )
+            )
+            assert count == 0
+            await session.rollback()
+
+        assert provider.calls == []
+
+    finally:
+        await _cleanup_attention_result_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_triage_normalized_activity_item_invalid_provider_output_does_not_persist() -> None:
+    await _ensure_attention_tables()
+    unique = uuid4().hex
+    await _cleanup_attention_result_fixture(unique)
+    provider = MockAttentionTriageProvider([{"attention_class": "requires_my_attention"}])
+
+    try:
+        async with AsyncSessionLocal() as session:
+            stored_activity = await record_normalized_activity_item(
+                session,
+                activity_item_id=f"nact_result_{unique}",
+                activity=_activity(unique),
+            )
+
+            with pytest.raises(AttentionResultValidationError, match="invalid"):
+                await triage_normalized_activity_item(
+                    session,
+                    activity_item_id=stored_activity.activity_item_id,
+                    provider=provider,
+                )
+
+            count = await session.scalar(
+                select(func.count(AttentionTriageResultRecord.id)).where(
+                    AttentionTriageResultRecord.activity_item_id
+                    == stored_activity.activity_item_id
+                )
+            )
+            assert count == 0
+            await session.rollback()
+
+        assert len(provider.calls) == 1
+
+    finally:
+        await _cleanup_attention_result_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_triage_normalized_activity_item_loads_feedback_as_advisory_context() -> None:
+    await _ensure_attention_tables()
+    unique = uuid4().hex
+    await _cleanup_attention_result_fixture(unique)
+    provider = MockAttentionTriageProvider(
+        [
+            _result(
+                attention_class="requires_my_attention",
+                priority="high",
+                show_in_digest=True,
+                owner="me",
+            )
+        ]
+    )
+
+    try:
+        async with AsyncSessionLocal() as session:
+            stored_activity = await record_normalized_activity_item(
+                session,
+                activity_item_id=f"nact_result_{unique}",
+                activity=_activity(unique),
+            )
+            await record_attention_triage_feedback(
+                session,
+                feedback_id=f"atfb_result_{unique}_matching",
+                source="gmail",
+                source_object_id=f"gmail:test:result:{unique}",
+                user_action="always_hide_similar",
+            )
+            await record_attention_triage_feedback(
+                session,
+                feedback_id=f"atfb_result_{unique}_other_source",
+                source="drive",
+                source_object_id=f"gmail:test:result:{unique}",
+                user_action="always_show_similar",
+            )
+
+            stored = await triage_normalized_activity_item(
+                session,
+                activity_item_id=stored_activity.activity_item_id,
+                provider=provider,
+            )
+            await session.commit()
+
+        assert stored.attention_class == "requires_my_attention"
+        assert stored.show_in_digest is True
+        assert len(provider.calls) == 1
+        feedback = provider.calls[0][1].recent_feedback
+        assert [item.feedback_id for item in feedback] == [f"atfb_result_{unique}_matching"]
+        assert feedback[0].user_action == "always_hide_similar"
+
+    finally:
+        await _cleanup_attention_result_fixture(unique)
+
+
+@pytest.mark.asyncio
+async def test_triage_normalized_activity_item_preserves_empty_evidence_without_fabrication() -> None:
+    await _ensure_attention_tables()
+    unique = uuid4().hex
+    await _cleanup_attention_result_fixture(unique)
+    provider = MockAttentionTriageProvider([_result(evidence=[])])
+
+    try:
+        async with AsyncSessionLocal() as session:
+            stored_activity = await record_normalized_activity_item(
+                session,
+                activity_item_id=f"nact_result_{unique}",
+                activity=_activity(unique),
+            )
+            stored = await triage_normalized_activity_item(
+                session,
+                activity_item_id=stored_activity.activity_item_id,
+                provider=provider,
+            )
+            await session.commit()
+
+        assert stored.evidence_refs == []
 
     finally:
         await _cleanup_attention_result_fixture(unique)

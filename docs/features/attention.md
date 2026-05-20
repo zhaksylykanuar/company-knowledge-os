@@ -6,7 +6,8 @@
 - Attention dashboard: implemented
 - Feedback storage: implemented
 - Normalized activity item persistence foundation: implemented
-- Attention triage result persistence foundation: implemented
+- Attention triage result persistence and single-activity bridge foundation:
+  implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -28,6 +29,9 @@
   persisted normalized activity rows idempotently by `source_event_id`.
 - Strictly validated `AttentionTriageResult` records can be persisted as safe
   metadata for future feedback linkage.
+- One persisted `NormalizedActivityItem` can be classified provider-free or
+  with an injected test provider through `AttentionTriageAgent`, then persisted
+  as one linked `AttentionTriageResult` by `activity_item_id`.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -111,6 +115,16 @@
 - FOS-053 does not run attention triage over persisted activities, change
   deterministic digest behavior, add feedback behavior, ingest live provider
   data, add API/CLI/UI controls, or add human approval/action flows.
+- FOS-054 adds a provider-free bridge from one persisted
+  `NormalizedActivityItem` to one persisted `AttentionTriageResult`. The bridge
+  loads bounded recent feedback into `AttentionContext` as advisory context,
+  classifies through `AttentionTriageAgent` with fallback or injected test
+  providers, validates the strict result contract before persistence, links the
+  stored result by `activity_item_id`, and is service-level idempotent by
+  `activity_item_id`.
+- FOS-054 does not call live providers or OpenAI, change deterministic digest
+  behavior, add batch triage, retriage/versioning, API/CLI/UI controls, human
+  approvals, scheduler behavior, or feedback override logic.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -141,6 +155,7 @@
 - Live email/provider triage results are not auto-persisted.
 - Source events are not automatically batch-projected into persisted normalized
   activity items.
+- Persisted normalized activity items are not batch-triaged.
 - Persisted normalized activity items and attention results are not yet used as
   digest inputs.
 - GitHub/Jira/Drive digest integration is not implemented.

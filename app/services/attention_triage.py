@@ -463,11 +463,13 @@ class AttentionTriageAgent:
         fallback_provider: AttentionTriageProvider | None = None,
         min_confidence_to_hide: float = DEFAULT_ATTENTION_TRIAGE_MIN_CONFIDENCE_TO_HIDE,
         review_threshold: float = DEFAULT_ATTENTION_TRIAGE_REVIEW_THRESHOLD,
+        fallback_on_provider_error: bool = True,
     ) -> None:
         self.provider = provider
         self.fallback_provider = fallback_provider or ConservativeFallbackAttentionTriageProvider()
         self.min_confidence_to_hide = min_confidence_to_hide
         self.review_threshold = review_threshold
+        self.fallback_on_provider_error = fallback_on_provider_error
 
     def classify_activity(
         self,
@@ -477,6 +479,8 @@ class AttentionTriageAgent:
         try:
             result = self.provider.classify_activity(activity, context)
         except Exception:
+            if not self.fallback_on_provider_error:
+                raise
             result = self.fallback_provider.classify_activity(activity, context)
 
         return apply_attention_confidence_policy(
