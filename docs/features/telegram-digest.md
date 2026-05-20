@@ -161,6 +161,12 @@ Implemented today:
   deterministic short summaries, short normal-mode evidence counts, debug-only
   raw refs, duplicate source-event collapse, and mock/example data-quality
   notes.
+- FOS-055 adds an internal provider-free persisted attention digest read model
+  for explicit time windows. It groups existing `attention_triage_results` rows
+  into attention-priority daily digest sections, keeps hidden/no-action
+  low-priority rows count-only, and may enrich visible rows from linked
+  `normalized_activity_items`. It does not replace the existing source activity
+  digest, rendered text endpoint, scheduler, delivery, or Telegram behavior.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

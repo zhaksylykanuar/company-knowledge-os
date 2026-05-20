@@ -8,12 +8,17 @@ from typing import Any
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.db.attention_models import AttentionTriageResultRecord
 from app.db.base import AsyncSessionLocal
-from app.db.event_models import SourceEvent
+from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.gmail_models import EmailThreadState
-from app.services.attention_triage import AttentionTriageResult
+from app.services.attention_triage import (
+    AttentionTriageResult,
+    apply_attention_confidence_policy,
+)
 from app.services.email_attention import email_thread_state_to_attention_result_for_digest
 
 DEFAULT_DIGEST_ENTRY_LIMIT = 20
@@ -65,6 +70,14 @@ EMAIL_THREAD_GROUPS = (
     EMAIL_THREAD_GROUP_WORK_INFO,
     EMAIL_THREAD_GROUP_REVIEW_OPTIONAL,
 )
+
+PERSISTED_ATTENTION_SECTION_LABELS = {
+    EMAIL_THREAD_GROUP_WORK_ACTIONS: "Work actions requiring my attention",
+    EMAIL_THREAD_GROUP_MANUAL_ACTIONS: "Manual actions",
+    EMAIL_THREAD_GROUP_WAITING_EXTERNAL_REPLY: "Waiting for external reply",
+    EMAIL_THREAD_GROUP_WORK_INFO: "Important project updates",
+    EMAIL_THREAD_GROUP_REVIEW_OPTIONAL: "Review optional",
+}
 
 MARKETING_TRIAGE_CATEGORIES = {
     EMAIL_TRIAGE_CATEGORY_MARKETING,
@@ -267,6 +280,160 @@ def _email_thread_action_type_from_attention_result(result: AttentionTriageResul
         "review_optional": EMAIL_TRIAGE_ACTION_REVIEW_OPTIONAL,
         "no_action_required": EMAIL_TRIAGE_ACTION_NO_ACTION_REQUIRED,
     }[result.attention_class]
+
+
+def _persisted_attention_group_key(result: AttentionTriageResult) -> str | None:
+    if not result.show_in_digest or result.attention_class == "no_action_required":
+        return None
+    if result.attention_class == "requires_my_attention":
+        return EMAIL_THREAD_GROUP_WORK_ACTIONS
+    if result.attention_class == "manual_action":
+        return EMAIL_THREAD_GROUP_MANUAL_ACTIONS
+    if result.attention_class == "waiting_on_external":
+        return EMAIL_THREAD_GROUP_WAITING_EXTERNAL_REPLY
+    if result.attention_class == "important_info":
+        return EMAIL_THREAD_GROUP_WORK_INFO
+    if result.attention_class == "review_optional":
+        return EMAIL_THREAD_GROUP_REVIEW_OPTIONAL
+    return None
+
+
+def _attention_result_from_record(
+    record: AttentionTriageResultRecord,
+) -> AttentionTriageResult:
+    return AttentionTriageResult(
+        attention_class=record.attention_class,
+        priority=record.priority,
+        show_in_digest=record.show_in_digest,
+        confidence=record.confidence,
+        reason=record.reason,
+        recommended_action=record.recommended_action,
+        owner=record.owner,
+        deadline=record.deadline,
+        evidence=[
+            dict(evidence_ref)
+            for evidence_ref in record.evidence_refs
+            if isinstance(evidence_ref, dict)
+        ],
+    )
+
+
+def _safe_optional_text(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+
+    cleaned = " ".join(value.strip().split())
+    return cleaned or None
+
+
+def _copy_evidence_refs(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(ref) for ref in value if isinstance(ref, dict)]
+
+
+def _attention_evidence_summary(
+    *,
+    evidence_refs: Sequence[dict[str, Any]],
+    activity_evidence_refs: Sequence[dict[str, Any]],
+) -> str:
+    if evidence_refs:
+        return _plural(len(evidence_refs), "triage evidence ref")
+    if activity_evidence_refs:
+        return _plural(len(activity_evidence_refs), "activity evidence ref")
+    return "Evidence unavailable"
+
+
+def _hidden_attention_label(result: AttentionTriageResult) -> str:
+    if result.attention_class == "no_action_required" and result.priority == "low":
+        return "no-action low-priority items"
+
+    attention_class = result.attention_class.replace("_", " ")
+    priority = result.priority.replace("_", " ")
+    return f"hidden {attention_class} {priority} items"
+
+
+async def _linked_normalized_activity_rows(
+    session: AsyncSession,
+    records: Sequence[AttentionTriageResultRecord],
+) -> dict[str, NormalizedActivityItemRecord]:
+    activity_item_ids = sorted(
+        {
+            record.activity_item_id
+            for record in records
+            if isinstance(record.activity_item_id, str) and record.activity_item_id
+        }
+    )
+    if not activity_item_ids:
+        return {}
+
+    rows = list(
+        (
+            await session.scalars(
+                select(NormalizedActivityItemRecord).where(
+                    NormalizedActivityItemRecord.activity_item_id.in_(activity_item_ids)
+                )
+            )
+        ).all()
+    )
+    return {row.activity_item_id: row for row in rows}
+
+
+def _persisted_attention_digest_item(
+    record: AttentionTriageResultRecord,
+    *,
+    result: AttentionTriageResult,
+    activity: NormalizedActivityItemRecord | None,
+) -> dict[str, Any]:
+    evidence_refs = _copy_evidence_refs(result.evidence)
+    activity_evidence_refs = _copy_evidence_refs(
+        activity.evidence_refs if activity is not None else []
+    )
+    title = (
+        _safe_optional_text(activity.title)
+        if activity is not None
+        else None
+    ) or f"{record.source} activity"
+
+    return {
+        "id": record.triage_result_id,
+        "triage_result_id": record.triage_result_id,
+        "activity_item_id": record.activity_item_id,
+        "source": record.source,
+        "source_object_id": record.source_object_id,
+        "attention_class": result.attention_class,
+        "priority": result.priority,
+        "show_in_digest": result.show_in_digest,
+        "confidence": result.confidence,
+        "title": title,
+        "safe_summary": (
+            _safe_optional_text(activity.safe_summary)
+            if activity is not None
+            else None
+        ),
+        "reason": result.reason,
+        "recommended_action": result.recommended_action,
+        "owner": result.owner,
+        "deadline": result.deadline,
+        "project": (
+            _safe_optional_text(activity.project)
+            if activity is not None
+            else None
+        ),
+        "activity_created_at": (
+            _iso_datetime(activity.activity_created_at)
+            if activity is not None
+            else None
+        ),
+        "triage_created_at": _iso_datetime(record.created_at),
+        "evidence": _attention_evidence_summary(
+            evidence_refs=evidence_refs,
+            activity_evidence_refs=activity_evidence_refs,
+        ),
+        "evidence_refs": evidence_refs,
+        "activity_evidence_refs": activity_evidence_refs,
+        "activity_available": activity is not None,
+    }
 
 
 def _hidden_email_category_label(email_thread: EmailThreadState) -> str:
@@ -758,6 +925,140 @@ def _has_email_thread_rows(email_thread_intelligence: dict[str, Any]) -> bool:
         return int(counts.get("total", 0)) > 0
     except (TypeError, ValueError):
         return False
+
+
+async def build_persisted_attention_digest_read_model(
+    session: AsyncSession,
+    *,
+    start_at: datetime,
+    end_at: datetime,
+    limit_per_section: int = DEFAULT_DIGEST_ENTRY_LIMIT,
+) -> dict[str, Any]:
+    """Group stored attention triage results into digest-ready sections.
+
+    This read model is provider-free. It reads validated persisted attention
+    results and optional normalized activity metadata only; it does not run
+    triage, call LLMs or connectors, mutate data, or replace the existing
+    source activity digest.
+    """
+
+    _require_aware_datetime(start_at, field_name="start_at")
+    _require_aware_datetime(end_at, field_name="end_at")
+    if end_at <= start_at:
+        raise ValueError("end_at must be after start_at")
+
+    safe_limit = _safe_limit(limit_per_section)
+    priority_rank = case(
+        (AttentionTriageResultRecord.priority == EMAIL_TRIAGE_PRIORITY_HIGH, 0),
+        (AttentionTriageResultRecord.priority == EMAIL_TRIAGE_PRIORITY_MEDIUM, 1),
+        (AttentionTriageResultRecord.priority == EMAIL_TRIAGE_PRIORITY_LOW, 2),
+        else_=3,
+    )
+    records = list(
+        (
+            await session.scalars(
+                select(AttentionTriageResultRecord)
+                .where(AttentionTriageResultRecord.created_at >= start_at)
+                .where(AttentionTriageResultRecord.created_at < end_at)
+                .order_by(
+                    priority_rank,
+                    desc(AttentionTriageResultRecord.created_at),
+                    desc(AttentionTriageResultRecord.id),
+                )
+            )
+        ).all()
+    )
+    linked_activities = await _linked_normalized_activity_rows(session, records)
+
+    groups: dict[str, list[dict[str, Any]]] = {
+        group_key: [] for group_key in EMAIL_THREAD_GROUPS
+    }
+    hidden_counts: Counter[str] = Counter()
+    by_attention_class: Counter[str] = Counter()
+    by_priority: Counter[str] = Counter()
+    by_show_in_digest: Counter[str] = Counter()
+    by_source: Counter[str] = Counter()
+    missing_activity_count = 0
+
+    for record in records:
+        raw_result = _attention_result_from_record(record)
+        result = apply_attention_confidence_policy(
+            raw_result,
+            min_confidence_to_hide=settings.attention_triage_min_confidence_to_hide,
+            review_threshold=settings.attention_triage_review_threshold,
+        )
+        by_attention_class[result.attention_class] += 1
+        by_priority[result.priority] += 1
+        by_show_in_digest[str(result.show_in_digest).lower()] += 1
+        by_source[record.source] += 1
+
+        group_key = _persisted_attention_group_key(result)
+        if group_key is None:
+            hidden_counts[_hidden_attention_label(result)] += 1
+            continue
+
+        activity = (
+            linked_activities.get(record.activity_item_id)
+            if record.activity_item_id is not None
+            else None
+        )
+        if record.activity_item_id is not None and activity is None:
+            missing_activity_count += 1
+        groups[group_key].append(
+            _persisted_attention_digest_item(
+                record,
+                result=result,
+                activity=activity,
+            )
+        )
+
+    visible_count = sum(len(items) for items in groups.values())
+    truncated = False
+    for group_key, items in groups.items():
+        if len(items) > safe_limit:
+            truncated = True
+        groups[group_key] = items[:safe_limit]
+
+    data_quality_notes = []
+    if missing_activity_count:
+        data_quality_notes.append(
+            f"{missing_activity_count} visible attention items were rendered without normalized activity enrichment."
+        )
+
+    return {
+        "section_title": "Persisted attention digest",
+        "available": True,
+        "window": {
+            "start_at": start_at.isoformat(),
+            "end_at": end_at.isoformat(),
+        },
+        "section_labels": dict(PERSISTED_ATTENTION_SECTION_LABELS),
+        "counts": {
+            "total": len(records),
+            "visible": visible_count,
+            "hidden": sum(hidden_counts.values()),
+            "shown": sum(len(items) for items in groups.values()),
+            "by_attention_class": dict(sorted(by_attention_class.items())),
+            "by_priority": dict(sorted(by_priority.items())),
+            "by_show_in_digest": dict(sorted(by_show_in_digest.items())),
+            "by_source": dict(sorted(by_source.items())),
+        },
+        "groups": groups,
+        "hidden_low_priority_summary": {
+            "total": sum(hidden_counts.values()),
+            "counts": dict(sorted(hidden_counts.items())),
+        },
+        "data_quality_notes": data_quality_notes,
+        "metadata": {
+            "source_model": "attention_triage_results",
+            "enrichment_model": "normalized_activity_items",
+            "group_limit": safe_limit,
+            "truncated": truncated,
+            "llm_used": False,
+            "read_model_only": True,
+            "source_activity_digest_replaced": False,
+        },
+    }
 
 
 async def build_source_activity_digest(

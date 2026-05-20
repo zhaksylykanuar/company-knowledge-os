@@ -9,8 +9,8 @@
 - Knowledge scores: implemented
 - Source events: partial
 - Normalized activity items: persistence and source-event projection foundation implemented
-- Attention triage results: persistence and single-activity triage bridge
-  foundation implemented
+- Attention triage results: persistence, single-activity triage bridge, and
+  persisted digest read-model foundations implemented
 - Attention triage feedback: implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
@@ -38,7 +38,8 @@
   source and source object. Rows store `triage_result_id`, `source`,
   `source_object_id`, optional `activity_item_id`, attention class,
   priority, digest visibility, confidence, reason, recommended action, owner,
-  deadline, evidence refs, and `created_at`.
+  deadline, evidence refs, and `created_at`. Stored rows can now be read as
+  provider-free digest input for explicit time windows.
 - `attention_triage_feedback`: user feedback events for future attention
   triage context. Rows store `feedback_id`, optional `source`, required
   `source_object_id`, nullable `triage_result_id`, `user_action`, and
@@ -87,12 +88,22 @@
 - Persisted activity triage is service-level idempotent by `activity_item_id`;
   repeating triage for the same activity returns the existing linked attention
   result instead of creating a duplicate.
+- Persisted attention digest reading is provider-free and read-only. It groups
+  existing `attention_triage_results` rows for an explicit timezone-aware
+  window into daily digest section keys, applies the existing low-confidence
+  visibility policy for read-time safety, and keeps hidden/no-action
+  low-priority rows as count-only summary data.
+- Persisted attention digest items may enrich visible rows from linked
+  `normalized_activity_items` via `activity_item_id`. Enrichment is optional:
+  missing normalized activity rows do not fail digest building, and result
+  evidence refs are not fabricated.
 - `triage_result_id` on attention feedback remains nullable. Feedback can
   reference a stored attention triage result, but feedback remains advisory and
   does not force deterministic show/hide behavior.
 - Automatic batch projection from all source events into normalized activity
   rows is still deferred. Batch persisted attention triage,
-  retriage/versioning, and digest rendering from persisted normalized activity
-  or persisted attention result rows are also still deferred.
+  retriage/versioning, digest replacement/rendering from persisted attention
+  rows, scheduler behavior, delivery, and human approvals are also still
+  deferred.
 - Meeting artifacts must not mutate Jira, Obsidian, raw storage, or Postgres
   until a future persistence and human approval/action model exists.

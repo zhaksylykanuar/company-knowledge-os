@@ -7,16 +7,32 @@ import pytest
 from sqlalchemy import delete
 
 from app.core.config import settings as app_settings
-from app.db.base import AsyncSessionLocal
-from app.db.event_models import SourceEvent
+from app.db.attention_models import AttentionTriageResultRecord
+from app.db.base import AsyncSessionLocal, engine
+from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.gmail_models import EmailThreadState
 from app.db.models import IngestedEvent
-from app.services.attention_triage import AttentionTriageAgent
-from app.services.digest import _visible_source_events, build_source_activity_digest
+from app.services.attention_results import record_attention_triage_result
+from app.services.attention_triage import (
+    AttentionTriageAgent,
+    AttentionTriageResult,
+    NormalizedActivityItem,
+)
+from app.services.digest import (
+    _visible_source_events,
+    build_persisted_attention_digest_read_model,
+    build_source_activity_digest,
+)
+from app.services.normalized_activity import record_normalized_activity_item
 
 
 def _utc(year: int, month: int, day: int, hour: int = 0) -> datetime:
     return datetime(year, month, day, hour, tzinfo=timezone.utc)
+
+
+class _FailingDigestSession:
+    async def scalars(self, *_args: object, **_kwargs: object) -> object:
+        raise AssertionError("invalid window should fail before querying")
 
 
 async def _cleanup_digest_fixture(unique: str) -> None:
@@ -37,6 +53,160 @@ async def _cleanup_digest_fixture(unique: str) -> None:
             )
         )
         await session.commit()
+
+
+async def _ensure_persisted_attention_digest_tables() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(IngestedEvent.__table__.create, checkfirst=True)
+        await conn.run_sync(SourceEvent.__table__.create, checkfirst=True)
+        await conn.run_sync(NormalizedActivityItemRecord.__table__.create, checkfirst=True)
+        await conn.run_sync(AttentionTriageResultRecord.__table__.create, checkfirst=True)
+
+
+async def _cleanup_persisted_attention_digest_fixture(unique: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(AttentionTriageResultRecord).where(
+                AttentionTriageResultRecord.triage_result_id.like(
+                    f"atri_digest_{unique}%"
+                )
+            )
+        )
+        await session.execute(
+            delete(AttentionTriageResultRecord).where(
+                AttentionTriageResultRecord.source_object_id.like(
+                    f"digest:test:{unique}%"
+                )
+            )
+        )
+        await session.execute(
+            delete(NormalizedActivityItemRecord).where(
+                NormalizedActivityItemRecord.activity_item_id.like(
+                    f"nact_digest_{unique}%"
+                )
+            )
+        )
+        await session.execute(
+            delete(SourceEvent).where(
+                SourceEvent.source_event_id.like(f"sevt_digest_attention_{unique}%")
+            )
+        )
+        await session.execute(
+            delete(SourceEvent).where(
+                SourceEvent.source_event_id.like(f"sevt_digest_{unique}_%")
+            )
+        )
+        await session.execute(
+            delete(IngestedEvent).where(
+                IngestedEvent.event_id.like(f"evt_digest_attention_{unique}%")
+            )
+        )
+        await session.execute(
+            delete(IngestedEvent).where(
+                IngestedEvent.event_id.like(f"evt_digest_{unique}_%")
+            )
+        )
+        await session.commit()
+
+
+def _attention_result(**overrides: object) -> AttentionTriageResult:
+    defaults = {
+        "attention_class": "requires_my_attention",
+        "priority": "high",
+        "show_in_digest": True,
+        "confidence": 0.91,
+        "reason": "validated attention result for persisted digest",
+        "recommended_action": "review the linked activity",
+        "owner": "me",
+        "deadline": None,
+        "evidence": [
+            {
+                "kind": "source_event",
+                "source_event_id": "sevt_digest_attention_fake",
+                "raw_object_ref": "raw://digest-attention/fake.json",
+            }
+        ],
+    }
+    defaults.update(overrides)
+    return AttentionTriageResult.model_validate(defaults)
+
+
+def _normalized_activity(unique: str, suffix: str, **overrides: object) -> NormalizedActivityItem:
+    defaults = {
+        "source": "github",
+        "source_object_id": f"digest:test:{unique}:{suffix}",
+        "activity_type": "pull_request.review_requested",
+        "title": f"Persisted digest activity {suffix}",
+        "actor": "github:fake-user",
+        "created_at": _utc(2126, 1, 1, 9),
+        "project": "company-knowledge-os",
+        "safe_summary": f"Safe persisted digest summary for {suffix}.",
+        "related_people": ["github:fake-user"],
+        "related_jira_keys": ["FOS-55"],
+        "related_prs": ["https://example.test/company-knowledge-os/pull/55"],
+        "related_files": [],
+        "evidence_refs": [
+            {
+                "kind": "source_event",
+                "source_event_id": f"sevt_digest_attention_{unique}_{suffix}",
+                "raw_object_ref": f"raw://digest-attention/{unique}/{suffix}.json",
+            }
+        ],
+    }
+    defaults.update(overrides)
+    return NormalizedActivityItem.model_validate(defaults)
+
+
+async def _record_persisted_attention_digest_item(
+    *,
+    unique: str,
+    suffix: str,
+    attention_class: str,
+    priority: str,
+    created_at: datetime,
+    show_in_digest: bool = True,
+    confidence: float = 0.91,
+    source: str = "github",
+    activity: NormalizedActivityItem | None = None,
+    activity_item_id: str | None = None,
+    evidence: list[dict] | None = None,
+) -> str:
+    async with AsyncSessionLocal() as session:
+        linked_activity_item_id = activity_item_id
+        stored_activity = None
+        if activity is not None:
+            linked_activity_item_id = activity_item_id or f"nact_digest_{unique}_{suffix}"
+            stored_activity = await record_normalized_activity_item(
+                session,
+                activity_item_id=linked_activity_item_id,
+                activity=activity,
+            )
+
+        source_object_id = (
+            stored_activity.source_object_id
+            if stored_activity is not None
+            else f"digest:test:{unique}:{suffix}"
+        )
+        result = _attention_result(
+            attention_class=attention_class,
+            priority=priority,
+            show_in_digest=show_in_digest,
+            confidence=confidence,
+            owner="me" if attention_class != "waiting_on_external" else "external",
+            recommended_action=f"Handle persisted digest {suffix}",
+            evidence=evidence if evidence is not None else _attention_result().evidence,
+        )
+        stored = await record_attention_triage_result(
+            session,
+            triage_result_id=f"atri_digest_{unique}_{suffix}",
+            source=source,
+            source_object_id=source_object_id,
+            activity_item_id=linked_activity_item_id,
+            result=result,
+            created_at=created_at,
+        )
+        await session.commit()
+        return stored.triage_result_id
 
 
 async def _insert_source_event(
@@ -171,6 +341,321 @@ async def _insert_email_thread_state(
             )
         )
         await session.commit()
+
+
+async def test_build_persisted_attention_digest_read_model_groups_sections_and_hidden_counts() -> None:
+    await _ensure_persisted_attention_digest_tables()
+    unique = uuid4().hex
+    await _cleanup_persisted_attention_digest_fixture(unique)
+
+    try:
+        section_cases = [
+            ("work", "requires_my_attention", "high", "work_actions"),
+            ("manual", "manual_action", "medium", "manual_actions"),
+            ("waiting", "waiting_on_external", "medium", "waiting_external_reply"),
+            ("info", "important_info", "low", "work_info"),
+            ("optional", "review_optional", "low", "review_optional"),
+        ]
+        for hour, (suffix, attention_class, priority, _group_key) in enumerate(
+            section_cases,
+            start=8,
+        ):
+            activity = _normalized_activity(unique, suffix)
+            await _record_persisted_attention_digest_item(
+                unique=unique,
+                suffix=suffix,
+                attention_class=attention_class,
+                priority=priority,
+                created_at=_utc(2126, 1, 1, hour),
+                activity=activity,
+                evidence=activity.evidence_refs,
+            )
+        await _record_persisted_attention_digest_item(
+            unique=unique,
+            suffix="hidden-no-action",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=False,
+            confidence=0.95,
+            created_at=_utc(2126, 1, 1, 13),
+        )
+        await _record_persisted_attention_digest_item(
+            unique=unique,
+            suffix="visible-no-action",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=True,
+            confidence=0.95,
+            created_at=_utc(2126, 1, 1, 14),
+        )
+
+        async with AsyncSessionLocal() as session:
+            digest = await build_persisted_attention_digest_read_model(
+                session,
+                start_at=_utc(2126, 1, 1),
+                end_at=_utc(2126, 1, 2),
+                limit_per_section=10,
+            )
+
+        assert digest["section_title"] == "Persisted attention digest"
+        assert digest["metadata"] == {
+            "source_model": "attention_triage_results",
+            "enrichment_model": "normalized_activity_items",
+            "group_limit": 10,
+            "truncated": False,
+            "llm_used": False,
+            "read_model_only": True,
+            "source_activity_digest_replaced": False,
+        }
+        assert digest["counts"]["total"] == 7
+        assert digest["counts"]["visible"] == 5
+        assert digest["counts"]["hidden"] == 2
+        assert digest["hidden_low_priority_summary"] == {
+            "total": 2,
+            "counts": {"no-action low-priority items": 2},
+        }
+
+        groups = digest["groups"]
+        for suffix, _attention_class, _priority, group_key in section_cases:
+            assert [item["title"] for item in groups[group_key]] == [
+                f"Persisted digest activity {suffix}"
+            ]
+
+        work_item = groups["work_actions"][0]
+        assert work_item["activity_item_id"] == f"nact_digest_{unique}_work"
+        assert work_item["source"] == "github"
+        assert work_item["attention_class"] == "requires_my_attention"
+        assert work_item["safe_summary"] == "Safe persisted digest summary for work."
+        assert work_item["project"] == "company-knowledge-os"
+        assert work_item["activity_available"] is True
+        assert work_item["evidence_refs"] == work_item["activity_evidence_refs"]
+        assert work_item["evidence"] == "1 triage evidence ref"
+
+        hidden_serialized = json.dumps(
+            digest["hidden_low_priority_summary"],
+            sort_keys=True,
+        )
+        assert "hidden-no-action" not in hidden_serialized
+        assert "visible-no-action" not in hidden_serialized
+        assert f"digest:test:{unique}:hidden-no-action" not in hidden_serialized
+        assert all(
+            not any(item["attention_class"] == "no_action_required" for item in items)
+            for items in groups.values()
+        )
+
+    finally:
+        await _cleanup_persisted_attention_digest_fixture(unique)
+
+
+async def test_build_persisted_attention_digest_read_model_keeps_low_confidence_visible() -> None:
+    await _ensure_persisted_attention_digest_tables()
+    unique = uuid4().hex
+    await _cleanup_persisted_attention_digest_fixture(unique)
+
+    try:
+        await _record_persisted_attention_digest_item(
+            unique=unique,
+            suffix="low-confidence-hidden",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=False,
+            confidence=0.30,
+            created_at=_utc(2126, 2, 1, 9),
+        )
+
+        async with AsyncSessionLocal() as session:
+            digest = await build_persisted_attention_digest_read_model(
+                session,
+                start_at=_utc(2126, 2, 1),
+                end_at=_utc(2126, 2, 2),
+            )
+
+        review_items = digest["groups"]["review_optional"]
+        assert digest["hidden_low_priority_summary"] == {"total": 0, "counts": {}}
+        assert len(review_items) == 1
+        assert review_items[0]["attention_class"] == "review_optional"
+        assert review_items[0]["priority"] == "medium"
+        assert review_items[0]["show_in_digest"] is True
+        assert "low confidence item was kept visible for review" in review_items[0]["reason"]
+
+    finally:
+        await _cleanup_persisted_attention_digest_fixture(unique)
+
+
+async def test_build_persisted_attention_digest_read_model_handles_missing_activity() -> None:
+    await _ensure_persisted_attention_digest_tables()
+    unique = uuid4().hex
+    await _cleanup_persisted_attention_digest_fixture(unique)
+
+    try:
+        await _record_persisted_attention_digest_item(
+            unique=unique,
+            suffix="missing-activity",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2126, 3, 1, 9),
+            activity_item_id=f"nact_digest_{unique}_missing",
+            evidence=[],
+        )
+
+        async with AsyncSessionLocal() as session:
+            digest = await build_persisted_attention_digest_read_model(
+                session,
+                start_at=_utc(2126, 3, 1),
+                end_at=_utc(2126, 3, 2),
+            )
+
+        item = digest["groups"]["work_actions"][0]
+        assert item["activity_item_id"] == f"nact_digest_{unique}_missing"
+        assert item["activity_available"] is False
+        assert item["title"] == "github activity"
+        assert item["safe_summary"] is None
+        assert item["project"] is None
+        assert item["evidence_refs"] == []
+        assert item["activity_evidence_refs"] == []
+        assert item["evidence"] == "Evidence unavailable"
+        assert digest["data_quality_notes"] == [
+            "1 visible attention items were rendered without normalized activity enrichment."
+        ]
+
+    finally:
+        await _cleanup_persisted_attention_digest_fixture(unique)
+
+
+async def test_build_persisted_attention_digest_read_model_orders_and_limits_deterministically() -> None:
+    await _ensure_persisted_attention_digest_tables()
+    unique = uuid4().hex
+    await _cleanup_persisted_attention_digest_fixture(unique)
+
+    try:
+        await _record_persisted_attention_digest_item(
+            unique=unique,
+            suffix="medium-new",
+            attention_class="requires_my_attention",
+            priority="medium",
+            created_at=_utc(2126, 4, 1, 12),
+            activity=_normalized_activity(unique, "medium-new"),
+        )
+        await _record_persisted_attention_digest_item(
+            unique=unique,
+            suffix="high-old",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2126, 4, 1, 10),
+            activity=_normalized_activity(unique, "high-old"),
+        )
+        await _record_persisted_attention_digest_item(
+            unique=unique,
+            suffix="high-new",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2126, 4, 1, 11),
+            activity=_normalized_activity(unique, "high-new"),
+        )
+
+        async with AsyncSessionLocal() as session:
+            digest = await build_persisted_attention_digest_read_model(
+                session,
+                start_at=_utc(2126, 4, 1),
+                end_at=_utc(2126, 4, 2),
+                limit_per_section=2,
+            )
+
+        work_titles = [
+            item["title"]
+            for item in digest["groups"]["work_actions"]
+        ]
+        assert work_titles == [
+            "Persisted digest activity high-new",
+            "Persisted digest activity high-old",
+        ]
+        assert digest["counts"]["visible"] == 3
+        assert digest["counts"]["shown"] == 2
+        assert digest["metadata"]["truncated"] is True
+
+    finally:
+        await _cleanup_persisted_attention_digest_fixture(unique)
+
+
+async def test_build_persisted_attention_digest_read_model_rejects_invalid_windows_before_query() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        await build_persisted_attention_digest_read_model(
+            _FailingDigestSession(),  # type: ignore[arg-type]
+            start_at=datetime(2126, 5, 1),
+            end_at=_utc(2126, 5, 2),
+        )
+
+    with pytest.raises(ValueError, match="after start_at"):
+        await build_persisted_attention_digest_read_model(
+            _FailingDigestSession(),  # type: ignore[arg-type]
+            start_at=_utc(2126, 5, 2),
+            end_at=_utc(2126, 5, 2),
+        )
+
+
+async def test_build_persisted_attention_digest_read_model_omits_raw_payload_and_prompt_fields() -> None:
+    await _ensure_persisted_attention_digest_tables()
+    unique = uuid4().hex
+    await _cleanup_persisted_attention_digest_fixture(unique)
+    raw_marker = "PRIVATE_RAW_SOURCE_PAYLOAD_DO_NOT_EXPOSE"
+
+    try:
+        source_event_id = await _insert_source_event(
+            unique=unique,
+            suffix="raw",
+            source_system="github",
+            source_object_type="pull_request",
+            event_type="github.pull_request.opened",
+            event_time=_utc(2126, 6, 1, 9),
+            title="Safe persisted digest source event",
+            payload={"raw_body": raw_marker, "prompt": "PROMPT_SHOULD_NOT_EXPOSE"},
+        )
+        activity_item_id = f"nact_digest_{unique}_raw"
+        activity = _normalized_activity(
+            unique,
+            "raw",
+            title="Safe persisted digest title",
+            safe_summary="Safe persisted digest summary.",
+        )
+
+        async with AsyncSessionLocal() as session:
+            stored_activity = await record_normalized_activity_item(
+                session,
+                source_event_id=source_event_id,
+                activity_item_id=activity_item_id,
+                activity=activity,
+            )
+            await record_attention_triage_result(
+                session,
+                triage_result_id=f"atri_digest_{unique}_raw",
+                source="github",
+                source_object_id=stored_activity.source_object_id,
+                activity_item_id=stored_activity.activity_item_id,
+                result=_attention_result(evidence=activity.evidence_refs),
+                created_at=_utc(2126, 6, 1, 10),
+            )
+            await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            digest = await build_persisted_attention_digest_read_model(
+                session,
+                start_at=_utc(2126, 6, 1),
+                end_at=_utc(2126, 6, 2),
+            )
+
+        serialized = json.dumps(digest, sort_keys=True)
+
+        assert "Safe persisted digest title" in serialized
+        assert "Safe persisted digest summary." in serialized
+        assert raw_marker not in serialized
+        assert "PROMPT_SHOULD_NOT_EXPOSE" not in serialized
+        assert "provider_payload" not in serialized
+        assert "raw_payload" not in serialized
+        assert "raw_text" not in serialized
+        assert "prompt" not in serialized
+
+    finally:
+        await _cleanup_persisted_attention_digest_fixture(unique)
 
 
 def test_visible_source_events_suppresses_raw_gmail_when_thread_state_exists() -> None:

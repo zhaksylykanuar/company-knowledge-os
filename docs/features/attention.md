@@ -32,6 +32,11 @@
 - One persisted `NormalizedActivityItem` can be classified provider-free or
   with an injected test provider through `AttentionTriageAgent`, then persisted
   as one linked `AttentionTriageResult` by `activity_item_id`.
+- Persisted `AttentionTriageResult` rows can be read provider-free as a digest
+  read model for explicit timezone-aware windows. The read model groups visible
+  rows into daily digest section keys, keeps hidden/no-action low-priority rows
+  count-only, and optionally enriches visible items from linked
+  `NormalizedActivityItem` rows.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -125,6 +130,18 @@
 - FOS-054 does not call live providers or OpenAI, change deterministic digest
   behavior, add batch triage, retriage/versioning, API/CLI/UI controls, human
   approvals, scheduler behavior, or feedback override logic.
+- FOS-055 adds a provider-free persisted attention digest read model. It reads
+  existing `attention_triage_results` rows for an explicit time window, applies
+  the existing low-confidence visibility policy at read time, groups visible
+  rows into work actions, manual actions, waiting external reply, important
+  updates, and review optional sections, and keeps hidden/no-action
+  low-priority rows in a count-only summary.
+- FOS-055 can safely enrich visible digest items from linked
+  `normalized_activity_items` metadata through `activity_item_id`, but missing
+  linked activity rows do not fail the read model. It does not call live
+  providers or OpenAI, run triage, replace existing source activity digest
+  behavior, change rendering, add scheduler/delivery, add human approval/UI, or
+  change feedback behavior.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -156,6 +173,7 @@
 - Source events are not automatically batch-projected into persisted normalized
   activity items.
 - Persisted normalized activity items are not batch-triaged.
-- Persisted normalized activity items and attention results are not yet used as
-  digest inputs.
+- Persisted attention results have an internal digest read model, but the
+  existing source activity digest and renderer do not yet use it as their
+  primary output.
 - GitHub/Jira/Drive digest integration is not implemented.
