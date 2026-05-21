@@ -25,6 +25,8 @@ EMAIL_THREAD_GROUP_LABELS = (
     ("review_optional", "Review optional"),
 )
 
+PERSISTED_ATTENTION_GROUP_LABELS = EMAIL_THREAD_GROUP_LABELS
+
 EMAIL_THREAD_STATUS_LABELS = {
     "needs_my_reply": "Needs my reply",
     "waiting_for_external_reply": "Waiting for external reply",
@@ -165,9 +167,22 @@ def _email_thread_groups(value: Any) -> Mapping[str, Any]:
     return _mapping(email_thread_intelligence.get("groups"))
 
 
+def _persisted_attention_groups(value: Any) -> Mapping[str, Any]:
+    persisted_attention_digest = _mapping(value)
+    return _mapping(persisted_attention_digest.get("groups"))
+
+
 def _has_email_thread_items(value: Any) -> bool:
     groups = _email_thread_groups(value)
     return any(_sequence(groups.get(group_key)) for group_key, _label in EMAIL_THREAD_GROUP_LABELS)
+
+
+def _has_persisted_attention_items(value: Any) -> bool:
+    groups = _persisted_attention_groups(value)
+    return any(
+        _sequence(groups.get(group_key))
+        for group_key, _label in PERSISTED_ATTENTION_GROUP_LABELS
+    )
 
 
 def _format_status(value: Any) -> str:
@@ -308,10 +323,145 @@ def _append_email_thread_section(
         lines.append(f"Email thread data quality note: {_string_value(note)}")
 
 
+def _format_persisted_attention_item(
+    value: Any,
+    index: int,
+    *,
+    debug_evidence: bool,
+) -> list[str]:
+    item = _mapping(value)
+    title = _string_value(item.get("title"), fallback="Untitled attention item")
+    source = _string_value(item.get("source"))
+    priority = _string_value(item.get("priority"), fallback="low")
+    action = _string_value(item.get("recommended_action"), fallback="Review item")
+    safe_summary = _string_value(item.get("safe_summary"), fallback="Summary unavailable")
+    owner = _string_value(item.get("owner"), fallback="")
+    deadline = _string_value(item.get("deadline"), fallback="")
+    project = _string_value(item.get("project"), fallback="")
+
+    lines = [
+        f"{index}. {title}",
+        f"   Source: {source}",
+        f"   Priority: {priority}",
+        f"   Action: {action}",
+    ]
+    if owner or deadline:
+        owner_deadline = ", ".join(value for value in (owner, deadline) if value)
+        lines.append(f"   Owner/deadline: {owner_deadline}")
+    if project:
+        lines.append(f"   Project: {project}")
+    lines.extend(
+        [
+            f"   Summary: {safe_summary}",
+            f"   Evidence: {_format_evidence_summary(item.get('evidence'))}",
+        ]
+    )
+    if debug_evidence:
+        lines.append(
+            f"   Debug evidence refs: {_format_evidence_refs(item.get('evidence_refs'))}"
+        )
+        activity_refs = _format_evidence_refs(item.get("activity_evidence_refs"))
+        if activity_refs != "none":
+            lines.append(f"   Debug activity evidence refs: {activity_refs}")
+
+    return lines
+
+
+def _append_persisted_attention_sections(
+    lines: list[str],
+    digest: Mapping[str, Any],
+    *,
+    debug_evidence: bool,
+) -> None:
+    groups = _persisted_attention_groups(digest)
+    for group_key, label in PERSISTED_ATTENTION_GROUP_LABELS:
+        lines.append(f"{label}:")
+        items = _sequence(groups.get(group_key))
+        if not items:
+            lines.append("- None")
+            continue
+
+        for index, item in enumerate(items, start=1):
+            lines.extend(
+                _format_persisted_attention_item(
+                    item,
+                    index,
+                    debug_evidence=debug_evidence,
+                )
+            )
+
+
+def _append_persisted_hidden_summary(lines: list[str], value: Any) -> None:
+    hidden_summary = _mapping(value)
+    hidden_counts = _count_items(hidden_summary.get("counts"))
+    if not hidden_counts:
+        total = _string_value(hidden_summary.get("total"), fallback="0")
+        lines.append(f"Hidden low-priority summary: {total} hidden")
+        return
+
+    lines.append("Hidden low-priority summary:")
+    for label, count in hidden_counts:
+        lines.append(f"- {count} {label}")
+
+
 def _append_source_event_data_quality_section(lines: list[str], value: Any) -> None:
     source_event_data_quality = _mapping(value)
     for note in _sequence(source_event_data_quality.get("notes")):
         lines.append(f"Source event data quality note: {_string_value(note)}")
+
+
+def render_persisted_attention_digest_text(
+    digest: Mapping[str, Any],
+    *,
+    debug_evidence: bool | None = False,
+) -> str:
+    """Render a persisted attention digest read model as deterministic plain text.
+
+    The renderer formats an existing read-model dict only. It does not call the
+    database, API layer, LLMs, connectors, delivery services, or infer new facts.
+    """
+
+    window = _mapping(digest.get("window"))
+    counts = _mapping(digest.get("counts"))
+    metadata = _mapping(digest.get("metadata"))
+    hidden_summary = _mapping(digest.get("hidden_low_priority_summary"))
+    effective_debug_evidence = bool(debug_evidence) or metadata.get("debug_evidence") is True
+
+    lines = [
+        _string_value(digest.get("section_title"), fallback="Persisted attention digest"),
+        f"Window: {_string_value(window.get('start_at'))} to {_string_value(window.get('end_at'))}",
+        f"Total attention items: {_string_value(counts.get('total'), fallback='0')}",
+        f"Visible items: {_string_value(counts.get('visible'), fallback='0')}",
+        f"Hidden items: {_string_value(counts.get('hidden'), fallback='0')}",
+    ]
+
+    _append_count_section(lines, "Sources", counts.get("by_source"))
+    _append_count_section(lines, "Priorities", counts.get("by_priority"))
+
+    has_visible_items = _has_persisted_attention_items(digest)
+    hidden_total = _string_value(hidden_summary.get("total"), fallback="0")
+    has_hidden_items = hidden_total != "0" or bool(_count_items(hidden_summary.get("counts")))
+    if not has_visible_items and not has_hidden_items:
+        lines.append("No persisted attention items found for this window.")
+
+    _append_persisted_attention_sections(
+        lines,
+        digest,
+        debug_evidence=effective_debug_evidence,
+    )
+    _append_persisted_hidden_summary(lines, hidden_summary)
+
+    if metadata.get("truncated") is True:
+        lines.append("Persisted attention items are truncated by the section limit.")
+
+    for note in _sequence(digest.get("data_quality_notes")):
+        lines.append(f"Persisted attention data quality note: {_string_value(note)}")
+
+    lines.append(
+        "This digest is persisted attention triage only; it does not infer decisions, tasks, or risks."
+    )
+
+    return "\n".join(lines)
 
 
 def render_source_activity_digest_text(

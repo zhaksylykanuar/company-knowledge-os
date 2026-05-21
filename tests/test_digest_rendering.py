@@ -1,6 +1,9 @@
 import builtins
 
-from app.services.digest_rendering import render_source_activity_digest_text
+from app.services.digest_rendering import (
+    render_persisted_attention_digest_text,
+    render_source_activity_digest_text,
+)
 
 
 def _metadata(entry_count: int = 0) -> dict:
@@ -320,6 +323,186 @@ def _digest_with_email_threads() -> dict:
     }
 
 
+def _persisted_attention_item(
+    suffix: str,
+    *,
+    source: str = "github",
+    priority: str = "medium",
+    action: str = "Review persisted attention item",
+) -> dict:
+    return {
+        "id": f"atri_render_{suffix}",
+        "triage_result_id": f"atri_render_{suffix}",
+        "activity_item_id": f"nact_render_{suffix}",
+        "source": source,
+        "source_object_id": f"source-object-{suffix}",
+        "attention_class": "requires_my_attention",
+        "priority": priority,
+        "show_in_digest": True,
+        "confidence": 0.91,
+        "title": f"Persisted attention title {suffix}",
+        "safe_summary": f"Safe persisted attention summary {suffix}.",
+        "reason": "Reason should remain out of normal rendered text.",
+        "recommended_action": action,
+        "owner": "me",
+        "deadline": "2126-01-02",
+        "project": "company-knowledge-os",
+        "activity_created_at": "2126-01-01T09:00:00+00:00",
+        "triage_created_at": "2126-01-01T10:00:00+00:00",
+        "evidence": "1 triage evidence ref",
+        "evidence_refs": [
+            {
+                "kind": "source_event",
+                "source_event_id": f"sevt_render_{suffix}",
+                "source_system": source,
+                "source_object_type": "pull_request",
+                "source_object_id": f"safe-object-{suffix}",
+                "raw_object_ref": f"raw://render/{suffix}.json",
+                "raw_payload": "PRIVATE_RAW_PAYLOAD_DO_NOT_RENDER",
+                "provider_payload": "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_RENDER",
+                "prompt": "PRIVATE_PROMPT_DO_NOT_RENDER",
+            }
+        ],
+        "activity_evidence_refs": [
+            {
+                "kind": "normalized_activity_item",
+                "source_event_id": f"sevt_activity_{suffix}",
+            }
+        ],
+        "activity_available": True,
+    }
+
+
+def _persisted_attention_digest() -> dict:
+    return {
+        "section_title": "Persisted attention digest",
+        "available": True,
+        "window": {
+            "start_at": "2126-01-01T00:00:00+00:00",
+            "end_at": "2126-01-02T00:00:00+00:00",
+        },
+        "section_labels": {
+            "work_actions": "Work actions requiring my attention",
+            "manual_actions": "Manual actions",
+            "waiting_external_reply": "Waiting for external reply",
+            "work_info": "Important project updates",
+            "review_optional": "Review optional",
+        },
+        "counts": {
+            "total": 6,
+            "visible": 5,
+            "hidden": 1,
+            "shown": 5,
+            "by_attention_class": {
+                "important_info": 1,
+                "manual_action": 1,
+                "requires_my_attention": 1,
+                "review_optional": 1,
+                "waiting_on_external": 1,
+            },
+            "by_priority": {
+                "high": 1,
+                "low": 2,
+                "medium": 2,
+            },
+            "by_show_in_digest": {
+                "false": 1,
+                "true": 5,
+            },
+            "by_source": {
+                "github": 3,
+                "jira": 2,
+            },
+        },
+        "groups": {
+            "work_actions": [
+                _persisted_attention_item(
+                    "work",
+                    source="github",
+                    priority="high",
+                    action="Review the pull request",
+                )
+            ],
+            "manual_actions": [
+                _persisted_attention_item(
+                    "manual",
+                    source="jira",
+                    action="Complete the manual Jira update",
+                )
+            ],
+            "waiting_external_reply": [
+                _persisted_attention_item(
+                    "waiting",
+                    source="gmail",
+                    action="Wait for the external reply",
+                )
+            ],
+            "work_info": [
+                _persisted_attention_item(
+                    "info",
+                    source="drive",
+                    priority="low",
+                    action="Review the project update",
+                )
+            ],
+            "review_optional": [
+                _persisted_attention_item(
+                    "optional",
+                    source="github",
+                    priority="low",
+                    action="Review if time permits",
+                )
+            ],
+        },
+        "hidden_low_priority_summary": {
+            "total": 1,
+            "counts": {"no-action low-priority items": 1},
+            "items": [
+                {
+                    "title": "Hidden private item should not render",
+                    "safe_summary": "Hidden private summary should not render",
+                }
+            ],
+        },
+        "data_quality_notes": [
+            "1 visible attention items were rendered without normalized activity enrichment."
+        ],
+        "metadata": {
+            "source_model": "attention_triage_results",
+            "enrichment_model": "normalized_activity_items",
+            "group_limit": 20,
+            "truncated": False,
+            "llm_used": False,
+            "read_model_only": True,
+            "source_activity_digest_replaced": False,
+        },
+    }
+
+
+def _empty_persisted_attention_digest() -> dict:
+    digest = _persisted_attention_digest()
+    digest["counts"] = {
+        "total": 0,
+        "visible": 0,
+        "hidden": 0,
+        "shown": 0,
+        "by_attention_class": {},
+        "by_priority": {},
+        "by_show_in_digest": {},
+        "by_source": {},
+    }
+    digest["groups"] = {
+        "work_actions": [],
+        "manual_actions": [],
+        "waiting_external_reply": [],
+        "work_info": [],
+        "review_optional": [],
+    }
+    digest["hidden_low_priority_summary"] = {"total": 0, "counts": {}}
+    digest["data_quality_notes"] = []
+    return digest
+
+
 def test_render_source_activity_digest_text_renders_empty_state() -> None:
     rendered = render_source_activity_digest_text(_empty_digest())
 
@@ -532,3 +715,118 @@ def test_render_source_activity_digest_text_does_not_import_external_services(
     rendered = render_source_activity_digest_text(_non_empty_digest())
 
     assert "Source activity digest" in rendered
+
+
+def test_render_persisted_attention_digest_text_renders_all_visible_sections() -> None:
+    rendered = render_persisted_attention_digest_text(_persisted_attention_digest())
+
+    assert "Persisted attention digest" in rendered
+    assert (
+        "Window: 2126-01-01T00:00:00+00:00 to 2126-01-02T00:00:00+00:00"
+        in rendered
+    )
+    assert "Total attention items: 6" in rendered
+    assert "Visible items: 5" in rendered
+    assert "Hidden items: 1" in rendered
+    assert "Work actions requiring my attention:" in rendered
+    assert "Manual actions:" in rendered
+    assert "Waiting for external reply:" in rendered
+    assert "Important project updates:" in rendered
+    assert "Review optional:" in rendered
+    assert rendered.index("Work actions requiring my attention:") < rendered.index(
+        "Manual actions:"
+    )
+    assert rendered.index("Manual actions:") < rendered.index("Waiting for external reply:")
+    assert rendered.index("Waiting for external reply:") < rendered.index(
+        "Important project updates:"
+    )
+    assert rendered.index("Important project updates:") < rendered.index(
+        "Review optional:"
+    )
+    assert "1. Persisted attention title work" in rendered
+    assert "Source: github" in rendered
+    assert "Priority: high" in rendered
+    assert "Action: Review the pull request" in rendered
+    assert "Owner/deadline: me, 2126-01-02" in rendered
+    assert "Project: company-knowledge-os" in rendered
+    assert "Summary: Safe persisted attention summary work." in rendered
+    assert "Evidence: 1 triage evidence ref" in rendered
+    assert (
+        "Persisted attention data quality note: 1 visible attention items were rendered without normalized activity enrichment."
+        in rendered
+    )
+    assert "does not infer decisions, tasks, or risks" in rendered
+
+
+def test_render_persisted_attention_digest_text_hidden_summary_is_count_only() -> None:
+    rendered = render_persisted_attention_digest_text(_persisted_attention_digest())
+
+    assert "Hidden low-priority summary:" in rendered
+    assert "- 1 no-action low-priority items" in rendered
+    assert "Hidden private item should not render" not in rendered
+    assert "Hidden private summary should not render" not in rendered
+
+
+def test_render_persisted_attention_digest_text_renders_empty_state() -> None:
+    rendered = render_persisted_attention_digest_text(_empty_persisted_attention_digest())
+
+    assert "Persisted attention digest" in rendered
+    assert "Total attention items: 0" in rendered
+    assert "No persisted attention items found for this window." in rendered
+    assert "Work actions requiring my attention:" in rendered
+    assert "- None" in rendered
+    assert "Hidden low-priority summary: 0 hidden" in rendered
+
+
+def test_render_persisted_attention_digest_text_debug_evidence_uses_safe_keys() -> None:
+    rendered = render_persisted_attention_digest_text(
+        _persisted_attention_digest(),
+        debug_evidence=True,
+    )
+
+    assert "Debug evidence refs:" in rendered
+    assert "kind=source_event" in rendered
+    assert "source_event_id=sevt_render_work" in rendered
+    assert "source_system=github" in rendered
+    assert "source_object_id=safe-object-work" in rendered
+    assert "raw_object_ref=raw://render/work.json" in rendered
+    assert "Debug activity evidence refs:" in rendered
+    assert "kind=normalized_activity_item" in rendered
+    assert "PRIVATE_RAW_PAYLOAD_DO_NOT_RENDER" not in rendered
+    assert "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_RENDER" not in rendered
+    assert "PRIVATE_PROMPT_DO_NOT_RENDER" not in rendered
+    assert "raw_payload=" not in rendered
+    assert "provider_payload=" not in rendered
+    assert "prompt=" not in rendered
+
+
+def test_render_persisted_attention_digest_text_omits_raw_provider_prompt_payloads() -> None:
+    digest = _persisted_attention_digest()
+    digest["groups"]["work_actions"][0] |= {
+        "raw_text": "PRIVATE_RAW_TEXT_DO_NOT_RENDER",
+        "raw_payload": {"body": "PRIVATE_RAW_PAYLOAD_DO_NOT_RENDER"},
+        "provider_payload": {"body": "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_RENDER"},
+        "prompt": "PRIVATE_PROMPT_DO_NOT_RENDER",
+        "source_payload": {"body": "PRIVATE_SOURCE_PAYLOAD_DO_NOT_RENDER"},
+    }
+
+    rendered = render_persisted_attention_digest_text(digest)
+
+    assert "PRIVATE_RAW_TEXT_DO_NOT_RENDER" not in rendered
+    assert "PRIVATE_RAW_PAYLOAD_DO_NOT_RENDER" not in rendered
+    assert "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_RENDER" not in rendered
+    assert "PRIVATE_PROMPT_DO_NOT_RENDER" not in rendered
+    assert "PRIVATE_SOURCE_PAYLOAD_DO_NOT_RENDER" not in rendered
+    assert "raw_text" not in rendered
+    assert "raw_payload" not in rendered
+    assert "provider_payload" not in rendered
+    assert "prompt" not in rendered
+    assert "source_payload" not in rendered
+
+
+def test_render_persisted_attention_digest_text_leaves_source_activity_renderer_unchanged() -> None:
+    rendered = render_source_activity_digest_text(_non_empty_digest())
+
+    assert "Source activity digest" in rendered
+    assert "Persisted attention digest" not in rendered
+    assert "Entries: 1 shown, limit 1" in rendered

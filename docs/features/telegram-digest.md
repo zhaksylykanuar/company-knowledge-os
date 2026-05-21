@@ -9,6 +9,7 @@
 - Internal deterministic source activity digest builder: implemented
 - Protected source activity digest API: implemented
 - Protected rendered source activity digest text API: implemented
+- Internal persisted attention digest text renderer: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -167,6 +168,14 @@ Implemented today:
   low-priority rows count-only, and may enrich visible rows from linked
   `normalized_activity_items`. It does not replace the existing source activity
   digest, rendered text endpoint, scheduler, delivery, or Telegram behavior.
+- FOS-056 adds deterministic text rendering for that persisted attention digest
+  read model. The renderer is provider-free, shows only safe item fields, keeps
+  hidden low-priority items count-only, and exposes evidence refs only in debug
+  mode through the safe evidence formatter.
+- FOS-056 does not add Telegram or Slack sending, scheduler behavior, API/CLI
+  entrypoints, human approval UI, live providers, or production connector
+  calls. Telegram and Slack remain delivery/interface surfaces only, not the
+  source of truth.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
