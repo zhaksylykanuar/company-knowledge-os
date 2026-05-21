@@ -10,6 +10,7 @@
   implemented
 - Persisted attention digest read model and deterministic text renderer:
   implemented
+- Protected persisted attention digest preview endpoints: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -43,6 +44,11 @@
   deterministic text. The renderer shows only safe item fields, keeps hidden
   low-priority rows count-only, and exposes evidence refs only in debug mode
   through the existing safe evidence formatter.
+- Protected preview endpoints can return the persisted attention digest read
+  model and rendered text for explicit timezone-aware windows. They read only
+  persisted attention digest data, do not run triage or providers, keep hidden
+  low-priority rows count-only, and expose evidence refs only through explicit
+  safe debug output.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -156,6 +162,14 @@
   add Telegram/Slack delivery, add scheduler behavior, replace the existing
   source activity digest renderer, add human approvals, or change feedback
   behavior.
+- FOS-057 adds protected provider-free preview endpoints for persisted
+  attention digest JSON and rendered text. The endpoints read existing
+  persisted attention digest data, use explicit time windows, preserve
+  hidden/no-action low-priority rows as count-only summaries, and expose
+  evidence refs only via safe debug formatting.
+- FOS-057 does not call live providers or OpenAI, run triage, add scheduler or
+  Telegram/Slack delivery, add migrations, change feedback behavior, replace
+  source activity digest endpoints, or add human approval/action execution.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -187,8 +201,8 @@
 - Source events are not automatically batch-projected into persisted normalized
   activity items.
 - Persisted normalized activity items are not batch-triaged.
-- Persisted attention results have an internal digest read model and
-  deterministic text renderer, but the existing source activity digest,
-  protected API, scheduler, and delivery paths do not yet use it as their
+- Persisted attention results have an internal digest read model, deterministic
+  text renderer, and protected preview endpoints, but the existing source
+  activity digest, scheduler, and delivery paths do not yet use it as their
   primary output.
 - GitHub/Jira/Drive digest integration is not implemented.
