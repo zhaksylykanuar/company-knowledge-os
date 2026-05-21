@@ -21,6 +21,7 @@ from app.services.attention_triage import (  # noqa: E402
     DigestSection,
     apply_attention_confidence_policy,
 )
+from app.services.digest_rendering import render_persisted_attention_digest_text  # noqa: E402
 from app.services.meeting_artifacts import (  # noqa: E402
     MeetingTranscriptInput,
     process_meeting_transcript,
@@ -41,6 +42,9 @@ def build_report() -> dict[str, Any]:
     return {
         "attention_policy_sample": _attention_policy_sample(),
         "digest_sections_sample": _digest_sections_sample(),
+        "persisted_attention_digest_preview_sample": (
+            _persisted_attention_digest_preview_sample()
+        ),
         "source_normalization_sample": _source_normalization_sample(),
         "meeting_draft_sample": _meeting_draft_sample(),
         "feedback_context_shape_sample": _feedback_context_shape_sample(),
@@ -138,6 +142,197 @@ def _digest_sections_sample() -> dict[str, Any]:
         "section_order": section_order,
         "sections": sections,
         "hidden_summary_counts_only": True,
+    }
+
+
+def _persisted_attention_digest_preview_sample() -> dict[str, Any]:
+    read_model = _persisted_attention_digest_read_model_sample()
+    return {
+        "synthetic": True,
+        "provider_free": True,
+        "db_reads": False,
+        "api_calls": False,
+        "delivery": False,
+        "renderer": "render_persisted_attention_digest_text",
+        "hidden_summary_counts_only": True,
+        "read_model": read_model,
+        "rendered_text": render_persisted_attention_digest_text(read_model),
+    }
+
+
+def _persisted_attention_digest_read_model_sample() -> dict[str, Any]:
+    return {
+        "section_title": "Persisted attention digest",
+        "available": True,
+        "window": {
+            "start_at": "2026-05-18T00:00:00+00:00",
+            "end_at": "2026-05-19T00:00:00+00:00",
+        },
+        "section_labels": {
+            "work_actions": "Work actions requiring my attention",
+            "manual_actions": "Manual actions",
+            "waiting_external_reply": "Waiting for external reply",
+            "work_info": "Important project updates",
+            "review_optional": "Review optional",
+        },
+        "counts": {
+            "total": 7,
+            "visible": 5,
+            "hidden": 2,
+            "shown": 5,
+            "by_attention_class": {
+                "important_info": 1,
+                "manual_action": 1,
+                "no_action_required": 2,
+                "requires_my_attention": 1,
+                "review_optional": 1,
+                "waiting_on_external": 1,
+            },
+            "by_priority": {
+                "high": 1,
+                "low": 3,
+                "medium": 3,
+            },
+            "by_show_in_digest": {
+                "false": 2,
+                "true": 5,
+            },
+            "by_source": {
+                "drive": 1,
+                "github": 2,
+                "gmail": 1,
+                "jira": 1,
+            },
+        },
+        "groups": {
+            "work_actions": [
+                _persisted_attention_item(
+                    suffix="reply",
+                    source="gmail",
+                    attention_class="requires_my_attention",
+                    priority="high",
+                    title="Reply to synthetic customer question",
+                    action="Draft a reply for founder review",
+                    summary="Synthetic customer asked for next steps.",
+                    owner="synthetic-founder",
+                    deadline="2026-05-19",
+                    project="Synthetic Pilot",
+                    evidence="1 triage evidence ref",
+                )
+            ],
+            "manual_actions": [
+                _persisted_attention_item(
+                    suffix="manual",
+                    source="jira",
+                    attention_class="manual_action",
+                    priority="medium",
+                    title="Complete synthetic approval checklist",
+                    action="Confirm checklist status before execution",
+                    summary="Synthetic launch checklist is waiting for approval.",
+                    owner="synthetic-operator",
+                    deadline="2026-05-20",
+                    project="Synthetic Pilot",
+                    evidence="1 triage evidence ref",
+                )
+            ],
+            "waiting_external_reply": [
+                _persisted_attention_item(
+                    suffix="waiting",
+                    source="github",
+                    attention_class="waiting_on_external",
+                    priority="medium",
+                    title="Wait for synthetic partner response",
+                    action="Do not follow up until the partner responds",
+                    summary="Synthetic partner review is outstanding.",
+                    owner="external partner",
+                    deadline=None,
+                    project="Synthetic Pilot",
+                    evidence="1 triage evidence ref",
+                )
+            ],
+            "work_info": [
+                _persisted_attention_item(
+                    suffix="update",
+                    source="drive",
+                    attention_class="important_info",
+                    priority="low",
+                    title="Synthetic launch plan changed",
+                    action="Review the updated synthetic runbook",
+                    summary="Synthetic pilot runbook changed its readiness notes.",
+                    owner=None,
+                    deadline=None,
+                    project="Synthetic Pilot",
+                    evidence="1 activity evidence ref",
+                )
+            ],
+            "review_optional": [
+                _persisted_attention_item(
+                    suffix="review",
+                    source="github",
+                    attention_class="review_optional",
+                    priority="low",
+                    title="Review optional synthetic context",
+                    action="Review only if preparing the pilot summary",
+                    summary="Synthetic context is available for optional review.",
+                    owner=None,
+                    deadline=None,
+                    project="Synthetic Pilot",
+                    evidence="1 triage evidence ref",
+                )
+            ],
+        },
+        "hidden_low_priority_summary": {
+            "total": 2,
+            "counts": {"no-action low-priority items": 2},
+        },
+        "data_quality_notes": [],
+        "metadata": {
+            "source_model": "attention_triage_results",
+            "enrichment_model": "normalized_activity_items",
+            "group_limit": 20,
+            "truncated": False,
+            "llm_used": False,
+            "read_model_only": True,
+            "source_activity_digest_replaced": False,
+            "debug_evidence": False,
+        },
+    }
+
+
+def _persisted_attention_item(
+    *,
+    suffix: str,
+    source: str,
+    attention_class: str,
+    priority: str,
+    title: str,
+    action: str,
+    summary: str,
+    owner: str | None,
+    deadline: str | None,
+    project: str,
+    evidence: str,
+) -> dict[str, Any]:
+    return {
+        "id": f"synthetic-triage-{suffix}",
+        "triage_result_id": f"synthetic-triage-{suffix}",
+        "activity_item_id": f"synthetic-activity-{suffix}",
+        "source": source,
+        "source_object_id": f"synthetic-object-{suffix}",
+        "attention_class": attention_class,
+        "priority": priority,
+        "show_in_digest": True,
+        "confidence": 0.91,
+        "title": title,
+        "safe_summary": summary,
+        "recommended_action": action,
+        "owner": owner,
+        "deadline": deadline,
+        "project": project,
+        "activity_created_at": SAMPLE_TIME.isoformat(),
+        "triage_created_at": SAMPLE_TIME.isoformat(),
+        "evidence": evidence,
+        "activity_available": True,
     }
 
 
@@ -328,6 +523,7 @@ def _model_dump_jsonable(value: Any) -> dict[str, Any]:
 
 def _render_text(report: dict[str, Any]) -> str:
     digest_sections = report["digest_sections_sample"]["section_order"]
+    persisted_preview = report["persisted_attention_digest_preview_sample"]
     source_sample = report["source_normalization_sample"]
     meeting_sample = report["meeting_draft_sample"]
     safety = report["safety"]
@@ -340,6 +536,9 @@ def _render_text(report: dict[str, Any]) -> str:
         "",
         "digest_sections_sample:",
         *[f"- {section}" for section in digest_sections],
+        "",
+        "persisted_attention_digest_preview_sample:",
+        persisted_preview["rendered_text"],
         "",
         "source_normalization_sample:",
         f"- github: {source_sample['github']['source_object_id']}",

@@ -11,6 +11,7 @@
 - Protected rendered source activity digest text API: implemented
 - Protected persisted attention digest preview API: implemented
 - Internal persisted attention digest text renderer: implemented
+- Synthetic manual pilot persisted attention digest preview artifact: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -185,6 +186,16 @@ Implemented today:
 - FOS-057 does not add Telegram or Slack sending, scheduler behavior, delivery
   wiring, migrations, live providers, or production connector calls. Telegram
   and Slack remain delivery/interface surfaces only, not the source of truth.
+- FOS-058 adds a synthetic manual pilot preview artifact for persisted
+  attention digest text. The artifact uses the real deterministic persisted
+  attention digest renderer, is provider-free and synthetic-only, keeps hidden
+  low-priority items count-only, and treats evidence refs as safe debug-style
+  context rather than source-of-truth data.
+- FOS-058 does not read stored data, call APIs, run triage, call providers or
+  OpenAI, add scheduler behavior, add delivery wiring, add Telegram or Slack
+  sending, change API endpoints, add migrations, or call live connectors.
+  Telegram and Slack remain delivery/interface surfaces only, not the source of
+  truth.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
@@ -202,6 +213,7 @@ Not implemented today:
 - Calendar connector.
 - Full production Gmail/Drive sync.
 - LLM summarization for digests.
+- Manual stored-data digest CLI/operator run.
 - Decision, task, risk, commitment, or recommendation inference in digest
   rendering.
 - Telegram delivery, scheduler, connector, or digest inference logic behind the

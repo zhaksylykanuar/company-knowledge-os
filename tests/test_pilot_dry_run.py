@@ -30,6 +30,7 @@ def test_json_command_exits_successfully_with_expected_sections() -> None:
     assert set(payload) == {
         "attention_policy_sample",
         "digest_sections_sample",
+        "persisted_attention_digest_preview_sample",
         "source_normalization_sample",
         "meeting_draft_sample",
         "feedback_context_shape_sample",
@@ -44,6 +45,8 @@ def test_text_command_exits_successfully() -> None:
     assert completed.returncode == 0
     assert "FOS-049A Manual Pilot Dry Run" in completed.stdout
     assert "attention_policy_sample:" in completed.stdout
+    assert "persisted_attention_digest_preview_sample:" in completed.stdout
+    assert "Persisted attention digest" in completed.stdout
     assert "safety:" in completed.stdout
 
 
@@ -87,6 +90,63 @@ def test_digest_sample_includes_all_sections_and_counts_only_hidden_summary() ->
     }
     assert "items" not in hidden_summary
     assert digest["hidden_summary_counts_only"] is True
+
+
+def test_persisted_attention_preview_uses_real_renderer_and_all_visible_sections() -> None:
+    sample = pilot_dry_run.build_report()["persisted_attention_digest_preview_sample"]
+    rendered_text = sample["rendered_text"]
+
+    assert sample["synthetic"] is True
+    assert sample["provider_free"] is True
+    assert sample["db_reads"] is False
+    assert sample["api_calls"] is False
+    assert sample["delivery"] is False
+    assert sample["renderer"] == "render_persisted_attention_digest_text"
+    assert sample["hidden_summary_counts_only"] is True
+    assert sample["read_model"]["metadata"]["read_model_only"] is True
+    assert "Persisted attention digest" in rendered_text
+    assert "Work actions requiring my attention:" in rendered_text
+    assert "Manual actions:" in rendered_text
+    assert "Waiting for external reply:" in rendered_text
+    assert "Important project updates:" in rendered_text
+    assert "Review optional:" in rendered_text
+
+
+def test_persisted_attention_preview_keeps_hidden_items_count_only() -> None:
+    sample = pilot_dry_run.build_report()["persisted_attention_digest_preview_sample"]
+    read_model = sample["read_model"]
+    rendered_text = sample["rendered_text"]
+
+    assert read_model["hidden_low_priority_summary"] == {
+        "total": 2,
+        "counts": {"no-action low-priority items": 2},
+    }
+    assert "Hidden low-priority summary:" in rendered_text
+    assert "- 2 no-action low-priority items" in rendered_text
+    assert "Synthetic hidden" not in rendered_text
+    assert "hidden-title" not in json.dumps(sample, sort_keys=True)
+    assert "hidden-detail" not in json.dumps(sample, sort_keys=True)
+    assert "items" not in read_model["hidden_low_priority_summary"]
+
+
+def test_persisted_attention_preview_omits_raw_provider_prompt_payload_markers() -> None:
+    report = pilot_dry_run.build_report()
+    sample = report["persisted_attention_digest_preview_sample"]
+    dumped = json.dumps(sample, sort_keys=True)
+    rendered_text = sample["rendered_text"]
+
+    for marker in (
+        "raw_payload",
+        "provider_payload",
+        "prompt",
+        "source_payload",
+        "source_body",
+        "raw_text",
+        "PRIVATE",
+        "YOUR_API_KEY",
+    ):
+        assert marker not in dumped
+        assert marker not in rendered_text
 
 
 def test_source_normalization_sample_includes_github_jira_and_drive_outputs() -> None:
