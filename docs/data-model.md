@@ -16,6 +16,8 @@
   audit-log-backed, implemented
 - Persisted attention digest delivery draft approval decisions:
   audit-log-backed, implemented
+- Persisted attention digest delivery readiness preview:
+  read-only, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -29,6 +31,8 @@
   FOS-062 stores sanitized delivery draft decision records here as
   `digest.delivery_draft.approved` and `digest.delivery_draft.rejected` events,
   also keyed by `after_ref=delivery_draft_id`.
+  FOS-063 reads those draft and decision events to build a delivery readiness
+  preview, but it does not append audit rows or introduce new storage.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -117,6 +121,15 @@
 - Approval decisions are not delivery execution. They do not mutate the draft
   event, do not mutate source-of-truth company facts, do not send
   Telegram/Slack messages, and do not invoke scheduler or delivery adapters.
+- Delivery readiness for persisted delivery drafts is read-only and derived
+  from existing `digest.delivery_draft.created`,
+  `digest.delivery_draft.approved`, and `digest.delivery_draft.rejected` audit
+  events. It reports whether a draft is approved and eligible for a future
+  separately gated delivery path, but it must not store rendered digest text in
+  the readiness response, create outbox/intention records, mutate source-of-
+  truth data, mutate draft or decision events, send Telegram/Slack messages, or
+  invoke scheduler, providers, live APIs, approval execution, or delivery
+  adapters. FOS-063 introduces no new table or migration.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

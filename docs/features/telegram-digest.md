@@ -18,6 +18,7 @@
   implemented
 - Audit-log-backed persisted attention digest delivery draft approval decisions:
   implemented
+- Read-only persisted attention digest delivery readiness preview: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -141,6 +142,11 @@ trusted facts.
 - Approval/rejection decisions for persisted delivery drafts are human decision
   records only. Approval does not send Telegram/Slack messages, execute
   delivery, mutate source-of-truth data, or make the draft authoritative.
+- Delivery readiness for persisted delivery drafts is a read-only preview of
+  whether an approved draft is eligible for a future separately gated delivery
+  path. It does not create outbox records, send Telegram/Slack messages,
+  execute delivery, mutate source-of-truth data, or mutate draft/decision
+  records.
 - Hidden low-priority digest items must remain count-only in preview, persisted
   draft, and delivery-oriented surfaces. Evidence refs remain debug-only and
   safe-formatted.
@@ -252,6 +258,17 @@ Implemented today:
   count-only, and evidence refs remain safe-formatted debug-only. This slice
   does not add scheduler behavior, Telegram/Slack sending, delivery wiring,
   migrations, live API calls, providers/OpenAI, connector calls, or new tables.
+- FOS-063 adds a protected read-only delivery readiness preview for persisted
+  delivery drafts. Readiness reports whether a draft is approved and eligible
+  for a future separately gated delivery path, while keeping delivery execution
+  disabled. It does not create delivery outbox/intention records, send
+  Telegram/Slack messages, execute approval or delivery, mutate source-of-truth
+  data, mutate draft/decision records, run scheduler behavior, call live APIs,
+  call providers/OpenAI, or add migrations/new tables.
+- FOS-063 readiness payloads expose only sanitized draft hash/window/chunk
+  metadata, source-of-truth metadata, decision history, and inert safety flags.
+  Hidden low-priority items remain count-only, and evidence refs remain
+  safe-formatted debug-only.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
@@ -281,5 +298,6 @@ Not implemented today:
   inference logic behind persisted attention digest delivery draft preview or
   audit-log-backed draft review records.
 - Approval-triggered execution for persisted delivery drafts.
+- Delivery outbox/intention records for approved persisted delivery drafts.
 - Scheduler, connector, inbound Q&A, LLM summarization, or digest inference
   logic in the Telegram outbound delivery adapter.

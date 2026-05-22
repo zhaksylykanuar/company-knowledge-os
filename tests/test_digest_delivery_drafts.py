@@ -23,6 +23,7 @@ from app.services.digest_delivery_drafts import (
     build_persisted_attention_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
     get_digest_delivery_draft_approval_status,
+    get_digest_delivery_draft_delivery_readiness,
     get_persisted_digest_delivery_draft,
     persist_digest_delivery_draft,
     reject_digest_delivery_draft,
@@ -195,6 +196,17 @@ async def _delivery_draft_audit_log_count(
             select(func.count())
             .select_from(AuditLog)
             .where(AuditLog.event_type == event_type)
+            .where(AuditLog.after_ref == delivery_draft_id)
+        )
+    return int(count or 0)
+
+
+async def _delivery_draft_audit_log_total(delivery_draft_id: str) -> int:
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.event_type.in_(DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES))
             .where(AuditLog.after_ref == delivery_draft_id)
         )
     return int(count or 0)
@@ -537,6 +549,10 @@ async def test_delivery_draft_approval_status_unknown_returns_none_and_decisions
             session,
             delivery_draft_id=delivery_draft_id,
         )
+        readiness = await get_digest_delivery_draft_delivery_readiness(
+            session,
+            delivery_draft_id=delivery_draft_id,
+        )
         with pytest.raises(DeliveryDraftNotFoundError, match="not found"):
             await approve_digest_delivery_draft(
                 session,
@@ -551,6 +567,7 @@ async def test_delivery_draft_approval_status_unknown_returns_none_and_decisions
             )
 
     assert status is None
+    assert readiness is None
 
 
 async def test_approving_delivery_draft_writes_one_safe_audit_event_and_is_idempotent() -> None:
@@ -767,9 +784,248 @@ async def test_delivery_draft_decision_conflicts_reject_opposite_terminal_decisi
         await _delete_delivery_draft_audit_logs(rejected_id)
 
 
+async def test_delivery_draft_delivery_readiness_reports_states_without_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_audit_log_table()
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("delivery readiness must not send Telegram messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    digest = _persisted_attention_digest()
+
+    unapproved_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 5, 1),
+        end_at=_utc(2132, 5, 2),
+    )
+    rejected_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 5, 3),
+        end_at=_utc(2132, 5, 4),
+    )
+    approved_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 5, 5),
+        end_at=_utc(2132, 5, 6),
+    )
+    draft_ids = [
+        unapproved_draft["delivery_draft_id"],
+        rejected_draft["delivery_draft_id"],
+        approved_draft["delivery_draft_id"],
+    ]
+    for delivery_draft_id in draft_ids:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(
+                session,
+                draft=unapproved_draft,
+                actor="test",
+            )
+            await persist_digest_delivery_draft(
+                session,
+                draft=rejected_draft,
+                actor="test",
+            )
+            await reject_digest_delivery_draft(
+                session,
+                delivery_draft_id=rejected_draft["delivery_draft_id"],
+                reviewer="founder",
+                note="Not ready.",
+            )
+            await persist_digest_delivery_draft(
+                session,
+                draft=approved_draft,
+                actor="test",
+            )
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=approved_draft["delivery_draft_id"],
+                reviewer="founder",
+                note="Ready for future delivery gate.",
+            )
+            await session.commit()
+
+        before_counts = {
+            delivery_draft_id: await _delivery_draft_audit_log_total(delivery_draft_id)
+            for delivery_draft_id in draft_ids
+        }
+        async with AsyncSessionLocal() as session:
+            unapproved = await get_digest_delivery_draft_delivery_readiness(
+                session,
+                delivery_draft_id=unapproved_draft["delivery_draft_id"],
+            )
+            rejected = await get_digest_delivery_draft_delivery_readiness(
+                session,
+                delivery_draft_id=rejected_draft["delivery_draft_id"],
+            )
+            approved = await get_digest_delivery_draft_delivery_readiness(
+                session,
+                delivery_draft_id=approved_draft["delivery_draft_id"],
+            )
+        after_counts = {
+            delivery_draft_id: await _delivery_draft_audit_log_total(delivery_draft_id)
+            for delivery_draft_id in draft_ids
+        }
+
+        assert before_counts == after_counts
+        assert unapproved is not None
+        assert rejected is not None
+        assert approved is not None
+
+        assert unapproved["status"] == "delivery_readiness"
+        assert unapproved["current_decision"] is None
+        assert unapproved["approved"] is False
+        assert unapproved["rejected"] is False
+        assert unapproved["eligible_for_delivery"] is False
+        assert unapproved["ineligible_reasons"] == ["not_approved"]
+
+        assert rejected["current_decision"] == "rejected"
+        assert rejected["approved"] is False
+        assert rejected["rejected"] is True
+        assert rejected["eligible_for_delivery"] is False
+        assert rejected["ineligible_reasons"] == ["rejected"]
+
+        assert approved["current_decision"] == "approved"
+        assert approved["approved"] is True
+        assert approved["rejected"] is False
+        assert approved["eligible_for_delivery"] is True
+        assert approved["ineligible_reasons"] == []
+
+        for readiness, draft in (
+            (unapproved, unapproved_draft),
+            (rejected, rejected_draft),
+            (approved, approved_draft),
+        ):
+            assert readiness["draft_exists"] is True
+            assert readiness["digest_type"] == "persisted_attention"
+            assert readiness["channel"] == "telegram"
+            assert readiness["delivery_execution_enabled"] is False
+            assert readiness["delivery_enabled"] is False
+            assert readiness["delivery_invoked"] is False
+            assert readiness["approval_execution_invoked"] is False
+            assert readiness["sent"] is False
+            assert readiness["text_sha256"] == draft["text_sha256"]
+            assert readiness["char_count"] == draft["char_count"]
+            assert readiness["chunk_count"] == draft["chunk_count"]
+            assert readiness["chunk_metadata"] == draft["chunk_metadata"]
+            assert readiness["start_at"] == draft["start_at"]
+            assert readiness["end_at"] == draft["end_at"]
+            assert readiness["limit"] == draft["limit"]
+            assert readiness["source_of_truth"] == draft["source_of_truth"]
+            assert readiness["safety"] == {
+                "provider_free": True,
+                "read_only": True,
+                "delivery_execution_enabled": False,
+                "delivery_invoked": False,
+                "approval_execution_invoked": False,
+                "scheduler_invoked": False,
+                "connectors_invoked": False,
+                "live_api_calls": False,
+                "db_write_scope": "none",
+                "draft_is_source_of_truth": False,
+                "telegram_is_source_of_truth": False,
+            }
+            assert "rendered_text" not in readiness
+            assert "digest" not in readiness
+
+        serialized = json.dumps(
+            {
+                "unapproved": unapproved,
+                "rejected": rejected,
+                "approved": approved,
+            },
+            sort_keys=True,
+        )
+        assert "Hidden delivery draft title" not in serialized
+        assert "atri_delivery_hidden" not in serialized
+        assert "sevt_delivery_hidden" not in serialized
+        assert "evidence_refs" not in serialized
+        for marker in (
+            "PRIVATE_RAW_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROMPT_DO_NOT_EXPOSE",
+            "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE",
+            "raw_payload",
+            "provider_payload",
+            "prompt",
+            "source_payload",
+        ):
+            assert marker not in serialized
+    finally:
+        for delivery_draft_id in draft_ids:
+            await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
 class _FakeScalars:
     def all(self) -> list[Any]:
         return []
+
+
+class _FakeAuditLogRecord:
+    def __init__(self, *, delivery_draft_id: str, payload: dict[str, Any]) -> None:
+        self.event_type = DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE
+        self.after_ref = delivery_draft_id
+        self.created_at = None
+        self.payload = payload
+
+
+class _ReadOnlyReadinessSession:
+    def __init__(self, *, record: _FakeAuditLogRecord) -> None:
+        self._record = record
+
+    async def scalar(self, *_args: object, **_kwargs: object) -> _FakeAuditLogRecord:
+        return self._record
+
+    async def scalars(self, *_args: object, **_kwargs: object) -> _FakeScalars:
+        return _FakeScalars()
+
+    def add(self, _value: object) -> None:
+        raise AssertionError("delivery readiness must not add rows")
+
+    async def flush(self) -> None:
+        raise AssertionError("delivery readiness must not flush rows")
+
+    async def commit(self) -> None:
+        raise AssertionError("delivery readiness must not commit")
+
+    async def execute(self, *_args: object, **_kwargs: object) -> None:
+        raise AssertionError("delivery readiness must not execute write paths")
+
+
+async def test_delivery_readiness_does_not_call_write_methods() -> None:
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 6, 1),
+        end_at=_utc(2132, 6, 2),
+    )
+    payload = dict(draft)
+    payload["persisted"] = True
+    fake_record = _FakeAuditLogRecord(
+        delivery_draft_id=draft["delivery_draft_id"],
+        payload=payload,
+    )
+
+    readiness = await get_digest_delivery_draft_delivery_readiness(
+        _ReadOnlyReadinessSession(record=fake_record),  # type: ignore[arg-type]
+        delivery_draft_id=draft["delivery_draft_id"],
+    )
+
+    assert readiness is not None
+    assert readiness["delivery_draft_id"] == draft["delivery_draft_id"]
+    assert readiness["eligible_for_delivery"] is False
+    assert readiness["ineligible_reasons"] == ["not_approved"]
+    assert "rendered_text" not in readiness
+    assert "digest" not in readiness
 
 
 class _ReadOnlySession:

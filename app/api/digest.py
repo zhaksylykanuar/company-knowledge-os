@@ -20,6 +20,7 @@ from app.services.digest_delivery_drafts import (
     build_persisted_attention_digest_delivery_draft_from_db,
     create_persisted_attention_digest_delivery_draft,
     get_digest_delivery_draft_approval_status,
+    get_digest_delivery_draft_delivery_readiness,
     get_persisted_digest_delivery_draft,
     reject_digest_delivery_draft,
 )
@@ -178,6 +179,30 @@ async def _get_digest_delivery_draft_approval_status_response(
             detail="delivery draft was not found",
         )
     return approval_status
+
+
+async def _get_digest_delivery_draft_delivery_readiness_response(
+    *,
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            readiness = await get_digest_delivery_draft_delivery_readiness(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if readiness is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="delivery draft was not found",
+        )
+    return readiness
 
 
 async def _record_digest_delivery_draft_decision_response(
@@ -465,5 +490,14 @@ async def get_persisted_digest_delivery_draft_approval_status_endpoint(
     delivery_draft_id: str,
 ) -> dict[str, Any]:
     return await _get_digest_delivery_draft_approval_status_response(
+        delivery_draft_id=delivery_draft_id,
+    )
+
+
+@router.get("/delivery-drafts/{delivery_draft_id}/delivery-readiness")
+async def get_persisted_digest_delivery_draft_delivery_readiness_endpoint(
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    return await _get_digest_delivery_draft_delivery_readiness_response(
         delivery_draft_id=delivery_draft_id,
     )

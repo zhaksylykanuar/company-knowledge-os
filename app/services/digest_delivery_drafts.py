@@ -25,6 +25,7 @@ from app.services.telegram_delivery import (
 )
 
 DIGEST_DELIVERY_DRAFT_STATUS = "draft"
+DIGEST_DELIVERY_DRAFT_READINESS_STATUS = "delivery_readiness"
 DIGEST_DELIVERY_DRAFT_TYPE = "persisted_attention"
 DIGEST_DELIVERY_DRAFT_CHANNEL = "telegram"
 DIGEST_DELIVERY_DRAFT_ID_PREFIX = "ddraft_"
@@ -579,6 +580,44 @@ def _decision_safety_metadata() -> dict[str, Any]:
     }
 
 
+def _delivery_readiness_safety_metadata() -> dict[str, Any]:
+    return {
+        "provider_free": True,
+        "read_only": True,
+        "delivery_execution_enabled": False,
+        "delivery_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "connectors_invoked": False,
+        "live_api_calls": False,
+        "db_write_scope": "none",
+        "draft_is_source_of_truth": False,
+        "telegram_is_source_of_truth": False,
+    }
+
+
+def _safe_chunk_metadata(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+
+    metadata: dict[str, Any] = {}
+    chunk_size = value.get("chunk_size")
+    if isinstance(chunk_size, int):
+        metadata["chunk_size"] = chunk_size
+
+    chunk_lengths = value.get("chunk_lengths")
+    if isinstance(chunk_lengths, list):
+        metadata["chunk_lengths"] = [
+            length for length in chunk_lengths if isinstance(length, int)
+        ]
+
+    chunks_preview_included = value.get("chunks_preview_included")
+    if isinstance(chunks_preview_included, bool):
+        metadata["chunks_preview_included"] = chunks_preview_included
+
+    return metadata
+
+
 def _decision_payload(
     *,
     draft: Mapping[str, Any],
@@ -684,6 +723,76 @@ async def get_digest_delivery_draft_approval_status(
         "decision_history": decision_history,
         "draft": _draft_approval_status_metadata(draft),
         "safety": _decision_safety_metadata(),
+    }
+
+
+async def get_digest_delivery_draft_delivery_readiness(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+) -> dict[str, Any] | None:
+    """Return a read-only delivery readiness preview for a persisted draft.
+
+    This reads the stored delivery draft and decision audit events only. It does
+    not recompute digest contents, mutate approval state, create outbox records,
+    send, schedule, or write audit rows.
+    """
+
+    cleaned_delivery_draft_id = _clean_delivery_draft_id(delivery_draft_id)
+    draft = await get_persisted_digest_delivery_draft(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    if draft is None:
+        return None
+
+    approval_status = await get_digest_delivery_draft_approval_status(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    if approval_status is None:
+        return None
+
+    current_decision = approval_status["current_decision"]
+    approved = current_decision == DIGEST_DELIVERY_DRAFT_APPROVED_DECISION
+    rejected = current_decision == DIGEST_DELIVERY_DRAFT_REJECTED_DECISION
+    ineligible_reasons: list[str] = []
+    if rejected:
+        ineligible_reasons.append("rejected")
+    elif not approved:
+        ineligible_reasons.append("not_approved")
+
+    return {
+        "delivery_draft_id": cleaned_delivery_draft_id,
+        "draft_exists": True,
+        "status": DIGEST_DELIVERY_DRAFT_READINESS_STATUS,
+        "digest_type": draft.get("digest_type"),
+        "channel": draft.get("channel"),
+        "current_decision": current_decision,
+        "approved": approved,
+        "rejected": rejected,
+        "eligible_for_delivery": approved,
+        "ineligible_reasons": ineligible_reasons,
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "approval_execution_invoked": False,
+        "sent": False,
+        "text_sha256": draft.get("text_sha256"),
+        "char_count": draft.get("char_count"),
+        "chunk_count": draft.get("chunk_count"),
+        "chunk_metadata": _safe_chunk_metadata(draft.get("chunk_metadata")),
+        "start_at": draft.get("start_at"),
+        "end_at": draft.get("end_at"),
+        "limit": draft.get("limit"),
+        "debug_evidence": bool(draft.get("debug_evidence")),
+        "decision_history": approval_status["decision_history"],
+        "source_of_truth": (
+            dict(draft.get("source_of_truth"))
+            if isinstance(draft.get("source_of_truth"), Mapping)
+            else {}
+        ),
+        "safety": _delivery_readiness_safety_metadata(),
     }
 
 
