@@ -16,11 +16,15 @@ from app.services.digest import (
 from app.services.digest_delivery_drafts import (
     DeliveryDraftDecisionConflictError,
     DeliveryDraftNotFoundError,
+    DeliveryIntentionConflictError,
+    DeliveryIntentionNotReadyError,
     approve_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
+    create_digest_delivery_intention,
     create_persisted_attention_digest_delivery_draft,
     get_digest_delivery_draft_approval_status,
     get_digest_delivery_draft_delivery_readiness,
+    get_digest_delivery_intention,
     get_persisted_digest_delivery_draft,
     reject_digest_delivery_draft,
 )
@@ -203,6 +207,60 @@ async def _get_digest_delivery_draft_delivery_readiness_response(
             detail="delivery draft was not found",
         )
     return readiness
+
+
+async def _create_digest_delivery_intention_response(
+    *,
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            intention = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="api",
+            )
+            await session.commit()
+            return intention
+    except DeliveryDraftNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except (DeliveryIntentionConflictError, DeliveryIntentionNotReadyError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+async def _get_digest_delivery_intention_response(
+    *,
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            intention = await get_digest_delivery_intention(
+                session,
+                delivery_intention_id=delivery_intention_id,
+            )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if intention is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="delivery intention was not found",
+        )
+    return intention
 
 
 async def _record_digest_delivery_draft_decision_response(
@@ -500,4 +558,22 @@ async def get_persisted_digest_delivery_draft_delivery_readiness_endpoint(
 ) -> dict[str, Any]:
     return await _get_digest_delivery_draft_delivery_readiness_response(
         delivery_draft_id=delivery_draft_id,
+    )
+
+
+@router.post("/delivery-drafts/{delivery_draft_id}/delivery-intention")
+async def create_persisted_digest_delivery_intention_endpoint(
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    return await _create_digest_delivery_intention_response(
+        delivery_draft_id=delivery_draft_id,
+    )
+
+
+@router.get("/delivery-intentions/{delivery_intention_id}")
+async def get_persisted_digest_delivery_intention_endpoint(
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    return await _get_digest_delivery_intention_response(
+        delivery_intention_id=delivery_intention_id,
     )

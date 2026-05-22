@@ -16,14 +16,20 @@ from app.services.digest_delivery_drafts import (
     DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES,
     DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
     DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+    DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
     DeliveryDraftDecisionConflictError,
     DeliveryDraftNotFoundError,
+    DeliveryIntentionConflictError,
+    DeliveryIntentionNotReadyError,
     approve_digest_delivery_draft,
     build_delivery_draft_id,
+    build_delivery_intention_id,
     build_persisted_attention_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
+    create_digest_delivery_intention,
     get_digest_delivery_draft_approval_status,
     get_digest_delivery_draft_delivery_readiness,
+    get_digest_delivery_intention,
     get_persisted_digest_delivery_draft,
     persist_digest_delivery_draft,
     reject_digest_delivery_draft,
@@ -183,6 +189,11 @@ async def _delete_delivery_draft_audit_logs(delivery_draft_id: str) -> None:
             .where(AuditLog.event_type.in_(DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES))
             .where(AuditLog.after_ref == delivery_draft_id)
         )
+        await session.execute(
+            delete(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
+            .where(AuditLog.before_ref == delivery_draft_id)
+        )
         await session.commit()
 
 
@@ -222,6 +233,31 @@ async def _delivery_draft_audit_payload(
             select(AuditLog.payload)
             .where(AuditLog.event_type == event_type)
             .where(AuditLog.after_ref == delivery_draft_id)
+            .order_by(AuditLog.id)
+        )
+    assert isinstance(payload, dict)
+    return payload
+
+
+async def _delivery_intention_audit_log_count(delivery_intention_id: str) -> int:
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_intention_id)
+        )
+    return int(count or 0)
+
+
+async def _delivery_intention_audit_payload(
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        payload = await session.scalar(
+            select(AuditLog.payload)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_intention_id)
             .order_by(AuditLog.id)
         )
     assert isinstance(payload, dict)
@@ -314,6 +350,62 @@ def test_delivery_draft_id_is_deterministic_and_changes_with_safe_inputs() -> No
     assert stable_id.startswith("ddraft_")
     assert stable_id != changed_text_id
     assert stable_id != changed_window_id
+
+
+def test_delivery_intention_id_is_deterministic_and_changes_with_safe_inputs() -> None:
+    stable_id = build_delivery_intention_id(
+        delivery_draft_id="ddraft_stable",
+        digest_type="persisted_attention",
+        channel="telegram",
+        text_sha256="a" * 64,
+        chunk_count=2,
+        chunk_metadata={
+            "chunk_size": 3900,
+            "chunk_lengths": [120, 80],
+            "chunks_preview_included": False,
+        },
+    )
+    repeated_id = build_delivery_intention_id(
+        delivery_draft_id="ddraft_stable",
+        digest_type="persisted_attention",
+        channel="telegram",
+        text_sha256="a" * 64,
+        chunk_count=2,
+        chunk_metadata={
+            "chunk_size": 3900,
+            "chunk_lengths": [120, 80],
+            "chunks_preview_included": False,
+        },
+    )
+    changed_hash_id = build_delivery_intention_id(
+        delivery_draft_id="ddraft_stable",
+        digest_type="persisted_attention",
+        channel="telegram",
+        text_sha256="b" * 64,
+        chunk_count=2,
+        chunk_metadata={
+            "chunk_size": 3900,
+            "chunk_lengths": [120, 80],
+            "chunks_preview_included": False,
+        },
+    )
+    changed_channel_id = build_delivery_intention_id(
+        delivery_draft_id="ddraft_stable",
+        digest_type="persisted_attention",
+        channel="slack",
+        text_sha256="a" * 64,
+        chunk_count=2,
+        chunk_metadata={
+            "chunk_size": 3900,
+            "chunk_lengths": [120, 80],
+            "chunks_preview_included": False,
+        },
+    )
+
+    assert stable_id == repeated_id
+    assert stable_id.startswith("dint_")
+    assert stable_id != changed_hash_id
+    assert stable_id != changed_channel_id
 
 
 def test_delivery_draft_keeps_hidden_details_count_only_and_omits_raw_payloads() -> None:
@@ -553,6 +645,10 @@ async def test_delivery_draft_approval_status_unknown_returns_none_and_decisions
             session,
             delivery_draft_id=delivery_draft_id,
         )
+        missing_intention = await get_digest_delivery_intention(
+            session,
+            delivery_intention_id="dint_unknown_fos_064_service",
+        )
         with pytest.raises(DeliveryDraftNotFoundError, match="not found"):
             await approve_digest_delivery_draft(
                 session,
@@ -565,9 +661,16 @@ async def test_delivery_draft_approval_status_unknown_returns_none_and_decisions
                 delivery_draft_id=delivery_draft_id,
                 reviewer="founder",
             )
+        with pytest.raises(DeliveryDraftNotFoundError, match="not found"):
+            await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="test",
+            )
 
     assert status is None
     assert readiness is None
+    assert missing_intention is None
 
 
 async def test_approving_delivery_draft_writes_one_safe_audit_event_and_is_idempotent() -> None:
@@ -961,6 +1064,289 @@ async def test_delivery_draft_delivery_readiness_reports_states_without_writes(
     finally:
         for delivery_draft_id in draft_ids:
             await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_intention_rejects_unapproved_and_rejected_drafts() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    unapproved_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 7, 1),
+        end_at=_utc(2132, 7, 2),
+    )
+    rejected_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 7, 3),
+        end_at=_utc(2132, 7, 4),
+    )
+    draft_ids = [
+        unapproved_draft["delivery_draft_id"],
+        rejected_draft["delivery_draft_id"],
+    ]
+    for delivery_draft_id in draft_ids:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(
+                session,
+                draft=unapproved_draft,
+                actor="test",
+            )
+            await persist_digest_delivery_draft(
+                session,
+                draft=rejected_draft,
+                actor="test",
+            )
+            await reject_digest_delivery_draft(
+                session,
+                delivery_draft_id=rejected_draft["delivery_draft_id"],
+                reviewer="founder",
+            )
+
+            with pytest.raises(DeliveryIntentionNotReadyError, match="not_approved"):
+                await create_digest_delivery_intention(
+                    session,
+                    delivery_draft_id=unapproved_draft["delivery_draft_id"],
+                    actor="test",
+                )
+            with pytest.raises(DeliveryIntentionNotReadyError, match="rejected"):
+                await create_digest_delivery_intention(
+                    session,
+                    delivery_draft_id=rejected_draft["delivery_draft_id"],
+                    actor="test",
+                )
+            await session.commit()
+
+        for delivery_draft_id in draft_ids:
+            async with AsyncSessionLocal() as session:
+                result = await session.scalar(
+                    select(func.count())
+                    .select_from(AuditLog)
+                    .where(
+                        AuditLog.event_type
+                        == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE
+                    )
+                    .where(AuditLog.before_ref == delivery_draft_id)
+                )
+            assert int(result or 0) == 0
+    finally:
+        for delivery_draft_id in draft_ids:
+            await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_intention_creates_one_safe_audit_event_and_is_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_audit_log_table()
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("delivery intention must not send Telegram messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    digest = _persisted_attention_digest()
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 7, 5),
+        end_at=_utc(2132, 7, 6),
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+                note="Approved for intention.",
+            )
+            created = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="test",
+            )
+            repeated = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="duplicate",
+            )
+            await session.commit()
+
+        delivery_intention_id = created["delivery_intention_id"]
+        stored_payload = await _delivery_intention_audit_payload(
+            delivery_intention_id
+        )
+        async with AsyncSessionLocal() as session:
+            retrieved = await get_digest_delivery_intention(
+                session,
+                delivery_intention_id=delivery_intention_id,
+            )
+
+        assert retrieved is not None
+        assert created["delivery_intention_id"] == repeated["delivery_intention_id"]
+        assert retrieved["delivery_intention_id"] == delivery_intention_id
+        assert created["delivery_draft_id"] == delivery_draft_id
+        assert created["status"] == "delivery_intention"
+        assert created["persisted"] is True
+        assert created["digest_type"] == "persisted_attention"
+        assert created["channel"] == "telegram"
+        assert created["current_decision"] == "approved"
+        assert created["eligible_for_delivery"] is True
+        assert created["delivery_execution_enabled"] is False
+        assert created["delivery_enabled"] is False
+        assert created["delivery_invoked"] is False
+        assert created["approval_execution_invoked"] is False
+        assert created["sent"] is False
+        assert created["scheduler_invoked"] is False
+        assert created["text_sha256"] == draft["text_sha256"]
+        assert created["char_count"] == draft["char_count"]
+        assert created["chunk_count"] == draft["chunk_count"]
+        assert created["chunk_metadata"] == draft["chunk_metadata"]
+        assert created["start_at"] == draft["start_at"]
+        assert created["end_at"] == draft["end_at"]
+        assert created["limit"] == draft["limit"]
+        assert created["readiness"] == {
+            "status": "delivery_readiness",
+            "current_decision": "approved",
+            "approved": True,
+            "rejected": False,
+            "eligible_for_delivery": True,
+            "ineligible_reasons": [],
+        }
+        assert created["source_of_truth"] == draft["source_of_truth"]
+        assert created["safety"] == {
+            "provider_free": True,
+            "read_only": False,
+            "db_write_scope": "audit_logs_only",
+            "audit_log_backed": True,
+            "delivery_execution_enabled": False,
+            "delivery_enabled": False,
+            "delivery_invoked": False,
+            "delivery_adapter_invoked": False,
+            "approval_execution_invoked": False,
+            "scheduler_invoked": False,
+            "connectors_invoked": False,
+            "live_api_calls": False,
+            "draft_is_source_of_truth": False,
+            "intention_is_source_of_truth": False,
+            "telegram_is_source_of_truth": False,
+        }
+        assert created["audit_log"]["event_type"] == (
+            DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE
+        )
+        assert created["audit_log"]["before_ref"] == delivery_draft_id
+        assert created["audit_log"]["after_ref"] == delivery_intention_id
+        assert stored_payload["delivery_intention_id"] == delivery_intention_id
+        assert stored_payload["delivery_draft_id"] == delivery_draft_id
+        assert await _delivery_intention_audit_log_count(delivery_intention_id) == 1
+
+        expected_id = build_delivery_intention_id(
+            delivery_draft_id=delivery_draft_id,
+            digest_type="persisted_attention",
+            channel="telegram",
+            text_sha256=draft["text_sha256"],
+            chunk_count=draft["chunk_count"],
+            chunk_metadata=draft["chunk_metadata"],
+        )
+        assert delivery_intention_id == expected_id
+
+        dumped = json.dumps(
+            {
+                "created": created,
+                "repeated": repeated,
+                "retrieved": retrieved,
+                "stored_payload": stored_payload,
+            },
+            sort_keys=True,
+        )
+        assert '"rendered_text":' not in dumped
+        assert '"digest":' not in dumped
+        assert "Hidden delivery draft title" not in dumped
+        assert "atri_delivery_hidden" not in dumped
+        assert "sevt_delivery_hidden" not in dumped
+        assert "evidence_refs" not in dumped
+        for marker in (
+            "PRIVATE_RAW_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROMPT_DO_NOT_EXPOSE",
+            "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE",
+            "raw_payload",
+            "provider_payload",
+            "prompt",
+            "source_payload",
+        ):
+            assert marker not in dumped
+    finally:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_intention_conflicts_on_mismatched_existing_payload() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 7, 7),
+        end_at=_utc(2132, 7, 8),
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+            )
+            readiness = await get_digest_delivery_draft_delivery_readiness(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+            assert readiness is not None
+            delivery_intention_id = build_delivery_intention_id(
+                delivery_draft_id=delivery_draft_id,
+                digest_type=readiness["digest_type"],
+                channel=readiness["channel"],
+                text_sha256=readiness["text_sha256"],
+                chunk_count=readiness["chunk_count"],
+                chunk_metadata=readiness["chunk_metadata"],
+            )
+            session.add(
+                AuditLog(
+                    event_type=DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
+                    actor="test",
+                    correlation_id=delivery_draft_id,
+                    trace_id=delivery_intention_id,
+                    before_ref=delivery_draft_id,
+                    after_ref=delivery_intention_id,
+                    payload={
+                        "persisted": True,
+                        "status": "delivery_intention",
+                        "delivery_intention_id": delivery_intention_id,
+                        "delivery_draft_id": delivery_draft_id,
+                        "text_sha256": "mismatched",
+                    },
+                )
+            )
+            await session.flush()
+
+            with pytest.raises(DeliveryIntentionConflictError, match="does not match"):
+                await create_digest_delivery_intention(
+                    session,
+                    delivery_draft_id=delivery_draft_id,
+                    actor="test",
+                )
+            await session.rollback()
+    finally:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
 
 class _FakeScalars:

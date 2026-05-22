@@ -21,6 +21,7 @@ from app.services.digest_delivery_drafts import (
     DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES,
     DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
     DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+    DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
 )
 from app.services.normalized_activity import record_normalized_activity_item
 import app.services.telegram_delivery as telegram_delivery
@@ -72,6 +73,11 @@ async def _cleanup_delivery_draft_api_record(delivery_draft_id: str) -> None:
             .where(AuditLog.event_type.in_(DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES))
             .where(AuditLog.after_ref == delivery_draft_id)
         )
+        await session.execute(
+            delete(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
+            .where(AuditLog.before_ref == delivery_draft_id)
+        )
         await session.commit()
 
 
@@ -117,6 +123,29 @@ async def _delivery_draft_api_payload(
             select(AuditLog.payload)
             .where(AuditLog.event_type == event_type)
             .where(AuditLog.after_ref == delivery_draft_id)
+            .order_by(AuditLog.id)
+        )
+    assert isinstance(payload, dict)
+    return payload
+
+
+async def _delivery_intention_api_event_count(delivery_intention_id: str) -> int:
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_intention_id)
+        )
+    return int(count or 0)
+
+
+async def _delivery_intention_api_payload(delivery_intention_id: str) -> dict:
+    async with AsyncSessionLocal() as session:
+        payload = await session.scalar(
+            select(AuditLog.payload)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_intention_id)
             .order_by(AuditLog.id)
         )
     assert isinstance(payload, dict)
@@ -1578,6 +1607,12 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
         readiness_response = await client.get(
             "/v1/digest/delivery-drafts/ddraft_missing/delivery-readiness",
         )
+        intention_post_response = await client.post(
+            "/v1/digest/delivery-drafts/ddraft_missing/delivery-intention",
+        )
+        intention_get_response = await client.get(
+            "/v1/digest/delivery-intentions/dint_missing",
+        )
 
     assert post_response.status_code == 401
     assert get_response.status_code == 401
@@ -1585,18 +1620,24 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert reject_response.status_code == 401
     assert status_response.status_code == 401
     assert readiness_response.status_code == 401
+    assert intention_post_response.status_code == 401
+    assert intention_get_response.status_code == 401
     assert post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert approve_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert reject_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert status_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert readiness_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert intention_post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert intention_get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert "test-api-key" not in post_response.text
     assert "test-api-key" not in get_response.text
     assert "test-api-key" not in approve_response.text
     assert "test-api-key" not in reject_response.text
     assert "test-api-key" not in status_response.text
     assert "test-api-key" not in readiness_response.text
+    assert "test-api-key" not in intention_post_response.text
+    assert "test-api-key" not in intention_get_response.text
 
 
 async def test_persisted_attention_digest_delivery_draft_retrieval_returns_404_for_unknown(
@@ -1674,15 +1715,25 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
         readiness_response = await client.get(
             f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-readiness",
         )
+        intention_post_response = await client.post(
+            f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+        )
+        intention_get_response = await client.get(
+            "/v1/digest/delivery-intentions/dint_unknown_fos_064_api",
+        )
 
     assert approve_response.status_code == 404
     assert reject_response.status_code == 404
     assert status_response.status_code == 404
     assert readiness_response.status_code == 404
+    assert intention_post_response.status_code == 404
+    assert intention_get_response.status_code == 404
     assert approve_response.json() == {"detail": "delivery draft was not found"}
     assert reject_response.json() == {"detail": "delivery draft was not found"}
     assert status_response.json() == {"detail": "delivery draft was not found"}
     assert readiness_response.json() == {"detail": "delivery draft was not found"}
+    assert intention_post_response.json() == {"detail": "delivery draft was not found"}
+    assert intention_get_response.json() == {"detail": "delivery intention was not found"}
 
 
 async def test_delivery_draft_approve_endpoint_records_safe_idempotent_decision(
@@ -2050,6 +2101,210 @@ async def test_delivery_draft_delivery_readiness_endpoint_reports_safe_states(
         assert "prompt" not in serialized
     finally:
         for delivery_draft_id in delivery_draft_ids:
+            await _cleanup_delivery_draft_api_record(delivery_draft_id)
+        await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
+async def test_delivery_intention_endpoint_rejects_not_ready_drafts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+    delivery_draft_ids: list[str] = []
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            unapproved_created = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-13T00:00:00+00:00",
+                    "end_at": "2131-09-14T00:00:00+00:00",
+                },
+            )
+            rejected_created = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-15T00:00:00+00:00",
+                    "end_at": "2131-09-16T00:00:00+00:00",
+                },
+            )
+            assert unapproved_created.status_code == 200
+            assert rejected_created.status_code == 200
+            unapproved_id = unapproved_created.json()["delivery_draft_id"]
+            rejected_id = rejected_created.json()["delivery_draft_id"]
+            delivery_draft_ids.extend([unapproved_id, rejected_id])
+
+            reject_response = await client.post(
+                f"/v1/digest/delivery-drafts/{rejected_id}/reject",
+                json={"reviewer": "founder"},
+            )
+            assert reject_response.status_code == 200
+
+            unapproved_intention = await client.post(
+                f"/v1/digest/delivery-drafts/{unapproved_id}/delivery-intention",
+            )
+            rejected_intention = await client.post(
+                f"/v1/digest/delivery-drafts/{rejected_id}/delivery-intention",
+            )
+
+        assert unapproved_intention.status_code == 409
+        assert rejected_intention.status_code == 409
+        assert "not_approved" in unapproved_intention.text
+        assert "rejected" in rejected_intention.text
+    finally:
+        for delivery_draft_id in delivery_draft_ids:
+            await _cleanup_delivery_draft_api_record(delivery_draft_id)
+
+
+async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("delivery intention must not send Telegram messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    unique = uuid4().hex
+    hidden_title = "Hidden delivery intention API title"
+    delivery_draft_id: str | None = None
+    await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+    try:
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="intention-work",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2131, 9, 17, 9),
+            activity=_normalized_activity(unique, "intention-work"),
+        )
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="intention-hidden",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=False,
+            created_at=_utc(2131, 9, 17, 10),
+            activity=_normalized_activity(
+                unique,
+                "intention-hidden",
+                title=hidden_title,
+            ),
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            created_response = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-17T00:00:00+00:00",
+                    "end_at": "2131-09-18T00:00:00+00:00",
+                    "limit": "10",
+                },
+            )
+            assert created_response.status_code == 200
+            created_draft = created_response.json()
+            delivery_draft_id = created_draft["delivery_draft_id"]
+
+            approve_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                json={"reviewer": "founder", "note": "Ready for intention."},
+            )
+            assert approve_response.status_code == 200
+
+            intention_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+            )
+            repeated_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+            )
+
+            assert intention_response.status_code == 200
+            assert repeated_response.status_code == 200
+            intention = intention_response.json()
+            repeated = repeated_response.json()
+            delivery_intention_id = intention["delivery_intention_id"]
+
+            retrieved_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}",
+            )
+
+        assert retrieved_response.status_code == 200
+        retrieved = retrieved_response.json()
+        stored_payload = await _delivery_intention_api_payload(delivery_intention_id)
+
+        assert repeated["delivery_intention_id"] == delivery_intention_id
+        assert retrieved["delivery_intention_id"] == delivery_intention_id
+        assert intention["delivery_draft_id"] == delivery_draft_id
+        assert intention["persisted"] is True
+        assert intention["status"] == "delivery_intention"
+        assert intention["digest_type"] == "persisted_attention"
+        assert intention["channel"] == "telegram"
+        assert intention["current_decision"] == "approved"
+        assert intention["eligible_for_delivery"] is True
+        assert intention["delivery_execution_enabled"] is False
+        assert intention["delivery_enabled"] is False
+        assert intention["delivery_invoked"] is False
+        assert intention["approval_execution_invoked"] is False
+        assert intention["sent"] is False
+        assert intention["scheduler_invoked"] is False
+        assert intention["text_sha256"] == created_draft["text_sha256"]
+        assert intention["char_count"] == created_draft["char_count"]
+        assert intention["chunk_count"] == created_draft["chunk_count"]
+        assert intention["chunk_metadata"] == created_draft["chunk_metadata"]
+        assert intention["readiness"] == {
+            "status": "delivery_readiness",
+            "current_decision": "approved",
+            "approved": True,
+            "rejected": False,
+            "eligible_for_delivery": True,
+            "ineligible_reasons": [],
+        }
+        assert intention["source_of_truth"] == created_draft["source_of_truth"]
+        assert intention["safety"]["provider_free"] is True
+        assert intention["safety"]["read_only"] is False
+        assert intention["safety"]["db_write_scope"] == "audit_logs_only"
+        assert intention["safety"]["delivery_adapter_invoked"] is False
+        assert intention["safety"]["delivery_invoked"] is False
+        assert intention["audit_log"]["event_type"] == (
+            DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE
+        )
+        assert intention["audit_log"]["before_ref"] == delivery_draft_id
+        assert intention["audit_log"]["after_ref"] == delivery_intention_id
+        assert stored_payload["delivery_intention_id"] == delivery_intention_id
+        assert stored_payload["delivery_draft_id"] == delivery_draft_id
+        assert await _delivery_intention_api_event_count(delivery_intention_id) == 1
+
+        serialized = json.dumps(
+            {
+                "intention": intention,
+                "repeated": repeated,
+                "retrieved": retrieved,
+                "stored_payload": stored_payload,
+            },
+            sort_keys=True,
+        )
+        assert '"rendered_text":' not in serialized
+        assert '"digest":' not in serialized
+        assert hidden_title not in serialized
+        assert f"atri_digest_api_{unique}_intention-hidden" not in serialized
+        assert f"digest:api:attention:{unique}:intention-hidden" not in serialized
+        assert "evidence_refs" not in serialized
+        assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
+        assert "raw_payload" not in serialized
+        assert "provider_payload" not in serialized
+        assert "prompt" not in serialized
+    finally:
+        if delivery_draft_id is not None:
             await _cleanup_delivery_draft_api_record(delivery_draft_id)
         await _cleanup_persisted_attention_digest_api_fixture(unique)
 

@@ -19,6 +19,8 @@
 - Audit-log-backed persisted attention digest delivery draft approval decisions:
   implemented
 - Read-only persisted attention digest delivery readiness preview: implemented
+- Audit-log-backed persisted attention digest delivery intention records:
+  implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -147,6 +149,11 @@ trusted facts.
   path. It does not create outbox records, send Telegram/Slack messages,
   execute delivery, mutate source-of-truth data, or mutate draft/decision
   records.
+- Delivery intentions for persisted delivery drafts are durable handoff
+  artifacts for a future separately gated delivery execution path. They are
+  not delivery execution, not outbox workers, not scheduler jobs, and not
+  source-of-truth company facts. They do not send Telegram/Slack messages,
+  invoke delivery adapters, or mutate draft/decision/source-of-truth records.
 - Hidden low-priority digest items must remain count-only in preview, persisted
   draft, and delivery-oriented surfaces. Evidence refs remain debug-only and
   safe-formatted.
@@ -269,6 +276,20 @@ Implemented today:
   metadata, source-of-truth metadata, decision history, and inert safety flags.
   Hidden low-priority items remain count-only, and evidence refs remain
   safe-formatted debug-only.
+- FOS-064 adds audit-log-backed delivery intention records for approved and
+  ready persisted delivery drafts. A delivery intention is a durable handoff
+  artifact for a future separately gated delivery execution path, not delivery
+  execution. It does not create a delivery outbox table, outbox worker, or
+  scheduler job, does not send Telegram/Slack messages, does not invoke
+  delivery adapters, does not mutate source-of-truth data, and does not mutate
+  draft or decision records.
+- FOS-064 intention payloads expose only sanitized draft/readiness hash,
+  window, chunk, source-of-truth, and inert safety metadata. They do not include
+  rendered digest text, full digest snapshots, raw/provider/prompt/source
+  payloads, hidden low-priority item details, or newly exposed evidence refs.
+  This slice does not add scheduler behavior, Telegram/Slack sending, delivery
+  adapter execution, delivery workers, migrations, live API calls,
+  providers/OpenAI, connector calls, an outbox table, or new tables.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
@@ -298,6 +319,7 @@ Not implemented today:
   inference logic behind persisted attention digest delivery draft preview or
   audit-log-backed draft review records.
 - Approval-triggered execution for persisted delivery drafts.
-- Delivery outbox/intention records for approved persisted delivery drafts.
+- Delivery execution, delivery workers, scheduler jobs, or outbox tables for
+  approved persisted delivery drafts.
 - Scheduler, connector, inbound Q&A, LLM summarization, or digest inference
   logic in the Telegram outbound delivery adapter.

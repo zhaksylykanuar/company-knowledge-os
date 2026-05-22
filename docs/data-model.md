@@ -18,6 +18,8 @@
   audit-log-backed, implemented
 - Persisted attention digest delivery readiness preview:
   read-only, implemented
+- Persisted attention digest delivery intention records:
+  audit-log-backed, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -33,6 +35,10 @@
   also keyed by `after_ref=delivery_draft_id`.
   FOS-063 reads those draft and decision events to build a delivery readiness
   preview, but it does not append audit rows or introduce new storage.
+  FOS-064 stores sanitized delivery intention handoff records here as
+  `digest.delivery_intention.created` events, with `before_ref` set to the
+  `delivery_draft_id` and `after_ref` set to the deterministic
+  `delivery_intention_id`.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -130,6 +136,20 @@
   truth data, mutate draft or decision events, send Telegram/Slack messages, or
   invoke scheduler, providers, live APIs, approval execution, or delivery
   adapters. FOS-063 introduces no new table or migration.
+- Delivery intention records are audit-log-backed execution metadata for
+  approved and ready persisted delivery drafts. They are durable handoff
+  artifacts for a future separately gated execution path, not delivery
+  execution, not outbox workers, not scheduler jobs, and not source-of-truth
+  company facts. They store only safe draft/readiness metadata such as
+  `delivery_intention_id`, `delivery_draft_id`, digest type, channel, rendered
+  text hash, window, chunk metadata, readiness summary, source-of-truth
+  metadata, and inert delivery flags.
+- Delivery intention payloads must not store rendered digest text, full digest
+  snapshots, raw source bodies, prompts, provider payloads, source payloads,
+  secrets, tokens, hidden item details, or newly exposed evidence refs. They
+  must not send Telegram/Slack messages, invoke delivery adapters, create
+  scheduler jobs, mutate draft or decision events, or mutate source-of-truth
+  company facts. FOS-064 introduces no new table or migration.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

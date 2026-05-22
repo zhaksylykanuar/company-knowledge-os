@@ -26,12 +26,15 @@ from app.services.telegram_delivery import (
 
 DIGEST_DELIVERY_DRAFT_STATUS = "draft"
 DIGEST_DELIVERY_DRAFT_READINESS_STATUS = "delivery_readiness"
+DIGEST_DELIVERY_INTENTION_STATUS = "delivery_intention"
 DIGEST_DELIVERY_DRAFT_TYPE = "persisted_attention"
 DIGEST_DELIVERY_DRAFT_CHANNEL = "telegram"
 DIGEST_DELIVERY_DRAFT_ID_PREFIX = "ddraft_"
+DIGEST_DELIVERY_INTENTION_ID_PREFIX = "dint_"
 DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE = "digest.delivery_draft.created"
 DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE = "digest.delivery_draft.approved"
 DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE = "digest.delivery_draft.rejected"
+DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE = "digest.delivery_intention.created"
 DIGEST_DELIVERY_DRAFT_DECISION_EVENT_TYPES = (
     DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
     DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
@@ -79,6 +82,14 @@ class DeliveryDraftNotFoundError(ValueError):
 
 class DeliveryDraftDecisionConflictError(ValueError):
     """Raised when a terminal delivery draft decision already exists."""
+
+
+class DeliveryIntentionNotReadyError(ValueError):
+    """Raised when a delivery intention is requested for a non-ready draft."""
+
+
+class DeliveryIntentionConflictError(ValueError):
+    """Raised when a stored delivery intention does not match expected data."""
 
 
 def _require_aware_datetime(value: datetime, *, field_name: str) -> None:
@@ -257,6 +268,28 @@ def build_delivery_draft_id(
     return f"{DIGEST_DELIVERY_DRAFT_ID_PREFIX}{digest[:32]}"
 
 
+def build_delivery_intention_id(
+    *,
+    delivery_draft_id: str,
+    digest_type: str,
+    channel: str,
+    text_sha256: str,
+    chunk_count: int,
+    chunk_metadata: Mapping[str, Any],
+) -> str:
+    stable_input = {
+        "channel": channel,
+        "chunk_count": int(chunk_count),
+        "chunk_metadata": dict(chunk_metadata),
+        "delivery_draft_id": delivery_draft_id,
+        "digest_type": digest_type,
+        "readiness_status": DIGEST_DELIVERY_DRAFT_READINESS_STATUS,
+        "text_sha256": text_sha256,
+    }
+    digest = sha256(_canonical_json(stable_input).encode("utf-8")).hexdigest()
+    return f"{DIGEST_DELIVERY_INTENTION_ID_PREFIX}{digest[:32]}"
+
+
 def _clean_delivery_draft_id(delivery_draft_id: str) -> str:
     if not isinstance(delivery_draft_id, str):
         raise ValueError("delivery_draft_id must be a non-empty string")
@@ -264,6 +297,16 @@ def _clean_delivery_draft_id(delivery_draft_id: str) -> str:
     cleaned = delivery_draft_id.strip()
     if not cleaned:
         raise ValueError("delivery_draft_id must be a non-empty string")
+    return cleaned
+
+
+def _clean_delivery_intention_id(delivery_intention_id: str) -> str:
+    if not isinstance(delivery_intention_id, str):
+        raise ValueError("delivery_intention_id must be a non-empty string")
+
+    cleaned = delivery_intention_id.strip()
+    if not cleaned:
+        raise ValueError("delivery_intention_id must be a non-empty string")
     return cleaned
 
 
@@ -596,6 +639,26 @@ def _delivery_readiness_safety_metadata() -> dict[str, Any]:
     }
 
 
+def _delivery_intention_safety_metadata() -> dict[str, Any]:
+    return {
+        "provider_free": True,
+        "read_only": False,
+        "db_write_scope": "audit_logs_only",
+        "audit_log_backed": True,
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "connectors_invoked": False,
+        "live_api_calls": False,
+        "draft_is_source_of_truth": False,
+        "intention_is_source_of_truth": False,
+        "telegram_is_source_of_truth": False,
+    }
+
+
 def _safe_chunk_metadata(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
@@ -616,6 +679,21 @@ def _safe_chunk_metadata(value: Any) -> dict[str, Any]:
         metadata["chunks_preview_included"] = chunks_preview_included
 
     return metadata
+
+
+def _readiness_summary(readiness: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "status": readiness.get("status"),
+        "current_decision": readiness.get("current_decision"),
+        "approved": bool(readiness.get("approved")),
+        "rejected": bool(readiness.get("rejected")),
+        "eligible_for_delivery": bool(readiness.get("eligible_for_delivery")),
+        "ineligible_reasons": (
+            list(readiness.get("ineligible_reasons", []))
+            if isinstance(readiness.get("ineligible_reasons"), list)
+            else []
+        ),
+    }
 
 
 def _decision_payload(
@@ -794,6 +872,155 @@ async def get_digest_delivery_draft_delivery_readiness(
         ),
         "safety": _delivery_readiness_safety_metadata(),
     }
+
+
+def _delivery_intention_payload(readiness: Mapping[str, Any]) -> dict[str, Any]:
+    delivery_draft_id = _clean_delivery_draft_id(
+        str(readiness.get("delivery_draft_id", ""))
+    )
+    digest_type = str(readiness.get("digest_type", ""))
+    channel = str(readiness.get("channel", ""))
+    text_hash = str(readiness.get("text_sha256", ""))
+    chunk_count = int(readiness.get("chunk_count", 0))
+    chunk_metadata = _safe_chunk_metadata(readiness.get("chunk_metadata"))
+    delivery_intention_id = build_delivery_intention_id(
+        delivery_draft_id=delivery_draft_id,
+        digest_type=digest_type,
+        channel=channel,
+        text_sha256=text_hash,
+        chunk_count=chunk_count,
+        chunk_metadata=chunk_metadata,
+    )
+
+    return {
+        "persisted": True,
+        "status": DIGEST_DELIVERY_INTENTION_STATUS,
+        "delivery_intention_id": delivery_intention_id,
+        "delivery_draft_id": delivery_draft_id,
+        "digest_type": digest_type,
+        "channel": channel,
+        "current_decision": readiness.get("current_decision"),
+        "eligible_for_delivery": True,
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "approval_execution_invoked": False,
+        "sent": False,
+        "scheduler_invoked": False,
+        "text_sha256": text_hash,
+        "char_count": readiness.get("char_count"),
+        "chunk_count": chunk_count,
+        "chunk_metadata": chunk_metadata,
+        "start_at": readiness.get("start_at"),
+        "end_at": readiness.get("end_at"),
+        "limit": readiness.get("limit"),
+        "debug_evidence": bool(readiness.get("debug_evidence")),
+        "readiness": _readiness_summary(readiness),
+        "source_of_truth": (
+            dict(readiness.get("source_of_truth"))
+            if isinstance(readiness.get("source_of_truth"), Mapping)
+            else {}
+        ),
+        "safety": _delivery_intention_safety_metadata(),
+    }
+
+
+def _delivery_intention_audit_log_response(record: AuditLog) -> dict[str, Any] | None:
+    if not isinstance(record.payload, Mapping):
+        return None
+
+    response = dict(record.payload)
+    if response.get("delivery_intention_id") != record.after_ref:
+        return None
+    if response.get("delivery_draft_id") != record.before_ref:
+        return None
+
+    response["persisted"] = True
+    response["audit_log"] = {
+        "event_type": record.event_type,
+        "before_ref": record.before_ref,
+        "after_ref": record.after_ref,
+        "created_at": (
+            record.created_at.isoformat() if record.created_at is not None else None
+        ),
+    }
+    return response
+
+
+async def get_digest_delivery_intention(
+    session: AsyncSession,
+    *,
+    delivery_intention_id: str,
+) -> dict[str, Any] | None:
+    cleaned_delivery_intention_id = _clean_delivery_intention_id(
+        delivery_intention_id
+    )
+    record = await session.scalar(
+        select(AuditLog)
+        .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
+        .where(AuditLog.after_ref == cleaned_delivery_intention_id)
+        .order_by(AuditLog.id)
+    )
+    if record is None:
+        return None
+    return _delivery_intention_audit_log_response(record)
+
+
+async def create_digest_delivery_intention(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+    actor: str = "system",
+) -> dict[str, Any]:
+    cleaned_delivery_draft_id = _clean_delivery_draft_id(delivery_draft_id)
+    readiness = await get_digest_delivery_draft_delivery_readiness(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    if readiness is None:
+        raise DeliveryDraftNotFoundError("delivery draft was not found")
+    if readiness.get("eligible_for_delivery") is not True:
+        reasons = readiness.get("ineligible_reasons")
+        reason_text = ", ".join(reasons) if isinstance(reasons, list) else "not_ready"
+        raise DeliveryIntentionNotReadyError(
+            f"delivery draft is not ready for delivery: {reason_text}"
+        )
+
+    payload = _delivery_intention_payload(readiness)
+    delivery_intention_id = _clean_delivery_intention_id(
+        str(payload.get("delivery_intention_id", ""))
+    )
+    existing = await get_digest_delivery_intention(
+        session,
+        delivery_intention_id=delivery_intention_id,
+    )
+    if existing is not None:
+        stored_payload = {
+            key: value for key, value in existing.items() if key != "audit_log"
+        }
+        if stored_payload != payload:
+            raise DeliveryIntentionConflictError(
+                "existing delivery intention payload does not match expected payload"
+            )
+        return existing
+
+    record = AuditLog(
+        event_type=DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
+        actor=actor,
+        correlation_id=cleaned_delivery_draft_id,
+        trace_id=delivery_intention_id,
+        before_ref=cleaned_delivery_draft_id,
+        after_ref=delivery_intention_id,
+        approval_id=f"{cleaned_delivery_draft_id}:delivery_intention",
+        payload=payload,
+    )
+    session.add(record)
+    await session.flush()
+
+    response = _delivery_intention_audit_log_response(record)
+    if response is None:
+        raise ValueError("persisted delivery intention audit payload is invalid")
+    return response
 
 
 async def record_digest_delivery_draft_decision(
