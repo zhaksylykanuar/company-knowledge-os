@@ -3,10 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 from hashlib import sha256
+import json
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models import AuditLog
 from app.services.digest import (
     DEFAULT_DIGEST_ENTRY_LIMIT,
     MAX_DIGEST_ENTRY_LIMIT,
@@ -24,6 +27,8 @@ from app.services.telegram_delivery import (
 DIGEST_DELIVERY_DRAFT_STATUS = "draft"
 DIGEST_DELIVERY_DRAFT_TYPE = "persisted_attention"
 DIGEST_DELIVERY_DRAFT_CHANNEL = "telegram"
+DIGEST_DELIVERY_DRAFT_ID_PREFIX = "ddraft_"
+DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE = "digest.delivery_draft.created"
 
 SAFE_PERSISTED_ATTENTION_ITEM_KEYS = (
     "id",
@@ -194,6 +199,47 @@ def _chunk_metadata(rendered_text: str, *, chunk_size: int) -> dict[str, Any]:
     }
 
 
+def _canonical_json(value: Mapping[str, Any]) -> str:
+    return json.dumps(
+        dict(value),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def build_delivery_draft_id(
+    *,
+    digest_type: str,
+    channel: str,
+    start_at: str,
+    end_at: str,
+    limit: int,
+    debug_evidence: bool,
+    text_sha256: str,
+) -> str:
+    stable_input = {
+        "channel": channel,
+        "debug_evidence": bool(debug_evidence),
+        "digest_type": digest_type,
+        "end_at": end_at,
+        "limit": int(limit),
+        "start_at": start_at,
+        "text_sha256": text_sha256,
+    }
+    digest = sha256(_canonical_json(stable_input).encode("utf-8")).hexdigest()
+    return f"{DIGEST_DELIVERY_DRAFT_ID_PREFIX}{digest[:32]}"
+
+
+def _clean_delivery_draft_id(delivery_draft_id: str) -> str:
+    if not isinstance(delivery_draft_id, str):
+        raise ValueError("delivery_draft_id must be a non-empty string")
+
+    cleaned = delivery_draft_id.strip()
+    if not cleaned:
+        raise ValueError("delivery_draft_id must be a non-empty string")
+    return cleaned
+
+
 def build_persisted_attention_digest_delivery_draft(
     *,
     digest: Mapping[str, Any],
@@ -220,21 +266,35 @@ def build_persisted_attention_digest_delivery_draft(
         debug_evidence=debug_evidence,
     )
     chunks = _chunk_metadata(rendered_text, chunk_size=chunk_size)
+    text_hash = sha256(rendered_text.encode("utf-8")).hexdigest()
+    start_at_iso = start_at.isoformat()
+    end_at_iso = end_at.isoformat()
+    delivery_draft_id = build_delivery_draft_id(
+        digest_type=DIGEST_DELIVERY_DRAFT_TYPE,
+        channel=channel,
+        start_at=start_at_iso,
+        end_at=end_at_iso,
+        limit=safe_limit,
+        debug_evidence=bool(debug_evidence),
+        text_sha256=text_hash,
+    )
 
     return {
+        "delivery_draft_id": delivery_draft_id,
         "status": DIGEST_DELIVERY_DRAFT_STATUS,
         "digest_type": DIGEST_DELIVERY_DRAFT_TYPE,
         "channel": channel,
+        "persisted": False,
         "delivery_enabled": False,
         "approval_required": True,
         "approved": False,
         "sent": False,
-        "start_at": start_at.isoformat(),
-        "end_at": end_at.isoformat(),
+        "start_at": start_at_iso,
+        "end_at": end_at_iso,
         "limit": safe_limit,
         "debug_evidence": bool(debug_evidence),
         "rendered_text": rendered_text,
-        "text_sha256": sha256(rendered_text.encode("utf-8")).hexdigest(),
+        "text_sha256": text_hash,
         "char_count": len(rendered_text),
         "chunk_count": len(chunks["chunk_lengths"]),
         "chunk_metadata": chunks,
@@ -293,4 +353,119 @@ async def build_persisted_attention_digest_delivery_draft_from_db(
         limit=safe_limit,
         debug_evidence=debug_evidence,
         channel=channel,
+    )
+
+
+def _persisted_payload(draft: Mapping[str, Any]) -> dict[str, Any]:
+    payload = dict(draft)
+    payload["persisted"] = True
+    payload["persistence"] = {
+        "storage": "audit_logs",
+        "event_type": DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+        "after_ref": payload["delivery_draft_id"],
+        "approval_state": "not_requested",
+    }
+
+    safety = (
+        dict(payload.get("safety", {}))
+        if isinstance(payload.get("safety"), Mapping)
+        else {}
+    )
+    safety["read_only"] = False
+    safety["db_write_scope"] = "audit_logs_only"
+    safety["audit_log_backed"] = True
+    payload["safety"] = safety
+    return payload
+
+
+def _audit_log_response(record: AuditLog) -> dict[str, Any] | None:
+    if not isinstance(record.payload, Mapping):
+        return None
+
+    response = dict(record.payload)
+    if response.get("delivery_draft_id") != record.after_ref:
+        return None
+
+    response["persisted"] = True
+    response["audit_log"] = {
+        "event_type": record.event_type,
+        "after_ref": record.after_ref,
+        "created_at": (
+            record.created_at.isoformat() if record.created_at is not None else None
+        ),
+    }
+    return response
+
+
+async def get_persisted_digest_delivery_draft(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+) -> dict[str, Any] | None:
+    cleaned_delivery_draft_id = _clean_delivery_draft_id(delivery_draft_id)
+    record = await session.scalar(
+        select(AuditLog)
+        .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+        .where(AuditLog.after_ref == cleaned_delivery_draft_id)
+        .order_by(AuditLog.id)
+    )
+    if record is None:
+        return None
+    return _audit_log_response(record)
+
+
+async def persist_digest_delivery_draft(
+    session: AsyncSession,
+    *,
+    draft: Mapping[str, Any],
+    actor: str = "system",
+) -> dict[str, Any]:
+    delivery_draft_id = _clean_delivery_draft_id(str(draft.get("delivery_draft_id", "")))
+    existing = await get_persisted_digest_delivery_draft(
+        session,
+        delivery_draft_id=delivery_draft_id,
+    )
+    if existing is not None:
+        return existing
+
+    payload = _persisted_payload(draft)
+    record = AuditLog(
+        event_type=DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+        actor=actor,
+        correlation_id=delivery_draft_id,
+        trace_id=delivery_draft_id,
+        after_ref=delivery_draft_id,
+        payload=payload,
+    )
+    session.add(record)
+    await session.flush()
+
+    response = _audit_log_response(record)
+    if response is None:
+        raise ValueError("persisted delivery draft audit payload is invalid")
+    return response
+
+
+async def create_persisted_attention_digest_delivery_draft(
+    session: AsyncSession,
+    *,
+    start_at: datetime,
+    end_at: datetime,
+    limit: int = DEFAULT_DIGEST_ENTRY_LIMIT,
+    debug_evidence: bool = False,
+    channel: str = DIGEST_DELIVERY_DRAFT_CHANNEL,
+    actor: str = "system",
+) -> dict[str, Any]:
+    draft = await build_persisted_attention_digest_delivery_draft_from_db(
+        session,
+        start_at=start_at,
+        end_at=end_at,
+        limit=limit,
+        debug_evidence=debug_evidence,
+        channel=channel,
+    )
+    return await persist_digest_delivery_draft(
+        session,
+        draft=draft,
+        actor=actor,
     )

@@ -6,11 +6,18 @@ from hashlib import sha256
 from typing import Any
 
 import pytest
+from sqlalchemy import delete, func, select
 
+from app.db.base import AsyncSessionLocal, engine
+from app.db.models import AuditLog
 import app.services.telegram_delivery as telegram_delivery
 from app.services.digest_delivery_drafts import (
+    DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+    build_delivery_draft_id,
     build_persisted_attention_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
+    get_persisted_digest_delivery_draft,
+    persist_digest_delivery_draft,
     sanitize_persisted_attention_digest_for_delivery_draft,
 )
 from app.services.digest_rendering import render_persisted_attention_digest_text
@@ -155,6 +162,48 @@ def _rendered_digest(
     )
 
 
+async def _ensure_audit_log_table() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(AuditLog.__table__.create, checkfirst=True)
+
+
+async def _delete_delivery_draft_audit_logs(delivery_draft_id: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_draft_id)
+        )
+        await session.commit()
+
+
+async def _delivery_draft_audit_log_count(
+    delivery_draft_id: str,
+) -> int:
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_draft_id)
+        )
+    return int(count or 0)
+
+
+async def _delivery_draft_audit_payload(
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        payload = await session.scalar(
+            select(AuditLog.payload)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_draft_id)
+            .order_by(AuditLog.id)
+        )
+    assert isinstance(payload, dict)
+    return payload
+
+
 def test_delivery_draft_builder_returns_inert_review_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -197,6 +246,50 @@ def test_delivery_draft_builder_returns_inert_review_contract(
         "connectors_invoked": False,
         "live_api_calls": False,
     }
+
+
+def test_delivery_draft_id_is_deterministic_and_changes_with_safe_inputs() -> None:
+    stable_id = build_delivery_draft_id(
+        digest_type="persisted_attention",
+        channel="telegram",
+        start_at="2132-01-01T00:00:00+00:00",
+        end_at="2132-01-02T00:00:00+00:00",
+        limit=20,
+        debug_evidence=False,
+        text_sha256="a" * 64,
+    )
+    repeated_id = build_delivery_draft_id(
+        digest_type="persisted_attention",
+        channel="telegram",
+        start_at="2132-01-01T00:00:00+00:00",
+        end_at="2132-01-02T00:00:00+00:00",
+        limit=20,
+        debug_evidence=False,
+        text_sha256="a" * 64,
+    )
+    changed_text_id = build_delivery_draft_id(
+        digest_type="persisted_attention",
+        channel="telegram",
+        start_at="2132-01-01T00:00:00+00:00",
+        end_at="2132-01-02T00:00:00+00:00",
+        limit=20,
+        debug_evidence=False,
+        text_sha256="b" * 64,
+    )
+    changed_window_id = build_delivery_draft_id(
+        digest_type="persisted_attention",
+        channel="telegram",
+        start_at="2132-01-02T00:00:00+00:00",
+        end_at="2132-01-03T00:00:00+00:00",
+        limit=20,
+        debug_evidence=False,
+        text_sha256="a" * 64,
+    )
+
+    assert stable_id == repeated_id
+    assert stable_id.startswith("ddraft_")
+    assert stable_id != changed_text_id
+    assert stable_id != changed_window_id
 
 
 def test_delivery_draft_keeps_hidden_details_count_only_and_omits_raw_payloads() -> None:
@@ -300,6 +393,126 @@ def test_delivery_draft_records_source_of_truth_metadata_without_becoming_truth(
         "digest_enrichment_model": "normalized_activity_items",
         "rendered_text_source": "render_persisted_attention_digest_text",
     }
+
+
+async def test_persisting_delivery_draft_writes_one_audit_log_and_is_idempotent() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 1, 1),
+        end_at=_utc(2132, 1, 2),
+        limit=20,
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            created = await persist_digest_delivery_draft(
+                session,
+                draft=draft,
+                actor="test",
+            )
+            await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            existing = await persist_digest_delivery_draft(
+                session,
+                draft=draft,
+                actor="test",
+            )
+            await session.commit()
+
+        assert created["delivery_draft_id"] == delivery_draft_id
+        assert existing["delivery_draft_id"] == delivery_draft_id
+        assert created["persisted"] is True
+        assert existing["persisted"] is True
+        assert created["status"] == "draft"
+        assert created["digest_type"] == "persisted_attention"
+        assert created["channel"] == "telegram"
+        assert created["delivery_enabled"] is False
+        assert created["approval_required"] is True
+        assert created["approved"] is False
+        assert created["sent"] is False
+        assert created["persistence"] == {
+            "storage": "audit_logs",
+            "event_type": DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+            "after_ref": delivery_draft_id,
+            "approval_state": "not_requested",
+        }
+        assert created["audit_log"]["event_type"] == (
+            DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE
+        )
+        assert created["audit_log"]["after_ref"] == delivery_draft_id
+        assert created["safety"]["audit_log_backed"] is True
+        assert created["safety"]["db_write_scope"] == "audit_logs_only"
+        assert created["safety"]["delivery_invoked"] is False
+        assert created["safety"]["approval_executed"] is False
+        assert await _delivery_draft_audit_log_count(delivery_draft_id) == 1
+    finally:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_retrieving_persisted_delivery_draft_returns_sanitized_payload() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest, debug_evidence=True)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 1, 1),
+        end_at=_utc(2132, 1, 2),
+        limit=20,
+        debug_evidence=True,
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            await session.commit()
+
+        stored_payload = await _delivery_draft_audit_payload(delivery_draft_id)
+        async with AsyncSessionLocal() as session:
+            retrieved = await get_persisted_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+            missing = await get_persisted_digest_delivery_draft(
+                session,
+                delivery_draft_id=f"{delivery_draft_id}_missing",
+            )
+
+        assert retrieved is not None
+        assert retrieved["delivery_draft_id"] == delivery_draft_id
+        assert retrieved["persisted"] is True
+        assert retrieved["rendered_text"] == rendered_text
+        assert retrieved["text_sha256"] == sha256(rendered_text.encode("utf-8")).hexdigest()
+        assert missing is None
+        assert stored_payload["digest"]["hidden_low_priority_summary"] == {
+            "total": 1,
+            "counts": {"no-action low-priority items": 1},
+        }
+
+        dumped = json.dumps({"stored": stored_payload, "retrieved": retrieved})
+        assert "Hidden delivery draft title" not in dumped
+        assert "atri_delivery_hidden" not in dumped
+        assert "sevt_delivery_hidden" not in dumped
+        assert "PRIVATE_RAW_PAYLOAD_DO_NOT_EXPOSE" not in dumped
+        assert "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in dumped
+        assert "PRIVATE_PROMPT_DO_NOT_EXPOSE" not in dumped
+        assert "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE" not in dumped
+        assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in dumped
+        assert "raw_payload" not in dumped
+        assert "provider_payload" not in dumped
+        assert "prompt" not in dumped
+        assert "source_payload" not in dumped
+    finally:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
 
 class _FakeScalars:

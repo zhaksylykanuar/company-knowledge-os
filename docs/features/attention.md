@@ -14,6 +14,8 @@
 - Synthetic manual pilot persisted attention digest preview artifact: implemented
 - Read-only persisted attention digest operator preview script: implemented
 - Read-only persisted attention digest delivery draft preview: implemented
+- Audit-log-backed persisted attention digest delivery draft review records:
+  implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -68,6 +70,18 @@
   Slack messages, does not run scheduler or delivery code, keeps hidden
   low-priority items count-only, and exposes evidence refs only through safe
   debug output.
+- A protected persisted delivery draft creation path can store an inert
+  persisted attention digest delivery draft as one `audit_logs` review record.
+  The persisted draft gets a deterministic `delivery_draft_id` derived from safe
+  window metadata and the rendered text hash, stores only sanitized draft data,
+  remains a review artifact rather than source-of-truth data, is not an
+  approval, is not sent, and does not run scheduler, delivery, triage,
+  providers/OpenAI, connectors, or live APIs. Recreating the same draft returns
+  the existing audit-log-backed record instead of appending a duplicate.
+- Persisted delivery draft retrieval reads the stored audit-log payload by
+  `delivery_draft_id` without recomputing digest contents or writing new rows.
+  Hidden low-priority items remain count-only, and evidence refs remain
+  safe-formatted debug-only.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -216,6 +230,16 @@
   approval execution, add approval state persistence, add migrations, or mutate
   production data. Telegram and Slack remain delivery/interface surfaces only,
   not the source of truth.
+- FOS-061 persists inert persisted attention digest delivery drafts as
+  audit-log-backed review records. It adds a protected creation endpoint that
+  appends one sanitized `digest.delivery_draft.created` audit event when the
+  deterministic `delivery_draft_id` does not already exist, plus a protected
+  retrieval endpoint for later review by ID.
+- FOS-061 does not add approval execution, approval state transitions,
+  scheduler behavior, Telegram/Slack sending, delivery wiring, migrations, a
+  new table, live API calls, providers/OpenAI, connector calls, source event
+  projection, triage/retriage, or feedback behavior changes. Persisted drafts
+  are review artifacts only and are not source-of-truth facts.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -250,6 +274,9 @@
 - Persisted attention results have an internal digest read model, deterministic
   text renderer, protected preview endpoints, and synthetic manual pilot
   preview artifact, plus a read-only stored-data operator preview script and an
-  inert delivery draft preview, but the existing source activity digest,
-  scheduler, and delivery paths do not yet use it as their primary output.
+  inert delivery draft preview with audit-log-backed review records, but the
+  existing source activity digest, scheduler, and delivery paths do not yet use
+  it as their primary output.
+- No approval API, approval execution, scheduler, or Telegram/Slack delivery
+  wiring exists for persisted delivery drafts.
 - GitHub/Jira/Drive digest integration is not implemented.

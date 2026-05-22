@@ -12,6 +12,8 @@
 - Attention triage results: persistence, single-activity triage bridge, and
   persisted digest read-model foundations implemented
 - Attention triage feedback: implemented
+- Persisted attention digest delivery draft review records:
+  audit-log-backed, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -19,6 +21,9 @@
 
 - `ingested_events`: raw event envelope with idempotency and trace fields.
 - `audit_logs`: append-style audit trail for accepted events and operations.
+  FOS-061 also stores sanitized persisted attention digest delivery draft review
+  records here as `digest.delivery_draft.created` events, with `after_ref`
+  set to the deterministic `delivery_draft_id`.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -80,6 +85,21 @@
 - Attention triage result persistence stores only strict schema-validated
   result metadata and evidence refs. It must not store raw source bodies,
   prompts, provider payloads, secrets, or unvalidated JSON blobs.
+- Persisted attention digest delivery drafts are audit-log-backed review
+  records only. They are derived from persisted attention digest read-model data
+  and deterministic rendered text, are not source-of-truth company facts, are
+  not approvals, and are not delivery execution.
+- Persisted delivery draft audit payloads must store only sanitized draft data:
+  `delivery_draft_id`, inert draft status, explicit window metadata, rendered
+  text and hash, chunk metadata, sanitized digest snapshot, safe
+  source-of-truth metadata, and safe debug evidence refs only when explicitly
+  requested. Hidden low-priority items remain count-only.
+- Persisted delivery draft audit payloads must not store raw source bodies,
+  provider payloads, prompts, source payloads, secrets, tokens, hidden item
+  details, or untrusted raw content.
+- Delivery draft idempotency is service-level and keyed by deterministic
+  `delivery_draft_id` in `audit_logs.after_ref`; no new table or migration is
+  introduced by FOS-061.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

@@ -14,6 +14,8 @@ from app.services.digest import (
 )
 from app.services.digest_delivery_drafts import (
     build_persisted_attention_digest_delivery_draft_from_db,
+    create_persisted_attention_digest_delivery_draft,
+    get_persisted_digest_delivery_draft,
 )
 from app.services.digest_rendering import (
     SAFE_EVIDENCE_REF_KEYS,
@@ -89,6 +91,56 @@ async def _build_persisted_attention_digest_delivery_draft_response(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
+
+
+async def _create_persisted_attention_digest_delivery_draft_response(
+    *,
+    start_at: datetime,
+    end_at: datetime,
+    limit: int,
+    debug_evidence: bool | None,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            draft = await create_persisted_attention_digest_delivery_draft(
+                session,
+                start_at=start_at,
+                end_at=end_at,
+                limit=limit,
+                debug_evidence=bool(debug_evidence),
+                actor="api",
+            )
+            await session.commit()
+            return draft
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+async def _get_persisted_digest_delivery_draft_response(
+    *,
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            draft = await get_persisted_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if draft is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="delivery draft was not found",
+        )
+    return draft
 
 
 def _safe_evidence_refs_for_preview(value: Any) -> list[dict[str, Any]]:
@@ -272,4 +324,32 @@ async def get_persisted_attention_digest_delivery_draft(
         end_at=end_at,
         limit=limit,
         debug_evidence=debug_evidence,
+    )
+
+
+@router.post("/persisted-attention/delivery-draft")
+async def create_persisted_attention_digest_delivery_draft_endpoint(
+    start_at: datetime,
+    end_at: datetime,
+    limit: int = Query(
+        default=DEFAULT_DIGEST_ENTRY_LIMIT,
+        ge=1,
+        le=MAX_DIGEST_ENTRY_LIMIT,
+    ),
+    debug_evidence: bool | None = Query(default=None),
+) -> dict[str, Any]:
+    return await _create_persisted_attention_digest_delivery_draft_response(
+        start_at=start_at,
+        end_at=end_at,
+        limit=limit,
+        debug_evidence=debug_evidence,
+    )
+
+
+@router.get("/delivery-drafts/{delivery_draft_id}")
+async def get_persisted_digest_delivery_draft_endpoint(
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    return await _get_persisted_digest_delivery_draft_response(
+        delivery_draft_id=delivery_draft_id,
     )
