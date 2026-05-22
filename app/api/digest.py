@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.services.digest import (
     DEFAULT_DIGEST_ENTRY_LIMIT,
@@ -18,6 +19,7 @@ from app.services.digest_delivery_drafts import (
     DeliveryDraftNotFoundError,
     DeliveryIntentionConflictError,
     DeliveryIntentionNotReadyError,
+    DeliveryTelegramExecutionPreflightConflictError,
     DeliveryTelegramPlanConflictError,
     approve_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
@@ -26,6 +28,7 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_draft_approval_status,
     get_digest_delivery_draft_delivery_readiness,
     get_digest_delivery_intention,
+    get_digest_delivery_intention_telegram_execution_preflight,
     get_digest_delivery_intention_telegram_plan,
     get_persisted_digest_delivery_draft,
     reject_digest_delivery_draft,
@@ -292,6 +295,37 @@ async def _get_digest_delivery_intention_telegram_plan_response(
             detail="delivery intention was not found",
         )
     return plan
+
+
+async def _get_digest_delivery_intention_telegram_execution_preflight_response(
+    *,
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            preflight = await get_digest_delivery_intention_telegram_execution_preflight(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                telegram_bot_token=settings.telegram_bot_token,
+                telegram_chat_id=settings.telegram_chat_id,
+            )
+    except DeliveryTelegramExecutionPreflightConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if preflight is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="delivery intention was not found",
+        )
+    return preflight
 
 
 async def _record_digest_delivery_draft_decision_response(
@@ -615,5 +649,14 @@ async def get_persisted_digest_delivery_intention_telegram_plan_endpoint(
     delivery_intention_id: str,
 ) -> dict[str, Any]:
     return await _get_digest_delivery_intention_telegram_plan_response(
+        delivery_intention_id=delivery_intention_id,
+    )
+
+
+@router.get("/delivery-intentions/{delivery_intention_id}/telegram-execution-preflight")
+async def get_persisted_digest_delivery_intention_telegram_execution_preflight_endpoint(
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    return await _get_digest_delivery_intention_telegram_execution_preflight_response(
         delivery_intention_id=delivery_intention_id,
     )

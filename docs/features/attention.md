@@ -23,6 +23,7 @@
   implemented
 - Pure Telegram delivery plan preview for delivery intentions: implemented
 - Read-only delivery intention operator review command: implemented
+- Read-only Telegram execution preflight for delivery intentions: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -125,6 +126,12 @@
   text, and does not call APIs, create or mutate records, require bot
   credentials, call delivery adapters, run scheduler behavior, or send
   Telegram/Slack messages.
+- A protected read-only Telegram execution preflight can inspect a stored
+  delivery intention and existing Telegram delivery plan, then report whether
+  Telegram bot token and chat ID configuration are present. The preflight
+  returns only booleans and safe blockers, never credential values, never
+  validates credentials against Telegram, never sends, never invokes delivery
+  adapters, and always keeps delivery execution disabled.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -335,6 +342,15 @@
   handling, delivery adapter execution, migrations, live API calls,
   providers/OpenAI, connector calls, source event projection, triage/retriage,
   or feedback behavior changes.
+- FOS-067 adds a protected read-only Telegram execution preflight for delivery
+  intentions. The preflight reuses the stored intention and Telegram plan
+  checks, reports credential presence booleans for Telegram bot token and chat
+  ID, and returns safe blockers including the explicit
+  `delivery_execution_not_implemented` no-send blocker.
+- FOS-067 does not return, print, store, or validate Telegram credential
+  values, call Telegram/Slack APIs, invoke delivery adapters, create audit
+  rows, create scheduler jobs, delivery result events, outbox records,
+  migrations, or new tables, and does not send Telegram/Slack messages.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -375,7 +391,8 @@
 - Persisted delivery drafts have approval/rejection decisions, a read-only
   delivery readiness preview, audit-log-backed delivery intention records, a
   pure Telegram delivery plan preview, and a local read-only operator review
-  command for the stored chain, but no approval-triggered execution, scheduler,
-  delivery worker, delivery result event, outbox table, bot credential
-  handling, or Telegram/Slack delivery wiring exists.
+  command plus read-only Telegram execution preflight for the stored chain, but
+  no approval-triggered execution, scheduler, delivery worker, delivery result
+  event, outbox table, credential validation against Telegram, or
+  Telegram/Slack delivery wiring exists.
 - GitHub/Jira/Drive digest integration is not implemented.

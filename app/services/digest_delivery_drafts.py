@@ -28,6 +28,7 @@ DIGEST_DELIVERY_DRAFT_STATUS = "draft"
 DIGEST_DELIVERY_DRAFT_READINESS_STATUS = "delivery_readiness"
 DIGEST_DELIVERY_INTENTION_STATUS = "delivery_intention"
 DIGEST_DELIVERY_TELEGRAM_PLAN_STATUS = "telegram_delivery_plan"
+DIGEST_DELIVERY_TELEGRAM_EXECUTION_PREFLIGHT_STATUS = "telegram_execution_preflight"
 DIGEST_DELIVERY_DRAFT_TYPE = "persisted_attention"
 DIGEST_DELIVERY_DRAFT_CHANNEL = "telegram"
 DIGEST_DELIVERY_DRAFT_ID_PREFIX = "ddraft_"
@@ -95,6 +96,10 @@ class DeliveryIntentionConflictError(ValueError):
 
 class DeliveryTelegramPlanConflictError(ValueError):
     """Raised when a Telegram delivery plan cannot be safely built."""
+
+
+class DeliveryTelegramExecutionPreflightConflictError(ValueError):
+    """Raised when Telegram execution preflight cannot safely inspect an intention."""
 
 
 def _require_aware_datetime(value: datetime, *, field_name: str) -> None:
@@ -686,6 +691,31 @@ def _telegram_delivery_plan_safety_metadata() -> dict[str, Any]:
     }
 
 
+def _telegram_execution_preflight_safety_metadata() -> dict[str, Any]:
+    return {
+        "provider_free": True,
+        "read_only": True,
+        "db_write_scope": "none",
+        "credential_values_exposed": False,
+        "credential_validation_invoked": False,
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "delivery_result_audit_event_created": False,
+        "outbox_record_created": False,
+        "connectors_invoked": False,
+        "live_api_calls": False,
+        "draft_is_source_of_truth": False,
+        "intention_is_source_of_truth": False,
+        "telegram_plan_is_source_of_truth": False,
+        "telegram_preflight_is_source_of_truth": False,
+        "telegram_is_source_of_truth": False,
+    }
+
+
 def _safe_chunk_metadata(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
@@ -1079,6 +1109,19 @@ def _safe_intention_audit_log_metadata(intention: Mapping[str, Any]) -> dict[str
     }
 
 
+def _configured_value_present(value: Any) -> bool:
+    if value is None:
+        return False
+
+    get_secret_value = getattr(value, "get_secret_value", None)
+    if callable(get_secret_value):
+        value = get_secret_value()
+
+    if not isinstance(value, str):
+        return False
+    return bool(value.strip())
+
+
 def _validate_telegram_plan_intention(intention: Mapping[str, Any]) -> None:
     if intention.get("channel") != DIGEST_DELIVERY_DRAFT_CHANNEL:
         raise DeliveryTelegramPlanConflictError(
@@ -1223,6 +1266,128 @@ async def get_digest_delivery_intention_telegram_plan(
             else {}
         ),
         "safety": _telegram_delivery_plan_safety_metadata(),
+    }
+
+
+async def get_digest_delivery_intention_telegram_execution_preflight(
+    session: AsyncSession,
+    *,
+    delivery_intention_id: str,
+    telegram_bot_token: Any = None,
+    telegram_chat_id: Any = None,
+) -> dict[str, Any] | None:
+    """Return a no-send Telegram execution preflight for a stored intention.
+
+    The preflight validates stored delivery chain readiness through the existing
+    Telegram plan path and checks configuration presence only. It never returns
+    credential values, validates credentials with Telegram, sends, schedules,
+    appends audit logs, or calls provider/delivery adapters.
+    """
+
+    cleaned_delivery_intention_id = _clean_delivery_intention_id(
+        delivery_intention_id
+    )
+    try:
+        plan = await get_digest_delivery_intention_telegram_plan(
+            session,
+            delivery_intention_id=cleaned_delivery_intention_id,
+        )
+    except DeliveryTelegramPlanConflictError as exc:
+        raise DeliveryTelegramExecutionPreflightConflictError(str(exc)) from exc
+    if plan is None:
+        return None
+
+    intention = await get_digest_delivery_intention(
+        session,
+        delivery_intention_id=cleaned_delivery_intention_id,
+    )
+    if intention is None:
+        return None
+
+    delivery_draft_id = _clean_delivery_draft_id(
+        str(plan.get("delivery_draft_id", ""))
+    )
+    approval_status = await get_digest_delivery_draft_approval_status(
+        session,
+        delivery_draft_id=delivery_draft_id,
+    )
+    if approval_status is None:
+        raise DeliveryTelegramExecutionPreflightConflictError(
+            "approval status was not found"
+        )
+
+    readiness = await get_digest_delivery_draft_delivery_readiness(
+        session,
+        delivery_draft_id=delivery_draft_id,
+    )
+    if readiness is None:
+        raise DeliveryTelegramExecutionPreflightConflictError(
+            "delivery readiness was not found"
+        )
+
+    telegram_bot_token_present = _configured_value_present(telegram_bot_token)
+    telegram_chat_id_present = _configured_value_present(telegram_chat_id)
+    blockers: list[str] = []
+    if not telegram_bot_token_present:
+        blockers.append("telegram_bot_token_missing")
+    if not telegram_chat_id_present:
+        blockers.append("telegram_chat_id_missing")
+    blockers.append("delivery_execution_not_implemented")
+
+    return {
+        "status": DIGEST_DELIVERY_TELEGRAM_EXECUTION_PREFLIGHT_STATUS,
+        "delivery_intention_id": cleaned_delivery_intention_id,
+        "delivery_draft_id": delivery_draft_id,
+        "digest_type": plan.get("digest_type"),
+        "channel": DIGEST_DELIVERY_DRAFT_CHANNEL,
+        "text_sha256": plan.get("text_sha256"),
+        "char_count": plan.get("char_count"),
+        "chunk_count": plan.get("chunk_count"),
+        "telegram_plan_ready": True,
+        "telegram_bot_token_present": telegram_bot_token_present,
+        "telegram_chat_id_present": telegram_chat_id_present,
+        "credential_presence_ready": (
+            telegram_bot_token_present and telegram_chat_id_present
+        ),
+        "execution_preflight_ready": False,
+        "blockers": blockers,
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "sent": False,
+        "intention": {
+            "status": intention.get("status"),
+            "persisted": bool(intention.get("persisted")),
+            "current_decision": intention.get("current_decision"),
+            "eligible_for_delivery": bool(intention.get("eligible_for_delivery")),
+            "audit_log": _safe_intention_audit_log_metadata(intention),
+        },
+        "approval": {
+            "current_decision": approval_status.get("current_decision"),
+            "approved": bool(approval_status.get("approved")),
+            "rejected": bool(approval_status.get("rejected")),
+        },
+        "readiness": _readiness_summary(readiness),
+        "telegram_plan": {
+            "status": plan.get("status"),
+            "chunk_count": plan.get("chunk_count"),
+            "chunks_text_included": bool(plan.get("chunks_text_included")),
+            "delivery_execution_enabled": False,
+            "delivery_enabled": False,
+            "delivery_invoked": False,
+            "delivery_adapter_invoked": False,
+            "scheduler_invoked": False,
+            "sent": False,
+        },
+        "source_of_truth": (
+            dict(plan.get("source_of_truth"))
+            if isinstance(plan.get("source_of_truth"), Mapping)
+            else {}
+        ),
+        "safety": _telegram_execution_preflight_safety_metadata(),
     }
 
 

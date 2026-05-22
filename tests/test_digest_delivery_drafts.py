@@ -32,6 +32,7 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_draft_approval_status,
     get_digest_delivery_draft_delivery_readiness,
     get_digest_delivery_intention,
+    get_digest_delivery_intention_telegram_execution_preflight,
     get_digest_delivery_intention_telegram_plan,
     get_persisted_digest_delivery_draft,
     persist_digest_delivery_draft,
@@ -1453,6 +1454,210 @@ async def test_delivery_intention_telegram_plan_returns_safe_read_only_metadata(
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
 
+async def test_delivery_intention_telegram_execution_preflight_reports_config_presence_without_sending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_audit_log_table()
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Telegram preflight must not send Telegram messages")
+
+    def forbidden_render(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("Telegram preflight must not recompute digest text")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 7, 13),
+        end_at=_utc(2132, 7, 14),
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+                note="Ready for Telegram preflight.",
+            )
+            intention = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="test",
+            )
+            await session.commit()
+
+        delivery_intention_id = intention["delivery_intention_id"]
+        draft_event_total_before = await _delivery_draft_audit_log_total(
+            delivery_draft_id
+        )
+        intention_count_before = await _delivery_intention_audit_log_count(
+            delivery_intention_id
+        )
+        monkeypatch.setattr(
+            digest_delivery_drafts,
+            "render_persisted_attention_digest_text",
+            forbidden_render,
+        )
+
+        async with AsyncSessionLocal() as session:
+            missing_credentials = (
+                await get_digest_delivery_intention_telegram_execution_preflight(
+                    session,
+                    delivery_intention_id=delivery_intention_id,
+                    telegram_bot_token=None,
+                    telegram_chat_id=" ",
+                )
+            )
+            configured_credentials = (
+                await get_digest_delivery_intention_telegram_execution_preflight(
+                    session,
+                    delivery_intention_id=delivery_intention_id,
+                    telegram_bot_token="TELEGRAM_BOT_TOKEN_TEST_VALUE",
+                    telegram_chat_id="TELEGRAM_CHAT_ID_TEST_VALUE",
+                )
+            )
+            missing = await get_digest_delivery_intention_telegram_execution_preflight(
+                session,
+                delivery_intention_id="dint_unknown_fos_067_service",
+                telegram_bot_token="TELEGRAM_BOT_TOKEN_TEST_VALUE",
+                telegram_chat_id="TELEGRAM_CHAT_ID_TEST_VALUE",
+            )
+
+        assert missing is None
+        assert missing_credentials is not None
+        assert configured_credentials is not None
+        assert missing_credentials["status"] == "telegram_execution_preflight"
+        assert missing_credentials["delivery_intention_id"] == delivery_intention_id
+        assert missing_credentials["delivery_draft_id"] == delivery_draft_id
+        assert missing_credentials["digest_type"] == "persisted_attention"
+        assert missing_credentials["channel"] == "telegram"
+        assert missing_credentials["text_sha256"] == draft["text_sha256"]
+        assert missing_credentials["char_count"] == draft["char_count"]
+        assert missing_credentials["chunk_count"] == draft["chunk_count"]
+        assert missing_credentials["telegram_plan_ready"] is True
+        assert missing_credentials["telegram_bot_token_present"] is False
+        assert missing_credentials["telegram_chat_id_present"] is False
+        assert missing_credentials["credential_presence_ready"] is False
+        assert missing_credentials["execution_preflight_ready"] is False
+        assert missing_credentials["blockers"] == [
+            "telegram_bot_token_missing",
+            "telegram_chat_id_missing",
+            "delivery_execution_not_implemented",
+        ]
+        assert missing_credentials["delivery_execution_enabled"] is False
+        assert missing_credentials["delivery_enabled"] is False
+        assert missing_credentials["delivery_invoked"] is False
+        assert missing_credentials["delivery_adapter_invoked"] is False
+        assert missing_credentials["approval_execution_invoked"] is False
+        assert missing_credentials["scheduler_invoked"] is False
+        assert missing_credentials["sent"] is False
+        assert missing_credentials["intention"]["current_decision"] == "approved"
+        assert missing_credentials["intention"]["eligible_for_delivery"] is True
+        assert missing_credentials["approval"] == {
+            "current_decision": "approved",
+            "approved": True,
+            "rejected": False,
+        }
+        assert missing_credentials["readiness"] == {
+            "status": "delivery_readiness",
+            "current_decision": "approved",
+            "approved": True,
+            "rejected": False,
+            "eligible_for_delivery": True,
+            "ineligible_reasons": [],
+        }
+        assert missing_credentials["telegram_plan"] == {
+            "status": "telegram_delivery_plan",
+            "chunk_count": draft["chunk_count"],
+            "chunks_text_included": False,
+            "delivery_execution_enabled": False,
+            "delivery_enabled": False,
+            "delivery_invoked": False,
+            "delivery_adapter_invoked": False,
+            "scheduler_invoked": False,
+            "sent": False,
+        }
+        assert missing_credentials["source_of_truth"] == draft["source_of_truth"]
+        assert missing_credentials["safety"] == {
+            "provider_free": True,
+            "read_only": True,
+            "db_write_scope": "none",
+            "credential_values_exposed": False,
+            "credential_validation_invoked": False,
+            "delivery_execution_enabled": False,
+            "delivery_enabled": False,
+            "delivery_invoked": False,
+            "delivery_adapter_invoked": False,
+            "approval_execution_invoked": False,
+            "scheduler_invoked": False,
+            "delivery_result_audit_event_created": False,
+            "outbox_record_created": False,
+            "connectors_invoked": False,
+            "live_api_calls": False,
+            "draft_is_source_of_truth": False,
+            "intention_is_source_of_truth": False,
+            "telegram_plan_is_source_of_truth": False,
+            "telegram_preflight_is_source_of_truth": False,
+            "telegram_is_source_of_truth": False,
+        }
+        assert configured_credentials["telegram_bot_token_present"] is True
+        assert configured_credentials["telegram_chat_id_present"] is True
+        assert configured_credentials["credential_presence_ready"] is True
+        assert configured_credentials["execution_preflight_ready"] is False
+        assert configured_credentials["blockers"] == [
+            "delivery_execution_not_implemented"
+        ]
+        assert configured_credentials["delivery_execution_enabled"] is False
+
+        assert (
+            await _delivery_draft_audit_log_total(delivery_draft_id)
+            == draft_event_total_before
+        )
+        assert (
+            await _delivery_intention_audit_log_count(delivery_intention_id)
+            == intention_count_before
+        )
+
+        dumped = json.dumps(
+            {
+                "missing_credentials": missing_credentials,
+                "configured_credentials": configured_credentials,
+            },
+            sort_keys=True,
+        )
+        assert "TELEGRAM_BOT_TOKEN_TEST_VALUE" not in dumped
+        assert "TELEGRAM_CHAT_ID_TEST_VALUE" not in dumped
+        assert '"rendered_text":' not in dumped
+        assert '"digest":' not in dumped
+        assert '"text":' not in dumped
+        assert "https://api.telegram.org" not in dumped
+        assert "Hidden delivery draft title" not in dumped
+        assert "atri_delivery_hidden" not in dumped
+        assert "sevt_delivery_hidden" not in dumped
+        assert "evidence_refs" not in dumped
+        for marker in (
+            "PRIVATE_RAW_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROMPT_DO_NOT_EXPOSE",
+            "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE",
+            "raw_payload",
+            "provider_payload",
+            "prompt",
+            "source_payload",
+        ):
+            assert marker not in dumped
+    finally:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
 async def test_delivery_intention_telegram_plan_fails_closed_for_unsafe_state() -> None:
     await _ensure_audit_log_table()
     digest = _persisted_attention_digest()
@@ -1665,8 +1870,11 @@ async def test_delivery_intention_conflicts_on_mismatched_existing_payload() -> 
 
 
 class _FakeScalars:
+    def __init__(self, values: list[Any] | None = None) -> None:
+        self._values = list(values or [])
+
     def all(self) -> list[Any]:
-        return []
+        return list(self._values)
 
 
 class _FakeAuditLogRecord:
@@ -1816,6 +2024,127 @@ async def test_telegram_plan_does_not_call_write_methods() -> None:
     assert plan["status"] == "telegram_delivery_plan"
     assert "rendered_text" not in plan
     assert "digest" not in plan
+
+
+class _ReadOnlyTelegramPreflightSession:
+    def __init__(
+        self,
+        *,
+        scalar_records: list[_FakeAuditLogRecord],
+        decision_records: list[_FakeAuditLogRecord],
+    ) -> None:
+        self._scalar_records = list(scalar_records)
+        self._decision_records = list(decision_records)
+
+    async def scalar(self, *_args: object, **_kwargs: object) -> _FakeAuditLogRecord:
+        return self._scalar_records.pop(0)
+
+    async def scalars(self, *_args: object, **_kwargs: object) -> _FakeScalars:
+        return _FakeScalars(self._decision_records)
+
+    def add(self, _value: object) -> None:
+        raise AssertionError("Telegram preflight must not add rows")
+
+    async def flush(self) -> None:
+        raise AssertionError("Telegram preflight must not flush rows")
+
+    async def commit(self) -> None:
+        raise AssertionError("Telegram preflight must not commit")
+
+    async def execute(self, *_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Telegram preflight must not execute write paths")
+
+
+async def test_telegram_execution_preflight_does_not_call_write_methods() -> None:
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 6, 5),
+        end_at=_utc(2132, 6, 6),
+    )
+    delivery_intention_id = "dint_read_only_preflight_fos_067"
+    delivery_draft_id = draft["delivery_draft_id"]
+    intention_payload = {
+        "persisted": True,
+        "status": "delivery_intention",
+        "delivery_intention_id": delivery_intention_id,
+        "delivery_draft_id": delivery_draft_id,
+        "digest_type": "persisted_attention",
+        "channel": "telegram",
+        "current_decision": "approved",
+        "eligible_for_delivery": True,
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "approval_execution_invoked": False,
+        "sent": False,
+        "scheduler_invoked": False,
+        "text_sha256": draft["text_sha256"],
+        "char_count": draft["char_count"],
+        "chunk_count": draft["chunk_count"],
+        "chunk_metadata": draft["chunk_metadata"],
+        "start_at": draft["start_at"],
+        "end_at": draft["end_at"],
+        "limit": draft["limit"],
+        "debug_evidence": draft["debug_evidence"],
+        "source_of_truth": draft["source_of_truth"],
+    }
+    draft_payload = dict(draft)
+    draft_payload["persisted"] = True
+    decision_payload = {
+        "delivery_draft_id": delivery_draft_id,
+        "decision": "approved",
+        "reviewer": "founder",
+        "draft_text_sha256": draft["text_sha256"],
+        "safety": {
+            "provider_free": True,
+            "delivery_invoked": False,
+        },
+    }
+    intention_record = _FakeAuditLogRecord(
+        delivery_draft_id=delivery_draft_id,
+        event_type=DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
+        before_ref=delivery_draft_id,
+        after_ref=delivery_intention_id,
+        payload=intention_payload,
+    )
+    draft_record = _FakeAuditLogRecord(
+        delivery_draft_id=delivery_draft_id,
+        payload=draft_payload,
+    )
+    decision_record = _FakeAuditLogRecord(
+        delivery_draft_id=delivery_draft_id,
+        event_type=DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+        payload=decision_payload,
+    )
+
+    preflight = await get_digest_delivery_intention_telegram_execution_preflight(
+        _ReadOnlyTelegramPreflightSession(
+            scalar_records=[
+                intention_record,
+                draft_record,
+                intention_record,
+                draft_record,
+                draft_record,
+                draft_record,
+            ],
+            decision_records=[decision_record],
+        ),  # type: ignore[arg-type]
+        delivery_intention_id=delivery_intention_id,
+        telegram_bot_token="TELEGRAM_BOT_TOKEN_TEST_VALUE",
+        telegram_chat_id="TELEGRAM_CHAT_ID_TEST_VALUE",
+    )
+
+    assert preflight is not None
+    assert preflight["delivery_intention_id"] == delivery_intention_id
+    assert preflight["delivery_draft_id"] == delivery_draft_id
+    assert preflight["credential_presence_ready"] is True
+    assert preflight["execution_preflight_ready"] is False
+    assert preflight["blockers"] == ["delivery_execution_not_implemented"]
+    assert "rendered_text" not in preflight
+    assert "digest" not in preflight
 
 
 class _ReadOnlySession:

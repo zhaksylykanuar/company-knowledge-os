@@ -24,6 +24,8 @@
   read-only, implemented
 - Persisted attention digest delivery intention operator review:
   read-only, implemented
+- Persisted attention digest Telegram execution preflight:
+  read-only, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -49,6 +51,9 @@
   FOS-066 reads those stored delivery intention, draft, decision, and readiness
   artifacts for local operator review, but it does not append audit rows or
   introduce new storage.
+  FOS-067 reads stored delivery intention and Telegram plan readiness plus
+  Telegram credential presence metadata for execution preflight, but it does
+  not append audit rows or introduce new storage.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -177,6 +182,15 @@
   bodies, prompts, provider payloads, source payloads, secrets, hidden item
   details, or newly exposed evidence refs. FOS-066 introduces no audit event,
   new table, or migration.
+- Telegram execution preflight for delivery intentions is read-only derived
+  metadata, not a stored record and not delivery execution. It reads the stored
+  delivery intention and Telegram plan, checks Telegram bot token and chat ID
+  presence only, and returns safe booleans and blockers. It must not return,
+  print, store, log, or validate credential values; send Telegram/Slack
+  messages; call delivery adapters; create scheduler jobs, delivery result
+  events, outbox records, audit rows, new tables, or migrations; or expose
+  rendered text, chunk text, raw source bodies, prompts, provider payloads,
+  hidden item details, or newly exposed evidence refs.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

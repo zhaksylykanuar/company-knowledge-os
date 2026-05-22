@@ -1616,6 +1616,10 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
         telegram_plan_response = await client.get(
             "/v1/digest/delivery-intentions/dint_missing/telegram-plan",
         )
+        telegram_preflight_response = await client.get(
+            "/v1/digest/delivery-intentions/dint_missing"
+            "/telegram-execution-preflight",
+        )
 
     assert post_response.status_code == 401
     assert get_response.status_code == 401
@@ -1626,6 +1630,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert intention_post_response.status_code == 401
     assert intention_get_response.status_code == 401
     assert telegram_plan_response.status_code == 401
+    assert telegram_preflight_response.status_code == 401
     assert post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert approve_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
@@ -1635,6 +1640,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert intention_post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert intention_get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert telegram_plan_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert telegram_preflight_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert "test-api-key" not in post_response.text
     assert "test-api-key" not in get_response.text
     assert "test-api-key" not in approve_response.text
@@ -1644,6 +1650,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert "test-api-key" not in intention_post_response.text
     assert "test-api-key" not in intention_get_response.text
     assert "test-api-key" not in telegram_plan_response.text
+    assert "test-api-key" not in telegram_preflight_response.text
 
 
 async def test_persisted_attention_digest_delivery_draft_retrieval_returns_404_for_unknown(
@@ -1730,6 +1737,10 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
         telegram_plan_response = await client.get(
             "/v1/digest/delivery-intentions/dint_unknown_fos_065_api/telegram-plan",
         )
+        telegram_preflight_response = await client.get(
+            "/v1/digest/delivery-intentions/dint_unknown_fos_067_api"
+            "/telegram-execution-preflight",
+        )
 
     assert approve_response.status_code == 404
     assert reject_response.status_code == 404
@@ -1738,6 +1749,7 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
     assert intention_post_response.status_code == 404
     assert intention_get_response.status_code == 404
     assert telegram_plan_response.status_code == 404
+    assert telegram_preflight_response.status_code == 404
     assert approve_response.json() == {"detail": "delivery draft was not found"}
     assert reject_response.json() == {"detail": "delivery draft was not found"}
     assert status_response.json() == {"detail": "delivery draft was not found"}
@@ -1745,6 +1757,9 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
     assert intention_post_response.json() == {"detail": "delivery draft was not found"}
     assert intention_get_response.json() == {"detail": "delivery intention was not found"}
     assert telegram_plan_response.json() == {
+        "detail": "delivery intention was not found"
+    }
+    assert telegram_preflight_response.json() == {
         "detail": "delivery intention was not found"
     }
 
@@ -2369,6 +2384,204 @@ async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_rec
         await _cleanup_persisted_attention_digest_api_fixture(unique)
 
 
+async def test_delivery_intention_telegram_execution_preflight_endpoint_reports_safe_blockers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+    monkeypatch.setattr(settings, "telegram_bot_token", None)
+    monkeypatch.setattr(settings, "telegram_chat_id", " ")
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Telegram execution preflight must not send messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    unique = uuid4().hex
+    hidden_title = "Hidden Telegram preflight API title"
+    delivery_draft_id: str | None = None
+    await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+    try:
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="preflight-work",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2131, 9, 19, 9),
+            activity=_normalized_activity(unique, "preflight-work"),
+        )
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="preflight-hidden",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=False,
+            created_at=_utc(2131, 9, 19, 10),
+            activity=_normalized_activity(
+                unique,
+                "preflight-hidden",
+                title=hidden_title,
+            ),
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            created_response = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-19T00:00:00+00:00",
+                    "end_at": "2131-09-20T00:00:00+00:00",
+                    "limit": "10",
+                },
+            )
+            assert created_response.status_code == 200
+            created_draft = created_response.json()
+            delivery_draft_id = created_draft["delivery_draft_id"]
+
+            approve_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                json={"reviewer": "founder", "note": "Ready for preflight."},
+            )
+            assert approve_response.status_code == 200
+
+            intention_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+            )
+            assert intention_response.status_code == 200
+            intention = intention_response.json()
+            delivery_intention_id = intention["delivery_intention_id"]
+
+            draft_total_before = await _delivery_draft_api_event_total(
+                delivery_draft_id
+            )
+            intention_count_before = await _delivery_intention_api_event_count(
+                delivery_intention_id
+            )
+
+            missing_credentials_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                "/telegram-execution-preflight",
+            )
+            monkeypatch.setattr(
+                settings,
+                "telegram_bot_token",
+                "TELEGRAM_BOT_TOKEN_TEST_VALUE",
+            )
+            monkeypatch.setattr(
+                settings,
+                "telegram_chat_id",
+                "TELEGRAM_CHAT_ID_TEST_VALUE",
+            )
+            configured_credentials_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                "/telegram-execution-preflight",
+            )
+
+        assert missing_credentials_response.status_code == 200
+        assert configured_credentials_response.status_code == 200
+        missing_credentials = missing_credentials_response.json()
+        configured_credentials = configured_credentials_response.json()
+
+        assert missing_credentials["status"] == "telegram_execution_preflight"
+        assert missing_credentials["delivery_intention_id"] == delivery_intention_id
+        assert missing_credentials["delivery_draft_id"] == delivery_draft_id
+        assert missing_credentials["digest_type"] == "persisted_attention"
+        assert missing_credentials["channel"] == "telegram"
+        assert missing_credentials["text_sha256"] == created_draft["text_sha256"]
+        assert missing_credentials["char_count"] == created_draft["char_count"]
+        assert missing_credentials["chunk_count"] == created_draft["chunk_count"]
+        assert missing_credentials["telegram_plan_ready"] is True
+        assert missing_credentials["telegram_bot_token_present"] is False
+        assert missing_credentials["telegram_chat_id_present"] is False
+        assert missing_credentials["credential_presence_ready"] is False
+        assert missing_credentials["execution_preflight_ready"] is False
+        assert missing_credentials["blockers"] == [
+            "telegram_bot_token_missing",
+            "telegram_chat_id_missing",
+            "delivery_execution_not_implemented",
+        ]
+        assert missing_credentials["delivery_execution_enabled"] is False
+        assert missing_credentials["delivery_enabled"] is False
+        assert missing_credentials["delivery_invoked"] is False
+        assert missing_credentials["delivery_adapter_invoked"] is False
+        assert missing_credentials["approval_execution_invoked"] is False
+        assert missing_credentials["scheduler_invoked"] is False
+        assert missing_credentials["sent"] is False
+        assert missing_credentials["intention"]["current_decision"] == "approved"
+        assert missing_credentials["intention"]["eligible_for_delivery"] is True
+        assert missing_credentials["approval"] == {
+            "current_decision": "approved",
+            "approved": True,
+            "rejected": False,
+        }
+        assert missing_credentials["readiness"] == {
+            "status": "delivery_readiness",
+            "current_decision": "approved",
+            "approved": True,
+            "rejected": False,
+            "eligible_for_delivery": True,
+            "ineligible_reasons": [],
+        }
+        assert missing_credentials["telegram_plan"]["status"] == "telegram_delivery_plan"
+        assert missing_credentials["telegram_plan"]["chunks_text_included"] is False
+        assert missing_credentials["source_of_truth"] == created_draft["source_of_truth"]
+        assert missing_credentials["safety"]["provider_free"] is True
+        assert missing_credentials["safety"]["read_only"] is True
+        assert missing_credentials["safety"]["credential_values_exposed"] is False
+        assert missing_credentials["safety"]["credential_validation_invoked"] is False
+        assert missing_credentials["safety"]["delivery_adapter_invoked"] is False
+        assert missing_credentials["safety"]["delivery_invoked"] is False
+        assert missing_credentials["safety"]["delivery_result_audit_event_created"] is False
+        assert missing_credentials["safety"]["outbox_record_created"] is False
+
+        assert configured_credentials["telegram_bot_token_present"] is True
+        assert configured_credentials["telegram_chat_id_present"] is True
+        assert configured_credentials["credential_presence_ready"] is True
+        assert configured_credentials["execution_preflight_ready"] is False
+        assert configured_credentials["delivery_execution_enabled"] is False
+        assert configured_credentials["blockers"] == [
+            "delivery_execution_not_implemented"
+        ]
+
+        assert await _delivery_draft_api_event_total(delivery_draft_id) == (
+            draft_total_before
+        )
+        assert await _delivery_intention_api_event_count(delivery_intention_id) == (
+            intention_count_before
+        )
+
+        serialized = json.dumps(
+            {
+                "missing_credentials": missing_credentials,
+                "configured_credentials": configured_credentials,
+            },
+            sort_keys=True,
+        )
+        assert "TELEGRAM_BOT_TOKEN_TEST_VALUE" not in serialized
+        assert "TELEGRAM_CHAT_ID_TEST_VALUE" not in serialized
+        assert '"rendered_text":' not in serialized
+        assert '"digest":' not in serialized
+        assert '"text":' not in serialized
+        assert "https://api.telegram.org" not in serialized
+        assert "webhook" not in serialized
+        assert hidden_title not in serialized
+        assert f"atri_digest_api_{unique}_preflight-hidden" not in serialized
+        assert f"digest:api:attention:{unique}:preflight-hidden" not in serialized
+        assert "evidence_refs" not in serialized
+        assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
+        assert "raw_payload" not in serialized
+        assert "provider_payload" not in serialized
+        assert "prompt" not in serialized
+    finally:
+        if delivery_draft_id is not None:
+            await _cleanup_delivery_draft_api_record(delivery_draft_id)
+        await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
 async def test_delivery_intention_telegram_plan_endpoint_conflicts_on_hash_mismatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2430,9 +2643,15 @@ async def test_delivery_intention_telegram_plan_endpoint_conflicts_on_hash_misma
                 f"/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-plan",
             )
+            telegram_preflight_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                "/telegram-execution-preflight",
+            )
 
         assert telegram_plan_response.status_code == 409
+        assert telegram_preflight_response.status_code == 409
         assert "text_sha256" in telegram_plan_response.text
+        assert "text_sha256" in telegram_preflight_response.text
         assert await _delivery_intention_api_event_count(delivery_intention_id) == 1
     finally:
         if delivery_draft_id is not None:
