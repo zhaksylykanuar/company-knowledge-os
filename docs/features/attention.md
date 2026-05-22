@@ -21,6 +21,7 @@
 - Read-only persisted attention digest delivery readiness preview: implemented
 - Audit-log-backed persisted attention digest delivery intention records:
   implemented
+- Pure Telegram delivery plan preview for delivery intentions: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -108,6 +109,14 @@
   rendered digest text or full digest snapshots, does not create a scheduler job
   or outbox worker, and does not send Telegram/Slack messages or invoke
   delivery adapters.
+- A protected Telegram delivery plan endpoint can read a stored delivery
+  intention and its referenced persisted delivery draft, then return
+  deterministic Telegram chunk metadata for a future separately gated send path.
+  The plan is a dry-run/pre-send review artifact only: it uses stored rendered
+  text internally for hashing and chunking, but it does not return rendered text
+  or chunk text, does not require bot credentials, does not call delivery
+  adapters, does not append audit rows, does not create scheduler jobs or
+  outbox records, and does not send Telegram/Slack messages.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -298,6 +307,13 @@
   connector calls, source event projection, triage/retriage, or feedback
   behavior changes. Telegram and Slack remain delivery/interface surfaces only,
   not the source of truth.
+- FOS-065 adds a protected pure Telegram delivery plan preview for delivery
+  intentions. The plan exposes safe deterministic chunk hashes and lengths for
+  future delivery review, but it omits rendered text and chunk text, does not
+  require bot credentials, does not call delivery adapters, does not append
+  audit rows, does not create scheduler jobs, delivery result events, outbox
+  records, migrations, or new tables, and does not send Telegram/Slack
+  messages.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -336,7 +352,8 @@
   existing source activity digest, scheduler, and delivery paths do not yet use
   it as their primary output.
 - Persisted delivery drafts have approval/rejection decisions, a read-only
-  delivery readiness preview, and audit-log-backed delivery intention records,
-  but no approval-triggered execution, scheduler, delivery worker, outbox table,
-  or Telegram/Slack delivery wiring exists.
+  delivery readiness preview, audit-log-backed delivery intention records, and
+  a pure Telegram delivery plan preview, but no approval-triggered execution,
+  scheduler, delivery worker, delivery result event, outbox table, bot
+  credential handling, or Telegram/Slack delivery wiring exists.
 - GitHub/Jira/Drive digest integration is not implemented.

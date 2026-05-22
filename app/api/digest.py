@@ -18,6 +18,7 @@ from app.services.digest_delivery_drafts import (
     DeliveryDraftNotFoundError,
     DeliveryIntentionConflictError,
     DeliveryIntentionNotReadyError,
+    DeliveryTelegramPlanConflictError,
     approve_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
     create_digest_delivery_intention,
@@ -25,6 +26,7 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_draft_approval_status,
     get_digest_delivery_draft_delivery_readiness,
     get_digest_delivery_intention,
+    get_digest_delivery_intention_telegram_plan,
     get_persisted_digest_delivery_draft,
     reject_digest_delivery_draft,
 )
@@ -261,6 +263,35 @@ async def _get_digest_delivery_intention_response(
             detail="delivery intention was not found",
         )
     return intention
+
+
+async def _get_digest_delivery_intention_telegram_plan_response(
+    *,
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            plan = await get_digest_delivery_intention_telegram_plan(
+                session,
+                delivery_intention_id=delivery_intention_id,
+            )
+    except DeliveryTelegramPlanConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="delivery intention was not found",
+        )
+    return plan
 
 
 async def _record_digest_delivery_draft_decision_response(
@@ -575,5 +606,14 @@ async def get_persisted_digest_delivery_intention_endpoint(
     delivery_intention_id: str,
 ) -> dict[str, Any]:
     return await _get_digest_delivery_intention_response(
+        delivery_intention_id=delivery_intention_id,
+    )
+
+
+@router.get("/delivery-intentions/{delivery_intention_id}/telegram-plan")
+async def get_persisted_digest_delivery_intention_telegram_plan_endpoint(
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    return await _get_digest_delivery_intention_telegram_plan_response(
         delivery_intention_id=delivery_intention_id,
     )

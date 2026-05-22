@@ -1613,6 +1613,9 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
         intention_get_response = await client.get(
             "/v1/digest/delivery-intentions/dint_missing",
         )
+        telegram_plan_response = await client.get(
+            "/v1/digest/delivery-intentions/dint_missing/telegram-plan",
+        )
 
     assert post_response.status_code == 401
     assert get_response.status_code == 401
@@ -1622,6 +1625,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert readiness_response.status_code == 401
     assert intention_post_response.status_code == 401
     assert intention_get_response.status_code == 401
+    assert telegram_plan_response.status_code == 401
     assert post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert approve_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
@@ -1630,6 +1634,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert readiness_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert intention_post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert intention_get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert telegram_plan_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert "test-api-key" not in post_response.text
     assert "test-api-key" not in get_response.text
     assert "test-api-key" not in approve_response.text
@@ -1638,6 +1643,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert "test-api-key" not in readiness_response.text
     assert "test-api-key" not in intention_post_response.text
     assert "test-api-key" not in intention_get_response.text
+    assert "test-api-key" not in telegram_plan_response.text
 
 
 async def test_persisted_attention_digest_delivery_draft_retrieval_returns_404_for_unknown(
@@ -1721,6 +1727,9 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
         intention_get_response = await client.get(
             "/v1/digest/delivery-intentions/dint_unknown_fos_064_api",
         )
+        telegram_plan_response = await client.get(
+            "/v1/digest/delivery-intentions/dint_unknown_fos_065_api/telegram-plan",
+        )
 
     assert approve_response.status_code == 404
     assert reject_response.status_code == 404
@@ -1728,12 +1737,16 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
     assert readiness_response.status_code == 404
     assert intention_post_response.status_code == 404
     assert intention_get_response.status_code == 404
+    assert telegram_plan_response.status_code == 404
     assert approve_response.json() == {"detail": "delivery draft was not found"}
     assert reject_response.json() == {"detail": "delivery draft was not found"}
     assert status_response.json() == {"detail": "delivery draft was not found"}
     assert readiness_response.json() == {"detail": "delivery draft was not found"}
     assert intention_post_response.json() == {"detail": "delivery draft was not found"}
     assert intention_get_response.json() == {"detail": "delivery intention was not found"}
+    assert telegram_plan_response.json() == {
+        "detail": "delivery intention was not found"
+    }
 
 
 async def test_delivery_draft_approve_endpoint_records_safe_idempotent_decision(
@@ -2235,9 +2248,15 @@ async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_rec
             retrieved_response = await client.get(
                 f"/v1/digest/delivery-intentions/{delivery_intention_id}",
             )
+            telegram_plan_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                "/telegram-plan",
+            )
 
         assert retrieved_response.status_code == 200
+        assert telegram_plan_response.status_code == 200
         retrieved = retrieved_response.json()
+        telegram_plan = telegram_plan_response.json()
         stored_payload = await _delivery_intention_api_payload(delivery_intention_id)
 
         assert repeated["delivery_intention_id"] == delivery_intention_id
@@ -2281,18 +2300,59 @@ async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_rec
         assert stored_payload["delivery_intention_id"] == delivery_intention_id
         assert stored_payload["delivery_draft_id"] == delivery_draft_id
         assert await _delivery_intention_api_event_count(delivery_intention_id) == 1
+        expected_chunks = telegram_delivery.split_telegram_plain_text(
+            created_draft["rendered_text"]
+        )
+        assert telegram_plan["status"] == "telegram_delivery_plan"
+        assert telegram_plan["delivery_intention_id"] == delivery_intention_id
+        assert telegram_plan["delivery_draft_id"] == delivery_draft_id
+        assert telegram_plan["digest_type"] == "persisted_attention"
+        assert telegram_plan["channel"] == "telegram"
+        assert telegram_plan["text_sha256"] == created_draft["text_sha256"]
+        assert telegram_plan["char_count"] == created_draft["char_count"]
+        assert telegram_plan["chunk_count"] == len(expected_chunks)
+        assert telegram_plan["chunks_text_included"] is False
+        assert telegram_plan["chunks"] == [
+            {
+                "index": index,
+                "char_count": len(chunk),
+                "sha256": sha256(chunk.encode("utf-8")).hexdigest(),
+            }
+            for index, chunk in enumerate(expected_chunks, start=1)
+        ]
+        assert all("text" not in chunk for chunk in telegram_plan["chunks"])
+        assert telegram_plan["delivery_execution_enabled"] is False
+        assert telegram_plan["delivery_enabled"] is False
+        assert telegram_plan["delivery_invoked"] is False
+        assert telegram_plan["delivery_adapter_invoked"] is False
+        assert telegram_plan["approval_execution_invoked"] is False
+        assert telegram_plan["scheduler_invoked"] is False
+        assert telegram_plan["sent"] is False
+        assert telegram_plan["safety"]["provider_free"] is True
+        assert telegram_plan["safety"]["read_only"] is True
+        assert telegram_plan["safety"]["db_write_scope"] == "none"
+        assert telegram_plan["safety"]["delivery_adapter_invoked"] is False
+        assert telegram_plan["safety"]["delivery_invoked"] is False
+        assert telegram_plan["safety"]["delivery_result_audit_event_created"] is False
+        assert telegram_plan["safety"]["outbox_record_created"] is False
+        assert await _delivery_intention_api_event_count(delivery_intention_id) == 1
 
         serialized = json.dumps(
             {
                 "intention": intention,
                 "repeated": repeated,
                 "retrieved": retrieved,
+                "telegram_plan": telegram_plan,
                 "stored_payload": stored_payload,
             },
             sort_keys=True,
         )
         assert '"rendered_text":' not in serialized
         assert '"digest":' not in serialized
+        assert '"text":' not in serialized
+        assert "chat_id" not in serialized
+        assert "bot_token" not in serialized
+        assert "https://api.telegram.org" not in serialized
         assert hidden_title not in serialized
         assert f"atri_digest_api_{unique}_intention-hidden" not in serialized
         assert f"digest:api:attention:{unique}:intention-hidden" not in serialized
@@ -2307,6 +2367,76 @@ async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_rec
         if delivery_draft_id is not None:
             await _cleanup_delivery_draft_api_record(delivery_draft_id)
         await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
+async def test_delivery_intention_telegram_plan_endpoint_conflicts_on_hash_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Telegram plan must not send Telegram messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    delivery_draft_id: str | None = None
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            created_response = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-19T00:00:00+00:00",
+                    "end_at": "2131-09-20T00:00:00+00:00",
+                    "limit": "10",
+                },
+            )
+            assert created_response.status_code == 200
+            delivery_draft_id = created_response.json()["delivery_draft_id"]
+
+            approve_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                json={"reviewer": "founder"},
+            )
+            assert approve_response.status_code == 200
+
+            intention_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+            )
+            assert intention_response.status_code == 200
+            delivery_intention_id = intention_response.json()["delivery_intention_id"]
+
+        async with AsyncSessionLocal() as session:
+            record = await session.scalar(
+                select(AuditLog)
+                .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+                .where(AuditLog.after_ref == delivery_draft_id)
+            )
+            assert record is not None
+            assert isinstance(record.payload, dict)
+            payload = dict(record.payload)
+            payload["text_sha256"] = "mismatched"
+            record.payload = payload
+            await session.commit()
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            telegram_plan_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                "/telegram-plan",
+            )
+
+        assert telegram_plan_response.status_code == 409
+        assert "text_sha256" in telegram_plan_response.text
+        assert await _delivery_intention_api_event_count(delivery_intention_id) == 1
+    finally:
+        if delivery_draft_id is not None:
+            await _cleanup_delivery_draft_api_record(delivery_draft_id)
 
 
 async def test_delivery_draft_decision_endpoints_reject_conflicts(

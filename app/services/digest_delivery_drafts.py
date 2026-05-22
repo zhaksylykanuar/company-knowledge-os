@@ -27,6 +27,7 @@ from app.services.telegram_delivery import (
 DIGEST_DELIVERY_DRAFT_STATUS = "draft"
 DIGEST_DELIVERY_DRAFT_READINESS_STATUS = "delivery_readiness"
 DIGEST_DELIVERY_INTENTION_STATUS = "delivery_intention"
+DIGEST_DELIVERY_TELEGRAM_PLAN_STATUS = "telegram_delivery_plan"
 DIGEST_DELIVERY_DRAFT_TYPE = "persisted_attention"
 DIGEST_DELIVERY_DRAFT_CHANNEL = "telegram"
 DIGEST_DELIVERY_DRAFT_ID_PREFIX = "ddraft_"
@@ -90,6 +91,10 @@ class DeliveryIntentionNotReadyError(ValueError):
 
 class DeliveryIntentionConflictError(ValueError):
     """Raised when a stored delivery intention does not match expected data."""
+
+
+class DeliveryTelegramPlanConflictError(ValueError):
+    """Raised when a Telegram delivery plan cannot be safely built."""
 
 
 def _require_aware_datetime(value: datetime, *, field_name: str) -> None:
@@ -659,6 +664,28 @@ def _delivery_intention_safety_metadata() -> dict[str, Any]:
     }
 
 
+def _telegram_delivery_plan_safety_metadata() -> dict[str, Any]:
+    return {
+        "provider_free": True,
+        "read_only": True,
+        "db_write_scope": "none",
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "delivery_result_audit_event_created": False,
+        "outbox_record_created": False,
+        "connectors_invoked": False,
+        "live_api_calls": False,
+        "draft_is_source_of_truth": False,
+        "intention_is_source_of_truth": False,
+        "telegram_plan_is_source_of_truth": False,
+        "telegram_is_source_of_truth": False,
+    }
+
+
 def _safe_chunk_metadata(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
@@ -1021,6 +1048,182 @@ async def create_digest_delivery_intention(
     if response is None:
         raise ValueError("persisted delivery intention audit payload is invalid")
     return response
+
+
+def _require_int(value: Any, *, field_name: str) -> int:
+    if not isinstance(value, int):
+        raise DeliveryTelegramPlanConflictError(f"{field_name} must be an integer")
+    return value
+
+
+def _telegram_plan_chunks(rendered_text: str, *, chunk_size: int) -> list[dict[str, Any]]:
+    chunks = split_telegram_plain_text(rendered_text, max_chars=chunk_size)
+    return [
+        {
+            "index": index,
+            "char_count": len(chunk),
+            "sha256": sha256(chunk.encode("utf-8")).hexdigest(),
+        }
+        for index, chunk in enumerate(chunks, start=1)
+    ]
+
+
+def _safe_intention_audit_log_metadata(intention: Mapping[str, Any]) -> dict[str, Any]:
+    audit_log = intention.get("audit_log")
+    if not isinstance(audit_log, Mapping):
+        return {}
+    return {
+        key: audit_log[key]
+        for key in ("event_type", "before_ref", "after_ref", "created_at")
+        if audit_log.get(key) is not None
+    }
+
+
+def _validate_telegram_plan_intention(intention: Mapping[str, Any]) -> None:
+    if intention.get("channel") != DIGEST_DELIVERY_DRAFT_CHANNEL:
+        raise DeliveryTelegramPlanConflictError(
+            "delivery intention channel is not telegram"
+        )
+    if intention.get("current_decision") != DIGEST_DELIVERY_DRAFT_APPROVED_DECISION:
+        raise DeliveryTelegramPlanConflictError(
+            "delivery intention is not approved"
+        )
+    if intention.get("eligible_for_delivery") is not True:
+        raise DeliveryTelegramPlanConflictError(
+            "delivery intention is not eligible for delivery"
+        )
+    if intention.get("delivery_execution_enabled") is not False:
+        raise DeliveryTelegramPlanConflictError(
+            "delivery intention execution state is unsafe"
+        )
+
+
+async def get_digest_delivery_intention_telegram_plan(
+    session: AsyncSession,
+    *,
+    delivery_intention_id: str,
+    chunk_size: int = DEFAULT_TELEGRAM_CHUNK_SIZE,
+) -> dict[str, Any] | None:
+    """Return a safe read-only Telegram delivery plan for a stored intention.
+
+    This reads the delivery intention and referenced draft audit payloads only.
+    It uses stored rendered draft text internally for deterministic Telegram
+    chunk metadata, but never returns message text, sends, schedules, appends
+    audit logs, or calls provider/delivery adapters.
+    """
+
+    cleaned_delivery_intention_id = _clean_delivery_intention_id(
+        delivery_intention_id
+    )
+    intention = await get_digest_delivery_intention(
+        session,
+        delivery_intention_id=cleaned_delivery_intention_id,
+    )
+    if intention is None:
+        return None
+
+    _validate_telegram_plan_intention(intention)
+    delivery_draft_id = _clean_delivery_draft_id(
+        str(intention.get("delivery_draft_id", ""))
+    )
+    draft = await get_persisted_digest_delivery_draft(
+        session,
+        delivery_draft_id=delivery_draft_id,
+    )
+    if draft is None:
+        raise DeliveryTelegramPlanConflictError(
+            "referenced delivery draft was not found"
+        )
+    if draft.get("channel") != DIGEST_DELIVERY_DRAFT_CHANNEL:
+        raise DeliveryTelegramPlanConflictError(
+            "referenced delivery draft channel is not telegram"
+        )
+
+    rendered_text = draft.get("rendered_text")
+    if not isinstance(rendered_text, str) or not rendered_text.strip():
+        raise DeliveryTelegramPlanConflictError(
+            "referenced delivery draft rendered text is unavailable"
+        )
+
+    text_hash = sha256(rendered_text.encode("utf-8")).hexdigest()
+    draft_text_hash = str(draft.get("text_sha256", ""))
+    intention_text_hash = str(intention.get("text_sha256", ""))
+    if text_hash != draft_text_hash:
+        raise DeliveryTelegramPlanConflictError(
+            "delivery draft rendered text hash does not match stored text_sha256"
+        )
+    if intention_text_hash != draft_text_hash:
+        raise DeliveryTelegramPlanConflictError(
+            "delivery intention text_sha256 does not match referenced draft"
+        )
+
+    chunks = _telegram_plan_chunks(rendered_text, chunk_size=chunk_size)
+    chunk_lengths = [chunk["char_count"] for chunk in chunks]
+    chunk_metadata = {
+        "chunk_size": chunk_size,
+        "chunk_lengths": chunk_lengths,
+        "chunks_preview_included": False,
+    }
+    for source_name, source in (("draft", draft), ("intention", intention)):
+        source_chunk_count = _require_int(
+            source.get("chunk_count"),
+            field_name=f"{source_name} chunk_count",
+        )
+        if source_chunk_count != len(chunks):
+            raise DeliveryTelegramPlanConflictError(
+                f"{source_name} chunk_count does not match Telegram plan chunks"
+            )
+
+        source_char_count = _require_int(
+            source.get("char_count"),
+            field_name=f"{source_name} char_count",
+        )
+        if source_char_count != len(rendered_text):
+            raise DeliveryTelegramPlanConflictError(
+                f"{source_name} char_count does not match rendered text"
+            )
+
+        source_chunk_metadata = _safe_chunk_metadata(source.get("chunk_metadata"))
+        if source_chunk_metadata.get("chunk_lengths") != chunk_lengths:
+            raise DeliveryTelegramPlanConflictError(
+                f"{source_name} chunk metadata does not match Telegram plan chunks"
+            )
+
+    return {
+        "status": DIGEST_DELIVERY_TELEGRAM_PLAN_STATUS,
+        "delivery_intention_id": cleaned_delivery_intention_id,
+        "delivery_draft_id": delivery_draft_id,
+        "digest_type": intention.get("digest_type"),
+        "channel": DIGEST_DELIVERY_DRAFT_CHANNEL,
+        "text_sha256": text_hash,
+        "char_count": len(rendered_text),
+        "chunk_count": len(chunks),
+        "chunks_text_included": False,
+        "chunks": chunks,
+        "chunk_metadata": chunk_metadata,
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "sent": False,
+        "start_at": intention.get("start_at"),
+        "end_at": intention.get("end_at"),
+        "limit": intention.get("limit"),
+        "debug_evidence": bool(intention.get("debug_evidence")),
+        "intention": {
+            "status": intention.get("status"),
+            "persisted": bool(intention.get("persisted")),
+            "audit_log": _safe_intention_audit_log_metadata(intention),
+        },
+        "source_of_truth": (
+            dict(intention.get("source_of_truth"))
+            if isinstance(intention.get("source_of_truth"), Mapping)
+            else {}
+        ),
+        "safety": _telegram_delivery_plan_safety_metadata(),
+    }
 
 
 async def record_digest_delivery_draft_decision(
