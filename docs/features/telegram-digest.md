@@ -16,6 +16,8 @@
 - Read-only persisted attention digest delivery draft preview: implemented
 - Audit-log-backed persisted attention digest delivery draft review records:
   implemented
+- Audit-log-backed persisted attention digest delivery draft approval decisions:
+  implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -136,6 +138,9 @@ trusted facts.
   review.
 - Persisted delivery drafts are human-review artifacts only. They are not a
   source of truth for company facts, not approvals, and not delivery execution.
+- Approval/rejection decisions for persisted delivery drafts are human decision
+  records only. Approval does not send Telegram/Slack messages, execute
+  delivery, mutate source-of-truth data, or make the draft authoritative.
 - Hidden low-priority digest items must remain count-only in preview, persisted
   draft, and delivery-oriented surfaces. Evidence refs remain debug-only and
   safe-formatted.
@@ -237,6 +242,16 @@ Implemented today:
   refs when explicitly requested. This slice does not add approval execution,
   scheduler behavior, Telegram/Slack sending, delivery wiring, migrations, live
   API calls, providers/OpenAI, or connector calls.
+- FOS-062 records approval/rejection decisions for persisted attention digest
+  delivery drafts as audit-log-backed events and exposes a protected approval
+  status API. Approval/rejection decisions are human decision records only; they
+  do not send Telegram/Slack messages, execute delivery, mutate source-of-truth
+  data, or make delivery drafts authoritative company facts.
+- FOS-062 decision/status payloads expose only sanitized decision metadata,
+  draft hash metadata, and inert safety flags. Hidden low-priority items remain
+  count-only, and evidence refs remain safe-formatted debug-only. This slice
+  does not add scheduler behavior, Telegram/Slack sending, delivery wiring,
+  migrations, live API calls, providers/OpenAI, connector calls, or new tables.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
@@ -265,6 +280,6 @@ Not implemented today:
 - Telegram delivery, scheduler, connector, approval execution, or digest
   inference logic behind persisted attention digest delivery draft preview or
   audit-log-backed draft review records.
-- Approval API/state transitions/execution for persisted delivery drafts.
+- Approval-triggered execution for persisted delivery drafts.
 - Scheduler, connector, inbound Q&A, LLM summarization, or digest inference
   logic in the Telegram outbound delivery adapter.

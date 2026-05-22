@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.base import AsyncSessionLocal
 from app.services.digest import (
@@ -13,9 +14,14 @@ from app.services.digest import (
     build_source_activity_digest,
 )
 from app.services.digest_delivery_drafts import (
+    DeliveryDraftDecisionConflictError,
+    DeliveryDraftNotFoundError,
+    approve_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
     create_persisted_attention_digest_delivery_draft,
+    get_digest_delivery_draft_approval_status,
     get_persisted_digest_delivery_draft,
+    reject_digest_delivery_draft,
 )
 from app.services.digest_rendering import (
     SAFE_EVIDENCE_REF_KEYS,
@@ -24,6 +30,13 @@ from app.services.digest_rendering import (
 )
 
 router = APIRouter(prefix="/v1/digest", tags=["digest"])
+
+
+class DeliveryDraftDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reviewer: str | None = Field(default=None, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
 
 
 async def _build_source_activity_digest_response(
@@ -141,6 +154,74 @@ async def _get_persisted_digest_delivery_draft_response(
             detail="delivery draft was not found",
         )
     return draft
+
+
+async def _get_digest_delivery_draft_approval_status_response(
+    *,
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            approval_status = await get_digest_delivery_draft_approval_status(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if approval_status is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="delivery draft was not found",
+        )
+    return approval_status
+
+
+async def _record_digest_delivery_draft_decision_response(
+    *,
+    delivery_draft_id: str,
+    decision: str,
+    request: DeliveryDraftDecisionRequest | None,
+) -> dict[str, Any]:
+    reviewer = request.reviewer if request is not None and request.reviewer else "api"
+    note = request.note if request is not None else None
+
+    try:
+        async with AsyncSessionLocal() as session:
+            if decision == "approved":
+                approval_status = await approve_digest_delivery_draft(
+                    session,
+                    delivery_draft_id=delivery_draft_id,
+                    reviewer=reviewer,
+                    note=note,
+                )
+            else:
+                approval_status = await reject_digest_delivery_draft(
+                    session,
+                    delivery_draft_id=delivery_draft_id,
+                    reviewer=reviewer,
+                    note=note,
+                )
+            await session.commit()
+            return approval_status
+    except DeliveryDraftNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except DeliveryDraftDecisionConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 def _safe_evidence_refs_for_preview(value: Any) -> list[dict[str, Any]]:
@@ -351,5 +432,38 @@ async def get_persisted_digest_delivery_draft_endpoint(
     delivery_draft_id: str,
 ) -> dict[str, Any]:
     return await _get_persisted_digest_delivery_draft_response(
+        delivery_draft_id=delivery_draft_id,
+    )
+
+
+@router.post("/delivery-drafts/{delivery_draft_id}/approve")
+async def approve_persisted_digest_delivery_draft_endpoint(
+    delivery_draft_id: str,
+    request: DeliveryDraftDecisionRequest | None = None,
+) -> dict[str, Any]:
+    return await _record_digest_delivery_draft_decision_response(
+        delivery_draft_id=delivery_draft_id,
+        decision="approved",
+        request=request,
+    )
+
+
+@router.post("/delivery-drafts/{delivery_draft_id}/reject")
+async def reject_persisted_digest_delivery_draft_endpoint(
+    delivery_draft_id: str,
+    request: DeliveryDraftDecisionRequest | None = None,
+) -> dict[str, Any]:
+    return await _record_digest_delivery_draft_decision_response(
+        delivery_draft_id=delivery_draft_id,
+        decision="rejected",
+        request=request,
+    )
+
+
+@router.get("/delivery-drafts/{delivery_draft_id}/approval-status")
+async def get_persisted_digest_delivery_draft_approval_status_endpoint(
+    delivery_draft_id: str,
+) -> dict[str, Any]:
+    return await _get_digest_delivery_draft_approval_status_response(
         delivery_draft_id=delivery_draft_id,
     )

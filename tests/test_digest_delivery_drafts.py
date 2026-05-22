@@ -12,12 +12,20 @@ from app.db.base import AsyncSessionLocal, engine
 from app.db.models import AuditLog
 import app.services.telegram_delivery as telegram_delivery
 from app.services.digest_delivery_drafts import (
+    DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+    DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES,
     DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+    DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+    DeliveryDraftDecisionConflictError,
+    DeliveryDraftNotFoundError,
+    approve_digest_delivery_draft,
     build_delivery_draft_id,
     build_persisted_attention_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
+    get_digest_delivery_draft_approval_status,
     get_persisted_digest_delivery_draft,
     persist_digest_delivery_draft,
+    reject_digest_delivery_draft,
     sanitize_persisted_attention_digest_for_delivery_draft,
 )
 from app.services.digest_rendering import render_persisted_attention_digest_text
@@ -171,7 +179,7 @@ async def _delete_delivery_draft_audit_logs(delivery_draft_id: str) -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(
             delete(AuditLog)
-            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.event_type.in_(DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES))
             .where(AuditLog.after_ref == delivery_draft_id)
         )
         await session.commit()
@@ -179,12 +187,14 @@ async def _delete_delivery_draft_audit_logs(delivery_draft_id: str) -> None:
 
 async def _delivery_draft_audit_log_count(
     delivery_draft_id: str,
+    *,
+    event_type: str = DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
 ) -> int:
     async with AsyncSessionLocal() as session:
         count = await session.scalar(
             select(func.count())
             .select_from(AuditLog)
-            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.event_type == event_type)
             .where(AuditLog.after_ref == delivery_draft_id)
         )
     return int(count or 0)
@@ -192,11 +202,13 @@ async def _delivery_draft_audit_log_count(
 
 async def _delivery_draft_audit_payload(
     delivery_draft_id: str,
+    *,
+    event_type: str = DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
 ) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         payload = await session.scalar(
             select(AuditLog.payload)
-            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.event_type == event_type)
             .where(AuditLog.after_ref == delivery_draft_id)
             .order_by(AuditLog.id)
         )
@@ -513,6 +525,246 @@ async def test_retrieving_persisted_delivery_draft_returns_sanitized_payload() -
         assert "source_payload" not in dumped
     finally:
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_draft_approval_status_unknown_returns_none_and_decisions_raise() -> None:
+    await _ensure_audit_log_table()
+    delivery_draft_id = "ddraft_unknown_fos_062_service"
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    async with AsyncSessionLocal() as session:
+        status = await get_digest_delivery_draft_approval_status(
+            session,
+            delivery_draft_id=delivery_draft_id,
+        )
+        with pytest.raises(DeliveryDraftNotFoundError, match="not found"):
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+            )
+        with pytest.raises(DeliveryDraftNotFoundError, match="not found"):
+            await reject_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+            )
+
+    assert status is None
+
+
+async def test_approving_delivery_draft_writes_one_safe_audit_event_and_is_idempotent() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 4, 1),
+        end_at=_utc(2132, 4, 2),
+        limit=20,
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            initial_status = await get_digest_delivery_draft_approval_status(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+            approved = await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+                note="Approved for digest review.",
+            )
+            repeated = await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="other reviewer",
+                note="This duplicate should not create another row.",
+            )
+            await session.commit()
+
+        assert initial_status is not None
+        assert initial_status["current_decision"] is None
+        assert approved == repeated
+        assert approved["delivery_draft_id"] == delivery_draft_id
+        assert approved["current_decision"] == "approved"
+        assert approved["approved"] is True
+        assert approved["rejected"] is False
+        assert approved["delivery_enabled"] is False
+        assert approved["sent"] is False
+        assert approved["delivery_invoked"] is False
+        assert approved["approval_execution_invoked"] is False
+        assert approved["draft"]["text_sha256"] == draft["text_sha256"]
+        assert len(approved["decision_history"]) == 1
+        history_entry = approved["decision_history"][0]
+        assert history_entry["event_type"] == DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE
+        assert history_entry["decision"] == "approved"
+        assert history_entry["reviewer"] == "founder"
+        assert history_entry["draft_text_sha256"] == draft["text_sha256"]
+        assert history_entry["audit_log"] == {
+            "event_type": DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+            "after_ref": delivery_draft_id,
+        }
+        assert history_entry["safety"] == approved["safety"]
+        assert history_entry["note"] == "Approved for digest review."
+        assert "created_at" in history_entry
+        assert await _delivery_draft_audit_log_count(
+            delivery_draft_id,
+            event_type=DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+        ) == 1
+
+        payload = await _delivery_draft_audit_payload(
+            delivery_draft_id,
+            event_type=DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+        )
+        dumped = json.dumps({"payload": payload, "status": approved}, sort_keys=True)
+        assert payload["delivery_draft_id"] == delivery_draft_id
+        assert payload["decision"] == "approved"
+        assert payload["reviewer"] == "founder"
+        assert payload["draft_text_sha256"] == draft["text_sha256"]
+        assert '"rendered_text":' not in dumped
+        assert "Hidden delivery draft title" not in dumped
+        assert "atri_delivery_hidden" not in dumped
+        assert "sevt_delivery_hidden" not in dumped
+        assert "evidence_refs" not in dumped
+        for marker in (
+            "PRIVATE_RAW_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROMPT_DO_NOT_EXPOSE",
+            "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE",
+            "raw_payload",
+            "provider_payload",
+            "prompt",
+            "source_payload",
+        ):
+            assert marker not in dumped
+    finally:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_rejecting_delivery_draft_writes_one_safe_audit_event_and_is_idempotent() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 4, 3),
+        end_at=_utc(2132, 4, 4),
+        limit=20,
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            rejected = await reject_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+                note="Needs revision before delivery.",
+            )
+            repeated = await reject_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="other reviewer",
+            )
+            await session.commit()
+
+        assert rejected == repeated
+        assert rejected["current_decision"] == "rejected"
+        assert rejected["approved"] is False
+        assert rejected["rejected"] is True
+        assert rejected["delivery_enabled"] is False
+        assert rejected["sent"] is False
+        assert rejected["decision_history"][0]["event_type"] == (
+            DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE
+        )
+        assert rejected["decision_history"][0]["reviewer"] == "founder"
+        assert rejected["decision_history"][0]["note"] == "Needs revision before delivery."
+        assert await _delivery_draft_audit_log_count(
+            delivery_draft_id,
+            event_type=DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+        ) == 1
+    finally:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_draft_decision_conflicts_reject_opposite_terminal_decision() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+
+    approved_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 4, 5),
+        end_at=_utc(2132, 4, 6),
+    )
+    rejected_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=_rendered_digest(digest),
+        start_at=_utc(2132, 4, 7),
+        end_at=_utc(2132, 4, 8),
+    )
+    approved_id = approved_draft["delivery_draft_id"]
+    rejected_id = rejected_draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(approved_id)
+    await _delete_delivery_draft_audit_logs(rejected_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(
+                session,
+                draft=approved_draft,
+                actor="test",
+            )
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=approved_id,
+                reviewer="founder",
+            )
+            with pytest.raises(DeliveryDraftDecisionConflictError, match="approved"):
+                await reject_digest_delivery_draft(
+                    session,
+                    delivery_draft_id=approved_id,
+                    reviewer="founder",
+                )
+
+            await persist_digest_delivery_draft(
+                session,
+                draft=rejected_draft,
+                actor="test",
+            )
+            await reject_digest_delivery_draft(
+                session,
+                delivery_draft_id=rejected_id,
+                reviewer="founder",
+            )
+            with pytest.raises(DeliveryDraftDecisionConflictError, match="rejected"):
+                await approve_digest_delivery_draft(
+                    session,
+                    delivery_draft_id=rejected_id,
+                    reviewer="founder",
+                )
+            await session.commit()
+
+        assert await _delivery_draft_audit_log_count(
+            approved_id,
+            event_type=DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+        ) == 0
+        assert await _delivery_draft_audit_log_count(
+            rejected_id,
+            event_type=DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+        ) == 0
+    finally:
+        await _delete_delivery_draft_audit_logs(approved_id)
+        await _delete_delivery_draft_audit_logs(rejected_id)
 
 
 class _FakeScalars:

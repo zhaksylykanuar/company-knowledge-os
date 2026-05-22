@@ -16,7 +16,12 @@ from app.db.models import AuditLog, IngestedEvent
 from app.main import app
 from app.services.attention_results import record_attention_triage_result
 from app.services.attention_triage import AttentionTriageResult, NormalizedActivityItem
-from app.services.digest_delivery_drafts import DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE
+from app.services.digest_delivery_drafts import (
+    DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+    DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES,
+    DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+    DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+)
 from app.services.normalized_activity import record_normalized_activity_item
 import app.services.telegram_delivery as telegram_delivery
 
@@ -64,28 +69,42 @@ async def _cleanup_delivery_draft_api_record(delivery_draft_id: str) -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(
             delete(AuditLog)
-            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.event_type.in_(DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES))
             .where(AuditLog.after_ref == delivery_draft_id)
         )
         await session.commit()
 
 
 async def _delivery_draft_api_record_count(delivery_draft_id: str) -> int:
+    return await _delivery_draft_api_event_count(
+        delivery_draft_id,
+        DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+    )
+
+
+async def _delivery_draft_api_event_count(
+    delivery_draft_id: str,
+    event_type: str,
+) -> int:
     async with AsyncSessionLocal() as session:
         count = await session.scalar(
             select(func.count())
             .select_from(AuditLog)
-            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.event_type == event_type)
             .where(AuditLog.after_ref == delivery_draft_id)
         )
     return int(count or 0)
 
 
-async def _delivery_draft_api_payload(delivery_draft_id: str) -> dict:
+async def _delivery_draft_api_payload(
+    delivery_draft_id: str,
+    *,
+    event_type: str = DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+) -> dict:
     async with AsyncSessionLocal() as session:
         payload = await session.scalar(
             select(AuditLog.payload)
-            .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+            .where(AuditLog.event_type == event_type)
             .where(AuditLog.after_ref == delivery_draft_id)
             .order_by(AuditLog.id)
         )
@@ -1534,13 +1553,33 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
         get_response = await client.get(
             "/v1/digest/delivery-drafts/ddraft_missing",
         )
+        approve_response = await client.post(
+            "/v1/digest/delivery-drafts/ddraft_missing/approve",
+            json={"reviewer": "founder"},
+        )
+        reject_response = await client.post(
+            "/v1/digest/delivery-drafts/ddraft_missing/reject",
+            json={"reviewer": "founder"},
+        )
+        status_response = await client.get(
+            "/v1/digest/delivery-drafts/ddraft_missing/approval-status",
+        )
 
     assert post_response.status_code == 401
     assert get_response.status_code == 401
+    assert approve_response.status_code == 401
+    assert reject_response.status_code == 401
+    assert status_response.status_code == 401
     assert post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert approve_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert reject_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert status_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert "test-api-key" not in post_response.text
     assert "test-api-key" not in get_response.text
+    assert "test-api-key" not in approve_response.text
+    assert "test-api-key" not in reject_response.text
+    assert "test-api-key" not in status_response.text
 
 
 async def test_persisted_attention_digest_delivery_draft_retrieval_returns_404_for_unknown(
@@ -1590,6 +1629,295 @@ async def test_persisted_attention_digest_delivery_draft_post_rejects_invalid_wi
     assert naive.json() == {"detail": "start_at must be timezone-aware"}
     assert reversed_window.status_code == 400
     assert reversed_window.json() == {"detail": "end_at must be after start_at"}
+
+
+async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+    delivery_draft_id = "ddraft_unknown_fos_062_api"
+    await _cleanup_delivery_draft_api_record(delivery_draft_id)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        approve_response = await client.post(
+            f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+            json={"reviewer": "founder"},
+        )
+        reject_response = await client.post(
+            f"/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
+            json={"reviewer": "founder"},
+        )
+        status_response = await client.get(
+            f"/v1/digest/delivery-drafts/{delivery_draft_id}/approval-status",
+        )
+
+    assert approve_response.status_code == 404
+    assert reject_response.status_code == 404
+    assert status_response.status_code == 404
+    assert approve_response.json() == {"detail": "delivery draft was not found"}
+    assert reject_response.json() == {"detail": "delivery draft was not found"}
+    assert status_response.json() == {"detail": "delivery draft was not found"}
+
+
+async def test_delivery_draft_approve_endpoint_records_safe_idempotent_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("approval decision must not send Telegram messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    unique = uuid4().hex
+    hidden_title = "Hidden approval API title"
+    delivery_draft_id: str | None = None
+    await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+    try:
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="approve-work",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2131, 9, 1, 9),
+            activity=_normalized_activity(unique, "approve-work"),
+        )
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="approve-hidden",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=False,
+            created_at=_utc(2131, 9, 1, 10),
+            activity=_normalized_activity(
+                unique,
+                "approve-hidden",
+                title=hidden_title,
+            ),
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            created_response = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-01T00:00:00+00:00",
+                    "end_at": "2131-09-02T00:00:00+00:00",
+                    "limit": "10",
+                },
+            )
+            assert created_response.status_code == 200
+            created = created_response.json()
+            delivery_draft_id = created["delivery_draft_id"]
+            approve_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                json={
+                    "reviewer": "founder",
+                    "note": "Approved for human-reviewed delivery.",
+                },
+            )
+            repeated_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                json={"reviewer": "duplicate reviewer"},
+            )
+            status_response = await client.get(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approval-status",
+            )
+
+        assert approve_response.status_code == 200
+        assert repeated_response.status_code == 200
+        assert status_response.status_code == 200
+        approved = approve_response.json()
+        repeated = repeated_response.json()
+        approval_status = status_response.json()
+        decision_payload = await _delivery_draft_api_payload(
+            delivery_draft_id,
+            event_type=DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+        )
+        serialized = json.dumps(
+            {
+                "approved": approved,
+                "status": approval_status,
+                "decision_payload": decision_payload,
+            },
+            sort_keys=True,
+        )
+
+        assert approved == repeated == approval_status
+        assert approved["delivery_draft_id"] == delivery_draft_id
+        assert approved["current_decision"] == "approved"
+        assert approved["approved"] is True
+        assert approved["rejected"] is False
+        assert approved["delivery_enabled"] is False
+        assert approved["sent"] is False
+        assert approved["delivery_invoked"] is False
+        assert approved["approval_execution_invoked"] is False
+        assert approved["draft"]["text_sha256"] == created["text_sha256"]
+        assert len(approved["decision_history"]) == 1
+        assert approved["decision_history"][0]["event_type"] == (
+            DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE
+        )
+        assert approved["decision_history"][0]["reviewer"] == "founder"
+        assert approved["decision_history"][0]["note"] == (
+            "Approved for human-reviewed delivery."
+        )
+        assert decision_payload["decision"] == "approved"
+        assert decision_payload["reviewer"] == "founder"
+        assert decision_payload["draft_text_sha256"] == created["text_sha256"]
+        assert await _delivery_draft_api_event_count(
+            delivery_draft_id,
+            DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+        ) == 1
+        assert '"rendered_text":' not in serialized
+        assert hidden_title not in serialized
+        assert f"atri_digest_api_{unique}_approve-hidden" not in serialized
+        assert f"digest:api:attention:{unique}:approve-hidden" not in serialized
+        assert "evidence_refs" not in serialized
+        assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
+        assert "raw_payload" not in serialized
+        assert "provider_payload" not in serialized
+        assert "prompt" not in serialized
+    finally:
+        if delivery_draft_id is not None:
+            await _cleanup_delivery_draft_api_record(delivery_draft_id)
+        await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
+async def test_delivery_draft_reject_endpoint_records_safe_idempotent_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+    delivery_draft_id: str | None = None
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            created_response = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-03T00:00:00+00:00",
+                    "end_at": "2131-09-04T00:00:00+00:00",
+                },
+            )
+            assert created_response.status_code == 200
+            created = created_response.json()
+            delivery_draft_id = created["delivery_draft_id"]
+            reject_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
+                json={
+                    "reviewer": "founder",
+                    "note": "Needs edits before delivery.",
+                },
+            )
+            repeated_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
+                json={"reviewer": "duplicate reviewer"},
+            )
+
+        assert reject_response.status_code == 200
+        assert repeated_response.status_code == 200
+        rejected = reject_response.json()
+        repeated = repeated_response.json()
+        assert rejected == repeated
+        assert rejected["current_decision"] == "rejected"
+        assert rejected["approved"] is False
+        assert rejected["rejected"] is True
+        assert rejected["delivery_enabled"] is False
+        assert rejected["sent"] is False
+        assert rejected["decision_history"][0]["event_type"] == (
+            DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE
+        )
+        assert rejected["decision_history"][0]["reviewer"] == "founder"
+        assert rejected["decision_history"][0]["note"] == "Needs edits before delivery."
+        assert await _delivery_draft_api_event_count(
+            delivery_draft_id,
+            DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+        ) == 1
+    finally:
+        if delivery_draft_id is not None:
+            await _cleanup_delivery_draft_api_record(delivery_draft_id)
+
+
+async def test_delivery_draft_decision_endpoints_reject_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+    approved_id: str | None = None
+    rejected_id: str | None = None
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            approved_created = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-05T00:00:00+00:00",
+                    "end_at": "2131-09-06T00:00:00+00:00",
+                },
+            )
+            rejected_created = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-07T00:00:00+00:00",
+                    "end_at": "2131-09-08T00:00:00+00:00",
+                },
+            )
+            assert approved_created.status_code == 200
+            assert rejected_created.status_code == 200
+            approved_id = approved_created.json()["delivery_draft_id"]
+            rejected_id = rejected_created.json()["delivery_draft_id"]
+
+            approve_response = await client.post(
+                f"/v1/digest/delivery-drafts/{approved_id}/approve",
+                json={"reviewer": "founder"},
+            )
+            reject_after_approve = await client.post(
+                f"/v1/digest/delivery-drafts/{approved_id}/reject",
+                json={"reviewer": "founder"},
+            )
+            reject_response = await client.post(
+                f"/v1/digest/delivery-drafts/{rejected_id}/reject",
+                json={"reviewer": "founder"},
+            )
+            approve_after_reject = await client.post(
+                f"/v1/digest/delivery-drafts/{rejected_id}/approve",
+                json={"reviewer": "founder"},
+            )
+
+        assert approve_response.status_code == 200
+        assert reject_response.status_code == 200
+        assert reject_after_approve.status_code == 409
+        assert approve_after_reject.status_code == 409
+        assert "already has terminal decision approved" in reject_after_approve.text
+        assert "already has terminal decision rejected" in approve_after_reject.text
+        assert await _delivery_draft_api_event_count(
+            approved_id,
+            DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+        ) == 0
+        assert await _delivery_draft_api_event_count(
+            rejected_id,
+            DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+        ) == 0
+    finally:
+        if approved_id is not None:
+            await _cleanup_delivery_draft_api_record(approved_id)
+        if rejected_id is not None:
+            await _cleanup_delivery_draft_api_record(rejected_id)
 
 
 async def test_persisted_attention_digest_endpoint_requires_api_key_when_auth_enabled(

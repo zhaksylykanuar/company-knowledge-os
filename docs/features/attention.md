@@ -16,6 +16,8 @@
 - Read-only persisted attention digest delivery draft preview: implemented
 - Audit-log-backed persisted attention digest delivery draft review records:
   implemented
+- Audit-log-backed persisted attention digest delivery draft approval decisions:
+  implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -82,6 +84,12 @@
   `delivery_draft_id` without recomputing digest contents or writing new rows.
   Hidden low-priority items remain count-only, and evidence refs remain
   safe-formatted debug-only.
+- Protected approval and rejection endpoints can record human decisions for a
+  persisted attention digest delivery draft as separate `audit_logs` events.
+  Approval and rejection are decision records only: they do not mutate the
+  draft event, do not make the draft source-of-truth data, do not send
+  Telegram/Slack messages, and do not execute delivery. The approval status API
+  reads stored draft and decision events without recomputing digest contents.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -240,6 +248,16 @@
   new table, live API calls, providers/OpenAI, connector calls, source event
   projection, triage/retriage, or feedback behavior changes. Persisted drafts
   are review artifacts only and are not source-of-truth facts.
+- FOS-062 records human approval/rejection decisions for persisted attention
+  digest delivery drafts as audit-log-backed events and exposes a protected
+  approval status API. Decision events store only sanitized reviewer/note and
+  draft hash metadata, are idempotent for repeated same decisions, and reject
+  conflicting terminal decisions.
+- FOS-062 does not add approval-triggered execution, scheduler behavior,
+  Telegram/Slack sending, delivery wiring, migrations, a new table, live API
+  calls, providers/OpenAI, connector calls, source event projection,
+  triage/retriage, or feedback behavior changes. Telegram and Slack remain
+  delivery/interface surfaces only, not the source of truth.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -277,6 +295,6 @@
   inert delivery draft preview with audit-log-backed review records, but the
   existing source activity digest, scheduler, and delivery paths do not yet use
   it as their primary output.
-- No approval API, approval execution, scheduler, or Telegram/Slack delivery
-  wiring exists for persisted delivery drafts.
+- No approval-triggered execution, scheduler, or Telegram/Slack delivery wiring
+  exists for persisted delivery drafts.
 - GitHub/Jira/Drive digest integration is not implemented.

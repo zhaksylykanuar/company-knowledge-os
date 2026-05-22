@@ -29,6 +29,24 @@ DIGEST_DELIVERY_DRAFT_TYPE = "persisted_attention"
 DIGEST_DELIVERY_DRAFT_CHANNEL = "telegram"
 DIGEST_DELIVERY_DRAFT_ID_PREFIX = "ddraft_"
 DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE = "digest.delivery_draft.created"
+DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE = "digest.delivery_draft.approved"
+DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE = "digest.delivery_draft.rejected"
+DIGEST_DELIVERY_DRAFT_DECISION_EVENT_TYPES = (
+    DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
+    DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
+)
+DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES = (
+    DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
+    *DIGEST_DELIVERY_DRAFT_DECISION_EVENT_TYPES,
+)
+DIGEST_DELIVERY_DRAFT_APPROVED_DECISION = "approved"
+DIGEST_DELIVERY_DRAFT_REJECTED_DECISION = "rejected"
+DIGEST_DELIVERY_DRAFT_DECISIONS = (
+    DIGEST_DELIVERY_DRAFT_APPROVED_DECISION,
+    DIGEST_DELIVERY_DRAFT_REJECTED_DECISION,
+)
+DIGEST_DELIVERY_DRAFT_DECISION_REVIEWER_MAX_LENGTH = 120
+DIGEST_DELIVERY_DRAFT_DECISION_NOTE_MAX_LENGTH = 500
 
 SAFE_PERSISTED_ATTENTION_ITEM_KEYS = (
     "id",
@@ -52,6 +70,14 @@ SAFE_PERSISTED_ATTENTION_ITEM_KEYS = (
     "evidence",
     "activity_available",
 )
+
+
+class DeliveryDraftNotFoundError(ValueError):
+    """Raised when a requested persisted delivery draft does not exist."""
+
+
+class DeliveryDraftDecisionConflictError(ValueError):
+    """Raised when a terminal delivery draft decision already exists."""
 
 
 def _require_aware_datetime(value: datetime, *, field_name: str) -> None:
@@ -238,6 +264,54 @@ def _clean_delivery_draft_id(delivery_draft_id: str) -> str:
     if not cleaned:
         raise ValueError("delivery_draft_id must be a non-empty string")
     return cleaned
+
+
+def _clean_required_text(value: str | None, *, field_name: str, max_length: int) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+
+    cleaned = " ".join(value.strip().split())
+    if not cleaned:
+        raise ValueError(f"{field_name} must not be empty")
+    if len(cleaned) > max_length:
+        raise ValueError(f"{field_name} must be at most {max_length} characters")
+    return cleaned
+
+
+def _clean_optional_text(
+    value: str | None,
+    *,
+    field_name: str,
+    max_length: int,
+) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+
+    cleaned = " ".join(value.strip().split())
+    if not cleaned:
+        return None
+    if len(cleaned) > max_length:
+        raise ValueError(f"{field_name} must be at most {max_length} characters")
+    return cleaned
+
+
+def _clean_decision(decision: str) -> str:
+    if not isinstance(decision, str):
+        raise ValueError("decision must be approved or rejected")
+
+    cleaned = decision.strip().lower()
+    if cleaned not in DIGEST_DELIVERY_DRAFT_DECISIONS:
+        raise ValueError("decision must be approved or rejected")
+    return cleaned
+
+
+def _decision_event_type(decision: str) -> str:
+    cleaned = _clean_decision(decision)
+    if cleaned == DIGEST_DELIVERY_DRAFT_APPROVED_DECISION:
+        return DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE
+    return DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE
 
 
 def build_persisted_attention_digest_delivery_draft(
@@ -468,4 +542,248 @@ async def create_persisted_attention_digest_delivery_draft(
         session,
         draft=draft,
         actor=actor,
+    )
+
+
+def _draft_approval_status_metadata(draft: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "digest_type": draft.get("digest_type"),
+        "channel": draft.get("channel"),
+        "status": draft.get("status"),
+        "start_at": draft.get("start_at"),
+        "end_at": draft.get("end_at"),
+        "limit": draft.get("limit"),
+        "debug_evidence": bool(draft.get("debug_evidence")),
+        "text_sha256": draft.get("text_sha256"),
+        "char_count": draft.get("char_count"),
+        "chunk_count": draft.get("chunk_count"),
+        "source_of_truth": (
+            dict(draft.get("source_of_truth"))
+            if isinstance(draft.get("source_of_truth"), Mapping)
+            else {}
+        ),
+    }
+
+
+def _decision_safety_metadata() -> dict[str, Any]:
+    return {
+        "provider_free": True,
+        "delivery_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "connectors_invoked": False,
+        "live_api_calls": False,
+        "db_write_scope": "audit_logs_only",
+        "draft_is_source_of_truth": False,
+        "telegram_is_source_of_truth": False,
+    }
+
+
+def _decision_payload(
+    *,
+    draft: Mapping[str, Any],
+    decision: str,
+    reviewer: str,
+    note: str | None,
+) -> dict[str, Any]:
+    delivery_draft_id = _clean_delivery_draft_id(str(draft.get("delivery_draft_id", "")))
+    payload = {
+        "delivery_draft_id": delivery_draft_id,
+        "decision": _clean_decision(decision),
+        "reviewer": reviewer,
+        "draft_text_sha256": draft.get("text_sha256"),
+        "draft": _draft_approval_status_metadata(draft),
+        "safety": _decision_safety_metadata(),
+    }
+    if note is not None:
+        payload["note"] = note
+    return payload
+
+
+def _decision_history_entry(record: AuditLog) -> dict[str, Any] | None:
+    if not isinstance(record.payload, Mapping):
+        return None
+    if record.payload.get("delivery_draft_id") != record.after_ref:
+        return None
+
+    decision = record.payload.get("decision")
+    if decision not in DIGEST_DELIVERY_DRAFT_DECISIONS:
+        return None
+
+    entry = {
+        "event_type": record.event_type,
+        "decision": decision,
+        "reviewer": record.payload.get("reviewer"),
+        "draft_text_sha256": record.payload.get("draft_text_sha256"),
+        "created_at": (
+            record.created_at.isoformat() if record.created_at is not None else None
+        ),
+        "audit_log": {
+            "event_type": record.event_type,
+            "after_ref": record.after_ref,
+        },
+        "safety": _decision_safety_metadata(),
+    }
+    note = record.payload.get("note")
+    if isinstance(note, str) and note:
+        entry["note"] = note
+    return entry
+
+
+async def get_digest_delivery_draft_decision_records(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+) -> list[AuditLog]:
+    cleaned_delivery_draft_id = _clean_delivery_draft_id(delivery_draft_id)
+    result = await session.scalars(
+        select(AuditLog)
+        .where(AuditLog.event_type.in_(DIGEST_DELIVERY_DRAFT_DECISION_EVENT_TYPES))
+        .where(AuditLog.after_ref == cleaned_delivery_draft_id)
+        .order_by(AuditLog.id)
+    )
+    return list(result.all())
+
+
+async def get_digest_delivery_draft_approval_status(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+) -> dict[str, Any] | None:
+    cleaned_delivery_draft_id = _clean_delivery_draft_id(delivery_draft_id)
+    draft = await get_persisted_digest_delivery_draft(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    if draft is None:
+        return None
+
+    decision_records = await get_digest_delivery_draft_decision_records(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    decision_history = [
+        entry
+        for record in decision_records
+        if (entry := _decision_history_entry(record)) is not None
+    ]
+    current_decision = (
+        decision_history[-1]["decision"] if decision_history else None
+    )
+
+    return {
+        "delivery_draft_id": cleaned_delivery_draft_id,
+        "draft_exists": True,
+        "current_decision": current_decision,
+        "approved": current_decision == DIGEST_DELIVERY_DRAFT_APPROVED_DECISION,
+        "rejected": current_decision == DIGEST_DELIVERY_DRAFT_REJECTED_DECISION,
+        "delivery_enabled": False,
+        "sent": False,
+        "delivery_invoked": False,
+        "approval_execution_invoked": False,
+        "decision_history": decision_history,
+        "draft": _draft_approval_status_metadata(draft),
+        "safety": _decision_safety_metadata(),
+    }
+
+
+async def record_digest_delivery_draft_decision(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+    decision: str,
+    reviewer: str = "system",
+    note: str | None = None,
+) -> dict[str, Any]:
+    cleaned_delivery_draft_id = _clean_delivery_draft_id(delivery_draft_id)
+    cleaned_decision = _clean_decision(decision)
+    cleaned_reviewer = _clean_required_text(
+        reviewer,
+        field_name="reviewer",
+        max_length=DIGEST_DELIVERY_DRAFT_DECISION_REVIEWER_MAX_LENGTH,
+    )
+    cleaned_note = _clean_optional_text(
+        note,
+        field_name="note",
+        max_length=DIGEST_DELIVERY_DRAFT_DECISION_NOTE_MAX_LENGTH,
+    )
+
+    draft = await get_persisted_digest_delivery_draft(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    if draft is None:
+        raise DeliveryDraftNotFoundError("delivery draft was not found")
+
+    status = await get_digest_delivery_draft_approval_status(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    if status is None:
+        raise DeliveryDraftNotFoundError("delivery draft was not found")
+
+    current_decision = status["current_decision"]
+    if current_decision == cleaned_decision:
+        return status
+    if current_decision is not None:
+        raise DeliveryDraftDecisionConflictError(
+            f"delivery draft already has terminal decision {current_decision}"
+        )
+
+    event_type = _decision_event_type(cleaned_decision)
+    record = AuditLog(
+        event_type=event_type,
+        actor=cleaned_reviewer,
+        correlation_id=cleaned_delivery_draft_id,
+        trace_id=cleaned_delivery_draft_id,
+        after_ref=cleaned_delivery_draft_id,
+        approval_id=f"{cleaned_delivery_draft_id}:{cleaned_decision}",
+        payload=_decision_payload(
+            draft=draft,
+            decision=cleaned_decision,
+            reviewer=cleaned_reviewer,
+            note=cleaned_note,
+        ),
+    )
+    session.add(record)
+    await session.flush()
+
+    updated_status = await get_digest_delivery_draft_approval_status(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    if updated_status is None:
+        raise DeliveryDraftNotFoundError("delivery draft was not found")
+    return updated_status
+
+
+async def approve_digest_delivery_draft(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+    reviewer: str = "system",
+    note: str | None = None,
+) -> dict[str, Any]:
+    return await record_digest_delivery_draft_decision(
+        session,
+        delivery_draft_id=delivery_draft_id,
+        decision=DIGEST_DELIVERY_DRAFT_APPROVED_DECISION,
+        reviewer=reviewer,
+        note=note,
+    )
+
+
+async def reject_digest_delivery_draft(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+    reviewer: str = "system",
+    note: str | None = None,
+) -> dict[str, Any]:
+    return await record_digest_delivery_draft_decision(
+        session,
+        delivery_draft_id=delivery_draft_id,
+        decision=DIGEST_DELIVERY_DRAFT_REJECTED_DECISION,
+        reviewer=reviewer,
+        note=note,
     )

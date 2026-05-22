@@ -14,6 +14,8 @@
 - Attention triage feedback: implemented
 - Persisted attention digest delivery draft review records:
   audit-log-backed, implemented
+- Persisted attention digest delivery draft approval decisions:
+  audit-log-backed, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -24,6 +26,9 @@
   FOS-061 also stores sanitized persisted attention digest delivery draft review
   records here as `digest.delivery_draft.created` events, with `after_ref`
   set to the deterministic `delivery_draft_id`.
+  FOS-062 stores sanitized delivery draft decision records here as
+  `digest.delivery_draft.approved` and `digest.delivery_draft.rejected` events,
+  also keyed by `after_ref=delivery_draft_id`.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -100,6 +105,18 @@
 - Delivery draft idempotency is service-level and keyed by deterministic
   `delivery_draft_id` in `audit_logs.after_ref`; no new table or migration is
   introduced by FOS-061.
+- Delivery draft approval/rejection decisions are audit events only. They store
+  safe reviewer/note metadata, the decision, the referenced
+  `delivery_draft_id`, and the draft text hash; they must not store rendered
+  digest text, raw source bodies, prompts, provider payloads, secrets, tokens,
+  hidden item details, or untrusted raw content.
+- Approval/rejection decision idempotency is service-level and keyed by
+  `delivery_draft_id` plus terminal decision. Repeating the same decision
+  returns the existing decision status, while conflicting terminal decisions are
+  rejected. FOS-062 introduces no new table or migration.
+- Approval decisions are not delivery execution. They do not mutate the draft
+  event, do not mutate source-of-truth company facts, do not send
+  Telegram/Slack messages, and do not invoke scheduler or delivery adapters.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
