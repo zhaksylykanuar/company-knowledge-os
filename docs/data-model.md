@@ -22,6 +22,8 @@
   audit-log-backed, implemented
 - Persisted attention digest Telegram delivery plan preview:
   read-only, implemented
+- Persisted attention digest delivery intention operator review:
+  read-only, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -43,6 +45,9 @@
   `delivery_intention_id`.
   FOS-065 reads delivery intention and referenced delivery draft events to build
   a pure Telegram delivery plan preview, but it does not append audit rows or
+  introduce new storage.
+  FOS-066 reads those stored delivery intention, draft, decision, and readiness
+  artifacts for local operator review, but it does not append audit rows or
   introduce new storage.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
@@ -162,6 +167,16 @@
   chat IDs, URLs, full digest snapshots, raw source bodies, prompts, provider
   payloads, source payloads, secrets, hidden item details, or newly exposed
   evidence refs. FOS-065 introduces no new table or migration.
+- Local delivery intention operator reviews are read-only derived bundles, not
+  stored records and not source-of-truth company facts. They read the stored
+  delivery intention, referenced delivery draft, approval status, readiness,
+  and Telegram delivery plan by `delivery_intention_id`. Default output must
+  omit rendered digest text and chunk text; optional rendered text output may
+  include only the stored sanitized draft text. Review output must not include
+  Telegram bot tokens, chat IDs, URLs, full digest snapshots, raw source
+  bodies, prompts, provider payloads, source payloads, secrets, hidden item
+  details, or newly exposed evidence refs. FOS-066 introduces no audit event,
+  new table, or migration.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

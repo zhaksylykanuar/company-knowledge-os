@@ -22,6 +22,7 @@
 - Audit-log-backed persisted attention digest delivery intention records:
   implemented
 - Pure Telegram delivery plan preview for delivery intentions: implemented
+- Read-only delivery intention operator review command: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -117,6 +118,13 @@
   or chunk text, does not require bot credentials, does not call delivery
   adapters, does not append audit rows, does not create scheduler jobs or
   outbox records, and does not send Telegram/Slack messages.
+- A local read-only operator review command can review the stored delivery
+  chain by `delivery_intention_id`: delivery intention, referenced delivery
+  draft, approval status, readiness, and Telegram delivery plan. The command is
+  review-only, omits rendered digest text by default, never includes chunk
+  text, and does not call APIs, create or mutate records, require bot
+  credentials, call delivery adapters, run scheduler behavior, or send
+  Telegram/Slack messages.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -314,6 +322,19 @@
   audit rows, does not create scheduler jobs, delivery result events, outbox
   records, migrations, or new tables, and does not send Telegram/Slack
   messages.
+- FOS-066 adds `scripts/review_digest_delivery_intention.py`, a local
+  read-only operator review command for a stored `delivery_intention_id`. It
+  composes existing stored delivery intention, delivery draft, approval status,
+  readiness, and Telegram plan services without calling APIs or recomputing the
+  digest. Default output omits rendered digest text and chunk text; optional
+  rendered text output uses only the stored sanitized draft text.
+- FOS-066 does not create or mutate delivery drafts, decisions, readiness,
+  intentions, Telegram plans, audit logs, scheduler jobs, delivery result
+  events, outbox records, source-of-truth data, or new tables. It does not add
+  approval-triggered execution, Telegram/Slack sending, bot credential
+  handling, delivery adapter execution, migrations, live API calls,
+  providers/OpenAI, connector calls, source event projection, triage/retriage,
+  or feedback behavior changes.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -352,8 +373,9 @@
   existing source activity digest, scheduler, and delivery paths do not yet use
   it as their primary output.
 - Persisted delivery drafts have approval/rejection decisions, a read-only
-  delivery readiness preview, audit-log-backed delivery intention records, and
-  a pure Telegram delivery plan preview, but no approval-triggered execution,
-  scheduler, delivery worker, delivery result event, outbox table, bot
-  credential handling, or Telegram/Slack delivery wiring exists.
+  delivery readiness preview, audit-log-backed delivery intention records, a
+  pure Telegram delivery plan preview, and a local read-only operator review
+  command for the stored chain, but no approval-triggered execution, scheduler,
+  delivery worker, delivery result event, outbox table, bot credential
+  handling, or Telegram/Slack delivery wiring exists.
 - GitHub/Jira/Drive digest integration is not implemented.
