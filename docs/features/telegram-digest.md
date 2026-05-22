@@ -13,6 +13,7 @@
 - Internal persisted attention digest text renderer: implemented
 - Synthetic manual pilot persisted attention digest preview artifact: implemented
 - Read-only persisted attention digest operator preview script: implemented
+- Read-only persisted attention digest delivery draft preview: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -207,6 +208,17 @@ Implemented today:
   behavior, delivery wiring, API changes, migrations, live API calls, or
   production data mutation. Telegram and Slack remain delivery/interface
   surfaces only, not the source of truth.
+- FOS-060 adds a protected read-only persisted attention digest delivery draft
+  preview. The draft is a human-review artifact derived from the existing
+  persisted attention digest read model and already-rendered deterministic text;
+  it is not an approval, is not persisted, is not sent, and is delivery-disabled.
+- FOS-060 is provider-free, does not run triage, does not call APIs,
+  providers/OpenAI, connectors, Telegram or Slack, scheduler, or delivery code,
+  and does not add approval execution, approval state persistence, delivery
+  wiring, migrations, live API calls, or production data mutation. Hidden
+  low-priority items remain count-only, and evidence refs remain safe-formatted
+  debug-only. Telegram and Slack remain delivery/interface surfaces only, not
+  the source of truth.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
@@ -232,5 +244,7 @@ Not implemented today:
   rendered source activity text endpoint.
 - Telegram delivery, scheduler, connector, or digest inference logic behind the
   persisted attention digest preview endpoints.
+- Telegram delivery, scheduler, connector, approval execution, or digest
+  inference logic behind the persisted attention digest delivery draft preview.
 - Scheduler, connector, inbound Q&A, LLM summarization, or digest inference
   logic in the Telegram outbound delivery adapter.

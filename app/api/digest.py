@@ -12,6 +12,9 @@ from app.services.digest import (
     build_persisted_attention_digest_read_model,
     build_source_activity_digest,
 )
+from app.services.digest_delivery_drafts import (
+    build_persisted_attention_digest_delivery_draft_from_db,
+)
 from app.services.digest_rendering import (
     SAFE_EVIDENCE_REF_KEYS,
     render_persisted_attention_digest_text,
@@ -57,6 +60,29 @@ async def _build_persisted_attention_digest_response(
                 start_at=start_at,
                 end_at=end_at,
                 limit_per_section=limit,
+            )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+async def _build_persisted_attention_digest_delivery_draft_response(
+    *,
+    start_at: datetime,
+    end_at: datetime,
+    limit: int,
+    debug_evidence: bool | None,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            return await build_persisted_attention_digest_delivery_draft_from_db(
+                session,
+                start_at=start_at,
+                end_at=end_at,
+                limit=limit,
+                debug_evidence=bool(debug_evidence),
             )
     except ValueError as exc:
         raise HTTPException(
@@ -227,4 +253,23 @@ async def get_persisted_attention_digest_text(
             preview,
             debug_evidence=debug_evidence,
         )
+    )
+
+
+@router.get("/persisted-attention/delivery-draft")
+async def get_persisted_attention_digest_delivery_draft(
+    start_at: datetime,
+    end_at: datetime,
+    limit: int = Query(
+        default=DEFAULT_DIGEST_ENTRY_LIMIT,
+        ge=1,
+        le=MAX_DIGEST_ENTRY_LIMIT,
+    ),
+    debug_evidence: bool | None = Query(default=None),
+) -> dict[str, Any]:
+    return await _build_persisted_attention_digest_delivery_draft_response(
+        start_at=start_at,
+        end_at=end_at,
+        limit=limit,
+        debug_evidence=debug_evidence,
     )

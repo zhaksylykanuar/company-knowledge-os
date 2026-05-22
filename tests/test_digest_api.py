@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timezone
+from hashlib import sha256
 from uuid import uuid4
 
 import pytest
@@ -16,6 +17,7 @@ from app.main import app
 from app.services.attention_results import record_attention_triage_result
 from app.services.attention_triage import AttentionTriageResult, NormalizedActivityItem
 from app.services.normalized_activity import record_normalized_activity_item
+import app.services.telegram_delivery as telegram_delivery
 
 
 def _utc(year: int, month: int, day: int, hour: int = 0) -> datetime:
@@ -940,6 +942,249 @@ async def test_persisted_attention_digest_text_endpoint_debug_evidence_is_safe_f
 
     finally:
         await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
+async def test_persisted_attention_digest_delivery_draft_endpoint_returns_empty_draft(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("delivery draft endpoint must not send Telegram messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/v1/digest/persisted-attention/delivery-draft",
+            params={
+                "start_at": "2131-04-10T00:00:00+00:00",
+                "end_at": "2131-04-11T00:00:00+00:00",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "draft"
+    assert body["digest_type"] == "persisted_attention"
+    assert body["channel"] == "telegram"
+    assert body["delivery_enabled"] is False
+    assert body["approval_required"] is True
+    assert body["approved"] is False
+    assert body["sent"] is False
+    assert body["start_at"] == "2131-04-10T00:00:00+00:00"
+    assert body["end_at"] == "2131-04-11T00:00:00+00:00"
+    assert body["limit"] == 20
+    assert body["debug_evidence"] is False
+    assert "No persisted attention items found for this window." in body["rendered_text"]
+    assert body["text_sha256"] == sha256(body["rendered_text"].encode("utf-8")).hexdigest()
+    assert body["char_count"] == len(body["rendered_text"])
+    assert body["chunk_count"] == len(body["chunk_metadata"]["chunk_lengths"])
+    assert body["digest"]["counts"]["total"] == 0
+    assert body["safety"]["provider_free"] is True
+    assert body["safety"]["read_only"] is True
+    assert body["safety"]["delivery_invoked"] is False
+    assert body["safety"]["approval_executed"] is False
+    assert body["safety"]["persisted"] is False
+    assert body["source_of_truth"]["digest_source_model"] == "attention_triage_results"
+    assert body["source_of_truth"]["draft_is_source_of_truth"] is False
+    assert body["source_of_truth"]["telegram_is_source_of_truth"] is False
+
+
+async def test_persisted_attention_digest_delivery_draft_endpoint_renders_visible_sections_safely(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+    unique = uuid4().hex
+    await _cleanup_persisted_attention_digest_api_fixture(unique)
+    hidden_title = "Hidden delivery draft API title"
+
+    try:
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="work",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2131, 4, 12, 9),
+            activity=_normalized_activity(unique, "work"),
+        )
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="hidden",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=False,
+            created_at=_utc(2131, 4, 12, 10),
+            activity=_normalized_activity(
+                unique,
+                "hidden",
+                title=hidden_title,
+            ),
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.get(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-04-12T00:00:00+00:00",
+                    "end_at": "2131-04-13T00:00:00+00:00",
+                    "limit": "10",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        serialized = json.dumps(body, sort_keys=True)
+        item = body["digest"]["groups"]["work_actions"][0]
+
+        assert body["status"] == "draft"
+        assert body["rendered_text"].startswith("Persisted attention digest")
+        assert "Work actions requiring my attention:" in body["rendered_text"]
+        assert "Persisted attention API title work" in body["rendered_text"]
+        assert "Hidden low-priority summary:" in body["rendered_text"]
+        assert "- 1 no-action low-priority items" in body["rendered_text"]
+        assert item["title"] == "Persisted attention API title work"
+        assert "evidence_refs" not in item
+        assert "activity_evidence_refs" not in item
+        assert body["digest"]["hidden_low_priority_summary"] == {
+            "total": 1,
+            "counts": {"no-action low-priority items": 1},
+        }
+        assert hidden_title not in serialized
+        assert f"atri_digest_api_{unique}_hidden" not in serialized
+        assert f"digest:api:attention:{unique}:hidden" not in serialized
+        assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
+        assert "raw_payload" not in serialized
+        assert "provider_payload" not in serialized
+        assert "prompt" not in serialized
+
+    finally:
+        await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
+async def test_persisted_attention_digest_delivery_draft_endpoint_debug_evidence_is_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+    unique = uuid4().hex
+    await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+    try:
+        activity = _normalized_activity(unique, "draft-debug")
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="draft-debug",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2131, 4, 14, 9),
+            activity=activity,
+            evidence=activity.evidence_refs,
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            response = await client.get(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-04-14T00:00:00+00:00",
+                    "end_at": "2131-04-15T00:00:00+00:00",
+                    "debug_evidence": "true",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        item = body["digest"]["groups"]["work_actions"][0]
+        serialized = json.dumps(body, sort_keys=True)
+
+        assert body["debug_evidence"] is True
+        assert item["evidence_refs"] == [
+            {
+                "kind": "source_event",
+                "source_event_id": f"sevt_digest_api_attention_{unique}_draft-debug",
+                "source_system": "github",
+                "source_object_type": "pull_request",
+                "source_object_id": f"digest:api:attention:{unique}:draft-debug",
+                "raw_object_ref": (
+                    f"raw://digest-api-attention/{unique}/draft-debug.json"
+                ),
+            }
+        ]
+        assert item["activity_evidence_refs"] == item["evidence_refs"]
+        assert "Debug evidence refs:" in body["rendered_text"]
+        assert "raw_payload" not in serialized
+        assert "provider_payload" not in serialized
+        assert "prompt" not in serialized
+
+    finally:
+        await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
+async def test_persisted_attention_digest_delivery_draft_endpoint_requires_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            "/v1/digest/persisted-attention/delivery-draft",
+            params={
+                "start_at": "2131-04-16T00:00:00+00:00",
+                "end_at": "2131-04-17T00:00:00+00:00",
+            },
+        )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert "test-api-key" not in response.text
+
+
+async def test_persisted_attention_digest_delivery_draft_endpoint_rejects_invalid_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        naive = await client.get(
+            "/v1/digest/persisted-attention/delivery-draft",
+            params={
+                "start_at": "2131-04-18T00:00:00",
+                "end_at": "2131-04-19T00:00:00+00:00",
+            },
+        )
+        reversed_window = await client.get(
+            "/v1/digest/persisted-attention/delivery-draft",
+            params={
+                "start_at": "2131-04-20T00:00:00+00:00",
+                "end_at": "2131-04-19T00:00:00+00:00",
+            },
+        )
+
+    assert naive.status_code == 400
+    assert naive.json() == {"detail": "start_at must be timezone-aware"}
+    assert reversed_window.status_code == 400
+    assert reversed_window.json() == {"detail": "end_at must be after start_at"}
 
 
 async def test_persisted_attention_digest_endpoint_requires_api_key_when_auth_enabled(

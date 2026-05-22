@@ -13,6 +13,7 @@
 - Protected persisted attention digest preview endpoints: implemented
 - Synthetic manual pilot persisted attention digest preview artifact: implemented
 - Read-only persisted attention digest operator preview script: implemented
+- Read-only persisted attention digest delivery draft preview: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -61,6 +62,12 @@
   not call APIs, providers/OpenAI, connectors, Telegram/Slack, scheduler, or
   delivery code, keeps hidden low-priority items count-only, and exposes
   evidence refs only through safe debug output.
+- A protected read-only delivery draft preview can build an inert human-review
+  artifact from already-rendered persisted attention digest text. The draft is
+  provider-free, is not persisted, is not an approval, does not send Telegram or
+  Slack messages, does not run scheduler or delivery code, keeps hidden
+  low-priority items count-only, and exposes evidence refs only through safe
+  debug output.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -199,6 +206,16 @@
 - FOS-059 does not call live providers or OpenAI, run triage, call APIs or
   connectors, add Telegram/Slack delivery, add scheduler behavior, add approval
   execution, change API endpoints, add migrations, or mutate production data.
+- FOS-060 adds an inert read-only delivery draft preview for persisted
+  attention digest text. It derives a human-review draft from the existing
+  persisted attention digest read model and deterministic renderer, includes
+  stable text and chunk metadata for review, and marks the draft as not
+  approved, not sent, not persisted, and delivery-disabled.
+- FOS-060 does not call live providers or OpenAI, run triage, call APIs or
+  connectors, send Telegram/Slack messages, add scheduler behavior, add
+  approval execution, add approval state persistence, add migrations, or mutate
+  production data. Telegram and Slack remain delivery/interface surfaces only,
+  not the source of truth.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -232,7 +249,7 @@
 - Persisted normalized activity items are not batch-triaged.
 - Persisted attention results have an internal digest read model, deterministic
   text renderer, protected preview endpoints, and synthetic manual pilot
-  preview artifact, plus a read-only stored-data operator preview script, but
-  the existing source activity digest, scheduler, and delivery paths do not yet
-  use it as their primary output.
+  preview artifact, plus a read-only stored-data operator preview script and an
+  inert delivery draft preview, but the existing source activity digest,
+  scheduler, and delivery paths do not yet use it as their primary output.
 - GitHub/Jira/Drive digest integration is not implemented.
