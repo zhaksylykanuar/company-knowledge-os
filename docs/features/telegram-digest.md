@@ -25,6 +25,7 @@
 - Read-only delivery intention operator review command: implemented
 - Read-only Telegram execution preflight for delivery intentions: implemented
 - Delivery result audit contract for future Telegram sends: implemented
+- Read-only bounded Telegram execution gate preview: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -181,6 +182,11 @@ trusted facts.
   facts and not delivery execution. Result payloads must not include rendered
   text, chunk text, credentials, raw Telegram responses, raw/provider/source
   payloads, hidden low-priority details, or newly exposed evidence refs.
+- Bounded Telegram execution gates for persisted delivery intentions are
+  read-only readiness metadata, not delivery execution. They combine stored
+  approval/readiness, Telegram plan, credential-presence preflight,
+  result-contract readiness, chunk bounds, and future operator-required fields
+  while keeping delivery execution disabled and never sending messages.
 - Hidden low-priority digest items must remain count-only in preview, persisted
   draft, and delivery-oriented surfaces. Evidence refs remain debug-only and
   safe-formatted.
@@ -349,6 +355,15 @@ Implemented today:
   credentials against Telegram, expose POST/PUT/PATCH result APIs, call delivery
   adapters, create scheduler jobs, delivery workers, outbox records/tables,
   migrations, live API calls, providers/OpenAI, connector calls, or new tables.
+- FOS-069 adds a protected read-only bounded Telegram execution gate preview for
+  delivery intentions. It reports safe readiness booleans, blockers, required
+  future operator fields, chunk bounds, and result-contract readiness without
+  sending or creating result records.
+- FOS-069 does not implement Telegram sending, use or expose bot credentials,
+  validate credentials against Telegram, expose POST/PUT/PATCH execution APIs,
+  call delivery adapters, create scheduler jobs, delivery workers, outbox
+  records/tables, migrations, live API calls, providers/OpenAI, connector calls,
+  or new tables.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
@@ -382,6 +397,7 @@ Not implemented today:
   approved persisted delivery drafts.
 - Bot credential handling and real Telegram send execution for delivery
   intentions.
+- POST/PUT/PATCH execution APIs for delivery intentions.
 - Public creation/update APIs for delivery result records.
 - Telegram credential validation against Telegram for delivery intentions.
 - API-backed or scheduled operator review flows for delivery intentions.

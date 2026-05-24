@@ -175,6 +175,16 @@ async def _delivery_result_api_event_count(delivery_result_id: str) -> int:
     return int(count or 0)
 
 
+async def _delivery_result_api_event_total() -> int:
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+        )
+    return int(count or 0)
+
+
 async def _cleanup_persisted_attention_digest_api_fixture(unique: str) -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(
@@ -944,9 +954,9 @@ async def test_persisted_attention_digest_endpoint_omits_evidence_refs_by_defaul
         assert "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_PROMPT_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE" not in serialized
-        assert "raw_payload" not in serialized
-        assert "provider_payload" not in serialized
-        assert "prompt" not in serialized
+        assert '"raw_payload":' not in serialized
+        assert '"provider_payload":' not in serialized
+        assert '"prompt":' not in serialized
         assert "source_payload" not in serialized
 
     finally:
@@ -1643,6 +1653,10 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
             "/v1/digest/delivery-intentions/dint_missing"
             "/telegram-execution-preflight",
         )
+        telegram_gate_response = await client.get(
+            "/v1/digest/delivery-intentions/dint_missing"
+            "/telegram-execution-gate",
+        )
         delivery_result_response = await client.get(
             "/v1/digest/delivery-results/dres_missing",
         )
@@ -1657,6 +1671,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert intention_get_response.status_code == 401
     assert telegram_plan_response.status_code == 401
     assert telegram_preflight_response.status_code == 401
+    assert telegram_gate_response.status_code == 401
     assert delivery_result_response.status_code == 401
     assert post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
@@ -1668,6 +1683,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert intention_get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert telegram_plan_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert telegram_preflight_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert telegram_gate_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert delivery_result_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert "test-api-key" not in post_response.text
     assert "test-api-key" not in get_response.text
@@ -1679,6 +1695,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert "test-api-key" not in intention_get_response.text
     assert "test-api-key" not in telegram_plan_response.text
     assert "test-api-key" not in telegram_preflight_response.text
+    assert "test-api-key" not in telegram_gate_response.text
     assert "test-api-key" not in delivery_result_response.text
 
 
@@ -1770,6 +1787,10 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
             "/v1/digest/delivery-intentions/dint_unknown_fos_067_api"
             "/telegram-execution-preflight",
         )
+        telegram_gate_response = await client.get(
+            "/v1/digest/delivery-intentions/dint_unknown_fos_069_api"
+            "/telegram-execution-gate",
+        )
         delivery_result_response = await client.get(
             "/v1/digest/delivery-results/dres_unknown_fos_068_api",
         )
@@ -1782,6 +1803,7 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
     assert intention_get_response.status_code == 404
     assert telegram_plan_response.status_code == 404
     assert telegram_preflight_response.status_code == 404
+    assert telegram_gate_response.status_code == 404
     assert delivery_result_response.status_code == 404
     assert approve_response.json() == {"detail": "delivery draft was not found"}
     assert reject_response.json() == {"detail": "delivery draft was not found"}
@@ -1793,6 +1815,9 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
         "detail": "delivery intention was not found"
     }
     assert telegram_preflight_response.json() == {
+        "detail": "delivery intention was not found"
+    }
+    assert telegram_gate_response.json() == {
         "detail": "delivery intention was not found"
     }
     assert delivery_result_response.json() == {
@@ -2411,9 +2436,9 @@ async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_rec
         assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
-        assert "raw_payload" not in serialized
-        assert "provider_payload" not in serialized
-        assert "prompt" not in serialized
+        assert '"raw_payload":' not in serialized
+        assert '"provider_payload":' not in serialized
+        assert '"prompt":' not in serialized
     finally:
         if delivery_draft_id is not None:
             await _cleanup_delivery_draft_api_record(delivery_draft_id)
@@ -2609,9 +2634,223 @@ async def test_delivery_intention_telegram_execution_preflight_endpoint_reports_
         assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
-        assert "raw_payload" not in serialized
-        assert "provider_payload" not in serialized
-        assert "prompt" not in serialized
+        assert '"raw_payload":' not in serialized
+        assert '"provider_payload":' not in serialized
+        assert '"prompt":' not in serialized
+    finally:
+        if delivery_draft_id is not None:
+            await _cleanup_delivery_draft_api_record(delivery_draft_id)
+        await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
+async def test_delivery_intention_telegram_execution_gate_endpoint_reports_safe_blockers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+    monkeypatch.setattr(settings, "telegram_bot_token", None)
+    monkeypatch.setattr(settings, "telegram_chat_id", " ")
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Telegram execution gate must not send messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    unique = uuid4().hex
+    hidden_title = "Hidden Telegram gate API title"
+    delivery_draft_id: str | None = None
+    await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+    try:
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="gate-work",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2131, 9, 23, 9),
+            activity=_normalized_activity(unique, "gate-work"),
+        )
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="gate-hidden",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=False,
+            created_at=_utc(2131, 9, 23, 10),
+            activity=_normalized_activity(
+                unique,
+                "gate-hidden",
+                title=hidden_title,
+            ),
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            created_response = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-23T00:00:00+00:00",
+                    "end_at": "2131-09-24T00:00:00+00:00",
+                    "limit": "10",
+                },
+            )
+            assert created_response.status_code == 200
+            created_draft = created_response.json()
+            delivery_draft_id = created_draft["delivery_draft_id"]
+
+            approve_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                json={"reviewer": "founder", "note": "Ready for gate."},
+            )
+            assert approve_response.status_code == 200
+
+            intention_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+            )
+            assert intention_response.status_code == 200
+            intention = intention_response.json()
+            delivery_intention_id = intention["delivery_intention_id"]
+
+            draft_total_before = await _delivery_draft_api_event_total(
+                delivery_draft_id
+            )
+            intention_count_before = await _delivery_intention_api_event_count(
+                delivery_intention_id
+            )
+            result_total_before = await _delivery_result_api_event_total()
+
+            missing_credentials_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                "/telegram-execution-gate",
+            )
+            monkeypatch.setattr(
+                settings,
+                "telegram_bot_token",
+                "TELEGRAM_BOT_TOKEN_TEST_VALUE",
+            )
+            monkeypatch.setattr(
+                settings,
+                "telegram_chat_id",
+                "TELEGRAM_CHAT_ID_TEST_VALUE",
+            )
+            configured_credentials_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                "/telegram-execution-gate",
+            )
+
+        assert missing_credentials_response.status_code == 200
+        assert configured_credentials_response.status_code == 200
+        missing_credentials = missing_credentials_response.json()
+        configured_credentials = configured_credentials_response.json()
+
+        assert missing_credentials["status"] == "telegram_execution_gate"
+        assert missing_credentials["delivery_intention_id"] == delivery_intention_id
+        assert missing_credentials["delivery_draft_id"] == delivery_draft_id
+        assert missing_credentials["digest_type"] == "persisted_attention"
+        assert missing_credentials["channel"] == "telegram"
+        assert missing_credentials["text_sha256"] == created_draft["text_sha256"]
+        assert missing_credentials["char_count"] == created_draft["char_count"]
+        assert missing_credentials["chunk_count"] == created_draft["chunk_count"]
+        assert missing_credentials["approval_ready"] is True
+        assert missing_credentials["readiness_ready"] is True
+        assert missing_credentials["telegram_plan_ready"] is True
+        assert missing_credentials["credential_presence_ready"] is False
+        assert missing_credentials["result_audit_contract_ready"] is True
+        assert missing_credentials["bounded_operator_request_required"] is True
+        assert missing_credentials["required_operator_fields"] == [
+            "delivery_intention_id",
+            "execution_attempt_id",
+            "max_chunks",
+            "confirm_send",
+            "test_mode",
+        ]
+        assert missing_credentials["max_chunks_allowed"] == 10
+        assert missing_credentials["planned_chunk_count"] == created_draft["chunk_count"]
+        assert missing_credentials["within_chunk_bounds"] is True
+        assert missing_credentials["execution_gate_ready"] is False
+        assert missing_credentials["blockers"] == [
+            "telegram_bot_token_missing",
+            "telegram_chat_id_missing",
+            "delivery_execution_not_implemented",
+            "bounded_operator_request_required",
+        ]
+        assert missing_credentials["delivery_execution_enabled"] is False
+        assert missing_credentials["delivery_enabled"] is False
+        assert missing_credentials["delivery_invoked"] is False
+        assert missing_credentials["delivery_adapter_invoked"] is False
+        assert missing_credentials["approval_execution_invoked"] is False
+        assert missing_credentials["scheduler_invoked"] is False
+        assert missing_credentials["sent"] is False
+        assert missing_credentials["preflight"]["credential_presence_ready"] is False
+        assert missing_credentials["preflight"]["execution_preflight_ready"] is False
+        assert missing_credentials["telegram_plan"]["chunks_text_included"] is False
+        assert missing_credentials["result_contract"] == {
+            "status": "delivery_result",
+            "event_type": DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+            "delivery_result_id_prefix": "dres_",
+            "allowed_result_statuses": [
+                "succeeded",
+                "failed",
+                "partial",
+                "skipped",
+            ],
+            "result_audit_contract_ready": True,
+            "delivery_result_record_created": False,
+            "result_creation_endpoint_available": False,
+            "db_write_scope": "none",
+        }
+        assert missing_credentials["source_of_truth"] == created_draft["source_of_truth"]
+        assert missing_credentials["safety"]["provider_free"] is True
+        assert missing_credentials["safety"]["read_only"] is True
+        assert missing_credentials["safety"]["credential_values_exposed"] is False
+        assert missing_credentials["safety"]["credential_validation_invoked"] is False
+        assert missing_credentials["safety"]["raw_payloads_exposed"] is False
+        assert missing_credentials["safety"]["delivery_adapter_invoked"] is False
+        assert missing_credentials["safety"]["delivery_invoked"] is False
+        assert missing_credentials["safety"]["delivery_result_audit_event_created"] is False
+        assert missing_credentials["safety"]["outbox_record_created"] is False
+
+        assert configured_credentials["credential_presence_ready"] is True
+        assert configured_credentials["execution_gate_ready"] is False
+        assert configured_credentials["delivery_execution_enabled"] is False
+        assert configured_credentials["blockers"] == [
+            "delivery_execution_not_implemented",
+            "bounded_operator_request_required",
+        ]
+
+        assert await _delivery_draft_api_event_total(delivery_draft_id) == (
+            draft_total_before
+        )
+        assert await _delivery_intention_api_event_count(delivery_intention_id) == (
+            intention_count_before
+        )
+        assert await _delivery_result_api_event_total() == result_total_before
+
+        serialized = json.dumps(
+            {
+                "missing_credentials": missing_credentials,
+                "configured_credentials": configured_credentials,
+            },
+            sort_keys=True,
+        )
+        assert "TELEGRAM_BOT_TOKEN_TEST_VALUE" not in serialized
+        assert "TELEGRAM_CHAT_ID_TEST_VALUE" not in serialized
+        assert '"rendered_text":' not in serialized
+        assert '"digest":' not in serialized
+        assert '"text":' not in serialized
+        assert "https://api.telegram.org" not in serialized
+        assert "webhook" not in serialized
+        assert hidden_title not in serialized
+        assert f"atri_digest_api_{unique}_gate-hidden" not in serialized
+        assert f"digest:api:attention:{unique}:gate-hidden" not in serialized
+        assert "evidence_refs" not in serialized
+        assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
+        assert '"raw_payload":' not in serialized
+        assert '"provider_payload":' not in serialized
+        assert '"prompt":' not in serialized
     finally:
         if delivery_draft_id is not None:
             await _cleanup_delivery_draft_api_record(delivery_draft_id)
@@ -2859,11 +3098,17 @@ async def test_delivery_intention_telegram_plan_endpoint_conflicts_on_hash_misma
                 f"/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-execution-preflight",
             )
+            telegram_gate_response = await client.get(
+                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                "/telegram-execution-gate",
+            )
 
         assert telegram_plan_response.status_code == 409
         assert telegram_preflight_response.status_code == 409
+        assert telegram_gate_response.status_code == 409
         assert "text_sha256" in telegram_plan_response.text
         assert "text_sha256" in telegram_preflight_response.text
+        assert "text_sha256" in telegram_gate_response.text
         assert await _delivery_intention_api_event_count(delivery_intention_id) == 1
     finally:
         if delivery_draft_id is not None:

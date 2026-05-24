@@ -28,6 +28,8 @@
   read-only, implemented
 - Persisted attention digest delivery result audit contract:
   audit-log-backed, implemented
+- Persisted attention digest bounded Telegram execution gate:
+  read-only, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -60,6 +62,9 @@
   `digest.delivery_result.recorded` events, with `before_ref` set to the
   `delivery_intention_id` and `after_ref` set to the deterministic
   `delivery_result_id`; no new table or migration is introduced.
+  FOS-069 reads stored delivery intention, preflight, plan, readiness, and
+  result-contract metadata to build an execution gate preview, but it does not
+  append audit rows or introduce new storage.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -209,6 +214,16 @@
   bodies, prompts, provider payloads, source payloads, hidden item details, or
   newly exposed evidence refs. FOS-068 adds no public result creation API, send
   path, outbox table, scheduler job, new table, or migration.
+- Bounded Telegram execution gates for delivery intentions are read-only derived
+  metadata, not stored records and not delivery execution. They read stored
+  approval/readiness, delivery intention, Telegram plan, credential-presence
+  preflight, and result-contract metadata to report safe readiness booleans,
+  blockers, required future operator fields, and chunk bounds. They must not
+  return or store rendered text, chunk text, Telegram bot tokens, chat IDs,
+  URLs, webhook secrets, raw Telegram API responses, raw source bodies, prompts,
+  provider payloads, source payloads, hidden item details, or newly exposed
+  evidence refs. FOS-069 adds no send path, delivery result record creation,
+  execution API mutation, outbox table, scheduler job, new table, or migration.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

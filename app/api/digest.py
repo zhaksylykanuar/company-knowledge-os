@@ -20,6 +20,7 @@ from app.services.digest_delivery_drafts import (
     DeliveryIntentionConflictError,
     DeliveryIntentionNotReadyError,
     DeliveryResultConflictError,
+    DeliveryTelegramExecutionGateConflictError,
     DeliveryTelegramExecutionPreflightConflictError,
     DeliveryTelegramPlanConflictError,
     approve_digest_delivery_draft,
@@ -29,6 +30,7 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_draft_approval_status,
     get_digest_delivery_draft_delivery_readiness,
     get_digest_delivery_intention,
+    get_digest_delivery_intention_telegram_execution_gate,
     get_digest_delivery_intention_telegram_execution_preflight,
     get_digest_delivery_intention_telegram_plan,
     get_digest_delivery_result,
@@ -328,6 +330,37 @@ async def _get_digest_delivery_intention_telegram_execution_preflight_response(
             detail="delivery intention was not found",
         )
     return preflight
+
+
+async def _get_digest_delivery_intention_telegram_execution_gate_response(
+    *,
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            gate = await get_digest_delivery_intention_telegram_execution_gate(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                telegram_bot_token=settings.telegram_bot_token,
+                telegram_chat_id=settings.telegram_chat_id,
+            )
+    except DeliveryTelegramExecutionGateConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if gate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="delivery intention was not found",
+        )
+    return gate
 
 
 async def _get_digest_delivery_result_response(
@@ -689,6 +722,15 @@ async def get_persisted_digest_delivery_intention_telegram_execution_preflight_e
     delivery_intention_id: str,
 ) -> dict[str, Any]:
     return await _get_digest_delivery_intention_telegram_execution_preflight_response(
+        delivery_intention_id=delivery_intention_id,
+    )
+
+
+@router.get("/delivery-intentions/{delivery_intention_id}/telegram-execution-gate")
+async def get_persisted_digest_delivery_intention_telegram_execution_gate_endpoint(
+    delivery_intention_id: str,
+) -> dict[str, Any]:
+    return await _get_digest_delivery_intention_telegram_execution_gate_response(
         delivery_intention_id=delivery_intention_id,
     )
 

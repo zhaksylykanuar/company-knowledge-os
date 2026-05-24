@@ -25,6 +25,7 @@
 - Read-only delivery intention operator review command: implemented
 - Read-only Telegram execution preflight for delivery intentions: implemented
 - Delivery result audit contract for future Telegram sends: implemented
+- Read-only bounded Telegram execution gate preview: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -140,6 +141,13 @@
   raw Telegram responses, raw/provider/source payloads, hidden low-priority
   details, or newly exposed evidence refs. FOS-068 does not implement sending or
   expose a public result creation endpoint.
+- A protected read-only bounded Telegram execution gate can inspect a stored
+  delivery intention and combine approval, readiness, Telegram plan,
+  credential-presence preflight, result-contract readiness, chunk bounds, and
+  future operator-required fields. The gate keeps delivery execution disabled,
+  requires a future bounded operator request, never exposes credential values,
+  never validates credentials against Telegram, never creates delivery result
+  records, and never sends Telegram/Slack messages.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -368,6 +376,14 @@
   adapters, create scheduler jobs, delivery workers, outbox records/tables,
   migrations, or new tables. Delivery results remain audit metadata only and are
   not source-of-truth company facts.
+- FOS-069 adds a protected read-only bounded Telegram execution gate preview for
+  delivery intentions. The gate combines stored approval/readiness, Telegram
+  plan, credential-presence preflight, result-contract readiness, chunk bounds,
+  and future operator confirmation requirements.
+- FOS-069 does not implement Telegram sending, use or expose bot credentials,
+  validate credentials against Telegram, create delivery result records, expose
+  POST/PUT/PATCH execution APIs, call delivery adapters, create scheduler jobs,
+  delivery workers, outbox records/tables, migrations, or new tables.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -409,8 +425,8 @@
   delivery readiness preview, audit-log-backed delivery intention records, a
   pure Telegram delivery plan preview, and a local read-only operator review
   command plus read-only Telegram execution preflight for the stored chain.
-  They now also have a delivery result audit contract for future outcomes, but
-  no approval-triggered execution, scheduler, delivery worker, outbox table,
-  credential validation against Telegram, or Telegram/Slack delivery wiring
-  exists.
+  They now also have a delivery result audit contract for future outcomes and a
+  read-only bounded execution gate preview, but no approval-triggered execution,
+  scheduler, delivery worker, outbox table, credential validation against
+  Telegram, or Telegram/Slack delivery wiring exists.
 - GitHub/Jira/Drive digest integration is not implemented.

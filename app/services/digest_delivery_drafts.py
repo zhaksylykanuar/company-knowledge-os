@@ -29,6 +29,7 @@ DIGEST_DELIVERY_DRAFT_READINESS_STATUS = "delivery_readiness"
 DIGEST_DELIVERY_INTENTION_STATUS = "delivery_intention"
 DIGEST_DELIVERY_TELEGRAM_PLAN_STATUS = "telegram_delivery_plan"
 DIGEST_DELIVERY_TELEGRAM_EXECUTION_PREFLIGHT_STATUS = "telegram_execution_preflight"
+DIGEST_DELIVERY_TELEGRAM_EXECUTION_GATE_STATUS = "telegram_execution_gate"
 DIGEST_DELIVERY_RESULT_STATUS = "delivery_result"
 DIGEST_DELIVERY_DRAFT_TYPE = "persisted_attention"
 DIGEST_DELIVERY_DRAFT_CHANNEL = "telegram"
@@ -67,6 +68,15 @@ DIGEST_DELIVERY_RESULT_SAFE_ERROR_CODE_MAX_LENGTH = 80
 DIGEST_DELIVERY_RESULT_SAFE_ERROR_SUMMARY_MAX_LENGTH = 240
 DIGEST_DELIVERY_RESULT_SAFE_MESSAGE_REFS_LIMIT = 20
 DIGEST_DELIVERY_RESULT_SAFE_MESSAGE_REF_VALUE_MAX_LENGTH = 120
+DIGEST_DELIVERY_TELEGRAM_EXECUTION_GATE_MAX_CHUNKS = 10
+
+DIGEST_DELIVERY_TELEGRAM_EXECUTION_GATE_REQUIRED_OPERATOR_FIELDS = (
+    "delivery_intention_id",
+    "execution_attempt_id",
+    "max_chunks",
+    "confirm_send",
+    "test_mode",
+)
 
 SAFE_DELIVERY_RESULT_MESSAGE_REF_KEYS = (
     "chunk_index",
@@ -133,6 +143,10 @@ class DeliveryTelegramPlanConflictError(ValueError):
 
 class DeliveryTelegramExecutionPreflightConflictError(ValueError):
     """Raised when Telegram execution preflight cannot safely inspect an intention."""
+
+
+class DeliveryTelegramExecutionGateConflictError(ValueError):
+    """Raised when Telegram execution gate cannot safely inspect an intention."""
 
 
 class DeliveryResultConflictError(ValueError):
@@ -854,6 +868,37 @@ def _telegram_execution_preflight_safety_metadata() -> dict[str, Any]:
         "intention_is_source_of_truth": False,
         "telegram_plan_is_source_of_truth": False,
         "telegram_preflight_is_source_of_truth": False,
+        "telegram_is_source_of_truth": False,
+    }
+
+
+def _telegram_execution_gate_safety_metadata() -> dict[str, Any]:
+    return {
+        "provider_free": True,
+        "read_only": True,
+        "db_write_scope": "none",
+        "credential_values_exposed": False,
+        "credential_validation_invoked": False,
+        "raw_payloads_exposed": False,
+        "telegram_raw_api_response_stored": False,
+        "rendered_text_included": False,
+        "chunk_text_included": False,
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "delivery_result_audit_event_created": False,
+        "outbox_record_created": False,
+        "connectors_invoked": False,
+        "live_api_calls": False,
+        "draft_is_source_of_truth": False,
+        "intention_is_source_of_truth": False,
+        "telegram_plan_is_source_of_truth": False,
+        "telegram_preflight_is_source_of_truth": False,
+        "telegram_execution_gate_is_source_of_truth": False,
+        "delivery_result_is_source_of_truth": False,
         "telegram_is_source_of_truth": False,
     }
 
@@ -1877,6 +1922,255 @@ async def record_digest_delivery_result(
     if response is None:
         raise ValueError("persisted delivery result audit payload is invalid")
     return response
+
+
+def _append_unique_blocker(blockers: list[str], blocker: str) -> None:
+    if blocker not in blockers:
+        blockers.append(blocker)
+
+
+def _telegram_execution_gate_result_contract_summary(
+    *,
+    intention: Mapping[str, Any],
+    telegram_plan: Mapping[str, Any],
+) -> dict[str, Any]:
+    try:
+        build_digest_delivery_result(
+            intention=intention,
+            telegram_plan=telegram_plan,
+            execution_attempt_id="execution-gate-preview",
+            result_status="skipped",
+            attempted_chunk_count=0,
+            delivered_chunk_count=0,
+            failed_chunk_count=0,
+            delivery_invoked=False,
+            delivery_adapter_invoked=False,
+        )
+    except (DeliveryResultConflictError, ValueError) as exc:
+        raise DeliveryTelegramExecutionGateConflictError(
+            f"delivery result contract is not ready: {exc}"
+        ) from exc
+
+    return {
+        "status": DIGEST_DELIVERY_RESULT_STATUS,
+        "event_type": DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+        "delivery_result_id_prefix": DIGEST_DELIVERY_RESULT_ID_PREFIX,
+        "allowed_result_statuses": list(DIGEST_DELIVERY_RESULT_STATUSES),
+        "result_audit_contract_ready": True,
+        "delivery_result_record_created": False,
+        "result_creation_endpoint_available": False,
+        "db_write_scope": "none",
+    }
+
+
+async def get_digest_delivery_intention_telegram_execution_gate(
+    session: AsyncSession,
+    *,
+    delivery_intention_id: str,
+    telegram_bot_token: Any = None,
+    telegram_chat_id: Any = None,
+    max_chunks_allowed: int = DIGEST_DELIVERY_TELEGRAM_EXECUTION_GATE_MAX_CHUNKS,
+) -> dict[str, Any] | None:
+    """Return a no-send bounded Telegram execution gate for a stored intention.
+
+    The gate composes existing stored approval/readiness, Telegram plan,
+    credential-presence preflight, and result-contract metadata. It never sends,
+    validates credentials with Telegram, creates delivery results, schedules,
+    appends audit logs, or calls provider/delivery adapters.
+    """
+
+    cleaned_delivery_intention_id = _clean_delivery_intention_id(
+        delivery_intention_id
+    )
+    safe_max_chunks_allowed = _require_int(
+        max_chunks_allowed,
+        field_name="max_chunks_allowed",
+    )
+    if safe_max_chunks_allowed < 1:
+        raise ValueError("max_chunks_allowed must be at least 1")
+
+    try:
+        preflight = await get_digest_delivery_intention_telegram_execution_preflight(
+            session,
+            delivery_intention_id=cleaned_delivery_intention_id,
+            telegram_bot_token=telegram_bot_token,
+            telegram_chat_id=telegram_chat_id,
+        )
+    except DeliveryTelegramExecutionPreflightConflictError as exc:
+        raise DeliveryTelegramExecutionGateConflictError(str(exc)) from exc
+    if preflight is None:
+        return None
+
+    intention = await get_digest_delivery_intention(
+        session,
+        delivery_intention_id=cleaned_delivery_intention_id,
+    )
+    if intention is None:
+        return None
+
+    delivery_draft_id = _clean_delivery_draft_id(
+        str(preflight.get("delivery_draft_id", ""))
+    )
+    approval_status = await get_digest_delivery_draft_approval_status(
+        session,
+        delivery_draft_id=delivery_draft_id,
+    )
+    if approval_status is None:
+        raise DeliveryTelegramExecutionGateConflictError(
+            "approval status was not found"
+        )
+
+    readiness = await get_digest_delivery_draft_delivery_readiness(
+        session,
+        delivery_draft_id=delivery_draft_id,
+    )
+    if readiness is None:
+        raise DeliveryTelegramExecutionGateConflictError(
+            "delivery readiness was not found"
+        )
+
+    try:
+        telegram_plan = await get_digest_delivery_intention_telegram_plan(
+            session,
+            delivery_intention_id=cleaned_delivery_intention_id,
+        )
+    except DeliveryTelegramPlanConflictError as exc:
+        raise DeliveryTelegramExecutionGateConflictError(str(exc)) from exc
+    if telegram_plan is None:
+        return None
+
+    planned_chunk_count = _require_non_negative_int(
+        telegram_plan.get("chunk_count"),
+        field_name="planned_chunk_count",
+    )
+    within_chunk_bounds = planned_chunk_count <= safe_max_chunks_allowed
+    result_contract = _telegram_execution_gate_result_contract_summary(
+        intention=intention,
+        telegram_plan=telegram_plan,
+    )
+
+    approval_ready = (
+        approval_status.get("current_decision")
+        == DIGEST_DELIVERY_DRAFT_APPROVED_DECISION
+    )
+    readiness_ready = bool(readiness.get("eligible_for_delivery"))
+    telegram_plan_ready = (
+        telegram_plan.get("status") == DIGEST_DELIVERY_TELEGRAM_PLAN_STATUS
+        and bool(preflight.get("telegram_plan_ready"))
+    )
+    credential_presence_ready = bool(preflight.get("credential_presence_ready"))
+    result_audit_contract_ready = bool(
+        result_contract.get("result_audit_contract_ready")
+    )
+
+    blockers: list[str] = []
+    for blocker in preflight.get("blockers", []):
+        if isinstance(blocker, str) and blocker:
+            _append_unique_blocker(blockers, blocker)
+    if not approval_ready:
+        _append_unique_blocker(blockers, "not_approved")
+    if not readiness_ready:
+        _append_unique_blocker(blockers, "not_ready")
+    if not telegram_plan_ready:
+        _append_unique_blocker(blockers, "telegram_plan_not_ready")
+    if not result_audit_contract_ready:
+        _append_unique_blocker(blockers, "delivery_result_contract_not_ready")
+    if not within_chunk_bounds:
+        _append_unique_blocker(blockers, "planned_chunk_count_exceeds_max_chunks")
+    _append_unique_blocker(blockers, "delivery_execution_not_implemented")
+    _append_unique_blocker(blockers, "bounded_operator_request_required")
+
+    return {
+        "status": DIGEST_DELIVERY_TELEGRAM_EXECUTION_GATE_STATUS,
+        "delivery_intention_id": cleaned_delivery_intention_id,
+        "delivery_draft_id": delivery_draft_id,
+        "digest_type": telegram_plan.get("digest_type"),
+        "channel": DIGEST_DELIVERY_DRAFT_CHANNEL,
+        "text_sha256": telegram_plan.get("text_sha256"),
+        "char_count": telegram_plan.get("char_count"),
+        "chunk_count": telegram_plan.get("chunk_count"),
+        "approval_ready": approval_ready,
+        "readiness_ready": readiness_ready,
+        "telegram_plan_ready": telegram_plan_ready,
+        "credential_presence_ready": credential_presence_ready,
+        "result_audit_contract_ready": result_audit_contract_ready,
+        "bounded_operator_request_required": True,
+        "required_operator_fields": list(
+            DIGEST_DELIVERY_TELEGRAM_EXECUTION_GATE_REQUIRED_OPERATOR_FIELDS
+        ),
+        "max_chunks_allowed": safe_max_chunks_allowed,
+        "planned_chunk_count": planned_chunk_count,
+        "within_chunk_bounds": within_chunk_bounds,
+        "execution_gate_ready": False,
+        "blockers": blockers,
+        "warnings": [
+            "future_bounded_operator_path_required",
+            "approval_does_not_trigger_delivery",
+        ],
+        "delivery_execution_enabled": False,
+        "delivery_enabled": False,
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "sent": False,
+        "intention": {
+            "status": intention.get("status"),
+            "persisted": bool(intention.get("persisted")),
+            "current_decision": intention.get("current_decision"),
+            "eligible_for_delivery": bool(intention.get("eligible_for_delivery")),
+            "audit_log": _safe_intention_audit_log_metadata(intention),
+        },
+        "approval": {
+            "current_decision": approval_status.get("current_decision"),
+            "approved": bool(approval_status.get("approved")),
+            "rejected": bool(approval_status.get("rejected")),
+        },
+        "readiness": _readiness_summary(readiness),
+        "telegram_plan": {
+            "status": telegram_plan.get("status"),
+            "chunk_count": telegram_plan.get("chunk_count"),
+            "chunks_text_included": bool(telegram_plan.get("chunks_text_included")),
+            "delivery_execution_enabled": False,
+            "delivery_enabled": False,
+            "delivery_invoked": False,
+            "delivery_adapter_invoked": False,
+            "scheduler_invoked": False,
+            "sent": False,
+        },
+        "preflight": {
+            "status": preflight.get("status"),
+            "telegram_plan_ready": bool(preflight.get("telegram_plan_ready")),
+            "telegram_bot_token_present": bool(
+                preflight.get("telegram_bot_token_present")
+            ),
+            "telegram_chat_id_present": bool(
+                preflight.get("telegram_chat_id_present")
+            ),
+            "credential_presence_ready": credential_presence_ready,
+            "execution_preflight_ready": bool(
+                preflight.get("execution_preflight_ready")
+            ),
+            "blockers": [
+                blocker
+                for blocker in preflight.get("blockers", [])
+                if isinstance(blocker, str)
+            ],
+            "delivery_execution_enabled": False,
+            "delivery_enabled": False,
+            "delivery_invoked": False,
+            "delivery_adapter_invoked": False,
+            "scheduler_invoked": False,
+            "sent": False,
+        },
+        "result_contract": result_contract,
+        "source_of_truth": (
+            dict(telegram_plan.get("source_of_truth"))
+            if isinstance(telegram_plan.get("source_of_truth"), Mapping)
+            else {}
+        ),
+        "safety": _telegram_execution_gate_safety_metadata(),
+    }
 
 
 async def record_digest_delivery_draft_decision(
