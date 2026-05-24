@@ -27,6 +27,7 @@
 - Delivery result audit contract for future Telegram sends: implemented
 - Read-only bounded Telegram execution gate preview: implemented
 - Test-only bounded Telegram delivery intention send command: implemented
+- Local/dev-only synthetic persisted attention digest seed command: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -199,6 +200,13 @@ trusted facts.
   low-priority details, or newly exposed evidence refs. It is not production
   delivery and adds no API send endpoint, scheduler, delivery worker, outbox
   table, automatic retry, production mode, or approval-triggered execution.
+- Local/dev-only synthetic persisted attention digest seed data may be created
+  only through the explicit operator seed command when a local database has no
+  visible persisted attention digest items. The seed must be clearly synthetic,
+  must not be treated as company truth, and must not call providers/OpenAI,
+  connectors, Telegram/Slack, scheduler, or delivery code. It does not create
+  delivery drafts, approvals, intentions, plans, preflight/gate records, result
+  records, or sends, and it does not edit raw storage or Obsidian.
 - Hidden low-priority digest items must remain count-only in preview, persisted
   draft, and delivery-oriented surfaces. Evidence refs remain debug-only and
   safe-formatted.
@@ -388,6 +396,18 @@ Implemented today:
   adds no API send endpoint, scheduler, delivery worker, outbox table,
   production mode, automatic retry, approval-triggered execution, migration, or
   new table.
+- FOS-071 adds a local/dev-only synthetic persisted attention digest seed
+  command for empty local databases. It writes one clearly labeled synthetic
+  sample through the persisted attention source chain so
+  `GET /v1/digest/persisted-attention` can return at least one visible item for
+  the selected local test window.
+- FOS-071 requires explicit `sample_id`, timezone-aware `created_at`, and the
+  exact confirmation phrase `SEED LOCAL SYNTHETIC DIGEST`; refuses
+  production-like environments; is deterministic/idempotent; and fails closed
+  on conflicting existing rows. It is not live ingestion and does not call
+  providers/OpenAI/connectors, use bot credentials, send Telegram/Slack
+  messages, create delivery artifacts/results, edit raw storage or Obsidian,
+  add migrations, or create new tables.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

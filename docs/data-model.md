@@ -32,6 +32,8 @@
   read-only, implemented
 - Persisted attention digest test-only Telegram send command:
   audit-log-backed result recording, implemented
+- Local/dev-only synthetic persisted attention digest seed command:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -71,6 +73,12 @@
   test-only bounded operator Telegram send attempts; it reuses
   `digest.delivery_result.recorded`, writes no other rows, and introduces no new
   storage.
+- `ingested_events`, `source_events`, `normalized_activity_items`, and
+  `attention_triage_results` may contain explicitly labeled local/dev-only
+  synthetic rows created by the FOS-071 operator seed command. Those rows exist
+  only to make an empty local persisted attention digest visible for delivery
+  workflow testing; they are not live provider data or source-of-truth company
+  facts.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -241,6 +249,18 @@
   adds no API send endpoint, production mode, scheduler job, delivery worker,
   outbox table, automatic retry, approval-triggered execution, new table, or
   migration.
+- Local/dev-only synthetic persisted attention digest seed rows are explicit
+  test fixtures in the local database, not company facts. The seed command uses
+  deterministic IDs and fails closed on conflicts while writing only enough
+  synthetic metadata to populate the persisted attention digest read model:
+  `ingested_events`, `source_events`, `normalized_activity_items`, and
+  `attention_triage_results`. Seed payloads must be clearly labeled synthetic
+  and must not contain raw provider payloads, source bodies, prompts, secrets,
+  credential values, chat IDs, webhook values, rendered digest text, chunk text,
+  hidden low-priority details, or untrusted raw content. FOS-071 adds no
+  delivery draft, approval, intention, plan, preflight, gate, delivery result,
+  send path, scheduler job, delivery worker, outbox table, raw-storage edit,
+  Obsidian export, new table, or migration.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

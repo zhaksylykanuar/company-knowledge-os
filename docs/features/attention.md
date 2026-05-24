@@ -27,6 +27,7 @@
 - Delivery result audit contract for future Telegram sends: implemented
 - Read-only bounded Telegram execution gate preview: implemented
 - Test-only bounded Telegram delivery intention send command: implemented
+- Local/dev-only synthetic persisted attention digest seed command: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -161,6 +162,16 @@
   or hidden low-priority details; and adds no API send endpoint, scheduler,
   delivery worker, outbox table, production mode, automatic retry, or
   approval-triggered execution.
+- A local/dev-only synthetic persisted attention digest seed command can create
+  one clearly synthetic persisted attention sample when a local database has no
+  visible persisted attention items. The command requires an explicit
+  `sample_id`, timezone-aware `created_at`, and exact confirmation phrase. It
+  writes only the synthetic persisted source/normalized activity/attention
+  chain needed for the persisted digest read model, refuses production-like
+  environments, is idempotent by deterministic IDs, calls no providers/OpenAI,
+  connectors, Telegram/Slack, scheduler, or delivery worker, and does not create
+  delivery drafts, approvals, intentions, plans, preflight/gate records, result
+  records, sends, raw storage files, or Obsidian exports.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -408,6 +419,20 @@
   exposed evidence refs. It adds no API send endpoint, scheduler, delivery
   worker, outbox table, production mode, automatic retry, approval-triggered
   execution, schema change, migration, or new table.
+- FOS-071 adds `scripts/seed_local_persisted_attention_digest.py`, a
+  local/dev-only synthetic persisted attention digest seed command. It creates
+  one clearly labeled synthetic local sample through stored
+  `ingested_events`, `source_events`, `normalized_activity_items`, and
+  `attention_triage_results` rows so a matching persisted attention digest
+  window can become non-empty for local delivery testing.
+- FOS-071 requires an explicit `sample_id`, timezone-aware `created_at`, and
+  exact confirmation phrase `SEED LOCAL SYNTHETIC DIGEST`; refuses
+  production-like environments; uses deterministic IDs for idempotency; and
+  fails closed on conflicting existing rows. The seed is not live ingestion, is
+  not source-of-truth company data, does not call providers/OpenAI/connectors,
+  does not send Telegram/Slack messages, does not create delivery
+  drafts/approvals/intentions/results, and does not edit raw storage or
+  Obsidian.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -454,5 +479,7 @@
   command can perform the first audited Telegram send path, but there is still
   no approval-triggered execution, scheduler, production mode, delivery worker,
   outbox table, credential validation against Telegram, API send endpoint, or
-  automatic delivery wiring.
+  automatic delivery wiring. Local/dev-only synthetic seed data can now be used
+  to make an empty local persisted attention digest window visible for testing,
+  but those rows are explicitly synthetic and not company truth.
 - GitHub/Jira/Drive digest integration is not implemented.
