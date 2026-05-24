@@ -425,6 +425,18 @@ Implemented today:
   scheduler, delivery worker, outbox table, automatic retry,
   approval-triggered execution, migration, or new table. Scheduler/automatic
   delivery remains deferred until repeated manual bounded sends are proven safe.
+- FOS-073 adds a local read-only delivery intention send status report command.
+  The report summarizes safe delivery result metadata for a
+  `delivery_intention_id` and shows whether duplicate-success protection would
+  block a new execution attempt. It does not send Telegram/Slack messages, read
+  bot credentials, create delivery results or audit events, call APIs, or expose
+  rendered text, chunk text, credential values, raw Telegram responses, raw
+  provider payloads, hidden low-priority details, or newly exposed evidence refs.
+- FOS-073 preserves the FOS-072 semantics: a prior successful/sent result should
+  not be resent, same-attempt idempotency remains handled by the send command,
+  and failed/partial/skipped prior attempts do not silently count as successful
+  duplicates. It adds no API send endpoint, production mode, scheduler, worker,
+  outbox table, automatic retry, migration, or new table.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

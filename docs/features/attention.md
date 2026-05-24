@@ -452,6 +452,18 @@
   delivery worker, outbox table, automatic retry, approval-triggered execution,
   schema change, migration, or new table. Scheduler/automatic delivery remains
   deferred until repeated manual bounded sends are safe.
+- FOS-073 adds a local read-only delivery intention send status report command
+  that summarizes safe delivery result metadata by `delivery_intention_id` and
+  shows whether duplicate-success protection would block a new execution
+  attempt. The report does not send Telegram/Slack messages, read bot
+  credentials, create delivery results or audit events, call APIs, or expose
+  rendered text, chunk text, credential values, raw Telegram responses, raw
+  provider payloads, hidden low-priority details, or newly exposed evidence refs.
+- FOS-073 does not change same-attempt idempotency in the send command and does
+  not treat failed, partial, skipped, malformed, or incomplete prior results as
+  successful duplicates. It adds no override flag, API send endpoint,
+  production mode, scheduler, delivery worker, outbox table, automatic retry,
+  schema change, migration, or new table.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

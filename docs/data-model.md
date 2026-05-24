@@ -280,6 +280,14 @@
   evidence refs. FOS-072 adds no override flag, API send endpoint, production
   mode, scheduler job, delivery worker, outbox table, automatic retry,
   approval-triggered execution, new table, or migration.
+- FOS-073 adds a read-only operator report over the same delivery result audit
+  metadata. It lists safe result metadata for a `delivery_intention_id`, derives
+  whether the duplicate-success guard would block a new execution attempt, and
+  surfaces only safe prior-success identifiers/counts. It does not append audit
+  rows, send messages, read bot credentials, expose rendered text or chunks,
+  expose raw Telegram/provider payloads, create a send API, add scheduler or
+  worker behavior, introduce an outbox table, add a migration, or create a new
+  table.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
