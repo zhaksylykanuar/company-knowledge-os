@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import pytest
 from sqlalchemy import delete, func, or_, select
 
 from app.db.base import AsyncSessionLocal, engine
@@ -20,6 +21,7 @@ from app.services.digest_delivery_drafts import (
     build_persisted_attention_digest_delivery_draft,
     create_digest_delivery_intention,
     persist_digest_delivery_draft,
+    record_digest_delivery_result,
     sanitize_persisted_attention_digest_for_delivery_draft,
 )
 from app.services.digest_rendering import render_persisted_attention_digest_text
@@ -607,6 +609,69 @@ async def test_valid_test_mode_send_records_sanitized_result_and_is_idempotent()
         )
 
 
+async def test_prior_successful_result_blocks_new_attempt_before_sending() -> None:
+    draft, intention, rendered_text = await _create_send_chain(
+        start_at=_utc(2134, 1, 13),
+        end_at=_utc(2134, 1, 14),
+    )
+    initial_transport = FakeTelegramTransport()
+
+    try:
+        first = await send_script.execute_test_send(
+            _query(
+                intention["delivery_intention_id"],
+                execution_attempt_id="attempt-first-success",
+                max_chunks=3,
+            ),
+            telegram_transport=initial_transport,
+            telegram_bot_token=BOT_TOKEN_VALUE,
+            telegram_chat_id=CHAT_ID_VALUE,
+        )
+        assert first["result_status"] == "succeeded"
+        assert await _delivery_result_count(intention["delivery_intention_id"]) == 1
+
+        duplicate_transport = FakeTelegramTransport()
+        with pytest.raises(send_script.SendDuplicateSuccessError) as exc_info:
+            await send_script.execute_test_send(
+                _query(
+                    intention["delivery_intention_id"],
+                    execution_attempt_id="attempt-new-id-after-success",
+                    max_chunks=3,
+                ),
+                telegram_transport=duplicate_transport,
+                telegram_bot_token=BOT_TOKEN_VALUE,
+                telegram_chat_id=CHAT_ID_VALUE,
+            )
+
+        blocked = send_script._duplicate_success_blocked_result(exc_info.value)
+        assert blocked["status"] == "blocked"
+        assert blocked["blocker"] == "delivery_intention_already_successfully_sent"
+        assert blocked["delivery_intention_id"] == intention["delivery_intention_id"]
+        assert blocked["execution_attempt_id"] == "attempt-new-id-after-success"
+        assert blocked["prior_successful_delivery_result"]["delivery_result_id"] == (
+            first["delivery_result_id"]
+        )
+        assert blocked["prior_successful_delivery_result"]["execution_attempt_id"] == (
+            "attempt-first-success"
+        )
+        assert blocked["delivery_invoked"] is False
+        assert blocked["delivery_adapter_invoked"] is False
+        assert blocked["scheduler_invoked"] is False
+        assert blocked["sent"] is False
+        assert duplicate_transport.calls == []
+        assert await _delivery_result_count(intention["delivery_intention_id"]) == 1
+        _assert_safe_output(_serialized(blocked), rendered_text=rendered_text)
+        _assert_safe_output(
+            send_script.format_text_result(blocked),
+            rendered_text=rendered_text,
+        )
+    finally:
+        await _delete_delivery_chain(
+            delivery_draft_id=draft["delivery_draft_id"],
+            delivery_intention_id=intention["delivery_intention_id"],
+        )
+
+
 async def test_failed_send_records_sanitized_failed_result() -> None:
     draft, intention, rendered_text = await _create_send_chain(
         start_at=_utc(2134, 1, 9),
@@ -649,6 +714,57 @@ async def test_failed_send_records_sanitized_failed_result() -> None:
         assert payload["safe_message_refs"] == []
         _assert_safe_output(_serialized(result), rendered_text=rendered_text)
         _assert_safe_output(_serialized(payload), rendered_text=rendered_text)
+    finally:
+        await _delete_delivery_chain(
+            delivery_draft_id=draft["delivery_draft_id"],
+            delivery_intention_id=intention["delivery_intention_id"],
+        )
+
+
+async def test_prior_failed_result_does_not_block_new_valid_attempt() -> None:
+    draft, intention, rendered_text = await _create_send_chain(
+        start_at=_utc(2134, 1, 15),
+        end_at=_utc(2134, 1, 16),
+    )
+    failed_transport = FakeTelegramTransport(
+        [
+            {
+                "ok": False,
+                "error_code": 429,
+                "description": "raw provider body should not be stored",
+            }
+        ]
+    )
+
+    try:
+        failed = await send_script.execute_test_send(
+            _query(
+                intention["delivery_intention_id"],
+                execution_attempt_id="attempt-prior-failed",
+                max_chunks=3,
+            ),
+            telegram_transport=failed_transport,
+            telegram_bot_token=BOT_TOKEN_VALUE,
+            telegram_chat_id=CHAT_ID_VALUE,
+        )
+        assert failed["result_status"] == "failed"
+
+        success_transport = FakeTelegramTransport()
+        success = await send_script.execute_test_send(
+            _query(
+                intention["delivery_intention_id"],
+                execution_attempt_id="attempt-after-failed",
+                max_chunks=3,
+            ),
+            telegram_transport=success_transport,
+            telegram_bot_token=BOT_TOKEN_VALUE,
+            telegram_chat_id=CHAT_ID_VALUE,
+        )
+
+        assert success["result_status"] == "succeeded"
+        assert success_transport.calls != []
+        assert await _delivery_result_count(intention["delivery_intention_id"]) == 2
+        _assert_safe_output(_serialized(success), rendered_text=rendered_text)
     finally:
         await _delete_delivery_chain(
             delivery_draft_id=draft["delivery_draft_id"],
@@ -706,6 +822,80 @@ async def test_partial_send_records_sanitized_partial_result() -> None:
         ]
         _assert_safe_output(_serialized(result), rendered_text=rendered_text)
         _assert_safe_output(_serialized(payload), rendered_text=rendered_text)
+    finally:
+        await _delete_delivery_chain(
+            delivery_draft_id=draft["delivery_draft_id"],
+            delivery_intention_id=intention["delivery_intention_id"],
+        )
+
+
+async def test_prior_partial_and_skipped_results_do_not_block_new_valid_attempt() -> None:
+    draft, intention, rendered_text = await _create_send_chain(
+        start_at=_utc(2134, 1, 17),
+        end_at=_utc(2134, 1, 18),
+        rendered_text=_two_chunk_rendered_text(),
+    )
+    partial_transport = FakeTelegramTransport(
+        [
+            {
+                "ok": True,
+                "result": {"message_id": "first-message"},
+            },
+            {
+                "ok": False,
+                "error_code": 500,
+                "description": "raw provider body should not be stored",
+            },
+        ]
+    )
+
+    try:
+        partial = await send_script.execute_test_send(
+            _query(
+                intention["delivery_intention_id"],
+                execution_attempt_id="attempt-prior-partial",
+                max_chunks=3,
+            ),
+            telegram_transport=partial_transport,
+            telegram_bot_token=BOT_TOKEN_VALUE,
+            telegram_chat_id=CHAT_ID_VALUE,
+        )
+        assert partial["result_status"] == "partial"
+
+        async with AsyncSessionLocal() as session:
+            skipped = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=intention["delivery_intention_id"],
+                execution_attempt_id="attempt-prior-skipped",
+                result_status="skipped",
+                attempted_chunk_count=0,
+                delivered_chunk_count=0,
+                failed_chunk_count=0,
+                safe_error_code="operator_skipped",
+                safe_error_summary="Operator skipped before send.",
+                delivery_invoked=False,
+                delivery_adapter_invoked=False,
+                actor="test",
+            )
+            await session.commit()
+        assert skipped["result_status"] == "skipped"
+
+        success_transport = FakeTelegramTransport()
+        success = await send_script.execute_test_send(
+            _query(
+                intention["delivery_intention_id"],
+                execution_attempt_id="attempt-after-partial-skipped",
+                max_chunks=3,
+            ),
+            telegram_transport=success_transport,
+            telegram_bot_token=BOT_TOKEN_VALUE,
+            telegram_chat_id=CHAT_ID_VALUE,
+        )
+
+        assert success["result_status"] == "succeeded"
+        assert success_transport.calls != []
+        assert await _delivery_result_count(intention["delivery_intention_id"]) == 3
+        _assert_safe_output(_serialized(success), rendered_text=rendered_text)
     finally:
         await _delete_delivery_chain(
             delivery_draft_id=draft["delivery_draft_id"],

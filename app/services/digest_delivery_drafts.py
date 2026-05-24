@@ -1821,6 +1821,33 @@ def _delivery_result_audit_log_response(record: AuditLog) -> dict[str, Any] | No
     return response
 
 
+def _safe_delivery_result_lookup_metadata(
+    result: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "delivery_result_id": result.get("delivery_result_id"),
+        "delivery_intention_id": result.get("delivery_intention_id"),
+        "execution_attempt_id": result.get("execution_attempt_id"),
+        "result_status": result.get("result_status"),
+        "sent": bool(result.get("sent")),
+        "attempted_chunk_count": result.get("attempted_chunk_count"),
+        "delivered_chunk_count": result.get("delivered_chunk_count"),
+        "failed_chunk_count": result.get("failed_chunk_count"),
+        "recorded_at": result.get("recorded_at"),
+    }
+
+
+def _delivery_result_metadata_is_successful(result: Mapping[str, Any]) -> bool:
+    delivered_chunk_count = result.get("delivered_chunk_count")
+    return (
+        result.get("result_status") == "succeeded"
+        and result.get("sent") is True
+        and isinstance(delivered_chunk_count, int)
+        and not isinstance(delivered_chunk_count, bool)
+        and delivered_chunk_count > 0
+    )
+
+
 async def get_digest_delivery_result(
     session: AsyncSession,
     *,
@@ -1836,6 +1863,45 @@ async def get_digest_delivery_result(
     if record is None:
         return None
     return _delivery_result_audit_log_response(record)
+
+
+async def list_delivery_results_for_delivery_intention(
+    session: AsyncSession,
+    *,
+    delivery_intention_id: str,
+) -> list[dict[str, Any]]:
+    cleaned_delivery_intention_id = _clean_delivery_intention_id(
+        delivery_intention_id
+    )
+    records = await session.scalars(
+        select(AuditLog)
+        .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+        .where(AuditLog.before_ref == cleaned_delivery_intention_id)
+        .order_by(AuditLog.id)
+    )
+
+    results: list[dict[str, Any]] = []
+    for record in records:
+        response = _delivery_result_audit_log_response(record)
+        if response is None:
+            continue
+        results.append(_safe_delivery_result_lookup_metadata(response))
+    return results
+
+
+async def get_successful_delivery_result_for_delivery_intention(
+    session: AsyncSession,
+    *,
+    delivery_intention_id: str,
+) -> dict[str, Any] | None:
+    results = await list_delivery_results_for_delivery_intention(
+        session,
+        delivery_intention_id=delivery_intention_id,
+    )
+    for result in results:
+        if _delivery_result_metadata_is_successful(result):
+            return result
+    return None
 
 
 async def record_digest_delivery_result(

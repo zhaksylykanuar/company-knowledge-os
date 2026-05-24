@@ -49,6 +49,20 @@ class SendRuntimeError(RuntimeError):
     pass
 
 
+class SendDuplicateSuccessError(SendBlockedError):
+    def __init__(
+        self,
+        *,
+        delivery_intention_id: str,
+        execution_attempt_id: str,
+        prior_result: Mapping[str, Any],
+    ) -> None:
+        super().__init__("delivery_intention_already_successfully_sent")
+        self.delivery_intention_id = delivery_intention_id
+        self.execution_attempt_id = execution_attempt_id
+        self.prior_result = dict(prior_result)
+
+
 @dataclass(frozen=True)
 class SendQuery:
     delivery_intention_id: str
@@ -274,6 +288,37 @@ def _blocked_result(*, error_code: str, message: str) -> dict[str, Any]:
     }
 
 
+def _duplicate_success_blocked_result(
+    exc: SendDuplicateSuccessError,
+) -> dict[str, Any]:
+    prior = {
+        "delivery_result_id": exc.prior_result.get("delivery_result_id"),
+        "delivery_intention_id": exc.prior_result.get("delivery_intention_id"),
+        "execution_attempt_id": exc.prior_result.get("execution_attempt_id"),
+        "result_status": exc.prior_result.get("result_status"),
+        "sent": bool(exc.prior_result.get("sent")),
+        "attempted_chunk_count": exc.prior_result.get("attempted_chunk_count"),
+        "delivered_chunk_count": exc.prior_result.get("delivered_chunk_count"),
+        "failed_chunk_count": exc.prior_result.get("failed_chunk_count"),
+        "recorded_at": exc.prior_result.get("recorded_at"),
+    }
+    return {
+        "status": "blocked",
+        "error_code": "send_blocked",
+        "blocker": "delivery_intention_already_successfully_sent",
+        "blockers": ["delivery_intention_already_successfully_sent"],
+        "message": "delivery intention already has a successful test send result",
+        "delivery_intention_id": exc.delivery_intention_id,
+        "execution_attempt_id": exc.execution_attempt_id,
+        "prior_successful_delivery_result": prior,
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "scheduler_invoked": False,
+        "sent": False,
+        "safety": _blocked_safety_metadata(),
+    }
+
+
 def _validate_gate_for_send(gate: Mapping[str, Any]) -> None:
     if gate.get("status") != "telegram_execution_gate":
         raise SendBlockedError("execution gate status is not safe")
@@ -416,6 +461,7 @@ async def execute_test_send(
     from app.services.digest_delivery_drafts import (
         DeliveryResultConflictError,
         DeliveryTelegramExecutionGateConflictError,
+        get_successful_delivery_result_for_delivery_intention,
         get_digest_delivery_intention,
         get_digest_delivery_intention_telegram_execution_gate,
         get_digest_delivery_intention_telegram_plan,
@@ -437,17 +483,6 @@ async def execute_test_send(
     )
     max_chunks = _clean_max_chunks(query.max_chunks)
 
-    bot_token = _setting_value(
-        settings.telegram_bot_token
-        if telegram_bot_token is _SETTING_UNSET
-        else telegram_bot_token
-    )
-    chat_id = _setting_value(
-        settings.telegram_chat_id
-        if telegram_chat_id is _SETTING_UNSET
-        else telegram_chat_id
-    )
-
     session_factory = session_factory or AsyncSessionLocal
     try:
         async with session_factory() as session:
@@ -462,6 +497,28 @@ async def execute_test_send(
                     idempotent_replay=True,
                     delivery_result_record_created=False,
                 )
+
+            prior_success = await get_successful_delivery_result_for_delivery_intention(
+                session,
+                delivery_intention_id=delivery_intention_id,
+            )
+            if prior_success is not None:
+                raise SendDuplicateSuccessError(
+                    delivery_intention_id=delivery_intention_id,
+                    execution_attempt_id=execution_attempt_id,
+                    prior_result=prior_success,
+                )
+
+            bot_token = _setting_value(
+                settings.telegram_bot_token
+                if telegram_bot_token is _SETTING_UNSET
+                else telegram_bot_token
+            )
+            chat_id = _setting_value(
+                settings.telegram_chat_id
+                if telegram_chat_id is _SETTING_UNSET
+                else telegram_chat_id
+            )
 
             gate = await get_digest_delivery_intention_telegram_execution_gate(
                 session,
@@ -565,7 +622,40 @@ async def execute_test_send(
 
 def format_text_result(result: Mapping[str, Any]) -> str:
     if result.get("status") == "blocked":
-        return f"Bounded test Telegram send blocked: {result.get('message')}\n"
+        lines = [
+            "Bounded test Telegram send blocked",
+            f"Reason: {result.get('message')}",
+        ]
+        if result.get("blocker") is not None:
+            lines.append(f"Blocker: {result.get('blocker')}")
+        if result.get("delivery_intention_id") is not None:
+            lines.append(
+                f"Delivery intention ID: {result.get('delivery_intention_id')}"
+            )
+        if result.get("execution_attempt_id") is not None:
+            lines.append(
+                f"Requested execution attempt ID: {result.get('execution_attempt_id')}"
+            )
+        prior = result.get("prior_successful_delivery_result")
+        if isinstance(prior, Mapping):
+            lines.extend(
+                [
+                    f"Prior delivery result ID: {prior.get('delivery_result_id')}",
+                    f"Prior execution attempt ID: {prior.get('execution_attempt_id')}",
+                    f"Prior result status: {prior.get('result_status')}",
+                    f"Prior sent: {prior.get('sent')}",
+                ]
+            )
+        lines.extend(
+            [
+                f"Delivery invoked: {result.get('delivery_invoked', False)}",
+                "Delivery adapter invoked: "
+                f"{result.get('delivery_adapter_invoked', False)}",
+                f"Scheduler invoked: {result.get('scheduler_invoked', False)}",
+                f"Sent: {result.get('sent', False)}",
+            ]
+        )
+        return "\n".join(lines) + "\n"
 
     lines = [
         "Bounded test-mode Telegram delivery attempt",
@@ -613,6 +703,14 @@ def main(argv: list[str] | None = None) -> int:
             _print_json(_blocked_result(error_code="not_found", message=str(exc)))
         else:
             print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except SendDuplicateSuccessError as exc:
+        output_format = getattr(locals().get("args", None), "format", "text")
+        result = _duplicate_success_blocked_result(exc)
+        if output_format == "json":
+            _print_json(result)
+        else:
+            print(format_text_result(result), end="")
         return 1
     except SendBlockedError as exc:
         output_format = getattr(locals().get("args", None), "format", "text")

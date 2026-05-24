@@ -40,6 +40,8 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_intention_telegram_execution_preflight,
     get_digest_delivery_intention_telegram_plan,
     get_digest_delivery_result,
+    get_successful_delivery_result_for_delivery_intention,
+    list_delivery_results_for_delivery_intention,
     get_persisted_digest_delivery_draft,
     persist_digest_delivery_draft,
     record_digest_delivery_result,
@@ -2194,6 +2196,182 @@ async def test_delivery_result_records_safe_idempotent_audit_contract(
     finally:
         if "delivery_result_id" in locals():
             await _delete_delivery_result_audit_log(delivery_result_id)
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_result_lookup_finds_only_clear_successful_results() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest) + "\n" + ("x" * 3900)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 8, 5),
+        end_at=_utc(2132, 8, 6),
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+    delivery_result_ids: list[str] = []
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+            )
+            intention = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="test",
+            )
+            delivery_intention_id = intention["delivery_intention_id"]
+            failed = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="lookup-failed",
+                result_status="failed",
+                attempted_chunk_count=1,
+                delivered_chunk_count=0,
+                failed_chunk_count=1,
+                safe_error_code="telegram_send_failed",
+                safe_error_summary="Telegram send failed.",
+                delivery_invoked=True,
+                delivery_adapter_invoked=True,
+                actor="test",
+            )
+            partial = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="lookup-partial",
+                result_status="partial",
+                attempted_chunk_count=2,
+                delivered_chunk_count=1,
+                failed_chunk_count=1,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "message-1",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                delivery_invoked=True,
+                delivery_adapter_invoked=True,
+                actor="test",
+            )
+            skipped = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="lookup-skipped",
+                result_status="skipped",
+                attempted_chunk_count=0,
+                delivered_chunk_count=0,
+                failed_chunk_count=0,
+                delivery_invoked=False,
+                delivery_adapter_invoked=False,
+                actor="test",
+            )
+            malformed = AuditLog(
+                event_type=DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+                actor="test",
+                correlation_id=delivery_intention_id,
+                trace_id="dres_malformed_success_should_not_count",
+                before_ref=delivery_intention_id,
+                after_ref="dres_malformed_success_should_not_count",
+                approval_id=f"{delivery_intention_id}:delivery_result",
+                payload={
+                    "status": "delivery_result",
+                    "delivery_result_id": "different_result_id",
+                    "delivery_intention_id": delivery_intention_id,
+                    "execution_attempt_id": "lookup-malformed",
+                    "result_status": "succeeded",
+                    "sent": True,
+                    "delivered_chunk_count": 1,
+                    "rendered_text": "PRIVATE_RENDERED_TEXT_DO_NOT_EXPOSE",
+                    "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                },
+            )
+            session.add(malformed)
+            await session.flush()
+
+            assert (
+                await get_successful_delivery_result_for_delivery_intention(
+                    session,
+                    delivery_intention_id=delivery_intention_id,
+                )
+                is None
+            )
+
+            succeeded = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="lookup-succeeded",
+                result_status="succeeded",
+                attempted_chunk_count=2,
+                delivered_chunk_count=2,
+                failed_chunk_count=0,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "message-2",
+                        "chat_id": "TELEGRAM_CHAT_ID_TEST_VALUE",
+                        "telegram_url": "https://api.telegram.org/botTOKEN",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                delivery_invoked=True,
+                delivery_adapter_invoked=True,
+                actor="test",
+            )
+            await session.commit()
+
+            listed = await list_delivery_results_for_delivery_intention(
+                session,
+                delivery_intention_id=delivery_intention_id,
+            )
+            successful = await get_successful_delivery_result_for_delivery_intention(
+                session,
+                delivery_intention_id=delivery_intention_id,
+            )
+
+        delivery_result_ids = [
+            failed["delivery_result_id"],
+            partial["delivery_result_id"],
+            skipped["delivery_result_id"],
+            succeeded["delivery_result_id"],
+        ]
+        assert [item["delivery_result_id"] for item in listed] == delivery_result_ids
+        assert successful == {
+            "delivery_result_id": succeeded["delivery_result_id"],
+            "delivery_intention_id": delivery_intention_id,
+            "execution_attempt_id": "lookup-succeeded",
+            "result_status": "succeeded",
+            "sent": True,
+            "attempted_chunk_count": 2,
+            "delivered_chunk_count": 2,
+            "failed_chunk_count": 0,
+            "recorded_at": succeeded["recorded_at"],
+        }
+
+        dumped = json.dumps({"listed": listed, "successful": successful}, sort_keys=True)
+        assert "TELEGRAM_CHAT_ID_TEST_VALUE" not in dumped
+        assert "PRIVATE_TELEGRAM_RAW_RESPONSE" not in dumped
+        assert "PRIVATE_RENDERED_TEXT_DO_NOT_EXPOSE" not in dumped
+        assert "rendered_text" not in dumped
+        assert "raw_response" not in dumped
+        assert "telegram_url" not in dumped
+        assert "evidence_refs" not in dumped
+    finally:
+        for delivery_result_id in delivery_result_ids:
+            await _delete_delivery_result_audit_log(delivery_result_id)
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                delete(AuditLog).where(
+                    AuditLog.after_ref == "dres_malformed_success_should_not_count"
+                )
+            )
+            await session.commit()
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
 

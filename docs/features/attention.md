@@ -28,6 +28,7 @@
 - Read-only bounded Telegram execution gate preview: implemented
 - Test-only bounded Telegram delivery intention send command: implemented
 - Local/dev-only synthetic persisted attention digest seed command: implemented
+- Duplicate-success protection for test-only Telegram sends: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -172,6 +173,13 @@
   connectors, Telegram/Slack, scheduler, or delivery worker, and does not create
   delivery drafts, approvals, intentions, plans, preflight/gate records, result
   records, sends, raw storage files, or Obsidian exports.
+- Duplicate-success protection prevents the local test-only Telegram send
+  command from sending a `delivery_intention_id` again when a prior sanitized
+  delivery result for that intention is clearly `succeeded`, `sent=true`, and
+  has delivered at least one chunk. Reusing the same `execution_attempt_id`
+  remains idempotent and returns the stored result without sending. Failed,
+  partial, skipped, malformed, or incomplete prior results do not silently count
+  as successful duplicates, and there is no override flag in this slice.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -433,6 +441,17 @@
   does not send Telegram/Slack messages, does not create delivery
   drafts/approvals/intentions/results, and does not edit raw storage or
   Obsidian.
+- FOS-072 adds duplicate-success protection to the local test-only Telegram
+  send command. If a stored `delivery_intention_id` already has a successful
+  sent `digest.delivery_result.recorded` audit event, a new
+  `execution_attempt_id` is refused before the Telegram sender is invoked and no
+  new delivery result audit row is created. The same `execution_attempt_id`
+  remains idempotent. Failed, partial, skipped, malformed, or incomplete prior
+  results do not silently count as successful duplicates.
+- FOS-072 adds no override flag, API send endpoint, production mode, scheduler,
+  delivery worker, outbox table, automatic retry, approval-triggered execution,
+  schema change, migration, or new table. Scheduler/automatic delivery remains
+  deferred until repeated manual bounded sends are safe.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -482,4 +501,8 @@
   automatic delivery wiring. Local/dev-only synthetic seed data can now be used
   to make an empty local persisted attention digest window visible for testing,
   but those rows are explicitly synthetic and not company truth.
+- The test-only send path now refuses duplicate successful sends for the same
+  delivery intention unless the operator is replaying the same
+  `execution_attempt_id`; there is still no override, scheduler, or automatic
+  delivery wiring.
 - GitHub/Jira/Drive digest integration is not implemented.

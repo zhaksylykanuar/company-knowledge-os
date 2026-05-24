@@ -34,6 +34,8 @@
   audit-log-backed result recording, implemented
 - Local/dev-only synthetic persisted attention digest seed command:
   implemented
+- Duplicate-success protection for test-only Telegram sends:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -73,6 +75,10 @@
   test-only bounded operator Telegram send attempts; it reuses
   `digest.delivery_result.recorded`, writes no other rows, and introduces no new
   storage.
+  FOS-072 reads existing `digest.delivery_result.recorded` rows by
+  `before_ref=delivery_intention_id` to block duplicate successful test sends
+  before any Telegram transport call; it appends no rows during the duplicate
+  guard and introduces no new storage.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist
@@ -261,6 +267,19 @@
   delivery draft, approval, intention, plan, preflight, gate, delivery result,
   send path, scheduler job, delivery worker, outbox table, raw-storage edit,
   Obsidian export, new table, or migration.
+- Duplicate-success checks for test-only Telegram sends are read-only checks
+  over existing delivery result audit metadata. A prior result blocks a new
+  `execution_attempt_id` only when the sanitized payload clearly has
+  `result_status=succeeded`, `sent=true`, and a positive
+  `delivered_chunk_count`. Failed, partial, skipped, malformed, or incomplete
+  prior results do not silently count as successful duplicates. The lookup
+  returns only safe metadata: delivery result ID, delivery intention ID,
+  execution attempt ID, result status, sent flag, chunk counts, and recorded
+  time. It must not expose rendered text, chunk text, credentials, raw Telegram
+  responses, full digest snapshots, hidden item details, or newly exposed
+  evidence refs. FOS-072 adds no override flag, API send endpoint, production
+  mode, scheduler job, delivery worker, outbox table, automatic retry,
+  approval-triggered execution, new table, or migration.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

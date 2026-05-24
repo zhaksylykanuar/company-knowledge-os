@@ -28,6 +28,7 @@
 - Read-only bounded Telegram execution gate preview: implemented
 - Test-only bounded Telegram delivery intention send command: implemented
 - Local/dev-only synthetic persisted attention digest seed command: implemented
+- Duplicate-success protection for test-only Telegram sends: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -207,6 +208,13 @@ trusted facts.
   connectors, Telegram/Slack, scheduler, or delivery code. It does not create
   delivery drafts, approvals, intentions, plans, preflight/gate records, result
   records, or sends, and it does not edit raw storage or Obsidian.
+- Test-only bounded Telegram sends must not duplicate a successful delivery
+  intention. If an existing sanitized delivery result for the same
+  `delivery_intention_id` is clearly `succeeded`, `sent=true`, and delivered at
+  least one chunk, the local send command refuses a new `execution_attempt_id`
+  before sending. Reusing the same `execution_attempt_id` remains idempotent.
+  Failed, partial, skipped, malformed, or incomplete prior results do not
+  silently count as successful duplicates. This slice has no override flag.
 - Hidden low-priority digest items must remain count-only in preview, persisted
   draft, and delivery-oriented surfaces. Evidence refs remain debug-only and
   safe-formatted.
@@ -408,6 +416,15 @@ Implemented today:
   providers/OpenAI/connectors, use bot credentials, send Telegram/Slack
   messages, create delivery artifacts/results, edit raw storage or Obsidian,
   add migrations, or create new tables.
+- FOS-072 adds duplicate-success protection to the local test-only bounded
+  Telegram send command. A delivery intention with a prior successful sent
+  delivery result cannot be sent again with a new `execution_attempt_id`; the
+  same `execution_attempt_id` remains an idempotent replay with no Telegram
+  transport call and no duplicate audit row.
+- FOS-072 does not add an override flag, API send endpoint, production mode,
+  scheduler, delivery worker, outbox table, automatic retry,
+  approval-triggered execution, migration, or new table. Scheduler/automatic
+  delivery remains deferred until repeated manual bounded sends are proven safe.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
