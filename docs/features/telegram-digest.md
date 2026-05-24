@@ -26,6 +26,7 @@
 - Read-only Telegram execution preflight for delivery intentions: implemented
 - Delivery result audit contract for future Telegram sends: implemented
 - Read-only bounded Telegram execution gate preview: implemented
+- Test-only bounded Telegram delivery intention send command: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -187,6 +188,17 @@ trusted facts.
   approval/readiness, Telegram plan, credential-presence preflight,
   result-contract readiness, chunk bounds, and future operator-required fields
   while keeping delivery execution disabled and never sending messages.
+- Test-only bounded Telegram sends for persisted delivery intentions are local
+  operator actions only. The command requires an explicit delivery intention ID,
+  execution attempt ID, low `max_chunks` bound, `test_mode=true`, and the exact
+  confirmation phrase `SEND TEST TELEGRAM DIGEST`; it sends only after stored
+  approval/readiness/intention/plan/preflight/gate checks pass, sends only
+  bounded chunks to the configured Telegram test chat, and records sanitized
+  delivery result audit metadata after the attempt. It must not print or store
+  bot token, chat ID, rendered text, chunk text, raw Telegram responses, hidden
+  low-priority details, or newly exposed evidence refs. It is not production
+  delivery and adds no API send endpoint, scheduler, delivery worker, outbox
+  table, automatic retry, production mode, or approval-triggered execution.
 - Hidden low-priority digest items must remain count-only in preview, persisted
   draft, and delivery-oriented surfaces. Evidence refs remain debug-only and
   safe-formatted.
@@ -364,6 +376,18 @@ Implemented today:
   call delivery adapters, create scheduler jobs, delivery workers, outbox
   records/tables, migrations, live API calls, providers/OpenAI, connector calls,
   or new tables.
+- FOS-070 adds a local test-only bounded Telegram delivery intention send
+  command. It is the first real send path, but it is explicitly operator-run,
+  bounded, test-mode-only, and audited through sanitized delivery result
+  metadata.
+- FOS-070 requires `delivery_intention_id`, `execution_attempt_id`,
+  `max_chunks`, `test_mode=true`, and the exact confirmation phrase before any
+  send attempt. It uses configured backend Telegram credentials internally,
+  never accepts credentials as CLI arguments, never prints or stores credential
+  values, never exposes rendered text/chunk text/raw Telegram responses, and
+  adds no API send endpoint, scheduler, delivery worker, outbox table,
+  production mode, automatic retry, approval-triggered execution, migration, or
+  new table.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
@@ -394,9 +418,8 @@ Not implemented today:
   audit-log-backed draft review records.
 - Approval-triggered execution for persisted delivery drafts.
 - Delivery execution, delivery workers, scheduler jobs, or outbox tables for
-  approved persisted delivery drafts.
-- Bot credential handling and real Telegram send execution for delivery
-  intentions.
+  automatic or production delivery of approved persisted delivery drafts.
+- Production-mode Telegram send execution for delivery intentions.
 - POST/PUT/PATCH execution APIs for delivery intentions.
 - Public creation/update APIs for delivery result records.
 - Telegram credential validation against Telegram for delivery intentions.

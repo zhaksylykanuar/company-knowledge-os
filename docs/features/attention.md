@@ -26,6 +26,7 @@
 - Read-only Telegram execution preflight for delivery intentions: implemented
 - Delivery result audit contract for future Telegram sends: implemented
 - Read-only bounded Telegram execution gate preview: implemented
+- Test-only bounded Telegram delivery intention send command: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -148,6 +149,18 @@
   requires a future bounded operator request, never exposes credential values,
   never validates credentials against Telegram, never creates delivery result
   records, and never sends Telegram/Slack messages.
+- A local test-only bounded Telegram send operator command can send a stored
+  delivery intention after explicit operator input. It requires
+  `delivery_intention_id`, `execution_attempt_id`, bounded `max_chunks`,
+  `test_mode=true`, and the exact confirmation phrase
+  `SEND TEST TELEGRAM DIGEST`. It sends only after existing approval,
+  readiness, intention, Telegram plan, preflight, and execution gate checks
+  pass; sends only bounded chunks to the configured Telegram test chat; records
+  sanitized delivery result audit metadata after the attempt; never prints or
+  stores bot token, chat ID, rendered text, chunk text, raw Telegram responses,
+  or hidden low-priority details; and adds no API send endpoint, scheduler,
+  delivery worker, outbox table, production mode, automatic retry, or
+  approval-triggered execution.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -384,6 +397,17 @@
   validate credentials against Telegram, create delivery result records, expose
   POST/PUT/PATCH execution APIs, call delivery adapters, create scheduler jobs,
   delivery workers, outbox records/tables, migrations, or new tables.
+- FOS-070 adds a local test-only bounded Telegram send command for delivery
+  intentions. The command is the first real send path, but it is not production
+  delivery: it requires explicit operator IDs, `test_mode=true`, a low
+  `max_chunks` bound, and the exact confirmation phrase before it can use the
+  configured Telegram test chat.
+- FOS-070 records sanitized `digest.delivery_result.recorded` metadata after an
+  attempt and does not print or store bot token, chat ID, rendered digest text,
+  chunk text, raw Telegram responses, hidden low-priority details, or newly
+  exposed evidence refs. It adds no API send endpoint, scheduler, delivery
+  worker, outbox table, production mode, automatic retry, approval-triggered
+  execution, schema change, migration, or new table.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -426,7 +450,9 @@
   pure Telegram delivery plan preview, and a local read-only operator review
   command plus read-only Telegram execution preflight for the stored chain.
   They now also have a delivery result audit contract for future outcomes and a
-  read-only bounded execution gate preview, but no approval-triggered execution,
-  scheduler, delivery worker, outbox table, credential validation against
-  Telegram, or Telegram/Slack delivery wiring exists.
+  read-only bounded execution gate preview. A local test-only bounded operator
+  command can perform the first audited Telegram send path, but there is still
+  no approval-triggered execution, scheduler, production mode, delivery worker,
+  outbox table, credential validation against Telegram, API send endpoint, or
+  automatic delivery wiring.
 - GitHub/Jira/Drive digest integration is not implemented.

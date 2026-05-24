@@ -30,6 +30,8 @@
   audit-log-backed, implemented
 - Persisted attention digest bounded Telegram execution gate:
   read-only, implemented
+- Persisted attention digest test-only Telegram send command:
+  audit-log-backed result recording, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -65,6 +67,10 @@
   FOS-069 reads stored delivery intention, preflight, plan, readiness, and
   result-contract metadata to build an execution gate preview, but it does not
   append audit rows or introduce new storage.
+  FOS-070 records sanitized delivery result audit events after explicit
+  test-only bounded operator Telegram send attempts; it reuses
+  `digest.delivery_result.recorded`, writes no other rows, and introduces no new
+  storage.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -224,6 +230,17 @@
   provider payloads, source payloads, hidden item details, or newly exposed
   evidence refs. FOS-069 adds no send path, delivery result record creation,
   execution API mutation, outbox table, scheduler job, new table, or migration.
+- Test-only bounded Telegram send attempts for delivery intentions are local
+  operator actions that reuse stored delivery drafts, intentions, plans,
+  preflight, and execution gate metadata. The command writes only sanitized
+  `digest.delivery_result.recorded` audit metadata after an attempt, keyed by
+  deterministic `delivery_result_id` and operator-provided
+  `execution_attempt_id`. It must not store rendered text, chunk text, bot
+  tokens, chat IDs, URLs, webhook secrets, raw Telegram API responses, full
+  digest snapshots, hidden item details, or newly exposed evidence refs. FOS-070
+  adds no API send endpoint, production mode, scheduler job, delivery worker,
+  outbox table, automatic retry, approval-triggered execution, new table, or
+  migration.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
