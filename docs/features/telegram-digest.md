@@ -437,6 +437,19 @@ Implemented today:
   and failed/partial/skipped prior attempts do not silently count as successful
   duplicates. It adds no API send endpoint, production mode, scheduler, worker,
   outbox table, automatic retry, migration, or new table.
+- FOS-074 adds a local manual pilot delivery draft preparation command for an
+  explicit persisted attention digest window. The command requires
+  timezone-aware `start_at`/`end_at`, bounded `limit`, and the exact
+  confirmation phrase `PREPARE MANUAL PILOT DRAFT`; refuses production-like
+  environments; fails safely on empty windows; and persists only one inert
+  delivery draft audit record through the existing draft persistence path.
+- FOS-074 is not approval, not delivery intention creation, not Telegram/Slack
+  sending, and not scheduler/automation. It prints safe next-step command
+  shapes for the manual pilot flow and keeps human approval separate. It does
+  not expose rendered text, chunk text, bot credentials, raw Telegram/provider
+  payloads, hidden low-priority item details, or newly exposed evidence refs,
+  and it adds no API send endpoint, production mode, scheduler, worker, outbox
+  table, automatic retry, migration, or new table.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

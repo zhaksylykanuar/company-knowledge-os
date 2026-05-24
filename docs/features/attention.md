@@ -464,6 +464,20 @@
   successful duplicates. It adds no override flag, API send endpoint,
   production mode, scheduler, delivery worker, outbox table, automatic retry,
   schema change, migration, or new table.
+- FOS-074 adds a local manual pilot delivery draft preparation command for an
+  explicit persisted attention digest window. The command refuses
+  production-like environments, requires the exact confirmation phrase
+  `PREPARE MANUAL PILOT DRAFT`, checks that the persisted digest has visible
+  rows, and persists only one inert audit-log-backed delivery draft through the
+  existing draft persistence path.
+- FOS-074 is not approval, not delivery intention creation, not Telegram/Slack
+  sending, and not scheduler/automation. Human approval remains a separate
+  explicit step. The command prints safe next-step command shapes for approval,
+  readiness, intention creation, review, send-status, execution-gate, and the
+  bounded test send, while keeping hidden low-priority items count-only and
+  avoiding rendered text, chunk text, credentials, raw payloads, and newly
+  exposed evidence refs. It adds no API send endpoint, production mode,
+  scheduler, worker, outbox table, automatic retry, migration, or new table.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

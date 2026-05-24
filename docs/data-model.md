@@ -288,6 +288,13 @@
   expose raw Telegram/provider payloads, create a send API, add scheduler or
   worker behavior, introduce an outbox table, add a migration, or create a new
   table.
+- FOS-074 adds a local manual pilot preparation path that can create only the
+  existing `digest.delivery_draft.created` audit-log-backed review artifact for
+  an explicit persisted attention digest window. It uses deterministic
+  `delivery_draft_id` behavior, remains idempotent for the same window and
+  rendered digest, and does not create approval/rejection rows, readiness
+  records, delivery intentions, Telegram plans, preflight/gate records, delivery
+  results, scheduler jobs, outbox rows, migrations, or new tables.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
