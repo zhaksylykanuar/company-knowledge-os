@@ -29,14 +29,17 @@ DIGEST_DELIVERY_DRAFT_READINESS_STATUS = "delivery_readiness"
 DIGEST_DELIVERY_INTENTION_STATUS = "delivery_intention"
 DIGEST_DELIVERY_TELEGRAM_PLAN_STATUS = "telegram_delivery_plan"
 DIGEST_DELIVERY_TELEGRAM_EXECUTION_PREFLIGHT_STATUS = "telegram_execution_preflight"
+DIGEST_DELIVERY_RESULT_STATUS = "delivery_result"
 DIGEST_DELIVERY_DRAFT_TYPE = "persisted_attention"
 DIGEST_DELIVERY_DRAFT_CHANNEL = "telegram"
 DIGEST_DELIVERY_DRAFT_ID_PREFIX = "ddraft_"
 DIGEST_DELIVERY_INTENTION_ID_PREFIX = "dint_"
+DIGEST_DELIVERY_RESULT_ID_PREFIX = "dres_"
 DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE = "digest.delivery_draft.created"
 DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE = "digest.delivery_draft.approved"
 DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE = "digest.delivery_draft.rejected"
 DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE = "digest.delivery_intention.created"
+DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE = "digest.delivery_result.recorded"
 DIGEST_DELIVERY_DRAFT_DECISION_EVENT_TYPES = (
     DIGEST_DELIVERY_DRAFT_APPROVED_EVENT_TYPE,
     DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
@@ -51,8 +54,38 @@ DIGEST_DELIVERY_DRAFT_DECISIONS = (
     DIGEST_DELIVERY_DRAFT_APPROVED_DECISION,
     DIGEST_DELIVERY_DRAFT_REJECTED_DECISION,
 )
+DIGEST_DELIVERY_RESULT_STATUSES = (
+    "succeeded",
+    "failed",
+    "partial",
+    "skipped",
+)
 DIGEST_DELIVERY_DRAFT_DECISION_REVIEWER_MAX_LENGTH = 120
 DIGEST_DELIVERY_DRAFT_DECISION_NOTE_MAX_LENGTH = 500
+DIGEST_DELIVERY_RESULT_EXECUTION_ATTEMPT_ID_MAX_LENGTH = 120
+DIGEST_DELIVERY_RESULT_SAFE_ERROR_CODE_MAX_LENGTH = 80
+DIGEST_DELIVERY_RESULT_SAFE_ERROR_SUMMARY_MAX_LENGTH = 240
+DIGEST_DELIVERY_RESULT_SAFE_MESSAGE_REFS_LIMIT = 20
+DIGEST_DELIVERY_RESULT_SAFE_MESSAGE_REF_VALUE_MAX_LENGTH = 120
+
+SAFE_DELIVERY_RESULT_MESSAGE_REF_KEYS = (
+    "chunk_index",
+    "message_id",
+    "provider_message_id",
+    "chunk_sha256",
+    "status",
+)
+UNSAFE_DELIVERY_RESULT_TEXT_MARKERS = (
+    "bot_token",
+    "chat_id",
+    "credential",
+    "secret",
+    "token",
+    "webhook",
+    "http://",
+    "https://",
+    "api.telegram.org",
+)
 
 SAFE_PERSISTED_ATTENTION_ITEM_KEYS = (
     "id",
@@ -100,6 +133,10 @@ class DeliveryTelegramPlanConflictError(ValueError):
 
 class DeliveryTelegramExecutionPreflightConflictError(ValueError):
     """Raised when Telegram execution preflight cannot safely inspect an intention."""
+
+
+class DeliveryResultConflictError(ValueError):
+    """Raised when a delivery result record conflicts with stored audit data."""
 
 
 def _require_aware_datetime(value: datetime, *, field_name: str) -> None:
@@ -300,6 +337,25 @@ def build_delivery_intention_id(
     return f"{DIGEST_DELIVERY_INTENTION_ID_PREFIX}{digest[:32]}"
 
 
+def build_delivery_result_id(
+    *,
+    delivery_intention_id: str,
+    execution_attempt_id: str,
+    channel: str,
+    text_sha256: str,
+    result_status: str,
+) -> str:
+    stable_input = {
+        "channel": channel,
+        "delivery_intention_id": delivery_intention_id,
+        "execution_attempt_id": execution_attempt_id,
+        "result_status": result_status,
+        "text_sha256": text_sha256,
+    }
+    digest = sha256(_canonical_json(stable_input).encode("utf-8")).hexdigest()
+    return f"{DIGEST_DELIVERY_RESULT_ID_PREFIX}{digest[:32]}"
+
+
 def _clean_delivery_draft_id(delivery_draft_id: str) -> str:
     if not isinstance(delivery_draft_id, str):
         raise ValueError("delivery_draft_id must be a non-empty string")
@@ -317,6 +373,16 @@ def _clean_delivery_intention_id(delivery_intention_id: str) -> str:
     cleaned = delivery_intention_id.strip()
     if not cleaned:
         raise ValueError("delivery_intention_id must be a non-empty string")
+    return cleaned
+
+
+def _clean_delivery_result_id(delivery_result_id: str) -> str:
+    if not isinstance(delivery_result_id, str):
+        raise ValueError("delivery_result_id must be a non-empty string")
+
+    cleaned = delivery_result_id.strip()
+    if not cleaned:
+        raise ValueError("delivery_result_id must be a non-empty string")
     return cleaned
 
 
@@ -359,6 +425,82 @@ def _clean_decision(decision: str) -> str:
     if cleaned not in DIGEST_DELIVERY_DRAFT_DECISIONS:
         raise ValueError("decision must be approved or rejected")
     return cleaned
+
+
+def _clean_delivery_result_status(result_status: str) -> str:
+    if not isinstance(result_status, str):
+        raise ValueError("result_status must be one of succeeded, failed, partial, skipped")
+
+    cleaned = result_status.strip().lower()
+    if cleaned not in DIGEST_DELIVERY_RESULT_STATUSES:
+        raise ValueError("result_status must be one of succeeded, failed, partial, skipped")
+    return cleaned
+
+
+def _require_non_negative_int(value: Any, *, field_name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a non-negative integer")
+    if value < 0:
+        raise ValueError(f"{field_name} must be a non-negative integer")
+    return value
+
+
+def _safe_message_ref_value(value: Any) -> int | str | bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        cleaned = " ".join(value.strip().split())
+        if not cleaned:
+            return None
+        if _contains_unsafe_delivery_result_marker(cleaned):
+            return None
+        return cleaned[:DIGEST_DELIVERY_RESULT_SAFE_MESSAGE_REF_VALUE_MAX_LENGTH]
+    return None
+
+
+def _contains_unsafe_delivery_result_marker(value: str) -> bool:
+    lowered = value.casefold()
+    return any(marker in lowered for marker in UNSAFE_DELIVERY_RESULT_TEXT_MARKERS)
+
+
+def _clean_safe_delivery_result_text(
+    value: str | None,
+    *,
+    field_name: str,
+    max_length: int,
+) -> str | None:
+    cleaned = _clean_optional_text(
+        value,
+        field_name=field_name,
+        max_length=max_length,
+    )
+    if cleaned is not None and _contains_unsafe_delivery_result_marker(cleaned):
+        raise ValueError(f"{field_name} must not include credential-like values")
+    return cleaned
+
+
+def _safe_message_refs(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("safe_message_refs must be a list")
+
+    refs: list[dict[str, Any]] = []
+    for ref in value[:DIGEST_DELIVERY_RESULT_SAFE_MESSAGE_REFS_LIMIT]:
+        if not isinstance(ref, Mapping):
+            continue
+        safe_ref = {}
+        for key in SAFE_DELIVERY_RESULT_MESSAGE_REF_KEYS:
+            if key not in ref:
+                continue
+            safe_value = _safe_message_ref_value(ref[key])
+            if safe_value is not None:
+                safe_ref[key] = safe_value
+        if safe_ref:
+            refs.append(safe_ref)
+    return refs
 
 
 def _decision_event_type(decision: str) -> str:
@@ -712,6 +854,38 @@ def _telegram_execution_preflight_safety_metadata() -> dict[str, Any]:
         "intention_is_source_of_truth": False,
         "telegram_plan_is_source_of_truth": False,
         "telegram_preflight_is_source_of_truth": False,
+        "telegram_is_source_of_truth": False,
+    }
+
+
+def _delivery_result_safety_metadata(
+    *,
+    delivery_invoked: bool,
+    delivery_adapter_invoked: bool,
+) -> dict[str, Any]:
+    return {
+        "provider_free": True,
+        "read_only": False,
+        "db_write_scope": "audit_logs_only",
+        "audit_log_backed": True,
+        "credential_values_exposed": False,
+        "credential_validation_invoked": False,
+        "raw_payloads_exposed": False,
+        "telegram_raw_api_response_stored": False,
+        "rendered_text_included": False,
+        "chunk_text_included": False,
+        "delivery_invoked": delivery_invoked,
+        "delivery_adapter_invoked": delivery_adapter_invoked,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "outbox_record_created": False,
+        "connectors_invoked": False,
+        "live_api_calls": False,
+        "draft_is_source_of_truth": False,
+        "intention_is_source_of_truth": False,
+        "telegram_plan_is_source_of_truth": False,
+        "telegram_preflight_is_source_of_truth": False,
+        "delivery_result_is_source_of_truth": False,
         "telegram_is_source_of_truth": False,
     }
 
@@ -1109,6 +1283,66 @@ def _safe_intention_audit_log_metadata(intention: Mapping[str, Any]) -> dict[str
     }
 
 
+def _safe_delivery_result_intention_metadata(
+    intention: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "status": intention.get("status"),
+        "persisted": bool(intention.get("persisted")),
+        "current_decision": intention.get("current_decision"),
+        "eligible_for_delivery": bool(intention.get("eligible_for_delivery")),
+        "audit_log": _safe_intention_audit_log_metadata(intention),
+    }
+
+
+def _delivery_result_source_of_truth_metadata(plan: Mapping[str, Any]) -> dict[str, Any]:
+    source_of_truth = (
+        dict(plan.get("source_of_truth"))
+        if isinstance(plan.get("source_of_truth"), Mapping)
+        else {}
+    )
+    source_of_truth["delivery_result_is_source_of_truth"] = False
+    source_of_truth["delivery_result_scope"] = "delivery_execution_metadata"
+    source_of_truth["telegram_is_source_of_truth"] = False
+    return source_of_truth
+
+
+def _validate_delivery_result_counts(
+    *,
+    result_status: str,
+    planned_chunk_count: int,
+    attempted_chunk_count: int,
+    delivered_chunk_count: int,
+    failed_chunk_count: int,
+) -> None:
+    if attempted_chunk_count > planned_chunk_count:
+        raise ValueError("attempted_chunk_count must be at most planned_chunk_count")
+    if delivered_chunk_count > attempted_chunk_count:
+        raise ValueError("delivered_chunk_count must be at most attempted_chunk_count")
+    if failed_chunk_count > attempted_chunk_count:
+        raise ValueError("failed_chunk_count must be at most attempted_chunk_count")
+
+    if result_status == "succeeded":
+        if (
+            attempted_chunk_count != planned_chunk_count
+            or delivered_chunk_count != planned_chunk_count
+            or failed_chunk_count != 0
+        ):
+            raise ValueError("succeeded delivery results must deliver all planned chunks")
+    elif result_status == "failed":
+        if attempted_chunk_count < 1 or delivered_chunk_count != 0 or failed_chunk_count < 1:
+            raise ValueError("failed delivery results must attempt and fail at least one chunk")
+    elif result_status == "partial":
+        if delivered_chunk_count < 1 or delivered_chunk_count >= planned_chunk_count:
+            raise ValueError("partial delivery results must deliver some but not all chunks")
+    elif result_status == "skipped" and (
+        attempted_chunk_count != 0
+        or delivered_chunk_count != 0
+        or failed_chunk_count != 0
+    ):
+        raise ValueError("skipped delivery results must not attempt chunks")
+
+
 def _configured_value_present(value: Any) -> bool:
     if value is None:
         return False
@@ -1389,6 +1623,260 @@ async def get_digest_delivery_intention_telegram_execution_preflight(
         ),
         "safety": _telegram_execution_preflight_safety_metadata(),
     }
+
+
+def build_digest_delivery_result(
+    *,
+    intention: Mapping[str, Any],
+    telegram_plan: Mapping[str, Any],
+    execution_attempt_id: str,
+    result_status: str,
+    attempted_chunk_count: int,
+    delivered_chunk_count: int,
+    failed_chunk_count: int,
+    safe_message_refs: list[Mapping[str, Any]] | None = None,
+    safe_error_code: str | None = None,
+    safe_error_summary: str | None = None,
+    delivery_invoked: bool = False,
+    delivery_adapter_invoked: bool = False,
+) -> dict[str, Any]:
+    cleaned_execution_attempt_id = _clean_required_text(
+        execution_attempt_id,
+        field_name="execution_attempt_id",
+        max_length=DIGEST_DELIVERY_RESULT_EXECUTION_ATTEMPT_ID_MAX_LENGTH,
+    )
+    cleaned_result_status = _clean_delivery_result_status(result_status)
+    delivery_intention_id = _clean_delivery_intention_id(
+        str(intention.get("delivery_intention_id", ""))
+    )
+    channel = str(telegram_plan.get("channel", ""))
+    if channel != DIGEST_DELIVERY_DRAFT_CHANNEL:
+        raise DeliveryResultConflictError("delivery result channel is not telegram")
+
+    text_hash = str(telegram_plan.get("text_sha256", ""))
+    if not text_hash or text_hash != str(intention.get("text_sha256", "")):
+        raise DeliveryResultConflictError(
+            "delivery result text_sha256 does not match intention"
+        )
+
+    planned_chunk_count = _require_non_negative_int(
+        telegram_plan.get("chunk_count"),
+        field_name="planned_chunk_count",
+    )
+    safe_attempted_chunk_count = _require_non_negative_int(
+        attempted_chunk_count,
+        field_name="attempted_chunk_count",
+    )
+    safe_delivered_chunk_count = _require_non_negative_int(
+        delivered_chunk_count,
+        field_name="delivered_chunk_count",
+    )
+    safe_failed_chunk_count = _require_non_negative_int(
+        failed_chunk_count,
+        field_name="failed_chunk_count",
+    )
+    _validate_delivery_result_counts(
+        result_status=cleaned_result_status,
+        planned_chunk_count=planned_chunk_count,
+        attempted_chunk_count=safe_attempted_chunk_count,
+        delivered_chunk_count=safe_delivered_chunk_count,
+        failed_chunk_count=safe_failed_chunk_count,
+    )
+
+    delivery_result_id = build_delivery_result_id(
+        delivery_intention_id=delivery_intention_id,
+        execution_attempt_id=cleaned_execution_attempt_id,
+        channel=channel,
+        text_sha256=text_hash,
+        result_status=cleaned_result_status,
+    )
+    delivery_invoked_bool = bool(delivery_invoked)
+    delivery_adapter_invoked_bool = bool(delivery_adapter_invoked)
+    payload = {
+        "persisted": True,
+        "status": DIGEST_DELIVERY_RESULT_STATUS,
+        "delivery_result_id": delivery_result_id,
+        "delivery_intention_id": delivery_intention_id,
+        "execution_attempt_id": cleaned_execution_attempt_id,
+        "digest_type": telegram_plan.get("digest_type"),
+        "channel": channel,
+        "result_status": cleaned_result_status,
+        "text_sha256": text_hash,
+        "planned_chunk_count": planned_chunk_count,
+        "attempted_chunk_count": safe_attempted_chunk_count,
+        "delivered_chunk_count": safe_delivered_chunk_count,
+        "failed_chunk_count": safe_failed_chunk_count,
+        "safe_message_refs": _safe_message_refs(safe_message_refs),
+        "delivery_invoked": delivery_invoked_bool,
+        "delivery_adapter_invoked": delivery_adapter_invoked_bool,
+        "scheduler_invoked": False,
+        "approval_execution_invoked": False,
+        "sent": safe_delivered_chunk_count > 0,
+        "intention": _safe_delivery_result_intention_metadata(intention),
+        "telegram_plan": {
+            "status": telegram_plan.get("status"),
+            "delivery_intention_id": telegram_plan.get("delivery_intention_id"),
+            "delivery_draft_id": telegram_plan.get("delivery_draft_id"),
+            "channel": telegram_plan.get("channel"),
+            "text_sha256": telegram_plan.get("text_sha256"),
+            "chunk_count": telegram_plan.get("chunk_count"),
+            "chunks_text_included": bool(telegram_plan.get("chunks_text_included")),
+            "delivery_execution_enabled": False,
+            "delivery_enabled": False,
+            "delivery_invoked": False,
+            "delivery_adapter_invoked": False,
+            "scheduler_invoked": False,
+            "sent": False,
+        },
+        "source_of_truth": _delivery_result_source_of_truth_metadata(telegram_plan),
+        "safety": _delivery_result_safety_metadata(
+            delivery_invoked=delivery_invoked_bool,
+            delivery_adapter_invoked=delivery_adapter_invoked_bool,
+        ),
+    }
+
+    cleaned_error_code = _clean_safe_delivery_result_text(
+        safe_error_code,
+        field_name="safe_error_code",
+        max_length=DIGEST_DELIVERY_RESULT_SAFE_ERROR_CODE_MAX_LENGTH,
+    )
+    if cleaned_error_code is not None:
+        payload["safe_error_code"] = cleaned_error_code
+
+    cleaned_error_summary = _clean_safe_delivery_result_text(
+        safe_error_summary,
+        field_name="safe_error_summary",
+        max_length=DIGEST_DELIVERY_RESULT_SAFE_ERROR_SUMMARY_MAX_LENGTH,
+    )
+    if cleaned_error_summary is not None:
+        payload["safe_error_summary"] = cleaned_error_summary
+
+    return payload
+
+
+def _delivery_result_audit_log_response(record: AuditLog) -> dict[str, Any] | None:
+    if not isinstance(record.payload, Mapping):
+        return None
+
+    response = dict(record.payload)
+    if response.get("delivery_result_id") != record.after_ref:
+        return None
+    if response.get("delivery_intention_id") != record.before_ref:
+        return None
+
+    response["persisted"] = True
+    recorded_at = record.created_at.isoformat() if record.created_at is not None else None
+    response["recorded_at"] = recorded_at
+    response["audit_log"] = {
+        "event_type": record.event_type,
+        "before_ref": record.before_ref,
+        "after_ref": record.after_ref,
+        "created_at": recorded_at,
+    }
+    return response
+
+
+async def get_digest_delivery_result(
+    session: AsyncSession,
+    *,
+    delivery_result_id: str,
+) -> dict[str, Any] | None:
+    cleaned_delivery_result_id = _clean_delivery_result_id(delivery_result_id)
+    record = await session.scalar(
+        select(AuditLog)
+        .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+        .where(AuditLog.after_ref == cleaned_delivery_result_id)
+        .order_by(AuditLog.id)
+    )
+    if record is None:
+        return None
+    return _delivery_result_audit_log_response(record)
+
+
+async def record_digest_delivery_result(
+    session: AsyncSession,
+    *,
+    delivery_intention_id: str,
+    execution_attempt_id: str,
+    result_status: str,
+    attempted_chunk_count: int,
+    delivered_chunk_count: int,
+    failed_chunk_count: int,
+    safe_message_refs: list[Mapping[str, Any]] | None = None,
+    safe_error_code: str | None = None,
+    safe_error_summary: str | None = None,
+    delivery_invoked: bool = False,
+    delivery_adapter_invoked: bool = False,
+    actor: str = "system",
+) -> dict[str, Any]:
+    cleaned_delivery_intention_id = _clean_delivery_intention_id(delivery_intention_id)
+    intention = await get_digest_delivery_intention(
+        session,
+        delivery_intention_id=cleaned_delivery_intention_id,
+    )
+    if intention is None:
+        raise DeliveryResultConflictError("delivery intention was not found")
+
+    try:
+        telegram_plan = await get_digest_delivery_intention_telegram_plan(
+            session,
+            delivery_intention_id=cleaned_delivery_intention_id,
+        )
+    except DeliveryTelegramPlanConflictError as exc:
+        raise DeliveryResultConflictError(str(exc)) from exc
+    if telegram_plan is None:
+        raise DeliveryResultConflictError("delivery intention was not found")
+
+    payload = build_digest_delivery_result(
+        intention=intention,
+        telegram_plan=telegram_plan,
+        execution_attempt_id=execution_attempt_id,
+        result_status=result_status,
+        attempted_chunk_count=attempted_chunk_count,
+        delivered_chunk_count=delivered_chunk_count,
+        failed_chunk_count=failed_chunk_count,
+        safe_message_refs=safe_message_refs,
+        safe_error_code=safe_error_code,
+        safe_error_summary=safe_error_summary,
+        delivery_invoked=delivery_invoked,
+        delivery_adapter_invoked=delivery_adapter_invoked,
+    )
+    delivery_result_id = _clean_delivery_result_id(
+        str(payload.get("delivery_result_id", ""))
+    )
+    existing = await get_digest_delivery_result(
+        session,
+        delivery_result_id=delivery_result_id,
+    )
+    if existing is not None:
+        stored_payload = {
+            key: value
+            for key, value in existing.items()
+            if key not in {"audit_log", "recorded_at"}
+        }
+        if stored_payload != payload:
+            raise DeliveryResultConflictError(
+                "existing delivery result payload does not match expected payload"
+            )
+        return existing
+
+    record = AuditLog(
+        event_type=DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+        actor=actor,
+        correlation_id=cleaned_delivery_intention_id,
+        trace_id=delivery_result_id,
+        before_ref=cleaned_delivery_intention_id,
+        after_ref=delivery_result_id,
+        approval_id=f"{cleaned_delivery_intention_id}:delivery_result",
+        payload=payload,
+    )
+    session.add(record)
+    await session.flush()
+
+    response = _delivery_result_audit_log_response(record)
+    if response is None:
+        raise ValueError("persisted delivery result audit payload is invalid")
+    return response
 
 
 async def record_digest_delivery_draft_decision(

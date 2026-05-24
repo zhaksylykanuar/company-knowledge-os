@@ -19,6 +19,7 @@ from app.services.digest_delivery_drafts import (
     DeliveryDraftNotFoundError,
     DeliveryIntentionConflictError,
     DeliveryIntentionNotReadyError,
+    DeliveryResultConflictError,
     DeliveryTelegramExecutionPreflightConflictError,
     DeliveryTelegramPlanConflictError,
     approve_digest_delivery_draft,
@@ -30,6 +31,7 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_intention,
     get_digest_delivery_intention_telegram_execution_preflight,
     get_digest_delivery_intention_telegram_plan,
+    get_digest_delivery_result,
     get_persisted_digest_delivery_draft,
     reject_digest_delivery_draft,
 )
@@ -326,6 +328,35 @@ async def _get_digest_delivery_intention_telegram_execution_preflight_response(
             detail="delivery intention was not found",
         )
     return preflight
+
+
+async def _get_digest_delivery_result_response(
+    *,
+    delivery_result_id: str,
+) -> dict[str, Any]:
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await get_digest_delivery_result(
+                session,
+                delivery_result_id=delivery_result_id,
+            )
+    except DeliveryResultConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="delivery result was not found",
+        )
+    return result
 
 
 async def _record_digest_delivery_draft_decision_response(
@@ -659,4 +690,13 @@ async def get_persisted_digest_delivery_intention_telegram_execution_preflight_e
 ) -> dict[str, Any]:
     return await _get_digest_delivery_intention_telegram_execution_preflight_response(
         delivery_intention_id=delivery_intention_id,
+    )
+
+
+@router.get("/delivery-results/{delivery_result_id}")
+async def get_persisted_digest_delivery_result_endpoint(
+    delivery_result_id: str,
+) -> dict[str, Any]:
+    return await _get_digest_delivery_result_response(
+        delivery_result_id=delivery_result_id,
     )

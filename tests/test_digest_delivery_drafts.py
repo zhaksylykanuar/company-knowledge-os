@@ -18,14 +18,18 @@ from app.services.digest_delivery_drafts import (
     DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
     DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
     DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
+    DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
     DeliveryDraftDecisionConflictError,
     DeliveryDraftNotFoundError,
     DeliveryIntentionConflictError,
     DeliveryIntentionNotReadyError,
+    DeliveryResultConflictError,
     DeliveryTelegramPlanConflictError,
     approve_digest_delivery_draft,
     build_delivery_draft_id,
     build_delivery_intention_id,
+    build_delivery_result_id,
+    build_digest_delivery_result,
     build_persisted_attention_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
     create_digest_delivery_intention,
@@ -34,8 +38,10 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_intention,
     get_digest_delivery_intention_telegram_execution_preflight,
     get_digest_delivery_intention_telegram_plan,
+    get_digest_delivery_result,
     get_persisted_digest_delivery_draft,
     persist_digest_delivery_draft,
+    record_digest_delivery_result,
     reject_digest_delivery_draft,
     sanitize_persisted_attention_digest_for_delivery_draft,
 )
@@ -211,6 +217,16 @@ async def _delete_delivery_intention_audit_log(delivery_intention_id: str) -> No
         await session.commit()
 
 
+async def _delete_delivery_result_audit_log(delivery_result_id: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_result_id)
+        )
+        await session.commit()
+
+
 async def _delivery_draft_audit_log_count(
     delivery_draft_id: str,
     *,
@@ -272,6 +288,29 @@ async def _delivery_intention_audit_payload(
             select(AuditLog.payload)
             .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
             .where(AuditLog.after_ref == delivery_intention_id)
+            .order_by(AuditLog.id)
+        )
+    assert isinstance(payload, dict)
+    return payload
+
+
+async def _delivery_result_audit_log_count(delivery_result_id: str) -> int:
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_result_id)
+        )
+    return int(count or 0)
+
+
+async def _delivery_result_audit_payload(delivery_result_id: str) -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        payload = await session.scalar(
+            select(AuditLog.payload)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_result_id)
             .order_by(AuditLog.id)
         )
     assert isinstance(payload, dict)
@@ -420,6 +459,42 @@ def test_delivery_intention_id_is_deterministic_and_changes_with_safe_inputs() -
     assert stable_id.startswith("dint_")
     assert stable_id != changed_hash_id
     assert stable_id != changed_channel_id
+
+
+def test_delivery_result_id_is_deterministic_and_changes_with_safe_inputs() -> None:
+    stable_id = build_delivery_result_id(
+        delivery_intention_id="dint_stable",
+        execution_attempt_id="manual-attempt-1",
+        channel="telegram",
+        text_sha256="a" * 64,
+        result_status="skipped",
+    )
+    repeated_id = build_delivery_result_id(
+        delivery_intention_id="dint_stable",
+        execution_attempt_id="manual-attempt-1",
+        channel="telegram",
+        text_sha256="a" * 64,
+        result_status="skipped",
+    )
+    changed_attempt_id = build_delivery_result_id(
+        delivery_intention_id="dint_stable",
+        execution_attempt_id="manual-attempt-2",
+        channel="telegram",
+        text_sha256="a" * 64,
+        result_status="skipped",
+    )
+    changed_status_id = build_delivery_result_id(
+        delivery_intention_id="dint_stable",
+        execution_attempt_id="manual-attempt-1",
+        channel="telegram",
+        text_sha256="a" * 64,
+        result_status="failed",
+    )
+
+    assert stable_id == repeated_id
+    assert stable_id.startswith("dres_")
+    assert stable_id != changed_attempt_id
+    assert stable_id != changed_status_id
 
 
 def test_delivery_draft_keeps_hidden_details_count_only_and_omits_raw_payloads() -> None:
@@ -1290,12 +1365,10 @@ async def test_delivery_intention_creates_one_safe_audit_event_and_is_idempotent
             "PRIVATE_PROMPT_DO_NOT_EXPOSE",
             "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE",
             "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE",
-            "raw_payload",
-            "provider_payload",
-            "prompt",
-            "source_payload",
         ):
             assert marker not in dumped
+        for key in ("raw_payload", "provider_payload", "prompt", "source_payload"):
+            assert f'"{key}":' not in dumped
     finally:
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
@@ -1444,12 +1517,10 @@ async def test_delivery_intention_telegram_plan_returns_safe_read_only_metadata(
             "PRIVATE_PROMPT_DO_NOT_EXPOSE",
             "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE",
             "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE",
-            "raw_payload",
-            "provider_payload",
-            "prompt",
-            "source_payload",
         ):
             assert marker not in dumped
+        for key in ("raw_payload", "provider_payload", "prompt", "source_payload"):
+            assert f'"{key}":' not in dumped
     finally:
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
@@ -1655,6 +1726,293 @@ async def test_delivery_intention_telegram_execution_preflight_reports_config_pr
         ):
             assert marker not in dumped
     finally:
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_result_records_safe_idempotent_audit_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_audit_log_table()
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("delivery result contract must not send Telegram messages")
+
+    def forbidden_render(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("delivery result contract must not recompute digest text")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 8, 1),
+        end_at=_utc(2132, 8, 2),
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+                note="Ready for delivery result contract.",
+            )
+            intention = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="test",
+            )
+            telegram_plan = await get_digest_delivery_intention_telegram_plan(
+                session,
+                delivery_intention_id=intention["delivery_intention_id"],
+            )
+            assert telegram_plan is not None
+            built = build_digest_delivery_result(
+                intention=intention,
+                telegram_plan=telegram_plan,
+                execution_attempt_id="manual-attempt-1",
+                result_status="skipped",
+                attempted_chunk_count=0,
+                delivered_chunk_count=0,
+                failed_chunk_count=0,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "message-1",
+                        "chat_id": "TELEGRAM_CHAT_ID_TEST_VALUE",
+                        "telegram_url": "https://api.telegram.org/botTOKEN",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                safe_error_code="operator_skipped",
+                safe_error_summary="Operator skipped before send.",
+                delivery_invoked=False,
+                delivery_adapter_invoked=False,
+            )
+            first = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=intention["delivery_intention_id"],
+                execution_attempt_id="manual-attempt-1",
+                result_status="skipped",
+                attempted_chunk_count=0,
+                delivered_chunk_count=0,
+                failed_chunk_count=0,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "message-1",
+                        "chat_id": "TELEGRAM_CHAT_ID_TEST_VALUE",
+                        "telegram_url": "https://api.telegram.org/botTOKEN",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                safe_error_code="operator_skipped",
+                safe_error_summary="Operator skipped before send.",
+                delivery_invoked=False,
+                delivery_adapter_invoked=False,
+                actor="test",
+            )
+            repeated = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=intention["delivery_intention_id"],
+                execution_attempt_id="manual-attempt-1",
+                result_status="skipped",
+                attempted_chunk_count=0,
+                delivered_chunk_count=0,
+                failed_chunk_count=0,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "message-1",
+                        "chat_id": "TELEGRAM_CHAT_ID_TEST_VALUE",
+                        "telegram_url": "https://api.telegram.org/botTOKEN",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                safe_error_code="operator_skipped",
+                safe_error_summary="Operator skipped before send.",
+                delivery_invoked=False,
+                delivery_adapter_invoked=False,
+                actor="test",
+            )
+            await session.commit()
+
+        delivery_intention_id = intention["delivery_intention_id"]
+        delivery_result_id = first["delivery_result_id"]
+        monkeypatch.setattr(
+            digest_delivery_drafts,
+            "render_persisted_attention_digest_text",
+            forbidden_render,
+        )
+
+        assert built["delivery_result_id"] == delivery_result_id
+        assert first == repeated
+        assert first["persisted"] is True
+        assert first["status"] == "delivery_result"
+        assert first["delivery_result_id"].startswith("dres_")
+        assert first["delivery_intention_id"] == delivery_intention_id
+        assert first["execution_attempt_id"] == "manual-attempt-1"
+        assert first["digest_type"] == "persisted_attention"
+        assert first["channel"] == "telegram"
+        assert first["result_status"] == "skipped"
+        assert first["text_sha256"] == draft["text_sha256"]
+        assert first["planned_chunk_count"] == draft["chunk_count"]
+        assert first["attempted_chunk_count"] == 0
+        assert first["delivered_chunk_count"] == 0
+        assert first["failed_chunk_count"] == 0
+        assert first["sent"] is False
+        assert first["delivery_invoked"] is False
+        assert first["delivery_adapter_invoked"] is False
+        assert first["scheduler_invoked"] is False
+        assert first["approval_execution_invoked"] is False
+        assert first["safe_message_refs"] == [
+            {
+                "chunk_index": 1,
+                "message_id": "message-1",
+            }
+        ]
+        assert first["safe_error_code"] == "operator_skipped"
+        assert first["safe_error_summary"] == "Operator skipped before send."
+        assert first["intention"]["current_decision"] == "approved"
+        assert first["telegram_plan"]["chunks_text_included"] is False
+        assert first["source_of_truth"]["delivery_result_is_source_of_truth"] is False
+        assert first["source_of_truth"]["telegram_is_source_of_truth"] is False
+        assert first["safety"]["provider_free"] is True
+        assert first["safety"]["credential_values_exposed"] is False
+        assert first["safety"]["credential_validation_invoked"] is False
+        assert first["safety"]["raw_payloads_exposed"] is False
+        assert first["safety"]["telegram_raw_api_response_stored"] is False
+        assert first["safety"]["rendered_text_included"] is False
+        assert first["safety"]["chunk_text_included"] is False
+        assert first["audit_log"]["event_type"] == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE
+        assert first["audit_log"]["before_ref"] == delivery_intention_id
+        assert first["audit_log"]["after_ref"] == delivery_result_id
+        assert first["recorded_at"] == first["audit_log"]["created_at"]
+        assert await _delivery_result_audit_log_count(delivery_result_id) == 1
+
+        async with AsyncSessionLocal() as session:
+            retrieved = await get_digest_delivery_result(
+                session,
+                delivery_result_id=delivery_result_id,
+            )
+            unknown = await get_digest_delivery_result(
+                session,
+                delivery_result_id="dres_unknown_fos_068_service",
+            )
+        assert retrieved == first
+        assert unknown is None
+
+        stored_payload = await _delivery_result_audit_payload(delivery_result_id)
+        assert stored_payload["delivery_result_id"] == delivery_result_id
+        assert "recorded_at" not in stored_payload
+
+        dumped = json.dumps(first, sort_keys=True)
+        assert "TELEGRAM_BOT_TOKEN_TEST_VALUE" not in dumped
+        assert "TELEGRAM_CHAT_ID_TEST_VALUE" not in dumped
+        assert '"rendered_text":' not in dumped
+        assert '"digest":' not in dumped
+        assert '"text":' not in dumped
+        assert "https://api.telegram.org" not in dumped
+        assert "telegram_url" not in dumped
+        assert "raw_response" not in dumped
+        assert "PRIVATE_TELEGRAM_RAW_RESPONSE" not in dumped
+        assert "Hidden delivery draft title" not in dumped
+        assert "atri_delivery_hidden" not in dumped
+        assert "sevt_delivery_hidden" not in dumped
+        assert "evidence_refs" not in dumped
+        for marker in (
+            "PRIVATE_RAW_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROVIDER_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_PROMPT_DO_NOT_EXPOSE",
+            "PRIVATE_SOURCE_PAYLOAD_DO_NOT_EXPOSE",
+            "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE",
+        ):
+            assert marker not in dumped
+        for key in ("raw_payload", "provider_payload", "prompt", "source_payload"):
+            assert f'"{key}":' not in dumped
+    finally:
+        if "delivery_result_id" in locals():
+            await _delete_delivery_result_audit_log(delivery_result_id)
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_result_conflicts_on_mismatched_existing_payload() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 8, 3),
+        end_at=_utc(2132, 8, 4),
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+            )
+            intention = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="test",
+            )
+            first = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=intention["delivery_intention_id"],
+                execution_attempt_id="manual-attempt-conflict",
+                result_status="skipped",
+                attempted_chunk_count=0,
+                delivered_chunk_count=0,
+                failed_chunk_count=0,
+                safe_error_summary="Operator skipped before send.",
+                actor="test",
+            )
+            await session.commit()
+
+        delivery_result_id = first["delivery_result_id"]
+        async with AsyncSessionLocal() as session:
+            record = await session.scalar(
+                select(AuditLog)
+                .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+                .where(AuditLog.after_ref == delivery_result_id)
+            )
+            assert record is not None
+            payload = dict(record.payload)
+            payload["safe_error_summary"] = "Changed safe summary."
+            record.payload = payload
+            await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            with pytest.raises(
+                DeliveryResultConflictError,
+                match="existing delivery result payload does not match expected payload",
+            ):
+                await record_digest_delivery_result(
+                    session,
+                    delivery_intention_id=intention["delivery_intention_id"],
+                    execution_attempt_id="manual-attempt-conflict",
+                    result_status="skipped",
+                    attempted_chunk_count=0,
+                    delivered_chunk_count=0,
+                    failed_chunk_count=0,
+                    safe_error_summary="Operator skipped before send.",
+                    actor="test",
+                )
+
+        assert await _delivery_result_audit_log_count(delivery_result_id) == 1
+    finally:
+        if "delivery_result_id" in locals():
+            await _delete_delivery_result_audit_log(delivery_result_id)
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
 

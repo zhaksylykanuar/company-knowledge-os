@@ -22,6 +22,8 @@ from app.services.digest_delivery_drafts import (
     DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
     DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
     DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
+    DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+    record_digest_delivery_result,
 )
 from app.services.normalized_activity import record_normalized_activity_item
 import app.services.telegram_delivery as telegram_delivery
@@ -77,6 +79,16 @@ async def _cleanup_delivery_draft_api_record(delivery_draft_id: str) -> None:
             delete(AuditLog)
             .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
             .where(AuditLog.before_ref == delivery_draft_id)
+        )
+        await session.commit()
+
+
+async def _cleanup_delivery_result_api_record(delivery_result_id: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_result_id)
         )
         await session.commit()
 
@@ -150,6 +162,17 @@ async def _delivery_intention_api_payload(delivery_intention_id: str) -> dict:
         )
     assert isinstance(payload, dict)
     return payload
+
+
+async def _delivery_result_api_event_count(delivery_result_id: str) -> int:
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE)
+            .where(AuditLog.after_ref == delivery_result_id)
+        )
+    return int(count or 0)
 
 
 async def _cleanup_persisted_attention_digest_api_fixture(unique: str) -> None:
@@ -1620,6 +1643,9 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
             "/v1/digest/delivery-intentions/dint_missing"
             "/telegram-execution-preflight",
         )
+        delivery_result_response = await client.get(
+            "/v1/digest/delivery-results/dres_missing",
+        )
 
     assert post_response.status_code == 401
     assert get_response.status_code == 401
@@ -1631,6 +1657,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert intention_get_response.status_code == 401
     assert telegram_plan_response.status_code == 401
     assert telegram_preflight_response.status_code == 401
+    assert delivery_result_response.status_code == 401
     assert post_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert approve_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
@@ -1641,6 +1668,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert intention_get_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert telegram_plan_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert telegram_preflight_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    assert delivery_result_response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
     assert "test-api-key" not in post_response.text
     assert "test-api-key" not in get_response.text
     assert "test-api-key" not in approve_response.text
@@ -1651,6 +1679,7 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
     assert "test-api-key" not in intention_get_response.text
     assert "test-api-key" not in telegram_plan_response.text
     assert "test-api-key" not in telegram_preflight_response.text
+    assert "test-api-key" not in delivery_result_response.text
 
 
 async def test_persisted_attention_digest_delivery_draft_retrieval_returns_404_for_unknown(
@@ -1741,6 +1770,9 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
             "/v1/digest/delivery-intentions/dint_unknown_fos_067_api"
             "/telegram-execution-preflight",
         )
+        delivery_result_response = await client.get(
+            "/v1/digest/delivery-results/dres_unknown_fos_068_api",
+        )
 
     assert approve_response.status_code == 404
     assert reject_response.status_code == 404
@@ -1750,6 +1782,7 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
     assert intention_get_response.status_code == 404
     assert telegram_plan_response.status_code == 404
     assert telegram_preflight_response.status_code == 404
+    assert delivery_result_response.status_code == 404
     assert approve_response.json() == {"detail": "delivery draft was not found"}
     assert reject_response.json() == {"detail": "delivery draft was not found"}
     assert status_response.json() == {"detail": "delivery draft was not found"}
@@ -1761,6 +1794,9 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
     }
     assert telegram_preflight_response.json() == {
         "detail": "delivery intention was not found"
+    }
+    assert delivery_result_response.json() == {
+        "detail": "delivery result was not found"
     }
 
 
@@ -1884,9 +1920,9 @@ async def test_delivery_draft_approve_endpoint_records_safe_idempotent_decision(
         assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
-        assert "raw_payload" not in serialized
-        assert "provider_payload" not in serialized
-        assert "prompt" not in serialized
+        assert '"raw_payload":' not in serialized
+        assert '"provider_payload":' not in serialized
+        assert '"prompt":' not in serialized
     finally:
         if delivery_draft_id is not None:
             await _cleanup_delivery_draft_api_record(delivery_draft_id)
@@ -2124,9 +2160,9 @@ async def test_delivery_draft_delivery_readiness_endpoint_reports_safe_states(
         assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
         assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
-        assert "raw_payload" not in serialized
-        assert "provider_payload" not in serialized
-        assert "prompt" not in serialized
+        assert '"raw_payload":' not in serialized
+        assert '"provider_payload":' not in serialized
+        assert '"prompt":' not in serialized
     finally:
         for delivery_draft_id in delivery_draft_ids:
             await _cleanup_delivery_draft_api_record(delivery_draft_id)
@@ -2577,6 +2613,182 @@ async def test_delivery_intention_telegram_execution_preflight_endpoint_reports_
         assert "provider_payload" not in serialized
         assert "prompt" not in serialized
     finally:
+        if delivery_draft_id is not None:
+            await _cleanup_delivery_draft_api_record(delivery_draft_id)
+        await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+
+async def test_delivery_result_endpoint_retrieves_safe_read_only_audit_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_persisted_attention_digest_api_tables()
+    _set_auth(monkeypatch, enabled=False, key=None)
+
+    async def forbidden_send(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("delivery result retrieval must not send messages")
+
+    monkeypatch.setattr(telegram_delivery, "send_telegram_plain_text", forbidden_send)
+    unique = uuid4().hex
+    hidden_title = "Hidden delivery result API title"
+    delivery_draft_id: str | None = None
+    delivery_result_id: str | None = None
+    await _cleanup_persisted_attention_digest_api_fixture(unique)
+
+    try:
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="result-work",
+            attention_class="requires_my_attention",
+            priority="high",
+            created_at=_utc(2131, 9, 21, 9),
+            activity=_normalized_activity(unique, "result-work"),
+        )
+        await _record_persisted_attention_api_item(
+            unique=unique,
+            suffix="result-hidden",
+            attention_class="no_action_required",
+            priority="low",
+            show_in_digest=False,
+            created_at=_utc(2131, 9, 21, 10),
+            activity=_normalized_activity(
+                unique,
+                "result-hidden",
+                title=hidden_title,
+            ),
+        )
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            created_response = await client.post(
+                "/v1/digest/persisted-attention/delivery-draft",
+                params={
+                    "start_at": "2131-09-21T00:00:00+00:00",
+                    "end_at": "2131-09-22T00:00:00+00:00",
+                    "limit": "10",
+                },
+            )
+            assert created_response.status_code == 200
+            created_draft = created_response.json()
+            delivery_draft_id = created_draft["delivery_draft_id"]
+
+            approve_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                json={"reviewer": "founder", "note": "Ready for result contract."},
+            )
+            assert approve_response.status_code == 200
+
+            intention_response = await client.post(
+                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+            )
+            assert intention_response.status_code == 200
+            delivery_intention_id = intention_response.json()["delivery_intention_id"]
+
+        async with AsyncSessionLocal() as session:
+            result = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="api-manual-attempt-1",
+                result_status="skipped",
+                attempted_chunk_count=0,
+                delivered_chunk_count=0,
+                failed_chunk_count=0,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "message-1",
+                        "chat_id": "TELEGRAM_CHAT_ID_TEST_VALUE",
+                        "telegram_url": "https://api.telegram.org/botTOKEN",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                safe_error_code="operator_skipped",
+                safe_error_summary="Operator skipped before send.",
+                delivery_invoked=False,
+                delivery_adapter_invoked=False,
+                actor="test",
+            )
+            await session.commit()
+
+        delivery_result_id = result["delivery_result_id"]
+        result_count_before = await _delivery_result_api_event_count(delivery_result_id)
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            retrieved_response = await client.get(
+                f"/v1/digest/delivery-results/{delivery_result_id}",
+            )
+
+        assert retrieved_response.status_code == 200
+        retrieved = retrieved_response.json()
+        assert retrieved["persisted"] is True
+        assert retrieved["status"] == "delivery_result"
+        assert retrieved["delivery_result_id"] == delivery_result_id
+        assert retrieved["delivery_intention_id"] == delivery_intention_id
+        assert retrieved["execution_attempt_id"] == "api-manual-attempt-1"
+        assert retrieved["digest_type"] == "persisted_attention"
+        assert retrieved["channel"] == "telegram"
+        assert retrieved["result_status"] == "skipped"
+        assert retrieved["text_sha256"] == created_draft["text_sha256"]
+        assert retrieved["planned_chunk_count"] == created_draft["chunk_count"]
+        assert retrieved["attempted_chunk_count"] == 0
+        assert retrieved["delivered_chunk_count"] == 0
+        assert retrieved["failed_chunk_count"] == 0
+        assert retrieved["safe_message_refs"] == [
+            {
+                "chunk_index": 1,
+                "message_id": "message-1",
+            }
+        ]
+        assert retrieved["safe_error_code"] == "operator_skipped"
+        assert retrieved["safe_error_summary"] == "Operator skipped before send."
+        assert retrieved["delivery_invoked"] is False
+        assert retrieved["delivery_adapter_invoked"] is False
+        assert retrieved["scheduler_invoked"] is False
+        assert retrieved["approval_execution_invoked"] is False
+        assert retrieved["sent"] is False
+        assert retrieved["source_of_truth"]["delivery_result_is_source_of_truth"] is False
+        assert retrieved["source_of_truth"]["telegram_is_source_of_truth"] is False
+        assert retrieved["safety"]["provider_free"] is True
+        assert retrieved["safety"]["credential_values_exposed"] is False
+        assert retrieved["safety"]["credential_validation_invoked"] is False
+        assert retrieved["safety"]["raw_payloads_exposed"] is False
+        assert retrieved["safety"]["telegram_raw_api_response_stored"] is False
+        assert retrieved["safety"]["rendered_text_included"] is False
+        assert retrieved["safety"]["chunk_text_included"] is False
+        assert retrieved["audit_log"]["event_type"] == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE
+        assert retrieved["audit_log"]["before_ref"] == delivery_intention_id
+        assert retrieved["audit_log"]["after_ref"] == delivery_result_id
+        assert retrieved["recorded_at"] == retrieved["audit_log"]["created_at"]
+        assert await _delivery_result_api_event_count(delivery_result_id) == (
+            result_count_before
+        )
+
+        serialized = json.dumps(retrieved, sort_keys=True)
+        assert "TELEGRAM_BOT_TOKEN_TEST_VALUE" not in serialized
+        assert "TELEGRAM_CHAT_ID_TEST_VALUE" not in serialized
+        assert '"rendered_text":' not in serialized
+        assert '"digest":' not in serialized
+        assert '"text":' not in serialized
+        assert "https://api.telegram.org" not in serialized
+        assert "telegram_url" not in serialized
+        assert "raw_response" not in serialized
+        assert "PRIVATE_TELEGRAM_RAW_RESPONSE" not in serialized
+        assert hidden_title not in serialized
+        assert f"atri_digest_api_{unique}_result-hidden" not in serialized
+        assert f"digest:api:attention:{unique}:result-hidden" not in serialized
+        assert "evidence_refs" not in serialized
+        assert "PRIVATE_ACTIVITY_RAW_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROVIDER_PAYLOAD_DO_NOT_EXPOSE" not in serialized
+        assert "PRIVATE_ACTIVITY_PROMPT_DO_NOT_EXPOSE" not in serialized
+        assert '"raw_payload":' not in serialized
+        assert '"provider_payload":' not in serialized
+        assert '"prompt":' not in serialized
+    finally:
+        if delivery_result_id is not None:
+            await _cleanup_delivery_result_api_record(delivery_result_id)
         if delivery_draft_id is not None:
             await _cleanup_delivery_draft_api_record(delivery_draft_id)
         await _cleanup_persisted_attention_digest_api_fixture(unique)

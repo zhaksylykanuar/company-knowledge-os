@@ -26,6 +26,8 @@
   read-only, implemented
 - Persisted attention digest Telegram execution preflight:
   read-only, implemented
+- Persisted attention digest delivery result audit contract:
+  audit-log-backed, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -54,6 +56,10 @@
   FOS-067 reads stored delivery intention and Telegram plan readiness plus
   Telegram credential presence metadata for execution preflight, but it does
   not append audit rows or introduce new storage.
+  FOS-068 stores sanitized future delivery outcome metadata here as
+  `digest.delivery_result.recorded` events, with `before_ref` set to the
+  `delivery_intention_id` and `after_ref` set to the deterministic
+  `delivery_result_id`; no new table or migration is introduced.
 - `source_documents`: source document metadata and raw refs.
 - `document_chunks`: searchable text chunks with offsets and raw refs.
 - `extracted_tasks`: evidence-backed extracted task records.
@@ -191,6 +197,18 @@
   events, outbox records, audit rows, new tables, or migrations; or expose
   rendered text, chunk text, raw source bodies, prompts, provider payloads,
   hidden item details, or newly exposed evidence refs.
+- Delivery result records for delivery intentions are audit-log-backed execution
+  outcome metadata, not source-of-truth company facts and not delivery
+  execution. They are keyed by deterministic `delivery_result_id` values and may
+  store only sanitized result fields: delivery intention ID, execution attempt
+  ID, channel, rendered text hash, planned/attempted/delivered/failed chunk
+  counts, bounded safe message refs, safe error code/summary, inert scheduler
+  and approval-execution flags, and source-of-truth/safety metadata. They must
+  not store rendered text, chunk text, Telegram bot tokens, chat IDs, URLs,
+  webhook secrets, raw Telegram API responses, full digest snapshots, raw source
+  bodies, prompts, provider payloads, source payloads, hidden item details, or
+  newly exposed evidence refs. FOS-068 adds no public result creation API, send
+  path, outbox table, scheduler job, new table, or migration.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

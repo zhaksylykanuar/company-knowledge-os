@@ -24,6 +24,7 @@
 - Pure Telegram delivery plan preview for delivery intentions: implemented
 - Read-only delivery intention operator review command: implemented
 - Read-only Telegram execution preflight for delivery intentions: implemented
+- Delivery result audit contract for future Telegram sends: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -132,6 +133,13 @@
   returns only booleans and safe blockers, never credential values, never
   validates credentials against Telegram, never sends, never invokes delivery
   adapters, and always keeps delivery execution disabled.
+- A delivery result audit contract can record and retrieve sanitized future
+  Telegram send outcomes in `audit_logs` by deterministic `delivery_result_id`.
+  Result records are execution outcome metadata, not source-of-truth company
+  facts, and they never include rendered text, chunk text, credential values,
+  raw Telegram responses, raw/provider/source payloads, hidden low-priority
+  details, or newly exposed evidence refs. FOS-068 does not implement sending or
+  expose a public result creation endpoint.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -351,6 +359,15 @@
   values, call Telegram/Slack APIs, invoke delivery adapters, create audit
   rows, create scheduler jobs, delivery result events, outbox records,
   migrations, or new tables, and does not send Telegram/Slack messages.
+- FOS-068 adds a delivery result audit contract for future bounded Telegram send
+  outcomes. The contract stores sanitized `digest.delivery_result.recorded`
+  events in existing `audit_logs`, keyed by deterministic `dres_` delivery
+  result IDs, and adds protected read-only retrieval for stored result metadata.
+- FOS-068 does not implement Telegram sending, use bot credentials, validate
+  credentials against Telegram, expose result creation APIs, call delivery
+  adapters, create scheduler jobs, delivery workers, outbox records/tables,
+  migrations, or new tables. Delivery results remain audit metadata only and are
+  not source-of-truth company facts.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -391,8 +408,9 @@
 - Persisted delivery drafts have approval/rejection decisions, a read-only
   delivery readiness preview, audit-log-backed delivery intention records, a
   pure Telegram delivery plan preview, and a local read-only operator review
-  command plus read-only Telegram execution preflight for the stored chain, but
-  no approval-triggered execution, scheduler, delivery worker, delivery result
-  event, outbox table, credential validation against Telegram, or
-  Telegram/Slack delivery wiring exists.
+  command plus read-only Telegram execution preflight for the stored chain.
+  They now also have a delivery result audit contract for future outcomes, but
+  no approval-triggered execution, scheduler, delivery worker, outbox table,
+  credential validation against Telegram, or Telegram/Slack delivery wiring
+  exists.
 - GitHub/Jira/Drive digest integration is not implemented.
