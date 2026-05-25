@@ -40,6 +40,8 @@
   implemented
 - Read-only manual pilot status report by sample/window:
   implemented
+- Read-only persisted attention window discovery for manual pilots:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -86,6 +88,9 @@
   FOS-078 reads existing delivery draft, decision, intention, and delivery
   result audit rows for an explicit digest window to build a manual pilot status
   report; it appends no rows and introduces no new storage.
+  FOS-079 reads the same audit metadata across bounded explicit persisted
+  attention windows for manual pilot candidate discovery; it appends no rows and
+  introduces no new storage.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist
@@ -351,6 +356,18 @@
   text, chunk text, raw payloads, credential values, hidden low-priority item
   details, or newly exposed evidence refs. Manual pilot status is operational
   metadata only and is not source-of-truth company data.
+- FOS-079 adds a read-only persisted attention window discovery operator
+  command. It reads `attention_triage_results` over explicit bounded windows
+  for safe count summaries and reads existing `audit_logs` rows for matching
+  delivery draft, decision, intention, and result lifecycle metadata. It can
+  label synthetic/local/dev windows when safe FOS-071 seed markers are present,
+  but absence of that marker is not proof of production truth.
+- FOS-079 appends no seed rows, draft rows, decision rows, intention rows,
+  result rows, Telegram plan/preflight/gate rows, scheduler jobs, outbox rows,
+  migrations, or new tables. It does not expose rendered text, stored digest
+  text, chunk text, digest item details, raw payloads, credential values, hidden
+  low-priority item details, or newly exposed evidence refs. Window discovery is
+  operational metadata only and is not source-of-truth company data.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

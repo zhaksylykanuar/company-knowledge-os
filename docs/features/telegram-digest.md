@@ -31,6 +31,8 @@
 - Duplicate-success protection for test-only Telegram sends: implemented
 - Local approved-draft manual pilot handoff command: implemented
 - Read-only manual pilot status report by sample/window: implemented
+- Read-only persisted attention window discovery for manual pilots:
+  implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -506,6 +508,19 @@ Implemented today:
   protection remains the send-time guard, and scheduler/automatic delivery
   remains deferred until repeated manual bounded sends and real stored local
   data pilots are proven safe.
+- FOS-079 adds `scripts/list_persisted_attention_digest_windows.py`, a local
+  read-only persisted attention window discovery command for manual pilots. It
+  scans an explicit bounded range, reports safe window-level digest counts,
+  draft/approval/intention/result lifecycle state, duplicate/stale status, and
+  recommended next action, and labels synthetic/local/dev windows only when a
+  safe local seed marker is detected.
+- FOS-079 is not seed creation, draft creation, approval, delivery intention
+  creation, Telegram/Slack sending, scheduler, or automation. It does not
+  require or read Telegram credentials, call Telegram/Slack or live APIs, expose
+  rendered text, stored digest text, chunk text, digest item details, raw
+  payloads, secrets, hidden low-priority details, or newly exposed evidence
+  refs. Absence of a synthetic marker is not production truth, and scheduler
+  remains deferred.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
