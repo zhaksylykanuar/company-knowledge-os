@@ -295,6 +295,18 @@
   rendered digest, and does not create approval/rejection rows, readiness
   records, delivery intentions, Telegram plans, preflight/gate records, delivery
   results, scheduler jobs, outbox rows, migrations, or new tables.
+- FOS-075 extends that preparation path with read-only stale draft status. It
+  reads existing `digest.delivery_intention.created` rows by
+  `before_ref=delivery_draft_id` and existing `digest.delivery_result.recorded`
+  rows by `before_ref=delivery_intention_id`, then reports only safe IDs,
+  counts, statuses, and prior-success metadata. A draft is considered already
+  sent only when an associated result has `result_status=succeeded`, `sent=true`,
+  and `delivered_chunk_count > 0`; failed, partial, skipped, malformed, or
+  incomplete results do not silently count as successful sends.
+- FOS-075 appends no rows for the status lookup and does not approve, create
+  intentions, create results, send, schedule, create outbox rows, add
+  migrations, or add tables. Delivery drafts, intentions, and results remain
+  audit/review/execution metadata, not source-of-truth company facts.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

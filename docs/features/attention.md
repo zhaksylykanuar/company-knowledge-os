@@ -478,6 +478,17 @@
   avoiding rendered text, chunk text, credentials, raw payloads, and newly
   exposed evidence refs. It adds no API send endpoint, production mode,
   scheduler, worker, outbox table, automatic retry, migration, or new table.
+- FOS-075 adds already-sent/stale draft visibility to the same manual pilot
+  preparation command. When the command returns an existing or newly created
+  delivery draft, it reads associated delivery intention and delivery result
+  audit rows and warns with `delivery_draft_already_successfully_sent` if any
+  associated result is clearly successful and sent.
+- FOS-075 is read-only status aside from the existing inert draft creation path:
+  it does not approve, create delivery intentions, create delivery results, or
+  send. Operators should use a fresh digest window or synthetic sample before
+  another manual pilot when this warning appears. The send command's
+  duplicate-success guard remains the final protection, and scheduler/automatic
+  delivery remains deferred.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

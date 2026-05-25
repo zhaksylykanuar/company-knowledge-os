@@ -19,6 +19,9 @@ from app.services.digest_delivery_drafts import (
     DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
     DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
     DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+    approve_digest_delivery_draft,
+    create_digest_delivery_intention,
+    record_digest_delivery_result,
 )
 from scripts import prepare_manual_pilot_delivery_draft as prepare_script
 from scripts import seed_local_persisted_attention_digest as seed_script
@@ -151,6 +154,17 @@ async def _cleanup_draft(delivery_draft_id: str) -> None:
         )
         await session.execute(
             delete(AuditLog).where(AuditLog.before_ref == delivery_draft_id)
+        )
+        await session.commit()
+
+
+async def _cleanup_delivery_results_for_intention(delivery_intention_id: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(AuditLog).where(
+                AuditLog.event_type == DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+                AuditLog.before_ref == delivery_intention_id,
+            )
         )
         await session.commit()
 
@@ -368,6 +382,21 @@ async def test_non_empty_digest_prepares_one_inert_delivery_draft(
         assert first["safety"]["delivery_result_created"] is False
         assert first["safety"]["delivery_invoked"] is False
         assert first["safety"]["scheduler_invoked"] is False
+        assert first["stale_or_already_sent_warning"] is False
+        assert first["recommended_next_action"] == "continue_manual_pilot_flow"
+        assert first["draft_usage_status"]["blocker"] is None
+        assert (
+            first["draft_usage_status"]["associated_delivery_intention_count"]
+            == 0
+        )
+        assert first["associated_delivery_intentions"] == []
+        assert first["delivery_results_summary"] == {
+            "count": 0,
+            "successful_count": 0,
+            "failed_count": 0,
+            "partial_count": 0,
+            "skipped_count": 0,
+        }
         assert "approve_draft" in first["next_steps"]
         assert "PREPARE MANUAL PILOT DRAFT" not in _serialized(first["next_steps"])
 
@@ -375,6 +404,7 @@ async def test_non_empty_digest_prepares_one_inert_delivery_draft(
         assert second["delivery_draft_record_created"] is False
         assert second["existing"] is True
         assert second["idempotent"] is True
+        assert second["stale_or_already_sent_warning"] is False
         assert await _draft_record_count(delivery_draft_id) == 1
         assert await _artifact_count_for_draft(delivery_draft_id) == 0
 
@@ -383,5 +413,114 @@ async def test_non_empty_digest_prepares_one_inert_delivery_draft(
         _assert_safe_output(_serialized(second))
     finally:
         await _cleanup_seed(seed_query)
+        if delivery_draft_id is not None:
+            await _cleanup_draft(delivery_draft_id)
+
+
+async def test_existing_already_sent_draft_reports_stale_warning() -> None:
+    await _ensure_seed_tables()
+    seed_query = _seed_query(_utc(2144, 2, 3, 9))
+    await _cleanup_seed(seed_query)
+    delivery_draft_id: str | None = None
+    delivery_intention_id: str | None = None
+
+    try:
+        seed_result = await seed_script.execute_seed(
+            seed_query,
+            settings_override=_local_settings(),
+            environ={},
+        )
+        start_at = datetime.fromisoformat(seed_result["window"]["start_at"])
+        end_at = datetime.fromisoformat(seed_result["window"]["end_at"])
+
+        first = await prepare_script.prepare_manual_pilot_delivery_draft(
+            _prepare_query(start_at=start_at, end_at=end_at),
+            settings_override=_local_settings(),
+            environ={},
+        )
+        delivery_draft_id = first["delivery_draft_id"]
+
+        async with AsyncSessionLocal() as session:
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+                note="Approved for stale draft warning test.",
+            )
+            intention = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="test",
+            )
+            delivery_intention_id = intention["delivery_intention_id"]
+            result = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="fos075-successful-attempt",
+                result_status="succeeded",
+                attempted_chunk_count=1,
+                delivered_chunk_count=1,
+                failed_chunk_count=0,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "safe-message-1",
+                        "chat_id": "TELEGRAM_CHAT_ID_TEST_VALUE",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                delivery_invoked=True,
+                delivery_adapter_invoked=True,
+                actor="test",
+            )
+            await session.commit()
+
+        second = await prepare_script.prepare_manual_pilot_delivery_draft(
+            _prepare_query(start_at=start_at, end_at=end_at),
+            settings_override=_local_settings(),
+            environ={},
+        )
+
+        assert second["delivery_draft_id"] == delivery_draft_id
+        assert second["delivery_draft_record_created"] is False
+        assert second["existing"] is True
+        assert second["idempotent"] is True
+        assert second["stale_or_already_sent_warning"] is True
+        assert (
+            second["recommended_next_action"]
+            == "create_new_digest_window_or_synthetic_sample_before_another_send"
+        )
+        usage = second["draft_usage_status"]
+        assert usage["blocker"] == "delivery_draft_already_successfully_sent"
+        assert usage["associated_delivery_intention_count"] == 1
+        assert usage["prior_successful_delivery_intention_id"] == delivery_intention_id
+        assert (
+            usage["prior_successful_delivery_result_id"]
+            == result["delivery_result_id"]
+        )
+        assert (
+            usage["prior_successful_execution_attempt_id"]
+            == "fos075-successful-attempt"
+        )
+        assert usage["prior_successful_delivered_chunk_count"] == 1
+        assert second["delivery_results_summary"] == {
+            "count": 1,
+            "successful_count": 1,
+            "failed_count": 0,
+            "partial_count": 0,
+            "skipped_count": 0,
+        }
+        assert await _draft_record_count(delivery_draft_id) == 1
+
+        text = prepare_script.format_text_prepare(second)
+        assert "Already-sent warning: True" in text
+        assert "delivery_draft_already_successfully_sent" in text
+        assert "create_new_digest_window_or_synthetic_sample" in text
+        _assert_safe_output(_serialized(second))
+        _assert_safe_output(text)
+    finally:
+        await _cleanup_seed(seed_query)
+        if delivery_intention_id is not None:
+            await _cleanup_delivery_results_for_intention(delivery_intention_id)
         if delivery_draft_id is not None:
             await _cleanup_draft(delivery_draft_id)

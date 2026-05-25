@@ -40,7 +40,9 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_intention_telegram_execution_preflight,
     get_digest_delivery_intention_telegram_plan,
     get_digest_delivery_result,
+    get_delivery_draft_send_status,
     get_successful_delivery_result_for_delivery_intention,
+    list_delivery_intentions_for_delivery_draft,
     list_delivery_results_for_delivery_intention,
     get_persisted_digest_delivery_draft,
     persist_digest_delivery_draft,
@@ -2372,6 +2374,233 @@ async def test_delivery_result_lookup_finds_only_clear_successful_results() -> N
                 )
             )
             await session.commit()
+        await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_delivery_draft_send_status_warns_only_for_clear_successful_result() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest) + "\n" + ("x" * 3900)
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 8, 7),
+        end_at=_utc(2132, 8, 8),
+    )
+    delivery_draft_id = draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(delivery_draft_id)
+    delivery_result_ids: list[str] = []
+    incomplete_result_id = "dres_fos075_incomplete_success_should_not_count"
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(session, draft=draft, actor="test")
+            await approve_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                reviewer="founder",
+            )
+            intention = await create_digest_delivery_intention(
+                session,
+                delivery_draft_id=delivery_draft_id,
+                actor="test",
+            )
+            delivery_intention_id = intention["delivery_intention_id"]
+
+            intentions = await list_delivery_intentions_for_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+            assert intentions == [
+                {
+                    "delivery_intention_id": delivery_intention_id,
+                    "delivery_draft_id": delivery_draft_id,
+                    "digest_type": "persisted_attention",
+                    "channel": "telegram",
+                    "current_decision": "approved",
+                    "eligible_for_delivery": True,
+                    "text_sha256": draft["text_sha256"],
+                    "char_count": draft["char_count"],
+                    "chunk_count": draft["chunk_count"],
+                    "sent": False,
+                    "scheduler_invoked": False,
+                    "recorded_at": intentions[0]["recorded_at"],
+                }
+            ]
+            no_results = await get_delivery_draft_send_status(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+            assert no_results is not None
+            assert no_results["associated_delivery_intention_count"] == 1
+            assert no_results["delivery_results_summary"] == {
+                "count": 0,
+                "successful_count": 0,
+                "failed_count": 0,
+                "partial_count": 0,
+                "skipped_count": 0,
+            }
+            assert no_results["stale_or_already_sent_warning"] is False
+
+            failed = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="draft-status-failed",
+                result_status="failed",
+                attempted_chunk_count=1,
+                delivered_chunk_count=0,
+                failed_chunk_count=1,
+                safe_error_code="telegram_send_failed",
+                safe_error_summary="Telegram send failed.",
+                delivery_invoked=True,
+                delivery_adapter_invoked=True,
+                actor="test",
+            )
+            delivery_result_ids.append(failed["delivery_result_id"])
+            partial = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="draft-status-partial",
+                result_status="partial",
+                attempted_chunk_count=2,
+                delivered_chunk_count=1,
+                failed_chunk_count=1,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "message-1",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                delivery_invoked=True,
+                delivery_adapter_invoked=True,
+                actor="test",
+            )
+            delivery_result_ids.append(partial["delivery_result_id"])
+            skipped = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="draft-status-skipped",
+                result_status="skipped",
+                attempted_chunk_count=0,
+                delivered_chunk_count=0,
+                failed_chunk_count=0,
+                delivery_invoked=False,
+                delivery_adapter_invoked=False,
+                actor="test",
+            )
+            delivery_result_ids.append(skipped["delivery_result_id"])
+            session.add(
+                AuditLog(
+                    event_type=DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+                    actor="test",
+                    correlation_id=delivery_intention_id,
+                    trace_id=incomplete_result_id,
+                    before_ref=delivery_intention_id,
+                    after_ref=incomplete_result_id,
+                    approval_id=f"{delivery_intention_id}:delivery_result",
+                    payload={
+                        "status": "delivery_result",
+                        "delivery_result_id": incomplete_result_id,
+                        "delivery_intention_id": delivery_intention_id,
+                        "execution_attempt_id": "draft-status-incomplete",
+                        "result_status": "succeeded",
+                        "sent": True,
+                        "rendered_text": "PRIVATE_RENDERED_TEXT_DO_NOT_EXPOSE",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    },
+                )
+            )
+            delivery_result_ids.append(incomplete_result_id)
+            await session.flush()
+
+            before_success = await get_delivery_draft_send_status(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+            assert before_success is not None
+            assert before_success["associated_delivery_intention_count"] == 1
+            assert before_success["delivery_results_summary"] == {
+                "count": 4,
+                "successful_count": 0,
+                "failed_count": 1,
+                "partial_count": 1,
+                "skipped_count": 1,
+            }
+            assert before_success["stale_or_already_sent_warning"] is False
+            assert before_success["blocker"] is None
+            assert (
+                before_success["recommended_next_action"]
+                == "continue_manual_pilot_flow"
+            )
+
+            succeeded = await record_digest_delivery_result(
+                session,
+                delivery_intention_id=delivery_intention_id,
+                execution_attempt_id="draft-status-succeeded",
+                result_status="succeeded",
+                attempted_chunk_count=2,
+                delivered_chunk_count=2,
+                failed_chunk_count=0,
+                safe_message_refs=[
+                    {
+                        "chunk_index": 1,
+                        "message_id": "message-2",
+                        "chat_id": "TELEGRAM_CHAT_ID_TEST_VALUE",
+                        "raw_response": "PRIVATE_TELEGRAM_RAW_RESPONSE",
+                    }
+                ],
+                delivery_invoked=True,
+                delivery_adapter_invoked=True,
+                actor="test",
+            )
+            delivery_result_ids.append(succeeded["delivery_result_id"])
+            await session.commit()
+
+            after_success = await get_delivery_draft_send_status(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+
+        assert after_success is not None
+        assert after_success["delivery_results_summary"] == {
+            "count": 5,
+            "successful_count": 1,
+            "failed_count": 1,
+            "partial_count": 1,
+            "skipped_count": 1,
+        }
+        assert after_success["stale_or_already_sent_warning"] is True
+        assert after_success["blocker"] == "delivery_draft_already_successfully_sent"
+        assert (
+            after_success["prior_successful_delivery_intention_id"]
+            == delivery_intention_id
+        )
+        assert (
+            after_success["prior_successful_delivery_result_id"]
+            == succeeded["delivery_result_id"]
+        )
+        assert (
+            after_success["prior_successful_execution_attempt_id"]
+            == "draft-status-succeeded"
+        )
+        assert after_success["prior_successful_delivered_chunk_count"] == 2
+        assert (
+            after_success["recommended_next_action"]
+            == "create_new_digest_window_or_synthetic_sample_before_another_send"
+        )
+
+        dumped = json.dumps(after_success, sort_keys=True)
+        assert "TELEGRAM_CHAT_ID_TEST_VALUE" not in dumped
+        assert "PRIVATE_TELEGRAM_RAW_RESPONSE" not in dumped
+        assert "PRIVATE_RENDERED_TEXT_DO_NOT_EXPOSE" not in dumped
+        assert "rendered_text" not in dumped
+        assert "raw_response" not in dumped
+        assert "chat_id" not in dumped
+        assert "evidence_refs" not in dumped
+    finally:
+        for delivery_result_id in delivery_result_ids:
+            await _delete_delivery_result_audit_log(delivery_result_id)
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
 

@@ -450,6 +450,17 @@ Implemented today:
   payloads, hidden low-priority item details, or newly exposed evidence refs,
   and it adds no API send endpoint, production mode, scheduler, worker, outbox
   table, automatic retry, migration, or new table.
+- FOS-075 adds read-only already-sent/stale draft visibility to the manual
+  pilot preparation command. The command now reports associated delivery
+  intentions and safe delivery result counts, and warns with
+  `delivery_draft_already_successfully_sent` when the returned draft already has
+  a successful/sent delivery result through an intention.
+- FOS-075 does not approve, create delivery intentions, create delivery results,
+  send Telegram/Slack messages, add an override flag, add an API send endpoint,
+  add production mode, add scheduler/worker/outbox behavior, add automatic
+  retry, add a migration, or create a table. Operators should not reuse an
+  already-sent draft or intention for another send; they should prepare a fresh
+  digest window or synthetic sample for the next manual pilot.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

@@ -1242,6 +1242,53 @@ async def get_digest_delivery_intention(
     return _delivery_intention_audit_log_response(record)
 
 
+def _safe_delivery_intention_lookup_metadata(
+    intention: Mapping[str, Any],
+) -> dict[str, Any]:
+    audit_log = intention.get("audit_log")
+    recorded_at = (
+        audit_log.get("created_at")
+        if isinstance(audit_log, Mapping)
+        else None
+    )
+    return {
+        "delivery_intention_id": intention.get("delivery_intention_id"),
+        "delivery_draft_id": intention.get("delivery_draft_id"),
+        "digest_type": intention.get("digest_type"),
+        "channel": intention.get("channel"),
+        "current_decision": intention.get("current_decision"),
+        "eligible_for_delivery": intention.get("eligible_for_delivery"),
+        "text_sha256": intention.get("text_sha256"),
+        "char_count": intention.get("char_count"),
+        "chunk_count": intention.get("chunk_count"),
+        "sent": bool(intention.get("sent")),
+        "scheduler_invoked": bool(intention.get("scheduler_invoked")),
+        "recorded_at": recorded_at,
+    }
+
+
+async def list_delivery_intentions_for_delivery_draft(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+) -> list[dict[str, Any]]:
+    cleaned_delivery_draft_id = _clean_delivery_draft_id(delivery_draft_id)
+    records = await session.scalars(
+        select(AuditLog)
+        .where(AuditLog.event_type == DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE)
+        .where(AuditLog.before_ref == cleaned_delivery_draft_id)
+        .order_by(AuditLog.id)
+    )
+
+    intentions: list[dict[str, Any]] = []
+    for record in records:
+        response = _delivery_intention_audit_log_response(record)
+        if response is None:
+            continue
+        intentions.append(_safe_delivery_intention_lookup_metadata(response))
+    return intentions
+
+
 async def create_digest_delivery_intention(
     session: AsyncSession,
     *,
@@ -1902,6 +1949,128 @@ async def get_successful_delivery_result_for_delivery_intention(
         if _delivery_result_metadata_is_successful(result):
             return result
     return None
+
+
+async def get_delivery_draft_send_status(
+    session: AsyncSession,
+    *,
+    delivery_draft_id: str,
+) -> dict[str, Any] | None:
+    cleaned_delivery_draft_id = _clean_delivery_draft_id(delivery_draft_id)
+    draft = await get_persisted_digest_delivery_draft(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    if draft is None:
+        return None
+
+    intentions = await list_delivery_intentions_for_delivery_draft(
+        session,
+        delivery_draft_id=cleaned_delivery_draft_id,
+    )
+    associated_intentions: list[dict[str, Any]] = []
+    delivery_result_count = 0
+    successful_result_count = 0
+    failed_result_count = 0
+    partial_result_count = 0
+    skipped_result_count = 0
+    prior_successful: dict[str, Any] | None = None
+
+    for intention in intentions:
+        delivery_intention_id = str(intention.get("delivery_intention_id") or "")
+        if not delivery_intention_id:
+            continue
+        results = await list_delivery_results_for_delivery_intention(
+            session,
+            delivery_intention_id=delivery_intention_id,
+        )
+        successful_results = [
+            result
+            for result in results
+            if _delivery_result_metadata_is_successful(result)
+        ]
+        statuses = [result.get("result_status") for result in results]
+        delivery_result_count += len(results)
+        successful_result_count += len(successful_results)
+        failed_result_count += statuses.count("failed")
+        partial_result_count += statuses.count("partial")
+        skipped_result_count += statuses.count("skipped")
+        if prior_successful is None and successful_results:
+            prior_successful = successful_results[0]
+
+        associated_intentions.append(
+            {
+                **intention,
+                "delivery_results": {
+                    "count": len(results),
+                    "successful_count": len(successful_results),
+                    "failed_count": statuses.count("failed"),
+                    "partial_count": statuses.count("partial"),
+                    "skipped_count": statuses.count("skipped"),
+                    "results": results,
+                },
+            }
+        )
+
+    already_sent = prior_successful is not None
+    return {
+        "status": "delivery_draft_send_status",
+        "delivery_draft_id": cleaned_delivery_draft_id,
+        "associated_delivery_intention_count": len(associated_intentions),
+        "associated_delivery_intentions": associated_intentions,
+        "delivery_results_summary": {
+            "count": delivery_result_count,
+            "successful_count": successful_result_count,
+            "failed_count": failed_result_count,
+            "partial_count": partial_result_count,
+            "skipped_count": skipped_result_count,
+        },
+        "stale_or_already_sent_warning": already_sent,
+        "blocker": (
+            "delivery_draft_already_successfully_sent" if already_sent else None
+        ),
+        "prior_successful_delivery_intention_id": (
+            prior_successful.get("delivery_intention_id")
+            if prior_successful is not None
+            else None
+        ),
+        "prior_successful_delivery_result_id": (
+            prior_successful.get("delivery_result_id")
+            if prior_successful is not None
+            else None
+        ),
+        "prior_successful_execution_attempt_id": (
+            prior_successful.get("execution_attempt_id")
+            if prior_successful is not None
+            else None
+        ),
+        "prior_successful_delivered_chunk_count": (
+            prior_successful.get("delivered_chunk_count")
+            if prior_successful is not None
+            else None
+        ),
+        "recommended_next_action": (
+            "create_new_digest_window_or_synthetic_sample_before_another_send"
+            if already_sent
+            else "continue_manual_pilot_flow"
+        ),
+        "safety": {
+            "provider_free": True,
+            "read_only": True,
+            "db_write_scope": "none",
+            "delivery_invoked": False,
+            "delivery_adapter_invoked": False,
+            "approval_execution_invoked": False,
+            "scheduler_invoked": False,
+            "outbox_record_created": False,
+            "delivery_worker_invoked": False,
+            "credential_values_exposed": False,
+            "stored_digest_text_included": False,
+            "chunk_text_included": False,
+            "raw_content_exposed": False,
+            "draft_status_is_source_of_truth": False,
+        },
+    }
 
 
 async def record_digest_delivery_result(

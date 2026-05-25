@@ -279,6 +279,7 @@ async def prepare_manual_pilot_delivery_draft(
     from app.services.digest import build_persisted_attention_digest_read_model
     from app.services.digest_delivery_drafts import (
         build_persisted_attention_digest_delivery_draft,
+        get_delivery_draft_send_status,
         get_persisted_digest_delivery_draft,
         persist_digest_delivery_draft,
         sanitize_persisted_attention_digest_for_delivery_draft,
@@ -336,6 +337,13 @@ async def prepare_manual_pilot_delivery_draft(
             delivery_draft_record_created = existing is None
             if delivery_draft_record_created:
                 await session.commit()
+
+            draft_usage_status = await get_delivery_draft_send_status(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+            if draft_usage_status is None:
+                raise PrepareRuntimeError("prepared delivery draft status was not found")
     except (PrepareInputError, PrepareBlockedError, PrepareRuntimeError):
         raise
     except ValueError as exc:
@@ -364,6 +372,19 @@ async def prepare_manual_pilot_delivery_draft(
         "delivery_draft_record_created": delivery_draft_record_created,
         "digest_counts": counts,
         "hidden_low_priority_count": _hidden_low_priority_count(digest),
+        "draft_usage_status": draft_usage_status,
+        "associated_delivery_intentions": draft_usage_status.get(
+            "associated_delivery_intentions",
+            [],
+        ),
+        "delivery_results_summary": draft_usage_status.get(
+            "delivery_results_summary",
+            {},
+        ),
+        "stale_or_already_sent_warning": bool(
+            draft_usage_status.get("stale_or_already_sent_warning")
+        ),
+        "recommended_next_action": draft_usage_status.get("recommended_next_action"),
         "next_steps": _next_step_commands(str(persisted.get("delivery_draft_id"))),
         "safety": _safety_metadata(
             delivery_draft_record_created=delivery_draft_record_created,
@@ -391,6 +412,8 @@ def format_text_prepare(result: Mapping[str, Any]) -> str:
 
     counts = result.get("digest_counts") if isinstance(result.get("digest_counts"), Mapping) else {}
     next_steps = result.get("next_steps") if isinstance(result.get("next_steps"), Mapping) else {}
+    usage = result.get("draft_usage_status") if isinstance(result.get("draft_usage_status"), Mapping) else {}
+    results = result.get("delivery_results_summary") if isinstance(result.get("delivery_results_summary"), Mapping) else {}
     lines = [
         "Manual pilot delivery draft prepared",
         f"Delivery draft ID: {result.get('delivery_draft_id')}",
@@ -410,6 +433,18 @@ def format_text_prepare(result: Mapping[str, Any]) -> str:
         f"Digest visible: {counts.get('visible')}",
         f"Digest hidden: {counts.get('hidden')}",
         f"Hidden low-priority count: {result.get('hidden_low_priority_count')}",
+        f"Associated delivery intentions: {usage.get('associated_delivery_intention_count', 0)}",
+        f"Delivery result count: {results.get('count', 0)}",
+        f"Successful delivery result count: {results.get('successful_count', 0)}",
+        f"Already-sent warning: {result.get('stale_or_already_sent_warning')}",
+        f"Already-sent blocker: {usage.get('blocker')}",
+        "Prior successful delivery intention ID: "
+        f"{usage.get('prior_successful_delivery_intention_id')}",
+        "Prior successful delivery result ID: "
+        f"{usage.get('prior_successful_delivery_result_id')}",
+        "Prior successful execution attempt ID: "
+        f"{usage.get('prior_successful_execution_attempt_id')}",
+        f"Recommended next action: {result.get('recommended_next_action')}",
         "",
         "Next steps (human approval remains separate):",
         f"Approve draft: {next_steps.get('approve_draft')}",
