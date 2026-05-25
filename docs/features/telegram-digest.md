@@ -36,6 +36,7 @@
 - Read-only real stored local data readiness discovery: implemented
 - Read-only stored source event normalization preview: implemented
 - Local/dev-only stored source event normalization command: implemented
+- Read-only normalized activity triage readiness preview: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -258,6 +259,18 @@ trusted facts.
   item details, source object identifiers, evidence refs, rendered text, chunk
   text, secrets, credentials, or hidden low-priority details. No-marker data is
   not production truth, and downstream human approval remains separate.
+- Normalized activity triage readiness preview is read-only operational
+  metadata only. It may scan stored `normalized_activity_items` for an explicit
+  bounded window and report count-only already-triaged, untriaged,
+  synthetic/no-marker, provider-free eligibility, and conservative fallback
+  projected attention class/priority/visibility counts. It must not create
+  attention results, call write-oriented triage services, call live
+  APIs/providers/OpenAI/connectors, Telegram, or Slack, read Telegram
+  credentials, or expose raw source bodies, provider payloads, item titles,
+  summaries, actions, source object identifiers, evidence refs, rendered text,
+  chunk text, secrets, credentials, or hidden low-priority details. No-marker
+  data is not production truth; future triage writes must be separate explicit
+  local/dev operator actions.
 
 ## Current Status
 
@@ -604,6 +617,23 @@ Implemented today:
   or hidden low-priority details. The next step after accepted local
   normalization is a read-only normalized activity triage readiness report or
   explicit provider-free triage plan; scheduler and automatic delivery remain
+  deferred.
+- FOS-083 adds `scripts/preview_normalized_activity_triage_readiness.py`, a
+  local read-only normalized activity triage readiness preview command. It
+  reports count-only normalized activity totals, safe source/activity-type
+  counts, synthetic/no-marker counts, already-triaged and untriaged counts,
+  provider-free eligibility counts, and conservative fallback projected
+  attention class, priority, visible, and hidden counts.
+- FOS-083 does not create source events, normalized activity rows, attention
+  results, seeds, drafts, approvals, delivery intentions, Telegram plans,
+  preflight/gate records, delivery results, scheduler jobs, worker/outbox
+  records, migrations, or tables. It does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, write-oriented triage services, or delivery code,
+  and it does not expose raw source bodies, provider payloads, item titles,
+  summaries, actions, source object identifiers, evidence refs, secrets,
+  credentials, rendered text, chunk text, or hidden low-priority details. The
+  next step after accepted preview may be a separate explicit local/dev
+  provider-free triage write command; scheduler and automatic delivery remain
   deferred.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into

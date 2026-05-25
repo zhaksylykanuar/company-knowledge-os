@@ -48,6 +48,8 @@
   implemented
 - Local/dev-only stored source event normalization command:
   implemented
+- Read-only normalized activity triage readiness preview:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -108,6 +110,9 @@
   `normalized_activity_items` through the provider-free projection service from
   a local/dev-only operator command. It writes no source events, attention
   results, audit logs, delivery artifacts, new tables, or migrations.
+- FOS-083 reads existing `normalized_activity_items` and linked
+  `attention_triage_results` over an explicit bounded window for count-only
+  triage readiness preview; it appends no rows and introduces no new storage.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist
@@ -432,6 +437,23 @@
   evidence refs, rendered digest text, chunk text, secrets, credential values,
   or hidden low-priority details. No-marker rows are not production truth, and
   attention triage remains a separate explicit step.
+- FOS-083 adds a read-only normalized activity triage readiness preview over
+  existing `normalized_activity_items` and linked `attention_triage_results`.
+  It reports only aggregate normalized activity counts, synthetic/no-marker
+  counts, already-triaged and untriaged counts, provider-free eligibility
+  counts, and conservative fallback projected attention class, priority,
+  visible, and hidden counts.
+- FOS-083 appends no source events, normalized activity rows, attention result
+  rows, audit logs, seed rows, draft rows, decision rows, intention rows,
+  result rows, Telegram plan/preflight/gate rows, scheduler jobs, outbox rows,
+  migrations, or new tables. It does not call write-oriented triage services,
+  live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery code.
+  Its output is count-only operational metadata and must not expose row-level
+  titles, summaries, actions, people, URLs, source object identifiers, raw
+  refs, raw payloads, provider payloads, prompts, evidence refs, rendered
+  digest text, chunk text, secrets, credential values, or hidden low-priority
+  details. No-marker rows are not production truth, and attention triage writes
+  remain a separate explicit local/dev step.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
