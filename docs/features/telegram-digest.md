@@ -461,6 +461,20 @@ Implemented today:
   retry, add a migration, or create a table. Operators should not reuse an
   already-sent draft or intention for another send; they should prepare a fresh
   digest window or synthetic sample for the next manual pilot.
+- FOS-076 adds `scripts/seed_and_prepare_manual_pilot_delivery_draft.py`, a
+  local/dev-only command that creates a fresh synthetic persisted attention
+  sample and prepares one inert delivery draft in one flow for repeated manual
+  pilots. The command requires explicit `sample_id`, timezone-aware
+  `created_at`, the exact seed confirmation phrase, and the exact prepare
+  confirmation phrase.
+- FOS-076 is not approval, not delivery intention creation, not Telegram/Slack
+  sending, and not scheduler/automation. It prints safe next-step command
+  shapes for approval, readiness, intention creation, review, send status,
+  execution gate, and bounded test send. If the prepared draft is already tied
+  to a successful send, it surfaces the FOS-075 stale warning and recommends a
+  new sample/window. Synthetic data remains local/dev-only and not company
+  truth, and the slice adds no API send endpoint, production mode, worker,
+  outbox table, automatic retry, migration, or new table.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

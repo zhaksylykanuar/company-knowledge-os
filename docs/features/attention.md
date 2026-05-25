@@ -489,6 +489,18 @@
   another manual pilot when this warning appears. The send command's
   duplicate-success guard remains the final protection, and scheduler/automatic
   delivery remains deferred.
+- FOS-076 adds a local/dev-only fresh manual pilot seed-and-draft command. It
+  combines synthetic persisted attention seeding with inert delivery draft
+  preparation for repeated manual pilots, while preserving the same explicit
+  seed and prepare confirmation phrases and production-like environment
+  refusal.
+- FOS-076 is not approval, not delivery intention creation, not Telegram/Slack
+  sending, and not scheduler/automation. Human approval remains a separate
+  explicit step. The command prints safe next-step command shapes, warns if the
+  resulting draft is already associated with a successful send, keeps synthetic
+  data out of company truth, keeps hidden low-priority items count-only, and
+  adds no API send endpoint, production mode, scheduler, worker, outbox table,
+  automatic retry, migration, or new table.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

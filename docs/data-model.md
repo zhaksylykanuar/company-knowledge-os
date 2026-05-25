@@ -307,6 +307,19 @@
   intentions, create results, send, schedule, create outbox rows, add
   migrations, or add tables. Delivery drafts, intentions, and results remain
   audit/review/execution metadata, not source-of-truth company facts.
+- FOS-076 adds a local/dev-only combined seed-and-draft operator path. It
+  reuses the existing synthetic persisted attention seed rows
+  (`ingested_events`, `source_events`, `normalized_activity_items`, and
+  `attention_triage_results`) plus the existing
+  `digest.delivery_draft.created` audit-log-backed review artifact. Re-running
+  the same sample/window/draft inputs remains idempotent and appends no
+  duplicate seed rows or draft audit rows.
+- FOS-076 does not create approval/rejection rows, readiness records, delivery
+  intentions, Telegram plans, preflight/gate records, delivery results,
+  scheduler jobs, outbox rows, migrations, or new tables. It may surface the
+  FOS-075 already-sent draft warning from existing audit rows, but the warning
+  is status metadata only. Synthetic sample rows are local/dev test fixtures,
+  not source-of-truth company facts.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
