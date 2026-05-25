@@ -29,6 +29,7 @@
 - Test-only bounded Telegram delivery intention send command: implemented
 - Local/dev-only synthetic persisted attention digest seed command: implemented
 - Duplicate-success protection for test-only Telegram sends: implemented
+- Local approved-draft manual pilot handoff command: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -475,6 +476,20 @@ Implemented today:
   new sample/window. Synthetic data remains local/dev-only and not company
   truth, and the slice adds no API send endpoint, production mode, worker,
   outbox table, automatic retry, migration, or new table.
+- FOS-077 adds `scripts/continue_manual_pilot_delivery_draft.py`, a local
+  approved-draft handoff command for repeated manual pilots. The command starts
+  from an explicit human-approved `delivery_draft_id`, requires the exact
+  confirmation phrase `CREATE MANUAL PILOT DELIVERY INTENTION`, verifies
+  readiness, refuses already-sent/stale drafts, creates or retrieves the
+  deterministic delivery intention, and prints safe review, send-status,
+  Telegram plan, execution-gate, and bounded send command summaries.
+- FOS-077 is not approval, not Telegram/Slack sending, not delivery result
+  creation, and not scheduler/automation. It writes only the existing
+  sanitized delivery intention audit event when needed, remains idempotent for
+  the same approved and ready draft, exposes no rendered text, chunk text,
+  credentials, raw Telegram/provider payloads, hidden low-priority details, or
+  newly exposed evidence refs, and adds no API send endpoint, production mode,
+  worker, outbox table, automatic retry, migration, or new table.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

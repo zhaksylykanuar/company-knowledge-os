@@ -29,6 +29,7 @@
 - Test-only bounded Telegram delivery intention send command: implemented
 - Local/dev-only synthetic persisted attention digest seed command: implemented
 - Duplicate-success protection for test-only Telegram sends: implemented
+- Local approved-draft manual pilot handoff command: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -501,6 +502,19 @@
   data out of company truth, keeps hidden low-priority items count-only, and
   adds no API send endpoint, production mode, scheduler, worker, outbox table,
   automatic retry, migration, or new table.
+- FOS-077 adds a local approved-draft manual pilot handoff command. Starting
+  from an explicit already-human-approved `delivery_draft_id`, it verifies
+  approval and readiness, refuses already-sent/stale drafts, creates or returns
+  the deterministic `delivery_intention_id`, and prints safe review,
+  send-status, Telegram plan, execution-gate, and bounded send command
+  summaries.
+- FOS-077 is not approval, not Telegram/Slack sending, not delivery result
+  creation, and not scheduler/automation. It writes only the existing sanitized
+  `digest.delivery_intention.created` audit event when needed, remains
+  idempotent for the same ready draft, exposes no rendered text, chunk text,
+  credentials, raw Telegram/provider payloads, hidden low-priority details, or
+  newly exposed evidence refs, and adds no API send endpoint, production mode,
+  worker, outbox table, automatic retry, migration, or new table.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -554,4 +568,8 @@
   delivery intention unless the operator is replaying the same
   `execution_attempt_id`; there is still no override, scheduler, or automatic
   delivery wiring.
+- The manual pilot chain now has local commands for fresh synthetic seed plus
+  draft preparation, stale draft warning, approved-draft handoff to delivery
+  intention, send status reporting, and bounded test-only sending, but human
+  approval remains separate and there is still no approval-triggered execution.
 - GitHub/Jira/Drive digest integration is not implemented.

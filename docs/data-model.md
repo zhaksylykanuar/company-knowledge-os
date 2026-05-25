@@ -36,6 +36,8 @@
   implemented
 - Duplicate-success protection for test-only Telegram sends:
   implemented
+- Local approved-draft manual pilot handoff command:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -320,6 +322,17 @@
   FOS-075 already-sent draft warning from existing audit rows, but the warning
   is status metadata only. Synthetic sample rows are local/dev test fixtures,
   not source-of-truth company facts.
+- FOS-077 adds a local approved-draft handoff operator path. It reads an
+  explicit stored `delivery_draft_id`, verifies existing approval and readiness,
+  refuses stale/already-sent drafts using the FOS-075 status lookup, and creates
+  or returns the deterministic `digest.delivery_intention.created` audit event
+  through the existing FOS-064 service path.
+- FOS-077 appends no approval/rejection rows, delivery result rows, Telegram
+  plans, preflight/gate records, scheduler jobs, outbox rows, migrations, or new
+  tables. Its derived review/status/gate summaries expose only safe IDs, counts,
+  hashes, statuses, blockers, and safety flags; delivery drafts, intentions,
+  and results remain audit/review/execution metadata, not source-of-truth
+  company facts.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
