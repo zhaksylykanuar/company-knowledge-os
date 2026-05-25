@@ -35,6 +35,7 @@
   implemented
 - Read-only real stored local data readiness discovery: implemented
 - Read-only stored source event normalization preview: implemented
+- Local/dev-only stored source event normalization command: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -244,6 +245,19 @@ trusted facts.
   identifiers, evidence refs, rendered text, chunk text, secrets, credentials,
   or hidden low-priority details. A future projection write path must be a
   separate explicit local/dev operator action.
+- Stored source event normalization is a local/dev-only explicit operator
+  action. It may project supported stored `source_events` into
+  `normalized_activity_items` through the existing provider-free service only
+  after an explicit time window, bounded max event count, and exact
+  confirmation phrase. It refuses production-like environments, remains
+  idempotent by `source_event_id`, and writes only normalized activity rows.
+  It must not create source events, attention results, delivery artifacts,
+  approvals, intentions, results, scheduler jobs, outbox records, migrations,
+  or tables; call live APIs/providers/OpenAI/connectors, Telegram, or Slack;
+  read Telegram credentials; or expose raw source bodies, provider payloads,
+  item details, source object identifiers, evidence refs, rendered text, chunk
+  text, secrets, credentials, or hidden low-priority details. No-marker data is
+  not production truth, and downstream human approval remains separate.
 
 ## Current Status
 
@@ -574,6 +588,23 @@ Implemented today:
   object identifiers, evidence refs, secrets, credentials, rendered text, chunk
   text, or hidden low-priority details. No-marker rows remain unlabeled local
   stored data, not production truth.
+- FOS-082 adds `scripts/normalize_stored_source_events.py`, a local/dev-only
+  stored source event normalization command. It writes only
+  `normalized_activity_items` through the existing provider-free service after
+  an explicit timezone-aware window, bounded `--max-events`, and exact
+  confirmation phrase; it refuses production-like environments and remains
+  idempotent for already-normalized source events.
+- FOS-082 does not create source events, attention results, seeds, drafts,
+  approvals, delivery intentions, Telegram plans, preflight/gate records,
+  delivery results, scheduler jobs, worker/outbox records, migrations, or
+  tables. It does not call live APIs, providers/OpenAI, connectors,
+  Telegram/Slack, or delivery code, and it does not expose raw source bodies,
+  provider payloads, item titles, summaries, actions, source object
+  identifiers, evidence refs, secrets, credentials, rendered text, chunk text,
+  or hidden low-priority details. The next step after accepted local
+  normalization is a read-only normalized activity triage readiness report or
+  explicit provider-free triage plan; scheduler and automatic delivery remain
+  deferred.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

@@ -46,6 +46,8 @@
   implemented
 - Read-only stored source event normalization preview:
   implemented
+- Local/dev-only stored source event normalization command:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -102,6 +104,10 @@
 - FOS-081 reads existing `source_events` and linked
   `normalized_activity_items` over an explicit bounded window for count-only
   normalization preview; it appends no rows and introduces no new storage.
+- FOS-082 projects supported stored `source_events` into existing
+  `normalized_activity_items` through the provider-free projection service from
+  a local/dev-only operator command. It writes no source events, attention
+  results, audit logs, delivery artifacts, new tables, or migrations.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist
@@ -408,6 +414,24 @@
   or new tables. Normalization preview is operational metadata only and is not
   source-of-truth company data; any future projection write command must be
   separate and explicit.
+- FOS-082 adds a local/dev-only stored source event normalization operator
+  command. It requires an explicit timezone-aware window, bounded `--max-events`,
+  and the exact `NORMALIZE STORED SOURCE EVENTS` confirmation phrase before
+  calling the existing provider-free
+  `project_source_event_to_normalized_activity_item` service. It refuses
+  production-like environments, excludes clearly synthetic local/dev rows by
+  default, skips already-normalized rows, counts unsupported or invalid rows
+  safely, and is idempotent by `source_event_id`.
+- FOS-082 writes only `normalized_activity_items` rows and only through the
+  existing normalized activity service. It appends no source events, attention
+  result rows, audit logs, seed rows, draft rows, decision rows, intention rows,
+  result rows, Telegram plan/preflight/gate rows, scheduler jobs, outbox rows,
+  migrations, or new tables. Its output is count-only operational metadata and
+  must not expose row-level titles, summaries, actions, people, URLs, source
+  object identifiers, raw refs, raw payloads, provider payloads, prompts,
+  evidence refs, rendered digest text, chunk text, secrets, credential values,
+  or hidden low-priority details. No-marker rows are not production truth, and
+  attention triage remains a separate explicit step.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
