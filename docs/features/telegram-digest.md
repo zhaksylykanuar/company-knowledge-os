@@ -37,6 +37,7 @@
 - Read-only stored source event normalization preview: implemented
 - Local/dev-only stored source event normalization command: implemented
 - Read-only normalized activity triage readiness preview: implemented
+- Local/dev-only provider-free normalized activity triage command: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -271,6 +272,20 @@ trusted facts.
   chunk text, secrets, credentials, or hidden low-priority details. No-marker
   data is not production truth; future triage writes must be separate explicit
   local/dev operator actions.
+- Provider-free normalized activity triage is a local/dev-only explicit
+  operator action. It may classify stored `normalized_activity_items` into
+  `attention_triage_results` through the existing strict schema-validated
+  provider-free service only after an explicit time window, bounded max item
+  count, and exact confirmation phrase. It refuses production-like
+  environments, remains idempotent by `activity_item_id`, and writes only
+  attention result rows. It must not create source events, normalized activity
+  rows, delivery artifacts, approvals, intentions, results, scheduler jobs,
+  outbox records, migrations, or tables; call live APIs/providers/OpenAI/
+  connectors, Telegram, or Slack; read Telegram credentials; or expose raw
+  source bodies, provider payloads, item details, source object identifiers,
+  evidence refs, rendered text, chunk text, secrets, credentials, or hidden
+  low-priority details. No-marker data is not production truth, and downstream
+  human approval remains separate.
 
 ## Current Status
 
@@ -635,6 +650,23 @@ Implemented today:
   next step after accepted preview may be a separate explicit local/dev
   provider-free triage write command; scheduler and automatic delivery remain
   deferred.
+- FOS-084 adds `scripts/triage_normalized_activity_items.py`, a local/dev-only
+  provider-free normalized activity triage command. It writes only
+  `attention_triage_results` through the existing strict schema-validated
+  provider-free service after an explicit timezone-aware window, bounded
+  `--max-items`, and exact confirmation phrase; it refuses production-like
+  environments and remains idempotent for already-triaged normalized activity
+  items.
+- FOS-084 does not create source events, normalized activity rows, seeds,
+  drafts, approvals, delivery intentions, Telegram plans, preflight/gate
+  records, delivery results, scheduler jobs, worker/outbox records, migrations,
+  or tables. It does not call live APIs, providers/OpenAI, connectors,
+  Telegram/Slack, or delivery code, and it does not expose raw source bodies,
+  provider payloads, item titles, summaries, actions, source object
+  identifiers, evidence refs, secrets, credentials, rendered text, chunk text,
+  or hidden low-priority details. The next step after accepted local triage is
+  to rerun real stored local data readiness and persisted attention window
+  discovery; scheduler and automatic delivery remain deferred.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

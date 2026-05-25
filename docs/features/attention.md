@@ -37,6 +37,7 @@
 - Read-only stored source event normalization preview: implemented
 - Local/dev-only stored source event normalization command: implemented
 - Read-only normalized activity triage readiness preview: implemented
+- Local/dev-only provider-free normalized activity triage command: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -611,6 +612,24 @@
   secrets, credentials, rendered text, chunk text, or hidden low-priority
   details. No-marker rows are not production truth, and any attention triage
   write remains a separate explicit local/dev step.
+- FOS-084 adds `scripts/triage_normalized_activity_items.py`, a local/dev-only
+  provider-free normalized activity triage command. It requires an explicit
+  timezone-aware window, bounded `--max-items`, and the exact
+  `TRIAGE NORMALIZED ACTIVITY` confirmation phrase before writing
+  `attention_triage_results` through the existing strict schema-validated
+  provider-free triage service.
+- FOS-084 writes only attention result rows, remains idempotent by
+  `activity_item_id`, skips already-triaged rows, counts unsupported or invalid
+  rows safely, excludes synthetic/local/dev rows by default, and refuses
+  production-like environments. It does not create source events, normalized
+  activity rows, seeds, drafts, approvals, delivery intentions, Telegram plans,
+  preflight/gate records, delivery results, scheduler jobs, worker/outbox
+  records, migrations, or tables. It does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code, and it does not expose raw
+  source bodies, provider payloads, item titles, summaries, actions, source
+  object identifiers, evidence refs, secrets, credentials, rendered text,
+  chunk text, or hidden low-priority details. No-marker rows are not production
+  truth; real-data readiness and window discovery remain separate checks.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -680,4 +699,9 @@
   any `attention_triage_results` writes. The preview can project conservative
   provider-free fallback counts, but persisted attention triage and real-data
   manual send rollout remain separate human-gated steps.
+- Normalized activity items can now be triaged into persisted attention results
+  through a separate explicit local/dev-only provider-free write command. The
+  command writes only `attention_triage_results`; real-data readiness, window
+  discovery, draft preparation, approval, and manual send rollout remain
+  separate human-gated steps.
 - GitHub/Jira/Drive digest integration is not implemented.
