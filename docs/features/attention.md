@@ -34,6 +34,7 @@
 - Read-only persisted attention window discovery for manual pilots:
   implemented
 - Read-only real stored local data readiness discovery: implemented
+- Read-only stored source event normalization preview: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -559,6 +560,21 @@
   connectors, Telegram/Slack, or delivery code, and it does not expose raw
   source bodies, provider payloads, item details, evidence refs, rendered text,
   chunk text, secrets, credentials, or hidden low-priority details.
+- FOS-081 adds `scripts/preview_stored_source_event_normalization.py`, a local
+  read-only source event normalization preview command. It scans stored
+  `source_events` for an explicit window and reports count-only eligibility for
+  future provider-free projection into `normalized_activity_items`, including
+  already-normalized, eligible, unsupported, invalid/unpreviewable, synthetic
+  skipped, and safe projected source/activity-type counts.
+- FOS-081 does not create source events, normalized activity rows, attention
+  results, seeds, drafts, approvals, delivery intentions, Telegram plans,
+  preflight/gate records, delivery results, scheduler jobs, worker/outbox
+  records, migrations, or tables. It does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code, and it does not expose raw
+  source bodies, provider payloads, item titles, summaries, actions, source
+  object identifiers, evidence refs, secrets, credentials, rendered text, chunk
+  text, or hidden low-priority details. No-marker rows are not production
+  truth, and a future projection write command must be separate and explicit.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -620,4 +636,9 @@
   local reports over existing `source_events`, `normalized_activity_items`, and
   `attention_triage_results`, but batch projection, batch persisted attention
   triage, and real-data manual send rollout remain separate human-gated steps.
+- Stored source event normalization can now be previewed count-only before any
+  projection writes, but the command intentionally does not create normalized
+  activity rows. A separate explicit local/dev projection write command is still
+  required before no-marker source events can advance toward persisted
+  attention triage.
 - GitHub/Jira/Drive digest integration is not implemented.

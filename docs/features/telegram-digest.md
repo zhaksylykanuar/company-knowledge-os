@@ -34,6 +34,7 @@
 - Read-only persisted attention window discovery for manual pilots:
   implemented
 - Read-only real stored local data readiness discovery: implemented
+- Read-only stored source event normalization preview: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -233,6 +234,16 @@ trusted facts.
   provider payloads, item details, evidence refs, rendered text, chunk text,
   secrets, credentials, or hidden low-priority details. No-marker data is not
   production truth.
+- Stored source event normalization preview is read-only operational metadata
+  only. It may scan stored `source_events` for an explicit bounded window and
+  report count-only eligibility for future provider-free projection into
+  `normalized_activity_items`, but it must not create normalized activity rows,
+  create attention results, call live APIs/providers/OpenAI/connectors,
+  Telegram, or Slack, read Telegram credentials, or expose raw source bodies,
+  provider payloads, item titles, summaries, actions, source object
+  identifiers, evidence refs, rendered text, chunk text, secrets, credentials,
+  or hidden low-priority details. A future projection write path must be a
+  separate explicit local/dev operator action.
 
 ## Current Status
 
@@ -548,6 +559,21 @@ Implemented today:
   chunk text, secrets, credentials, or hidden low-priority details. Human
   approval and duplicate-success protection remain separate gates, and
   scheduler/automatic delivery remains deferred.
+- FOS-081 adds `scripts/preview_stored_source_event_normalization.py`, a local
+  read-only stored source event normalization preview command. It reports
+  count-only source event totals, safe source/type counts, synthetic/no-marker
+  counts, already-normalized counts, eligible/unsupported/invalid preview
+  counts, and safe projected normalized activity source/activity-type counts for
+  a future explicit projection command.
+- FOS-081 does not create source events, normalized activity rows, attention
+  results, seeds, drafts, approvals, delivery intentions, Telegram plans,
+  preflight/gate records, delivery results, scheduler jobs, worker/outbox
+  records, migrations, or tables. It does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code, and it does not expose raw
+  source bodies, provider payloads, item titles, summaries, actions, source
+  object identifiers, evidence refs, secrets, credentials, rendered text, chunk
+  text, or hidden low-priority details. No-marker rows remain unlabeled local
+  stored data, not production truth.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

@@ -44,6 +44,8 @@
   implemented
 - Read-only real stored local data readiness discovery:
   implemented
+- Read-only stored source event normalization preview:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -97,6 +99,9 @@
   `attention_triage_results` rows over explicit bounded windows for count-only
   real stored local data readiness discovery; it appends no rows and introduces
   no new storage.
+- FOS-081 reads existing `source_events` and linked
+  `normalized_activity_items` over an explicit bounded window for count-only
+  normalization preview; it appends no rows and introduces no new storage.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist
@@ -388,6 +393,21 @@
   Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
   or new tables. Readiness discovery is operational metadata only and is not
   source-of-truth company data.
+- FOS-081 adds a read-only stored source event normalization preview over
+  existing `source_events` and linked `normalized_activity_items`. It returns
+  only aggregate source event counts, synthetic/no-marker counts, already-
+  normalized counts, eligible/unsupported/invalid preview counts, safe projected
+  normalized source/activity-type counts, and recommended next actions. It does
+  not treat no-marker rows as production truth and does not expose row-level
+  titles, summaries, actions, people, URLs, source object identifiers, raw refs,
+  raw payloads, provider payloads, prompts, evidence refs, rendered digest text,
+  chunk text, secrets, credential values, or hidden low-priority details.
+- FOS-081 appends no source events, normalized activity rows, attention result
+  rows, seed rows, draft rows, decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
+  or new tables. Normalization preview is operational metadata only and is not
+  source-of-truth company data; any future projection write command must be
+  separate and explicit.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
