@@ -30,6 +30,7 @@
 - Local/dev-only synthetic persisted attention digest seed command: implemented
 - Duplicate-success protection for test-only Telegram sends: implemented
 - Local approved-draft manual pilot handoff command: implemented
+- Read-only manual pilot status report by sample/window: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -515,6 +516,19 @@
   credentials, raw Telegram/provider payloads, hidden low-priority details, or
   newly exposed evidence refs, and adds no API send endpoint, production mode,
   worker, outbox table, automatic retry, migration, or new table.
+- FOS-078 adds `scripts/report_manual_pilot_status.py`, a local read-only
+  manual pilot status report for an explicit persisted attention digest window
+  and optional synthetic `sample_id`. The report summarizes safe digest counts,
+  matching delivery draft state, approval state, delivery intention state,
+  delivery result counts, duplicate guard state, stale/already-sent status, and
+  a recommended next action.
+- FOS-078 creates no seeds, drafts, approvals, intentions, Telegram plans,
+  preflight/gate records, delivery results, scheduler jobs, worker/outbox
+  records, migrations, or tables. It does not read bot credentials, call
+  Telegram/Slack or live APIs, expose rendered text, chunk text, raw payloads,
+  secrets, hidden low-priority details, or newly exposed evidence refs. Human
+  approval remains separate, duplicate-success protection at send time remains
+  the final guard, and scheduler/automatic delivery remains deferred.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

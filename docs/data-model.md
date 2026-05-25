@@ -38,6 +38,8 @@
   implemented
 - Local approved-draft manual pilot handoff command:
   implemented
+- Read-only manual pilot status report by sample/window:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -81,6 +83,9 @@
   `before_ref=delivery_intention_id` to block duplicate successful test sends
   before any Telegram transport call; it appends no rows during the duplicate
   guard and introduces no new storage.
+  FOS-078 reads existing delivery draft, decision, intention, and delivery
+  result audit rows for an explicit digest window to build a manual pilot status
+  report; it appends no rows and introduces no new storage.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist
@@ -333,6 +338,19 @@
   hashes, statuses, blockers, and safety flags; delivery drafts, intentions,
   and results remain audit/review/execution metadata, not source-of-truth
   company facts.
+- FOS-078 adds a read-only manual pilot status report over an explicit persisted
+  attention digest window and optional synthetic `sample_id`. It reads
+  `attention_triage_results` for safe digest counts and existing
+  `audit_logs` rows for matching drafts, approval decisions, delivery
+  intentions, and delivery results. The report exposes only safe counts, IDs,
+  hashes, statuses, duplicate/stale metadata, recommended next action, and
+  placeholder command shapes.
+- FOS-078 appends no seed rows, draft rows, decision rows, intention rows,
+  result rows, Telegram plan/preflight/gate rows, scheduler jobs, outbox rows,
+  migrations, or new tables. It does not expose rendered text, stored digest
+  text, chunk text, raw payloads, credential values, hidden low-priority item
+  details, or newly exposed evidence refs. Manual pilot status is operational
+  metadata only and is not source-of-truth company data.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

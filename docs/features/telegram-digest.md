@@ -30,6 +30,7 @@
 - Local/dev-only synthetic persisted attention digest seed command: implemented
 - Duplicate-success protection for test-only Telegram sends: implemented
 - Local approved-draft manual pilot handoff command: implemented
+- Read-only manual pilot status report by sample/window: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -490,6 +491,21 @@ Implemented today:
   credentials, raw Telegram/provider payloads, hidden low-priority details, or
   newly exposed evidence refs, and adds no API send endpoint, production mode,
   worker, outbox table, automatic retry, migration, or new table.
+- FOS-078 adds `scripts/report_manual_pilot_status.py`, a local read-only
+  manual pilot status report for an explicit persisted digest window and
+  optional synthetic `sample_id`. It summarizes safe digest counts, matching
+  draft state, approval state, intention state, delivery result state,
+  duplicate guard status, stale/already-sent status, and the recommended next
+  manual action.
+- FOS-078 does not create seeds, drafts, approvals, delivery intentions,
+  Telegram plans, preflight/gate records, delivery results, scheduler jobs,
+  workers, outbox records, migrations, or tables. It does not require or read
+  Telegram credentials, call Telegram/Slack or live APIs, or expose rendered
+  text, chunk text, raw payloads, secrets, hidden low-priority details, or newly
+  exposed evidence refs. Human approval remains separate, duplicate-success
+  protection remains the send-time guard, and scheduler/automatic delivery
+  remains deferred until repeated manual bounded sends and real stored local
+  data pilots are proven safe.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

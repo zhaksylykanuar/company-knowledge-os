@@ -41,10 +41,11 @@ from app.services.digest_delivery_drafts import (
     get_digest_delivery_intention_telegram_plan,
     get_digest_delivery_result,
     get_delivery_draft_send_status,
+    get_persisted_digest_delivery_draft,
     get_successful_delivery_result_for_delivery_intention,
     list_delivery_intentions_for_delivery_draft,
     list_delivery_results_for_delivery_intention,
-    get_persisted_digest_delivery_draft,
+    list_persisted_digest_delivery_drafts_for_window,
     persist_digest_delivery_draft,
     record_digest_delivery_result,
     reject_digest_delivery_draft,
@@ -733,6 +734,70 @@ async def test_retrieving_persisted_delivery_draft_returns_sanitized_payload() -
         assert "source_payload" not in dumped
     finally:
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_list_delivery_drafts_for_window_returns_safe_metadata_only() -> None:
+    await _ensure_audit_log_table()
+    digest = _persisted_attention_digest()
+    rendered_text = _rendered_digest(digest)
+    matching_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 2, 1),
+        end_at=_utc(2132, 2, 2),
+        limit=20,
+    )
+    other_draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=_utc(2132, 2, 3),
+        end_at=_utc(2132, 2, 4),
+        limit=20,
+    )
+    matching_draft_id = matching_draft["delivery_draft_id"]
+    other_draft_id = other_draft["delivery_draft_id"]
+    await _delete_delivery_draft_audit_logs(matching_draft_id)
+    await _delete_delivery_draft_audit_logs(other_draft_id)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await persist_digest_delivery_draft(
+                session,
+                draft=matching_draft,
+                actor="test",
+            )
+            await persist_digest_delivery_draft(
+                session,
+                draft=other_draft,
+                actor="test",
+            )
+            await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            listed = await list_persisted_digest_delivery_drafts_for_window(
+                session,
+                start_at=_utc(2132, 2, 1),
+                end_at=_utc(2132, 2, 2),
+                limit=20,
+                debug_evidence=False,
+            )
+
+        assert [item["delivery_draft_id"] for item in listed] == [matching_draft_id]
+        assert listed[0]["digest_type"] == "persisted_attention"
+        assert listed[0]["channel"] == "telegram"
+        assert listed[0]["text_sha256"] == matching_draft["text_sha256"]
+        assert listed[0]["char_count"] == matching_draft["char_count"]
+        assert listed[0]["chunk_count"] == matching_draft["chunk_count"]
+        dumped = json.dumps(listed, sort_keys=True)
+        assert "rendered_text" not in dumped
+        assert "chunk_metadata" not in dumped
+        assert '"digest":' not in dumped
+        assert "Hidden delivery draft title" not in dumped
+        assert "PRIVATE_RAW_PAYLOAD_DO_NOT_EXPOSE" not in dumped
+        assert "evidence_refs" not in dumped
+    finally:
+        await _delete_delivery_draft_audit_logs(matching_draft_id)
+        await _delete_delivery_draft_audit_logs(other_draft_id)
 
 
 async def test_delivery_draft_approval_status_unknown_returns_none_and_decisions_raise() -> None:

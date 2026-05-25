@@ -698,6 +698,85 @@ async def get_persisted_digest_delivery_draft(
     return _audit_log_response(record)
 
 
+def _safe_delivery_draft_lookup_metadata(
+    draft: Mapping[str, Any],
+) -> dict[str, Any]:
+    audit_log = draft.get("audit_log")
+    recorded_at = (
+        audit_log.get("created_at")
+        if isinstance(audit_log, Mapping)
+        else None
+    )
+    return {
+        "delivery_draft_id": draft.get("delivery_draft_id"),
+        "digest_type": draft.get("digest_type"),
+        "channel": draft.get("channel"),
+        "status": draft.get("status"),
+        "persisted": bool(draft.get("persisted")),
+        "start_at": draft.get("start_at"),
+        "end_at": draft.get("end_at"),
+        "limit": draft.get("limit"),
+        "debug_evidence": bool(draft.get("debug_evidence")),
+        "text_sha256": draft.get("text_sha256"),
+        "char_count": draft.get("char_count"),
+        "chunk_count": draft.get("chunk_count"),
+        "recorded_at": recorded_at,
+    }
+
+
+async def list_persisted_digest_delivery_drafts_for_window(
+    session: AsyncSession,
+    *,
+    start_at: datetime,
+    end_at: datetime,
+    limit: int = DEFAULT_DIGEST_ENTRY_LIMIT,
+    debug_evidence: bool = False,
+    channel: str = DIGEST_DELIVERY_DRAFT_CHANNEL,
+) -> list[dict[str, Any]]:
+    """Return safe delivery draft metadata for an exact persisted digest window.
+
+    This reads existing ``digest.delivery_draft.created`` audit rows and filters
+    them by the safe window/limit/debug metadata stored in the draft payload. It
+    intentionally returns lookup metadata only and never exposes rendered text,
+    digest item snapshots, chunk text, raw payloads, credentials, or evidence
+    refs.
+    """
+
+    _require_aware_datetime(start_at, field_name="start_at")
+    _require_aware_datetime(end_at, field_name="end_at")
+    if end_at <= start_at:
+        raise ValueError("end_at must be after start_at")
+
+    safe_limit = _validated_limit(limit)
+    start_at_iso = start_at.isoformat()
+    end_at_iso = end_at.isoformat()
+    records = await session.scalars(
+        select(AuditLog)
+        .where(AuditLog.event_type == DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE)
+        .order_by(AuditLog.id)
+    )
+
+    drafts: list[dict[str, Any]] = []
+    for record in records:
+        response = _audit_log_response(record)
+        if response is None:
+            continue
+        if response.get("digest_type") != DIGEST_DELIVERY_DRAFT_TYPE:
+            continue
+        if response.get("channel") != channel:
+            continue
+        if response.get("start_at") != start_at_iso:
+            continue
+        if response.get("end_at") != end_at_iso:
+            continue
+        if response.get("limit") != safe_limit:
+            continue
+        if bool(response.get("debug_evidence")) != bool(debug_evidence):
+            continue
+        drafts.append(_safe_delivery_draft_lookup_metadata(response))
+    return drafts
+
+
 async def persist_digest_delivery_draft(
     session: AsyncSession,
     *,
