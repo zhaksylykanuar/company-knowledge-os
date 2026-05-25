@@ -33,6 +33,7 @@
 - Read-only manual pilot status report by sample/window: implemented
 - Read-only persisted attention window discovery for manual pilots:
   implemented
+- Read-only real stored local data readiness discovery: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -222,6 +223,16 @@ trusted facts.
 - Hidden low-priority digest items must remain count-only in preview, persisted
   draft, and delivery-oriented surfaces. Evidence refs remain debug-only and
   safe-formatted.
+- Real stored local data readiness discovery is read-only operational metadata
+  only. It may scan stored `source_events`, `normalized_activity_items`, and
+  `attention_triage_results` for explicit bounded windows, but it must expose
+  only safe counts and pipeline readiness booleans. It must not create source
+  events, normalized items, attention results, delivery artifacts, approvals,
+  intentions, results, or sends; call live APIs/providers/OpenAI/connectors,
+  Telegram, or Slack; read Telegram credentials; or expose raw source bodies,
+  provider payloads, item details, evidence refs, rendered text, chunk text,
+  secrets, credentials, or hidden low-priority details. No-marker data is not
+  production truth.
 
 ## Current Status
 
@@ -521,6 +532,22 @@ Implemented today:
   payloads, secrets, hidden low-priority details, or newly exposed evidence
   refs. Absence of a synthetic marker is not production truth, and scheduler
   remains deferred.
+- FOS-080 adds `scripts/report_real_stored_local_data_readiness.py`, a local
+  read-only real stored local data readiness command. It scans explicit bounded
+  windows across `source_events`, `normalized_activity_items`, and
+  `attention_triage_results`, returns count-only pipeline coverage and
+  readiness metadata, labels synthetic/local/dev markers when safely detected,
+  and labels no-marker data conservatively without treating it as production
+  truth.
+- FOS-080 does not create source events, normalized activity rows, attention
+  results, seeds, drafts, approvals, delivery intentions, Telegram plans,
+  preflight/gate records, delivery results, scheduler jobs, worker/outbox
+  records, migrations, or tables. It does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code, and it does not expose raw
+  source bodies, provider payloads, item details, evidence refs, rendered text,
+  chunk text, secrets, credentials, or hidden low-priority details. Human
+  approval and duplicate-success protection remain separate gates, and
+  scheduler/automatic delivery remains deferred.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

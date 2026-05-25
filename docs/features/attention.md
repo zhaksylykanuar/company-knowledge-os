@@ -33,6 +33,7 @@
 - Read-only manual pilot status report by sample/window: implemented
 - Read-only persisted attention window discovery for manual pilots:
   implemented
+- Read-only real stored local data readiness discovery: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -544,6 +545,20 @@
   chunk text, item details, raw payloads, secrets, hidden low-priority details,
   or newly exposed evidence refs. Absence of a synthetic marker is not treated
   as production truth, and scheduler/automatic delivery remains deferred.
+- FOS-080 adds `scripts/report_real_stored_local_data_readiness.py`, a local
+  read-only readiness command for moving from synthetic manual pilots toward
+  real stored local data review. It scans `source_events`,
+  `normalized_activity_items`, and `attention_triage_results` over an explicit
+  bounded time range, reports count-only pipeline readiness metadata, labels
+  synthetic/local/dev markers when safely detectable, and labels no-marker data
+  conservatively without treating it as production truth.
+- FOS-080 does not create source events, normalized activity rows, attention
+  results, seeds, drafts, approvals, delivery intentions, Telegram plans,
+  preflight/gate records, delivery results, scheduler jobs, worker/outbox
+  records, migrations, or tables. It does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code, and it does not expose raw
+  source bodies, provider payloads, item details, evidence refs, rendered text,
+  chunk text, secrets, credentials, or hidden low-priority details.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -601,4 +616,8 @@
   draft preparation, stale draft warning, approved-draft handoff to delivery
   intention, send status reporting, and bounded test-only sending, but human
   approval remains separate and there is still no approval-triggered execution.
+- Real stored local data pilot readiness can now be checked with count-only
+  local reports over existing `source_events`, `normalized_activity_items`, and
+  `attention_triage_results`, but batch projection, batch persisted attention
+  triage, and real-data manual send rollout remain separate human-gated steps.
 - GitHub/Jira/Drive digest integration is not implemented.
