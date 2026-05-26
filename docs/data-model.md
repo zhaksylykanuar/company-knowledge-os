@@ -52,6 +52,8 @@
   implemented
 - Local/dev-only provider-free normalized activity triage command:
   implemented
+- Read-only persisted attention window reconciliation report:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -120,6 +122,10 @@
   from a local/dev-only operator command. It writes no source events,
   normalized activity rows, audit logs, delivery artifacts, new tables, or
   migrations.
+- FOS-085 reads existing `attention_triage_results`, linked
+  `normalized_activity_items`/`source_events`, and delivery draft audit logs for
+  count-only window reconciliation. It appends no rows and introduces no new
+  storage.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist
@@ -480,6 +486,24 @@
   chunk text, secrets, credential values, or hidden low-priority details.
   No-marker rows are not production truth; real-data readiness and persisted
   attention window discovery remain separate explicit checks.
+- FOS-085 adds a local read-only persisted attention window reconciliation
+  report. It compares attention-result `created_at` windows with optional
+  linked normalized/source activity windows, labels synthetic/no-marker/mixed
+  windows conservatively, and computes the current digest `text_sha256` without
+  returning rendered digest text or chunk text.
+- FOS-085 also compares the current digest hash with existing delivery draft
+  hashes for the same window, limit, debug-evidence setting, and channel. It
+  distinguishes successful delivery for different digest content from
+  successful delivery for the current digest content. It appends no source
+  events, normalized activity rows, attention results, audit logs, draft rows,
+  decision rows, intention rows, result rows, Telegram plan/preflight/gate
+  rows, scheduler jobs, outbox rows, migrations, or new tables. Its output is
+  count-only operational metadata plus hashes and must not expose row-level
+  titles, summaries, actions, people, URLs, source object identifiers, raw refs,
+  raw payloads, provider payloads, prompts, evidence refs, rendered digest text,
+  chunk text, secrets, credential values, or hidden low-priority details.
+  No-marker rows are not production truth, and real stored local draft
+  preparation remains separately human-gated.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

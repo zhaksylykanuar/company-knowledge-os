@@ -38,6 +38,7 @@
 - Local/dev-only stored source event normalization command: implemented
 - Read-only normalized activity triage readiness preview: implemented
 - Local/dev-only provider-free normalized activity triage command: implemented
+- Read-only persisted attention window reconciliation report: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -630,6 +631,23 @@
   object identifiers, evidence refs, secrets, credentials, rendered text,
   chunk text, or hidden low-priority details. No-marker rows are not production
   truth; real-data readiness and window discovery remain separate checks.
+- FOS-085 adds `scripts/report_persisted_attention_window_reconciliation.py`,
+  a local read-only persisted attention window reconciliation report. It
+  explains count-only mismatches between attention-result write-time windows
+  and linked normalized/source activity windows, labels synthetic/no-marker/
+  mixed windows conservatively, and computes the current persisted digest text
+  hash without returning digest text or chunk text.
+- FOS-085 compares the current digest `text_sha256` with existing delivery
+  draft hashes for the same window, limit, debug-evidence setting, and channel.
+  It distinguishes a prior successful delivery for different digest content
+  from a successful delivery for the current digest content. It creates no
+  drafts, approvals, delivery intentions, delivery results, Telegram plans,
+  preflight/gate records, sends, scheduler jobs, worker/outbox records,
+  migrations, or tables. It does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code, and it does not expose raw
+  source bodies, provider payloads, item details, source object identifiers,
+  evidence refs, secrets, credentials, digest text, chunk text, or hidden
+  low-priority details.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -704,4 +722,9 @@
   command writes only `attention_triage_results`; real-data readiness, window
   discovery, draft preparation, approval, and manual send rollout remain
   separate human-gated steps.
+- Persisted attention windows can now be reconciled read-only by write-time
+  attention window, optional linked activity/source window, mixed marker
+  counts, and current digest hash versus existing delivery draft hashes.
+  Real-data draft preparation should wait until this report shows the current
+  digest content is not already sent and timestamp/linkage status is understood.
 - GitHub/Jira/Drive digest integration is not implemented.

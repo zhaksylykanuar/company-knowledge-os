@@ -38,6 +38,7 @@
 - Local/dev-only stored source event normalization command: implemented
 - Read-only normalized activity triage readiness preview: implemented
 - Local/dev-only provider-free normalized activity triage command: implemented
+- Read-only persisted attention window reconciliation report: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -667,6 +668,24 @@ Implemented today:
   or hidden low-priority details. The next step after accepted local triage is
   to rerun real stored local data readiness and persisted attention window
   discovery; scheduler and automatic delivery remain deferred.
+- FOS-085 adds `scripts/report_persisted_attention_window_reconciliation.py`,
+  a local read-only reconciliation report for persisted attention windows. It
+  compares attention-result write-time windows with optional linked
+  normalized/source activity windows, labels synthetic/no-marker/mixed windows
+  conservatively, and computes current digest hash metadata without returning
+  rendered digest text or chunk text.
+- FOS-085 compares the current digest `text_sha256` with existing delivery
+  draft hashes and separates prior successful sends for different digest
+  content from successful sends for the current digest content. It does not
+  create drafts, approvals, delivery intentions, Telegram plans,
+  preflight/gate records, delivery results, scheduler jobs, worker/outbox
+  records, migrations, or tables; call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code; or expose raw source bodies,
+  provider payloads, item details, source object identifiers, evidence refs,
+  secrets, credentials, rendered text, chunk text, or hidden low-priority
+  details. Real stored local draft preparation should wait until
+  reconciliation shows the current digest content is not already sent and
+  timestamp/linkage status is understood.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
