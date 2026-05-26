@@ -39,6 +39,7 @@
 - Read-only normalized activity triage readiness preview: implemented
 - Local/dev-only provider-free normalized activity triage command: implemented
 - Read-only persisted attention window reconciliation report: implemented
+- Read-only no-marker persisted attention candidate report: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -648,6 +649,22 @@
   source bodies, provider payloads, item details, source object identifiers,
   evidence refs, secrets, credentials, digest text, chunk text, or hidden
   low-priority details.
+- FOS-086 adds `scripts/report_no_marker_persisted_attention_candidates.py`,
+  a local read-only no-marker persisted attention candidate report. It
+  separates no-marker attention results from synthetic/local/dev attention
+  results in a mixed persisted window, computes a no-marker-only candidate
+  digest hash and safe count/chunk metadata, and never returns rendered digest
+  text, chunk text, item details, raw content, source object identifiers,
+  evidence refs, secrets, or credentials.
+- FOS-086 compares the no-marker candidate `text_sha256` with existing delivery
+  draft hashes for the same persisted window and distinguishes prior sends for
+  different content from sends for the current candidate content. It does not
+  treat no-marker rows as production truth, create drafts, approvals,
+  intentions, results, Telegram plans, preflight/gate records, sends,
+  scheduler jobs, worker/outbox records, migrations, or tables, and it does not
+  call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
+  code. Real stored local draft preparation should wait until the no-marker
+  candidate report is reviewed and accepted.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -727,4 +744,9 @@
   counts, and current digest hash versus existing delivery draft hashes.
   Real-data draft preparation should wait until this report shows the current
   digest content is not already sent and timestamp/linkage status is understood.
+- No-marker persisted attention candidates can now be reported separately from
+  synthetic/local/dev items in the same persisted window. Draft preparation
+  remains a later explicit step after the no-marker-only count/hash/lifecycle
+  report is reviewed; human approval and duplicate-success protection remain
+  separate downstream guards.
 - GitHub/Jira/Drive digest integration is not implemented.

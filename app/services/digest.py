@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import case, desc, func, select
+from sqlalchemy import and_, case, desc, func, not_, select
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,10 @@ DEFAULT_DIGEST_ENTRY_LIMIT = 20
 MAX_DIGEST_ENTRY_LIMIT = 50
 DEFAULT_INFORMATIONAL_EMAIL_THREAD_LIMIT = 3
 SOURCE_EVENT_DEDUPE_SCAN_MULTIPLIER = 10
+SYNTHETIC_PERSISTED_ATTENTION_SOURCE_OBJECT_PREFIX = (
+    "local.synthetic.persisted_attention_seed:"
+)
+PERSISTED_ATTENTION_MARKER_FILTER_NO_MARKER_ONLY = "no_marker_only"
 
 EMAIL_THREAD_STATUS_NEEDS_MY_REPLY = "needs_my_reply"
 EMAIL_THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY = "waiting_for_external_reply"
@@ -127,6 +131,15 @@ def _count_dict(rows: Sequence[tuple[str | None, int]]) -> dict[str, int]:
 
 def _count_pairs(rows: Sequence[Row[tuple[str, int]]]) -> list[tuple[str, int]]:
     return [(row[0], row[1]) for row in rows]
+
+
+def _persisted_attention_synthetic_marker_clause():
+    return and_(
+        AttentionTriageResultRecord.source == "internal",
+        AttentionTriageResultRecord.source_object_id.like(
+            f"{SYNTHETIC_PERSISTED_ATTENTION_SOURCE_OBJECT_PREFIX}%"
+        ),
+    )
 
 
 def _activity_time(source_event: SourceEvent) -> datetime | None:
@@ -933,6 +946,7 @@ async def build_persisted_attention_digest_read_model(
     start_at: datetime,
     end_at: datetime,
     limit_per_section: int = DEFAULT_DIGEST_ENTRY_LIMIT,
+    marker_filter: str | None = None,
 ) -> dict[str, Any]:
     """Group stored attention triage results into digest-ready sections.
 
@@ -946,6 +960,8 @@ async def build_persisted_attention_digest_read_model(
     _require_aware_datetime(end_at, field_name="end_at")
     if end_at <= start_at:
         raise ValueError("end_at must be after start_at")
+    if marker_filter not in (None, PERSISTED_ATTENTION_MARKER_FILTER_NO_MARKER_ONLY):
+        raise ValueError("unsupported persisted attention marker_filter")
 
     safe_limit = _safe_limit(limit_per_section)
     priority_rank = case(
@@ -954,20 +970,19 @@ async def build_persisted_attention_digest_read_model(
         (AttentionTriageResultRecord.priority == EMAIL_TRIAGE_PRIORITY_LOW, 2),
         else_=3,
     )
-    records = list(
-        (
-            await session.scalars(
-                select(AttentionTriageResultRecord)
-                .where(AttentionTriageResultRecord.created_at >= start_at)
-                .where(AttentionTriageResultRecord.created_at < end_at)
-                .order_by(
-                    priority_rank,
-                    desc(AttentionTriageResultRecord.created_at),
-                    desc(AttentionTriageResultRecord.id),
-                )
-            )
-        ).all()
+    stmt = (
+        select(AttentionTriageResultRecord)
+        .where(AttentionTriageResultRecord.created_at >= start_at)
+        .where(AttentionTriageResultRecord.created_at < end_at)
     )
+    if marker_filter == PERSISTED_ATTENTION_MARKER_FILTER_NO_MARKER_ONLY:
+        stmt = stmt.where(not_(_persisted_attention_synthetic_marker_clause()))
+    stmt = stmt.order_by(
+        priority_rank,
+        desc(AttentionTriageResultRecord.created_at),
+        desc(AttentionTriageResultRecord.id),
+    )
+    records = list((await session.scalars(stmt)).all())
     linked_activities = await _linked_normalized_activity_rows(session, records)
 
     groups: dict[str, list[dict[str, Any]]] = {
@@ -1025,6 +1040,18 @@ async def build_persisted_attention_digest_read_model(
             f"{missing_activity_count} visible attention items were rendered without normalized activity enrichment."
         )
 
+    metadata = {
+        "source_model": "attention_triage_results",
+        "enrichment_model": "normalized_activity_items",
+        "group_limit": safe_limit,
+        "truncated": truncated,
+        "llm_used": False,
+        "read_model_only": True,
+        "source_activity_digest_replaced": False,
+    }
+    if marker_filter is not None:
+        metadata["marker_filter"] = marker_filter
+
     return {
         "section_title": "Persisted attention digest",
         "available": True,
@@ -1049,15 +1076,7 @@ async def build_persisted_attention_digest_read_model(
             "counts": dict(sorted(hidden_counts.items())),
         },
         "data_quality_notes": data_quality_notes,
-        "metadata": {
-            "source_model": "attention_triage_results",
-            "enrichment_model": "normalized_activity_items",
-            "group_limit": safe_limit,
-            "truncated": truncated,
-            "llm_used": False,
-            "read_model_only": True,
-            "source_activity_digest_replaced": False,
-        },
+        "metadata": metadata,
     }
 
 

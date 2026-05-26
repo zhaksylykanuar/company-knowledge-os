@@ -39,6 +39,7 @@
 - Read-only normalized activity triage readiness preview: implemented
 - Local/dev-only provider-free normalized activity triage command: implemented
 - Read-only persisted attention window reconciliation report: implemented
+- Read-only no-marker persisted attention candidate report: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -686,6 +687,21 @@ Implemented today:
   details. Real stored local draft preparation should wait until
   reconciliation shows the current digest content is not already sent and
   timestamp/linkage status is understood.
+- FOS-086 adds `scripts/report_no_marker_persisted_attention_candidates.py`,
+  a local read-only no-marker persisted attention candidate report for mixed
+  persisted windows. It excludes synthetic/local/dev attention results,
+  reports no-marker-only candidate counts, computes candidate hash/chunk
+  metadata without returning rendered text or chunk text, and compares the
+  candidate hash to existing delivery draft hashes.
+- FOS-086 does not treat no-marker rows as production truth, create drafts,
+  approvals, delivery intentions, Telegram plans, preflight/gate records,
+  delivery results, scheduler jobs, worker/outbox records, migrations, or
+  tables; call live APIs, providers/OpenAI, connectors, Telegram/Slack, or
+  delivery code; or expose raw source bodies, provider payloads, item details,
+  source object identifiers, evidence refs, secrets, credentials, rendered
+  text, chunk text, or hidden low-priority details. Real stored local draft
+  preparation should wait until this no-marker candidate report is reviewed and
+  accepted.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
