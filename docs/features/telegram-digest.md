@@ -43,6 +43,7 @@
 - Local/dev-only no-marker persisted attention delivery draft preparation:
   implemented
 - Read-only no-marker persisted attention digest quality report: implemented
+- Read-only no-marker duplicate root-cause linkage report: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -737,6 +738,23 @@ Implemented today:
   results, scheduler jobs, worker/outbox records, migrations, or tables; it does
   not call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
   code.
+- FOS-089 adds
+  `scripts/report_no_marker_persisted_attention_duplicate_root_cause.py`, a
+  local read-only duplicate root-cause linkage report for no-marker persisted
+  attention candidates. It uses count-only opaque buckets to distinguish likely
+  source-object repetition, source-event repetition, normalization fanout,
+  attention-result fanout, rendered-shape collision, mixed signals, and
+  insufficient linkage before any future dedupe or grouping work.
+- FOS-089 does not create drafts, approvals, delivery intentions, Telegram
+  plans, preflight/gate records, delivery results, sends, scheduler jobs,
+  worker/outbox records, migrations, or tables. It does not change the renderer,
+  digest read model, source event normalization, or attention triage, and it
+  does not call live APIs, providers/OpenAI, connectors, Telegram/Slack, or
+  delivery code. It never exposes raw source object identifiers, PR numbers,
+  repository names, author names, titles, summaries, actions, source bodies,
+  evidence refs, rendered text, chunk text, secrets, credentials, raw payloads,
+  or raw fingerprints. Human approval remains a separate downstream step, and
+  duplicate-success protection remains the send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

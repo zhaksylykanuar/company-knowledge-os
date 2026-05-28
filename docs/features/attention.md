@@ -43,6 +43,7 @@
 - Local/dev-only no-marker persisted attention delivery draft preparation:
   implemented
 - Read-only no-marker persisted attention digest quality report: implemented
+- Read-only no-marker duplicate root-cause linkage report: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -702,6 +703,22 @@
   report creates no drafts, approvals, intentions, results, sends, scheduler
   jobs, worker/outbox records, migrations, or tables and does not call live
   APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery code.
+- FOS-089 adds
+  `scripts/report_no_marker_persisted_attention_duplicate_root_cause.py`, a
+  local read-only no-marker duplicate root-cause linkage report. It investigates
+  duplicate-looking clusters across source object/linkage, source event,
+  normalized activity, attention result, and rendered-shape layers using
+  count-only fanout metrics, opaque cluster labels, and safe enum summaries.
+- FOS-089 is diagnostic only. It does not dedupe, group, change rendering,
+  change the persisted digest read model, change source event normalization,
+  change attention triage, create delivery drafts, approvals, intentions,
+  results, sends, scheduler jobs, worker/outbox records, migrations, or tables,
+  or call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
+  code. It never exposes raw source object identifiers, PR numbers, repository
+  names, author names, titles, summaries, actions, source bodies, evidence refs,
+  rendered text, chunk text, secrets, credentials, raw payloads, or raw
+  fingerprints. Root-cause labels are conservative operational diagnostics;
+  duplicate-looking does not prove semantic duplication.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

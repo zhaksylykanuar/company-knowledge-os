@@ -60,6 +60,8 @@
   audit-log-backed, implemented
 - Read-only no-marker persisted attention digest quality report:
   implemented
+- Read-only no-marker duplicate root-cause linkage report:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -556,6 +558,22 @@
   not call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
   code. Duplicate-looking remains operational quality metadata, not proof of a
   semantic duplicate.
+- FOS-089 adds a read-only no-marker duplicate root-cause linkage report. It
+  reads existing no-marker candidate attention results and linked normalized
+  activity/source event metadata to compute safe bucket counts, fanout metrics,
+  likely origin, confidence, warnings, and limitations across source object,
+  source event, normalized activity, attention result, and rendered-shape
+  layers.
+- FOS-089 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
+  or tables. It does not modify renderer grouping, digest read-model grouping,
+  source event dedupe, normalization dedupe, attention triage dedupe, or
+  delivery behavior. It does not expose raw source object identifiers, PR
+  numbers, repository names, author names, titles, summaries, actions, source
+  bodies, evidence refs, rendered digest text, chunk text, raw payloads,
+  secrets, credentials, or raw fingerprints and does not call live APIs,
+  providers/OpenAI, connectors, Telegram/Slack, or delivery code.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
