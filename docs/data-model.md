@@ -56,6 +56,8 @@
   implemented
 - Read-only no-marker persisted attention candidate report:
   implemented
+- Local/dev-only no-marker persisted attention delivery draft preparation:
+  audit-log-backed, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -521,6 +523,21 @@
   rows, scheduler jobs, outbox rows, migrations, or new tables. No-marker rows
   are not production truth, and real stored local draft preparation remains a
   separate explicit downstream step.
+- FOS-087 adds a local/dev-only no-marker persisted attention delivery draft
+  preparation command. It writes only one sanitized
+  `digest.delivery_draft.created` audit-log record through the existing
+  delivery draft persistence path, and only after an explicit time window,
+  exact confirmation phrase, local/dev environment check, and visible
+  no-marker candidate check pass.
+- FOS-087 draft payloads carry safe review metadata such as
+  `marker_filter=no_marker_only`, `no_marker_not_production_truth=true`, the
+  no-marker candidate `text_sha256`, candidate count/chunk metadata, excluded
+  synthetic counts, optional linked activity window metadata, timestamp
+  mismatch warnings, and prior-different-hash warnings. They remain delivery
+  draft review artifacts, not source-of-truth company facts. FOS-087 does not
+  append approval, intention, result, Telegram plan/preflight/gate, scheduler,
+  worker, outbox, migration, or new-table records and does not call live APIs,
+  providers/OpenAI, connectors, Telegram/Slack, or delivery code.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

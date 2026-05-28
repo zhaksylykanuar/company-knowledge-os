@@ -40,6 +40,8 @@
 - Local/dev-only provider-free normalized activity triage command: implemented
 - Read-only persisted attention window reconciliation report: implemented
 - Read-only no-marker persisted attention candidate report: implemented
+- Local/dev-only no-marker persisted attention delivery draft preparation:
+  implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -702,6 +704,23 @@ Implemented today:
   text, chunk text, or hidden low-priority details. Real stored local draft
   preparation should wait until this no-marker candidate report is reviewed and
   accepted.
+- FOS-087 adds
+  `scripts/prepare_no_marker_persisted_attention_delivery_draft.py`, a
+  local/dev-only command that prepares an inert no-marker persisted attention
+  delivery draft after explicit confirmation. It requires an explicit
+  timezone-aware persisted attention window, fixes
+  `marker_filter=no_marker_only`, excludes synthetic/local/dev attention
+  results, refuses production-like environments, and stores safe draft review
+  metadata for the no-marker candidate hash, excluded synthetic counts,
+  `no_marker_not_production_truth`, timestamp mismatch warnings, and prior
+  successful delivery for different digest content.
+- FOS-087 creates only the delivery draft audit record. It does not approve,
+  reject, create delivery intentions, create Telegram plans, create
+  preflight/gate records, create delivery results, send Telegram/Slack
+  messages, add scheduler/worker/outbox behavior, add migrations or tables, or
+  call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
+  code. Human approval remains a separate explicit step, and duplicate-success
+  protection remains the final send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

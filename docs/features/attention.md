@@ -40,6 +40,8 @@
 - Local/dev-only provider-free normalized activity triage command: implemented
 - Read-only persisted attention window reconciliation report: implemented
 - Read-only no-marker persisted attention candidate report: implemented
+- Local/dev-only no-marker persisted attention delivery draft preparation:
+  implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -665,6 +667,25 @@
   call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
   code. Real stored local draft preparation should wait until the no-marker
   candidate report is reviewed and accepted.
+- FOS-087 adds
+  `scripts/prepare_no_marker_persisted_attention_delivery_draft.py`, a
+  local/dev-only command that creates one inert audit-log-backed delivery draft
+  from the no-marker-only persisted attention candidate. It requires an
+  explicit timezone-aware window and the exact confirmation phrase
+  `PREPARE NO-MARKER DIGEST DRAFT`, refuses production-like environments,
+  fixes `marker_filter=no_marker_only`, excludes synthetic/local/dev attention
+  results, and stores review metadata such as `no_marker_not_production_truth`,
+  the candidate `text_sha256`, excluded synthetic counts, and timestamp
+  mismatch/prior-different-hash warnings.
+- FOS-087 creates only the sanitized delivery draft audit record. It does not
+  approve or reject, create delivery intentions, Telegram plans, preflight/gate
+  records, delivery results, sends, scheduler jobs, worker/outbox records,
+  migrations, or tables, and it does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code. The command output does not
+  include rendered digest text, chunk text, raw source bodies, provider
+  payloads, item details, source object identifiers, evidence refs, secrets, or
+  credentials. Human approval remains a separate downstream step, and
+  duplicate-success protection remains the final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
