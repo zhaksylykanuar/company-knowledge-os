@@ -42,6 +42,7 @@
 - Read-only no-marker persisted attention candidate report: implemented
 - Local/dev-only no-marker persisted attention delivery draft preparation:
   implemented
+- Read-only no-marker persisted attention digest quality report: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
@@ -721,6 +722,21 @@ Implemented today:
   call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
   code. Human approval remains a separate explicit step, and duplicate-success
   protection remains the final send-time guard.
+- FOS-088 adds
+  `scripts/report_no_marker_persisted_attention_digest_quality.py`, a local
+  read-only no-marker persisted attention digest quality report for manual
+  pilots. It reports duplicate-looking/noisy no-marker candidate items through
+  safe aggregate clusters and count-only metrics before another real/no-marker
+  send is considered.
+- FOS-088 never exposes raw titles, summaries, actions, source object
+  identifiers, PR numbers, repository names, author names, rendered text, chunk
+  text, raw payloads, evidence refs, secrets, or credentials. Opaque cluster
+  labels are report labels, not database identifiers, and duplicate-looking is
+  not proof of semantic duplication. The report creates no drafts, approvals,
+  delivery intentions, Telegram plans, preflight/gate records, delivery
+  results, scheduler jobs, worker/outbox records, migrations, or tables; it does
+  not call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
+  code.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

@@ -42,6 +42,7 @@
 - Read-only no-marker persisted attention candidate report: implemented
 - Local/dev-only no-marker persisted attention delivery draft preparation:
   implemented
+- Read-only no-marker persisted attention digest quality report: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -686,6 +687,21 @@
   payloads, item details, source object identifiers, evidence refs, secrets, or
   credentials. Human approval remains a separate downstream step, and
   duplicate-success protection remains the final send-time guard.
+- FOS-088 adds
+  `scripts/report_no_marker_persisted_attention_digest_quality.py`, a local
+  read-only no-marker persisted attention digest quality report. It analyzes
+  the no-marker candidate digest for duplicate-looking/noisy visible items
+  using aggregate clusters at the rendered-shape, attention-result,
+  normalized-activity, and source-event linkage layers.
+- FOS-088 outputs only counts, safe enum summaries, opaque cluster labels, the
+  no-marker candidate hash/chunk metadata, lifecycle status, warnings, and a
+  safe recommended next action. It never returns raw titles, summaries, actions,
+  source object identifiers, PR numbers, repository names, author names,
+  rendered digest text, chunk text, raw payloads, evidence refs, secrets, or
+  credentials. Duplicate-looking does not prove semantic duplication. The
+  report creates no drafts, approvals, intentions, results, sends, scheduler
+  jobs, worker/outbox records, migrations, or tables and does not call live
+  APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery code.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
