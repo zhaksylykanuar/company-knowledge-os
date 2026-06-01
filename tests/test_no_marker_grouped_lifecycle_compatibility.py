@@ -423,6 +423,39 @@ def test_missing_required_args_fail_safely() -> None:
     assert "--end-at" in missing_end.stderr
 
 
+def test_help_lists_review_output_modes_before_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def forbidden_report(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("help must exit before report execution")
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        forbidden_report,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        compat_script.main(["--help"])
+
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    help_output = captured.out
+    assert "--format" in help_output
+    assert "text" in help_output
+    assert "json" in help_output
+    assert "review-json" in help_output
+    assert "decision/review-only" in help_output
+    assert "read-only" in help_output
+    assert "No output mode enforces" in help_output
+    assert "send blocking" in help_output
+    assert "--synthetic-review-smoke" in help_output
+    assert "synthetic review scenarios" in help_output
+    assert captured.err == ""
+    _assert_safe_output(help_output)
+
+
 def test_invalid_inputs_fail_before_execution(monkeypatch: pytest.MonkeyPatch) -> None:
     async def forbidden_report(*_args: object, **_kwargs: object) -> object:
         raise AssertionError("invalid input must fail before DB execution")
@@ -479,6 +512,37 @@ def test_invalid_inputs_fail_before_execution(monkeypatch: pytest.MonkeyPatch) -
         )
         == 2
     )
+
+
+def test_invalid_format_fails_before_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def forbidden_report(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("invalid format must fail before report execution")
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        forbidden_report,
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        compat_script.main(
+            [
+                "--start-at",
+                "2149-01-01T00:00:00+00:00",
+                "--end-at",
+                "2149-01-02T00:00:00+00:00",
+                "--format",
+                "unsafe-format",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    _assert_safe_output(captured.err)
 
 
 def test_cli_rejects_credential_send_mutation_and_marker_filter_args() -> None:
@@ -1062,3 +1126,82 @@ def test_review_json_output_is_decision_only_and_sanitized() -> None:
     assert "grouped_preview_text" not in serialized_without_safe_hash_field_names
     _assert_grouped_lifecycle_report_contract(parsed)
     _assert_safe_output(result.stdout)
+
+
+def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def forbidden_report(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("synthetic smoke must not execute the real report")
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        forbidden_report,
+    )
+
+    assert compat_script.main(["--synthetic-review-smoke"]) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    parsed = json.loads(captured.out)
+
+    assert parsed["mode"] == "synthetic_review_smoke"
+    assert parsed["read_only"] is True
+    assert parsed["provider_free"] is True
+    assert parsed["local_synthetic_only"] is True
+    assert parsed["uses_real_local_data"] is False
+    assert parsed["enforced"] is False
+    assert parsed["semantic_duplicate_claimed"] is False
+    assert parsed["scenario_count"] == 4
+
+    scenarios = parsed["scenarios"]
+    assert isinstance(scenarios, list)
+    assert len(scenarios) == parsed["scenario_count"]
+    assert {scenario["scenario_name"] for scenario in scenarios} == {
+        "current_grouped_hash_already_sent",
+        "linked_canonical_hash_blocks_presentation_variant",
+        "not_blocked",
+        "manual_review_insufficient_hash_evidence",
+    }
+    assert {scenario["operator_review_summary"]["decision"] for scenario in scenarios} == {
+        "already_sent_by_current_hash",
+        "blocked_by_linked_canonical_hash",
+        "not_blocked",
+        "manual_review_needed",
+    }
+
+    for scenario in scenarios:
+        assert "lifecycle_compatibility" in scenario
+        assert "canonical_hash_guard_evaluation" in scenario
+        assert "operator_review_summary" in scenario
+        assert scenario["canonical_hash_guard_evaluation"]["enforced"] is False
+        assert (
+            scenario["canonical_hash_guard_evaluation"][
+                "semantic_duplicate_claimed"
+            ]
+            is False
+        )
+        assert scenario["operator_review_summary"]["enforced"] is False
+        assert scenario["operator_review_summary"]["semantic_duplicate_claimed"] is False
+        assert scenario["operator_review_summary"]["decision"] in OPERATOR_REVIEW_DECISIONS
+        for full_report_only_key in (
+            "candidate",
+            "grouped_preview",
+            "duplicate_quality",
+            "recommended_next_action",
+            "warnings",
+            "limitations",
+        ):
+            assert full_report_only_key not in scenario
+        _assert_grouped_lifecycle_report_contract(scenario)
+
+    serialized_without_safe_hash_field_names = captured.out.replace(
+        "grouped_preview_text_sha256",
+        "",
+    ).replace(
+        "grouped_preview_text_included",
+        "",
+    )
+    assert "grouped_preview_text" not in serialized_without_safe_hash_field_names
+    _assert_safe_output(captured.out)

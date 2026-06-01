@@ -72,6 +72,8 @@
   implemented
 - Decision-only grouped lifecycle review JSON output:
   implemented
+- Grouped lifecycle CLI help and synthetic review smoke mode:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -697,6 +699,21 @@
   `lifecycle_compatibility`, `canonical_hash_guard_evaluation`,
   `operator_review_summary`, and safety flags.
 - FOS-096 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It does not enforce blocking in send paths, does not change renderer
+  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
+  behavior, schema, delivery result writing, delivery execution, scheduler
+  behavior, or automatic delivery, and does not claim semantic duplication.
+  Grouping preview remains presentation planning, and duplicate-success
+  protection remains the final send-time guard.
+- FOS-097 improves grouped lifecycle report CLI help and adds a local synthetic
+  review smoke mode. It does not add new storage. The smoke mode returns
+  in-memory synthetic scenarios over `lifecycle_compatibility`,
+  `canonical_hash_guard_evaluation`, and `operator_review_summary` so local
+  operators can verify the sanitized decision surface without reading real
+  local data.
+- FOS-097 appends no source events, normalized activity rows, attention results,
   audit logs, draft rows, approval/decision rows, intention rows, result rows,
   Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
   tables. It does not enforce blocking in send paths, does not change renderer

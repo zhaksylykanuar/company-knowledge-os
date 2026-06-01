@@ -50,6 +50,7 @@
 - Read-only grouped lifecycle operator decision summary: implemented
 - Sanitized grouped lifecycle report contract tests: implemented
 - Decision-only grouped lifecycle review JSON output: implemented
+- Grouped lifecycle CLI help and synthetic review smoke mode: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -843,6 +844,20 @@
   or automatic delivery, and does not claim semantic duplication. Grouping
   preview remains presentation planning, not a source-of-truth mutation, and
   duplicate-success protection remains the final send-time guard.
+- FOS-097 improves CLI discoverability for grouped lifecycle report output
+  modes and adds a local synthetic review smoke mode. The CLI help documents
+  `text`, `json`, and `review-json` as read-only output modes, and the smoke
+  mode builds in-memory synthetic decision scenarios for the sanitized review
+  surface without reading real local data.
+- FOS-097 is reporting/debug only. The synthetic smoke mode is provider-free,
+  read-only, local, and synthetic. It does not enforce blocking in send paths,
+  claim semantic duplication, create drafts, approvals, intentions, delivery
+  results, sends, audit rows, or source-of-truth mutations, and does not change
+  renderer behavior, draft body generation, `text_sha256`, API behavior,
+  schema, delivery execution, delivery results, scheduler behavior, or
+  automatic delivery. Grouping preview remains presentation planning, not a
+  source-of-truth mutation, and duplicate-success protection remains the final
+  send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

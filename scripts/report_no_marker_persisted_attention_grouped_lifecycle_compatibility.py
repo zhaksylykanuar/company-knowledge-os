@@ -108,15 +108,17 @@ def _clean_group_by(value: str) -> str:
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    raw_argv = sys.argv[1:] if argv is None else argv
+    synthetic_review_smoke_requested = "--synthetic-review-smoke" in raw_argv
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--start-at",
-        required=True,
+        required=not synthetic_review_smoke_requested,
         help="Timezone-aware ISO start for the persisted attention window.",
     )
     parser.add_argument(
         "--end-at",
-        required=True,
+        required=not synthetic_review_smoke_requested,
         help="Timezone-aware ISO end for the persisted attention window.",
     )
     parser.add_argument(
@@ -156,9 +158,22 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--format",
         choices=("text", "json", "review-json"),
         default="json",
-        help="Output format. Use review-json for decision-only review metadata.",
+        help=(
+            "Read-only output mode: json is the full sanitized report, text is "
+            "human-readable, and review-json is decision/review-only metadata. "
+            "No output mode enforces send blocking."
+        ),
     )
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--synthetic-review-smoke",
+        action="store_true",
+        help=(
+            "Run provider-free in-memory synthetic review scenarios as JSON. "
+            "This does not read local data, create audit rows, send messages, "
+            "or enforce blocking."
+        ),
+    )
+    return parser.parse_args(raw_argv)
 
 
 def _query_from_args(args: argparse.Namespace) -> NoMarkerGroupedLifecycleQuery:
@@ -816,6 +831,186 @@ def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _synthetic_canonical_hash_guard_evaluation(
+    *,
+    current_hash: str,
+    canonical_hash: str,
+    current_hash_has_successful_delivery: bool,
+    linked_canonical_hash_has_successful_delivery: bool,
+) -> dict[str, Any]:
+    canonical_hash_distinct = canonical_hash != current_hash
+    blocked_by_canonical_success = (
+        canonical_hash_distinct
+        and linked_canonical_hash_has_successful_delivery
+        and not current_hash_has_successful_delivery
+    )
+    if current_hash_has_successful_delivery:
+        blocker_code = "delivery_draft_already_successfully_sent"
+        recommended_action = "do_not_resend_grouped_presentation"
+    elif blocked_by_canonical_success:
+        blocker_code = "presentation_variant_canonical_hash_already_successfully_sent"
+        recommended_action = (
+            "do_not_send_presentation_variant_of_successful_canonical_digest"
+        )
+    else:
+        blocker_code = None
+        recommended_action = "continue_manual_pilot_flow"
+
+    return {
+        "status": "presentation_variant_duplicate_guard_evaluation",
+        "available": True,
+        "current_hash_available": True,
+        "linked_canonical_hash_available": True,
+        "canonical_hash_distinct_from_current": canonical_hash_distinct,
+        "current_hash_has_successful_delivery": current_hash_has_successful_delivery,
+        "linked_canonical_hash_has_successful_delivery": (
+            linked_canonical_hash_has_successful_delivery
+        ),
+        "blocked_by_canonical_success": blocked_by_canonical_success,
+        "current_duplicate_success_guard_would_block": (
+            current_hash_has_successful_delivery
+        ),
+        "canonical_hash_guard_extension_would_block": blocked_by_canonical_success,
+        "blocker_code": blocker_code,
+        "recommended_action": recommended_action,
+        "conservative_reason": None,
+        "enforced": False,
+        "semantic_duplicate_claimed": False,
+        "read_only": True,
+    }
+
+
+def _synthetic_review_scenario(
+    *,
+    scenario_name: str,
+    current_hash: str,
+    canonical_hash: str | None,
+    current_hash_has_successful_delivery: bool,
+    linked_canonical_hash_has_successful_delivery: bool,
+    guard_evaluation: Mapping[str, Any],
+) -> dict[str, Any]:
+    compatibility = _compatibility(
+        visible_count=1,
+        canonical_lifecycle={
+            "candidate_has_matching_draft_hash": (
+                linked_canonical_hash_has_successful_delivery
+            ),
+            "matching_hash_has_successful_delivery_result": (
+                linked_canonical_hash_has_successful_delivery
+            ),
+            "candidate_lifecycle_status": "synthetic_review_only",
+        },
+        canonical_text_sha256=canonical_hash,
+        grouped_text_sha256=current_hash,
+        grouped_hash_differs_from_canonical=(
+            bool(canonical_hash) and canonical_hash != current_hash
+        ),
+        grouped_hash_matches_existing_draft=current_hash_has_successful_delivery,
+        grouped_hash_has_successful_delivery_result=(
+            current_hash_has_successful_delivery
+        ),
+    )
+    operator_review_summary = _operator_review_summary(
+        compatibility=compatibility,
+        canonical_hash_guard_evaluation=guard_evaluation,
+    )
+    report = {
+        "status": "no_marker_grouped_lifecycle_compatibility",
+        "start_at": "2149-01-01T00:00:00+00:00",
+        "end_at": "2149-01-02T00:00:00+00:00",
+        "activity_start_at": None,
+        "activity_end_at": None,
+        "limit": DEFAULT_DIGEST_ENTRY_LIMIT,
+        "debug_evidence": False,
+        "cluster_threshold": DEFAULT_CLUSTER_THRESHOLD,
+        "marker_filter": PERSISTED_ATTENTION_MARKER_FILTER_NO_MARKER_ONLY,
+        "group_by": DEFAULT_GROUP_BY,
+        "no_marker_not_production_truth": True,
+        "lifecycle_compatibility": compatibility,
+        "canonical_hash_guard_evaluation": dict(guard_evaluation),
+        "operator_review_summary": operator_review_summary,
+        "safety": _safety_metadata(),
+    }
+    scenario = format_review_json_report(report)
+    scenario["scenario_name"] = scenario_name
+    return scenario
+
+
+def build_synthetic_review_smoke_report() -> dict[str, Any]:
+    """Build provider-free synthetic review scenarios without data access."""
+
+    current_sent_hash = "1" * 64
+    canonical_sent_hash = "2" * 64
+    current_unsent_hash = "3" * 64
+    canonical_unsent_hash = "4" * 64
+    manual_review_hash = "5" * 64
+
+    scenarios = [
+        _synthetic_review_scenario(
+            scenario_name="current_grouped_hash_already_sent",
+            current_hash=current_sent_hash,
+            canonical_hash=canonical_sent_hash,
+            current_hash_has_successful_delivery=True,
+            linked_canonical_hash_has_successful_delivery=True,
+            guard_evaluation=_synthetic_canonical_hash_guard_evaluation(
+                current_hash=current_sent_hash,
+                canonical_hash=canonical_sent_hash,
+                current_hash_has_successful_delivery=True,
+                linked_canonical_hash_has_successful_delivery=True,
+            ),
+        ),
+        _synthetic_review_scenario(
+            scenario_name="linked_canonical_hash_blocks_presentation_variant",
+            current_hash=current_unsent_hash,
+            canonical_hash=canonical_sent_hash,
+            current_hash_has_successful_delivery=False,
+            linked_canonical_hash_has_successful_delivery=True,
+            guard_evaluation=_synthetic_canonical_hash_guard_evaluation(
+                current_hash=current_unsent_hash,
+                canonical_hash=canonical_sent_hash,
+                current_hash_has_successful_delivery=False,
+                linked_canonical_hash_has_successful_delivery=True,
+            ),
+        ),
+        _synthetic_review_scenario(
+            scenario_name="not_blocked",
+            current_hash=current_unsent_hash,
+            canonical_hash=canonical_unsent_hash,
+            current_hash_has_successful_delivery=False,
+            linked_canonical_hash_has_successful_delivery=False,
+            guard_evaluation=_synthetic_canonical_hash_guard_evaluation(
+                current_hash=current_unsent_hash,
+                canonical_hash=canonical_unsent_hash,
+                current_hash_has_successful_delivery=False,
+                linked_canonical_hash_has_successful_delivery=False,
+            ),
+        ),
+        _synthetic_review_scenario(
+            scenario_name="manual_review_insufficient_hash_evidence",
+            current_hash=manual_review_hash,
+            canonical_hash=None,
+            current_hash_has_successful_delivery=False,
+            linked_canonical_hash_has_successful_delivery=False,
+            guard_evaluation=_conservative_canonical_hash_guard_evaluation(
+                reason="missing_linked_canonical_hash",
+                current_hash=manual_review_hash,
+                canonical_hash=None,
+            ),
+        ),
+    ]
+    return {
+        "mode": "synthetic_review_smoke",
+        "read_only": True,
+        "provider_free": True,
+        "local_synthetic_only": True,
+        "uses_real_local_data": False,
+        "enforced": False,
+        "semantic_duplicate_claimed": False,
+        "scenario_count": len(scenarios),
+        "scenarios": scenarios,
+    }
+
+
 def format_text_report(report: Mapping[str, Any]) -> str:
     candidate = _mapping(report.get("candidate"))
     grouped_preview = _mapping(report.get("grouped_preview"))
@@ -958,6 +1153,9 @@ def main(argv: list[str] | None = None) -> int:
     json_output_formats = {"json", "review-json"}
     try:
         args = _parse_args(argv)
+        if args.synthetic_review_smoke:
+            _print_json(build_synthetic_review_smoke_report())
+            return 0
         query = _query_from_args(args)
         report = asyncio.run(
             build_no_marker_grouped_lifecycle_compatibility_report(query)
