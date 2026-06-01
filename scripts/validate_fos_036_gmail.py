@@ -21,15 +21,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from pydantic import SecretStr
-from sqlalchemy import func, select
+from pydantic import SecretStr  # noqa: E402
+from sqlalchemy import func, select  # noqa: E402
 
-from app.core.config import settings
-from app.db.base import AsyncSessionLocal, engine
-from app.db.event_models import SourceEvent
-from app.db.gmail_models import GmailAttachment, GmailMessage, GmailThread
-from app.db.models import IngestedEvent
-from app.db.source_models import DocumentChunk, SourceDocument
+from app.core.config import settings  # noqa: E402
+from app.db.base import AsyncSessionLocal, engine  # noqa: E402
+from app.db.event_models import SourceEvent  # noqa: E402
+from app.db.gmail_models import GmailAttachment, GmailMessage, GmailThread  # noqa: E402
+from app.db.models import IngestedEvent  # noqa: E402
+from app.db.source_models import DocumentChunk, SourceDocument  # noqa: E402
 
 EXPECTED_GMAIL_COUNTS = {
     "gmail_source_events": 3,

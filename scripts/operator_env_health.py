@@ -13,7 +13,6 @@ import json
 import os
 import re
 import shlex
-import sys
 from pathlib import Path
 from typing import Any
 
