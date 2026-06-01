@@ -49,6 +49,7 @@
 - Read-only grouped lifecycle canonical hash guard review: implemented
 - Read-only grouped lifecycle operator decision summary: implemented
 - Sanitized grouped lifecycle report contract tests: implemented
+- Decision-only grouped lifecycle review JSON output: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -830,6 +831,18 @@
   behavior, and does not claim semantic duplication. Grouping preview remains
   presentation planning, not a source-of-truth mutation, and duplicate-success
   protection remains the final send-time guard.
+- FOS-096 adds a decision-only `review-json` output mode to the no-marker
+  grouped lifecycle compatibility report. The mode exposes only minimal safe
+  report/window metadata, `lifecycle_compatibility`,
+  `canonical_hash_guard_evaluation`, `operator_review_summary`, and safety
+  flags so an operator can consume the sanitized decision surface without the
+  full report sections.
+- FOS-096 is reporting/review only. It does not enforce blocking in send paths,
+  does not change renderer behavior, draft body generation, `text_sha256`, API
+  behavior, schema, delivery execution, delivery results, scheduler behavior,
+  or automatic delivery, and does not claim semantic duplication. Grouping
+  preview remains presentation planning, not a source-of-truth mutation, and
+  duplicate-success protection remains the final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

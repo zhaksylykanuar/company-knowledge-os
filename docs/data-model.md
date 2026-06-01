@@ -70,6 +70,8 @@
   implemented
 - Sanitized grouped lifecycle report contract tests:
   implemented
+- Decision-only grouped lifecycle review JSON output:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -689,6 +691,20 @@
   scheduler behavior, and does not claim semantic duplication. Grouping preview
   remains presentation planning, and duplicate-success protection remains the
   final send-time guard.
+- FOS-096 adds a decision-only `review-json` output mode for the grouped
+  lifecycle compatibility report. It does not add new storage. The output
+  contains only minimal safe report/window metadata,
+  `lifecycle_compatibility`, `canonical_hash_guard_evaluation`,
+  `operator_review_summary`, and safety flags.
+- FOS-096 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It does not enforce blocking in send paths, does not change renderer
+  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
+  behavior, schema, delivery result writing, delivery execution, scheduler
+  behavior, or automatic delivery, and does not claim semantic duplication.
+  Grouping preview remains presentation planning, and duplicate-success
+  protection remains the final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

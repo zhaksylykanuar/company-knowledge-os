@@ -1014,3 +1014,51 @@ def test_json_output_is_stable_and_sanitized() -> None:
     assert parsed["operator_review_summary"]["semantic_duplicate_claimed"] is False
     _assert_grouped_lifecycle_report_contract(parsed)
     _assert_safe_output(result.stdout)
+
+
+def test_review_json_output_is_decision_only_and_sanitized() -> None:
+    result = _run_script(
+        "--start-at",
+        "2149-01-01T00:00:00+00:00",
+        "--end-at",
+        "2149-01-02T00:00:00+00:00",
+        "--format",
+        "review-json",
+    )
+
+    assert result.returncode == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["status"] == "no_marker_grouped_lifecycle_compatibility"
+    assert "lifecycle_compatibility" in parsed
+    assert "canonical_hash_guard_evaluation" in parsed
+    assert "operator_review_summary" in parsed
+    assert parsed["operator_review_summary"]["decision"] in OPERATOR_REVIEW_DECISIONS
+    assert parsed["canonical_hash_guard_evaluation"]["enforced"] is False
+    assert (
+        parsed["canonical_hash_guard_evaluation"]["semantic_duplicate_claimed"]
+        is False
+    )
+    assert parsed["operator_review_summary"]["enforced"] is False
+    assert parsed["operator_review_summary"]["semantic_duplicate_claimed"] is False
+    assert parsed["safety"]["read_only"] is True
+
+    for full_report_only_key in (
+        "candidate",
+        "grouped_preview",
+        "duplicate_quality",
+        "recommended_next_action",
+        "warnings",
+        "limitations",
+    ):
+        assert full_report_only_key not in parsed
+
+    serialized_without_safe_hash_field_names = result.stdout.replace(
+        "grouped_preview_text_sha256",
+        "",
+    ).replace(
+        "grouped_preview_text_included",
+        "",
+    )
+    assert "grouped_preview_text" not in serialized_without_safe_hash_field_names
+    _assert_grouped_lifecycle_report_contract(parsed)
+    _assert_safe_output(result.stdout)

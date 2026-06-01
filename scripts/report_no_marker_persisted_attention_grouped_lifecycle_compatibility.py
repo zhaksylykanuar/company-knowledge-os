@@ -154,9 +154,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--format",
-        choices=("text", "json"),
+        choices=("text", "json", "review-json"),
         default="json",
-        help="Output format.",
+        help="Output format. Use review-json for decision-only review metadata.",
     )
     return parser.parse_args(argv)
 
@@ -786,6 +786,36 @@ def _print_json(value: Mapping[str, Any]) -> None:
     print(json.dumps(value, indent=2, sort_keys=True))
 
 
+def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Return only the sanitized decision/review surface for operator review."""
+
+    return {
+        "status": report.get("status"),
+        "start_at": report.get("start_at"),
+        "end_at": report.get("end_at"),
+        "activity_start_at": report.get("activity_start_at"),
+        "activity_end_at": report.get("activity_end_at"),
+        "limit": report.get("limit"),
+        "debug_evidence": report.get("debug_evidence"),
+        "cluster_threshold": report.get("cluster_threshold"),
+        "marker_filter": report.get("marker_filter"),
+        "group_by": report.get("group_by"),
+        "no_marker_not_production_truth": (
+            report.get("no_marker_not_production_truth") is True
+        ),
+        "lifecycle_compatibility": dict(
+            _mapping(report.get("lifecycle_compatibility"))
+        ),
+        "canonical_hash_guard_evaluation": dict(
+            _mapping(report.get("canonical_hash_guard_evaluation"))
+        ),
+        "operator_review_summary": dict(
+            _mapping(report.get("operator_review_summary"))
+        ),
+        "safety": dict(_mapping(report.get("safety"))),
+    }
+
+
 def format_text_report(report: Mapping[str, Any]) -> str:
     candidate = _mapping(report.get("candidate"))
     grouped_preview = _mapping(report.get("grouped_preview"))
@@ -925,6 +955,7 @@ def format_text_report(report: Mapping[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    json_output_formats = {"json", "review-json"}
     try:
         args = _parse_args(argv)
         query = _query_from_args(args)
@@ -933,21 +964,21 @@ def main(argv: list[str] | None = None) -> int:
         )
     except NoMarkerGroupedLifecycleInputError as exc:
         output_format = getattr(locals().get("args", None), "format", "json")
-        if output_format == "json":
+        if output_format in json_output_formats:
             _print_json(_blocked_result(error_code="input_error", message=str(exc)))
         else:
             print(f"Error: {exc}", file=sys.stderr)
         return 2
     except NoMarkerGroupedLifecycleBlockedError as exc:
         output_format = getattr(locals().get("args", None), "format", "json")
-        if output_format == "json":
+        if output_format in json_output_formats:
             _print_json(_blocked_result(error_code="blocked", message=str(exc)))
         else:
             print(f"Error: {exc}", file=sys.stderr)
         return 1
     except NoMarkerGroupedLifecycleRuntimeError as exc:
         output_format = getattr(locals().get("args", None), "format", "json")
-        if output_format == "json":
+        if output_format in json_output_formats:
             _print_json(_blocked_result(error_code="runtime_error", message=str(exc)))
         else:
             print(f"Error: {exc}", file=sys.stderr)
@@ -955,6 +986,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if query.output_format == "json":
         _print_json(report)
+    elif query.output_format == "review-json":
+        _print_json(format_review_json_report(report))
     else:
         print(format_text_report(report), end="")
     return 0
