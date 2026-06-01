@@ -74,6 +74,8 @@
   implemented
 - Grouped lifecycle CLI help and synthetic review smoke mode:
   implemented
+- Grouped lifecycle review exit codes and sanitized artifacts:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -722,6 +724,21 @@
   behavior, or automatic delivery, and does not claim semantic duplication.
   Grouping preview remains presentation planning, and duplicate-success
   protection remains the final send-time guard.
+- FOS-098 adds optional grouped lifecycle review exit codes and sanitized JSON
+  artifact output. It does not add new storage. Exit codes are derived only from
+  `operator_review_summary.decision`; artifact output is limited to
+  `review-json` and synthetic review smoke JSON, and artifact files are local
+  review artifacts rather than source-of-truth records.
+- FOS-098 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It rejects unsafe artifact paths and unsafe output modes, does not
+  enforce blocking in send paths, does not change renderer grouping, digest
+  read-model grouping, delivery draft text, `text_sha256`, API behavior, schema,
+  delivery result writing, delivery execution, scheduler behavior, or automatic
+  delivery, and does not claim semantic duplication. Grouping preview remains
+  presentation planning, and duplicate-success protection remains the final
+  send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

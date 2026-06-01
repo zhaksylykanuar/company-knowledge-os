@@ -51,6 +51,7 @@
 - Sanitized grouped lifecycle report contract tests: implemented
 - Decision-only grouped lifecycle review JSON output: implemented
 - Grouped lifecycle CLI help and synthetic review smoke mode: implemented
+- Grouped lifecycle review exit codes and sanitized artifacts: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -857,6 +858,22 @@
   schema, delivery execution, delivery results, scheduler behavior, or
   automatic delivery. Grouping preview remains presentation planning, not a
   source-of-truth mutation, and duplicate-success protection remains the final
+  send-time guard.
+- FOS-098 adds optional grouped lifecycle review exit codes for local/operator
+  automation. Exit codes are derived from `operator_review_summary.decision`
+  only: not blocked, already sent by current hash, blocked by linked canonical
+  hash, or manual review needed. These are review/reporting signals only and do
+  not enforce blocking in send paths.
+- FOS-098 also adds optional sanitized JSON artifact output for `review-json`
+  and synthetic review smoke output. Artifact files are local review artifacts,
+  not source of truth, and unsafe artifact paths such as raw storage, Obsidian
+  export, repository metadata, or obvious secret/config paths are rejected.
+  This slice does not create drafts, approvals, intentions, delivery results,
+  sends, audit rows, or source-of-truth mutations, does not claim semantic
+  duplication, and does not change renderer behavior, draft body generation,
+  `text_sha256`, API behavior, schema, delivery execution, delivery results,
+  scheduler behavior, or automatic delivery. Grouping preview remains
+  presentation planning, and duplicate-success protection remains the final
   send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not

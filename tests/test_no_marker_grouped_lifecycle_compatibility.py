@@ -413,6 +413,25 @@ def _assert_grouped_lifecycle_report_contract(report: dict) -> None:
     _assert_safe_output(compat_script.format_text_report(report))
 
 
+def _synthetic_review_report_for_decision(decision: str) -> dict:
+    smoke_report = compat_script.build_synthetic_review_smoke_report()
+    for scenario in smoke_report["scenarios"]:
+        if scenario["operator_review_summary"]["decision"] == decision:
+            return dict(scenario)
+    raise AssertionError(f"missing synthetic review scenario for {decision}")
+
+
+def _patch_report_builder(monkeypatch: pytest.MonkeyPatch, report: dict) -> None:
+    async def fake_report(*_args: object, **_kwargs: object) -> dict:
+        return report
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        fake_report,
+    )
+
+
 def test_missing_required_args_fail_safely() -> None:
     missing_start = _run_script("--end-at", "2149-01-02T00:00:00+00:00")
     missing_end = _run_script("--start-at", "2149-01-01T00:00:00+00:00")
@@ -452,6 +471,10 @@ def test_help_lists_review_output_modes_before_execution(
     assert "send blocking" in help_output
     assert "--synthetic-review-smoke" in help_output
     assert "synthetic review scenarios" in help_output
+    assert "--review-exit-code" in help_output
+    assert "reporting signal only" in help_output
+    assert "--output-path" in help_output
+    assert "sanitized review-json" in help_output
     assert captured.err == ""
     _assert_safe_output(help_output)
 
@@ -536,6 +559,7 @@ def test_invalid_format_fails_before_execution(
                 "2149-01-02T00:00:00+00:00",
                 "--format",
                 "unsafe-format",
+                "--review-exit-code",
             ]
         )
 
@@ -1128,6 +1152,111 @@ def test_review_json_output_is_decision_only_and_sanitized() -> None:
     _assert_safe_output(result.stdout)
 
 
+def test_review_exit_code_flag_defaults_to_zero_when_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = _synthetic_review_report_for_decision(
+        "blocked_by_linked_canonical_hash"
+    )
+    _patch_report_builder(monkeypatch, report)
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--format",
+            "review-json",
+        ]
+    )
+
+    assert code == 0
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["operator_review_summary"]["decision"] == (
+        "blocked_by_linked_canonical_hash"
+    )
+    _assert_grouped_lifecycle_report_contract(parsed)
+    _assert_safe_output(captured.out + captured.err)
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected_exit_code"),
+    (
+        ("not_blocked", 0),
+        ("already_sent_by_current_hash", 10),
+        ("blocked_by_linked_canonical_hash", 20),
+        ("manual_review_needed", 30),
+    ),
+)
+def test_review_exit_code_maps_operator_decisions(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    decision: str,
+    expected_exit_code: int,
+) -> None:
+    report = _synthetic_review_report_for_decision(decision)
+    _patch_report_builder(monkeypatch, report)
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--format",
+            "review-json",
+            "--review-exit-code",
+        ]
+    )
+
+    assert code == expected_exit_code
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["operator_review_summary"]["decision"] == decision
+    assert parsed["operator_review_summary"]["enforced"] is False
+    assert parsed["operator_review_summary"]["semantic_duplicate_claimed"] is False
+    _assert_grouped_lifecycle_report_contract(parsed)
+    _assert_safe_output(captured.out + captured.err)
+
+
+def test_review_exit_code_report_error_returns_usage_code(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def blocked_report(*_args: object, **_kwargs: object) -> dict:
+        raise compat_script.NoMarkerGroupedLifecycleRuntimeError(
+            "synthetic construction error"
+        )
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        blocked_report,
+    )
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--format",
+            "review-json",
+            "--review-exit-code",
+        ]
+    )
+
+    assert code == 2
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["error_code"] == "runtime_error"
+    _assert_safe_output(captured.out + captured.err)
+
+
 def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1164,7 +1293,10 @@ def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
         "not_blocked",
         "manual_review_insufficient_hash_evidence",
     }
-    assert {scenario["operator_review_summary"]["decision"] for scenario in scenarios} == {
+    scenario_decisions = {
+        scenario["operator_review_summary"]["decision"] for scenario in scenarios
+    }
+    assert scenario_decisions == {
         "already_sent_by_current_hash",
         "blocked_by_linked_canonical_hash",
         "not_blocked",
@@ -1184,7 +1316,8 @@ def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
         )
         assert scenario["operator_review_summary"]["enforced"] is False
         assert scenario["operator_review_summary"]["semantic_duplicate_claimed"] is False
-        assert scenario["operator_review_summary"]["decision"] in OPERATOR_REVIEW_DECISIONS
+        decision = scenario["operator_review_summary"]["decision"]
+        assert decision in OPERATOR_REVIEW_DECISIONS
         for full_report_only_key in (
             "candidate",
             "grouped_preview",
@@ -1205,3 +1338,187 @@ def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
     )
     assert "grouped_preview_text" not in serialized_without_safe_hash_field_names
     _assert_safe_output(captured.out)
+
+
+def test_synthetic_review_smoke_review_exit_code_is_most_conservative(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def forbidden_report(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("synthetic smoke must not execute the real report")
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        forbidden_report,
+    )
+
+    code = compat_script.main(
+        ["--synthetic-review-smoke", "--review-exit-code"]
+    )
+
+    assert code == 30
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["mode"] == "synthetic_review_smoke"
+    assert parsed["enforced"] is False
+    assert parsed["semantic_duplicate_claimed"] is False
+    assert any(
+        scenario["operator_review_summary"]["decision"] == "manual_review_needed"
+        for scenario in parsed["scenarios"]
+    )
+    _assert_safe_output(captured.out + captured.err)
+
+
+def test_review_json_output_path_writes_sanitized_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    report = _synthetic_review_report_for_decision("not_blocked")
+    _patch_report_builder(monkeypatch, report)
+    artifact_path = tmp_path / "nested" / "review.json"
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--format",
+            "review-json",
+            "--output-path",
+            str(artifact_path),
+        ]
+    )
+
+    assert code == 0
+    captured = capsys.readouterr()
+    stdout_payload = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact_payload == stdout_payload
+    _assert_grouped_lifecycle_report_contract(artifact_payload)
+    _assert_safe_output(captured.out + captured.err)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
+def test_synthetic_review_smoke_output_path_writes_sanitized_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    async def forbidden_report(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("synthetic smoke must not execute the real report")
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        forbidden_report,
+    )
+    artifact_path = tmp_path / "smoke" / "review.json"
+
+    code = compat_script.main(
+        ["--synthetic-review-smoke", "--output-path", str(artifact_path)]
+    )
+
+    assert code == 0
+    captured = capsys.readouterr()
+    stdout_payload = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact_payload == stdout_payload
+    assert artifact_payload["mode"] == "synthetic_review_smoke"
+    assert artifact_payload["read_only"] is True
+    assert artifact_payload["provider_free"] is True
+    for scenario in artifact_payload["scenarios"]:
+        _assert_grouped_lifecycle_report_contract(scenario)
+    _assert_safe_output(captured.out + captured.err)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_output_path_rejects_unsafe_output_modes_before_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    output_format: str,
+) -> None:
+    async def forbidden_report(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("invalid artifact mode must fail before execution")
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        forbidden_report,
+    )
+    artifact_path = tmp_path / f"{output_format}-review.json"
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--format",
+            output_format,
+            "--output-path",
+            str(artifact_path),
+        ]
+    )
+
+    assert code == 2
+    assert not artifact_path.exists()
+    captured = capsys.readouterr()
+    if output_format == "json":
+        parsed = json.loads(captured.out)
+        assert parsed["status"] == "blocked"
+        assert parsed["error_code"] == "input_error"
+        assert captured.err == ""
+    else:
+        assert captured.out == ""
+    _assert_safe_output(captured.out + captured.err)
+
+
+@pytest.mark.parametrize(
+    "artifact_path",
+    (
+        "raw_storage/review.json",
+        "obsidian_vault/review.json",
+        ".git/review.json",
+        ".config/review.json",
+        "credentials.json",
+        "token-review.json",
+    ),
+)
+def test_output_path_rejects_unsafe_paths_before_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    artifact_path: str,
+) -> None:
+    async def forbidden_report(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("unsafe artifact path must fail before execution")
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        forbidden_report,
+    )
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--format",
+            "review-json",
+            "--output-path",
+            artifact_path,
+        ]
+    )
+
+    assert code == 2
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["error_code"] == "input_error"
+    _assert_safe_output(captured.out + captured.err)

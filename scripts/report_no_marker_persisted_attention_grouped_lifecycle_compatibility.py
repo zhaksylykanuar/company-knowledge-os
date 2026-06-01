@@ -45,6 +45,33 @@ DEFAULT_CLUSTER_THRESHOLD = grouped_preview_script.DEFAULT_CLUSTER_THRESHOLD
 MAX_CLUSTER_THRESHOLD = grouped_preview_script.MAX_CLUSTER_THRESHOLD
 SUPPORTED_GROUP_BY = grouped_preview_script.SUPPORTED_GROUP_BY
 DEFAULT_GROUP_BY = grouped_preview_script.DEFAULT_GROUP_BY
+REVIEW_DECISION_EXIT_CODES = {
+    "not_blocked": 0,
+    "already_sent_by_current_hash": 10,
+    "blocked_by_linked_canonical_hash": 20,
+    "manual_review_needed": 30,
+}
+UNSAFE_ARTIFACT_PATH_PARTS = {
+    "..",
+    ".config",
+    ".git",
+    ".ssh",
+    "obsidian_vault",
+    "raw_storage",
+}
+UNSAFE_ARTIFACT_PATH_NAMES = {
+    ".env",
+    ".env.local",
+    ".env.production",
+    "credentials.json",
+    "secrets.json",
+}
+UNSAFE_ARTIFACT_PATH_FRAGMENTS = (
+    "credential",
+    "secret",
+    "token",
+    "webhook",
+)
 
 
 class NoMarkerGroupedLifecycleInputError(ValueError):
@@ -165,6 +192,22 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--review-exit-code",
+        action="store_true",
+        help=(
+            "Return a stable review decision exit code: 0 not blocked, "
+            "10 already sent, 20 linked canonical blocker, 30 manual review. "
+            "This is a reporting signal only and does not enforce delivery."
+        ),
+    )
+    parser.add_argument(
+        "--output-path",
+        help=(
+            "Optional local artifact path for sanitized review-json or "
+            "synthetic smoke JSON output only. Rejected for full or text output."
+        ),
+    )
+    parser.add_argument(
         "--synthetic-review-smoke",
         action="store_true",
         help=(
@@ -227,6 +270,76 @@ def _sequence(value: Any) -> Sequence[Any]:
     if isinstance(value, Sequence) and not isinstance(value, str):
         return value
     return []
+
+
+def _review_exit_code_for_decision(decision: Any) -> int:
+    if isinstance(decision, str):
+        return REVIEW_DECISION_EXIT_CODES.get(decision, 30)
+    return 30
+
+
+def _review_exit_code_for_report(report: Mapping[str, Any]) -> int:
+    summary = _mapping(report.get("operator_review_summary"))
+    return _review_exit_code_for_decision(summary.get("decision"))
+
+
+def _review_exit_code_for_smoke_report(report: Mapping[str, Any]) -> int:
+    scenario_codes = [
+        _review_exit_code_for_report(_mapping(scenario))
+        for scenario in _sequence(report.get("scenarios"))
+    ]
+    return max(scenario_codes, default=30)
+
+
+def _artifact_output_allowed(*, output_format: str, synthetic_review_smoke: bool) -> bool:
+    return synthetic_review_smoke or output_format == "review-json"
+
+
+def _safe_artifact_path(path_value: str | None) -> Path | None:
+    if path_value is None:
+        return None
+    path = Path(path_value).expanduser()
+    parts = [part.casefold() for part in path.parts]
+    if any(part in UNSAFE_ARTIFACT_PATH_PARTS for part in parts):
+        raise NoMarkerGroupedLifecycleInputError(
+            "artifact output path is not allowed"
+        )
+    name = path.name.casefold()
+    if not name or name in (".", ".."):
+        raise NoMarkerGroupedLifecycleInputError("artifact output path is invalid")
+    if name in UNSAFE_ARTIFACT_PATH_NAMES or name.startswith(".env"):
+        raise NoMarkerGroupedLifecycleInputError(
+            "artifact output path is not allowed"
+        )
+    if any(fragment in name for fragment in UNSAFE_ARTIFACT_PATH_FRAGMENTS):
+        raise NoMarkerGroupedLifecycleInputError(
+            "artifact output path is not allowed"
+        )
+    if path.exists() and path.is_dir():
+        raise NoMarkerGroupedLifecycleInputError("artifact output path is invalid")
+    return path
+
+
+def _write_json_artifact(value: Mapping[str, Any], path: Path | None) -> None:
+    if path is None:
+        return
+    payload = json.dumps(value, indent=2, sort_keys=True) + "\n"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(payload, encoding="utf-8")
+    except OSError as exc:
+        raise NoMarkerGroupedLifecycleInputError(
+            "artifact output path could not be written"
+        ) from exc
+
+
+def _emit_json(
+    value: Mapping[str, Any],
+    *,
+    artifact_path: Path | None = None,
+) -> None:
+    _write_json_artifact(value, artifact_path)
+    _print_json(value)
 
 
 async def _load_window_draft_hash_facts(
@@ -1153,8 +1266,19 @@ def main(argv: list[str] | None = None) -> int:
     json_output_formats = {"json", "review-json"}
     try:
         args = _parse_args(argv)
+        if args.output_path is not None and not _artifact_output_allowed(
+            output_format=args.format,
+            synthetic_review_smoke=bool(args.synthetic_review_smoke),
+        ):
+            raise NoMarkerGroupedLifecycleInputError(
+                "output_path is only allowed for review-json or synthetic review smoke output"
+            )
+        artifact_path = _safe_artifact_path(args.output_path)
         if args.synthetic_review_smoke:
-            _print_json(build_synthetic_review_smoke_report())
+            smoke_report = build_synthetic_review_smoke_report()
+            _emit_json(smoke_report, artifact_path=artifact_path)
+            if args.review_exit_code:
+                return _review_exit_code_for_smoke_report(smoke_report)
             return 0
         query = _query_from_args(args)
         report = asyncio.run(
@@ -1173,21 +1297,34 @@ def main(argv: list[str] | None = None) -> int:
             _print_json(_blocked_result(error_code="blocked", message=str(exc)))
         else:
             print(f"Error: {exc}", file=sys.stderr)
-        return 1
+        return (
+            2
+            if getattr(locals().get("args", None), "review_exit_code", False)
+            else 1
+        )
     except NoMarkerGroupedLifecycleRuntimeError as exc:
         output_format = getattr(locals().get("args", None), "format", "json")
         if output_format in json_output_formats:
             _print_json(_blocked_result(error_code="runtime_error", message=str(exc)))
         else:
             print(f"Error: {exc}", file=sys.stderr)
-        return 1
+        return (
+            2
+            if getattr(locals().get("args", None), "review_exit_code", False)
+            else 1
+        )
 
     if query.output_format == "json":
         _print_json(report)
     elif query.output_format == "review-json":
-        _print_json(format_review_json_report(report))
+        _emit_json(
+            format_review_json_report(report),
+            artifact_path=artifact_path,
+        )
     else:
         print(format_text_report(report), end="")
+    if args.review_exit_code:
+        return _review_exit_code_for_report(report)
     return 0
 
 

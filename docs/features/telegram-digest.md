@@ -52,6 +52,7 @@
 - Sanitized grouped lifecycle report contract tests: implemented
 - Decision-only grouped lifecycle review JSON output: implemented
 - Grouped lifecycle CLI help and synthetic review smoke mode: implemented
+- Grouped lifecycle review exit codes and sanitized artifacts: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -885,6 +886,21 @@ Implemented today:
   schema, delivery execution, delivery results, scheduler behavior, or
   automatic delivery. Grouping preview remains presentation planning, not
   source-of-truth mutation, and duplicate-success protection remains the final
+  send-time guard.
+- FOS-098 adds optional review exit codes for grouped lifecycle local/operator
+  automation. The exit codes are derived only from
+  `operator_review_summary.decision` and are review/reporting signals, not
+  send-path enforcement.
+- FOS-098 also adds optional sanitized artifact output for `review-json` and
+  synthetic review smoke output. Artifact files are local review artifacts, not
+  source of truth, and the CLI rejects unsafe artifact paths and unsafe output
+  modes. This remains provider-free/read-only for smoke and non-enforcing for
+  all modes; it does not create drafts, approvals, intentions, delivery results,
+  sends, audit rows, or source-of-truth mutations, does not claim semantic
+  duplication, and does not change renderer behavior, draft body generation,
+  `text_sha256`, API behavior, schema, delivery execution, delivery results,
+  scheduler behavior, or automatic delivery. Grouping preview remains
+  presentation planning, and duplicate-success protection remains the final
   send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
