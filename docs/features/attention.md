@@ -745,6 +745,32 @@
   payloads, or raw fingerprints. Grouping preview does not prove semantic
   duplication and is not a source-of-truth mutation; human approval and
   send-time duplicate-success protection remain separate downstream guards.
+- FOS-091 adds
+  `scripts/report_no_marker_persisted_attention_grouped_lifecycle_compatibility.py`,
+  a local read-only no-marker grouped lifecycle compatibility report. It compares
+  the canonical no-marker candidate `text_sha256` with the grouped preview
+  `text_sha256` and the window's existing delivery draft/result lifecycle, then
+  explains whether a grouped preview would be treated as already-sent or as a
+  new/unsent presentation variant under the current hash-oriented duplicate
+  guard.
+- FOS-091 flags `presentation_variant_duplicate_send_risk=true` when the
+  grouped preview hash differs from an already-successfully-delivered canonical
+  candidate hash and the grouped hash itself has no successful delivery, and
+  reports `current_hash_guard_would_allow_grouped_variant` /
+  `requires_guard_extension_before_grouped_send` so a future grouped draft/send
+  links the grouped hash to the canonical ungrouped candidate hash.
+- FOS-091 does not create drafts, approvals, intentions, results, or sends, and
+  does not change the renderer, read model, delivery draft text, `text_sha256`
+  lifecycle, or the duplicate guard. It writes no DB rows, runs no migrations,
+  adds no table, and does not call live APIs, providers/OpenAI, connectors,
+  Telegram/Slack, or delivery code. It never exposes raw titles, summaries,
+  actions, source object identifiers, PR numbers, repository names, author
+  names, evidence refs, rendered text, grouped preview text, chunk text,
+  secrets, credentials, raw payloads, or raw fingerprints. The grouped hash is a
+  presentation-variant hash, not delivered content; a future grouped draft/send
+  requires a guard extension or canonical-hash linkage. Human approval remains a
+  separate downstream step and send-time duplicate-success protection remains
+  the final guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -837,4 +863,12 @@
   hash-affecting change remain separate later steps after the grouped preview is
   reviewed; human approval and send-time duplicate-success protection remain the
   downstream guards.
+- A read-only grouped lifecycle compatibility report can now explain whether a
+  grouped preview would be treated as a new/unsent presentation variant of
+  already-sent canonical content under the current hash-oriented guard, and
+  flags the presentation-variant duplicate-send risk. The duplicate-success
+  guard extension (linking grouped hash to canonical ungrouped candidate hash),
+  grouped draft preparation, and any renderer/read-model grouping remain
+  separate later steps; no guard, draft, renderer, or read-model behavior is
+  changed yet.
 - GitHub/Jira/Drive digest integration is not implemented.

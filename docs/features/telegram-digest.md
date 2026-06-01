@@ -776,6 +776,29 @@ Implemented today:
   a source-of-truth mutation; human approval remains a separate downstream step,
   and send-time duplicate-success protection remains the final guard. Scheduler
   and automatic delivery remain deferred.
+- FOS-091 adds
+  `scripts/report_no_marker_persisted_attention_grouped_lifecycle_compatibility.py`,
+  a local read-only no-marker grouped lifecycle compatibility report. It compares
+  the canonical no-marker candidate `text_sha256`, the grouped preview
+  `text_sha256`, and the window's existing delivery draft/result lifecycle, and
+  explains whether a grouped preview would be treated as already-sent or as a
+  new/unsent presentation variant under the current hash-oriented duplicate
+  guard. It flags `presentation_variant_duplicate_send_risk` when the grouped
+  hash differs from an already-sent canonical candidate hash and the grouped
+  hash itself has no successful delivery.
+- FOS-091 does not create drafts, approvals, delivery intentions, Telegram
+  plans, preflight/gate records, delivery results, sends, scheduler jobs,
+  worker/outbox records, migrations, or tables, and does not change the
+  renderer, read model, delivery draft text, `text_sha256` lifecycle, or the
+  duplicate guard. It does not call live APIs, providers/OpenAI, connectors,
+  Telegram/Slack, or delivery code, and never exposes raw titles, summaries,
+  actions, source object identifiers, PR numbers, repository names, author
+  names, evidence refs, rendered text, grouped preview text, chunk text,
+  secrets, credentials, raw payloads, or raw fingerprints. The grouped hash is a
+  presentation-variant hash, not delivered content; a future grouped draft/send
+  requires a guard extension or canonical-hash linkage. Human approval remains a
+  separate downstream step, send-time duplicate-success protection remains the
+  final guard, and scheduler/automatic delivery remains deferred.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
