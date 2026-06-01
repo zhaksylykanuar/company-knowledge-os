@@ -53,6 +53,7 @@
 - Decision-only grouped lifecycle review JSON output: implemented
 - Grouped lifecycle CLI help and synthetic review smoke mode: implemented
 - Grouped lifecycle review exit codes and sanitized artifacts: implemented
+- Provider-free grouped lifecycle review operator doctor: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -902,6 +903,20 @@ Implemented today:
   scheduler behavior, or automatic delivery. Grouping preview remains
   presentation planning, and duplicate-success protection remains the final
   send-time guard.
+- FOS-099 adds a provider-free grouped lifecycle review operator doctor. The
+  doctor is a local synthetic self-check for output-mode help, synthetic review
+  smoke, decision-only `review-json` contract checks, review exit-code mapping,
+  sanitized artifact writing, and unsafe artifact rejection.
+- FOS-099 is reporting/debug only. It does not use real local data, does not
+  require provider credentials, DB access, raw storage, Obsidian export,
+  Telegram/Slack/OpenAI/Gmail/Jira/GitHub, or live APIs, and any doctor artifact
+  is a local review/debug artifact only. It does not enforce blocking in send
+  paths, does not claim semantic duplication, does not create drafts, approvals,
+  intentions, delivery results, sends, audit rows, or source-of-truth mutations,
+  and does not change renderer behavior, draft body generation, `text_sha256`,
+  API behavior, schema, delivery execution, delivery results, scheduler
+  behavior, or automatic delivery. Grouping preview remains presentation
+  planning, and duplicate-success protection remains the final send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

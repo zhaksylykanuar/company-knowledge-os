@@ -52,6 +52,7 @@
 - Decision-only grouped lifecycle review JSON output: implemented
 - Grouped lifecycle CLI help and synthetic review smoke mode: implemented
 - Grouped lifecycle review exit codes and sanitized artifacts: implemented
+- Provider-free grouped lifecycle review operator doctor: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -875,6 +876,21 @@
   scheduler behavior, or automatic delivery. Grouping preview remains
   presentation planning, and duplicate-success protection remains the final
   send-time guard.
+- FOS-099 adds a provider-free grouped lifecycle review operator doctor. The
+  doctor is a local synthetic self-check for CLI help/discoverability,
+  synthetic review smoke output, `review-json` contract shape, review exit-code
+  mapping, sanitized artifact writing, and unsafe artifact rejection.
+- FOS-099 is reporting/debug only. The doctor uses synthetic in-memory review
+  objects and a temporary local JSON artifact, does not use real local data, and
+  does not require providers, credentials, raw storage, Obsidian export, DB
+  access, Telegram/Slack/OpenAI/Gmail/Jira/GitHub, or live APIs. It does not
+  enforce blocking in send paths, does not claim semantic duplication, does not
+  create drafts, approvals, intentions, delivery results, sends, audit rows, or
+  source-of-truth mutations, and does not change renderer behavior, draft body
+  generation, `text_sha256`, API behavior, schema, delivery execution, delivery
+  results, scheduler behavior, or automatic delivery. Any doctor artifact is a
+  local review/debug artifact only, grouping preview remains presentation
+  planning, and duplicate-success protection remains the final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

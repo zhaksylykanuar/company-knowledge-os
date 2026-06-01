@@ -76,6 +76,8 @@
   implemented
 - Grouped lifecycle review exit codes and sanitized artifacts:
   implemented
+- Provider-free grouped lifecycle review operator doctor:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -739,6 +741,21 @@
   delivery, and does not claim semantic duplication. Grouping preview remains
   presentation planning, and duplicate-success protection remains the final
   send-time guard.
+- FOS-099 adds a provider-free grouped lifecycle review operator doctor. It does
+  not add new storage. The doctor checks CLI help/discoverability, synthetic
+  review smoke output, `review-json` contract shape, review exit-code mapping,
+  sanitized artifact writing, and unsafe artifact rejection using synthetic
+  in-memory review data and a local temporary JSON artifact only.
+- FOS-099 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It does not use real local data, does not enforce blocking in send
+  paths, does not change renderer grouping, digest read-model grouping, delivery
+  draft text, `text_sha256`, API behavior, schema, delivery result writing,
+  delivery execution, scheduler behavior, or automatic delivery, and does not
+  claim semantic duplication. Any doctor artifact is a local review/debug
+  artifact only, grouping preview remains presentation planning, and
+  duplicate-success protection remains the final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
