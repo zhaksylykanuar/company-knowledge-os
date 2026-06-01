@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 
 from app.db.base import AsyncSessionLocal
+from app.db.models import AuditLog
 from app.services.digest import (
     PERSISTED_ATTENTION_MARKER_FILTER_NO_MARKER_ONLY,
     build_persisted_attention_digest_read_model,
@@ -102,6 +103,126 @@ async def _grouped_preview_hash(
         )
     )
     return report["grouped_preview"]["grouped_preview_text_sha256"]
+
+
+async def _insert_successful_hash_lifecycle(
+    unique: str,
+    *,
+    text_sha256: str,
+    start_at: datetime,
+    end_at: datetime,
+) -> dict[str, str]:
+    actor = f"test_fos086_{unique}"
+    delivery_draft_id = f"ddraft_fos093_{unique}"
+    delivery_intention_id = f"dint_fos093_{unique}"
+    delivery_result_id = f"dres_fos093_{unique}"
+    async with AsyncSessionLocal() as session:
+        session.add(
+            AuditLog(
+                event_type="digest.delivery_draft.created",
+                actor=actor,
+                correlation_id=delivery_draft_id,
+                trace_id=delivery_draft_id,
+                after_ref=delivery_draft_id,
+                payload={
+                    "status": "draft",
+                    "delivery_draft_id": delivery_draft_id,
+                    "digest_type": "persisted_attention",
+                    "channel": "telegram",
+                    "start_at": start_at.isoformat(),
+                    "end_at": end_at.isoformat(),
+                    "limit": 20,
+                    "debug_evidence": False,
+                    "text_sha256": text_sha256,
+                    "char_count": 1,
+                    "chunk_count": 1,
+                    "sent": False,
+                },
+            )
+        )
+        session.add(
+            AuditLog(
+                event_type="digest.delivery_intention.created",
+                actor=actor,
+                correlation_id=delivery_draft_id,
+                trace_id=delivery_intention_id,
+                before_ref=delivery_draft_id,
+                after_ref=delivery_intention_id,
+                approval_id=f"{delivery_draft_id}:delivery_intention",
+                payload={
+                    "status": "delivery_intention",
+                    "delivery_intention_id": delivery_intention_id,
+                    "delivery_draft_id": delivery_draft_id,
+                    "digest_type": "persisted_attention",
+                    "channel": "telegram",
+                    "current_decision": "approved",
+                    "eligible_for_delivery": True,
+                    "text_sha256": text_sha256,
+                    "char_count": 1,
+                    "chunk_count": 1,
+                    "sent": False,
+                    "scheduler_invoked": False,
+                },
+            )
+        )
+        session.add(
+            AuditLog(
+                event_type="digest.delivery_result.recorded",
+                actor=actor,
+                correlation_id=delivery_intention_id,
+                trace_id=delivery_result_id,
+                before_ref=delivery_intention_id,
+                after_ref=delivery_result_id,
+                approval_id=f"{delivery_intention_id}:delivery_result",
+                payload={
+                    "status": "delivery_result",
+                    "delivery_result_id": delivery_result_id,
+                    "delivery_intention_id": delivery_intention_id,
+                    "execution_attempt_id": f"attempt-fos093-{unique}",
+                    "result_status": "succeeded",
+                    "sent": True,
+                    "attempted_chunk_count": 1,
+                    "delivered_chunk_count": 1,
+                    "failed_chunk_count": 0,
+                },
+            )
+        )
+        await session.commit()
+    return {
+        "delivery_draft_id": delivery_draft_id,
+        "delivery_intention_id": delivery_intention_id,
+        "delivery_result_id": delivery_result_id,
+    }
+
+
+def _fake_grouped_report(
+    *,
+    candidate_hash: str | None,
+    grouped_hash: str | None,
+    visible: int = 1,
+) -> dict:
+    return {
+        "candidate": {
+            "visible": visible,
+            "text_sha256": candidate_hash,
+        },
+        "grouped_preview": {
+            "grouped_preview_text_sha256": grouped_hash,
+            "grouped_preview_hash_differs_from_candidate": (
+                bool(candidate_hash)
+                and bool(grouped_hash)
+                and candidate_hash != grouped_hash
+            ),
+        },
+        "duplicate_quality": {"high_duplicate_risk": False},
+        "lifecycle": {
+            "candidate_has_matching_draft_hash": False,
+            "matching_hash_has_successful_delivery_result": False,
+            "candidate_lifecycle_status": "candidate_not_prepared",
+        },
+        "warnings": [],
+        "limitations": [],
+    }
 
 
 def test_missing_required_args_fail_safely() -> None:
@@ -263,6 +384,21 @@ async def test_already_sent_canonical_flags_presentation_variant_risk() -> None:
         assert report["recommended_next_action"] == (
             "do_not_send_grouped_variant_of_already_sent_canonical"
         )
+        guard = report["canonical_hash_guard_evaluation"]
+        assert guard["current_hash_has_successful_delivery"] is False
+        assert guard["linked_canonical_hash_has_successful_delivery"] is True
+        assert guard["blocked_by_canonical_success"] is True
+        assert guard["current_duplicate_success_guard_would_block"] is False
+        assert guard["canonical_hash_guard_extension_would_block"] is True
+        assert (
+            guard["blocker_code"]
+            == "presentation_variant_canonical_hash_already_successfully_sent"
+        )
+        assert guard["enforced"] is False
+        assert guard["semantic_duplicate_claimed"] is False
+        assert "canonical_hash_guard_evaluator_would_block_grouped_variant" in report[
+            "warnings"
+        ]
         # report did not write anything
         assert await _audit_log_count() == before_audit
         _assert_safe_output(_serialized(report))
@@ -284,6 +420,13 @@ async def test_unsent_canonical_has_no_presentation_variant_risk() -> None:
         assert compat["canonical_matching_hash_has_successful_delivery_result"] is False
         assert compat["presentation_variant_duplicate_send_risk"] is False
         assert compat["requires_guard_extension_before_grouped_send"] is False
+        guard = report["canonical_hash_guard_evaluation"]
+        assert guard["linked_canonical_hash_has_successful_delivery"] is False
+        assert guard["blocked_by_canonical_success"] is False
+        assert guard["blocker_code"] is None
+        assert guard["recommended_action"] == "continue_manual_pilot_flow"
+        assert guard["enforced"] is False
+        assert guard["semantic_duplicate_claimed"] is False
         assert report["recommended_next_action"] == (
             "continue_no_marker_manual_pilot_review"
         )
@@ -320,9 +463,164 @@ async def test_grouped_hash_matching_successful_delivery_is_already_sent(
         assert compat["current_hash_guard_would_block_grouped_variant"] is True
         assert compat["current_hash_guard_would_allow_grouped_variant"] is False
         assert compat["presentation_variant_duplicate_send_risk"] is False
+        guard = report["canonical_hash_guard_evaluation"]
+        assert guard["current_hash_has_successful_delivery"] is False
+        assert guard["linked_canonical_hash_has_successful_delivery"] is False
+        assert guard["blocked_by_canonical_success"] is False
+        assert guard["blocker_code"] is None
         _assert_safe_output(_serialized(report))
     finally:
         await _cleanup(unique)
+
+
+async def test_current_grouped_hash_success_takes_precedence_in_guard_evaluation() -> None:
+    await _ensure_tables()
+    unique = f"compat_guard_current_{uuid4().hex}"
+    await _cleanup(unique)
+    try:
+        await _insert_attention_result(unique, created_at=_utc(2149, 9, 11, 9))
+        async with AsyncSessionLocal() as session:
+            digest = await build_persisted_attention_digest_read_model(
+                session,
+                start_at=_utc(2149, 9, 11),
+                end_at=_utc(2149, 9, 12),
+                limit_per_section=20,
+                marker_filter=PERSISTED_ATTENTION_MARKER_FILTER_NO_MARKER_ONLY,
+            )
+        canonical_draft = await _persist_successful_draft_for_digest(
+            unique,
+            digest=digest,
+            start_at=_utc(2149, 9, 11),
+            end_at=_utc(2149, 9, 12),
+        )
+        grouped_hash = await _grouped_preview_hash(
+            start_at=_utc(2149, 9, 11),
+            end_at=_utc(2149, 9, 12),
+        )
+        assert grouped_hash != canonical_draft["text_sha256"]
+        await _insert_successful_hash_lifecycle(
+            unique,
+            text_sha256=grouped_hash,
+            start_at=_utc(2149, 9, 11),
+            end_at=_utc(2149, 9, 12),
+        )
+        before_audit = await _audit_log_count()
+
+        report = await _build(_query(start_at=_utc(2149, 9, 11), end_at=_utc(2149, 9, 12)))
+
+        compat = report["lifecycle_compatibility"]
+        assert compat["grouped_hash_has_successful_delivery_result"] is True
+        assert compat["current_hash_guard_would_block_grouped_variant"] is True
+        assert compat["presentation_variant_duplicate_send_risk"] is False
+        guard = report["canonical_hash_guard_evaluation"]
+        assert guard["current_hash_has_successful_delivery"] is True
+        assert guard["linked_canonical_hash_has_successful_delivery"] is True
+        assert guard["blocked_by_canonical_success"] is False
+        assert guard["current_duplicate_success_guard_would_block"] is True
+        assert guard["canonical_hash_guard_extension_would_block"] is False
+        assert guard["blocker_code"] == "delivery_draft_already_successfully_sent"
+        assert guard["enforced"] is False
+        assert guard["semantic_duplicate_claimed"] is False
+        assert await _audit_log_count() == before_audit
+        _assert_safe_output(_serialized(report))
+        _assert_safe_output(compat_script.format_text_report(report))
+    finally:
+        await _cleanup(unique)
+
+
+async def test_missing_canonical_hash_is_conservative_in_guard_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_tables()
+    grouped_hash = "a" * 64
+
+    async def fake_grouped_report(*_args: object, **_kwargs: object) -> dict:
+        return _fake_grouped_report(
+            candidate_hash=None,
+            grouped_hash=grouped_hash,
+        )
+
+    monkeypatch.setattr(
+        grouped_preview_script,
+        "build_no_marker_persisted_attention_grouped_preview_report",
+        fake_grouped_report,
+    )
+
+    report = await _build(_query(start_at=_utc(2149, 9, 13), end_at=_utc(2149, 9, 14)))
+
+    guard = report["canonical_hash_guard_evaluation"]
+    assert guard["available"] is False
+    assert guard["current_hash_available"] is True
+    assert guard["linked_canonical_hash_available"] is False
+    assert guard["blocked_by_canonical_success"] is False
+    assert guard["blocker_code"] is None
+    assert guard["conservative_reason"] == "missing_linked_canonical_hash"
+    assert guard["enforced"] is False
+    assert guard["semantic_duplicate_claimed"] is False
+    _assert_safe_output(_serialized(report))
+    _assert_safe_output(compat_script.format_text_report(report))
+
+
+async def test_equal_canonical_and_grouped_hash_is_not_variant_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_tables()
+    same_hash = "b" * 64
+
+    async def fake_grouped_report(*_args: object, **_kwargs: object) -> dict:
+        return _fake_grouped_report(
+            candidate_hash=same_hash,
+            grouped_hash=same_hash,
+        )
+
+    monkeypatch.setattr(
+        grouped_preview_script,
+        "build_no_marker_persisted_attention_grouped_preview_report",
+        fake_grouped_report,
+    )
+
+    report = await _build(_query(start_at=_utc(2149, 9, 15), end_at=_utc(2149, 9, 16)))
+
+    guard = report["canonical_hash_guard_evaluation"]
+    assert guard["available"] is False
+    assert guard["current_hash_available"] is True
+    assert guard["linked_canonical_hash_available"] is True
+    assert guard["canonical_hash_distinct_from_current"] is False
+    assert guard["blocked_by_canonical_success"] is False
+    assert guard["blocker_code"] is None
+    assert guard["conservative_reason"] == "canonical_hash_matches_current_hash"
+    assert guard["enforced"] is False
+    assert guard["semantic_duplicate_claimed"] is False
+    _assert_safe_output(_serialized(report))
+
+
+async def test_invalid_grouped_hash_is_conservative_in_guard_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_tables()
+
+    async def fake_grouped_report(*_args: object, **_kwargs: object) -> dict:
+        return _fake_grouped_report(
+            candidate_hash="c" * 64,
+            grouped_hash="not-a-sha256",
+        )
+
+    monkeypatch.setattr(
+        grouped_preview_script,
+        "build_no_marker_persisted_attention_grouped_preview_report",
+        fake_grouped_report,
+    )
+
+    report = await _build(_query(start_at=_utc(2149, 9, 17), end_at=_utc(2149, 9, 18)))
+
+    guard = report["canonical_hash_guard_evaluation"]
+    assert guard["available"] is False
+    assert guard["blocked_by_canonical_success"] is False
+    assert guard["blocker_code"] is None
+    assert guard["conservative_reason"] == "invalid_explicit_hash_link"
+    assert guard["enforced"] is False
+    assert guard["semantic_duplicate_claimed"] is False
+    _assert_safe_output(_serialized(report))
 
 
 async def test_hashes_returned_without_rendering_text() -> None:
@@ -354,6 +652,14 @@ async def test_hashes_returned_without_rendering_text() -> None:
         assert report["safety"]["telegram_invoked"] is False
         assert report["safety"]["openai_invoked"] is False
         assert report["safety"]["live_api_calls"] is False
+        assert report["safety"]["canonical_hash_guard_evaluator_invoked"] is True
+        assert report["safety"]["canonical_hash_guard_enforced"] is False
+        assert report["safety"]["semantic_duplicate_claimed"] is False
+        assert report["canonical_hash_guard_evaluation"]["enforced"] is False
+        assert (
+            report["canonical_hash_guard_evaluation"]["semantic_duplicate_claimed"]
+            is False
+        )
         _assert_safe_output(serialized)
         _assert_safe_output(compat_script.format_text_report(report))
     finally:

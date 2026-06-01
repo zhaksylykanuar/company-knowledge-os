@@ -64,6 +64,8 @@
   implemented
 - Read-only presentation-variant canonical hash duplicate guard evaluator:
   implemented
+- Read-only grouped lifecycle canonical hash guard review:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -635,6 +637,23 @@
   only evaluates explicitly linked canonical/presentation hashes; grouping
   preview remains presentation planning, not source-of-truth mutation, and
   duplicate-success protection remains the final send-time guard.
+- FOS-093 exposes the FOS-092 evaluator inside the read-only no-marker grouped
+  lifecycle compatibility report. It does not add new storage. The report maps
+  the grouped preview hash to the current presentation hash and the no-marker
+  candidate hash to the linked canonical hash, then returns only sanitized
+  evaluation metadata: current-hash success, linked-canonical success, future
+  blocker/recommended-action codes, `enforced=false`, and
+  `semantic_duplicate_claimed=false`.
+- FOS-093 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It does not enforce blocking in send paths, does not change renderer
+  grouping, digest read-model grouping, delivery draft text, `text_sha256`
+  lifecycle, delivery result writing, or delivery behavior, and does not claim
+  semantic duplication. It only applies to explicitly linked
+  canonical/presentation hashes; grouping preview remains presentation planning,
+  not source-of-truth mutation, and duplicate-success protection remains the
+  final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

@@ -46,6 +46,7 @@
 - Read-only no-marker duplicate root-cause linkage report: implemented
 - Read-only presentation-variant canonical hash duplicate guard evaluator:
   implemented
+- Read-only grouped lifecycle canonical hash guard review: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -789,6 +790,20 @@
   explicitly linked canonical/presentation hashes. Grouping preview remains
   presentation planning, not a source-of-truth mutation, and send-time
   duplicate-success protection remains the final guard.
+- FOS-093 exposes the FOS-092 read-only canonical-hash duplicate guard evaluator
+  inside the no-marker grouped lifecycle compatibility report. The report uses
+  the explicit grouped preview hash as the current presentation hash and the
+  explicit no-marker candidate hash as the linked canonical hash, then returns a
+  sanitized review section with current-hash success, linked-canonical success,
+  future blocker/recommended-action metadata, `enforced=false`, and
+  `semantic_duplicate_claimed=false`.
+- FOS-093 is reporting/review only. It does not enforce blocking in send paths,
+  does not create drafts, approvals, intentions, delivery results, sends,
+  scheduler jobs, worker/outbox records, migrations, or tables, and does not
+  claim semantic duplication. It only applies to explicitly linked
+  canonical/presentation hashes. Grouping preview remains presentation planning,
+  not a source-of-truth mutation, and duplicate-success protection remains the
+  final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -885,9 +900,9 @@
   grouped preview would be treated as a new/unsent presentation variant of
   already-sent canonical content under the current hash-oriented guard, and
   flags the presentation-variant duplicate-send risk. A read-only
-  canonical-hash evaluator can now model the future guard decision for
-  explicitly linked presentation/canonical hashes, but send-path enforcement,
-  grouped draft preparation, and any renderer/read-model grouping remain
-  separate later steps; no draft, renderer, read-model, or send behavior is
-  changed yet.
+  canonical-hash evaluator is now exposed in that report to model the future
+  guard decision for explicitly linked presentation/canonical hashes, but
+  send-path enforcement, grouped draft preparation, and any renderer/read-model
+  grouping remain separate later steps; no draft, renderer, read-model, or send
+  behavior is changed yet.
 - GitHub/Jira/Drive digest integration is not implemented.

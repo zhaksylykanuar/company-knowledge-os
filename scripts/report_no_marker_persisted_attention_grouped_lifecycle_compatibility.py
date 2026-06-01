@@ -6,8 +6,9 @@ grouped preview would be treated as already-sent or as a new/unsent presentation
 variant under the current hash-oriented duplicate-success guard, and flags the
 presentation-variant duplicate-send risk. It never changes the real persisted
 digest read model, renderer, delivery draft body, ``text_sha256`` lifecycle, or
-the duplicate guard, and never creates drafts, approvals, intentions, results,
-or sends.
+the duplicate guard. It also exposes the read-only canonical-hash guard
+evaluator result for the explicit canonical/grouped hash pair. It never creates
+drafts, approvals, intentions, results, or sends.
 """
 
 from __future__ import annotations
@@ -356,6 +357,7 @@ def _warnings(
     *,
     grouped_preview_report: Mapping[str, Any],
     compatibility: Mapping[str, Any],
+    canonical_hash_guard_evaluation: Mapping[str, Any],
 ) -> list[str]:
     warnings = [
         str(warning)
@@ -369,6 +371,8 @@ def _warnings(
         == "new_unsent_presentation_variant"
     ):
         warnings.append("grouped_variant_would_be_new_unsent_presentation_variant")
+    if canonical_hash_guard_evaluation.get("blocked_by_canonical_success") is True:
+        warnings.append("canonical_hash_guard_evaluator_would_block_grouped_variant")
     warnings.append("grouped_hash_is_presentation_variant_not_delivered_content")
     warnings.append("duplicate_looking_not_semantic_duplicate")
     return sorted(set(warnings))
@@ -396,7 +400,138 @@ def _limitations(grouped_preview_report: Mapping[str, Any]) -> list[str]:
 
 
 def _safety_metadata() -> dict[str, Any]:
-    return dict(grouped_preview_script._safety_metadata())
+    safety = dict(grouped_preview_script._safety_metadata())
+    safety["canonical_hash_guard_evaluator_invoked"] = True
+    safety["canonical_hash_guard_enforced"] = False
+    safety["semantic_duplicate_claimed"] = False
+    return safety
+
+
+def _conservative_canonical_hash_guard_evaluation(
+    *,
+    reason: str,
+    current_hash: str | None,
+    canonical_hash: str | None,
+) -> dict[str, Any]:
+    return {
+        "status": "presentation_variant_duplicate_guard_evaluation",
+        "available": False,
+        "current_hash_available": bool(current_hash),
+        "linked_canonical_hash_available": bool(canonical_hash),
+        "canonical_hash_distinct_from_current": (
+            bool(current_hash)
+            and bool(canonical_hash)
+            and current_hash != canonical_hash
+        ),
+        "current_hash_has_successful_delivery": False,
+        "linked_canonical_hash_has_successful_delivery": False,
+        "blocked_by_canonical_success": False,
+        "current_duplicate_success_guard_would_block": False,
+        "canonical_hash_guard_extension_would_block": False,
+        "blocker_code": None,
+        "recommended_action": "continue_no_marker_manual_pilot_review",
+        "conservative_reason": reason,
+        "enforced": False,
+        "semantic_duplicate_claimed": False,
+        "read_only": True,
+    }
+
+
+def _safe_canonical_hash_guard_evaluation(
+    evaluation: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "status": evaluation.get("status"),
+        "available": True,
+        "current_hash_available": bool(evaluation.get("presentation_text_sha256")),
+        "linked_canonical_hash_available": bool(
+            evaluation.get("canonical_text_sha256")
+        ),
+        "canonical_hash_distinct_from_current": (
+            evaluation.get("canonical_hash_distinct_from_presentation") is True
+        ),
+        "current_hash_has_successful_delivery": (
+            evaluation.get("presentation_hash_has_successful_delivery_result") is True
+        ),
+        "linked_canonical_hash_has_successful_delivery": (
+            evaluation.get("canonical_hash_has_successful_delivery_result") is True
+        ),
+        "blocked_by_canonical_success": (
+            evaluation.get("presentation_variant_blocked_by_canonical_success") is True
+        ),
+        "current_duplicate_success_guard_would_block": (
+            evaluation.get("current_duplicate_success_guard_would_block") is True
+        ),
+        "canonical_hash_guard_extension_would_block": (
+            evaluation.get("canonical_hash_guard_extension_would_block") is True
+        ),
+        "blocker_code": evaluation.get("blocker"),
+        "recommended_action": evaluation.get("recommended_next_action"),
+        "conservative_reason": None,
+        "enforced": evaluation.get("enforced") is True,
+        "semantic_duplicate_claimed": (
+            evaluation.get("semantic_duplicate_claimed") is True
+        ),
+        "read_only": _mapping(evaluation.get("safety")).get("read_only") is True,
+    }
+
+
+async def _evaluate_canonical_hash_guard(
+    *,
+    session_factory: Callable[[], Any] | None,
+    current_hash: str | None,
+    canonical_hash: str | None,
+    start_at: datetime,
+    end_at: datetime,
+    limit: int,
+    debug_evidence: bool,
+) -> dict[str, Any]:
+    if not current_hash:
+        return _conservative_canonical_hash_guard_evaluation(
+            reason="missing_current_presentation_hash",
+            current_hash=current_hash,
+            canonical_hash=canonical_hash,
+        )
+    if not canonical_hash:
+        return _conservative_canonical_hash_guard_evaluation(
+            reason="missing_linked_canonical_hash",
+            current_hash=current_hash,
+            canonical_hash=canonical_hash,
+        )
+    if current_hash == canonical_hash:
+        return _conservative_canonical_hash_guard_evaluation(
+            reason="canonical_hash_matches_current_hash",
+            current_hash=current_hash,
+            canonical_hash=canonical_hash,
+        )
+
+    from app.db.base import AsyncSessionLocal
+    from app.services.digest_delivery_drafts import (
+        evaluate_digest_delivery_presentation_variant_duplicate_guard,
+    )
+
+    factory = session_factory or AsyncSessionLocal
+    try:
+        async with factory() as session:
+            evaluation = (
+                await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+                    session,
+                    presentation_text_sha256=current_hash,
+                    canonical_text_sha256=canonical_hash,
+                    start_at=start_at,
+                    end_at=end_at,
+                    limit=limit,
+                    debug_evidence=debug_evidence,
+                )
+            )
+    except ValueError:
+        return _conservative_canonical_hash_guard_evaluation(
+            reason="invalid_explicit_hash_link",
+            current_hash=current_hash,
+            canonical_hash=canonical_hash,
+        )
+
+    return _safe_canonical_hash_guard_evaluation(evaluation)
 
 
 def _blocked_result(*, error_code: str, message: str) -> dict[str, Any]:
@@ -497,6 +632,19 @@ async def build_no_marker_grouped_lifecycle_compatibility_report(
         grouped_hash_matches_existing_draft=grouped_matches,
         grouped_hash_has_successful_delivery_result=grouped_success,
     )
+    canonical_hash_guard_evaluation = await _evaluate_canonical_hash_guard(
+        session_factory=session_factory,
+        current_hash=(
+            grouped_text_sha256 if isinstance(grouped_text_sha256, str) else None
+        ),
+        canonical_hash=(
+            canonical_text_sha256 if isinstance(canonical_text_sha256, str) else None
+        ),
+        start_at=query.start_at,
+        end_at=query.end_at,
+        limit=query.limit,
+        debug_evidence=query.debug_evidence,
+    )
 
     return {
         "status": "no_marker_grouped_lifecycle_compatibility",
@@ -521,6 +669,7 @@ async def build_no_marker_grouped_lifecycle_compatibility_report(
         "candidate": dict(candidate),
         "grouped_preview": dict(grouped_preview),
         "lifecycle_compatibility": compatibility,
+        "canonical_hash_guard_evaluation": canonical_hash_guard_evaluation,
         "duplicate_quality": dict(duplicate_quality),
         "recommended_next_action": _recommended_next_action(
             visible_count=visible_count,
@@ -529,6 +678,7 @@ async def build_no_marker_grouped_lifecycle_compatibility_report(
         "warnings": _warnings(
             grouped_preview_report=grouped_report,
             compatibility=compatibility,
+            canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
         ),
         "limitations": _limitations(grouped_report),
         "safety": _safety_metadata(),
@@ -543,6 +693,7 @@ def format_text_report(report: Mapping[str, Any]) -> str:
     candidate = _mapping(report.get("candidate"))
     grouped_preview = _mapping(report.get("grouped_preview"))
     compatibility = _mapping(report.get("lifecycle_compatibility"))
+    canonical_guard = _mapping(report.get("canonical_hash_guard_evaluation"))
     duplicate_quality = _mapping(report.get("duplicate_quality"))
     safety = _mapping(report.get("safety"))
     lines = [
@@ -603,6 +754,28 @@ def format_text_report(report: Mapping[str, Any]) -> str:
             "Requires guard extension before grouped send: "
             f"{compatibility.get('requires_guard_extension_before_grouped_send')}"
         ),
+        (
+            "Canonical-hash guard current hash successful delivery: "
+            f"{canonical_guard.get('current_hash_has_successful_delivery')}"
+        ),
+        (
+            "Canonical-hash guard linked canonical successful delivery: "
+            f"{canonical_guard.get('linked_canonical_hash_has_successful_delivery')}"
+        ),
+        (
+            "Canonical-hash guard blocked by canonical success: "
+            f"{canonical_guard.get('blocked_by_canonical_success')}"
+        ),
+        f"Canonical-hash guard blocker: {canonical_guard.get('blocker_code')}",
+        (
+            "Canonical-hash guard recommended action: "
+            f"{canonical_guard.get('recommended_action')}"
+        ),
+        f"Canonical-hash guard enforced: {canonical_guard.get('enforced')}",
+        (
+            "Canonical-hash guard semantic duplicate claimed: "
+            f"{canonical_guard.get('semantic_duplicate_claimed')}"
+        ),
         f"High duplicate risk: {duplicate_quality.get('high_duplicate_risk')}",
         f"Recommended next action: {report.get('recommended_next_action')}",
         f"Warnings: {report.get('warnings')}",
@@ -613,6 +786,14 @@ def format_text_report(report: Mapping[str, Any]) -> str:
         f"Read only: {safety.get('read_only')}",
         f"DB write scope: {safety.get('db_write_scope')}",
         f"Grouped preview text included: {safety.get('grouped_preview_text_included')}",
+        (
+            "Canonical-hash guard evaluator invoked: "
+            f"{safety.get('canonical_hash_guard_evaluator_invoked')}"
+        ),
+        (
+            "Canonical-hash guard enforced: "
+            f"{safety.get('canonical_hash_guard_enforced')}"
+        ),
         f"Delivery draft created: {safety.get('delivery_draft_created')}",
         f"Delivery result created: {safety.get('delivery_result_created')}",
         f"Telegram invoked: {safety.get('telegram_invoked')}",
