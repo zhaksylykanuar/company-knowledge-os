@@ -62,6 +62,8 @@
   implemented
 - Read-only no-marker duplicate root-cause linkage report:
   implemented
+- Read-only presentation-variant canonical hash duplicate guard evaluator:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -616,6 +618,23 @@
   digest text, grouped preview text, chunk text, raw payloads, secrets,
   credentials, or raw fingerprints and does not call live APIs, providers/OpenAI,
   connectors, Telegram/Slack, or delivery code.
+- FOS-092 adds a read-only canonical-hash duplicate guard evaluator for
+  presentation variants. It reads existing `digest.delivery_draft.created`,
+  `digest.delivery_intention.created`, and `digest.delivery_result.recorded`
+  audit metadata for an explicit delivery window, current presentation
+  `text_sha256`, and optional explicitly linked canonical `text_sha256`, then
+  reports whether the current presentation hash has a successful delivery result
+  and whether a distinct canonical hash has a successful delivery result.
+- FOS-092 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It does not enforce blocking in send paths yet, does not change
+  renderer grouping, digest read-model grouping, delivery draft text,
+  `text_sha256` lifecycle, draft/intention/result id derivation, delivery result
+  writing, or delivery behavior, and does not claim semantic duplication. It
+  only evaluates explicitly linked canonical/presentation hashes; grouping
+  preview remains presentation planning, not source-of-truth mutation, and
+  duplicate-success protection remains the final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

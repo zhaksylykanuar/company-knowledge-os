@@ -45,6 +45,8 @@
 - Read-only no-marker persisted attention digest quality report: implemented
 - Read-only no-marker duplicate root-cause linkage report: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
+- Read-only presentation-variant canonical hash duplicate guard evaluator:
+  implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -799,6 +801,20 @@ Implemented today:
   requires a guard extension or canonical-hash linkage. Human approval remains a
   separate downstream step, send-time duplicate-success protection remains the
   final guard, and scheduler/automatic delivery remains deferred.
+- FOS-092 adds a service-level read-only canonical-hash duplicate guard
+  evaluator for presentation variants. It accepts an explicit current
+  presentation `text_sha256`, an optional explicitly linked canonical
+  `text_sha256`, and a delivery window, then reads existing delivery
+  draft/intention/result audit metadata to report direct current-hash success,
+  distinct canonical-hash success, and a future-safe blocker code for
+  presentation variants of already-delivered canonical content.
+- FOS-092 does not enforce blocking in the send path yet, does not create or
+  mutate drafts, approvals, intentions, Telegram plans, preflight/gate records,
+  delivery results, sends, scheduler jobs, worker/outbox records, migrations, or
+  tables, and does not claim semantic duplication. It only evaluates explicitly
+  linked canonical/presentation hashes. Grouping preview remains presentation
+  planning, not source-of-truth mutation, and duplicate-success protection
+  remains the final send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

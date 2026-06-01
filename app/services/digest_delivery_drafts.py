@@ -69,6 +69,9 @@ DIGEST_DELIVERY_RESULT_SAFE_ERROR_SUMMARY_MAX_LENGTH = 240
 DIGEST_DELIVERY_RESULT_SAFE_MESSAGE_REFS_LIMIT = 20
 DIGEST_DELIVERY_RESULT_SAFE_MESSAGE_REF_VALUE_MAX_LENGTH = 120
 DIGEST_DELIVERY_TELEGRAM_EXECUTION_GATE_MAX_CHUNKS = 10
+DIGEST_PRESENTATION_VARIANT_CANONICAL_SUCCESS_BLOCKER = (
+    "presentation_variant_canonical_hash_already_successfully_sent"
+)
 
 DIGEST_DELIVERY_TELEGRAM_EXECUTION_GATE_REQUIRED_OPERATOR_FIELDS = (
     "delivery_intention_id",
@@ -409,6 +412,29 @@ def _clean_required_text(value: str | None, *, field_name: str, max_length: int)
         raise ValueError(f"{field_name} must not be empty")
     if len(cleaned) > max_length:
         raise ValueError(f"{field_name} must be at most {max_length} characters")
+    return cleaned
+
+
+def _clean_text_sha256(
+    value: str | None,
+    *,
+    field_name: str,
+    required: bool,
+) -> str | None:
+    if value is None:
+        if required:
+            raise ValueError(f"{field_name} must be a SHA-256 hex digest")
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a SHA-256 hex digest")
+
+    cleaned = value.strip().lower()
+    if not cleaned:
+        if required:
+            raise ValueError(f"{field_name} must be a SHA-256 hex digest")
+        return None
+    if len(cleaned) != 64 or any(char not in "0123456789abcdef" for char in cleaned):
+        raise ValueError(f"{field_name} must be a SHA-256 hex digest")
     return cleaned
 
 
@@ -2149,6 +2175,237 @@ async def get_delivery_draft_send_status(
             "raw_content_exposed": False,
             "draft_status_is_source_of_truth": False,
         },
+    }
+
+
+def _presentation_variant_duplicate_guard_safety_metadata() -> dict[str, Any]:
+    return {
+        "provider_free": True,
+        "read_only": True,
+        "db_write_scope": "none",
+        "delivery_invoked": False,
+        "delivery_adapter_invoked": False,
+        "approval_execution_invoked": False,
+        "scheduler_invoked": False,
+        "outbox_record_created": False,
+        "delivery_worker_invoked": False,
+        "delivery_result_record_created": False,
+        "rendered_text_included": False,
+        "grouped_preview_text_included": False,
+        "chunk_text_included": False,
+        "raw_payloads_exposed": False,
+        "credential_values_exposed": False,
+        "urls_exposed": False,
+        "source_ids_exposed": False,
+        "author_identity_exposed": False,
+        "evidence_refs_exposed": False,
+        "semantic_duplicate_claimed": False,
+        "enforced_in_send_path": False,
+        "draft_is_source_of_truth": False,
+        "delivery_result_is_source_of_truth": False,
+        "telegram_is_source_of_truth": False,
+    }
+
+
+def _empty_hash_lifecycle(text_sha256: str | None) -> dict[str, Any]:
+    return {
+        "text_sha256": text_sha256,
+        "matching_delivery_draft_count": 0,
+        "matches_existing_draft": False,
+        "has_successful_delivery_result": False,
+        "matching_delivery_draft_id": None,
+        "prior_successful_delivery_intention_id": None,
+        "prior_successful_delivery_result_id": None,
+        "prior_successful_execution_attempt_id": None,
+        "prior_successful_delivered_chunk_count": None,
+        "blocker": None,
+        "recommended_next_action": "continue_manual_pilot_flow",
+    }
+
+
+async def _delivery_hash_lifecycle_for_window(
+    session: AsyncSession,
+    *,
+    text_sha256: str,
+    delivery_drafts: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    matching_drafts = [
+        draft for draft in delivery_drafts if draft.get("text_sha256") == text_sha256
+    ]
+    lifecycle = _empty_hash_lifecycle(text_sha256)
+    lifecycle["matching_delivery_draft_count"] = len(matching_drafts)
+    lifecycle["matches_existing_draft"] = bool(matching_drafts)
+
+    first_status: Mapping[str, Any] | None = None
+    successful_status: Mapping[str, Any] | None = None
+    successful_delivery_draft_id: str | None = None
+    first_delivery_draft_id: str | None = None
+
+    for draft in matching_drafts:
+        delivery_draft_id = str(draft.get("delivery_draft_id") or "").strip()
+        if not delivery_draft_id:
+            continue
+        if first_delivery_draft_id is None:
+            first_delivery_draft_id = delivery_draft_id
+
+        status = await get_delivery_draft_send_status(
+            session,
+            delivery_draft_id=delivery_draft_id,
+        )
+        if status is None:
+            continue
+        if first_status is None:
+            first_status = status
+        if status.get("blocker") == "delivery_draft_already_successfully_sent":
+            successful_status = status
+            successful_delivery_draft_id = delivery_draft_id
+            break
+
+    if successful_status is None:
+        lifecycle["matching_delivery_draft_id"] = first_delivery_draft_id
+        if first_status is not None:
+            lifecycle["recommended_next_action"] = first_status.get(
+                "recommended_next_action"
+            )
+        return lifecycle
+
+    lifecycle["has_successful_delivery_result"] = True
+    lifecycle["matching_delivery_draft_id"] = successful_delivery_draft_id
+    lifecycle["prior_successful_delivery_intention_id"] = successful_status.get(
+        "prior_successful_delivery_intention_id"
+    )
+    lifecycle["prior_successful_delivery_result_id"] = successful_status.get(
+        "prior_successful_delivery_result_id"
+    )
+    lifecycle["prior_successful_execution_attempt_id"] = successful_status.get(
+        "prior_successful_execution_attempt_id"
+    )
+    lifecycle["prior_successful_delivered_chunk_count"] = successful_status.get(
+        "prior_successful_delivered_chunk_count"
+    )
+    lifecycle["blocker"] = successful_status.get("blocker")
+    lifecycle["recommended_next_action"] = successful_status.get(
+        "recommended_next_action"
+    )
+    return lifecycle
+
+
+async def evaluate_digest_delivery_presentation_variant_duplicate_guard(
+    session: AsyncSession,
+    *,
+    presentation_text_sha256: str,
+    canonical_text_sha256: str | None = None,
+    start_at: datetime,
+    end_at: datetime,
+    limit: int = DEFAULT_DIGEST_ENTRY_LIMIT,
+    debug_evidence: bool = False,
+    channel: str = DIGEST_DELIVERY_DRAFT_CHANNEL,
+) -> dict[str, Any]:
+    """Read-only duplicate-success evaluator for linked presentation variants.
+
+    The evaluator reports what a future canonical-hash guard could do when a
+    current presentation hash is explicitly linked to a canonical digest hash.
+    It does not enforce blocking, send messages, or create audit rows.
+    """
+
+    presentation_hash = _clean_text_sha256(
+        presentation_text_sha256,
+        field_name="presentation_text_sha256",
+        required=True,
+    )
+    assert presentation_hash is not None
+    canonical_hash = _clean_text_sha256(
+        canonical_text_sha256,
+        field_name="canonical_text_sha256",
+        required=False,
+    )
+    safe_channel = _clean_required_text(
+        channel,
+        field_name="channel",
+        max_length=40,
+    )
+
+    delivery_drafts = await list_persisted_digest_delivery_drafts_for_window(
+        session,
+        start_at=start_at,
+        end_at=end_at,
+        limit=limit,
+        debug_evidence=debug_evidence,
+        channel=safe_channel,
+    )
+    presentation_lifecycle = await _delivery_hash_lifecycle_for_window(
+        session,
+        text_sha256=presentation_hash,
+        delivery_drafts=delivery_drafts,
+    )
+
+    canonical_hash_provided = canonical_hash is not None
+    canonical_hash_distinct = canonical_hash_provided and canonical_hash != presentation_hash
+    if canonical_hash_distinct:
+        canonical_lifecycle = await _delivery_hash_lifecycle_for_window(
+            session,
+            text_sha256=canonical_hash,
+            delivery_drafts=delivery_drafts,
+        )
+    else:
+        canonical_lifecycle = _empty_hash_lifecycle(canonical_hash)
+
+    presentation_success = (
+        presentation_lifecycle.get("has_successful_delivery_result") is True
+    )
+    canonical_success = (
+        canonical_hash_distinct
+        and canonical_lifecycle.get("has_successful_delivery_result") is True
+    )
+    presentation_variant_blocked = bool(canonical_success and not presentation_success)
+
+    if presentation_success:
+        blocker = "delivery_draft_already_successfully_sent"
+        recommended_next_action = (
+            presentation_lifecycle.get("recommended_next_action")
+            or "create_new_digest_window_or_synthetic_sample_before_another_send"
+        )
+    elif presentation_variant_blocked:
+        blocker = DIGEST_PRESENTATION_VARIANT_CANONICAL_SUCCESS_BLOCKER
+        recommended_next_action = (
+            "do_not_send_presentation_variant_of_successful_canonical_digest"
+        )
+    else:
+        blocker = None
+        recommended_next_action = "continue_manual_pilot_flow"
+
+    return {
+        "status": "presentation_variant_duplicate_guard_evaluation",
+        "start_at": start_at.isoformat(),
+        "end_at": end_at.isoformat(),
+        "limit": _validated_limit(limit),
+        "debug_evidence": bool(debug_evidence),
+        "channel": safe_channel,
+        "presentation_text_sha256": presentation_hash,
+        "canonical_text_sha256": canonical_hash,
+        "canonical_hash_provided": canonical_hash_provided,
+        "canonical_hash_distinct_from_presentation": bool(canonical_hash_distinct),
+        "presentation_hash_matches_existing_draft": (
+            presentation_lifecycle.get("matches_existing_draft") is True
+        ),
+        "presentation_hash_has_successful_delivery_result": presentation_success,
+        "canonical_hash_matches_existing_draft": (
+            canonical_hash_distinct
+            and canonical_lifecycle.get("matches_existing_draft") is True
+        ),
+        "canonical_hash_has_successful_delivery_result": bool(canonical_success),
+        "presentation_variant_blocked_by_canonical_success": (
+            presentation_variant_blocked
+        ),
+        "current_duplicate_success_guard_would_block": presentation_success,
+        "canonical_hash_guard_extension_would_block": presentation_variant_blocked,
+        "blocker": blocker,
+        "recommended_next_action": recommended_next_action,
+        "enforced": False,
+        "semantic_duplicate_claimed": False,
+        "presentation_hash_lifecycle": presentation_lifecycle,
+        "canonical_hash_lifecycle": canonical_lifecycle,
+        "safety": _presentation_variant_duplicate_guard_safety_metadata(),
     }
 
 

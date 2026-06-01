@@ -44,6 +44,8 @@
   implemented
 - Read-only no-marker persisted attention digest quality report: implemented
 - Read-only no-marker duplicate root-cause linkage report: implemented
+- Read-only presentation-variant canonical hash duplicate guard evaluator:
+  implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -771,6 +773,22 @@
   requires a guard extension or canonical-hash linkage. Human approval remains a
   separate downstream step and send-time duplicate-success protection remains
   the final guard.
+- FOS-092 adds a service-level read-only canonical-hash duplicate guard
+  evaluator for presentation variants. Given an explicit current presentation
+  `text_sha256`, an optional explicitly linked canonical `text_sha256`, and a
+  delivery window, it reads existing delivery draft/intention/result audit
+  metadata to report whether the presentation hash already has a successful
+  delivery result and whether a distinct canonical hash already has a successful
+  delivery result.
+- FOS-092 can report a future-safe presentation-variant blocker when a distinct
+  linked canonical hash has already succeeded and the current presentation hash
+  has not. This is a decision contract only: it is not wired into send
+  execution, does not enforce blocking, does not create drafts, approvals,
+  intentions, results, sends, scheduler jobs, worker/outbox records, migrations,
+  or tables, and does not claim semantic duplication. It only evaluates
+  explicitly linked canonical/presentation hashes. Grouping preview remains
+  presentation planning, not a source-of-truth mutation, and send-time
+  duplicate-success protection remains the final guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -866,9 +884,10 @@
 - A read-only grouped lifecycle compatibility report can now explain whether a
   grouped preview would be treated as a new/unsent presentation variant of
   already-sent canonical content under the current hash-oriented guard, and
-  flags the presentation-variant duplicate-send risk. The duplicate-success
-  guard extension (linking grouped hash to canonical ungrouped candidate hash),
+  flags the presentation-variant duplicate-send risk. A read-only
+  canonical-hash evaluator can now model the future guard decision for
+  explicitly linked presentation/canonical hashes, but send-path enforcement,
   grouped draft preparation, and any renderer/read-model grouping remain
-  separate later steps; no guard, draft, renderer, or read-model behavior is
+  separate later steps; no draft, renderer, read-model, or send behavior is
   changed yet.
 - GitHub/Jira/Drive digest integration is not implemented.

@@ -18,6 +18,7 @@ from app.services.digest_delivery_drafts import (
     DIGEST_DELIVERY_DRAFT_CREATED_EVENT_TYPE,
     DIGEST_DELIVERY_DRAFT_REJECTED_EVENT_TYPE,
     DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
+    DIGEST_PRESENTATION_VARIANT_CANONICAL_SUCCESS_BLOCKER,
     DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
     DeliveryDraftDecisionConflictError,
     DeliveryDraftNotFoundError,
@@ -33,6 +34,7 @@ from app.services.digest_delivery_drafts import (
     build_persisted_attention_digest_delivery_draft,
     build_persisted_attention_digest_delivery_draft_from_db,
     create_digest_delivery_intention,
+    evaluate_digest_delivery_presentation_variant_duplicate_guard,
     get_digest_delivery_draft_approval_status,
     get_digest_delivery_draft_delivery_readiness,
     get_digest_delivery_intention,
@@ -321,6 +323,24 @@ async def _delivery_result_audit_log_total() -> int:
     return int(count or 0)
 
 
+async def _delivery_lifecycle_audit_log_total() -> int:
+    async with AsyncSessionLocal() as session:
+        count = await session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(
+                AuditLog.event_type.in_(
+                    (
+                        *DIGEST_DELIVERY_DRAFT_AUDIT_EVENT_TYPES,
+                        DIGEST_DELIVERY_INTENTION_CREATED_EVENT_TYPE,
+                        DIGEST_DELIVERY_RESULT_RECORDED_EVENT_TYPE,
+                    )
+                )
+            )
+        )
+    return int(count or 0)
+
+
 async def _delivery_result_audit_payload(delivery_result_id: str) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         payload = await session.scalar(
@@ -331,6 +351,99 @@ async def _delivery_result_audit_payload(delivery_result_id: str) -> dict[str, A
         )
     assert isinstance(payload, dict)
     return payload
+
+
+def _synthetic_text_sha256(label: str) -> str:
+    return sha256(label.encode("utf-8")).hexdigest()
+
+
+async def _persist_ready_delivery_for_rendered_text(
+    session: Any,
+    *,
+    rendered_text: str,
+    start_at: datetime,
+    end_at: datetime,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    digest = _persisted_attention_digest()
+    draft = build_persisted_attention_digest_delivery_draft(
+        digest=digest,
+        rendered_text=rendered_text,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    await persist_digest_delivery_draft(session, draft=draft, actor="test")
+    await approve_digest_delivery_draft(
+        session,
+        delivery_draft_id=draft["delivery_draft_id"],
+        reviewer="founder",
+    )
+    intention = await create_digest_delivery_intention(
+        session,
+        delivery_draft_id=draft["delivery_draft_id"],
+        actor="test",
+    )
+    return draft, intention
+
+
+async def _persist_successful_delivery_for_rendered_text(
+    session: Any,
+    *,
+    rendered_text: str,
+    start_at: datetime,
+    end_at: datetime,
+    execution_attempt_id: str,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    draft, intention = await _persist_ready_delivery_for_rendered_text(
+        session,
+        rendered_text=rendered_text,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    result = await record_digest_delivery_result(
+        session,
+        delivery_intention_id=intention["delivery_intention_id"],
+        execution_attempt_id=execution_attempt_id,
+        result_status="succeeded",
+        attempted_chunk_count=1,
+        delivered_chunk_count=1,
+        failed_chunk_count=0,
+        delivery_invoked=True,
+        delivery_adapter_invoked=True,
+        actor="test",
+    )
+    return draft, intention, result
+
+
+def _assert_presentation_guard_output_safe(result: dict[str, Any]) -> None:
+    dumped = json.dumps(result, sort_keys=True)
+    for marker in (
+        '"rendered_text":',
+        '"grouped_preview_text":',
+        '"digest":',
+        '"safe_summary":',
+        '"source_object_id":',
+        '"author_email":',
+        '"evidence_refs":',
+        '"raw_payload":',
+        '"provider_payload":',
+        '"prompt":',
+        "PRIVATE_",
+        "http://",
+        "https://",
+    ):
+        assert marker not in dumped
+    assert result["safety"]["read_only"] is True
+    assert result["safety"]["db_write_scope"] == "none"
+    assert result["safety"]["delivery_invoked"] is False
+    assert result["safety"]["delivery_adapter_invoked"] is False
+    assert result["safety"]["delivery_result_record_created"] is False
+    assert result["safety"]["rendered_text_included"] is False
+    assert result["safety"]["grouped_preview_text_included"] is False
+    assert result["safety"]["chunk_text_included"] is False
+    assert result["safety"]["raw_payloads_exposed"] is False
+    assert result["safety"]["credential_values_exposed"] is False
+    assert result["safety"]["semantic_duplicate_claimed"] is False
+    assert result["safety"]["enforced_in_send_path"] is False
 
 
 def test_delivery_draft_builder_returns_inert_review_contract(
@@ -2667,6 +2780,340 @@ async def test_delivery_draft_send_status_warns_only_for_clear_successful_result
         for delivery_result_id in delivery_result_ids:
             await _delete_delivery_result_audit_log(delivery_result_id)
         await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_presentation_variant_guard_direct_hash_success_uses_existing_blocker() -> None:
+    await _ensure_audit_log_table()
+    start_at = _utc(2132, 8, 20)
+    end_at = _utc(2132, 8, 21)
+    rendered_text = _rendered_digest(_persisted_attention_digest()) + "\nfos092-direct"
+    delivery_draft_id: str | None = None
+    delivery_result_id: str | None = None
+
+    try:
+        async with AsyncSessionLocal() as session:
+            draft, _intention, result = (
+                await _persist_successful_delivery_for_rendered_text(
+                    session,
+                    rendered_text=rendered_text,
+                    start_at=start_at,
+                    end_at=end_at,
+                    execution_attempt_id="fos092-direct-success",
+                )
+            )
+            await session.commit()
+            delivery_draft_id = draft["delivery_draft_id"]
+            delivery_result_id = result["delivery_result_id"]
+
+            evaluation = (
+                await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+                    session,
+                    presentation_text_sha256=draft["text_sha256"],
+                    canonical_text_sha256=_synthetic_text_sha256(
+                        "fos092-other-canonical"
+                    ),
+                    start_at=start_at,
+                    end_at=end_at,
+                )
+            )
+
+        assert evaluation["presentation_hash_matches_existing_draft"] is True
+        assert evaluation["presentation_hash_has_successful_delivery_result"] is True
+        assert evaluation["canonical_hash_has_successful_delivery_result"] is False
+        assert evaluation["presentation_variant_blocked_by_canonical_success"] is False
+        assert evaluation["current_duplicate_success_guard_would_block"] is True
+        assert evaluation["canonical_hash_guard_extension_would_block"] is False
+        assert evaluation["blocker"] == "delivery_draft_already_successfully_sent"
+        assert evaluation["enforced"] is False
+        assert evaluation["semantic_duplicate_claimed"] is False
+        _assert_presentation_guard_output_safe(evaluation)
+    finally:
+        if delivery_result_id is not None:
+            await _delete_delivery_result_audit_log(delivery_result_id)
+        if delivery_draft_id is not None:
+            await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_presentation_variant_guard_blocks_distinct_canonical_success() -> None:
+    await _ensure_audit_log_table()
+    start_at = _utc(2132, 8, 22)
+    end_at = _utc(2132, 8, 23)
+    rendered_text = _rendered_digest(_persisted_attention_digest()) + "\nfos092-canon"
+    presentation_hash = _synthetic_text_sha256("fos092-current-presentation")
+    delivery_draft_id: str | None = None
+    delivery_result_id: str | None = None
+
+    try:
+        async with AsyncSessionLocal() as session:
+            draft, _intention, result = (
+                await _persist_successful_delivery_for_rendered_text(
+                    session,
+                    rendered_text=rendered_text,
+                    start_at=start_at,
+                    end_at=end_at,
+                    execution_attempt_id="fos092-canonical-success",
+                )
+            )
+            await session.commit()
+            delivery_draft_id = draft["delivery_draft_id"]
+            delivery_result_id = result["delivery_result_id"]
+
+            evaluation = (
+                await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+                    session,
+                    presentation_text_sha256=presentation_hash,
+                    canonical_text_sha256=draft["text_sha256"],
+                    start_at=start_at,
+                    end_at=end_at,
+                )
+            )
+
+        assert evaluation["presentation_hash_matches_existing_draft"] is False
+        assert evaluation["presentation_hash_has_successful_delivery_result"] is False
+        assert evaluation["canonical_hash_matches_existing_draft"] is True
+        assert evaluation["canonical_hash_has_successful_delivery_result"] is True
+        assert evaluation["presentation_variant_blocked_by_canonical_success"] is True
+        assert evaluation["current_duplicate_success_guard_would_block"] is False
+        assert evaluation["canonical_hash_guard_extension_would_block"] is True
+        assert (
+            evaluation["blocker"]
+            == DIGEST_PRESENTATION_VARIANT_CANONICAL_SUCCESS_BLOCKER
+        )
+        assert evaluation["recommended_next_action"] == (
+            "do_not_send_presentation_variant_of_successful_canonical_digest"
+        )
+        assert evaluation["enforced"] is False
+        assert evaluation["semantic_duplicate_claimed"] is False
+        _assert_presentation_guard_output_safe(evaluation)
+    finally:
+        if delivery_result_id is not None:
+            await _delete_delivery_result_audit_log(delivery_result_id)
+        if delivery_draft_id is not None:
+            await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_presentation_variant_guard_allows_when_canonical_has_no_success() -> None:
+    await _ensure_audit_log_table()
+    start_at = _utc(2132, 8, 24)
+    end_at = _utc(2132, 8, 25)
+    rendered_text = _rendered_digest(_persisted_attention_digest()) + "\nfos092-unsent"
+    presentation_hash = _synthetic_text_sha256("fos092-unsent-presentation")
+    delivery_draft_id: str | None = None
+
+    try:
+        async with AsyncSessionLocal() as session:
+            draft, _intention = await _persist_ready_delivery_for_rendered_text(
+                session,
+                rendered_text=rendered_text,
+                start_at=start_at,
+                end_at=end_at,
+            )
+            await session.commit()
+            delivery_draft_id = draft["delivery_draft_id"]
+
+            evaluation = (
+                await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+                    session,
+                    presentation_text_sha256=presentation_hash,
+                    canonical_text_sha256=draft["text_sha256"],
+                    start_at=start_at,
+                    end_at=end_at,
+                )
+            )
+
+        assert evaluation["presentation_hash_has_successful_delivery_result"] is False
+        assert evaluation["canonical_hash_matches_existing_draft"] is True
+        assert evaluation["canonical_hash_has_successful_delivery_result"] is False
+        assert evaluation["presentation_variant_blocked_by_canonical_success"] is False
+        assert evaluation["canonical_hash_guard_extension_would_block"] is False
+        assert evaluation["blocker"] is None
+        assert evaluation["recommended_next_action"] == "continue_manual_pilot_flow"
+        _assert_presentation_guard_output_safe(evaluation)
+    finally:
+        if delivery_draft_id is not None:
+            await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_presentation_variant_guard_current_success_precedes_canonical_success() -> None:
+    await _ensure_audit_log_table()
+    start_at = _utc(2132, 8, 26)
+    end_at = _utc(2132, 8, 27)
+    current_text = _rendered_digest(_persisted_attention_digest()) + "\nfos092-current"
+    canonical_text = _rendered_digest(_persisted_attention_digest()) + "\nfos092-canon2"
+    delivery_draft_ids: list[str] = []
+    delivery_result_ids: list[str] = []
+
+    try:
+        async with AsyncSessionLocal() as session:
+            current_draft, _current_intention, current_result = (
+                await _persist_successful_delivery_for_rendered_text(
+                    session,
+                    rendered_text=current_text,
+                    start_at=start_at,
+                    end_at=end_at,
+                    execution_attempt_id="fos092-current-success",
+                )
+            )
+            canonical_draft, _canonical_intention, canonical_result = (
+                await _persist_successful_delivery_for_rendered_text(
+                    session,
+                    rendered_text=canonical_text,
+                    start_at=start_at,
+                    end_at=end_at,
+                    execution_attempt_id="fos092-canonical-success-2",
+                )
+            )
+            await session.commit()
+            delivery_draft_ids.extend(
+                [
+                    current_draft["delivery_draft_id"],
+                    canonical_draft["delivery_draft_id"],
+                ]
+            )
+            delivery_result_ids.extend(
+                [
+                    current_result["delivery_result_id"],
+                    canonical_result["delivery_result_id"],
+                ]
+            )
+
+            evaluation = (
+                await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+                    session,
+                    presentation_text_sha256=current_draft["text_sha256"],
+                    canonical_text_sha256=canonical_draft["text_sha256"],
+                    start_at=start_at,
+                    end_at=end_at,
+                )
+            )
+
+        assert evaluation["presentation_hash_has_successful_delivery_result"] is True
+        assert evaluation["canonical_hash_has_successful_delivery_result"] is True
+        assert evaluation["presentation_variant_blocked_by_canonical_success"] is False
+        assert evaluation["current_duplicate_success_guard_would_block"] is True
+        assert evaluation["canonical_hash_guard_extension_would_block"] is False
+        assert evaluation["blocker"] == "delivery_draft_already_successfully_sent"
+        _assert_presentation_guard_output_safe(evaluation)
+    finally:
+        for delivery_result_id in delivery_result_ids:
+            await _delete_delivery_result_audit_log(delivery_result_id)
+        for delivery_draft_id in delivery_draft_ids:
+            await _delete_delivery_draft_audit_logs(delivery_draft_id)
+
+
+async def test_presentation_variant_guard_missing_canonical_hash_is_conservative() -> None:
+    await _ensure_audit_log_table()
+    start_at = _utc(2132, 8, 28)
+    end_at = _utc(2132, 8, 29)
+    presentation_hash = _synthetic_text_sha256("fos092-missing-canonical")
+
+    async with AsyncSessionLocal() as session:
+        none_evaluation = (
+            await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+                session,
+                presentation_text_sha256=presentation_hash,
+                canonical_text_sha256=None,
+                start_at=start_at,
+                end_at=end_at,
+            )
+        )
+        empty_evaluation = (
+            await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+                session,
+                presentation_text_sha256=presentation_hash,
+                canonical_text_sha256="   ",
+                start_at=start_at,
+                end_at=end_at,
+            )
+        )
+
+    for evaluation in (none_evaluation, empty_evaluation):
+        assert evaluation["canonical_hash_provided"] is False
+        assert evaluation["canonical_hash_distinct_from_presentation"] is False
+        assert evaluation["canonical_hash_has_successful_delivery_result"] is False
+        assert evaluation["presentation_variant_blocked_by_canonical_success"] is False
+        assert evaluation["canonical_hash_guard_extension_would_block"] is False
+        assert evaluation["blocker"] is None
+        assert evaluation["semantic_duplicate_claimed"] is False
+        _assert_presentation_guard_output_safe(evaluation)
+
+
+async def test_presentation_variant_guard_equal_canonical_hash_is_not_variant_claim() -> None:
+    await _ensure_audit_log_table()
+    start_at = _utc(2132, 8, 30)
+    end_at = _utc(2132, 8, 31)
+    presentation_hash = _synthetic_text_sha256("fos092-equal-hash")
+
+    async with AsyncSessionLocal() as session:
+        evaluation = await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+            session,
+            presentation_text_sha256=presentation_hash,
+            canonical_text_sha256=presentation_hash,
+            start_at=start_at,
+            end_at=end_at,
+        )
+
+    assert evaluation["canonical_hash_provided"] is True
+    assert evaluation["canonical_hash_distinct_from_presentation"] is False
+    assert evaluation["canonical_hash_matches_existing_draft"] is False
+    assert evaluation["canonical_hash_has_successful_delivery_result"] is False
+    assert evaluation["presentation_variant_blocked_by_canonical_success"] is False
+    assert evaluation["canonical_hash_guard_extension_would_block"] is False
+    assert evaluation["blocker"] is None
+    assert evaluation["semantic_duplicate_claimed"] is False
+    _assert_presentation_guard_output_safe(evaluation)
+
+
+async def test_presentation_variant_guard_evaluator_is_read_only_and_safe() -> None:
+    await _ensure_audit_log_table()
+    start_at = _utc(2132, 9, 1)
+    end_at = _utc(2132, 9, 2)
+    rendered_text = _rendered_digest(_persisted_attention_digest()) + "\nfos092-read"
+    presentation_hash = _synthetic_text_sha256("fos092-read-only-presentation")
+    delivery_draft_id: str | None = None
+    delivery_result_id: str | None = None
+
+    try:
+        async with AsyncSessionLocal() as session:
+            draft, _intention, result = (
+                await _persist_successful_delivery_for_rendered_text(
+                    session,
+                    rendered_text=rendered_text,
+                    start_at=start_at,
+                    end_at=end_at,
+                    execution_attempt_id="fos092-read-only-success",
+                )
+            )
+            await session.commit()
+            delivery_draft_id = draft["delivery_draft_id"]
+            delivery_result_id = result["delivery_result_id"]
+
+        before_total = await _delivery_lifecycle_audit_log_total()
+        async with AsyncSessionLocal() as session:
+            evaluation = (
+                await evaluate_digest_delivery_presentation_variant_duplicate_guard(
+                    session,
+                    presentation_text_sha256=presentation_hash,
+                    canonical_text_sha256=draft["text_sha256"],
+                    start_at=start_at,
+                    end_at=end_at,
+                )
+            )
+        after_total = await _delivery_lifecycle_audit_log_total()
+
+        assert after_total == before_total
+        assert (
+            evaluation["blocker"]
+            == DIGEST_PRESENTATION_VARIANT_CANONICAL_SUCCESS_BLOCKER
+        )
+        assert evaluation["enforced"] is False
+        assert evaluation["semantic_duplicate_claimed"] is False
+        _assert_presentation_guard_output_safe(evaluation)
+    finally:
+        if delivery_result_id is not None:
+            await _delete_delivery_result_audit_log(delivery_result_id)
+        if delivery_draft_id is not None:
+            await _delete_delivery_draft_audit_logs(delivery_draft_id)
 
 
 async def test_delivery_result_conflicts_on_mismatched_existing_payload() -> None:
