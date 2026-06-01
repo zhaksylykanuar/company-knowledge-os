@@ -574,6 +574,25 @@
   bodies, evidence refs, rendered digest text, chunk text, raw payloads,
   secrets, credentials, or raw fingerprints and does not call live APIs,
   providers/OpenAI, connectors, Telegram/Slack, or delivery code.
+- FOS-090 adds a read-only no-marker grouped digest preview. It reads existing
+  no-marker candidate attention results and linked normalized activity/source
+  event metadata to group repeated source-object visible items by source object
+  for presentation planning only, returning count-only group metadata, opaque
+  group labels, safe enum summaries, per-section counts, and a separate grouped
+  preview hash/chunk metadata. Every visible item maps to exactly one group, the
+  sum of group item counts equals the ungrouped visible count, and the canonical
+  ungrouped candidate `text_sha256` is returned unchanged.
+- FOS-090 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
+  or tables. It does not modify renderer grouping, digest read-model grouping,
+  delivery draft text, `text_sha256` lifecycle, source event dedupe,
+  normalization dedupe, attention triage dedupe, or delivery behavior. It does
+  not expose raw source object identifiers, PR numbers, repository names, author
+  names, titles, summaries, actions, source bodies, evidence refs, rendered
+  digest text, grouped preview text, chunk text, raw payloads, secrets,
+  credentials, or raw fingerprints and does not call live APIs, providers/OpenAI,
+  connectors, Telegram/Slack, or delivery code.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

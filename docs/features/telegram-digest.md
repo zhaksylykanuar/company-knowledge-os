@@ -755,6 +755,27 @@ Implemented today:
   evidence refs, rendered text, chunk text, secrets, credentials, raw payloads,
   or raw fingerprints. Human approval remains a separate downstream step, and
   duplicate-success protection remains the send-time guard.
+- FOS-090 adds
+  `scripts/report_no_marker_persisted_attention_grouped_preview.py`, a local
+  read-only no-marker grouped digest preview. It groups repeated source-object
+  no-marker candidate items by source object for presentation planning only,
+  preserves visible item counts, reports grouped entry counts and per-section
+  counts separately, and computes a separate grouped preview hash/chunk metadata
+  without exposing grouped text. It returns the canonical ungrouped candidate
+  `text_sha256` unchanged.
+- FOS-090 does not change the real persisted digest read model, renderer,
+  delivery draft text, `text_sha256`, or delivery behavior, and does not dedupe
+  or delete raw source events. It creates no drafts, approvals, delivery
+  intentions, Telegram plans, preflight/gate records, delivery results, sends,
+  scheduler jobs, worker/outbox records, migrations, or tables, and does not
+  call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
+  code. It never exposes raw titles, summaries, actions, source object
+  identifiers, PR numbers, repository names, author names, evidence refs,
+  rendered text, chunk text, secrets, credentials, raw payloads, or raw
+  fingerprints. Grouping preview does not prove semantic duplication and is not
+  a source-of-truth mutation; human approval remains a separate downstream step,
+  and send-time duplicate-success protection remains the final guard. Scheduler
+  and automatic delivery remain deferred.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

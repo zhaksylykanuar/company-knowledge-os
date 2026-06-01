@@ -719,6 +719,32 @@
   rendered text, chunk text, secrets, credentials, raw payloads, or raw
   fingerprints. Root-cause labels are conservative operational diagnostics;
   duplicate-looking does not prove semantic duplication.
+- FOS-090 adds
+  `scripts/report_no_marker_persisted_attention_grouped_preview.py`, a local
+  read-only no-marker grouped digest preview. It groups repeated source-object
+  no-marker candidate items by source object for presentation planning only,
+  using opaque group labels (`group_001`, `group_002`, ...), count-only group
+  metadata, and safe enum summaries.
+- FOS-090 preserves visible item counts: every visible no-marker candidate item
+  is represented by exactly one group, the sum of group item counts equals the
+  ungrouped visible count, and hidden/low-priority items remain count-only. It
+  reports grouped entry counts and per-section counts separately from ungrouped
+  visible counts.
+- FOS-090 computes a separate grouped preview hash/chunk metadata
+  (`grouped_preview_text_sha256`, char/chunk counts) without exposing grouped
+  text, and returns the canonical ungrouped candidate `text_sha256` unchanged
+  alongside a `grouped_preview_hash_differs_from_candidate` boolean.
+- FOS-090 does not change the real persisted digest read model, renderer,
+  delivery draft text, `text_sha256` lifecycle, or delivery behavior, and does
+  not dedupe or delete raw source events. It creates no drafts, approvals,
+  intentions, results, sends, scheduler jobs, worker/outbox records, migrations,
+  or tables, and does not call live APIs, providers/OpenAI, connectors,
+  Telegram/Slack, or delivery code. It never exposes raw titles, summaries,
+  actions, source object identifiers, PR numbers, repository names, author
+  names, evidence refs, rendered text, chunk text, secrets, credentials, raw
+  payloads, or raw fingerprints. Grouping preview does not prove semantic
+  duplication and is not a source-of-truth mutation; human approval and
+  send-time duplicate-success protection remain separate downstream guards.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -803,4 +829,12 @@
   remains a later explicit step after the no-marker-only count/hash/lifecycle
   report is reviewed; human approval and duplicate-success protection remain
   separate downstream guards.
+- No-marker persisted attention candidates can now be previewed as a read-only
+  source-object grouped digest for presentation planning. The grouped preview
+  preserves visible item counts and reports grouped entry counts separately, but
+  it does not change the real read model, renderer, delivery draft text, or
+  `text_sha256`. Renderer/read-model grouping, draft warning/blocking, and any
+  hash-affecting change remain separate later steps after the grouped preview is
+  reviewed; human approval and send-time duplicate-success protection remain the
+  downstream guards.
 - GitHub/Jira/Drive digest integration is not implemented.
