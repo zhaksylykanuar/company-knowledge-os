@@ -403,6 +403,8 @@ def _safety_metadata() -> dict[str, Any]:
     safety = dict(grouped_preview_script._safety_metadata())
     safety["canonical_hash_guard_evaluator_invoked"] = True
     safety["canonical_hash_guard_enforced"] = False
+    safety["operator_review_summary_included"] = True
+    safety["operator_review_summary_enforced"] = False
     safety["semantic_duplicate_claimed"] = False
     return safety
 
@@ -473,6 +475,96 @@ def _safe_canonical_hash_guard_evaluation(
             evaluation.get("semantic_duplicate_claimed") is True
         ),
         "read_only": _mapping(evaluation.get("safety")).get("read_only") is True,
+    }
+
+
+def _operator_review_summary(
+    *,
+    compatibility: Mapping[str, Any],
+    canonical_hash_guard_evaluation: Mapping[str, Any],
+) -> dict[str, Any]:
+    reason_codes: list[str] = []
+    current_hash_has_success = (
+        canonical_hash_guard_evaluation.get("current_hash_has_successful_delivery")
+        is True
+    )
+
+    if (
+        compatibility.get("grouped_hash_has_successful_delivery_result") is True
+        or current_hash_has_success
+    ):
+        decision = "already_sent_by_current_hash"
+        blocker_code = (
+            canonical_hash_guard_evaluation.get("blocker_code")
+            or "delivery_draft_already_successfully_sent"
+        )
+        recommended_action = (
+            canonical_hash_guard_evaluation.get("recommended_action")
+            if current_hash_has_success
+            else None
+        ) or "do_not_resend_grouped_presentation"
+        requires_human_review = False
+        reason_codes.append("current_grouped_hash_has_successful_delivery")
+    elif canonical_hash_guard_evaluation.get("blocked_by_canonical_success") is True:
+        decision = "blocked_by_linked_canonical_hash"
+        blocker_code = (
+            canonical_hash_guard_evaluation.get("blocker_code")
+            or "presentation_variant_canonical_hash_already_successfully_sent"
+        )
+        recommended_action = (
+            canonical_hash_guard_evaluation.get("recommended_action")
+            or "do_not_send_presentation_variant_of_successful_canonical_digest"
+        )
+        requires_human_review = False
+        reason_codes.append("linked_canonical_hash_has_successful_delivery")
+    elif (
+        compatibility.get("grouped_variant_would_be_treated_as")
+        == "no_visible_candidate"
+    ):
+        decision = "manual_review_needed"
+        blocker_code = None
+        recommended_action = "choose_window_with_no_marker_visible_candidates"
+        requires_human_review = True
+        reason_codes.append("no_visible_candidate")
+    elif canonical_hash_guard_evaluation.get("available") is not True:
+        decision = "manual_review_needed"
+        blocker_code = None
+        recommended_action = "manual_review_required_before_grouped_send"
+        requires_human_review = True
+        reason = canonical_hash_guard_evaluation.get("conservative_reason")
+        reason_codes.append(
+            reason
+            if isinstance(reason, str) and reason
+            else "insufficient_hash_evidence"
+        )
+    else:
+        decision = "not_blocked"
+        blocker_code = None
+        recommended_action = (
+            canonical_hash_guard_evaluation.get("recommended_action")
+            or "continue_no_marker_manual_pilot_review"
+        )
+        requires_human_review = False
+        reason_codes.append("no_current_or_linked_canonical_successful_delivery")
+
+    if compatibility.get("presentation_variant_duplicate_send_risk") is True:
+        reason_codes.append("presentation_variant_duplicate_send_risk")
+    if (
+        canonical_hash_guard_evaluation.get("canonical_hash_distinct_from_current")
+        is True
+    ):
+        reason_codes.append("explicit_canonical_presentation_hash_link")
+
+    return {
+        "status": "operator_review_summary",
+        "decision": decision,
+        "blocker_code": blocker_code,
+        "recommended_action": recommended_action,
+        "requires_human_review": requires_human_review,
+        "reason_codes": list(dict.fromkeys(reason_codes)),
+        "enforced": False,
+        "semantic_duplicate_claimed": False,
+        "read_only": True,
     }
 
 
@@ -645,6 +737,10 @@ async def build_no_marker_grouped_lifecycle_compatibility_report(
         limit=query.limit,
         debug_evidence=query.debug_evidence,
     )
+    operator_review_summary = _operator_review_summary(
+        compatibility=compatibility,
+        canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
+    )
 
     return {
         "status": "no_marker_grouped_lifecycle_compatibility",
@@ -670,6 +766,7 @@ async def build_no_marker_grouped_lifecycle_compatibility_report(
         "grouped_preview": dict(grouped_preview),
         "lifecycle_compatibility": compatibility,
         "canonical_hash_guard_evaluation": canonical_hash_guard_evaluation,
+        "operator_review_summary": operator_review_summary,
         "duplicate_quality": dict(duplicate_quality),
         "recommended_next_action": _recommended_next_action(
             visible_count=visible_count,
@@ -694,6 +791,7 @@ def format_text_report(report: Mapping[str, Any]) -> str:
     grouped_preview = _mapping(report.get("grouped_preview"))
     compatibility = _mapping(report.get("lifecycle_compatibility"))
     canonical_guard = _mapping(report.get("canonical_hash_guard_evaluation"))
+    operator_summary = _mapping(report.get("operator_review_summary"))
     duplicate_quality = _mapping(report.get("duplicate_quality"))
     safety = _mapping(report.get("safety"))
     lines = [
@@ -776,6 +874,22 @@ def format_text_report(report: Mapping[str, Any]) -> str:
             "Canonical-hash guard semantic duplicate claimed: "
             f"{canonical_guard.get('semantic_duplicate_claimed')}"
         ),
+        f"Operator review decision: {operator_summary.get('decision')}",
+        f"Operator review blocker: {operator_summary.get('blocker_code')}",
+        (
+            "Operator review recommended action: "
+            f"{operator_summary.get('recommended_action')}"
+        ),
+        (
+            "Operator review requires human review: "
+            f"{operator_summary.get('requires_human_review')}"
+        ),
+        f"Operator review reason codes: {operator_summary.get('reason_codes')}",
+        f"Operator review enforced: {operator_summary.get('enforced')}",
+        (
+            "Operator review semantic duplicate claimed: "
+            f"{operator_summary.get('semantic_duplicate_claimed')}"
+        ),
         f"High duplicate risk: {duplicate_quality.get('high_duplicate_risk')}",
         f"Recommended next action: {report.get('recommended_next_action')}",
         f"Warnings: {report.get('warnings')}",
@@ -793,6 +907,14 @@ def format_text_report(report: Mapping[str, Any]) -> str:
         (
             "Canonical-hash guard enforced: "
             f"{safety.get('canonical_hash_guard_enforced')}"
+        ),
+        (
+            "Operator review summary included: "
+            f"{safety.get('operator_review_summary_included')}"
+        ),
+        (
+            "Operator review summary enforced: "
+            f"{safety.get('operator_review_summary_enforced')}"
         ),
         f"Delivery draft created: {safety.get('delivery_draft_created')}",
         f"Delivery result created: {safety.get('delivery_result_created')}",

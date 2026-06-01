@@ -47,6 +47,7 @@
 - Read-only presentation-variant canonical hash duplicate guard evaluator:
   implemented
 - Read-only grouped lifecycle canonical hash guard review: implemented
+- Read-only grouped lifecycle operator decision summary: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -804,6 +805,19 @@
   canonical/presentation hashes. Grouping preview remains presentation planning,
   not a source-of-truth mutation, and duplicate-success protection remains the
   final send-time guard.
+- FOS-094 adds a read-only operator review summary to the grouped lifecycle
+  compatibility report. The summary is derived only from lifecycle
+  compatibility and canonical-hash guard evaluation metadata, and classifies the
+  grouped presentation as already sent by current hash, blocked by an explicitly
+  linked canonical hash, not blocked, or needing manual review.
+- FOS-094 is reporting/review only. It does not enforce blocking in send paths,
+  does not create drafts, approvals, intentions, delivery results, sends,
+  scheduler jobs, worker/outbox records, migrations, or tables, and does not
+  claim semantic duplication. It only applies to explicitly linked
+  canonical/presentation hashes. Missing or insufficient hash evidence leads to
+  conservative manual review; grouping preview remains presentation planning,
+  not a source-of-truth mutation, and duplicate-success protection remains the
+  final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
@@ -901,8 +915,10 @@
   already-sent canonical content under the current hash-oriented guard, and
   flags the presentation-variant duplicate-send risk. A read-only
   canonical-hash evaluator is now exposed in that report to model the future
-  guard decision for explicitly linked presentation/canonical hashes, but
-  send-path enforcement, grouped draft preparation, and any renderer/read-model
-  grouping remain separate later steps; no draft, renderer, read-model, or send
-  behavior is changed yet.
+  guard decision for explicitly linked presentation/canonical hashes. The same
+  report also includes a sanitized operator review summary that makes
+  insufficient hash evidence a manual-review outcome, but send-path
+  enforcement, grouped draft preparation, and any renderer/read-model grouping
+  remain separate later steps; no draft, renderer, read-model, or send behavior
+  is changed yet.
 - GitHub/Jira/Drive digest integration is not implemented.

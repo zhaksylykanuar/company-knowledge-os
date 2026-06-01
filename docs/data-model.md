@@ -66,6 +66,8 @@
   implemented
 - Read-only grouped lifecycle canonical hash guard review:
   implemented
+- Read-only grouped lifecycle operator decision summary:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -654,6 +656,22 @@
   canonical/presentation hashes; grouping preview remains presentation planning,
   not source-of-truth mutation, and duplicate-success protection remains the
   final send-time guard.
+- FOS-094 adds a read-only operator decision summary to the grouped lifecycle
+  compatibility report. It does not add new storage. The summary is derived
+  from existing lifecycle compatibility and canonical-hash guard evaluation
+  metadata, and reports a sanitized decision for current-hash already-sent,
+  explicitly linked canonical-hash blocker, not-blocked, or manual-review
+  outcomes.
+- FOS-094 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It does not enforce blocking in send paths, does not change renderer
+  grouping, digest read-model grouping, delivery draft text, `text_sha256`
+  lifecycle, delivery result writing, or delivery behavior, and does not claim
+  semantic duplication. It only applies to explicitly linked
+  canonical/presentation hashes; missing or insufficient evidence leads to
+  conservative manual review, grouping preview remains presentation planning,
+  and duplicate-success protection remains the final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

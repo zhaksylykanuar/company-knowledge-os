@@ -225,6 +225,13 @@ def _fake_grouped_report(
     }
 
 
+def _assert_operator_summary_is_safe(summary: dict) -> None:
+    assert summary["status"] == "operator_review_summary"
+    assert summary["enforced"] is False
+    assert summary["semantic_duplicate_claimed"] is False
+    assert summary["read_only"] is True
+
+
 def test_missing_required_args_fail_safely() -> None:
     missing_start = _run_script("--end-at", "2149-01-02T00:00:00+00:00")
     missing_end = _run_script("--start-at", "2149-01-01T00:00:00+00:00")
@@ -339,6 +346,15 @@ async def test_empty_window_reports_no_visible_candidate() -> None:
     assert report["recommended_next_action"] == (
         "choose_window_with_no_marker_visible_candidates"
     )
+    summary = report["operator_review_summary"]
+    assert summary["decision"] == "manual_review_needed"
+    assert summary["blocker_code"] is None
+    assert summary["recommended_action"] == (
+        "choose_window_with_no_marker_visible_candidates"
+    )
+    assert summary["requires_human_review"] is True
+    assert "no_visible_candidate" in summary["reason_codes"]
+    _assert_operator_summary_is_safe(summary)
     assert report["safety"]["read_only"] is True
     assert report["safety"]["db_write_scope"] == "none"
     assert await _audit_log_count() == before_audit
@@ -396,6 +412,23 @@ async def test_already_sent_canonical_flags_presentation_variant_risk() -> None:
         )
         assert guard["enforced"] is False
         assert guard["semantic_duplicate_claimed"] is False
+        summary = report["operator_review_summary"]
+        assert summary["decision"] == "blocked_by_linked_canonical_hash"
+        assert (
+            summary["blocker_code"]
+            == "presentation_variant_canonical_hash_already_successfully_sent"
+        )
+        assert summary["recommended_action"] == (
+            "do_not_send_presentation_variant_of_successful_canonical_digest"
+        )
+        assert summary["requires_human_review"] is False
+        assert (
+            "linked_canonical_hash_has_successful_delivery"
+            in summary["reason_codes"]
+        )
+        assert "presentation_variant_duplicate_send_risk" in summary["reason_codes"]
+        assert "explicit_canonical_presentation_hash_link" in summary["reason_codes"]
+        _assert_operator_summary_is_safe(summary)
         assert "canonical_hash_guard_evaluator_would_block_grouped_variant" in report[
             "warnings"
         ]
@@ -430,6 +463,17 @@ async def test_unsent_canonical_has_no_presentation_variant_risk() -> None:
         assert report["recommended_next_action"] == (
             "continue_no_marker_manual_pilot_review"
         )
+        summary = report["operator_review_summary"]
+        assert summary["decision"] == "not_blocked"
+        assert summary["blocker_code"] is None
+        assert summary["recommended_action"] == "continue_manual_pilot_flow"
+        assert summary["requires_human_review"] is False
+        assert (
+            "no_current_or_linked_canonical_successful_delivery"
+            in summary["reason_codes"]
+        )
+        assert "explicit_canonical_presentation_hash_link" in summary["reason_codes"]
+        _assert_operator_summary_is_safe(summary)
         _assert_safe_output(_serialized(report))
     finally:
         await _cleanup(unique)
@@ -468,6 +512,16 @@ async def test_grouped_hash_matching_successful_delivery_is_already_sent(
         assert guard["linked_canonical_hash_has_successful_delivery"] is False
         assert guard["blocked_by_canonical_success"] is False
         assert guard["blocker_code"] is None
+        summary = report["operator_review_summary"]
+        assert summary["decision"] == "already_sent_by_current_hash"
+        assert summary["blocker_code"] == "delivery_draft_already_successfully_sent"
+        assert summary["recommended_action"] == "do_not_resend_grouped_presentation"
+        assert summary["requires_human_review"] is False
+        assert (
+            "current_grouped_hash_has_successful_delivery"
+            in summary["reason_codes"]
+        )
+        _assert_operator_summary_is_safe(summary)
         _assert_safe_output(_serialized(report))
     finally:
         await _cleanup(unique)
@@ -521,6 +575,19 @@ async def test_current_grouped_hash_success_takes_precedence_in_guard_evaluation
         assert guard["blocker_code"] == "delivery_draft_already_successfully_sent"
         assert guard["enforced"] is False
         assert guard["semantic_duplicate_claimed"] is False
+        summary = report["operator_review_summary"]
+        assert summary["decision"] == "already_sent_by_current_hash"
+        assert summary["blocker_code"] == "delivery_draft_already_successfully_sent"
+        assert summary["requires_human_review"] is False
+        assert (
+            "current_grouped_hash_has_successful_delivery"
+            in summary["reason_codes"]
+        )
+        assert "explicit_canonical_presentation_hash_link" in summary["reason_codes"]
+        assert "linked_canonical_hash_has_successful_delivery" not in summary[
+            "reason_codes"
+        ]
+        _assert_operator_summary_is_safe(summary)
         assert await _audit_log_count() == before_audit
         _assert_safe_output(_serialized(report))
         _assert_safe_output(compat_script.format_text_report(report))
@@ -557,6 +624,13 @@ async def test_missing_canonical_hash_is_conservative_in_guard_evaluation(
     assert guard["conservative_reason"] == "missing_linked_canonical_hash"
     assert guard["enforced"] is False
     assert guard["semantic_duplicate_claimed"] is False
+    summary = report["operator_review_summary"]
+    assert summary["decision"] == "manual_review_needed"
+    assert summary["blocker_code"] is None
+    assert summary["recommended_action"] == "manual_review_required_before_grouped_send"
+    assert summary["requires_human_review"] is True
+    assert "missing_linked_canonical_hash" in summary["reason_codes"]
+    _assert_operator_summary_is_safe(summary)
     _assert_safe_output(_serialized(report))
     _assert_safe_output(compat_script.format_text_report(report))
 
@@ -591,6 +665,13 @@ async def test_equal_canonical_and_grouped_hash_is_not_variant_claim(
     assert guard["conservative_reason"] == "canonical_hash_matches_current_hash"
     assert guard["enforced"] is False
     assert guard["semantic_duplicate_claimed"] is False
+    summary = report["operator_review_summary"]
+    assert summary["decision"] == "manual_review_needed"
+    assert summary["blocker_code"] is None
+    assert summary["recommended_action"] == "manual_review_required_before_grouped_send"
+    assert summary["requires_human_review"] is True
+    assert "canonical_hash_matches_current_hash" in summary["reason_codes"]
+    _assert_operator_summary_is_safe(summary)
     _assert_safe_output(_serialized(report))
 
 
@@ -620,6 +701,13 @@ async def test_invalid_grouped_hash_is_conservative_in_guard_evaluation(
     assert guard["conservative_reason"] == "invalid_explicit_hash_link"
     assert guard["enforced"] is False
     assert guard["semantic_duplicate_claimed"] is False
+    summary = report["operator_review_summary"]
+    assert summary["decision"] == "manual_review_needed"
+    assert summary["blocker_code"] is None
+    assert summary["recommended_action"] == "manual_review_required_before_grouped_send"
+    assert summary["requires_human_review"] is True
+    assert "invalid_explicit_hash_link" in summary["reason_codes"]
+    _assert_operator_summary_is_safe(summary)
     _assert_safe_output(_serialized(report))
 
 
@@ -654,12 +742,15 @@ async def test_hashes_returned_without_rendering_text() -> None:
         assert report["safety"]["live_api_calls"] is False
         assert report["safety"]["canonical_hash_guard_evaluator_invoked"] is True
         assert report["safety"]["canonical_hash_guard_enforced"] is False
+        assert report["safety"]["operator_review_summary_included"] is True
+        assert report["safety"]["operator_review_summary_enforced"] is False
         assert report["safety"]["semantic_duplicate_claimed"] is False
         assert report["canonical_hash_guard_evaluation"]["enforced"] is False
         assert (
             report["canonical_hash_guard_evaluation"]["semantic_duplicate_claimed"]
             is False
         )
+        _assert_operator_summary_is_safe(report["operator_review_summary"])
         _assert_safe_output(serialized)
         _assert_safe_output(compat_script.format_text_report(report))
     finally:
@@ -728,4 +819,6 @@ def test_json_output_is_stable_and_sanitized() -> None:
     assert parsed["marker_filter"] == "no_marker_only"
     assert parsed["group_by"] == "source_object"
     assert parsed["safety"]["read_only"] is True
+    assert parsed["operator_review_summary"]["enforced"] is False
+    assert parsed["operator_review_summary"]["semantic_duplicate_claimed"] is False
     _assert_safe_output(result.stdout)

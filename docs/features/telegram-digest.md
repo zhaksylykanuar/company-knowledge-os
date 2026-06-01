@@ -48,6 +48,7 @@
 - Read-only presentation-variant canonical hash duplicate guard evaluator:
   implemented
 - Read-only grouped lifecycle canonical hash guard review: implemented
+- Read-only grouped lifecycle operator decision summary: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -827,6 +828,20 @@ Implemented today:
   delivery results, sends, scheduler jobs, worker/outbox records, migrations, or
   tables, and does not claim semantic duplication. It only applies to explicitly
   linked canonical/presentation hashes. Grouping preview remains presentation
+  planning, not source-of-truth mutation, and duplicate-success protection
+  remains the final send-time guard.
+- FOS-094 adds a sanitized, read-only operator review summary to the grouped
+  lifecycle compatibility report. The summary is derived from lifecycle
+  compatibility plus canonical-hash guard evaluation metadata, and reports
+  whether the grouped presentation is already sent by current hash, potentially
+  blocked by an explicitly linked canonical hash, not blocked, or needs manual
+  review because evidence is insufficient.
+- FOS-094 does not enforce blocking in send paths, does not create or mutate
+  drafts, approvals, intentions, Telegram plans, preflight/gate records,
+  delivery results, sends, scheduler jobs, worker/outbox records, migrations, or
+  tables, and does not claim semantic duplication. It only applies to explicitly
+  linked canonical/presentation hashes; missing or insufficient evidence leads
+  to conservative manual review. Grouping preview remains presentation
   planning, not source-of-truth mutation, and duplicate-success protection
   remains the final send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
