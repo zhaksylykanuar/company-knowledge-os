@@ -54,6 +54,8 @@
 - Grouped lifecycle review exit codes and sanitized artifacts: implemented
 - Provider-free grouped lifecycle review operator doctor: implemented
 - Gated manual local grouped lifecycle review runner: implemented
+- Safe grouped lifecycle manual runner window presets and preflight:
+  implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -906,6 +908,23 @@
   source-of-truth mutations, and does not change renderer behavior, draft body
   generation, `text_sha256`, API behavior, schema, delivery execution, delivery
   results, scheduler behavior, or automatic delivery. Artifacts are local
+  review/debug artifacts only, grouping preview remains presentation planning,
+  and duplicate-success protection remains the final send-time guard.
+- FOS-102 adds safe bounded window presets and preflight planning to the manual
+  grouped lifecycle review runner. Operators can use `--lookback-hours` to
+  resolve UTC `--start-at`/`--end-at` values for local read-only debugging
+  without guessing exact timestamps, and `--preflight-only` validates the
+  acknowledgement gate, doctor readiness, output mode, artifact path, and
+  resolved window without report execution.
+- FOS-102 preserves the FOS-100 boundaries: the runner remains default-blocked
+  unless `--allow-local-data-readonly` is passed, still runs the provider-free
+  doctor before acknowledged local-data delegation, and still requires sanitized
+  `review-json` plus safe local artifact behavior. It does not enforce blocking
+  in send paths, does not claim semantic duplication, does not create drafts,
+  approvals, intentions, delivery results, sends, audit rows, or
+  source-of-truth mutations, and does not change renderer behavior, draft body
+  generation, `text_sha256`, API behavior, schema, delivery execution, delivery
+  results, scheduler behavior, or automatic delivery. Artifacts remain local
   review/debug artifacts only, grouping preview remains presentation planning,
   and duplicate-success protection remains the final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,

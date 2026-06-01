@@ -10,6 +10,7 @@ import json
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +24,12 @@ from scripts import (  # noqa: E402
 )
 
 MANUAL_RUNNER_MODE = "manual_grouped_lifecycle_review"
+MANUAL_RUNNER_PREFLIGHT_MODE = "manual_grouped_lifecycle_review_preflight"
+MAX_LOOKBACK_HOURS = 168.0
 EXIT_LOCAL_DATA_ACK_REQUIRED = 40
 EXIT_DOCTOR_FAILED = 41
 EXIT_UNSAFE_OUTPUT_PATH = 42
+EXIT_INVALID_WINDOW = 43
 EXIT_INVALID_USAGE = 2
 SAFE_REPORT_EXIT_CODES = frozenset({0, 10, 20, 30})
 
@@ -43,6 +47,20 @@ class DelegatedReportResult:
     payload: Mapping[str, Any]
 
 
+@dataclass(frozen=True)
+class ResolvedWindow:
+    start_at: str
+    end_at: str
+    source: str
+    lookback_hours: float | None
+
+
+@dataclass(frozen=True)
+class ManualReviewPlan:
+    artifact_path: Path
+    resolved_window: ResolvedWindow
+
+
 def _safe_reason_code(value: str) -> str:
     cleaned = "".join(
         character if character.isalnum() or character == "_" else "_"
@@ -57,6 +75,14 @@ def _json_text(value: Mapping[str, Any]) -> str:
 
 def _print_json(value: Mapping[str, Any]) -> None:
     print(_json_text(value), end="")
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _utc_iso(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat()
 
 
 def _safe_blocked_result(
@@ -81,6 +107,41 @@ def _safe_blocked_result(
     }
 
 
+def _safe_preflight_result(
+    *,
+    status: str,
+    reason_code: str | None,
+    local_data_acknowledged: bool,
+    resolved_window: ResolvedWindow | None = None,
+    checks: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        "mode": MANUAL_RUNNER_PREFLIGHT_MODE,
+        "status": status,
+        "reason_code": reason_code,
+        "read_only": True,
+        "provider_free": False,
+        "local_synthetic_only": False,
+        "uses_real_local_data": False,
+        "local_data_acknowledged": local_data_acknowledged,
+        "executed_report": False,
+        "output_format": "review-json",
+        "enforced": False,
+        "semantic_duplicate_claimed": False,
+        "resolved_window": (
+            {
+                "start_at": resolved_window.start_at,
+                "end_at": resolved_window.end_at,
+                "source": resolved_window.source,
+                "lookback_hours": resolved_window.lookback_hours,
+            }
+            if resolved_window is not None
+            else None
+        ),
+        "checks": checks or [],
+    }
+
+
 def _assert_sanitized(value: Mapping[str, Any]) -> None:
     doctor_script._assert_sanitized(value)
 
@@ -96,12 +157,30 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help=(
+            "Validate the gated manual review configuration without executing "
+            "the grouped lifecycle report."
+        ),
+    )
+    parser.add_argument(
         "--start-at",
         help="Timezone-aware ISO start for the persisted attention window.",
     )
     parser.add_argument(
         "--end-at",
-        help="Timezone-aware ISO end for the persisted attention window.",
+        help=(
+            "Timezone-aware ISO end for the persisted attention window. With "
+            "--lookback-hours, defaults to current UTC time when omitted."
+        ),
+    )
+    parser.add_argument(
+        "--lookback-hours",
+        help=(
+            "Bounded relative UTC window, greater than 0 and at most 168 hours. "
+            "Use this instead of --start-at to avoid guessing timestamps."
+        ),
     )
     parser.add_argument(
         "--activity-start-at",
@@ -146,7 +225,58 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _validate_manual_gate(args: argparse.Namespace) -> Path:
+def _parse_datetime(value: str, *, field_name: str) -> datetime:
+    try:
+        return review_script._parse_datetime(value, field_name=field_name)
+    except review_script.NoMarkerGroupedLifecycleInputError as exc:
+        raise ManualReviewRunnerError("invalid_window", EXIT_INVALID_WINDOW) from exc
+
+
+def _parse_lookback_hours(value: str | None) -> float | None:
+    if value is None:
+        return None
+    try:
+        lookback_hours = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ManualReviewRunnerError("invalid_window", EXIT_INVALID_WINDOW) from exc
+    if lookback_hours <= 0 or lookback_hours > MAX_LOOKBACK_HOURS:
+        raise ManualReviewRunnerError("invalid_window", EXIT_INVALID_WINDOW)
+    return lookback_hours
+
+
+def _resolve_window(args: argparse.Namespace) -> ResolvedWindow:
+    lookback_hours = _parse_lookback_hours(args.lookback_hours)
+    if lookback_hours is not None:
+        if args.start_at is not None:
+            raise ManualReviewRunnerError("invalid_window", EXIT_INVALID_WINDOW)
+        end_at = (
+            _parse_datetime(args.end_at, field_name="end_at")
+            if args.end_at is not None
+            else _utc_now()
+        )
+        start_at = end_at - timedelta(hours=lookback_hours)
+        return ResolvedWindow(
+            start_at=_utc_iso(start_at),
+            end_at=_utc_iso(end_at),
+            source="lookback_hours",
+            lookback_hours=lookback_hours,
+        )
+
+    if args.start_at is None or args.end_at is None:
+        raise ManualReviewRunnerError("invalid_window", EXIT_INVALID_WINDOW)
+    start_at = _parse_datetime(args.start_at, field_name="start_at")
+    end_at = _parse_datetime(args.end_at, field_name="end_at")
+    if end_at <= start_at:
+        raise ManualReviewRunnerError("invalid_window", EXIT_INVALID_WINDOW)
+    return ResolvedWindow(
+        start_at=_utc_iso(start_at),
+        end_at=_utc_iso(end_at),
+        source="explicit",
+        lookback_hours=None,
+    )
+
+
+def _validate_manual_gate(args: argparse.Namespace) -> ManualReviewPlan:
     if not args.allow_local_data_readonly:
         raise ManualReviewRunnerError(
             "local_data_ack_required",
@@ -165,9 +295,11 @@ def _validate_manual_gate(args: argparse.Namespace) -> Path:
         ) from exc
     if artifact_path is None:
         raise ManualReviewRunnerError("output_path_required", EXIT_UNSAFE_OUTPUT_PATH)
-    if args.start_at is None or args.end_at is None:
-        raise ManualReviewRunnerError("report_window_required", EXIT_INVALID_USAGE)
-    return artifact_path
+    resolved_window = _resolve_window(args)
+    return ManualReviewPlan(
+        artifact_path=artifact_path,
+        resolved_window=resolved_window,
+    )
 
 
 def _run_doctor() -> Mapping[str, Any]:
@@ -181,12 +313,78 @@ def _run_doctor() -> Mapping[str, Any]:
     return doctor_report
 
 
-def _report_args(args: argparse.Namespace) -> list[str]:
+def _check(name: str, status: str, reason_code: str | None = None) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": status,
+        "reason_code": reason_code,
+    }
+
+
+def run_preflight(args: argparse.Namespace) -> tuple[int, Mapping[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    if not args.allow_local_data_readonly:
+        checks.append(_check("acknowledgement", "blocked", "local_data_ack_required"))
+        report = _safe_preflight_result(
+            status="blocked",
+            reason_code="local_data_ack_required",
+            local_data_acknowledged=False,
+            checks=checks,
+        )
+        return EXIT_LOCAL_DATA_ACK_REQUIRED, report
+
+    checks.append(_check("acknowledgement", "pass"))
+    try:
+        plan = _validate_manual_gate(args)
+    except ManualReviewRunnerError as exc:
+        if exc.reason_code in {"unsafe_output_path", "output_path_required"}:
+            checks.append(_check("artifact_path", "blocked", exc.reason_code))
+        elif exc.reason_code == "invalid_window":
+            checks.append(_check("window", "fail", exc.reason_code))
+        else:
+            checks.append(_check("configuration", "fail", exc.reason_code))
+        status = "blocked" if exc.exit_code in {40, 41, 42} else "fail"
+        report = _safe_preflight_result(
+            status=status,
+            reason_code=exc.reason_code,
+            local_data_acknowledged=True,
+            checks=checks,
+        )
+        return exc.exit_code, report
+
+    checks.append(_check("output_mode", "pass"))
+    checks.append(_check("artifact_path", "pass"))
+    checks.append(_check("resolved_window", "pass"))
+    try:
+        _run_doctor()
+    except ManualReviewRunnerError as exc:
+        checks.append(_check("doctor", "blocked", exc.reason_code))
+        report = _safe_preflight_result(
+            status="blocked",
+            reason_code=exc.reason_code,
+            local_data_acknowledged=True,
+            resolved_window=plan.resolved_window,
+            checks=checks,
+        )
+        return exc.exit_code, report
+    checks.append(_check("doctor", "pass"))
+    report = _safe_preflight_result(
+        status="pass",
+        reason_code=None,
+        local_data_acknowledged=True,
+        resolved_window=plan.resolved_window,
+        checks=checks,
+    )
+    _assert_sanitized(report)
+    return 0, report
+
+
+def _report_args(args: argparse.Namespace, resolved_window: ResolvedWindow) -> list[str]:
     report_args = [
         "--start-at",
-        args.start_at,
+        resolved_window.start_at,
         "--end-at",
-        args.end_at,
+        resolved_window.end_at,
         "--format",
         "review-json",
         "--review-exit-code",
@@ -211,11 +409,14 @@ def _report_args(args: argparse.Namespace) -> list[str]:
     return report_args
 
 
-def _delegate_report(args: argparse.Namespace) -> DelegatedReportResult:
+def _delegate_report(
+    args: argparse.Namespace,
+    resolved_window: ResolvedWindow,
+) -> DelegatedReportResult:
     stdout = io.StringIO()
     stderr = io.StringIO()
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-        exit_code = review_script.main(_report_args(args))
+        exit_code = review_script.main(_report_args(args, resolved_window))
     if stderr.getvalue():
         raise ManualReviewRunnerError("delegated_report_stderr", EXIT_INVALID_USAGE)
     try:
@@ -235,10 +436,10 @@ def _delegate_report(args: argparse.Namespace) -> DelegatedReportResult:
 
 
 def run_manual_review(args: argparse.Namespace) -> DelegatedReportResult:
-    artifact_path = _validate_manual_gate(args)
+    plan = _validate_manual_gate(args)
     _run_doctor()
-    delegated = _delegate_report(args)
-    review_script._write_json_artifact(delegated.payload, artifact_path)
+    delegated = _delegate_report(args, plan.resolved_window)
+    review_script._write_json_artifact(delegated.payload, plan.artifact_path)
     if delegated.exit_code not in SAFE_REPORT_EXIT_CODES:
         raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
     return delegated
@@ -247,6 +448,10 @@ def run_manual_review(args: argparse.Namespace) -> DelegatedReportResult:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _parse_args(argv)
+        if args.preflight_only:
+            exit_code, preflight = run_preflight(args)
+            _print_json(preflight)
+            return exit_code
         delegated = run_manual_review(args)
     except ManualReviewRunnerError as exc:
         local_data_acknowledged = bool(

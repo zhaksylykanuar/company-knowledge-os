@@ -80,6 +80,8 @@
   implemented
 - Gated manual local grouped lifecycle review runner:
   implemented
+- Safe grouped lifecycle manual runner window presets and preflight:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -765,6 +767,22 @@
   path, and rejects unsafe output modes or artifact paths before report
   execution.
 - FOS-100 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It does not enforce blocking in send paths, does not change renderer
+  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
+  behavior, schema, delivery result writing, delivery execution, scheduler
+  behavior, or automatic delivery, and does not claim semantic duplication.
+  Runner artifacts are local review/debug artifacts only, grouping preview
+  remains presentation planning, and duplicate-success protection remains the
+  final send-time guard.
+- FOS-102 adds safe bounded window presets and preflight planning to the manual
+  grouped lifecycle review runner. It does not add new storage.
+  `--lookback-hours` resolves UTC `--start-at`/`--end-at` values for local
+  read-only debugging, and `--preflight-only` validates acknowledgement, doctor
+  readiness, output mode, artifact path, and the resolved window without report
+  execution.
+- FOS-102 appends no source events, normalized activity rows, attention results,
   audit logs, draft rows, approval/decision rows, intention rows, result rows,
   Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
   tables. It does not enforce blocking in send paths, does not change renderer

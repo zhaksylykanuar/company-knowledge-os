@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -94,6 +95,18 @@ def _base_args(tmp_path: Path) -> list[str]:
     ]
 
 
+def _lookback_args(tmp_path: Path) -> list[str]:
+    return [
+        "--allow-local-data-readonly",
+        "--lookback-hours",
+        "24",
+        "--end-at",
+        "2149-01-02T00:00:00+00:00",
+        "--output-path",
+        str(tmp_path / "review" / "manual-review.json"),
+    ]
+
+
 def _patch_doctor_pass(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
     def fake_doctor() -> dict[str, Any]:
         calls.append("doctor")
@@ -108,6 +121,7 @@ def _patch_report(
     calls: list[str],
     decision: str,
     exit_code: int,
+    captured_report_args: list[list[str]] | None = None,
 ) -> None:
     payload = _review_payload_for_decision(decision)
 
@@ -118,10 +132,329 @@ def _patch_report(
         assert argv[argv.index("--format") + 1] == "review-json"
         assert "--review-exit-code" in argv
         assert "--output-path" not in argv
+        if captured_report_args is not None:
+            captured_report_args.append(list(argv))
         print(json.dumps(payload, indent=2, sort_keys=True))
         return exit_code
 
     monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
+
+
+def test_manual_runner_help_lists_lookback_and_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def forbidden_doctor() -> dict[str, Any]:
+        raise AssertionError("help must not run doctor")
+
+    def forbidden_report(_argv: list[str] | None = None) -> int:
+        raise AssertionError("help must not run report")
+
+    monkeypatch.setattr(
+        manual_script.doctor_script,
+        "build_doctor_report",
+        forbidden_doctor,
+    )
+    monkeypatch.setattr(manual_script.review_script, "main", forbidden_report)
+
+    with pytest.raises(SystemExit) as exc_info:
+        manual_script.main(["--help"])
+
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert "--allow-local-data-readonly" in captured.out
+    assert "--lookback-hours" in captured.out
+    assert "--preflight-only" in captured.out
+    assert "review-json" in captured.out
+    assert "--output-path" in captured.out
+    assert "Without this flag" in captured.out
+    assert "no report" in captured.out
+    _assert_safe_output(captured.out)
+
+
+def test_lookback_hours_resolves_with_deterministic_now(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    monkeypatch.setattr(
+        manual_script,
+        "_utc_now",
+        lambda: datetime(2149, 1, 2, 12, 0, tzinfo=UTC),
+    )
+    artifact_path = tmp_path / "review" / "preflight.json"
+
+    code = manual_script.main(
+        [
+            "--preflight-only",
+            "--allow-local-data-readonly",
+            "--lookback-hours",
+            "24",
+            "--output-path",
+            str(artifact_path),
+        ]
+    )
+
+    assert code == 0
+    assert calls == ["doctor"]
+    assert not artifact_path.exists()
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["mode"] == "manual_grouped_lifecycle_review_preflight"
+    assert parsed["status"] == "pass"
+    assert parsed["executed_report"] is False
+    assert parsed["resolved_window"] == {
+        "start_at": "2149-01-01T12:00:00+00:00",
+        "end_at": "2149-01-02T12:00:00+00:00",
+        "source": "lookback_hours",
+        "lookback_hours": 24.0,
+    }
+    _assert_safe_output(captured.out)
+
+
+def test_lookback_hours_with_explicit_end_at_resolves_window(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+
+    code = manual_script.main(
+        [
+            "--preflight-only",
+            "--allow-local-data-readonly",
+            "--lookback-hours",
+            "6",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--output-path",
+            str(tmp_path / "review" / "preflight.json"),
+        ]
+    )
+
+    assert code == 0
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["resolved_window"]["start_at"] == "2149-01-01T18:00:00+00:00"
+    assert parsed["resolved_window"]["end_at"] == "2149-01-02T00:00:00+00:00"
+    assert parsed["resolved_window"]["source"] == "lookback_hours"
+    _assert_safe_output(captured.out)
+
+
+@pytest.mark.parametrize("lookback_hours", ["0", "-1", "abc", "169"])
+def test_lookback_hours_rejects_invalid_values_before_report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    lookback_hours: str,
+) -> None:
+    def forbidden_doctor() -> dict[str, Any]:
+        raise AssertionError("invalid window must not run doctor")
+
+    def forbidden_report(_argv: list[str] | None = None) -> int:
+        raise AssertionError("invalid window must not run report")
+
+    monkeypatch.setattr(
+        manual_script.doctor_script,
+        "build_doctor_report",
+        forbidden_doctor,
+    )
+    monkeypatch.setattr(manual_script.review_script, "main", forbidden_report)
+
+    code = manual_script.main(
+        [
+            "--preflight-only",
+            "--allow-local-data-readonly",
+            "--lookback-hours",
+            lookback_hours,
+            "--output-path",
+            str(tmp_path / "review" / "preflight.json"),
+        ]
+    )
+
+    assert code == manual_script.EXIT_INVALID_WINDOW
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "fail"
+    assert parsed["reason_code"] == "invalid_window"
+    assert parsed["executed_report"] is False
+    _assert_safe_output(captured.out)
+
+
+def test_missing_window_without_lookback_fails_before_report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    def forbidden_doctor() -> dict[str, Any]:
+        raise AssertionError("missing window must not run doctor")
+
+    def forbidden_report(_argv: list[str] | None = None) -> int:
+        raise AssertionError("missing window must not run report")
+
+    monkeypatch.setattr(
+        manual_script.doctor_script,
+        "build_doctor_report",
+        forbidden_doctor,
+    )
+    monkeypatch.setattr(manual_script.review_script, "main", forbidden_report)
+
+    code = manual_script.main(
+        [
+            "--allow-local-data-readonly",
+            "--output-path",
+            str(tmp_path / "review" / "manual-review.json"),
+        ]
+    )
+
+    assert code == manual_script.EXIT_INVALID_WINDOW
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["reason_code"] == "invalid_window"
+    assert parsed["executed_report"] is False
+    _assert_safe_output(captured.out)
+
+
+def test_conflicting_start_at_and_lookback_fails_before_report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    def forbidden_doctor() -> dict[str, Any]:
+        raise AssertionError("ambiguous window must not run doctor")
+
+    def forbidden_report(_argv: list[str] | None = None) -> int:
+        raise AssertionError("ambiguous window must not run report")
+
+    monkeypatch.setattr(
+        manual_script.doctor_script,
+        "build_doctor_report",
+        forbidden_doctor,
+    )
+    monkeypatch.setattr(manual_script.review_script, "main", forbidden_report)
+
+    code = manual_script.main(
+        [
+            "--allow-local-data-readonly",
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--lookback-hours",
+            "24",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--output-path",
+            str(tmp_path / "review" / "manual-review.json"),
+        ]
+    )
+
+    assert code == manual_script.EXIT_INVALID_WINDOW
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["reason_code"] == "invalid_window"
+    assert parsed["executed_report"] is False
+    _assert_safe_output(captured.out)
+
+
+def test_preflight_without_ack_blocks_without_report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def forbidden_doctor() -> dict[str, Any]:
+        raise AssertionError("preflight without ack must not run doctor")
+
+    def forbidden_report(_argv: list[str] | None = None) -> int:
+        raise AssertionError("preflight must not run report")
+
+    monkeypatch.setattr(
+        manual_script.doctor_script,
+        "build_doctor_report",
+        forbidden_doctor,
+    )
+    monkeypatch.setattr(manual_script.review_script, "main", forbidden_report)
+
+    code = manual_script.main(["--preflight-only"])
+
+    assert code == manual_script.EXIT_LOCAL_DATA_ACK_REQUIRED
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["mode"] == "manual_grouped_lifecycle_review_preflight"
+    assert parsed["status"] == "blocked"
+    assert parsed["reason_code"] == "local_data_ack_required"
+    assert parsed["executed_report"] is False
+    assert parsed["resolved_window"] is None
+    _assert_safe_output(captured.out)
+
+
+def test_preflight_doctor_failure_stops_before_report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    def failing_doctor() -> dict[str, Any]:
+        report = _doctor_pass_report()
+        report["status"] = "fail"
+        return report
+
+    def forbidden_report(_argv: list[str] | None = None) -> int:
+        raise AssertionError("preflight must not run report")
+
+    monkeypatch.setattr(
+        manual_script.doctor_script,
+        "build_doctor_report",
+        failing_doctor,
+    )
+    monkeypatch.setattr(manual_script.review_script, "main", forbidden_report)
+
+    code = manual_script.main([*_lookback_args(tmp_path), "--preflight-only"])
+
+    assert code == manual_script.EXIT_DOCTOR_FAILED
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["reason_code"] == "doctor_failed"
+    assert parsed["executed_report"] is False
+    _assert_safe_output(captured.out)
+
+
+def test_preflight_unsafe_output_path_stops_before_report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def forbidden_doctor() -> dict[str, Any]:
+        raise AssertionError("unsafe path preflight must not run doctor")
+
+    def forbidden_report(_argv: list[str] | None = None) -> int:
+        raise AssertionError("unsafe path preflight must not run report")
+
+    monkeypatch.setattr(
+        manual_script.doctor_script,
+        "build_doctor_report",
+        forbidden_doctor,
+    )
+    monkeypatch.setattr(manual_script.review_script, "main", forbidden_report)
+
+    code = manual_script.main(
+        [
+            "--preflight-only",
+            "--allow-local-data-readonly",
+            "--lookback-hours",
+            "24",
+            "--output-path",
+            "raw_storage/review.json",
+        ]
+    )
+
+    assert code == manual_script.EXIT_UNSAFE_OUTPUT_PATH
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["reason_code"] == "unsafe_output_path"
+    assert parsed["executed_report"] is False
+    _assert_safe_output(captured.out)
 
 
 def test_manual_runner_without_ack_blocks_before_report(
@@ -192,6 +525,42 @@ def test_manual_runner_runs_doctor_before_delegating_report(
     assert parsed["operator_review_summary"]["semantic_duplicate_claimed"] is False
     _assert_safe_output(captured.out)
     _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
+def test_manual_runner_acknowledged_run_accepts_lookback_hours(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    captured_report_args: list[list[str]] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_report(
+        monkeypatch,
+        calls=calls,
+        decision="not_blocked",
+        exit_code=0,
+        captured_report_args=captured_report_args,
+    )
+
+    code = manual_script.main(_lookback_args(tmp_path))
+
+    assert code == 0
+    assert calls == ["doctor", "report"]
+    assert len(captured_report_args) == 1
+    report_args = captured_report_args[0]
+    assert report_args[report_args.index("--start-at") + 1] == (
+        "2149-01-01T00:00:00+00:00"
+    )
+    assert report_args[report_args.index("--end-at") + 1] == (
+        "2149-01-02T00:00:00+00:00"
+    )
+    assert "--format" in report_args
+    assert report_args[report_args.index("--format") + 1] == "review-json"
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["operator_review_summary"]["decision"] == "not_blocked"
+    _assert_safe_output(captured.out)
 
 
 def test_manual_runner_doctor_failure_stops_before_report(

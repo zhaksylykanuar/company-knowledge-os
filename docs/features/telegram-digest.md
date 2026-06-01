@@ -55,6 +55,8 @@
 - Grouped lifecycle review exit codes and sanitized artifacts: implemented
 - Provider-free grouped lifecycle review operator doctor: implemented
 - Gated manual local grouped lifecycle review runner: implemented
+- Safe grouped lifecycle manual runner window presets and preflight:
+  implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -932,6 +934,22 @@ Implemented today:
   results, scheduler behavior, or automatic delivery. Runner artifacts are
   local review/debug artifacts only, grouping preview remains presentation
   planning, and duplicate-success protection remains the final send-time guard.
+- FOS-102 adds safe bounded window presets and a preflight mode to the manual
+  grouped lifecycle review runner. `--lookback-hours` can resolve UTC
+  `--start-at`/`--end-at` values for local read-only debugging, while
+  `--preflight-only` validates acknowledgement, doctor readiness, output mode,
+  artifact path, and the resolved window without report execution.
+- FOS-102 keeps the runner manual/read-only/debug only. It remains blocked by
+  default unless `--allow-local-data-readonly` is passed, runs the provider-free
+  doctor before acknowledged delegation, requires sanitized `review-json` and a
+  safe artifact path for local-data runs, does not enforce blocking in send
+  paths, does not claim semantic duplication, does not create drafts,
+  approvals, intentions, delivery results, sends, audit rows, or
+  source-of-truth mutations, and does not change renderer behavior, draft body
+  generation, `text_sha256`, API behavior, schema, delivery execution, delivery
+  results, scheduler behavior, or automatic delivery. Artifacts remain local
+  review/debug artifacts only, grouping preview remains presentation planning,
+  and duplicate-success protection remains the final send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
