@@ -54,6 +54,7 @@
 - Grouped lifecycle CLI help and synthetic review smoke mode: implemented
 - Grouped lifecycle review exit codes and sanitized artifacts: implemented
 - Provider-free grouped lifecycle review operator doctor: implemented
+- Gated manual local grouped lifecycle review runner: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -916,6 +917,20 @@ Implemented today:
   and does not change renderer behavior, draft body generation, `text_sha256`,
   API behavior, schema, delivery execution, delivery results, scheduler
   behavior, or automatic delivery. Grouping preview remains presentation
+  planning, and duplicate-success protection remains the final send-time guard.
+- FOS-100 adds a gated manual local grouped lifecycle review runner intended for
+  future human-operated read-only local verification. The runner blocks by
+  default unless `--allow-local-data-readonly` is passed, runs the provider-free
+  doctor before delegation, and only allows sanitized `review-json` plus a safe
+  local artifact path.
+- FOS-100 is manual/read-only/debug tooling, not send-path enforcement. It
+  rejects unsafe output modes and unsafe artifact paths before report
+  delegation, does not claim semantic duplication, does not create drafts,
+  approvals, intentions, delivery results, sends, audit rows, or
+  source-of-truth mutations, and does not change renderer behavior, draft body
+  generation, `text_sha256`, API behavior, schema, delivery execution, delivery
+  results, scheduler behavior, or automatic delivery. Runner artifacts are
+  local review/debug artifacts only, grouping preview remains presentation
   planning, and duplicate-success protection remains the final send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into

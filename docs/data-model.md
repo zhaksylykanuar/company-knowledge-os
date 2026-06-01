@@ -78,6 +78,8 @@
   implemented
 - Provider-free grouped lifecycle review operator doctor:
   implemented
+- Gated manual local grouped lifecycle review runner:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -756,6 +758,22 @@
   claim semantic duplication. Any doctor artifact is a local review/debug
   artifact only, grouping preview remains presentation planning, and
   duplicate-success protection remains the final send-time guard.
+- FOS-100 adds a gated manual local grouped lifecycle review runner. It does not
+  add new storage. The runner blocks by default unless
+  `--allow-local-data-readonly` is passed, runs the provider-free doctor before
+  delegation, forces sanitized `review-json`, requires a safe local artifact
+  path, and rejects unsafe output modes or artifact paths before report
+  execution.
+- FOS-100 appends no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It does not enforce blocking in send paths, does not change renderer
+  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
+  behavior, schema, delivery result writing, delivery execution, scheduler
+  behavior, or automatic delivery, and does not claim semantic duplication.
+  Runner artifacts are local review/debug artifacts only, grouping preview
+  remains presentation planning, and duplicate-success protection remains the
+  final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

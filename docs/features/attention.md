@@ -53,6 +53,7 @@
 - Grouped lifecycle CLI help and synthetic review smoke mode: implemented
 - Grouped lifecycle review exit codes and sanitized artifacts: implemented
 - Provider-free grouped lifecycle review operator doctor: implemented
+- Gated manual local grouped lifecycle review runner: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -891,6 +892,22 @@
   results, scheduler behavior, or automatic delivery. Any doctor artifact is a
   local review/debug artifact only, grouping preview remains presentation
   planning, and duplicate-success protection remains the final send-time guard.
+- FOS-100 adds a gated manual local grouped lifecycle review runner for future
+  human-operated read-only local verification. It blocks by default with
+  `local_data_ack_required` unless the operator passes
+  `--allow-local-data-readonly`.
+- FOS-100 runs the provider-free doctor before any local-data report delegation,
+  forces `review-json`, requires a safe local artifact path, and rejects text,
+  full JSON, raw storage, Obsidian export, repository metadata, config, or
+  secret-like artifact targets before report execution. The runner is
+  manual/read-only/debug tooling only: it does not enforce blocking in send
+  paths, does not claim semantic duplication, does not create drafts,
+  approvals, intentions, delivery results, sends, audit rows, or
+  source-of-truth mutations, and does not change renderer behavior, draft body
+  generation, `text_sha256`, API behavior, schema, delivery execution, delivery
+  results, scheduler behavior, or automatic delivery. Artifacts are local
+  review/debug artifacts only, grouping preview remains presentation planning,
+  and duplicate-success protection remains the final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
