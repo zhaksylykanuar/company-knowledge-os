@@ -49,6 +49,7 @@
   implemented
 - Read-only grouped lifecycle canonical hash guard review: implemented
 - Read-only grouped lifecycle operator decision summary: implemented
+- Sanitized grouped lifecycle report contract tests: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -844,6 +845,18 @@ Implemented today:
   to conservative manual review. Grouping preview remains presentation
   planning, not source-of-truth mutation, and duplicate-success protection
   remains the final send-time guard.
+- FOS-095 adds sanitized contract tests for the grouped lifecycle compatibility
+  report. The tests cover `lifecycle_compatibility`,
+  `canonical_hash_guard_evaluation`, and `operator_review_summary`, and fail if
+  required fields disappear, stable operator decision values change,
+  enforcement becomes true, semantic duplication is claimed, or unsafe output
+  appears.
+- FOS-095 is reporting/review contract hardening only. It does not enforce
+  blocking in send paths, does not change renderer behavior, draft body
+  generation, `text_sha256`, API behavior, schema, delivery execution, or
+  scheduler behavior, and does not claim semantic duplication. Grouping preview
+  remains presentation planning, not source-of-truth mutation, and
+  duplicate-success protection remains the final send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

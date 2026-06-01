@@ -48,6 +48,7 @@
   implemented
 - Read-only grouped lifecycle canonical hash guard review: implemented
 - Read-only grouped lifecycle operator decision summary: implemented
+- Sanitized grouped lifecycle report contract tests: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -818,6 +819,17 @@
   conservative manual review; grouping preview remains presentation planning,
   not a source-of-truth mutation, and duplicate-success protection remains the
   final send-time guard.
+- FOS-095 adds sanitized contract tests for the no-marker grouped lifecycle
+  compatibility report. The tests cover `lifecycle_compatibility`,
+  `canonical_hash_guard_evaluation`, and `operator_review_summary`, locking
+  required review fields, stable operator decision values, `enforced=false`,
+  `semantic_duplicate_claimed=false`, and sanitized JSON/text output behavior.
+- FOS-095 is test-contract hardening only. It does not enforce blocking in send
+  paths, does not change renderer behavior, draft body generation,
+  `text_sha256`, API behavior, schema, delivery execution, or scheduler
+  behavior, and does not claim semantic duplication. Grouping preview remains
+  presentation planning, not a source-of-truth mutation, and duplicate-success
+  protection remains the final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

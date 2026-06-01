@@ -39,6 +39,63 @@ SCRIPT = (
     / "scripts"
     / "report_no_marker_persisted_attention_grouped_lifecycle_compatibility.py"
 )
+OPERATOR_REVIEW_DECISIONS = {
+    "already_sent_by_current_hash",
+    "blocked_by_linked_canonical_hash",
+    "not_blocked",
+    "manual_review_needed",
+}
+GROUPED_VARIANT_TREATMENTS = {
+    "already_sent",
+    "new_unsent_presentation_variant",
+    "no_visible_candidate",
+    "unknown",
+}
+LIFECYCLE_COMPATIBILITY_REQUIRED_FIELDS = {
+    "canonical_candidate_text_sha256",
+    "grouped_preview_text_sha256",
+    "grouped_preview_hash_differs_from_canonical",
+    "canonical_candidate_has_matching_draft_hash",
+    "canonical_matching_hash_has_successful_delivery_result",
+    "canonical_candidate_lifecycle_status",
+    "grouped_hash_matches_existing_draft",
+    "grouped_hash_has_successful_delivery_result",
+    "grouped_variant_would_be_treated_as",
+    "current_hash_guard_would_block_grouped_variant",
+    "current_hash_guard_would_allow_grouped_variant",
+    "presentation_variant_duplicate_send_risk",
+    "requires_guard_extension_before_grouped_send",
+    "grouped_hash_is_presentation_variant_not_delivered_content",
+}
+CANONICAL_HASH_GUARD_REQUIRED_FIELDS = {
+    "status",
+    "available",
+    "current_hash_available",
+    "linked_canonical_hash_available",
+    "canonical_hash_distinct_from_current",
+    "current_hash_has_successful_delivery",
+    "linked_canonical_hash_has_successful_delivery",
+    "blocked_by_canonical_success",
+    "current_duplicate_success_guard_would_block",
+    "canonical_hash_guard_extension_would_block",
+    "blocker_code",
+    "recommended_action",
+    "conservative_reason",
+    "enforced",
+    "semantic_duplicate_claimed",
+    "read_only",
+}
+OPERATOR_REVIEW_SUMMARY_REQUIRED_FIELDS = {
+    "status",
+    "decision",
+    "blocker_code",
+    "recommended_action",
+    "requires_human_review",
+    "reason_codes",
+    "enforced",
+    "semantic_duplicate_claimed",
+    "read_only",
+}
 
 
 def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
@@ -232,6 +289,130 @@ def _assert_operator_summary_is_safe(summary: dict) -> None:
     assert summary["read_only"] is True
 
 
+def _assert_has_required_fields(section: dict, required_fields: set[str]) -> None:
+    missing = required_fields - set(section)
+    assert missing == set()
+
+
+def _assert_optional_string(value: object) -> None:
+    assert value is None or isinstance(value, str)
+
+
+def _assert_grouped_lifecycle_report_contract(report: dict) -> None:
+    assert report["status"] == "no_marker_grouped_lifecycle_compatibility"
+    assert report["marker_filter"] == "no_marker_only"
+    assert report["group_by"] == "source_object"
+    assert report["no_marker_not_production_truth"] is True
+
+    lifecycle_compatibility = report["lifecycle_compatibility"]
+    canonical_hash_guard_evaluation = report["canonical_hash_guard_evaluation"]
+    operator_review_summary = report["operator_review_summary"]
+    safety = report["safety"]
+
+    assert isinstance(lifecycle_compatibility, dict)
+    assert isinstance(canonical_hash_guard_evaluation, dict)
+    assert isinstance(operator_review_summary, dict)
+    assert isinstance(safety, dict)
+
+    _assert_has_required_fields(
+        lifecycle_compatibility,
+        LIFECYCLE_COMPATIBILITY_REQUIRED_FIELDS,
+    )
+    assert lifecycle_compatibility["grouped_variant_would_be_treated_as"] in (
+        GROUPED_VARIANT_TREATMENTS
+    )
+    assert isinstance(
+        lifecycle_compatibility["grouped_preview_hash_differs_from_canonical"],
+        bool,
+    )
+    assert isinstance(
+        lifecycle_compatibility[
+            "canonical_matching_hash_has_successful_delivery_result"
+        ],
+        bool,
+    )
+    assert isinstance(
+        lifecycle_compatibility["grouped_hash_has_successful_delivery_result"],
+        bool,
+    )
+    assert isinstance(
+        lifecycle_compatibility["current_hash_guard_would_block_grouped_variant"],
+        bool,
+    )
+    assert isinstance(
+        lifecycle_compatibility["current_hash_guard_would_allow_grouped_variant"],
+        bool,
+    )
+    assert isinstance(
+        lifecycle_compatibility["presentation_variant_duplicate_send_risk"],
+        bool,
+    )
+    assert isinstance(
+        lifecycle_compatibility["requires_guard_extension_before_grouped_send"],
+        bool,
+    )
+    assert (
+        lifecycle_compatibility[
+            "grouped_hash_is_presentation_variant_not_delivered_content"
+        ]
+        is True
+    )
+
+    _assert_has_required_fields(
+        canonical_hash_guard_evaluation,
+        CANONICAL_HASH_GUARD_REQUIRED_FIELDS,
+    )
+    assert canonical_hash_guard_evaluation["status"] == (
+        "presentation_variant_duplicate_guard_evaluation"
+    )
+    for key in (
+        "available",
+        "current_hash_available",
+        "linked_canonical_hash_available",
+        "canonical_hash_distinct_from_current",
+        "current_hash_has_successful_delivery",
+        "linked_canonical_hash_has_successful_delivery",
+        "blocked_by_canonical_success",
+        "current_duplicate_success_guard_would_block",
+        "canonical_hash_guard_extension_would_block",
+    ):
+        assert isinstance(canonical_hash_guard_evaluation[key], bool)
+    _assert_optional_string(canonical_hash_guard_evaluation["blocker_code"])
+    _assert_optional_string(canonical_hash_guard_evaluation["recommended_action"])
+    _assert_optional_string(canonical_hash_guard_evaluation["conservative_reason"])
+    assert canonical_hash_guard_evaluation["enforced"] is False
+    assert canonical_hash_guard_evaluation["semantic_duplicate_claimed"] is False
+    assert canonical_hash_guard_evaluation["read_only"] is True
+
+    _assert_has_required_fields(
+        operator_review_summary,
+        OPERATOR_REVIEW_SUMMARY_REQUIRED_FIELDS,
+    )
+    assert operator_review_summary["decision"] in OPERATOR_REVIEW_DECISIONS
+    _assert_optional_string(operator_review_summary["blocker_code"])
+    assert isinstance(operator_review_summary["recommended_action"], str)
+    assert operator_review_summary["recommended_action"]
+    assert isinstance(operator_review_summary["requires_human_review"], bool)
+    assert isinstance(operator_review_summary["reason_codes"], list)
+    assert operator_review_summary["reason_codes"]
+    assert all(
+        isinstance(reason_code, str) and reason_code
+        for reason_code in operator_review_summary["reason_codes"]
+    )
+    _assert_operator_summary_is_safe(operator_review_summary)
+
+    assert safety["read_only"] is True
+    assert safety["db_write_scope"] == "none"
+    assert safety["canonical_hash_guard_enforced"] is False
+    assert safety["operator_review_summary_enforced"] is False
+    assert safety["semantic_duplicate_claimed"] is False
+    assert safety["telegram_invoked"] is False
+    assert safety["scheduler_invoked"] is False
+
+    _assert_safe_output(_serialized(report))
+    _assert_safe_output(compat_script.format_text_report(report))
+
+
 def test_missing_required_args_fail_safely() -> None:
     missing_start = _run_script("--end-at", "2149-01-02T00:00:00+00:00")
     missing_end = _run_script("--start-at", "2149-01-01T00:00:00+00:00")
@@ -358,6 +539,7 @@ async def test_empty_window_reports_no_visible_candidate() -> None:
     assert report["safety"]["read_only"] is True
     assert report["safety"]["db_write_scope"] == "none"
     assert await _audit_log_count() == before_audit
+    _assert_grouped_lifecycle_report_contract(report)
     _assert_safe_output(_serialized(report))
     _assert_safe_output(compat_script.format_text_report(report))
 
@@ -434,6 +616,7 @@ async def test_already_sent_canonical_flags_presentation_variant_risk() -> None:
         ]
         # report did not write anything
         assert await _audit_log_count() == before_audit
+        _assert_grouped_lifecycle_report_contract(report)
         _assert_safe_output(_serialized(report))
         _assert_safe_output(compat_script.format_text_report(report))
     finally:
@@ -474,6 +657,7 @@ async def test_unsent_canonical_has_no_presentation_variant_risk() -> None:
         )
         assert "explicit_canonical_presentation_hash_link" in summary["reason_codes"]
         _assert_operator_summary_is_safe(summary)
+        _assert_grouped_lifecycle_report_contract(report)
         _assert_safe_output(_serialized(report))
     finally:
         await _cleanup(unique)
@@ -522,6 +706,7 @@ async def test_grouped_hash_matching_successful_delivery_is_already_sent(
             in summary["reason_codes"]
         )
         _assert_operator_summary_is_safe(summary)
+        _assert_grouped_lifecycle_report_contract(report)
         _assert_safe_output(_serialized(report))
     finally:
         await _cleanup(unique)
@@ -589,6 +774,7 @@ async def test_current_grouped_hash_success_takes_precedence_in_guard_evaluation
         ]
         _assert_operator_summary_is_safe(summary)
         assert await _audit_log_count() == before_audit
+        _assert_grouped_lifecycle_report_contract(report)
         _assert_safe_output(_serialized(report))
         _assert_safe_output(compat_script.format_text_report(report))
     finally:
@@ -631,6 +817,7 @@ async def test_missing_canonical_hash_is_conservative_in_guard_evaluation(
     assert summary["requires_human_review"] is True
     assert "missing_linked_canonical_hash" in summary["reason_codes"]
     _assert_operator_summary_is_safe(summary)
+    _assert_grouped_lifecycle_report_contract(report)
     _assert_safe_output(_serialized(report))
     _assert_safe_output(compat_script.format_text_report(report))
 
@@ -672,6 +859,7 @@ async def test_equal_canonical_and_grouped_hash_is_not_variant_claim(
     assert summary["requires_human_review"] is True
     assert "canonical_hash_matches_current_hash" in summary["reason_codes"]
     _assert_operator_summary_is_safe(summary)
+    _assert_grouped_lifecycle_report_contract(report)
     _assert_safe_output(_serialized(report))
 
 
@@ -708,6 +896,7 @@ async def test_invalid_grouped_hash_is_conservative_in_guard_evaluation(
     assert summary["requires_human_review"] is True
     assert "invalid_explicit_hash_link" in summary["reason_codes"]
     _assert_operator_summary_is_safe(summary)
+    _assert_grouped_lifecycle_report_contract(report)
     _assert_safe_output(_serialized(report))
 
 
@@ -751,6 +940,7 @@ async def test_hashes_returned_without_rendering_text() -> None:
             is False
         )
         _assert_operator_summary_is_safe(report["operator_review_summary"])
+        _assert_grouped_lifecycle_report_contract(report)
         _assert_safe_output(serialized)
         _assert_safe_output(compat_script.format_text_report(report))
     finally:
@@ -800,6 +990,7 @@ async def test_report_stays_read_only_with_test_session_factory(
         )
 
         assert report["safety"]["db_write_scope"] == "none"
+        _assert_grouped_lifecycle_report_contract(report)
         _assert_safe_output(_serialized(report))
     finally:
         await _cleanup(unique)
@@ -821,4 +1012,5 @@ def test_json_output_is_stable_and_sanitized() -> None:
     assert parsed["safety"]["read_only"] is True
     assert parsed["operator_review_summary"]["enforced"] is False
     assert parsed["operator_review_summary"]["semantic_duplicate_claimed"] is False
+    _assert_grouped_lifecycle_report_contract(parsed)
     _assert_safe_output(result.stdout)
