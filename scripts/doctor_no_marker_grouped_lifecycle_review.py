@@ -41,6 +41,7 @@ REQUIRED_REVIEW_SECTIONS = frozenset(
         "lifecycle_compatibility",
         "canonical_hash_guard_evaluation",
         "operator_review_summary",
+        "manual_review_diagnostics",
     }
 )
 REQUIRED_LIFECYCLE_FIELDS = frozenset(
@@ -75,6 +76,27 @@ REQUIRED_OPERATOR_SUMMARY_FIELDS = frozenset(
         "enforced",
         "semantic_duplicate_claimed",
         "read_only",
+    }
+)
+REQUIRED_MANUAL_REVIEW_DIAGNOSTICS_FIELDS = frozenset(
+    {
+        "diagnostic_version",
+        "diagnostic_status",
+        "presentation_hash_present",
+        "canonical_hash_present",
+        "canonical_hash_distinct_from_presentation",
+        "explicit_canonical_link_available",
+        "current_hash_success_signal_present",
+        "canonical_hash_success_signal_present",
+        "resolved_window_present",
+        "lifecycle_signals_sufficient",
+        "requires_human_review",
+        "reason_codes",
+        "safe_next_step",
+        "recommended_operator_action",
+        "read_only",
+        "enforced",
+        "semantic_duplicate_claimed",
     }
 )
 UNSAFE_OUTPUT_PATTERNS = (
@@ -180,6 +202,7 @@ def _assert_review_contract(report: Mapping[str, Any]) -> None:
     lifecycle = _mapping(report.get("lifecycle_compatibility"))
     guard = _mapping(report.get("canonical_hash_guard_evaluation"))
     summary = _mapping(report.get("operator_review_summary"))
+    diagnostics = _mapping(report.get("manual_review_diagnostics"))
     _assert_required_fields(
         lifecycle,
         REQUIRED_LIFECYCLE_FIELDS,
@@ -195,16 +218,37 @@ def _assert_review_contract(report: Mapping[str, Any]) -> None:
         REQUIRED_OPERATOR_SUMMARY_FIELDS,
         reason_code="missing_operator_summary_field",
     )
+    _assert_required_fields(
+        diagnostics,
+        REQUIRED_MANUAL_REVIEW_DIAGNOSTICS_FIELDS,
+        reason_code="missing_manual_review_diagnostics_field",
+    )
     if summary.get("decision") not in SAFE_DECISIONS:
         raise DoctorCheckError("unknown_operator_decision")
-    if guard.get("enforced") is not False or summary.get("enforced") is not False:
+    if diagnostics.get("diagnostic_status") not in SAFE_DECISIONS:
+        raise DoctorCheckError("unknown_diagnostic_status")
+    if (
+        diagnostics.get("safe_next_step")
+        not in review_script.MANUAL_REVIEW_SAFE_NEXT_STEPS
+    ):
+        raise DoctorCheckError("unknown_diagnostic_next_step")
+    if (
+        guard.get("enforced") is not False
+        or summary.get("enforced") is not False
+        or diagnostics.get("enforced") is not False
+    ):
         raise DoctorCheckError("enforcement_not_false")
     if (
         guard.get("semantic_duplicate_claimed") is not False
         or summary.get("semantic_duplicate_claimed") is not False
+        or diagnostics.get("semantic_duplicate_claimed") is not False
     ):
         raise DoctorCheckError("semantic_duplicate_claimed")
-    if guard.get("read_only") is not True or summary.get("read_only") is not True:
+    if (
+        guard.get("read_only") is not True
+        or summary.get("read_only") is not True
+        or diagnostics.get("read_only") is not True
+    ):
         raise DoctorCheckError("read_only_not_true")
     _assert_sanitized(report)
 

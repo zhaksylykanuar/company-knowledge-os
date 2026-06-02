@@ -96,6 +96,33 @@ OPERATOR_REVIEW_SUMMARY_REQUIRED_FIELDS = {
     "semantic_duplicate_claimed",
     "read_only",
 }
+MANUAL_REVIEW_DIAGNOSTICS_REQUIRED_FIELDS = {
+    "diagnostic_version",
+    "diagnostic_status",
+    "presentation_hash_present",
+    "canonical_hash_present",
+    "canonical_hash_distinct_from_presentation",
+    "explicit_canonical_link_available",
+    "current_hash_success_signal_present",
+    "canonical_hash_success_signal_present",
+    "resolved_window_present",
+    "lifecycle_signals_sufficient",
+    "requires_human_review",
+    "reason_codes",
+    "safe_next_step",
+    "recommended_operator_action",
+    "read_only",
+    "enforced",
+    "semantic_duplicate_claimed",
+}
+MANUAL_REVIEW_DIAGNOSTIC_NEXT_STEPS = {
+    "inspect_review_artifact",
+    "repeat_with_bounded_window",
+    "verify_canonical_linkage",
+    "verify_lifecycle_metadata",
+    "no_action_required",
+    "keep_manual_review",
+}
 
 
 def _run_script(*args: str) -> subprocess.CompletedProcess[str]:
@@ -307,11 +334,13 @@ def _assert_grouped_lifecycle_report_contract(report: dict) -> None:
     lifecycle_compatibility = report["lifecycle_compatibility"]
     canonical_hash_guard_evaluation = report["canonical_hash_guard_evaluation"]
     operator_review_summary = report["operator_review_summary"]
+    manual_review_diagnostics = report["manual_review_diagnostics"]
     safety = report["safety"]
 
     assert isinstance(lifecycle_compatibility, dict)
     assert isinstance(canonical_hash_guard_evaluation, dict)
     assert isinstance(operator_review_summary, dict)
+    assert isinstance(manual_review_diagnostics, dict)
     assert isinstance(safety, dict)
 
     _assert_has_required_fields(
@@ -401,10 +430,54 @@ def _assert_grouped_lifecycle_report_contract(report: dict) -> None:
     )
     _assert_operator_summary_is_safe(operator_review_summary)
 
+    _assert_has_required_fields(
+        manual_review_diagnostics,
+        MANUAL_REVIEW_DIAGNOSTICS_REQUIRED_FIELDS,
+    )
+    assert manual_review_diagnostics["diagnostic_version"] == (
+        compat_script.MANUAL_REVIEW_DIAGNOSTIC_VERSION
+    )
+    assert manual_review_diagnostics["diagnostic_status"] in OPERATOR_REVIEW_DECISIONS
+    for key in (
+        "presentation_hash_present",
+        "canonical_hash_present",
+        "canonical_hash_distinct_from_presentation",
+        "explicit_canonical_link_available",
+        "current_hash_success_signal_present",
+        "canonical_hash_success_signal_present",
+        "resolved_window_present",
+        "lifecycle_signals_sufficient",
+        "requires_human_review",
+    ):
+        assert isinstance(manual_review_diagnostics[key], bool)
+    assert isinstance(manual_review_diagnostics["reason_codes"], list)
+    assert manual_review_diagnostics["reason_codes"]
+    assert all(
+        isinstance(reason_code, str) and reason_code
+        for reason_code in manual_review_diagnostics["reason_codes"]
+    )
+    assert (
+        manual_review_diagnostics["safe_next_step"]
+        in MANUAL_REVIEW_DIAGNOSTIC_NEXT_STEPS
+    )
+    assert (
+        manual_review_diagnostics["recommended_operator_action"]
+        in MANUAL_REVIEW_DIAGNOSTIC_NEXT_STEPS
+    )
+    assert manual_review_diagnostics["read_only"] is True
+    assert manual_review_diagnostics["enforced"] is False
+    assert manual_review_diagnostics["semantic_duplicate_claimed"] is False
+    assert (
+        manual_review_diagnostics["requires_human_review"]
+        == operator_review_summary["requires_human_review"]
+    )
+
     assert safety["read_only"] is True
     assert safety["db_write_scope"] == "none"
     assert safety["canonical_hash_guard_enforced"] is False
     assert safety["operator_review_summary_enforced"] is False
+    assert safety["manual_review_diagnostics_included"] is True
+    assert safety["manual_review_diagnostics_enforced"] is False
     assert safety["semantic_duplicate_claimed"] is False
     assert safety["telegram_invoked"] is False
     assert safety["scheduler_invoked"] is False
@@ -1150,6 +1223,104 @@ def test_review_json_output_is_decision_only_and_sanitized() -> None:
     assert "grouped_preview_text" not in serialized_without_safe_hash_field_names
     _assert_grouped_lifecycle_report_contract(parsed)
     _assert_safe_output(result.stdout)
+
+
+def test_manual_review_needed_review_json_includes_sanitized_diagnostics() -> None:
+    report = _synthetic_review_report_for_decision("manual_review_needed")
+
+    diagnostics = report["manual_review_diagnostics"]
+
+    assert diagnostics["diagnostic_status"] == "manual_review_needed"
+    assert diagnostics["requires_human_review"] is True
+    assert diagnostics["read_only"] is True
+    assert diagnostics["enforced"] is False
+    assert diagnostics["semantic_duplicate_claimed"] is False
+    assert "manual_review_needed" in diagnostics["reason_codes"]
+    assert "missing_canonical_hash" in diagnostics["reason_codes"]
+    assert diagnostics["safe_next_step"] == "verify_canonical_linkage"
+    _assert_grouped_lifecycle_report_contract(report)
+    _assert_safe_output(_serialized(report))
+
+
+def test_missing_canonical_hash_diagnostics_stay_conservative() -> None:
+    report = _synthetic_review_report_for_decision("manual_review_needed")
+    diagnostics = report["manual_review_diagnostics"]
+
+    assert diagnostics["canonical_hash_present"] is False
+    assert diagnostics["explicit_canonical_link_available"] is False
+    assert diagnostics["canonical_hash_success_signal_present"] is False
+    assert "missing_canonical_hash" in diagnostics["reason_codes"]
+    assert diagnostics["semantic_duplicate_claimed"] is False
+    assert report["operator_review_summary"]["decision"] == "manual_review_needed"
+    _assert_grouped_lifecycle_report_contract(report)
+
+
+def test_equal_canonical_hash_diagnostics_do_not_claim_variant_duplicate() -> None:
+    same_hash = "6" * 64
+
+    report = compat_script._synthetic_review_scenario(
+        scenario_name="manual_review_equal_hashes",
+        current_hash=same_hash,
+        canonical_hash=same_hash,
+        current_hash_has_successful_delivery=False,
+        linked_canonical_hash_has_successful_delivery=False,
+        guard_evaluation=compat_script._conservative_canonical_hash_guard_evaluation(
+            reason="canonical_hash_matches_current_hash",
+            current_hash=same_hash,
+            canonical_hash=same_hash,
+        ),
+    )
+
+    diagnostics = report["manual_review_diagnostics"]
+    assert diagnostics["canonical_hash_present"] is True
+    assert diagnostics["canonical_hash_distinct_from_presentation"] is False
+    assert diagnostics["explicit_canonical_link_available"] is False
+    assert "canonical_hash_not_distinct" in diagnostics["reason_codes"]
+    assert diagnostics["safe_next_step"] == "verify_canonical_linkage"
+    assert diagnostics["semantic_duplicate_claimed"] is False
+    assert report["canonical_hash_guard_evaluation"]["blocked_by_canonical_success"] is False
+    _assert_grouped_lifecycle_report_contract(report)
+    _assert_safe_output(_serialized(report))
+
+
+def test_not_blocked_diagnostics_do_not_require_human_review() -> None:
+    report = _synthetic_review_report_for_decision("not_blocked")
+    diagnostics = report["manual_review_diagnostics"]
+
+    assert diagnostics["diagnostic_status"] == "not_blocked"
+    assert diagnostics["requires_human_review"] is False
+    assert diagnostics["lifecycle_signals_sufficient"] is True
+    assert "not_blocked_by_available_signals" in diagnostics["reason_codes"]
+    assert diagnostics["safe_next_step"] == "no_action_required"
+    assert diagnostics["semantic_duplicate_claimed"] is False
+    _assert_grouped_lifecycle_report_contract(report)
+
+
+def test_already_sent_diagnostics_preserve_current_hash_precedence() -> None:
+    report = _synthetic_review_report_for_decision("already_sent_by_current_hash")
+    diagnostics = report["manual_review_diagnostics"]
+
+    assert diagnostics["diagnostic_status"] == "already_sent_by_current_hash"
+    assert diagnostics["current_hash_success_signal_present"] is True
+    assert "current_hash_already_sent" in diagnostics["reason_codes"]
+    assert "linked_canonical_hash_already_sent" not in diagnostics["reason_codes"]
+    assert diagnostics["safe_next_step"] == "no_action_required"
+    assert diagnostics["semantic_duplicate_claimed"] is False
+    _assert_grouped_lifecycle_report_contract(report)
+
+
+def test_linked_canonical_blocker_diagnostics_are_explicit_and_safe() -> None:
+    report = _synthetic_review_report_for_decision(
+        "blocked_by_linked_canonical_hash"
+    )
+    diagnostics = report["manual_review_diagnostics"]
+
+    assert diagnostics["diagnostic_status"] == "blocked_by_linked_canonical_hash"
+    assert diagnostics["explicit_canonical_link_available"] is True
+    assert diagnostics["canonical_hash_success_signal_present"] is True
+    assert "linked_canonical_hash_already_sent" in diagnostics["reason_codes"]
+    assert diagnostics["semantic_duplicate_claimed"] is False
+    _assert_grouped_lifecycle_report_contract(report)
 
 
 def test_review_exit_code_flag_defaults_to_zero_when_absent(

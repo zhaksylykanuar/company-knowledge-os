@@ -523,6 +523,12 @@ def test_manual_runner_runs_doctor_before_delegating_report(
     assert parsed["operator_review_summary"]["decision"] == "not_blocked"
     assert parsed["operator_review_summary"]["enforced"] is False
     assert parsed["operator_review_summary"]["semantic_duplicate_claimed"] is False
+    assert parsed["manual_review_diagnostics"]["diagnostic_status"] == "not_blocked"
+    assert parsed["manual_review_diagnostics"]["enforced"] is False
+    assert (
+        parsed["manual_review_diagnostics"]["semantic_duplicate_claimed"]
+        is False
+    )
     _assert_safe_output(captured.out)
     _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
 
@@ -748,3 +754,37 @@ def test_manual_runner_maps_delegated_decision_exit_codes(
     parsed = json.loads(captured.out)
     assert parsed["operator_review_summary"]["decision"] == decision
     _assert_safe_output(captured.out)
+
+
+def test_manual_runner_artifact_includes_sanitized_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_report(
+        monkeypatch,
+        calls=calls,
+        decision="manual_review_needed",
+        exit_code=30,
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == 30
+    captured = capsys.readouterr()
+    stdout_payload = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert stdout_payload == artifact_payload
+    diagnostics = artifact_payload["manual_review_diagnostics"]
+    assert diagnostics["diagnostic_status"] == "manual_review_needed"
+    assert diagnostics["requires_human_review"] is True
+    assert diagnostics["read_only"] is True
+    assert diagnostics["enforced"] is False
+    assert diagnostics["semantic_duplicate_claimed"] is False
+    assert "manual_review_needed" in diagnostics["reason_codes"]
+    assert diagnostics["safe_next_step"] == "verify_canonical_linkage"
+    _assert_safe_output(captured.out)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))

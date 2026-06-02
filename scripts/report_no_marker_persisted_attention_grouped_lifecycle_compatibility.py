@@ -51,6 +51,17 @@ REVIEW_DECISION_EXIT_CODES = {
     "blocked_by_linked_canonical_hash": 20,
     "manual_review_needed": 30,
 }
+MANUAL_REVIEW_DIAGNOSTIC_VERSION = (
+    "grouped_lifecycle_manual_review_diagnostics.v1"
+)
+MANUAL_REVIEW_SAFE_NEXT_STEPS = {
+    "inspect_review_artifact",
+    "repeat_with_bounded_window",
+    "verify_canonical_linkage",
+    "verify_lifecycle_metadata",
+    "no_action_required",
+    "keep_manual_review",
+}
 UNSAFE_ARTIFACT_PATH_PARTS = {
     "..",
     ".config",
@@ -270,6 +281,14 @@ def _sequence(value: Any) -> Sequence[Any]:
     if isinstance(value, Sequence) and not isinstance(value, str):
         return value
     return []
+
+
+def _truthy_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _dedupe_reason_codes(reason_codes: Sequence[str]) -> list[str]:
+    return list(dict.fromkeys(reason_codes))
 
 
 def _review_exit_code_for_decision(decision: Any) -> int:
@@ -533,6 +552,8 @@ def _safety_metadata() -> dict[str, Any]:
     safety["canonical_hash_guard_enforced"] = False
     safety["operator_review_summary_included"] = True
     safety["operator_review_summary_enforced"] = False
+    safety["manual_review_diagnostics_included"] = True
+    safety["manual_review_diagnostics_enforced"] = False
     safety["semantic_duplicate_claimed"] = False
     return safety
 
@@ -693,6 +714,136 @@ def _operator_review_summary(
         "enforced": False,
         "semantic_duplicate_claimed": False,
         "read_only": True,
+    }
+
+
+def build_manual_review_diagnostics(
+    *,
+    lifecycle_compatibility: Mapping[str, Any],
+    canonical_hash_guard_evaluation: Mapping[str, Any],
+    operator_review_summary: Mapping[str, Any],
+    resolved_window: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build safe decision diagnostics without exposing raw review content."""
+
+    decision = operator_review_summary.get("decision")
+    presentation_hash_present = (
+        canonical_hash_guard_evaluation.get("current_hash_available") is True
+        or _truthy_string(lifecycle_compatibility.get("grouped_preview_text_sha256"))
+    )
+    canonical_hash_present = (
+        canonical_hash_guard_evaluation.get("linked_canonical_hash_available") is True
+        or _truthy_string(lifecycle_compatibility.get("canonical_candidate_text_sha256"))
+    )
+    canonical_hash_distinct_from_presentation = (
+        canonical_hash_guard_evaluation.get("canonical_hash_distinct_from_current")
+        is True
+        or lifecycle_compatibility.get("grouped_preview_hash_differs_from_canonical")
+        is True
+    )
+    explicit_canonical_link_available = (
+        presentation_hash_present
+        and canonical_hash_present
+        and canonical_hash_distinct_from_presentation
+    )
+    current_hash_success_signal_present = (
+        canonical_hash_guard_evaluation.get("current_hash_has_successful_delivery")
+        is True
+        or lifecycle_compatibility.get("grouped_hash_has_successful_delivery_result")
+        is True
+    )
+    canonical_hash_success_signal_present = (
+        canonical_hash_guard_evaluation.get(
+            "linked_canonical_hash_has_successful_delivery"
+        )
+        is True
+        or lifecycle_compatibility.get(
+            "canonical_matching_hash_has_successful_delivery_result"
+        )
+        is True
+    )
+    window = _mapping(resolved_window)
+    resolved_window_present = _truthy_string(window.get("start_at")) and _truthy_string(
+        window.get("end_at")
+    )
+    requires_human_review = (
+        operator_review_summary.get("requires_human_review") is True
+        or decision == "manual_review_needed"
+    )
+    lifecycle_signals_sufficient = not requires_human_review
+
+    reason_codes: list[str] = []
+    if decision == "manual_review_needed":
+        reason_codes.append("manual_review_needed")
+    if not presentation_hash_present:
+        reason_codes.append("missing_presentation_hash")
+    if not canonical_hash_present:
+        reason_codes.append("missing_canonical_hash")
+    if (
+        presentation_hash_present
+        and canonical_hash_present
+        and not canonical_hash_distinct_from_presentation
+    ):
+        reason_codes.append("canonical_hash_not_distinct")
+    if not resolved_window_present:
+        reason_codes.append("missing_or_unresolved_window")
+    if decision == "already_sent_by_current_hash":
+        reason_codes.append("current_hash_already_sent")
+    elif decision == "blocked_by_linked_canonical_hash":
+        reason_codes.append("linked_canonical_hash_already_sent")
+    elif decision == "not_blocked":
+        reason_codes.append("not_blocked_by_available_signals")
+    elif (
+        decision == "manual_review_needed"
+        and not current_hash_success_signal_present
+        and not canonical_hash_success_signal_present
+    ):
+        reason_codes.append("no_successful_delivery_signal")
+    if decision == "manual_review_needed" and len(reason_codes) <= 1:
+        reason_codes.append("ambiguous_lifecycle_signal")
+
+    if decision in {
+        "already_sent_by_current_hash",
+        "blocked_by_linked_canonical_hash",
+        "not_blocked",
+    }:
+        safe_next_step = "no_action_required"
+    elif not resolved_window_present:
+        safe_next_step = "repeat_with_bounded_window"
+    elif not explicit_canonical_link_available:
+        safe_next_step = "verify_canonical_linkage"
+    elif not lifecycle_signals_sufficient:
+        safe_next_step = "verify_lifecycle_metadata"
+    else:
+        safe_next_step = "keep_manual_review"
+
+    if safe_next_step not in MANUAL_REVIEW_SAFE_NEXT_STEPS:
+        safe_next_step = "keep_manual_review"
+
+    return {
+        "diagnostic_version": MANUAL_REVIEW_DIAGNOSTIC_VERSION,
+        "diagnostic_status": (
+            decision if isinstance(decision, str) else "manual_review_needed"
+        ),
+        "presentation_hash_present": presentation_hash_present,
+        "canonical_hash_present": canonical_hash_present,
+        "canonical_hash_distinct_from_presentation": (
+            canonical_hash_distinct_from_presentation
+        ),
+        "explicit_canonical_link_available": explicit_canonical_link_available,
+        "current_hash_success_signal_present": current_hash_success_signal_present,
+        "canonical_hash_success_signal_present": (
+            canonical_hash_success_signal_present
+        ),
+        "resolved_window_present": resolved_window_present,
+        "lifecycle_signals_sufficient": lifecycle_signals_sufficient,
+        "requires_human_review": requires_human_review,
+        "reason_codes": _dedupe_reason_codes(reason_codes),
+        "safe_next_step": safe_next_step,
+        "recommended_operator_action": safe_next_step,
+        "read_only": True,
+        "enforced": False,
+        "semantic_duplicate_claimed": False,
     }
 
 
@@ -869,6 +1020,15 @@ async def build_no_marker_grouped_lifecycle_compatibility_report(
         compatibility=compatibility,
         canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
     )
+    manual_review_diagnostics = build_manual_review_diagnostics(
+        lifecycle_compatibility=compatibility,
+        canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
+        operator_review_summary=operator_review_summary,
+        resolved_window={
+            "start_at": query.start_at.isoformat(),
+            "end_at": query.end_at.isoformat(),
+        },
+    )
 
     return {
         "status": "no_marker_grouped_lifecycle_compatibility",
@@ -895,6 +1055,7 @@ async def build_no_marker_grouped_lifecycle_compatibility_report(
         "lifecycle_compatibility": compatibility,
         "canonical_hash_guard_evaluation": canonical_hash_guard_evaluation,
         "operator_review_summary": operator_review_summary,
+        "manual_review_diagnostics": manual_review_diagnostics,
         "duplicate_quality": dict(duplicate_quality),
         "recommended_next_action": _recommended_next_action(
             visible_count=visible_count,
@@ -917,6 +1078,25 @@ def _print_json(value: Mapping[str, Any]) -> None:
 def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
     """Return only the sanitized decision/review surface for operator review."""
 
+    lifecycle_compatibility = dict(_mapping(report.get("lifecycle_compatibility")))
+    canonical_hash_guard_evaluation = dict(
+        _mapping(report.get("canonical_hash_guard_evaluation"))
+    )
+    operator_review_summary = dict(_mapping(report.get("operator_review_summary")))
+    manual_review_diagnostics = dict(
+        _mapping(report.get("manual_review_diagnostics"))
+    )
+    if not manual_review_diagnostics:
+        manual_review_diagnostics = build_manual_review_diagnostics(
+            lifecycle_compatibility=lifecycle_compatibility,
+            canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
+            operator_review_summary=operator_review_summary,
+            resolved_window={
+                "start_at": report.get("start_at"),
+                "end_at": report.get("end_at"),
+            },
+        )
+
     return {
         "status": report.get("status"),
         "start_at": report.get("start_at"),
@@ -931,15 +1111,10 @@ def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
         "no_marker_not_production_truth": (
             report.get("no_marker_not_production_truth") is True
         ),
-        "lifecycle_compatibility": dict(
-            _mapping(report.get("lifecycle_compatibility"))
-        ),
-        "canonical_hash_guard_evaluation": dict(
-            _mapping(report.get("canonical_hash_guard_evaluation"))
-        ),
-        "operator_review_summary": dict(
-            _mapping(report.get("operator_review_summary"))
-        ),
+        "lifecycle_compatibility": lifecycle_compatibility,
+        "canonical_hash_guard_evaluation": canonical_hash_guard_evaluation,
+        "operator_review_summary": operator_review_summary,
+        "manual_review_diagnostics": manual_review_diagnostics,
         "safety": dict(_mapping(report.get("safety"))),
     }
 
@@ -1027,6 +1202,15 @@ def _synthetic_review_scenario(
         compatibility=compatibility,
         canonical_hash_guard_evaluation=guard_evaluation,
     )
+    manual_review_diagnostics = build_manual_review_diagnostics(
+        lifecycle_compatibility=compatibility,
+        canonical_hash_guard_evaluation=guard_evaluation,
+        operator_review_summary=operator_review_summary,
+        resolved_window={
+            "start_at": "2149-01-01T00:00:00+00:00",
+            "end_at": "2149-01-02T00:00:00+00:00",
+        },
+    )
     report = {
         "status": "no_marker_grouped_lifecycle_compatibility",
         "start_at": "2149-01-01T00:00:00+00:00",
@@ -1042,6 +1226,7 @@ def _synthetic_review_scenario(
         "lifecycle_compatibility": compatibility,
         "canonical_hash_guard_evaluation": dict(guard_evaluation),
         "operator_review_summary": operator_review_summary,
+        "manual_review_diagnostics": manual_review_diagnostics,
         "safety": _safety_metadata(),
     }
     scenario = format_review_json_report(report)

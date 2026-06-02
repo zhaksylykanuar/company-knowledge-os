@@ -82,6 +82,8 @@
   implemented
 - Safe grouped lifecycle manual runner window presets and preflight:
   implemented
+- Sanitized grouped lifecycle manual-review diagnostics:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -792,6 +794,21 @@
   Runner artifacts are local review/debug artifacts only, grouping preview
   remains presentation planning, and duplicate-success protection remains the
   final send-time guard.
+- FOS-104 adds sanitized manual-review diagnostics to grouped lifecycle review
+  output. The diagnostics are derived from already sanitized lifecycle
+  compatibility, canonical-hash guard evaluation, operator review summary, and
+  resolved window metadata. They expose booleans, stable reason codes, and safe
+  next-step/action codes only; they add no source events, normalized activity
+  rows, attention results, audit logs, draft rows, approval/decision rows,
+  intention rows, result rows, Telegram plan/preflight/gate rows, scheduler
+  jobs, outbox rows, migrations, or tables.
+- FOS-104 diagnostics are read-only reporting/debug metadata only. They do not
+  enforce blocking in send paths, do not claim semantic duplication, do not
+  change renderer grouping, digest read-model grouping, delivery draft text,
+  `text_sha256`, API behavior, schema, delivery result writing, delivery
+  execution, scheduler behavior, or automatic delivery. Runner artifacts remain
+  local review/debug artifacts only, grouping preview remains presentation
+  planning, and duplicate-success protection remains the final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

@@ -57,6 +57,7 @@
 - Gated manual local grouped lifecycle review runner: implemented
 - Safe grouped lifecycle manual runner window presets and preflight:
   implemented
+- Sanitized grouped lifecycle manual-review diagnostics: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -946,6 +947,19 @@ Implemented today:
   paths, does not claim semantic duplication, does not create drafts,
   approvals, intentions, delivery results, sends, audit rows, or
   source-of-truth mutations, and does not change renderer behavior, draft body
+  generation, `text_sha256`, API behavior, schema, delivery execution, delivery
+  results, scheduler behavior, or automatic delivery. Artifacts remain local
+  review/debug artifacts only, grouping preview remains presentation planning,
+  and duplicate-success protection remains the final send-time guard.
+- FOS-104 adds sanitized manual-review diagnostics to grouped lifecycle review
+  output. The diagnostics are derived from sanitized lifecycle compatibility,
+  canonical-hash guard evaluation, operator review summary, and resolved window
+  metadata, and expose stable reason/action codes so `manual_review_needed`
+  results can be debugged without exposing raw content.
+- FOS-104 diagnostics are read-only reporting/debug metadata only. They do not
+  enforce blocking in send paths, do not claim semantic duplication, do not
+  create drafts, approvals, intentions, delivery results, sends, audit rows, or
+  source-of-truth mutations, and do not change renderer behavior, draft body
   generation, `text_sha256`, API behavior, schema, delivery execution, delivery
   results, scheduler behavior, or automatic delivery. Artifacts remain local
   review/debug artifacts only, grouping preview remains presentation planning,
