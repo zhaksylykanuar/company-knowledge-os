@@ -86,6 +86,8 @@
   implemented
 - Grouped lifecycle review artifact hash redaction:
   implemented
+- Gated grouped lifecycle review window sweep runner:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -826,6 +828,23 @@
   behavior, or automatic delivery. Sanitized review artifacts remain local
   review/debug artifacts only, grouping preview remains presentation planning,
   and duplicate-success protection remains the final send-time guard.
+- FOS-108 adds a gated grouped lifecycle review window sweep runner. It compares
+  sanitized review decisions and diagnostics across multiple bounded lookback
+  windows, supports preflight-only checks, writes only sanitized local
+  review/debug artifacts under a safe output directory, and returns a
+  conservative aggregate review decision.
+- FOS-108 adds no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It remains manual/read-only/debug tooling, is default-blocked unless
+  explicitly acknowledged, runs the provider-free doctor before acknowledged
+  sweep delegation, does not enforce blocking in send paths, does not claim
+  semantic duplication, does not change renderer grouping, digest read-model
+  grouping, delivery draft text, `text_sha256`, API behavior, schema, delivery
+  result writing, delivery execution, scheduler behavior, or automatic delivery.
+  Sweep artifacts are local review/debug artifacts only, grouping preview
+  remains presentation planning, and duplicate-success protection remains the
+  final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

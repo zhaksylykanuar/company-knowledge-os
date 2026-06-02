@@ -59,6 +59,7 @@
   implemented
 - Sanitized grouped lifecycle manual-review diagnostics: implemented
 - Grouped lifecycle review artifact hash redaction: implemented
+- Gated grouped lifecycle review window sweep runner: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -979,6 +980,21 @@ Implemented today:
   results, scheduler behavior, or automatic delivery. Grouping preview remains
   presentation planning, and duplicate-success protection remains the final
   send-time guard.
+- FOS-108 adds a gated grouped lifecycle review window sweep runner for local
+  operator debugging. The runner compares sanitized review decisions and
+  diagnostics across multiple bounded lookback windows, supports preflight-only
+  checks, writes only sanitized local review/debug artifacts under a safe output
+  directory, and produces a conservative aggregate review decision.
+- FOS-108 is manual/read-only/debug tooling. It remains default-blocked unless
+  `--allow-local-data-readonly` is passed, runs the provider-free doctor before
+  acknowledged sweep delegation, does not enforce blocking in send paths, does
+  not claim semantic duplication, does not create drafts, approvals,
+  intentions, delivery results, sends, audit rows, or source-of-truth
+  mutations, and does not change renderer behavior, draft body generation,
+  `text_sha256`, API behavior, schema, delivery execution, delivery results,
+  scheduler behavior, or automatic delivery. Artifacts remain local
+  review/debug artifacts only, grouping preview remains presentation planning,
+  and duplicate-success protection remains the final send-time guard.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

@@ -58,6 +58,7 @@
   implemented
 - Sanitized grouped lifecycle manual-review diagnostics: implemented
 - Grouped lifecycle review artifact hash redaction: implemented
+- Gated grouped lifecycle review window sweep runner: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -957,6 +958,22 @@
   schema, delivery execution, delivery results, scheduler behavior, or
   automatic delivery. Grouping preview remains presentation planning, and
   duplicate-success protection remains the final send-time guard.
+- FOS-108 adds a gated grouped lifecycle review window sweep runner. It lets a
+  human operator compare sanitized review decisions and diagnostics across
+  multiple bounded lookback windows, defaults to safe preset windows, supports
+  preflight-only checks, and writes only sanitized local review/debug artifacts
+  under a safe output directory.
+- FOS-108 remains default-blocked unless `--allow-local-data-readonly` is
+  passed, runs the provider-free doctor before any acknowledged sweep
+  delegation, and uses conservative aggregate decision precedence for review
+  signals. It does not enforce blocking in send paths, does not claim semantic
+  duplication, does not create drafts, approvals, intentions, delivery results,
+  sends, audit rows, or source-of-truth mutations, and does not change renderer
+  behavior, draft body generation, `text_sha256`, API behavior, schema,
+  delivery execution, delivery results, scheduler behavior, or automatic
+  delivery. Artifacts remain local review/debug artifacts only, grouping preview
+  remains presentation planning, and duplicate-success protection remains the
+  final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
