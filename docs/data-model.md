@@ -84,6 +84,8 @@
   implemented
 - Sanitized grouped lifecycle manual-review diagnostics:
   implemented
+- Grouped lifecycle review artifact hash redaction:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -809,6 +811,21 @@
   execution, scheduler behavior, or automatic delivery. Runner artifacts remain
   local review/debug artifacts only, grouping preview remains presentation
   planning, and duplicate-success protection remains the final send-time guard.
+- FOS-106 removes raw hash values from grouped lifecycle `review-json`,
+  synthetic smoke, doctor, and manual-runner artifact output. Sanitized
+  operator artifacts use booleans and relationship categories instead of raw
+  hash identifiers, while internal read-only lifecycle comparison and
+  duplicate-guard evaluation may still use hashes.
+- FOS-106 adds no source events, normalized activity rows, attention results,
+  audit logs, draft rows, approval/decision rows, intention rows, result rows,
+  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
+  tables. It is reporting/debug sanitization only, does not enforce blocking in
+  send paths, does not claim semantic duplication, does not change renderer
+  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
+  behavior, schema, delivery result writing, delivery execution, scheduler
+  behavior, or automatic delivery. Sanitized review artifacts remain local
+  review/debug artifacts only, grouping preview remains presentation planning,
+  and duplicate-success protection remains the final send-time guard.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

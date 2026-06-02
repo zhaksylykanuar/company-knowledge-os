@@ -57,6 +57,7 @@
 - Safe grouped lifecycle manual runner window presets and preflight:
   implemented
 - Sanitized grouped lifecycle manual-review diagnostics: implemented
+- Grouped lifecycle review artifact hash redaction: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -942,6 +943,20 @@
   results, scheduler behavior, or automatic delivery. Artifacts remain local
   review/debug artifacts only, grouping preview remains presentation planning,
   and duplicate-success protection remains the final send-time guard.
+- FOS-106 removes raw hash values from grouped lifecycle `review-json`,
+  synthetic smoke, doctor, and manual-runner artifact output. Operator-facing
+  artifacts use booleans and relationship categories such as whether
+  presentation/canonical hashes are present, distinct, or insufficient.
+- FOS-106 is reporting/debug sanitization only. Hashes may still be used
+  internally for read-only lifecycle comparison and duplicate-guard evaluation,
+  but sanitized review artifacts are local review/debug artifacts only, not
+  source of truth. It does not enforce blocking in send paths, does not claim
+  semantic duplication, does not create drafts, approvals, intentions, delivery
+  results, sends, audit rows, or source-of-truth mutations, and does not change
+  renderer behavior, draft body generation, `text_sha256`, API behavior,
+  schema, delivery execution, delivery results, scheduler behavior, or
+  automatic delivery. Grouping preview remains presentation planning, and
+  duplicate-success protection remains the final send-time guard.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

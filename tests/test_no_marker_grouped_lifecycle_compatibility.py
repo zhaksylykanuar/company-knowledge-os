@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -52,8 +53,11 @@ GROUPED_VARIANT_TREATMENTS = {
     "unknown",
 }
 LIFECYCLE_COMPATIBILITY_REQUIRED_FIELDS = {
-    "canonical_candidate_text_sha256",
-    "grouped_preview_text_sha256",
+    "presentation_hash_present",
+    "canonical_hash_present",
+    "canonical_hash_distinct_from_presentation",
+    "explicit_canonical_link_available",
+    "hash_relationship_status",
     "grouped_preview_hash_differs_from_canonical",
     "canonical_candidate_has_matching_draft_hash",
     "canonical_matching_hash_has_successful_delivery_result",
@@ -325,6 +329,29 @@ def _assert_optional_string(value: object) -> None:
     assert value is None or isinstance(value, str)
 
 
+RAW_HASH_VALUE_RE = re.compile(r"(?i)(?:sha256[:=_-]?)?[a-f0-9]{64}")
+
+
+def _raw_hash_value_paths(value: object, path: str = "$") -> list[str]:
+    if isinstance(value, str):
+        return [path] if RAW_HASH_VALUE_RE.search(value) else []
+    if isinstance(value, dict):
+        paths: list[str] = []
+        for key, child in value.items():
+            paths.extend(_raw_hash_value_paths(child, f"{path}.{key}"))
+        return paths
+    if isinstance(value, list):
+        paths = []
+        for index, child in enumerate(value):
+            paths.extend(_raw_hash_value_paths(child, f"{path}[{index}]"))
+        return paths
+    return []
+
+
+def _assert_no_raw_hash_values(value: object) -> None:
+    assert _raw_hash_value_paths(value) == []
+
+
 def _assert_grouped_lifecycle_report_contract(report: dict) -> None:
     assert report["status"] == "no_marker_grouped_lifecycle_compatibility"
     assert report["marker_filter"] == "no_marker_only"
@@ -346,6 +373,16 @@ def _assert_grouped_lifecycle_report_contract(report: dict) -> None:
     _assert_has_required_fields(
         lifecycle_compatibility,
         LIFECYCLE_COMPATIBILITY_REQUIRED_FIELDS,
+    )
+    for key in (
+        "presentation_hash_present",
+        "canonical_hash_present",
+        "canonical_hash_distinct_from_presentation",
+        "explicit_canonical_link_available",
+    ):
+        assert isinstance(lifecycle_compatibility[key], bool)
+    assert lifecycle_compatibility["hash_relationship_status"] in (
+        compat_script.HASH_RELATIONSHIP_STATUSES
     )
     assert lifecycle_compatibility["grouped_variant_would_be_treated_as"] in (
         GROUPED_VARIANT_TREATMENTS
@@ -1193,6 +1230,14 @@ def test_review_json_output_is_decision_only_and_sanitized() -> None:
     assert "lifecycle_compatibility" in parsed
     assert "canonical_hash_guard_evaluation" in parsed
     assert "operator_review_summary" in parsed
+    lifecycle = parsed["lifecycle_compatibility"]
+    assert "canonical_candidate_text_sha256" not in lifecycle
+    assert "grouped_preview_text_sha256" not in lifecycle
+    assert isinstance(lifecycle["presentation_hash_present"], bool)
+    assert isinstance(lifecycle["canonical_hash_present"], bool)
+    assert lifecycle["hash_relationship_status"] in (
+        compat_script.HASH_RELATIONSHIP_STATUSES
+    )
     assert parsed["operator_review_summary"]["decision"] in OPERATOR_REVIEW_DECISIONS
     assert parsed["canonical_hash_guard_evaluation"]["enforced"] is False
     assert (
@@ -1222,7 +1267,48 @@ def test_review_json_output_is_decision_only_and_sanitized() -> None:
     )
     assert "grouped_preview_text" not in serialized_without_safe_hash_field_names
     _assert_grouped_lifecycle_report_contract(parsed)
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(result.stdout)
+
+
+def test_review_json_projection_omits_raw_hash_values(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = _synthetic_review_report_for_decision(
+        "blocked_by_linked_canonical_hash"
+    )
+    lifecycle = dict(report["lifecycle_compatibility"])
+    lifecycle["canonical_candidate_text_sha256"] = "a" * 64
+    lifecycle["grouped_preview_text_sha256"] = "b" * 64
+    report["lifecycle_compatibility"] = lifecycle
+    _patch_report_builder(monkeypatch, report)
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--format",
+            "review-json",
+            "--review-exit-code",
+        ]
+    )
+
+    assert code == 20
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    lifecycle = parsed["lifecycle_compatibility"]
+    assert "canonical_candidate_text_sha256" not in lifecycle
+    assert "grouped_preview_text_sha256" not in lifecycle
+    assert lifecycle["canonical_hash_present"] is True
+    assert lifecycle["presentation_hash_present"] is True
+    assert lifecycle["canonical_hash_distinct_from_presentation"] is True
+    assert lifecycle["hash_relationship_status"] == "distinct_explicitly_linked_hashes"
+    _assert_grouped_lifecycle_report_contract(parsed)
+    _assert_no_raw_hash_values(parsed)
+    _assert_safe_output(captured.out + captured.err)
 
 
 def test_manual_review_needed_review_json_includes_sanitized_diagnostics() -> None:
@@ -1239,6 +1325,7 @@ def test_manual_review_needed_review_json_includes_sanitized_diagnostics() -> No
     assert "missing_canonical_hash" in diagnostics["reason_codes"]
     assert diagnostics["safe_next_step"] == "verify_canonical_linkage"
     _assert_grouped_lifecycle_report_contract(report)
+    _assert_no_raw_hash_values(report)
     _assert_safe_output(_serialized(report))
 
 
@@ -1253,6 +1340,7 @@ def test_missing_canonical_hash_diagnostics_stay_conservative() -> None:
     assert diagnostics["semantic_duplicate_claimed"] is False
     assert report["operator_review_summary"]["decision"] == "manual_review_needed"
     _assert_grouped_lifecycle_report_contract(report)
+    _assert_no_raw_hash_values(report)
 
 
 def test_equal_canonical_hash_diagnostics_do_not_claim_variant_duplicate() -> None:
@@ -1280,6 +1368,7 @@ def test_equal_canonical_hash_diagnostics_do_not_claim_variant_duplicate() -> No
     assert diagnostics["semantic_duplicate_claimed"] is False
     assert report["canonical_hash_guard_evaluation"]["blocked_by_canonical_success"] is False
     _assert_grouped_lifecycle_report_contract(report)
+    _assert_no_raw_hash_values(report)
     _assert_safe_output(_serialized(report))
 
 
@@ -1294,6 +1383,7 @@ def test_not_blocked_diagnostics_do_not_require_human_review() -> None:
     assert diagnostics["safe_next_step"] == "no_action_required"
     assert diagnostics["semantic_duplicate_claimed"] is False
     _assert_grouped_lifecycle_report_contract(report)
+    _assert_no_raw_hash_values(report)
 
 
 def test_already_sent_diagnostics_preserve_current_hash_precedence() -> None:
@@ -1307,6 +1397,7 @@ def test_already_sent_diagnostics_preserve_current_hash_precedence() -> None:
     assert diagnostics["safe_next_step"] == "no_action_required"
     assert diagnostics["semantic_duplicate_claimed"] is False
     _assert_grouped_lifecycle_report_contract(report)
+    _assert_no_raw_hash_values(report)
 
 
 def test_linked_canonical_blocker_diagnostics_are_explicit_and_safe() -> None:
@@ -1321,6 +1412,7 @@ def test_linked_canonical_blocker_diagnostics_are_explicit_and_safe() -> None:
     assert "linked_canonical_hash_already_sent" in diagnostics["reason_codes"]
     assert diagnostics["semantic_duplicate_claimed"] is False
     _assert_grouped_lifecycle_report_contract(report)
+    _assert_no_raw_hash_values(report)
 
 
 def test_review_exit_code_flag_defaults_to_zero_when_absent(
@@ -1478,6 +1570,14 @@ def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
         assert "lifecycle_compatibility" in scenario
         assert "canonical_hash_guard_evaluation" in scenario
         assert "operator_review_summary" in scenario
+        assert (
+            "canonical_candidate_text_sha256"
+            not in scenario["lifecycle_compatibility"]
+        )
+        assert (
+            "grouped_preview_text_sha256"
+            not in scenario["lifecycle_compatibility"]
+        )
         assert scenario["canonical_hash_guard_evaluation"]["enforced"] is False
         assert (
             scenario["canonical_hash_guard_evaluation"][
@@ -1499,6 +1599,7 @@ def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
         ):
             assert full_report_only_key not in scenario
         _assert_grouped_lifecycle_report_contract(scenario)
+        _assert_no_raw_hash_values(scenario)
 
     serialized_without_safe_hash_field_names = captured.out.replace(
         "grouped_preview_text_sha256",
@@ -1508,6 +1609,7 @@ def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
         "",
     )
     assert "grouped_preview_text" not in serialized_without_safe_hash_field_names
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out)
 
 
@@ -1538,6 +1640,7 @@ def test_synthetic_review_smoke_review_exit_code_is_most_conservative(
         scenario["operator_review_summary"]["decision"] == "manual_review_needed"
         for scenario in parsed["scenarios"]
     )
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out + captured.err)
 
 
@@ -1569,6 +1672,7 @@ def test_review_json_output_path_writes_sanitized_artifact(
     artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert artifact_payload == stdout_payload
     _assert_grouped_lifecycle_report_contract(artifact_payload)
+    _assert_no_raw_hash_values(artifact_payload)
     _assert_safe_output(captured.out + captured.err)
     _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
 
@@ -1602,6 +1706,7 @@ def test_synthetic_review_smoke_output_path_writes_sanitized_artifact(
     assert artifact_payload["provider_free"] is True
     for scenario in artifact_payload["scenarios"]:
         _assert_grouped_lifecycle_report_contract(scenario)
+    _assert_no_raw_hash_values(artifact_payload)
     _assert_safe_output(captured.out + captured.err)
     _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
 

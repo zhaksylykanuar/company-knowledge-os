@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -58,6 +59,29 @@ def _assert_safe_output(output: str) -> None:
     lowered = output.casefold()
     for pattern in UNSAFE_OUTPUT_PATTERNS:
         assert pattern not in lowered
+
+
+RAW_HASH_VALUE_RE = re.compile(r"(?i)(?:sha256[:=_-]?)?[a-f0-9]{64}")
+
+
+def _raw_hash_value_paths(value: object, path: str = "$") -> list[str]:
+    if isinstance(value, str):
+        return [path] if RAW_HASH_VALUE_RE.search(value) else []
+    if isinstance(value, dict):
+        paths: list[str] = []
+        for key, child in value.items():
+            paths.extend(_raw_hash_value_paths(child, f"{path}.{key}"))
+        return paths
+    if isinstance(value, list):
+        paths = []
+        for index, child in enumerate(value):
+            paths.extend(_raw_hash_value_paths(child, f"{path}[{index}]"))
+        return paths
+    return []
+
+
+def _assert_no_raw_hash_values(value: object) -> None:
+    assert _raw_hash_value_paths(value) == []
 
 
 def _assert_top_level_contract(parsed: dict[str, Any]) -> None:
@@ -118,6 +142,7 @@ def test_doctor_cli_exits_zero_and_outputs_valid_json(
     _assert_check_contract(parsed)
     for check_name in EXPECTED_CHECK_NAMES:
         assert _check_by_name(parsed, check_name)["status"] == "pass"
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out)
 
 
@@ -136,6 +161,7 @@ def test_doctor_script_subprocess_exits_zero_with_json_output() -> None:
     _assert_top_level_contract(parsed)
     assert parsed["status"] == "pass"
     _assert_check_contract(parsed)
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(result.stdout)
 
 
@@ -163,6 +189,8 @@ def test_doctor_uses_tmp_path_for_sanitized_artifact_check(tmp_path: Path) -> No
         artifact_payload["operator_review_summary"]["semantic_duplicate_claimed"]
         is False
     )
+    _assert_no_raw_hash_values(report)
+    _assert_no_raw_hash_values(artifact_payload)
     _assert_safe_output(json.dumps(report, sort_keys=True))
     artifact_output = (
         artifact_path.read_text(encoding="utf-8")
@@ -189,6 +217,7 @@ def test_doctor_check_output_covers_operator_workflow_affordances() -> None:
             "status": "pass",
             "reason_code": None,
         }
+    _assert_no_raw_hash_values(report)
     _assert_safe_output(json.dumps(report, sort_keys=True))
 
 
@@ -225,6 +254,7 @@ def test_doctor_failure_path_returns_safe_nonzero_json(
         "passed_count": 0,
         "failed_count": 1,
     }
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out)
 
 

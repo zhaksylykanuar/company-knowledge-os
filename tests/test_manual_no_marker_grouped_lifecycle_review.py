@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,29 @@ def _assert_safe_output(output: str) -> None:
     lowered = _safe_serialized(output).casefold()
     for pattern in UNSAFE_OUTPUT_PATTERNS:
         assert pattern not in lowered
+
+
+RAW_HASH_VALUE_RE = re.compile(r"(?i)(?:sha256[:=_-]?)?[a-f0-9]{64}")
+
+
+def _raw_hash_value_paths(value: object, path: str = "$") -> list[str]:
+    if isinstance(value, str):
+        return [path] if RAW_HASH_VALUE_RE.search(value) else []
+    if isinstance(value, dict):
+        paths: list[str] = []
+        for key, child in value.items():
+            paths.extend(_raw_hash_value_paths(child, f"{path}.{key}"))
+        return paths
+    if isinstance(value, list):
+        paths = []
+        for index, child in enumerate(value):
+            paths.extend(_raw_hash_value_paths(child, f"{path}[{index}]"))
+        return paths
+    return []
+
+
+def _assert_no_raw_hash_values(value: object) -> None:
+    assert _raw_hash_value_paths(value) == []
 
 
 def _doctor_pass_report() -> dict[str, Any]:
@@ -136,6 +160,29 @@ def _patch_report(
             captured_report_args.append(list(argv))
         print(json.dumps(payload, indent=2, sort_keys=True))
         return exit_code
+
+    monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
+
+
+def _patch_raw_hash_report(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    calls: list[str],
+    captured_report_args: list[list[str]] | None = None,
+) -> None:
+    payload = _review_payload_for_decision("not_blocked")
+    lifecycle = dict(payload["lifecycle_compatibility"])
+    lifecycle["canonical_candidate_text_sha256"] = "a" * 64
+    lifecycle["grouped_preview_text_sha256"] = "b" * 64
+    payload["lifecycle_compatibility"] = lifecycle
+
+    def fake_report_main(argv: list[str] | None = None) -> int:
+        calls.append("report")
+        assert argv is not None
+        if captured_report_args is not None:
+            captured_report_args.append(list(argv))
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
 
     monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
 
@@ -529,8 +576,11 @@ def test_manual_runner_runs_doctor_before_delegating_report(
         parsed["manual_review_diagnostics"]["semantic_duplicate_claimed"]
         is False
     )
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out)
-    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+    artifact_text = artifact_path.read_text(encoding="utf-8")
+    _assert_no_raw_hash_values(artifact_payload)
+    _assert_safe_output(artifact_text)
 
 
 def test_manual_runner_acknowledged_run_accepts_lookback_hours(
@@ -566,6 +616,7 @@ def test_manual_runner_acknowledged_run_accepts_lookback_hours(
     captured = capsys.readouterr()
     parsed = json.loads(captured.out)
     assert parsed["operator_review_summary"]["decision"] == "not_blocked"
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out)
 
 
@@ -753,6 +804,7 @@ def test_manual_runner_maps_delegated_decision_exit_codes(
     captured = capsys.readouterr()
     parsed = json.loads(captured.out)
     assert parsed["operator_review_summary"]["decision"] == decision
+    _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out)
 
 
@@ -786,5 +838,35 @@ def test_manual_runner_artifact_includes_sanitized_diagnostics(
     assert diagnostics["semantic_duplicate_claimed"] is False
     assert "manual_review_needed" in diagnostics["reason_codes"]
     assert diagnostics["safe_next_step"] == "verify_canonical_linkage"
+    _assert_no_raw_hash_values(stdout_payload)
+    _assert_no_raw_hash_values(artifact_payload)
+    _assert_safe_output(captured.out)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
+def test_manual_runner_artifact_redacts_delegated_raw_hash_values(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_raw_hash_report(monkeypatch, calls=calls)
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == 0
+    assert calls == ["doctor", "report"]
+    captured = capsys.readouterr()
+    stdout_payload = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert stdout_payload == artifact_payload
+    lifecycle = artifact_payload["lifecycle_compatibility"]
+    assert "canonical_candidate_text_sha256" not in lifecycle
+    assert "grouped_preview_text_sha256" not in lifecycle
+    assert lifecycle["hash_relationship_status"] == "distinct_explicitly_linked_hashes"
+    _assert_no_raw_hash_values(stdout_payload)
+    _assert_no_raw_hash_values(artifact_payload)
     _assert_safe_output(captured.out)
     _assert_safe_output(artifact_path.read_text(encoding="utf-8"))

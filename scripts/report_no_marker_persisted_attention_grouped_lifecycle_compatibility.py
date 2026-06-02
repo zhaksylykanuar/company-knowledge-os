@@ -62,6 +62,13 @@ MANUAL_REVIEW_SAFE_NEXT_STEPS = {
     "no_action_required",
     "keep_manual_review",
 }
+HASH_RELATIONSHIP_STATUSES = {
+    "missing_canonical",
+    "missing_presentation",
+    "equal_hashes",
+    "distinct_explicitly_linked_hashes",
+    "insufficient_hash_signal",
+}
 UNSAFE_ARTIFACT_PATH_PARTS = {
     "..",
     ".config",
@@ -424,6 +431,23 @@ def _grouped_hash_lifecycle(
     return matches, has_success
 
 
+def _hash_relationship_status(
+    *,
+    presentation_hash_present: bool,
+    canonical_hash_present: bool,
+    canonical_hash_distinct_from_presentation: bool,
+) -> str:
+    if not presentation_hash_present:
+        return "missing_presentation"
+    if not canonical_hash_present:
+        return "missing_canonical"
+    if canonical_hash_distinct_from_presentation:
+        return "distinct_explicitly_linked_hashes"
+    if presentation_hash_present and canonical_hash_present:
+        return "equal_hashes"
+    return "insufficient_hash_signal"
+
+
 def _compatibility(
     *,
     visible_count: int,
@@ -436,6 +460,18 @@ def _compatibility(
 ) -> dict[str, Any]:
     canonical_matching_success = (
         canonical_lifecycle.get("matching_hash_has_successful_delivery_result") is True
+    )
+    presentation_hash_present = bool(grouped_text_sha256)
+    canonical_hash_present = bool(canonical_text_sha256)
+    canonical_hash_distinct_from_presentation = (
+        presentation_hash_present
+        and canonical_hash_present
+        and grouped_hash_differs_from_canonical
+    )
+    explicit_canonical_link_available = (
+        presentation_hash_present
+        and canonical_hash_present
+        and canonical_hash_distinct_from_presentation
     )
 
     if visible_count < 1:
@@ -457,6 +493,19 @@ def _compatibility(
     return {
         "canonical_candidate_text_sha256": canonical_text_sha256,
         "grouped_preview_text_sha256": grouped_text_sha256,
+        "presentation_hash_present": presentation_hash_present,
+        "canonical_hash_present": canonical_hash_present,
+        "canonical_hash_distinct_from_presentation": (
+            canonical_hash_distinct_from_presentation
+        ),
+        "explicit_canonical_link_available": explicit_canonical_link_available,
+        "hash_relationship_status": _hash_relationship_status(
+            presentation_hash_present=presentation_hash_present,
+            canonical_hash_present=canonical_hash_present,
+            canonical_hash_distinct_from_presentation=(
+                canonical_hash_distinct_from_presentation
+            ),
+        ),
         "grouped_preview_hash_differs_from_canonical": (
             grouped_hash_differs_from_canonical
         ),
@@ -728,15 +777,20 @@ def build_manual_review_diagnostics(
 
     decision = operator_review_summary.get("decision")
     presentation_hash_present = (
-        canonical_hash_guard_evaluation.get("current_hash_available") is True
+        lifecycle_compatibility.get("presentation_hash_present") is True
+        or canonical_hash_guard_evaluation.get("current_hash_available") is True
         or _truthy_string(lifecycle_compatibility.get("grouped_preview_text_sha256"))
     )
     canonical_hash_present = (
-        canonical_hash_guard_evaluation.get("linked_canonical_hash_available") is True
+        lifecycle_compatibility.get("canonical_hash_present") is True
+        or canonical_hash_guard_evaluation.get("linked_canonical_hash_available")
+        is True
         or _truthy_string(lifecycle_compatibility.get("canonical_candidate_text_sha256"))
     )
     canonical_hash_distinct_from_presentation = (
-        canonical_hash_guard_evaluation.get("canonical_hash_distinct_from_current")
+        lifecycle_compatibility.get("canonical_hash_distinct_from_presentation")
+        is True
+        or canonical_hash_guard_evaluation.get("canonical_hash_distinct_from_current")
         is True
         or lifecycle_compatibility.get("grouped_preview_hash_differs_from_canonical")
         is True
@@ -844,6 +898,101 @@ def build_manual_review_diagnostics(
         "read_only": True,
         "enforced": False,
         "semantic_duplicate_claimed": False,
+    }
+
+
+def _safe_lifecycle_compatibility(
+    *,
+    lifecycle_compatibility: Mapping[str, Any],
+    canonical_hash_guard_evaluation: Mapping[str, Any],
+) -> dict[str, Any]:
+    presentation_hash_present = (
+        lifecycle_compatibility.get("presentation_hash_present") is True
+        or canonical_hash_guard_evaluation.get("current_hash_available") is True
+    )
+    canonical_hash_present = (
+        lifecycle_compatibility.get("canonical_hash_present") is True
+        or canonical_hash_guard_evaluation.get("linked_canonical_hash_available")
+        is True
+    )
+    canonical_hash_distinct_from_presentation = (
+        lifecycle_compatibility.get("canonical_hash_distinct_from_presentation")
+        is True
+        or canonical_hash_guard_evaluation.get("canonical_hash_distinct_from_current")
+        is True
+    )
+    explicit_canonical_link_available = (
+        presentation_hash_present
+        and canonical_hash_present
+        and canonical_hash_distinct_from_presentation
+    )
+    return {
+        "presentation_hash_present": presentation_hash_present,
+        "canonical_hash_present": canonical_hash_present,
+        "canonical_hash_distinct_from_presentation": (
+            canonical_hash_distinct_from_presentation
+        ),
+        "explicit_canonical_link_available": explicit_canonical_link_available,
+        "hash_relationship_status": _hash_relationship_status(
+            presentation_hash_present=presentation_hash_present,
+            canonical_hash_present=canonical_hash_present,
+            canonical_hash_distinct_from_presentation=(
+                canonical_hash_distinct_from_presentation
+            ),
+        ),
+        "grouped_preview_hash_differs_from_canonical": (
+            lifecycle_compatibility.get("grouped_preview_hash_differs_from_canonical")
+            is True
+        ),
+        "canonical_candidate_has_matching_draft_hash": (
+            lifecycle_compatibility.get("canonical_candidate_has_matching_draft_hash")
+            is True
+        ),
+        "canonical_matching_hash_has_successful_delivery_result": (
+            lifecycle_compatibility.get(
+                "canonical_matching_hash_has_successful_delivery_result"
+            )
+            is True
+        ),
+        "canonical_candidate_lifecycle_status": lifecycle_compatibility.get(
+            "canonical_candidate_lifecycle_status"
+        ),
+        "grouped_hash_matches_existing_draft": (
+            lifecycle_compatibility.get("grouped_hash_matches_existing_draft") is True
+        ),
+        "grouped_hash_has_successful_delivery_result": (
+            lifecycle_compatibility.get("grouped_hash_has_successful_delivery_result")
+            is True
+        ),
+        "grouped_variant_would_be_treated_as": lifecycle_compatibility.get(
+            "grouped_variant_would_be_treated_as"
+        ),
+        "current_hash_guard_would_block_grouped_variant": (
+            lifecycle_compatibility.get(
+                "current_hash_guard_would_block_grouped_variant"
+            )
+            is True
+        ),
+        "current_hash_guard_would_allow_grouped_variant": (
+            lifecycle_compatibility.get(
+                "current_hash_guard_would_allow_grouped_variant"
+            )
+            is True
+        ),
+        "presentation_variant_duplicate_send_risk": (
+            lifecycle_compatibility.get("presentation_variant_duplicate_send_risk")
+            is True
+        ),
+        "requires_guard_extension_before_grouped_send": (
+            lifecycle_compatibility.get("requires_guard_extension_before_grouped_send")
+            is True
+        ),
+        "grouped_hash_is_presentation_variant_not_delivered_content": (
+            lifecycle_compatibility.get(
+                "grouped_hash_is_presentation_variant_not_delivered_content"
+            )
+            is True
+        ),
     }
 
 
@@ -1078,7 +1227,9 @@ def _print_json(value: Mapping[str, Any]) -> None:
 def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
     """Return only the sanitized decision/review surface for operator review."""
 
-    lifecycle_compatibility = dict(_mapping(report.get("lifecycle_compatibility")))
+    raw_lifecycle_compatibility = dict(
+        _mapping(report.get("lifecycle_compatibility"))
+    )
     canonical_hash_guard_evaluation = dict(
         _mapping(report.get("canonical_hash_guard_evaluation"))
     )
@@ -1088,7 +1239,7 @@ def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
     )
     if not manual_review_diagnostics:
         manual_review_diagnostics = build_manual_review_diagnostics(
-            lifecycle_compatibility=lifecycle_compatibility,
+            lifecycle_compatibility=raw_lifecycle_compatibility,
             canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
             operator_review_summary=operator_review_summary,
             resolved_window={
@@ -1096,6 +1247,10 @@ def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
                 "end_at": report.get("end_at"),
             },
         )
+    lifecycle_compatibility = _safe_lifecycle_compatibility(
+        lifecycle_compatibility=raw_lifecycle_compatibility,
+        canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
+    )
 
     return {
         "status": report.get("status"),

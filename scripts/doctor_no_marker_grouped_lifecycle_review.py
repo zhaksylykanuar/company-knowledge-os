@@ -7,6 +7,7 @@ import argparse
 import contextlib
 import io
 import json
+import re
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -46,8 +47,11 @@ REQUIRED_REVIEW_SECTIONS = frozenset(
 )
 REQUIRED_LIFECYCLE_FIELDS = frozenset(
     {
-        "canonical_candidate_text_sha256",
-        "grouped_preview_text_sha256",
+        "presentation_hash_present",
+        "canonical_hash_present",
+        "canonical_hash_distinct_from_presentation",
+        "explicit_canonical_link_available",
+        "hash_relationship_status",
         "grouped_preview_hash_differs_from_canonical",
         "grouped_variant_would_be_treated_as",
         "presentation_variant_duplicate_send_risk",
@@ -99,6 +103,7 @@ REQUIRED_MANUAL_REVIEW_DIAGNOSTICS_FIELDS = frozenset(
         "semantic_duplicate_claimed",
     }
 )
+RAW_HASH_VALUE_RE = re.compile(r"(?i)(?:sha256[:=_-]?)?[a-f0-9]{64}")
 UNSAFE_OUTPUT_PATTERNS = (
     "rendered_digest_text",
     "rendered digest text",
@@ -181,6 +186,24 @@ def _assert_sanitized(value: Mapping[str, Any]) -> None:
     serialized = _safe_serialized(value).casefold()
     if any(pattern in serialized for pattern in UNSAFE_OUTPUT_PATTERNS):
         raise DoctorCheckError("unsafe_output_detected")
+    if _raw_hash_value_paths(value):
+        raise DoctorCheckError("raw_hash_value_detected")
+
+
+def _raw_hash_value_paths(value: Any, path: str = "$") -> list[str]:
+    if isinstance(value, str):
+        return [path] if RAW_HASH_VALUE_RE.search(value) else []
+    if isinstance(value, Mapping):
+        paths: list[str] = []
+        for key, child in value.items():
+            paths.extend(_raw_hash_value_paths(child, f"{path}.{key}"))
+        return paths
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        paths = []
+        for index, child in enumerate(value):
+            paths.extend(_raw_hash_value_paths(child, f"{path}[{index}]"))
+        return paths
+    return []
 
 
 def _assert_required_fields(
@@ -225,6 +248,11 @@ def _assert_review_contract(report: Mapping[str, Any]) -> None:
     )
     if summary.get("decision") not in SAFE_DECISIONS:
         raise DoctorCheckError("unknown_operator_decision")
+    if (
+        lifecycle.get("hash_relationship_status")
+        not in review_script.HASH_RELATIONSHIP_STATUSES
+    ):
+        raise DoctorCheckError("unknown_hash_relationship_status")
     if diagnostics.get("diagnostic_status") not in SAFE_DECISIONS:
         raise DoctorCheckError("unknown_diagnostic_status")
     if (

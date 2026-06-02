@@ -431,6 +431,8 @@ def _delegate_report(
             "delegated_report_invalid_json",
             EXIT_INVALID_USAGE,
         )
+    if payload.get("status") == "no_marker_grouped_lifecycle_compatibility":
+        payload = review_script.format_review_json_report(payload)
     _assert_sanitized(payload)
     return DelegatedReportResult(exit_code=exit_code, payload=payload)
 
