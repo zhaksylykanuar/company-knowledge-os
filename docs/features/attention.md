@@ -1002,6 +1002,16 @@
 - FOS-114 preserves default blocking, doctor gating, explicit local-readonly
   acknowledgement, no-send behavior, non-enforcement, source-of-truth
   immutability, human approval boundaries, and duplicate-success protection.
+- FOS-116 fixes the nested sweep/manual review contract by treating the
+  per-window manual review artifact as the durable sanitized payload after a
+  valid delegated review outcome. Captured delegated stdout is not required to
+  be the review payload, so a valid `30` for `manual_review_needed` can remain
+  a completed window outcome when the artifact contract is present and safe.
+- FOS-116 keeps missing or malformed artifacts, unexpected return codes,
+  decision/code mismatches, and sanitizer failures as sanitized failures only.
+  The sweep and manual runner remain default-blocked, doctor-gated,
+  explicit-acknowledgement, sanitized-output-only, no-send, non-enforcing, and
+  not a source-of-truth mutation.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

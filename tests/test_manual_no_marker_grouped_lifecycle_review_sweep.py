@@ -131,9 +131,12 @@ def _patch_delegate(
         index = state["index"]
         state["index"] += 1
         decision = decisions[index]
-        payload = _review_payload_for_decision(
-            decision if decision in review_script.REVIEW_DECISION_EXIT_CODES else "not_blocked"
+        safe_decision = (
+            decision
+            if decision in review_script.REVIEW_DECISION_EXIT_CODES
+            else "not_blocked"
         )
+        payload = _review_payload_for_decision(safe_decision)
         if decision not in review_script.REVIEW_DECISION_EXIT_CODES:
             payload = dict(payload)
             summary = dict(payload["operator_review_summary"])
@@ -160,6 +163,10 @@ def _patch_manual_runner_delegate(
     calls: list[str],
     decisions: list[str],
     exit_codes: list[int] | None = None,
+    captured_argvs: list[list[str]] | None = None,
+    stdout_text: str | None = None,
+    write_artifact: bool = True,
+    malformed_artifact: bool = False,
 ) -> None:
     state = {"index": 0}
 
@@ -170,14 +177,19 @@ def _patch_manual_runner_delegate(
         assert "--format" in argv
         assert argv[argv.index("--format") + 1] == "review-json"
         assert "--output-path" in argv
+        if captured_argvs is not None:
+            captured_argvs.append(list(argv))
         output_path = Path(argv[argv.index("--output-path") + 1])
         lookback_hours = argv[argv.index("--lookback-hours") + 1]
         index = state["index"]
         state["index"] += 1
         decision = decisions[index]
-        payload = _review_payload_for_decision(
-            decision if decision in review_script.REVIEW_DECISION_EXIT_CODES else "not_blocked"
+        safe_decision = (
+            decision
+            if decision in review_script.REVIEW_DECISION_EXIT_CODES
+            else "not_blocked"
         )
+        payload = _review_payload_for_decision(safe_decision)
         if decision not in review_script.REVIEW_DECISION_EXIT_CODES:
             payload = dict(payload)
             summary = dict(payload["operator_review_summary"])
@@ -189,8 +201,18 @@ def _patch_manual_runner_delegate(
             else review_script.REVIEW_DECISION_EXIT_CODES.get(decision, 30)
         )
         calls.append(f"manual:{float(lookback_hours):g}")
-        review_script._write_json_artifact(payload, output_path)
-        print(json.dumps(payload, indent=2, sort_keys=True))
+        if write_artifact:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            if malformed_artifact:
+                output_path.write_text("{", encoding="utf-8")
+            else:
+                review_script._write_json_artifact(payload, output_path)
+        stdout_payload = (
+            stdout_text
+            if stdout_text is not None
+            else json.dumps(payload, indent=2, sort_keys=True)
+        )
+        print(stdout_payload)
         return exit_code
 
     monkeypatch.setattr(sweep_script.manual_script, "main", fake_manual_main)
@@ -628,6 +650,7 @@ def test_sweep_accepts_valid_exit_codes_through_manual_runner_boundary(
         calls=calls,
         decisions=[decision],
         exit_codes=[exit_code],
+        stdout_text="synthetic delegated stdout",
     )
 
     code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
@@ -680,6 +703,80 @@ def test_sweep_manual_runner_boundary_accepts_30_and_completes_all_windows(
         artifact_payload = json.loads(artifact_text)
         _assert_no_raw_hash_values(artifact_payload)
         _assert_safe_output(artifact_text)
+
+
+def test_sweep_uses_manual_runner_artifact_contract_after_valid_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=[
+            "manual_review_needed",
+            "not_blocked",
+            "already_sent_by_current_hash",
+        ],
+        stdout_text="synthetic delegated stdout",
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path))
+
+    assert code == 30
+    assert calls == ["doctor", "manual:6", "manual:24", "manual:72"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["reason_code"] is None
+    assert parsed["executed_report_count"] == 3
+    assert parsed["aggregate_decision"] == "manual_review_needed"
+    assert len(parsed["windows"]) == 3
+    assert all(window["status"] == "completed" for window in parsed["windows"])
+    assert parsed["windows"][0]["exit_code"] == 30
+    assert parsed["windows"][0]["decision"] == "manual_review_needed"
+    artifact_paths = sorted((tmp_path / "sweep").glob("*.json"))
+    assert len(artifact_paths) == 3
+    for artifact_path in artifact_paths:
+        artifact_text = artifact_path.read_text(encoding="utf-8")
+        artifact_payload = json.loads(artifact_text)
+        _assert_no_raw_hash_values(artifact_payload)
+        _assert_safe_output(artifact_text)
+
+
+def test_sweep_acknowledged_manual_argv_includes_local_readonly_for_each_window(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    captured_argvs: list[list[str]] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=["not_blocked", "not_blocked", "not_blocked"],
+        captured_argvs=captured_argvs,
+        stdout_text="synthetic delegated stdout",
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path))
+
+    assert code == 0
+    assert calls == ["doctor", "manual:6", "manual:24", "manual:72"]
+    assert len(captured_argvs) == 3
+    for argv in captured_argvs:
+        assert "--allow-local-data-readonly" in argv
+        assert "--lookback-hours" in argv
+        assert "--format" in argv
+        assert argv[argv.index("--format") + 1] == "review-json"
+        assert "--output-path" in argv
+        assert "--preflight-only" not in argv
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["executed_report_count"] == 3
+    assert parsed["aggregate_decision"] == "not_blocked"
 
 
 def test_sweep_nested_report_boundary_accepts_30_and_completes_all_windows(
@@ -916,6 +1013,60 @@ def test_manual_runner_boundary_unexpected_exit_code_fails_safely(
         calls=calls,
         decisions=["not_blocked"],
         exit_codes=[99],
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
+
+    assert code == sweep_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "manual:6"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "fail"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    assert parsed["executed_report_count"] == 0
+    assert parsed["windows"] == []
+
+
+def test_manual_runner_boundary_missing_artifact_fails_safely(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=["manual_review_needed"],
+        exit_codes=[30],
+        stdout_text="synthetic delegated stdout",
+        write_artifact=False,
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
+
+    assert code == sweep_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "manual:6"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "fail"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    assert parsed["executed_report_count"] == 0
+    assert parsed["windows"] == []
+
+
+def test_manual_runner_boundary_malformed_artifact_fails_safely(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=["manual_review_needed"],
+        exit_codes=[30],
+        stdout_text="synthetic delegated stdout",
+        malformed_artifact=True,
     )
 
     code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))

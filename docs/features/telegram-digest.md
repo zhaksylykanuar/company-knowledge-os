@@ -1025,6 +1025,16 @@ Implemented today:
   default blocking, doctor gating, explicit local-readonly acknowledgement,
   no-send behavior, non-enforcement, source-of-truth immutability, human
   approval boundaries, and duplicate-success protection.
+- FOS-116 fixes the nested sweep/manual review contract by validating the
+  per-window manual review artifact as the durable sanitized payload after a
+  valid delegated review outcome. Captured delegated stdout may be diagnostic
+  text, so valid outcomes `0`, `10`, `20`, and `30` can complete sweep windows
+  when the artifact is present, safe, and decision-aligned.
+- FOS-116 keeps missing or malformed artifacts, unexpected return codes,
+  decision/code mismatches, and sanitizer failures as sanitized failures only.
+  The tooling remains default-blocked, doctor-gated, explicit-acknowledgement,
+  sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
+  mutation.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

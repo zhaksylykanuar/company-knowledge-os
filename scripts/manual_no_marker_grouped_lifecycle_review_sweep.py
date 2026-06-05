@@ -471,22 +471,27 @@ def _delegate_window_review(
         lookback_hours=lookback_hours,
         output_path=output_path,
     )
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+        io.StringIO()
+    ):
         exit_code = manual_script.main(manual_argv)
     delegated_decision = _decision_from_delegated_exit_code(exit_code)
     if delegated_decision is None:
         raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+    # The per-window artifact is the manual runner's durable sanitized contract.
+    # Captured stdout can contain safe diagnostics and must not decide success.
     try:
-        payload = json.loads(stdout.getvalue())
-    except json.JSONDecodeError as exc:
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
         raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE) from exc
     if not isinstance(payload, Mapping):
         raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
     if _decision_from_payload(payload) != delegated_decision:
         raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
-    manual_script._assert_sanitized(payload)
+    try:
+        manual_script._assert_sanitized(payload)
+    except Exception as exc:
+        raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE) from exc
     return manual_script.DelegatedReportResult(
         exit_code=exit_code,
         payload=payload,

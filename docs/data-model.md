@@ -876,6 +876,16 @@
   sweep artifacts remain local review/debug artifacts only; the tooling remains
   default-blocked, doctor-gated, sanitized-output-only, no-send,
   non-enforcing, and not a source-of-truth mutation.
+- FOS-116 adds no storage and changes only the nested sweep/manual review
+  artifact contract. After a valid delegated review outcome, the sweep
+  validates the per-window manual review artifact as the durable sanitized
+  payload instead of requiring captured delegated stdout to be the review
+  payload.
+- FOS-116 keeps missing or malformed artifacts, unexpected return codes,
+  decision/code mismatches, and sanitizer failures as sanitized failures only.
+  Review and sweep artifacts remain local review/debug artifacts only; the
+  tooling remains default-blocked, doctor-gated, sanitized-output-only,
+  no-send, non-enforcing, and not a source-of-truth mutation.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

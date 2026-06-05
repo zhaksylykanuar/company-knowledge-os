@@ -660,9 +660,16 @@ def test_manual_runner_acknowledged_run_accepts_lookback_hours(
     )
     assert "--format" in report_args
     assert report_args[report_args.index("--format") + 1] == "review-json"
+    assert "--review-exit-code" in report_args
+    assert "--output-path" not in report_args
+    assert "--allow-local-data-readonly" not in report_args
+    assert "--preflight-only" not in report_args
     captured = capsys.readouterr()
     parsed = json.loads(captured.out)
     assert parsed["operator_review_summary"]["decision"] == "not_blocked"
+    assert parsed["operator_review_summary"]["enforced"] is False
+    assert parsed["manual_review_diagnostics"]["enforced"] is False
+    assert parsed["manual_review_diagnostics"]["read_only"] is True
     _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out)
 
