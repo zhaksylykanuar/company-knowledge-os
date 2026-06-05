@@ -154,6 +154,63 @@ def _patch_delegate(
     monkeypatch.setattr(sweep_script, "_delegate_window_review", fake_delegate)
 
 
+def _patch_manual_runner_delegate(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    calls: list[str],
+    decisions: list[str],
+    exit_codes: list[int] | None = None,
+) -> None:
+    state = {"index": 0}
+
+    def fake_manual_main(argv: list[str] | None = None) -> int:
+        assert argv is not None
+        assert "--allow-local-data-readonly" in argv
+        assert "--lookback-hours" in argv
+        assert "--format" in argv
+        assert argv[argv.index("--format") + 1] == "review-json"
+        assert "--output-path" in argv
+        output_path = Path(argv[argv.index("--output-path") + 1])
+        lookback_hours = argv[argv.index("--lookback-hours") + 1]
+        index = state["index"]
+        state["index"] += 1
+        decision = decisions[index]
+        payload = _review_payload_for_decision(
+            decision if decision in review_script.REVIEW_DECISION_EXIT_CODES else "not_blocked"
+        )
+        if decision not in review_script.REVIEW_DECISION_EXIT_CODES:
+            payload = dict(payload)
+            summary = dict(payload["operator_review_summary"])
+            summary["decision"] = decision
+            payload["operator_review_summary"] = summary
+        exit_code = (
+            exit_codes[index]
+            if exit_codes is not None
+            else review_script.REVIEW_DECISION_EXIT_CODES.get(decision, 30)
+        )
+        calls.append(f"manual:{float(lookback_hours):g}")
+        review_script._write_json_artifact(payload, output_path)
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return exit_code
+
+    monkeypatch.setattr(sweep_script.manual_script, "main", fake_manual_main)
+
+
+def _patch_malformed_manual_runner_delegate(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    calls: list[str],
+    exit_code: int,
+) -> None:
+    def fake_manual_main(argv: list[str] | None = None) -> int:
+        assert argv is not None
+        calls.append("manual")
+        print("{")
+        return exit_code
+
+    monkeypatch.setattr(sweep_script.manual_script, "main", fake_manual_main)
+
+
 def _ack_args(tmp_path: Path, *, lookbacks: str = "6,24,72") -> list[str]:
     return [
         "--allow-local-data-readonly",
@@ -502,6 +559,83 @@ def test_sweep_accepts_each_valid_delegated_exit_code_as_window_outcome(
 
 
 @pytest.mark.parametrize(
+    ("decision", "exit_code"),
+    (
+        ("not_blocked", 0),
+        ("already_sent_by_current_hash", 10),
+        ("blocked_by_linked_canonical_hash", 20),
+        ("manual_review_needed", 30),
+    ),
+)
+def test_sweep_accepts_valid_exit_codes_through_manual_runner_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    decision: str,
+    exit_code: int,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=[decision],
+        exit_codes=[exit_code],
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
+
+    assert code == exit_code
+    assert calls == ["doctor", "manual:6"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["executed_report_count"] == 1
+    assert parsed["aggregate_decision"] == decision
+    assert parsed["windows"][0]["status"] == "completed"
+    assert parsed["windows"][0]["exit_code"] == exit_code
+    assert parsed["windows"][0]["decision"] == decision
+
+
+def test_sweep_manual_runner_boundary_accepts_30_and_completes_all_windows(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=[
+            "manual_review_needed",
+            "not_blocked",
+            "already_sent_by_current_hash",
+        ],
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path))
+
+    assert code == 30
+    assert calls == ["doctor", "manual:6", "manual:24", "manual:72"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["reason_code"] is None
+    assert parsed["executed_report_count"] == 3
+    assert parsed["aggregate_decision"] == "manual_review_needed"
+    assert len(parsed["windows"]) == 3
+    assert all(window["status"] == "completed" for window in parsed["windows"])
+    assert parsed["windows"][0]["exit_code"] == 30
+    assert parsed["windows"][0]["decision"] == "manual_review_needed"
+    artifact_paths = sorted((tmp_path / "sweep").glob("*.json"))
+    assert len(artifact_paths) == 3
+    for artifact_path in artifact_paths:
+        artifact_text = artifact_path.read_text(encoding="utf-8")
+        artifact_payload = json.loads(artifact_text)
+        _assert_no_raw_hash_values(artifact_payload)
+        _assert_safe_output(artifact_text)
+
+
+@pytest.mark.parametrize(
     ("decisions", "expected_decision", "expected_exit_code"),
     (
         (["not_blocked", "not_blocked"], "not_blocked", 0),
@@ -540,6 +674,64 @@ def test_aggregate_decision_precedence_and_exit_codes(
     _assert_safe_output(json.dumps(parsed, sort_keys=True))
 
 
+@pytest.mark.parametrize(
+    ("decisions", "lookbacks", "expected_decision", "expected_exit_code"),
+    (
+        (["not_blocked", "not_blocked"], "6,24", "not_blocked", 0),
+        (
+            ["already_sent_by_current_hash", "not_blocked"],
+            "6,24",
+            "already_sent_by_current_hash",
+            10,
+        ),
+        (
+            [
+                "blocked_by_linked_canonical_hash",
+                "already_sent_by_current_hash",
+                "not_blocked",
+            ],
+            "6,24,72",
+            "blocked_by_linked_canonical_hash",
+            20,
+        ),
+        (
+            [
+                "manual_review_needed",
+                "blocked_by_linked_canonical_hash",
+                "already_sent_by_current_hash",
+            ],
+            "6,24,72",
+            "manual_review_needed",
+            30,
+        ),
+    ),
+)
+def test_manual_runner_boundary_aggregate_precedence_and_exit_codes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    decisions: list[str],
+    lookbacks: str,
+    expected_decision: str,
+    expected_exit_code: int,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=decisions,
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks=lookbacks))
+
+    assert code == expected_exit_code
+    parsed = _parse_stdout(capsys)
+    assert parsed["aggregate_decision"] == expected_decision
+    assert parsed["executed_report_count"] == len(decisions)
+    assert all(window["status"] == "completed" for window in parsed["windows"])
+
+
 def test_unexpected_delegated_exit_code_fails_safely(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -558,6 +750,55 @@ def test_unexpected_delegated_exit_code_fails_safely(
 
     assert code == sweep_script.EXIT_INVALID_USAGE
     assert calls == ["doctor", "delegate:6"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "fail"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    assert parsed["executed_report_count"] == 0
+    assert parsed["windows"] == []
+
+
+def test_manual_runner_boundary_unexpected_exit_code_fails_safely(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=["not_blocked"],
+        exit_codes=[99],
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
+
+    assert code == sweep_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "manual:6"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "fail"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    assert parsed["executed_report_count"] == 0
+    assert parsed["windows"] == []
+
+
+def test_manual_runner_boundary_malformed_output_fails_safely(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_malformed_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        exit_code=30,
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
+
+    assert code == sweep_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "manual"]
     parsed = _parse_stdout(capsys)
     assert parsed["status"] == "fail"
     assert parsed["reason_code"] == "delegated_report_failed"

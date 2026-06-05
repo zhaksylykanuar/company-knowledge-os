@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -326,31 +327,52 @@ def _window_artifact_path(output_dir: Path, lookback_hours: float) -> Path:
     return output_dir / f"grouped-lifecycle-review-{label}h.json"
 
 
-def _manual_args_for_window(
+def _manual_argv_for_window(
     args: argparse.Namespace,
     *,
     lookback_hours: float,
     output_path: Path,
-) -> argparse.Namespace:
-    return SimpleNamespace(
-        allow_local_data_readonly=True,
-        preflight_only=False,
-        start_at=None,
-        end_at=args.end_at,
-        lookback_hours=str(lookback_hours),
-        activity_start_at=args.activity_start_at,
-        activity_end_at=args.activity_end_at,
-        limit=args.limit,
-        debug_evidence=bool(args.debug_evidence),
-        cluster_threshold=args.cluster_threshold,
-        group_by=args.group_by,
-        format="review-json",
-        output_path=str(output_path),
+) -> list[str]:
+    manual_argv = [
+        "--allow-local-data-readonly",
+        "--lookback-hours",
+        str(lookback_hours),
+        "--format",
+        "review-json",
+        "--output-path",
+        str(output_path),
+    ]
+    optional_string_args = (
+        ("--end-at", args.end_at),
+        ("--activity-start-at", args.activity_start_at),
+        ("--activity-end-at", args.activity_end_at),
+        ("--group-by", args.group_by),
     )
+    for flag, value in optional_string_args:
+        if value is not None:
+            manual_argv.extend([flag, value])
+    optional_int_args = (
+        ("--limit", args.limit),
+        ("--cluster-threshold", args.cluster_threshold),
+    )
+    for flag, value in optional_int_args:
+        if value is not None:
+            manual_argv.extend([flag, str(value)])
+    if args.debug_evidence:
+        manual_argv.append("--debug-evidence")
+    return manual_argv
 
 
 def _decision_from_delegated_exit_code(exit_code: int) -> str | None:
     return DELEGATED_REVIEW_EXIT_CODE_DECISIONS.get(exit_code)
+
+
+def _decision_from_payload(payload: Mapping[str, Any]) -> str | None:
+    summary = payload.get("operator_review_summary")
+    if isinstance(summary, Mapping):
+        decision = summary.get("decision")
+        return decision if isinstance(decision, str) else None
+    return None
 
 
 def _window_summary(
@@ -444,15 +466,31 @@ def _delegate_window_review(
     lookback_hours: float,
     output_path: Path,
 ) -> manual_script.DelegatedReportResult:
-    manual_args = _manual_args_for_window(
+    manual_argv = _manual_argv_for_window(
         args,
         lookback_hours=lookback_hours,
         output_path=output_path,
     )
-    resolved_window = manual_script._resolve_window(manual_args)
-    delegated = manual_script._delegate_report(manual_args, resolved_window)
-    review_script._write_json_artifact(delegated.payload, output_path)
-    return delegated
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        exit_code = manual_script.main(manual_argv)
+    delegated_decision = _decision_from_delegated_exit_code(exit_code)
+    if delegated_decision is None:
+        raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+    try:
+        payload = json.loads(stdout.getvalue())
+    except json.JSONDecodeError as exc:
+        raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE) from exc
+    if not isinstance(payload, Mapping):
+        raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+    if _decision_from_payload(payload) != delegated_decision:
+        raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+    manual_script._assert_sanitized(payload)
+    return manual_script.DelegatedReportResult(
+        exit_code=exit_code,
+        payload=payload,
+    )
 
 
 def run_sweep(args: argparse.Namespace) -> tuple[int, Mapping[str, Any]]:

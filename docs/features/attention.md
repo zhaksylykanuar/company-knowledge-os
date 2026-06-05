@@ -984,6 +984,14 @@
   failures still return sanitized failure metadata only. The sweep remains
   default-blocked, doctor-gated, sanitized-output-only, no-send,
   non-enforcing, and not a source-of-truth mutation.
+- FOS-112 routes each acknowledged sweep window through the gated manual runner
+  boundary and classifies the captured delegated review return code at that
+  boundary. Valid review outcomes `0`, `10`, `20`, and `30` remain completed
+  window outcomes, while unexpected return codes or malformed delegated output
+  still fail with sanitized failure metadata only.
+- FOS-112 preserves the same safety boundaries: the sweep remains
+  default-blocked, doctor-gated, sanitized-output-only, no-send,
+  non-enforcing, and not a source-of-truth mutation.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

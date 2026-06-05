@@ -1007,6 +1007,14 @@ Implemented today:
   metadata only. The sweep remains default-blocked, doctor-gated,
   sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
   mutation.
+- FOS-112 routes acknowledged sweep windows through the gated manual runner
+  boundary and classifies the captured delegated review return code there.
+  Valid review outcomes `0`, `10`, `20`, and `30` remain completed window
+  outcomes, including `30` for `manual_review_needed`; unexpected return codes
+  or malformed delegated output still fail with sanitized metadata only.
+- FOS-112 preserves the same operator boundaries: default-blocked,
+  doctor-gated, sanitized-output-only, no-send, non-enforcing, and not a
+  source-of-truth mutation.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
