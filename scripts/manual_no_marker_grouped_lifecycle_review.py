@@ -393,7 +393,12 @@ def run_preflight(args: argparse.Namespace) -> tuple[int, Mapping[str, Any]]:
     return 0, report
 
 
-def _report_args(args: argparse.Namespace, resolved_window: ResolvedWindow) -> list[str]:
+def _report_args(
+    args: argparse.Namespace,
+    resolved_window: ResolvedWindow,
+    *,
+    artifact_path: Path,
+) -> list[str]:
     report_args = [
         "--start-at",
         resolved_window.start_at,
@@ -401,6 +406,8 @@ def _report_args(args: argparse.Namespace, resolved_window: ResolvedWindow) -> l
         resolved_window.end_at,
         "--format",
         "review-json",
+        "--output-path",
+        str(artifact_path),
         "--review-exit-code",
     ]
     optional_string_args = (
@@ -426,17 +433,21 @@ def _report_args(args: argparse.Namespace, resolved_window: ResolvedWindow) -> l
 def _delegate_report(
     args: argparse.Namespace,
     resolved_window: ResolvedWindow,
+    *,
+    artifact_path: Path,
 ) -> DelegatedReportResult:
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-        exit_code = review_script.main(_report_args(args, resolved_window))
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+        io.StringIO()
+    ):
+        exit_code = review_script.main(
+            _report_args(args, resolved_window, artifact_path=artifact_path)
+        )
     delegated_decision = REPORT_EXIT_CODE_DECISIONS.get(exit_code)
     if delegated_decision is None:
         raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
     try:
-        payload = json.loads(stdout.getvalue())
-    except json.JSONDecodeError as exc:
+        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
         raise ManualReviewRunnerError(
             "delegated_report_invalid_json",
             EXIT_INVALID_USAGE,
@@ -465,7 +476,11 @@ def _delegate_report(
 def run_manual_review(args: argparse.Namespace) -> DelegatedReportResult:
     plan = _validate_manual_gate(args)
     _run_doctor()
-    delegated = _delegate_report(args, plan.resolved_window)
+    delegated = _delegate_report(
+        args,
+        plan.resolved_window,
+        artifact_path=plan.artifact_path,
+    )
     if delegated.exit_code not in SAFE_REPORT_EXIT_CODES:
         raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
     review_script._write_json_artifact(delegated.payload, plan.artifact_path)

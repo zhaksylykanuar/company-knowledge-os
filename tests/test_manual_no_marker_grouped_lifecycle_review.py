@@ -149,6 +149,9 @@ def _patch_report(
     exit_code: int,
     captured_report_args: list[list[str]] | None = None,
     stderr_text: str | None = None,
+    stdout_text: str | None = None,
+    write_artifact: bool = True,
+    malformed_artifact: bool = False,
 ) -> None:
     payload = _review_payload_for_decision(decision)
 
@@ -158,12 +161,24 @@ def _patch_report(
         assert "--format" in argv
         assert argv[argv.index("--format") + 1] == "review-json"
         assert "--review-exit-code" in argv
-        assert "--output-path" not in argv
+        assert "--output-path" in argv
         if captured_report_args is not None:
             captured_report_args.append(list(argv))
+        output_path = Path(argv[argv.index("--output-path") + 1])
+        if write_artifact:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            if malformed_artifact:
+                output_path.write_text("{", encoding="utf-8")
+            else:
+                review_script._write_json_artifact(payload, output_path)
         if stderr_text is not None:
             print(stderr_text, file=sys.stderr)
-        print(json.dumps(payload, indent=2, sort_keys=True))
+        stdout_payload = (
+            stdout_text
+            if stdout_text is not None
+            else json.dumps(payload, indent=2, sort_keys=True)
+        )
+        print(stdout_payload)
         return exit_code
 
     monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
@@ -178,6 +193,10 @@ def _patch_malformed_report(
     def fake_report_main(argv: list[str] | None = None) -> int:
         calls.append("report")
         assert argv is not None
+        assert "--output-path" in argv
+        output_path = Path(argv[argv.index("--output-path") + 1])
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("{", encoding="utf-8")
         print("{")
         return exit_code
 
@@ -198,6 +217,9 @@ def _patch_unsafe_review_report(
     def fake_report_main(argv: list[str] | None = None) -> int:
         calls.append("report")
         assert argv is not None
+        assert "--output-path" in argv
+        output_path = Path(argv[argv.index("--output-path") + 1])
+        review_script._write_json_artifact(payload, output_path)
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
 
@@ -221,6 +243,9 @@ def _patch_raw_hash_report(
         assert argv is not None
         if captured_report_args is not None:
             captured_report_args.append(list(argv))
+        assert "--output-path" in argv
+        output_path = Path(argv[argv.index("--output-path") + 1])
+        review_script._write_json_artifact(payload, output_path)
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
 
@@ -661,7 +686,10 @@ def test_manual_runner_acknowledged_run_accepts_lookback_hours(
     assert "--format" in report_args
     assert report_args[report_args.index("--format") + 1] == "review-json"
     assert "--review-exit-code" in report_args
-    assert "--output-path" not in report_args
+    assert "--output-path" in report_args
+    assert Path(report_args[report_args.index("--output-path") + 1]) == (
+        tmp_path / "review" / "manual-review.json"
+    )
     assert "--allow-local-data-readonly" not in report_args
     assert "--preflight-only" not in report_args
     captured = capsys.readouterr()
@@ -868,6 +896,7 @@ def test_manual_runner_delegated_report_boundary_does_not_check_nonzero_outcomes
     assert "check=True" not in source
     assert "CalledProcessError" not in source
     assert "delegated_report_stderr" not in source
+    assert "stdout.getvalue()" not in source
 
 
 def test_manual_runner_accepts_valid_manual_review_with_delegated_stderr(
@@ -901,6 +930,41 @@ def test_manual_runner_accepts_valid_manual_review_with_delegated_stderr(
     _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
 
 
+def test_manual_runner_uses_delegated_report_artifact_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_report(
+        monkeypatch,
+        calls=calls,
+        decision="manual_review_needed",
+        exit_code=30,
+        stderr_text="synthetic delegated stderr",
+        stdout_text="synthetic delegated stdout",
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == 30
+    assert calls == ["doctor", "report"]
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    parsed = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert parsed == artifact_payload
+    assert parsed["operator_review_summary"]["decision"] == "manual_review_needed"
+    assert parsed["manual_review_diagnostics"]["diagnostic_status"] == (
+        "manual_review_needed"
+    )
+    _assert_no_raw_hash_values(parsed)
+    _assert_safe_output(captured.out)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
 def test_manual_runner_rejects_unexpected_delegated_exit_before_artifact(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -913,6 +977,7 @@ def test_manual_runner_rejects_unexpected_delegated_exit_before_artifact(
         calls=calls,
         decision="not_blocked",
         exit_code=99,
+        write_artifact=False,
     )
     artifact_path = tmp_path / "review" / "manual-review.json"
 
@@ -943,7 +1008,7 @@ def test_manual_runner_rejects_malformed_delegated_review_output(
 
     assert code == manual_script.EXIT_INVALID_USAGE
     assert calls == ["doctor", "report"]
-    assert not artifact_path.exists()
+    assert artifact_path.exists()
     captured = capsys.readouterr()
     parsed = json.loads(captured.out)
     assert parsed["status"] == "blocked"
@@ -971,7 +1036,7 @@ def test_manual_runner_rejects_delegated_exit_decision_mismatch(
 
     assert code == manual_script.EXIT_INVALID_USAGE
     assert calls == ["doctor", "report"]
-    assert not artifact_path.exists()
+    assert artifact_path.exists()
     captured = capsys.readouterr()
     parsed = json.loads(captured.out)
     assert parsed["status"] == "blocked"
@@ -994,7 +1059,7 @@ def test_manual_runner_rejects_unsafe_delegated_review_output(
 
     assert code == manual_script.EXIT_INVALID_USAGE
     assert calls == ["doctor", "report"]
-    assert not artifact_path.exists()
+    assert artifact_path.exists()
     captured = capsys.readouterr()
     parsed = json.loads(captured.out)
     assert parsed["status"] == "blocked"

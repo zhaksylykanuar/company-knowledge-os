@@ -1035,6 +1035,12 @@ Implemented today:
   The tooling remains default-blocked, doctor-gated, explicit-acknowledgement,
   sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
   mutation.
+- FOS-118 closes the remaining nested delegated report contract gap. The
+  manual runner now passes its safe artifact path to the delegated report
+  command and validates that durable sanitized artifact after a valid review
+  outcome, so delegated report stdout is not required to be the review payload.
+  Missing or malformed report artifacts, unexpected return codes,
+  decision/code mismatches, and sanitizer failures remain sanitized failures.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

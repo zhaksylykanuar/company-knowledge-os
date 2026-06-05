@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -244,7 +245,8 @@ def _patch_nested_report_delegate(
         assert "--review-exit-code" in argv
         assert "--format" in argv
         assert argv[argv.index("--format") + 1] == "review-json"
-        assert "--output-path" not in argv
+        assert "--output-path" in argv
+        output_path = Path(argv[argv.index("--output-path") + 1])
         index = state["index"]
         state["index"] += 1
         decision = decisions[index]
@@ -255,6 +257,7 @@ def _patch_nested_report_delegate(
             else review_script.REVIEW_DECISION_EXIT_CODES[decision]
         )
         calls.append(f"report:{decision}")
+        review_script._write_json_artifact(payload, output_path)
         print(json.dumps(payload, indent=2, sort_keys=True))
         return exit_code
 
@@ -262,6 +265,39 @@ def _patch_nested_report_delegate(
         sweep_script.manual_script.review_script,
         "main",
         fake_report_main,
+    )
+
+
+def _patch_faithful_synthetic_report_builder(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    calls: list[str],
+    decisions: list[str],
+    stderr_text: str | None = None,
+) -> None:
+    state = {"index": 0}
+
+    async def fake_report_builder(
+        query: object,
+        **_kwargs: object,
+    ) -> dict[str, Any]:
+        index = state["index"]
+        state["index"] += 1
+        decision = decisions[index]
+        payload = dict(_review_payload_for_decision(decision))
+        if hasattr(query, "start_at"):
+            payload["start_at"] = query.start_at.isoformat()
+        if hasattr(query, "end_at"):
+            payload["end_at"] = query.end_at.isoformat()
+        calls.append(f"report_builder:{decision}")
+        if stderr_text is not None:
+            print(stderr_text, file=sys.stderr)
+        return payload
+
+    monkeypatch.setattr(
+        sweep_script.manual_script.review_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        fake_report_builder,
     )
 
 
@@ -816,6 +852,53 @@ def test_sweep_nested_report_boundary_accepts_30_and_completes_all_windows(
     for artifact_path in artifact_paths:
         artifact_text = artifact_path.read_text(encoding="utf-8")
         artifact_payload = json.loads(artifact_text)
+        _assert_no_raw_hash_values(artifact_payload)
+        _assert_safe_output(artifact_text)
+
+
+def test_faithful_nested_synthetic_sweep_completes_artifact_backed_windows(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_doctor_pass(monkeypatch, calls)
+    _patch_faithful_synthetic_report_builder(
+        monkeypatch,
+        calls=calls,
+        decisions=[
+            "manual_review_needed",
+            "not_blocked",
+            "already_sent_by_current_hash",
+        ],
+        stderr_text="synthetic delegated stderr",
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path))
+
+    assert code == 30
+    assert calls.count("manual_doctor") == 3
+    assert calls.count("report_builder:manual_review_needed") == 1
+    assert calls.count("report_builder:not_blocked") == 1
+    assert calls.count("report_builder:already_sent_by_current_hash") == 1
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["reason_code"] is None
+    assert parsed["executed_report_count"] == 3
+    assert parsed["aggregate_decision"] == "manual_review_needed"
+    assert len(parsed["windows"]) == 3
+    assert all(window["status"] == "completed" for window in parsed["windows"])
+    assert all(window["artifact_written"] is True for window in parsed["windows"])
+    assert parsed["windows"][0]["exit_code"] == 30
+    assert parsed["windows"][0]["decision"] == "manual_review_needed"
+    artifact_paths = sorted((tmp_path / "sweep").glob("*.json"))
+    assert len(artifact_paths) == 3
+    for artifact_path in artifact_paths:
+        artifact_text = artifact_path.read_text(encoding="utf-8")
+        artifact_payload = json.loads(artifact_text)
+        assert "operator_review_summary" in artifact_payload
+        assert "manual_review_diagnostics" in artifact_payload
         _assert_no_raw_hash_values(artifact_payload)
         _assert_safe_output(artifact_text)
 
