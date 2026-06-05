@@ -196,6 +196,53 @@ def _patch_manual_runner_delegate(
     monkeypatch.setattr(sweep_script.manual_script, "main", fake_manual_main)
 
 
+def _patch_manual_doctor_pass(monkeypatch: pytest.MonkeyPatch, calls: list[str]) -> None:
+    def fake_doctor() -> dict[str, Any]:
+        calls.append("manual_doctor")
+        return _doctor_pass()
+
+    monkeypatch.setattr(
+        sweep_script.manual_script.doctor_script,
+        "build_doctor_report",
+        fake_doctor,
+    )
+
+
+def _patch_nested_report_delegate(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    calls: list[str],
+    decisions: list[str],
+    exit_codes: list[int] | None = None,
+) -> None:
+    state = {"index": 0}
+
+    def fake_report_main(argv: list[str] | None = None) -> int:
+        assert argv is not None
+        assert "--review-exit-code" in argv
+        assert "--format" in argv
+        assert argv[argv.index("--format") + 1] == "review-json"
+        assert "--output-path" not in argv
+        index = state["index"]
+        state["index"] += 1
+        decision = decisions[index]
+        payload = _review_payload_for_decision(decision)
+        exit_code = (
+            exit_codes[index]
+            if exit_codes is not None
+            else review_script.REVIEW_DECISION_EXIT_CODES[decision]
+        )
+        calls.append(f"report:{decision}")
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return exit_code
+
+    monkeypatch.setattr(
+        sweep_script.manual_script.review_script,
+        "main",
+        fake_report_main,
+    )
+
+
 def _patch_malformed_manual_runner_delegate(
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -635,6 +682,47 @@ def test_sweep_manual_runner_boundary_accepts_30_and_completes_all_windows(
         _assert_safe_output(artifact_text)
 
 
+def test_sweep_nested_report_boundary_accepts_30_and_completes_all_windows(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_doctor_pass(monkeypatch, calls)
+    _patch_nested_report_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=[
+            "manual_review_needed",
+            "not_blocked",
+            "already_sent_by_current_hash",
+        ],
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path))
+
+    assert code == 30
+    assert calls.count("manual_doctor") == 3
+    assert "report:manual_review_needed" in calls
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["reason_code"] is None
+    assert parsed["executed_report_count"] == 3
+    assert parsed["aggregate_decision"] == "manual_review_needed"
+    assert len(parsed["windows"]) == 3
+    assert all(window["status"] == "completed" for window in parsed["windows"])
+    assert parsed["windows"][0]["exit_code"] == 30
+    assert parsed["windows"][0]["decision"] == "manual_review_needed"
+    artifact_paths = sorted((tmp_path / "sweep").glob("*.json"))
+    assert len(artifact_paths) == 3
+    for artifact_path in artifact_paths:
+        artifact_text = artifact_path.read_text(encoding="utf-8")
+        artifact_payload = json.loads(artifact_text)
+        _assert_no_raw_hash_values(artifact_payload)
+        _assert_safe_output(artifact_text)
+
+
 @pytest.mark.parametrize(
     ("decisions", "expected_decision", "expected_exit_code"),
     (
@@ -718,6 +806,65 @@ def test_manual_runner_boundary_aggregate_precedence_and_exit_codes(
     calls: list[str] = []
     _patch_doctor_pass(monkeypatch, calls)
     _patch_manual_runner_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=decisions,
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks=lookbacks))
+
+    assert code == expected_exit_code
+    parsed = _parse_stdout(capsys)
+    assert parsed["aggregate_decision"] == expected_decision
+    assert parsed["executed_report_count"] == len(decisions)
+    assert all(window["status"] == "completed" for window in parsed["windows"])
+
+
+@pytest.mark.parametrize(
+    ("decisions", "lookbacks", "expected_decision", "expected_exit_code"),
+    (
+        (["not_blocked", "not_blocked"], "6,24", "not_blocked", 0),
+        (
+            ["already_sent_by_current_hash", "not_blocked"],
+            "6,24",
+            "already_sent_by_current_hash",
+            10,
+        ),
+        (
+            [
+                "blocked_by_linked_canonical_hash",
+                "already_sent_by_current_hash",
+                "not_blocked",
+            ],
+            "6,24,72",
+            "blocked_by_linked_canonical_hash",
+            20,
+        ),
+        (
+            [
+                "manual_review_needed",
+                "blocked_by_linked_canonical_hash",
+                "already_sent_by_current_hash",
+            ],
+            "6,24,72",
+            "manual_review_needed",
+            30,
+        ),
+    ),
+)
+def test_nested_report_boundary_aggregate_precedence_and_exit_codes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    decisions: list[str],
+    lookbacks: str,
+    expected_decision: str,
+    expected_exit_code: int,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_doctor_pass(monkeypatch, calls)
+    _patch_nested_report_delegate(
         monkeypatch,
         calls=calls,
         decisions=decisions,

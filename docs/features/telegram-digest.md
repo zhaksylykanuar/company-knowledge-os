@@ -1015,6 +1015,16 @@ Implemented today:
 - FOS-112 preserves the same operator boundaries: default-blocked,
   doctor-gated, sanitized-output-only, no-send, non-enforcing, and not a
   source-of-truth mutation.
+- FOS-114 fixes the upstream delegated report boundary inside the manual runner
+  used by grouped lifecycle sweep windows. Valid delegated report review
+  outcomes `0`, `10`, `20`, and `30` are classified before failure handling,
+  so `30` for `manual_review_needed` remains a valid completed review outcome
+  when sanitized review output is present.
+- FOS-114 keeps unexpected return codes, malformed output, decision/code
+  mismatches, and sanitizer failures as sanitized failures only. It preserves
+  default blocking, doctor gating, explicit local-readonly acknowledgement,
+  no-send behavior, non-enforcement, source-of-truth immutability, human
+  approval boundaries, and duplicate-success protection.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

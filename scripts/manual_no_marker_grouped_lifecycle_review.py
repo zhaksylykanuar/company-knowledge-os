@@ -31,7 +31,11 @@ EXIT_DOCTOR_FAILED = 41
 EXIT_UNSAFE_OUTPUT_PATH = 42
 EXIT_INVALID_WINDOW = 43
 EXIT_INVALID_USAGE = 2
-SAFE_REPORT_EXIT_CODES = frozenset({0, 10, 20, 30})
+REPORT_EXIT_CODE_DECISIONS = {
+    exit_code: decision
+    for decision, exit_code in review_script.REVIEW_DECISION_EXIT_CODES.items()
+}
+SAFE_REPORT_EXIT_CODES = frozenset(REPORT_EXIT_CODE_DECISIONS)
 
 
 class ManualReviewRunnerError(RuntimeError):
@@ -427,8 +431,9 @@ def _delegate_report(
     stderr = io.StringIO()
     with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
         exit_code = review_script.main(_report_args(args, resolved_window))
-    if stderr.getvalue():
-        raise ManualReviewRunnerError("delegated_report_stderr", EXIT_INVALID_USAGE)
+    delegated_decision = REPORT_EXIT_CODE_DECISIONS.get(exit_code)
+    if delegated_decision is None:
+        raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
     try:
         payload = json.loads(stdout.getvalue())
     except json.JSONDecodeError as exc:
@@ -443,7 +448,17 @@ def _delegate_report(
         )
     if payload.get("status") == "no_marker_grouped_lifecycle_compatibility":
         payload = review_script.format_review_json_report(payload)
-    _assert_sanitized(payload)
+    summary = payload.get("operator_review_summary")
+    payload_decision = summary.get("decision") if isinstance(summary, Mapping) else None
+    if payload_decision != delegated_decision:
+        raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+    try:
+        _assert_sanitized(payload)
+    except Exception as exc:
+        raise ManualReviewRunnerError(
+            "delegated_report_failed",
+            EXIT_INVALID_USAGE,
+        ) from exc
     return DelegatedReportResult(exit_code=exit_code, payload=payload)
 
 
@@ -451,9 +466,9 @@ def run_manual_review(args: argparse.Namespace) -> DelegatedReportResult:
     plan = _validate_manual_gate(args)
     _run_doctor()
     delegated = _delegate_report(args, plan.resolved_window)
-    review_script._write_json_artifact(delegated.payload, plan.artifact_path)
     if delegated.exit_code not in SAFE_REPORT_EXIT_CODES:
         raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+    review_script._write_json_artifact(delegated.payload, plan.artifact_path)
     return delegated
 
 

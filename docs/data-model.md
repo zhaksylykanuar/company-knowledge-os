@@ -866,6 +866,16 @@
   only; the runner remains default-blocked, doctor-gated,
   sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
   mutation.
+- FOS-114 adds no storage and changes only the upstream delegated report
+  boundary used by the manual grouped lifecycle review runner and sweep
+  windows. Valid delegated report review outcomes `0`, `10`, `20`, and `30`
+  are classified before failure handling; valid sanitized review output remains
+  a completed review outcome even if delegated stderr was captured.
+- FOS-114 keeps unexpected return codes, malformed output, decision/code
+  mismatches, and sanitizer failures as sanitized failures only. Review and
+  sweep artifacts remain local review/debug artifacts only; the tooling remains
+  default-blocked, doctor-gated, sanitized-output-only, no-send,
+  non-enforcing, and not a source-of-truth mutation.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
