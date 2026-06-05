@@ -974,6 +974,16 @@
   delivery. Artifacts remain local review/debug artifacts only, grouping preview
   remains presentation planning, and duplicate-success protection remains the
   final send-time guard.
+- FOS-110 fixes grouped lifecycle sweep delegation outcome handling. Delegated
+  review exit codes `0`, `10`, `20`, and `30` are completed window outcomes,
+  including `30` for `manual_review_needed`, so an acknowledged sweep completes
+  every requested window when each delegated result is a valid review outcome.
+- FOS-110 keeps sweep aggregation conservative: any `manual_review_needed`
+  window wins, then `blocked_by_linked_canonical_hash`, then
+  `already_sent_by_current_hash`, then all-`not_blocked`. Unexpected delegated
+  failures still return sanitized failure metadata only. The sweep remains
+  default-blocked, doctor-gated, sanitized-output-only, no-send,
+  non-enforcing, and not a source-of-truth mutation.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

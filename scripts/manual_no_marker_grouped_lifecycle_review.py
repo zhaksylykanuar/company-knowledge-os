@@ -147,7 +147,17 @@ def _assert_sanitized(value: Mapping[str, Any]) -> None:
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Safety:\n"
+            "- default-blocked without explicit local data acknowledgement.\n"
+            "- doctor-gated before delegation.\n"
+            "- sanitized output/artifact only.\n"
+            "- no send, no enforcement, and no source-of-truth mutation."
+        ),
+    )
     parser.add_argument(
         "--allow-local-data-readonly",
         action="store_true",

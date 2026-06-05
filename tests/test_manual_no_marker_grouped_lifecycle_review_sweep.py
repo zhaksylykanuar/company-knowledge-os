@@ -173,6 +173,41 @@ def _parse_stdout(capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
     return parsed
 
 
+def test_sweep_help_describes_gates_and_non_delivery_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        sweep_script,
+        "_run_doctor",
+        lambda: (_ for _ in ()).throw(AssertionError("help must not run doctor")),
+    )
+    monkeypatch.setattr(
+        sweep_script,
+        "_delegate_window_review",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("help must not delegate")
+        ),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        sweep_script.main(["--help"])
+
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    help_output = captured.out.casefold()
+    assert "--allow-local-data-readonly" in captured.out
+    assert "--lookback-hours-list" in captured.out
+    assert "--preflight-only" in captured.out
+    assert "default-blocked" in help_output
+    assert "doctor-gated" in help_output
+    assert "sanitized output/artifact" in help_output
+    assert "no send" in help_output
+    assert "no enforcement" in help_output
+    assert "no source-of-truth mutation" in help_output
+    _assert_safe_output(captured.out)
+
+
 def test_sweep_without_ack_blocks_before_delegation(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -367,8 +402,12 @@ def test_acknowledged_sweep_writes_one_artifact_per_window(
     code = sweep_script.main(_ack_args(tmp_path))
 
     assert code == 30
+    assert calls == ["doctor", "delegate:6", "delegate:24", "delegate:72"]
     parsed = _parse_stdout(capsys)
     assert parsed["status"] == "pass"
+    assert parsed["executed_report_count"] == 3
+    assert parsed["window_count"] == 3
+    assert all(window["status"] == "completed" for window in parsed["windows"])
     artifact_paths = sorted((tmp_path / "sweep").glob("*.json"))
     assert len(artifact_paths) == 3
     for artifact_path in artifact_paths:
@@ -419,6 +458,50 @@ def test_sweep_aggregate_summary_contains_only_safe_fields(
 
 
 @pytest.mark.parametrize(
+    ("exit_code", "expected_decision"),
+    (
+        (0, "not_blocked"),
+        (10, "already_sent_by_current_hash"),
+        (20, "blocked_by_linked_canonical_hash"),
+        (30, "manual_review_needed"),
+    ),
+)
+def test_sweep_accepts_each_valid_delegated_exit_code_as_window_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    exit_code: int,
+    expected_decision: str,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=["not_blocked"],
+        exit_codes=[exit_code],
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
+
+    assert code == exit_code
+    assert calls == ["doctor", "delegate:6"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["executed_report_count"] == 1
+    assert parsed["aggregate_decision"] == expected_decision
+    assert len(parsed["windows"]) == 1
+    window = parsed["windows"][0]
+    assert window["lookback_hours"] == 6.0
+    assert window["status"] == "completed"
+    assert window["exit_code"] == exit_code
+    assert window["decision"] == expected_decision
+    assert window["diagnostic_status"] == "not_blocked"
+    assert window["artifact_written"] is True
+    assert isinstance(window["reason_codes"], list)
+
+
+@pytest.mark.parametrize(
     ("decisions", "expected_decision", "expected_exit_code"),
     (
         (["not_blocked", "not_blocked"], "not_blocked", 0),
@@ -455,3 +538,28 @@ def test_aggregate_decision_precedence_and_exit_codes(
     assert parsed["aggregate_decision"] == expected_decision
     assert parsed["recommended_operator_action"]
     _assert_safe_output(json.dumps(parsed, sort_keys=True))
+
+
+def test_unexpected_delegated_exit_code_fails_safely(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=["not_blocked"],
+        exit_codes=[99],
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
+
+    assert code == sweep_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "delegate:6"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "fail"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    assert parsed["executed_report_count"] == 0
+    assert parsed["windows"] == []

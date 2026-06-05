@@ -845,6 +845,17 @@
   Sweep artifacts are local review/debug artifacts only, grouping preview
   remains presentation planning, and duplicate-success protection remains the
   final send-time guard.
+- FOS-110 adds no storage and changes only grouped lifecycle sweep outcome
+  handling. Delegated review exit codes `0`, `10`, `20`, and `30` are completed
+  window outcomes, including `30` for `manual_review_needed`; acknowledged
+  sweeps finish all requested windows when every delegated result is one of
+  those review outcomes.
+- FOS-110 aggregate sweep decisions preserve conservative precedence and return
+  the matching aggregate review exit code. Unexpected delegated failures still
+  fail with sanitized metadata only. Sweep artifacts remain local review/debug
+  artifacts only; the runner remains default-blocked, doctor-gated,
+  sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
+  mutation.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

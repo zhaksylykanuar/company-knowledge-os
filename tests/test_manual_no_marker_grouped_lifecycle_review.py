@@ -216,6 +216,13 @@ def test_manual_runner_help_lists_lookback_and_preflight(
     assert "--output-path" in captured.out
     assert "Without this flag" in captured.out
     assert "no report" in captured.out
+    help_output = captured.out.casefold()
+    assert "default-blocked" in help_output
+    assert "doctor-gated" in help_output
+    assert "sanitized output/artifact" in help_output
+    assert "no send" in help_output
+    assert "no enforcement" in help_output
+    assert "no source-of-truth mutation" in help_output
     _assert_safe_output(captured.out)
 
 

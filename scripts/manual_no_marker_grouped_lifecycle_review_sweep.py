@@ -23,12 +23,17 @@ from scripts import (  # noqa: E402
 
 SWEEP_MODE = "manual_grouped_lifecycle_review_sweep"
 DEFAULT_LOOKBACK_HOURS = (6.0, 24.0, 72.0)
+DELEGATED_REVIEW_DECISION_EXIT_CODES = dict(review_script.REVIEW_DECISION_EXIT_CODES)
+DELEGATED_REVIEW_EXIT_CODE_DECISIONS = {
+    exit_code: decision
+    for decision, exit_code in DELEGATED_REVIEW_DECISION_EXIT_CODES.items()
+}
 EXIT_LOCAL_DATA_ACK_REQUIRED = manual_script.EXIT_LOCAL_DATA_ACK_REQUIRED
 EXIT_DOCTOR_FAILED = manual_script.EXIT_DOCTOR_FAILED
 EXIT_UNSAFE_OUTPUT_PATH = manual_script.EXIT_UNSAFE_OUTPUT_PATH
 EXIT_INVALID_WINDOW = manual_script.EXIT_INVALID_WINDOW
 EXIT_INVALID_USAGE = manual_script.EXIT_INVALID_USAGE
-SAFE_REPORT_EXIT_CODES = manual_script.SAFE_REPORT_EXIT_CODES
+SAFE_REPORT_EXIT_CODES = frozenset(DELEGATED_REVIEW_EXIT_CODE_DECISIONS)
 AGGREGATE_DECISION_ORDER = (
     "manual_review_needed",
     "blocked_by_linked_canonical_hash",
@@ -72,7 +77,17 @@ def _print_json(value: Mapping[str, Any]) -> None:
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Safety:\n"
+            "- default-blocked without explicit local data acknowledgement.\n"
+            "- doctor-gated before delegation.\n"
+            "- sanitized output/artifact only.\n"
+            "- no send, no enforcement, and no source-of-truth mutation."
+        ),
+    )
     parser.add_argument(
         "--allow-local-data-readonly",
         action="store_true",
@@ -334,18 +349,15 @@ def _manual_args_for_window(
     )
 
 
-def _decision_from_payload(payload: Mapping[str, Any]) -> str | None:
-    summary = payload.get("operator_review_summary")
-    if isinstance(summary, Mapping):
-        decision = summary.get("decision")
-        return decision if isinstance(decision, str) else None
-    return None
+def _decision_from_delegated_exit_code(exit_code: int) -> str | None:
+    return DELEGATED_REVIEW_EXIT_CODE_DECISIONS.get(exit_code)
 
 
 def _window_summary(
     *,
     lookback_hours: float,
     exit_code: int,
+    decision: str,
     payload: Mapping[str, Any],
     artifact_written: bool,
 ) -> dict[str, Any]:
@@ -365,7 +377,7 @@ def _window_summary(
         "lookback_hours": lookback_hours,
         "status": "completed",
         "exit_code": exit_code,
-        "decision": _decision_from_payload(payload),
+        "decision": decision,
         "diagnostic_status": diagnostics_mapping.get("diagnostic_status"),
         "reason_codes": list(dict.fromkeys(safe_reason_codes)),
         "safe_next_step": diagnostics_mapping.get("safe_next_step"),
@@ -423,7 +435,7 @@ def _recommended_action_for_aggregate(
 
 
 def _exit_code_for_aggregate(aggregate_decision: str) -> int:
-    return review_script.REVIEW_DECISION_EXIT_CODES.get(aggregate_decision, 30)
+    return DELEGATED_REVIEW_DECISION_EXIT_CODES.get(aggregate_decision, 30)
 
 
 def _delegate_window_review(
@@ -493,12 +505,14 @@ def run_sweep(args: argparse.Namespace) -> tuple[int, Mapping[str, Any]]:
             )
         except Exception as exc:
             raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE) from exc
-        if delegated.exit_code not in SAFE_REPORT_EXIT_CODES:
+        delegated_decision = _decision_from_delegated_exit_code(delegated.exit_code)
+        if delegated_decision is None:
             raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
         windows.append(
             _window_summary(
                 lookback_hours=lookback,
                 exit_code=delegated.exit_code,
+                decision=delegated_decision,
                 payload=delegated.payload,
                 artifact_written=artifact_path.exists(),
             )

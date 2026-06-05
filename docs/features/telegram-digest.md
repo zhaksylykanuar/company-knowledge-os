@@ -995,6 +995,18 @@ Implemented today:
   scheduler behavior, or automatic delivery. Artifacts remain local
   review/debug artifacts only, grouping preview remains presentation planning,
   and duplicate-success protection remains the final send-time guard.
+- FOS-110 fixes grouped lifecycle sweep delegation outcome handling. Delegated
+  review exit codes `0`, `10`, `20`, and `30` are completed window outcomes,
+  including `30` for `manual_review_needed`, so acknowledged sweeps continue
+  through all requested windows when every delegated result is a valid review
+  outcome.
+- FOS-110 keeps aggregate decisions aligned with aggregate exit codes:
+  `manual_review_needed` wins first, followed by
+  `blocked_by_linked_canonical_hash`, `already_sent_by_current_hash`, and
+  all-`not_blocked`. Unexpected delegated failures still fail with sanitized
+  metadata only. The sweep remains default-blocked, doctor-gated,
+  sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
+  mutation.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
