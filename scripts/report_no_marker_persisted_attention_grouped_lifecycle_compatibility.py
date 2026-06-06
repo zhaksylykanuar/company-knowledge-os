@@ -1302,6 +1302,19 @@ def is_review_json_artifact(report: Mapping[str, Any]) -> bool:
     )
 
 
+def is_legacy_review_json_artifact(report: Mapping[str, Any]) -> bool:
+    if "artifact_schema" in report:
+        return False
+    return (
+        report.get("status") == "no_marker_grouped_lifecycle_compatibility"
+        and isinstance(report.get("operator_review_summary"), Mapping)
+        and isinstance(report.get("manual_review_diagnostics"), Mapping)
+        and isinstance(report.get("lifecycle_compatibility"), Mapping)
+        and isinstance(report.get("canonical_hash_guard_evaluation"), Mapping)
+        and not any(key in report for key in FULL_REPORT_ONLY_KEYS)
+    )
+
+
 def _synthetic_canonical_hash_guard_evaluation(
     *,
     current_hash: str,

@@ -1047,6 +1047,11 @@ Implemented today:
   before validation. Full reports are converted through the same sanitized
   formatter; ambiguous, missing, malformed, mismatched, or unsafe artifacts
   remain sanitized failures.
+- FOS-122 tightens the CLI-level delegated report artifact contract. The manual
+  runner requests `review-json` at the exact delegated artifact path, accepts
+  schema-marked review artifacts, markerless legacy review-json artifacts, or
+  full compatibility reports only after sanitized conversion, and fails safely
+  for wrong-path, wrong-schema, malformed, mismatched, or unsafe artifacts.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

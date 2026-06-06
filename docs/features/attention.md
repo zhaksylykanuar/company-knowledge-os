@@ -1024,6 +1024,11 @@
   before validation. Full reports are converted through the same sanitized
   formatter; ambiguous, missing, malformed, mismatched, or unsafe artifacts
   remain sanitized failures.
+- FOS-122 tightens the CLI-level delegated report artifact contract. The manual
+  runner requests `review-json` at the exact delegated artifact path, accepts
+  schema-marked review artifacts, markerless legacy review-json artifacts, or
+  full compatibility reports only after sanitized conversion, and fails safely
+  for wrong-path, wrong-schema, malformed, mismatched, or unsafe artifacts.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

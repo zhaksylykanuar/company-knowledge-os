@@ -237,6 +237,9 @@ def _patch_nested_report_delegate(
     calls: list[str],
     decisions: list[str],
     exit_codes: list[int] | None = None,
+    artifact_kind: str = "review-json",
+    stderr_text: str | None = None,
+    stdout_text: str | None = None,
 ) -> None:
     state = {"index": 0}
 
@@ -256,9 +259,19 @@ def _patch_nested_report_delegate(
             if exit_codes is not None
             else review_script.REVIEW_DECISION_EXIT_CODES[decision]
         )
+        artifact_payload = dict(payload)
+        if artifact_kind == "legacy-review-json":
+            artifact_payload.pop("artifact_schema", None)
+            artifact_payload.pop("output_format", None)
         calls.append(f"report:{decision}")
-        review_script._write_json_artifact(payload, output_path)
-        print(json.dumps(payload, indent=2, sort_keys=True))
+        review_script._write_json_artifact(artifact_payload, output_path)
+        if stderr_text is not None:
+            print(stderr_text, file=sys.stderr)
+        print(
+            stdout_text
+            if stdout_text is not None
+            else json.dumps(artifact_payload, indent=2, sort_keys=True)
+        )
         return exit_code
 
     monkeypatch.setattr(
@@ -852,6 +865,54 @@ def test_sweep_nested_report_boundary_accepts_30_and_completes_all_windows(
     for artifact_path in artifact_paths:
         artifact_text = artifact_path.read_text(encoding="utf-8")
         artifact_payload = json.loads(artifact_text)
+        _assert_no_raw_hash_values(artifact_payload)
+        _assert_safe_output(artifact_text)
+
+
+def test_sweep_nested_report_boundary_accepts_legacy_review_json_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_doctor_pass(monkeypatch, calls)
+    _patch_nested_report_delegate(
+        monkeypatch,
+        calls=calls,
+        decisions=[
+            "manual_review_needed",
+            "not_blocked",
+            "already_sent_by_current_hash",
+        ],
+        artifact_kind="legacy-review-json",
+        stderr_text="synthetic delegated stderr",
+        stdout_text="synthetic delegated stdout",
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path))
+
+    assert code == 30
+    assert calls.count("manual_doctor") == 3
+    assert calls.count("report:manual_review_needed") == 1
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["reason_code"] is None
+    assert parsed["executed_report_count"] == 3
+    assert parsed["aggregate_decision"] == "manual_review_needed"
+    assert all(window["status"] == "completed" for window in parsed["windows"])
+    assert all(window["artifact_written"] is True for window in parsed["windows"])
+    assert parsed["windows"][0]["exit_code"] == 30
+    assert parsed["windows"][0]["decision"] == "manual_review_needed"
+    artifact_paths = sorted((tmp_path / "sweep").glob("*.json"))
+    assert len(artifact_paths) == 3
+    for artifact_path in artifact_paths:
+        artifact_text = artifact_path.read_text(encoding="utf-8")
+        artifact_payload = json.loads(artifact_text)
+        assert artifact_payload["artifact_schema"] == (
+            review_script.REVIEW_JSON_ARTIFACT_SCHEMA
+        )
+        assert artifact_payload["output_format"] == "review-json"
         _assert_no_raw_hash_values(artifact_payload)
         _assert_safe_output(artifact_text)
 

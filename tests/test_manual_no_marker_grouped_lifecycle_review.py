@@ -211,6 +211,7 @@ def _patch_production_report_artifact(
     stderr_text: str | None = None,
     stdout_text: str | None = None,
     drop_diagnostics: bool = False,
+    artifact_kind: str = "review-json",
 ) -> None:
     full_report = _full_report_for_decision(decision)
 
@@ -222,7 +223,15 @@ def _patch_production_report_artifact(
         assert "--review-exit-code" in argv
         assert "--output-path" in argv
         output_path = Path(argv[argv.index("--output-path") + 1])
-        artifact_payload = review_script.format_review_json_report(full_report)
+        if artifact_kind == "full":
+            artifact_payload = dict(full_report)
+        else:
+            artifact_payload = review_script.format_review_json_report(full_report)
+            if artifact_kind == "legacy-review-json":
+                artifact_payload.pop("artifact_schema", None)
+                artifact_payload.pop("output_format", None)
+            elif artifact_kind == "wrong-schema":
+                artifact_payload["artifact_schema"] = "unsupported_review_json.v1"
         if drop_diagnostics:
             artifact_payload.pop("manual_review_diagnostics", None)
         review_script._write_json_artifact(artifact_payload, output_path)
@@ -756,6 +765,39 @@ def test_manual_runner_acknowledged_run_accepts_lookback_hours(
     _assert_safe_output(captured.out)
 
 
+def test_manual_runner_report_argv_requests_review_json_artifact_contract(
+    tmp_path: Path,
+) -> None:
+    artifact_path = tmp_path / "review" / "delegated-report.json"
+    args = manual_script._parse_args(_lookback_args(tmp_path))
+    resolved_window = manual_script.ResolvedWindow(
+        start_at="2149-01-01T00:00:00+00:00",
+        end_at="2149-01-02T00:00:00+00:00",
+        source="lookback_hours",
+        lookback_hours=24.0,
+    )
+
+    report_args = manual_script._report_args(
+        args,
+        resolved_window,
+        artifact_path=artifact_path,
+    )
+
+    assert report_args[report_args.index("--start-at") + 1] == (
+        "2149-01-01T00:00:00+00:00"
+    )
+    assert report_args[report_args.index("--end-at") + 1] == (
+        "2149-01-02T00:00:00+00:00"
+    )
+    assert report_args[report_args.index("--format") + 1] == "review-json"
+    assert report_args[report_args.index("--output-path") + 1] == str(
+        artifact_path
+    )
+    assert "--review-exit-code" in report_args
+    assert "--allow-local-data-readonly" not in report_args
+    assert "--preflight-only" not in report_args
+
+
 def test_manual_runner_doctor_failure_stops_before_report(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -986,6 +1028,46 @@ def test_manual_runner_accepts_production_report_artifact_contract(
     _assert_safe_output(captured.out)
 
 
+def test_manual_runner_accepts_legacy_review_json_artifact_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_production_report_artifact(
+        monkeypatch,
+        calls=calls,
+        decision="manual_review_needed",
+        exit_code=30,
+        artifact_kind="legacy-review-json",
+        stderr_text="synthetic delegated stderr",
+        stdout_text="synthetic delegated stdout",
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == 30
+    assert calls == ["doctor", "report"]
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    parsed = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert parsed == artifact_payload
+    assert parsed["artifact_schema"] == review_script.REVIEW_JSON_ARTIFACT_SCHEMA
+    assert parsed["output_format"] == "review-json"
+    assert parsed["operator_review_summary"]["decision"] == (
+        "manual_review_needed"
+    )
+    assert parsed["manual_review_diagnostics"]["diagnostic_status"] == (
+        "manual_review_needed"
+    )
+    _assert_no_raw_hash_values(parsed)
+    _assert_safe_output(captured.out)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
 def test_manual_runner_delegated_report_boundary_does_not_check_nonzero_outcomes() -> None:
     source = inspect.getsource(manual_script._delegate_report)
 
@@ -1167,6 +1249,76 @@ def test_manual_runner_rejects_missing_delegated_report_diagnostics(
     parsed = json.loads(captured.out)
     assert parsed["status"] == "blocked"
     assert parsed["reason_code"] == "delegated_report_failed"
+    assert parsed["executed_report"] is False
+    _assert_safe_output(captured.out)
+
+
+def test_manual_runner_rejects_wrong_delegated_report_schema(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_production_report_artifact(
+        monkeypatch,
+        calls=calls,
+        decision="manual_review_needed",
+        exit_code=30,
+        artifact_kind="wrong-schema",
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == manual_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "report"]
+    assert artifact_path.exists()
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    assert parsed["executed_report"] is False
+    _assert_safe_output(captured.out)
+
+
+def test_manual_runner_rejects_wrong_delegated_report_artifact_path(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+
+    def fake_report_main(argv: list[str] | None = None) -> int:
+        calls.append("report")
+        assert argv is not None
+        assert "--format" in argv
+        assert argv[argv.index("--format") + 1] == "review-json"
+        assert "--output-path" in argv
+        requested_path = Path(argv[argv.index("--output-path") + 1])
+        wrong_path = requested_path.with_name("delegated-report-wrong-path.json")
+        review_script._write_json_artifact(
+            review_script.format_review_json_report(
+                _full_report_for_decision("manual_review_needed")
+            ),
+            wrong_path,
+        )
+        print("synthetic delegated stdout")
+        return 30
+
+    monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == manual_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "report"]
+    assert not artifact_path.exists()
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["reason_code"] == "delegated_report_invalid_json"
     assert parsed["executed_report"] is False
     _assert_safe_output(captured.out)
 

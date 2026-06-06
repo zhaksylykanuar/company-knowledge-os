@@ -1619,6 +1619,34 @@ def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
     _assert_safe_output(captured.out)
 
 
+def test_review_json_artifact_shape_predicates_distinguish_cli_contracts() -> None:
+    scenario = compat_script.build_synthetic_review_smoke_report()["scenarios"][0]
+    legacy_review_json = dict(scenario)
+    legacy_review_json.pop("artifact_schema", None)
+    legacy_review_json.pop("output_format", None)
+    full_report = {
+        **legacy_review_json,
+        "candidate": {},
+        "grouped_preview": {},
+        "duplicate_quality": {},
+        "recommended_next_action": "inspect_review_artifact",
+        "warnings": [],
+        "limitations": [],
+    }
+    wrong_schema = dict(scenario)
+    wrong_schema["artifact_schema"] = "unsupported_review_json.v1"
+
+    assert compat_script.is_review_json_artifact(scenario) is True
+    assert compat_script.is_legacy_review_json_artifact(scenario) is False
+    assert compat_script.is_full_compatibility_report_artifact(scenario) is False
+    assert compat_script.is_review_json_artifact(legacy_review_json) is False
+    assert compat_script.is_legacy_review_json_artifact(legacy_review_json) is True
+    assert compat_script.is_full_compatibility_report_artifact(full_report) is True
+    assert compat_script.is_review_json_artifact(wrong_schema) is False
+    assert compat_script.is_legacy_review_json_artifact(wrong_schema) is False
+    assert compat_script.is_full_compatibility_report_artifact(wrong_schema) is False
+
+
 def test_synthetic_review_smoke_review_exit_code_is_most_conservative(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

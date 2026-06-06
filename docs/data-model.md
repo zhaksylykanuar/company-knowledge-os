@@ -906,6 +906,12 @@
   remain local review/debug artifacts only; the tooling remains
   default-blocked, doctor-gated, sanitized-output-only, no-send,
   non-enforcing, and not a source-of-truth mutation.
+- FOS-122 adds no storage and tightens the CLI-level delegated report artifact
+  contract. The manual runner requests `review-json` at the exact delegated
+  artifact path, accepts schema-marked review artifacts, markerless legacy
+  review-json artifacts, or full compatibility reports only after sanitized
+  conversion, and keeps wrong-path, wrong-schema, malformed, mismatched, or
+  unsafe artifacts as sanitized failures.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

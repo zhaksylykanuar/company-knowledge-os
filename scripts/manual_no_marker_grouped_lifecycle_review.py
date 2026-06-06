@@ -435,6 +435,8 @@ def _normalize_delegated_report_artifact(
 ) -> Mapping[str, Any]:
     if review_script.is_review_json_artifact(payload):
         return payload
+    if review_script.is_legacy_review_json_artifact(payload):
+        return review_script.format_review_json_report(payload)
     if review_script.is_full_compatibility_report_artifact(payload):
         return review_script.format_review_json_report(payload)
     raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
