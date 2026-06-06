@@ -5,6 +5,11 @@ from typing import Any
 import pytest
 
 import app.services.telegram_delivery as telegram_delivery
+from app.services.provider_execution_guard import (
+    LIVE_PROVIDER_EXECUTION_ACK,
+    PROVIDER_EXECUTION_ACK_REQUIRED,
+    PROVIDER_EXECUTION_DEFAULT_DENIED,
+)
 from app.services.telegram_delivery import (
     TELEGRAM_MESSAGE_CHAR_LIMIT,
     build_telegram_send_message_payload,
@@ -158,6 +163,90 @@ async def test_send_telegram_plain_text_calls_fake_transport_once_per_chunk_in_o
     assert result.sent_chunks == 2
     assert result.message_ids == (1, 2)
     assert [payload["text"] for _, payload in transport.calls] == expected_chunks
+
+
+async def test_send_telegram_plain_text_default_denies_live_provider_before_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def forbidden_httpx_post_json(
+        url: str,
+        payload: Mapping[str, str],
+    ) -> Mapping[str, Any]:
+        raise AssertionError("default-denied live provider path must not call network")
+
+    monkeypatch.setattr(telegram_delivery, "_httpx_post_json", forbidden_httpx_post_json)
+
+    result = await send_telegram_plain_text(
+        bot_token="TELEGRAM_BOT_TOKEN",
+        chat_id="TELEGRAM_CHAT_ID",
+        text="Source activity digest",
+    )
+
+    assert result.success is False
+    assert result.attempted_chunks == 0
+    assert result.sent_chunks == 0
+    assert result.error_summary == PROVIDER_EXECUTION_DEFAULT_DENIED
+    assert "TELEGRAM_BOT_TOKEN" not in repr(result)
+
+
+async def test_send_telegram_plain_text_requires_exact_live_provider_ack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def forbidden_httpx_post_json(
+        url: str,
+        payload: Mapping[str, str],
+    ) -> Mapping[str, Any]:
+        raise AssertionError("missing live provider ack must not call network")
+
+    monkeypatch.setattr(telegram_delivery, "_httpx_post_json", forbidden_httpx_post_json)
+
+    result = await send_telegram_plain_text(
+        bot_token="TELEGRAM_BOT_TOKEN",
+        chat_id="TELEGRAM_CHAT_ID",
+        text="Source activity digest",
+        allow_live_provider_execution=True,
+        provider_execution_ack="wrong_ack",
+    )
+
+    assert result.success is False
+    assert result.attempted_chunks == 0
+    assert result.sent_chunks == 0
+    assert result.error_summary == PROVIDER_EXECUTION_ACK_REQUIRED
+    assert "TELEGRAM_BOT_TOKEN" not in repr(result)
+
+
+async def test_send_telegram_plain_text_live_provider_ack_uses_http_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    async def fake_httpx_post_json(
+        url: str,
+        payload: Mapping[str, str],
+    ) -> Mapping[str, Any]:
+        calls.append((url, dict(payload)))
+        return {
+            "ok": True,
+            "result": {
+                "message_id": "message-1",
+            },
+        }
+
+    monkeypatch.setattr(telegram_delivery, "_httpx_post_json", fake_httpx_post_json)
+
+    result = await send_telegram_plain_text(
+        bot_token="TELEGRAM_BOT_TOKEN",
+        chat_id="TELEGRAM_CHAT_ID",
+        text="Source activity digest",
+        allow_live_provider_execution=True,
+        provider_execution_ack=LIVE_PROVIDER_EXECUTION_ACK,
+    )
+
+    assert result.success is True
+    assert result.attempted_chunks == 1
+    assert result.sent_chunks == 1
+    assert result.message_ids == ("message-1",)
+    assert len(calls) == 1
 
 
 async def test_send_telegram_plain_text_stops_on_failure_with_safe_result() -> None:

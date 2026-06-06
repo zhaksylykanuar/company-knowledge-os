@@ -88,6 +88,8 @@
   implemented
 - Gated grouped lifecycle review window sweep runner:
   implemented
+- Default-denied live provider execution guard:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -336,6 +338,11 @@
   adds no API send endpoint, production mode, scheduler job, delivery worker,
   outbox table, automatic retry, approval-triggered execution, new table, or
   migration.
+- Provider execution guards are runtime boundaries, not data model tables. Live
+  provider calls are default-denied unless a separate bounded execution path
+  supplies explicit acknowledgement. External API responses remain raw event or
+  delivery-interface material until stored and validated through existing
+  source-of-truth paths; Telegram and Slack are not source-of-truth stores.
 - Local/dev-only synthetic persisted attention digest seed rows are explicit
   test fixtures in the local database, not company facts. The seed command uses
   deterministic IDs and fails closed on conflicts while writing only enough

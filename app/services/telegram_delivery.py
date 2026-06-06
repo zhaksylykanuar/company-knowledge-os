@@ -6,6 +6,11 @@ from typing import Any
 
 import httpx
 
+from app.services.provider_execution_guard import (
+    ProviderExecutionBlockedError,
+    require_live_provider_execution_ack,
+)
+
 TELEGRAM_MESSAGE_CHAR_LIMIT = 4096
 DEFAULT_TELEGRAM_CHUNK_SIZE = 3900
 TELEGRAM_API_BASE_URL = "https://api.telegram.org"
@@ -147,11 +152,32 @@ async def send_telegram_plain_text(
     text: str,
     transport: TelegramSendMessageTransport | None = None,
     chunk_size: int = DEFAULT_TELEGRAM_CHUNK_SIZE,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
 ) -> TelegramDeliveryResult:
     token = _require_non_empty(bot_token, field_name="bot_token")
     cleaned_chat_id = _require_non_empty(chat_id, field_name="chat_id")
     chunks = split_telegram_plain_text(text, max_chars=chunk_size)
-    post_json = transport or _httpx_post_json
+
+    if transport is None:
+        try:
+            require_live_provider_execution_ack(
+                provider="telegram",
+                boundary="telegram_send_message",
+                allow_live_provider_execution=allow_live_provider_execution,
+                provider_execution_ack=provider_execution_ack,
+            )
+        except ProviderExecutionBlockedError as exc:
+            return TelegramDeliveryResult(
+                success=False,
+                attempted_chunks=0,
+                sent_chunks=0,
+                error_summary=exc.reason_code,
+            )
+        post_json = _httpx_post_json
+    else:
+        post_json = transport
+
     url = _send_message_url(token)
 
     message_ids: list[int | str] = []

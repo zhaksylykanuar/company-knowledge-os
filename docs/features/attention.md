@@ -59,6 +59,8 @@
 - Sanitized grouped lifecycle manual-review diagnostics: implemented
 - Grouped lifecycle review artifact hash redaction: implemented
 - Gated grouped lifecycle review window sweep runner: implemented
+- Default-denied live provider execution guard for delivery adapters:
+  implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -210,6 +212,11 @@
   remains idempotent and returns the stored result without sending. Failed,
   partial, skipped, malformed, or incomplete prior results do not silently count
   as successful duplicates, and there is no override flag in this slice.
+- Live provider execution is default-denied unless a separately gated execution
+  path supplies an explicit provider acknowledgement. Local attention review,
+  digest drafting, preflight, gate, and grouped lifecycle tools remain
+  provider-free and no-send. External APIs are raw event or interface
+  boundaries, not interpreted truth.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

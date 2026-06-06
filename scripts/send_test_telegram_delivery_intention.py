@@ -387,6 +387,7 @@ async def _send_bounded_chunks(
     chunks: list[str],
     transport: TelegramSendMessageTransport | None,
 ) -> _BoundedTelegramSendResult:
+    from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
     from app.services.telegram_delivery import (
         DEFAULT_TELEGRAM_CHUNK_SIZE,
         send_telegram_plain_text,
@@ -405,6 +406,8 @@ async def _send_bounded_chunks(
             text=chunk,
             transport=transport,
             chunk_size=DEFAULT_TELEGRAM_CHUNK_SIZE,
+            allow_live_provider_execution=True,
+            provider_execution_ack=LIVE_PROVIDER_EXECUTION_ACK,
         )
         attempted_chunk_count += result.attempted_chunks
         delivered_chunk_count += result.sent_chunks

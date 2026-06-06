@@ -60,6 +60,8 @@
 - Sanitized grouped lifecycle manual-review diagnostics: implemented
 - Grouped lifecycle review artifact hash redaction: implemented
 - Gated grouped lifecycle review window sweep runner: implemented
+- Default-denied live provider execution guard for the Telegram adapter:
+  implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -82,6 +84,7 @@ submitting founder notes for ingestion. Telegram is not the source of truth.
 
 - Raw storage and Postgres are authoritative.
 - Obsidian is export-only.
+- External APIs are raw event or interface boundaries, not interpreted truth.
 - Telegram messages can become source events only when intentionally ingested.
 - ChatGPT or the OpenAI API may help extract, summarize, or answer, but must not
   be treated as the database or source of truth.
@@ -231,6 +234,11 @@ trusted facts.
   low-priority details, or newly exposed evidence refs. It is not production
   delivery and adds no API send endpoint, scheduler, delivery worker, outbox
   table, automatic retry, production mode, or approval-triggered execution.
+- Live provider execution is default-denied at the provider adapter boundary.
+  Local review, draft, plan, preflight, gate, and grouped lifecycle tooling must
+  stay provider-free and no-send unless a separate bounded execution path
+  explicitly supplies the live-provider acknowledgement. Telegram and Slack
+  remain delivery/interface surfaces only, not source-of-truth stores.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,
