@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 from app.core.config import settings
+from app.services.provider_execution_guard import require_live_provider_execution_ack
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 GOOGLE_DOC_MIME = "application/vnd.google-apps.document"
@@ -14,7 +15,18 @@ GOOGLE_SHEET_MIME = "application/vnd.google-apps.spreadsheet"
 GOOGLE_SLIDES_MIME = "application/vnd.google-apps.presentation"
 
 
-def get_drive_service():
+def get_drive_service(
+    *,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
+):
+    require_live_provider_execution_ack(
+        provider="google_drive",
+        boundary="drive_service",
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
+
     token_path = Path(settings.google_token_file)
     creds = None
 
@@ -30,11 +42,19 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds)
 
 
-def list_ai_inbox_files(page_size: int = 50) -> list[dict]:
+def list_ai_inbox_files(
+    page_size: int = 50,
+    *,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
+) -> list[dict]:
     if not settings.google_drive_ai_inbox_folder_id:
         raise RuntimeError("GOOGLE_DRIVE_AI_INBOX_FOLDER_ID is empty")
 
-    service = get_drive_service()
+    service = get_drive_service(
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
     query = f"'{settings.google_drive_ai_inbox_folder_id}' in parents and trashed=false"
     response = service.files().list(
         q=query,
@@ -56,8 +76,17 @@ def _download_request(service, file_id: str, mime_type: str | None):
     return service.files().get_media(fileId=file_id)
 
 
-def download_file_text(file_id: str, mime_type: str | None = None) -> str:
-    service = get_drive_service()
+def download_file_text(
+    file_id: str,
+    mime_type: str | None = None,
+    *,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
+) -> str:
+    service = get_drive_service(
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
     request = _download_request(service, file_id, mime_type)
 
     file = io.BytesIO()

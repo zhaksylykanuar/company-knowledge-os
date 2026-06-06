@@ -62,6 +62,8 @@
 - Gated grouped lifecycle review window sweep runner: implemented
 - Default-denied live provider execution guard for the Telegram adapter:
   implemented
+- Default-denied live provider execution guard coverage for OpenAI, Gmail, and
+  Drive connector/client boundaries: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -239,6 +241,11 @@ trusted facts.
   stay provider-free and no-send unless a separate bounded execution path
   explicitly supplies the live-provider acknowledgement. Telegram and Slack
   remain delivery/interface surfaces only, not source-of-truth stores.
+- The same default-denied provider execution guard applies to OpenAI, Gmail, and
+  Drive connector/client boundaries. Those external APIs are raw event/provider
+  boundaries only; their responses must pass through the existing storage,
+  normalization, and validation paths before any derived company knowledge is
+  trusted.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

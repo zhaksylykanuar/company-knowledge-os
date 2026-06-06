@@ -90,6 +90,9 @@
   implemented
 - Default-denied live provider execution guard:
   implemented
+- Extended default-denied provider execution guard coverage for OpenAI, Gmail,
+  and Drive connector/client boundaries:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -343,6 +346,10 @@
   supplies explicit acknowledgement. External API responses remain raw event or
   delivery-interface material until stored and validated through existing
   source-of-truth paths; Telegram and Slack are not source-of-truth stores.
+- OpenAI, Gmail, and Drive connector/client calls share that default-denied
+  runtime boundary. Guard diagnostics are safe reason classes only and must not
+  include provider payloads, source identifiers, credential values, rendered
+  digest text, or raw event contents.
 - Local/dev-only synthetic persisted attention digest seed rows are explicit
   test fixtures in the local database, not company facts. The seed command uses
   deterministic IDs and fails closed on conflicts while writing only enough

@@ -5,9 +5,21 @@ from openai import OpenAI
 from app.agents.evidence_validator import validate_evidence
 from app.agents.schemas import EvidenceRef, ExtractedDecision, ExtractedRisk, ExtractedTask, ExtractionResult
 from app.core.config import settings
+from app.services.provider_execution_guard import require_live_provider_execution_ack
 
 
-def get_openai_client() -> OpenAI:
+def get_openai_client(
+    *,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
+) -> OpenAI:
+    require_live_provider_execution_ack(
+        provider="openai",
+        boundary="llm_runner_client",
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
+
     if not settings.enable_llm:
         raise RuntimeError("LLM is disabled. Set ENABLE_LLM=true to use LLMAgentRunner.")
     if not settings.openai_api_key:
@@ -16,6 +28,15 @@ def get_openai_client() -> OpenAI:
 
 
 class LLMAgentRunner:
+    def __init__(
+        self,
+        *,
+        allow_live_provider_execution: bool = False,
+        provider_execution_ack: str | None = None,
+    ) -> None:
+        self.allow_live_provider_execution = allow_live_provider_execution
+        self.provider_execution_ack = provider_execution_ack
+
     async def extract(
         self,
         *,
@@ -25,7 +46,10 @@ class LLMAgentRunner:
         text: str,
         source_url: str | None = None,
     ) -> ExtractionResult:
-        client = get_openai_client()
+        client = get_openai_client(
+            allow_live_provider_execution=self.allow_live_provider_execution,
+            provider_execution_ack=self.provider_execution_ack,
+        )
 
         response = client.responses.create(
             model="gpt-4o-mini",

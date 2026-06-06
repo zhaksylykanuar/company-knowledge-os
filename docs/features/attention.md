@@ -61,6 +61,8 @@
 - Gated grouped lifecycle review window sweep runner: implemented
 - Default-denied live provider execution guard for delivery adapters:
   implemented
+- Default-denied live provider execution guard coverage for OpenAI, Gmail, and
+  Drive connector/client boundaries: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -217,6 +219,10 @@
   digest drafting, preflight, gate, and grouped lifecycle tools remain
   provider-free and no-send. External APIs are raw event or interface
   boundaries, not interpreted truth.
+- OpenAI, Gmail, and Drive connector/client boundaries use the same
+  default-denied guard. Synthetic injected providers and local normalized-data
+  transforms remain usable for tests and review without live-provider
+  acknowledgement.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
