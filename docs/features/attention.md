@@ -243,7 +243,9 @@
   is still manual-operator-only and must pass the scheduler non-execution guard,
   provider guard, production-operation guard, human approval checks, and
   duplicate-success protection before any test send adapter is invoked. Future
-  scheduler/outbox execution remains out of scope.
+  scheduler/outbox execution remains out of scope. See
+  `../runbooks/guarded-operations.md` for the concise guarded-operations
+  summary.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

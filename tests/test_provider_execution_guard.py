@@ -8,6 +8,8 @@ from app.services.provider_execution_guard import (
     PROVIDER_EXECUTION_ACK_REQUIRED,
     PROVIDER_EXECUTION_ALLOWED,
     PROVIDER_EXECUTION_DEFAULT_DENIED,
+    UNKNOWN_PROVIDER,
+    UNKNOWN_PROVIDER_BOUNDARY,
     ProviderExecutionBlockedError,
     require_live_provider_execution_ack,
 )
@@ -67,6 +69,20 @@ def test_provider_execution_guard_requires_exact_operator_ack() -> None:
     assert diagnostics["reason_code"] == PROVIDER_EXECUTION_ACK_REQUIRED
     assert diagnostics["allowed"] is False
     assert LIVE_PROVIDER_EXECUTION_ACK not in repr(diagnostics)
+
+
+def test_provider_execution_guard_sanitizes_unknown_labels() -> None:
+    with pytest.raises(ProviderExecutionBlockedError) as exc_info:
+        require_live_provider_execution_ack(
+            provider="unsafe provider label",
+            boundary="unsafe boundary label",
+        )
+
+    diagnostics = exc_info.value.diagnostics.as_dict()
+    assert diagnostics["provider"] == UNKNOWN_PROVIDER
+    assert diagnostics["boundary"] == UNKNOWN_PROVIDER_BOUNDARY
+    assert "unsafe provider label" not in repr(diagnostics)
+    assert "unsafe boundary label" not in repr(diagnostics)
 
 
 def test_provider_execution_guard_allows_explicit_live_ack() -> None:

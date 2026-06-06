@@ -373,7 +373,8 @@
   and explicitly asserts it is not scheduler/outbox managed before reaching
   provider or production-operation gates. Delivery intentions remain durable
   handoff audit artifacts, and delivery results remain execution outcome
-  metadata only.
+  metadata only. See `runbooks/guarded-operations.md` for the concise operator
+  guard summary and diagnostic rules.
 - Local/dev-only synthetic persisted attention digest seed rows are explicit
   test fixtures in the local database, not company facts. The seed command uses
   deterministic IDs and fails closed on conflicts while writing only enough

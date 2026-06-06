@@ -269,7 +269,8 @@ trusted facts.
   drain, background dispatch, retry worker, or automatic delivery path before
   provider and production-operation gates can be reached. Delivery intentions
   remain durable handoff artifacts, and delivery results remain execution
-  outcome metadata only.
+  outcome metadata only. The concise operator summary lives in
+  `../runbooks/guarded-operations.md`.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

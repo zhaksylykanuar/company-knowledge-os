@@ -34,6 +34,7 @@ Navigation map for future Codex sessions.
 ## Runbooks
 
 - `operator_runtime_setup.md`: local operator env, health checks, and Codex launcher setup.
+- `runbooks/guarded-operations.md`: guarded execution boundaries and safe diagnostics.
 - `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
 
 ## Agent Workflows

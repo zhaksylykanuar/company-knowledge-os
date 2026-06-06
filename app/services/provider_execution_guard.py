@@ -6,6 +6,25 @@ LIVE_PROVIDER_EXECUTION_ACK = "ALLOW LIVE PROVIDER EXECUTION"
 PROVIDER_EXECUTION_ALLOWED = "provider_execution_allowed"
 PROVIDER_EXECUTION_DEFAULT_DENIED = "provider_execution_default_denied"
 PROVIDER_EXECUTION_ACK_REQUIRED = "provider_execution_ack_required"
+UNKNOWN_PROVIDER = "external_provider"
+UNKNOWN_PROVIDER_BOUNDARY = "provider_boundary"
+
+SAFE_PROVIDERS = frozenset(
+    {
+        "gmail",
+        "google_drive",
+        "openai",
+        "telegram",
+    }
+)
+SAFE_PROVIDER_BOUNDARIES = frozenset(
+    {
+        "drive_service",
+        "gmail_service",
+        "llm_runner_client",
+        "telegram_send_message",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -37,8 +56,8 @@ class ProviderExecutionBlockedError(RuntimeError):
     ) -> None:
         super().__init__(reason_code)
         self.diagnostics = ProviderExecutionDiagnostics(
-            provider=provider,
-            boundary=boundary,
+            provider=_safe_provider(provider),
+            boundary=_safe_boundary(boundary),
             execution_mode=execution_mode,
             reason_code=reason_code,
             allowed=False,
@@ -56,24 +75,39 @@ def require_live_provider_execution_ack(
     allow_live_provider_execution: bool = False,
     provider_execution_ack: str | None = None,
 ) -> ProviderExecutionDiagnostics:
+    safe_provider = _safe_provider(provider)
+    safe_boundary = _safe_boundary(boundary)
+
     if allow_live_provider_execution is not True:
         raise ProviderExecutionBlockedError(
-            provider=provider,
-            boundary=boundary,
+            provider=safe_provider,
+            boundary=safe_boundary,
             reason_code=PROVIDER_EXECUTION_DEFAULT_DENIED,
         )
 
     if provider_execution_ack != LIVE_PROVIDER_EXECUTION_ACK:
         raise ProviderExecutionBlockedError(
-            provider=provider,
-            boundary=boundary,
+            provider=safe_provider,
+            boundary=safe_boundary,
             reason_code=PROVIDER_EXECUTION_ACK_REQUIRED,
         )
 
     return ProviderExecutionDiagnostics(
-        provider=provider,
-        boundary=boundary,
+        provider=safe_provider,
+        boundary=safe_boundary,
         execution_mode="live_provider",
         reason_code=PROVIDER_EXECUTION_ALLOWED,
         allowed=True,
     )
+
+
+def _safe_provider(provider: str) -> str:
+    if provider in SAFE_PROVIDERS:
+        return provider
+    return UNKNOWN_PROVIDER
+
+
+def _safe_boundary(boundary: str) -> str:
+    if boundary in SAFE_PROVIDER_BOUNDARIES:
+        return boundary
+    return UNKNOWN_PROVIDER_BOUNDARY
