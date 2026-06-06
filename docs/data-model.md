@@ -897,6 +897,15 @@
   only; the tooling remains default-blocked, doctor-gated,
   sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
   mutation.
+- FOS-120 adds no storage and makes the delegated report review-json artifact
+  contract explicit. Review-json artifacts carry a stable schema marker so the
+  manual runner can distinguish them from full compatibility reports; full
+  reports are converted through the sanitized formatter before validation.
+- FOS-120 keeps ambiguous, missing, malformed, mismatched, or unsafe delegated
+  report artifacts as sanitized failures only. Review and sweep artifacts
+  remain local review/debug artifacts only; the tooling remains
+  default-blocked, doctor-gated, sanitized-output-only, no-send,
+  non-enforcing, and not a source-of-truth mutation.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

@@ -1226,6 +1226,8 @@ def test_review_json_output_is_decision_only_and_sanitized() -> None:
 
     assert result.returncode == 0
     parsed = json.loads(result.stdout)
+    assert parsed["artifact_schema"] == compat_script.REVIEW_JSON_ARTIFACT_SCHEMA
+    assert parsed["output_format"] == "review-json"
     assert parsed["status"] == "no_marker_grouped_lifecycle_compatibility"
     assert "lifecycle_compatibility" in parsed
     assert "canonical_hash_guard_evaluation" in parsed
@@ -1567,6 +1569,10 @@ def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
     }
 
     for scenario in scenarios:
+        assert scenario["artifact_schema"] == (
+            compat_script.REVIEW_JSON_ARTIFACT_SCHEMA
+        )
+        assert scenario["output_format"] == "review-json"
         assert "lifecycle_compatibility" in scenario
         assert "canonical_hash_guard_evaluation" in scenario
         assert "operator_review_summary" in scenario

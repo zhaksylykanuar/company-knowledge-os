@@ -1041,6 +1041,12 @@ Implemented today:
   outcome, so delegated report stdout is not required to be the review payload.
   Missing or malformed report artifacts, unexpected return codes,
   decision/code mismatches, and sanitizer failures remain sanitized failures.
+- FOS-120 makes the delegated report review-json artifact contract explicit.
+  The report artifact carries a stable review-json schema marker, and the
+  manual runner distinguishes that artifact from a full compatibility report
+  before validation. Full reports are converted through the same sanitized
+  formatter; ambiguous, missing, malformed, mismatched, or unsafe artifacts
+  remain sanitized failures.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

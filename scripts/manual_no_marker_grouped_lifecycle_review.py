@@ -430,6 +430,28 @@ def _report_args(
     return report_args
 
 
+def _normalize_delegated_report_artifact(
+    payload: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    if review_script.is_review_json_artifact(payload):
+        return payload
+    if review_script.is_full_compatibility_report_artifact(payload):
+        return review_script.format_review_json_report(payload)
+    raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+
+
+def _decision_from_review_artifact(payload: Mapping[str, Any]) -> str | None:
+    summary = payload.get("operator_review_summary")
+    diagnostics = payload.get("manual_review_diagnostics")
+    if not isinstance(summary, Mapping) or not isinstance(diagnostics, Mapping):
+        return None
+    decision = summary.get("decision")
+    diagnostic_status = diagnostics.get("diagnostic_status")
+    if not isinstance(decision, str) or diagnostic_status != decision:
+        return None
+    return decision
+
+
 def _delegate_report(
     args: argparse.Namespace,
     resolved_window: ResolvedWindow,
@@ -457,10 +479,8 @@ def _delegate_report(
             "delegated_report_invalid_json",
             EXIT_INVALID_USAGE,
         )
-    if payload.get("status") == "no_marker_grouped_lifecycle_compatibility":
-        payload = review_script.format_review_json_report(payload)
-    summary = payload.get("operator_review_summary")
-    payload_decision = summary.get("decision") if isinstance(summary, Mapping) else None
+    payload = _normalize_delegated_report_artifact(payload)
+    payload_decision = _decision_from_review_artifact(payload)
     if payload_decision != delegated_decision:
         raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
     try:

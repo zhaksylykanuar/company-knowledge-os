@@ -51,9 +51,18 @@ REVIEW_DECISION_EXIT_CODES = {
     "blocked_by_linked_canonical_hash": 20,
     "manual_review_needed": 30,
 }
+REVIEW_JSON_ARTIFACT_SCHEMA = "no_marker_grouped_lifecycle_review_json.v1"
 MANUAL_REVIEW_DIAGNOSTIC_VERSION = (
     "grouped_lifecycle_manual_review_diagnostics.v1"
 )
+FULL_REPORT_ONLY_KEYS = {
+    "candidate",
+    "grouped_preview",
+    "duplicate_quality",
+    "recommended_next_action",
+    "warnings",
+    "limitations",
+}
 MANUAL_REVIEW_SAFE_NEXT_STEPS = {
     "inspect_review_artifact",
     "repeat_with_bounded_window",
@@ -1253,6 +1262,8 @@ def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
     )
 
     return {
+        "artifact_schema": REVIEW_JSON_ARTIFACT_SCHEMA,
+        "output_format": "review-json",
         "status": report.get("status"),
         "start_at": report.get("start_at"),
         "end_at": report.get("end_at"),
@@ -1272,6 +1283,23 @@ def format_review_json_report(report: Mapping[str, Any]) -> dict[str, Any]:
         "manual_review_diagnostics": manual_review_diagnostics,
         "safety": dict(_mapping(report.get("safety"))),
     }
+
+
+def is_full_compatibility_report_artifact(report: Mapping[str, Any]) -> bool:
+    return (
+        report.get("status") == "no_marker_grouped_lifecycle_compatibility"
+        and any(key in report for key in FULL_REPORT_ONLY_KEYS)
+    )
+
+
+def is_review_json_artifact(report: Mapping[str, Any]) -> bool:
+    return (
+        report.get("artifact_schema") == REVIEW_JSON_ARTIFACT_SCHEMA
+        and report.get("output_format") == "review-json"
+        and isinstance(report.get("operator_review_summary"), Mapping)
+        and isinstance(report.get("manual_review_diagnostics"), Mapping)
+        and not any(key in report for key in FULL_REPORT_ONLY_KEYS)
+    )
 
 
 def _synthetic_canonical_hash_guard_evaluation(

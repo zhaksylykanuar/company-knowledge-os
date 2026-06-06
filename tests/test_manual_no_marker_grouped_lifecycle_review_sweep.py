@@ -897,6 +897,10 @@ def test_faithful_nested_synthetic_sweep_completes_artifact_backed_windows(
     for artifact_path in artifact_paths:
         artifact_text = artifact_path.read_text(encoding="utf-8")
         artifact_payload = json.loads(artifact_text)
+        assert artifact_payload["artifact_schema"] == (
+            review_script.REVIEW_JSON_ARTIFACT_SCHEMA
+        )
+        assert artifact_payload["output_format"] == "review-json"
         assert "operator_review_summary" in artifact_payload
         assert "manual_review_diagnostics" in artifact_payload
         _assert_no_raw_hash_values(artifact_payload)

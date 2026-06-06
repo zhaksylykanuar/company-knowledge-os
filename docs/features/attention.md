@@ -1018,6 +1018,12 @@
   outcome, so delegated report stdout is not required to be the review payload.
   Missing or malformed report artifacts, unexpected return codes,
   decision/code mismatches, and sanitizer failures remain sanitized failures.
+- FOS-120 makes the delegated report review-json artifact contract explicit.
+  The report artifact carries a stable review-json schema marker, and the
+  manual runner distinguishes that artifact from a full compatibility report
+  before validation. Full reports are converted through the same sanitized
+  formatter; ambiguous, missing, malformed, mismatched, or unsafe artifacts
+  remain sanitized failures.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

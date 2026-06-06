@@ -109,6 +109,24 @@ def _review_payload_for_decision(decision: str) -> dict[str, Any]:
     raise AssertionError(f"missing synthetic scenario for {decision}")
 
 
+def _full_report_for_decision(decision: str) -> dict[str, Any]:
+    review_payload = _review_payload_for_decision(decision)
+    full_payload = {
+        key: value
+        for key, value in review_payload.items()
+        if key not in {"artifact_schema", "output_format"}
+    }
+    return {
+        **full_payload,
+        "candidate": {},
+        "grouped_preview": {},
+        "duplicate_quality": {},
+        "recommended_next_action": "inspect_review_artifact",
+        "warnings": [],
+        "limitations": [],
+    }
+
+
 def _base_args(tmp_path: Path) -> list[str]:
     return [
         "--allow-local-data-readonly",
@@ -184,6 +202,42 @@ def _patch_report(
     monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
 
 
+def _patch_production_report_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    calls: list[str],
+    decision: str,
+    exit_code: int,
+    stderr_text: str | None = None,
+    stdout_text: str | None = None,
+    drop_diagnostics: bool = False,
+) -> None:
+    full_report = _full_report_for_decision(decision)
+
+    def fake_report_main(argv: list[str] | None = None) -> int:
+        calls.append("report")
+        assert argv is not None
+        assert "--format" in argv
+        assert argv[argv.index("--format") + 1] == "review-json"
+        assert "--review-exit-code" in argv
+        assert "--output-path" in argv
+        output_path = Path(argv[argv.index("--output-path") + 1])
+        artifact_payload = review_script.format_review_json_report(full_report)
+        if drop_diagnostics:
+            artifact_payload.pop("manual_review_diagnostics", None)
+        review_script._write_json_artifact(artifact_payload, output_path)
+        if stderr_text is not None:
+            print(stderr_text, file=sys.stderr)
+        print(
+            stdout_text
+            if stdout_text is not None
+            else json.dumps(artifact_payload, indent=2, sort_keys=True)
+        )
+        return exit_code
+
+    monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
+
+
 def _patch_malformed_report(
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -232,7 +286,7 @@ def _patch_raw_hash_report(
     calls: list[str],
     captured_report_args: list[list[str]] | None = None,
 ) -> None:
-    payload = _review_payload_for_decision("not_blocked")
+    payload = _full_report_for_decision("not_blocked")
     lifecycle = dict(payload["lifecycle_compatibility"])
     lifecycle["canonical_candidate_text_sha256"] = "a" * 64
     lifecycle["grouped_preview_text_sha256"] = "b" * 64
@@ -890,6 +944,48 @@ def test_manual_runner_maps_delegated_decision_exit_codes(
     _assert_safe_output(captured.out)
 
 
+@pytest.mark.parametrize(
+    ("decision", "exit_code"),
+    (
+        ("not_blocked", 0),
+        ("already_sent_by_current_hash", 10),
+        ("blocked_by_linked_canonical_hash", 20),
+        ("manual_review_needed", 30),
+    ),
+)
+def test_manual_runner_accepts_production_report_artifact_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    decision: str,
+    exit_code: int,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_production_report_artifact(
+        monkeypatch,
+        calls=calls,
+        decision=decision,
+        exit_code=exit_code,
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == exit_code
+    assert calls == ["doctor", "report"]
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert parsed == artifact_payload
+    assert parsed["artifact_schema"] == review_script.REVIEW_JSON_ARTIFACT_SCHEMA
+    assert parsed["output_format"] == "review-json"
+    assert parsed["operator_review_summary"]["decision"] == decision
+    assert parsed["manual_review_diagnostics"]["diagnostic_status"] == decision
+    _assert_no_raw_hash_values(parsed)
+    _assert_safe_output(captured.out)
+
+
 def test_manual_runner_delegated_report_boundary_does_not_check_nonzero_outcomes() -> None:
     source = inspect.getsource(manual_script._delegate_report)
 
@@ -937,7 +1033,7 @@ def test_manual_runner_uses_delegated_report_artifact_contract(
 ) -> None:
     calls: list[str] = []
     _patch_doctor_pass(monkeypatch, calls)
-    _patch_report(
+    _patch_production_report_artifact(
         monkeypatch,
         calls=calls,
         decision="manual_review_needed",
@@ -956,6 +1052,7 @@ def test_manual_runner_uses_delegated_report_artifact_contract(
     parsed = json.loads(captured.out)
     artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert parsed == artifact_payload
+    assert parsed["artifact_schema"] == review_script.REVIEW_JSON_ARTIFACT_SCHEMA
     assert parsed["operator_review_summary"]["decision"] == "manual_review_needed"
     assert parsed["manual_review_diagnostics"]["diagnostic_status"] == (
         "manual_review_needed"
@@ -1029,6 +1126,35 @@ def test_manual_runner_rejects_delegated_exit_decision_mismatch(
         calls=calls,
         decision="not_blocked",
         exit_code=30,
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == manual_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "report"]
+    assert artifact_path.exists()
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    assert parsed["executed_report"] is False
+    _assert_safe_output(captured.out)
+
+
+def test_manual_runner_rejects_missing_delegated_report_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_production_report_artifact(
+        monkeypatch,
+        calls=calls,
+        decision="manual_review_needed",
+        exit_code=30,
+        drop_diagnostics=True,
     )
     artifact_path = tmp_path / "review" / "manual-review.json"
 
