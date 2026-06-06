@@ -13,6 +13,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.services.knowledge_score_processor import process_knowledge_scores  # noqa: E402
 from app.services.obsidian_exporter import export_obsidian_vault  # noqa: E402
+from app.services.production_operation_guard import (  # noqa: E402
+    PRODUCTION_OPERATION_ACK,
+    SOURCE_OF_TRUTH_MUTATION,
+    require_production_operation_ack,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,11 +39,32 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Refresh deterministic knowledge scores before export.",
     )
+    parser.add_argument(
+        "--allow-production-operation",
+        action="store_true",
+        help="Explicitly acknowledge this export as a production-affecting operation.",
+    )
+    parser.add_argument(
+        "--confirm-production-operation",
+        default=None,
+        help=f'Must be exactly "{PRODUCTION_OPERATION_ACK}".',
+    )
     return parser
 
 
 async def run_export(args: argparse.Namespace) -> dict[str, Any]:
     source_document_id = args.source_document_id
+    allow_production_operation = bool(
+        getattr(args, "allow_production_operation", False)
+    )
+    production_operation_ack = getattr(args, "confirm_production_operation", None)
+
+    require_production_operation_ack(
+        operation_class=SOURCE_OF_TRUTH_MUTATION,
+        boundary="obsidian_export_script",
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
+    )
 
     score_result = None
     if args.refresh_scores:
@@ -49,6 +75,8 @@ async def run_export(args: argparse.Namespace) -> dict[str, Any]:
     export_result = await export_obsidian_vault(
         vault_path=Path(args.vault_path),
         source_document_id=source_document_id,
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
     )
 
     if score_result is not None:

@@ -93,6 +93,8 @@
 - Extended default-denied provider execution guard coverage for OpenAI, Gmail,
   and Drive connector/client boundaries:
   implemented
+- Default-denied production-operation guard baseline:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -350,6 +352,13 @@
   runtime boundary. Guard diagnostics are safe reason classes only and must not
   include provider payloads, source identifiers, credential values, rendered
   digest text, or raw event contents.
+- Production-operation guards are runtime gates, not data model tables. Delivery
+  execution and Obsidian vault export are default-denied unless an explicit
+  operator acknowledgement is supplied by a bounded execution path. Read-only
+  review, digest, report, preflight, and grouped lifecycle tools remain
+  no-send, non-enforcing, and not source-of-truth mutations. Migrations,
+  production DB operations, scheduler execution, outbox execution, and automatic
+  delivery remain out of scope.
 - Local/dev-only synthetic persisted attention digest seed rows are explicit
   test fixtures in the local database, not company facts. The seed command uses
   deterministic IDs and fails closed on conflicts while writing only enough

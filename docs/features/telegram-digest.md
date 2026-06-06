@@ -64,6 +64,8 @@
   implemented
 - Default-denied live provider execution guard coverage for OpenAI, Gmail, and
   Drive connector/client boundaries: implemented
+- Default-denied production-operation guard baseline for delivery execution and
+  Obsidian export boundaries: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -246,6 +248,13 @@ trusted facts.
   boundaries only; their responses must pass through the existing storage,
   normalization, and validation paths before any derived company knowledge is
   trusted.
+- Production-affecting operations are default-denied unless a separate bounded
+  operator execution path supplies an explicit production-operation
+  acknowledgement. Delivery execution and Obsidian export are guarded operation
+  classes; local review, digest, report, preflight, and grouped lifecycle tools
+  remain no-send, non-enforcing, and not source-of-truth mutations. Scheduler,
+  outbox, automatic delivery, migrations, and production DB operations remain
+  out of scope.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

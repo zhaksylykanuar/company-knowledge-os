@@ -63,6 +63,8 @@
   implemented
 - Default-denied live provider execution guard coverage for OpenAI, Gmail, and
   Drive connector/client boundaries: implemented
+- Default-denied production-operation guard baseline for delivery execution and
+  Obsidian export boundaries: implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -223,6 +225,12 @@
   default-denied guard. Synthetic injected providers and local normalized-data
   transforms remain usable for tests and review without live-provider
   acknowledgement.
+- Production-affecting operations are default-denied outside explicit operator
+  gates. Delivery execution and Obsidian vault export require a separate
+  production-operation acknowledgement; read-only attention review, digest
+  drafting, local reports, preflights, and grouped lifecycle tools remain
+  no-send and no-source-of-truth mutation. Scheduler and automatic delivery are
+  still out of scope.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

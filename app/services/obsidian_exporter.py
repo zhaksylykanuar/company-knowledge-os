@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import AsyncSessionLocal
 from app.db.score_models import KnowledgeScore
 from app.db.task_models import ExtractedDecision, ExtractedRisk, ExtractedTask
+from app.services.production_operation_guard import (
+    OBSIDIAN_VAULT_MUTATION,
+    require_production_operation_ack,
+)
 
 
 ENTITY_DIRS = {
@@ -170,7 +174,16 @@ async def export_obsidian_vault(
     *,
     vault_path: Path | str,
     source_document_id: str | None = None,
+    allow_production_operation: bool = False,
+    production_operation_ack: str | None = None,
 ) -> dict[str, Any]:
+    require_production_operation_ack(
+        operation_class=OBSIDIAN_VAULT_MUTATION,
+        boundary="obsidian_export_vault",
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
+    )
+
     entities = await collect_obsidian_entities(
         source_document_id=source_document_id,
     )

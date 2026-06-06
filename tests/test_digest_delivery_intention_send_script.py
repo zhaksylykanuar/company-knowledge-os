@@ -25,6 +25,7 @@ from app.services.digest_delivery_drafts import (
     sanitize_persisted_attention_digest_for_delivery_draft,
 )
 from app.services.digest_rendering import render_persisted_attention_digest_text
+from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
 from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
 from app.services.telegram_delivery import TelegramDeliveryResult
 from scripts import send_test_telegram_delivery_intention as send_script
@@ -76,6 +77,8 @@ async def test_bounded_send_supplies_live_provider_ack_after_operator_gate(
         chat_id=CHAT_ID_VALUE,
         chunks=["Source activity digest"],
         transport=None,
+        allow_production_operation=True,
+        production_operation_ack=PRODUCTION_OPERATION_ACK,
     )
 
     assert result.attempted_chunk_count == 1

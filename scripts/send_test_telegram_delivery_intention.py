@@ -386,11 +386,24 @@ async def _send_bounded_chunks(
     chat_id: str,
     chunks: list[str],
     transport: TelegramSendMessageTransport | None,
+    allow_production_operation: bool = False,
+    production_operation_ack: str | None = None,
 ) -> _BoundedTelegramSendResult:
+    from app.services.production_operation_guard import (
+        DELIVERY_EXECUTION,
+        require_production_operation_ack,
+    )
     from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
     from app.services.telegram_delivery import (
         DEFAULT_TELEGRAM_CHUNK_SIZE,
         send_telegram_plain_text,
+    )
+
+    require_production_operation_ack(
+        operation_class=DELIVERY_EXECUTION,
+        boundary="test_telegram_delivery_execution",
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
     )
 
     attempted_chunk_count = 0
@@ -471,6 +484,7 @@ async def execute_test_send(
         get_persisted_digest_delivery_draft,
         record_digest_delivery_result,
     )
+    from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
     from app.services.telegram_delivery import split_telegram_plain_text
 
     if query.test_mode is not True:
@@ -581,6 +595,8 @@ async def execute_test_send(
                 chat_id=chat_id,
                 chunks=chunks,
                 transport=telegram_transport,
+                allow_production_operation=True,
+                production_operation_ack=PRODUCTION_OPERATION_ACK,
             )
             result_status = _result_status(
                 planned_chunk_count=planned_chunk_count,

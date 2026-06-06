@@ -11,6 +11,7 @@ from app.services.obsidian_exporter import (
     collect_obsidian_entities,
     export_obsidian_vault,
 )
+from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
 
 
 async def _cleanup_obsidian_fixture(source_document_id: str) -> None:
@@ -201,6 +202,8 @@ async def test_export_obsidian_vault_writes_markdown_files_from_postgres(tmp_pat
         result = await export_obsidian_vault(
             vault_path=tmp_path,
             source_document_id=source_document_id,
+            allow_production_operation=True,
+            production_operation_ack=PRODUCTION_OPERATION_ACK,
         )
 
         assert result["exported"] is True
