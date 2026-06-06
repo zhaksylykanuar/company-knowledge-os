@@ -927,6 +927,17 @@
   artifacts remain local review/debug artifacts only; the tooling remains
   doctor-gated, sanitized-output-only, no-send, non-enforcing, and not a
   source-of-truth mutation.
+- FOS-128 adds no storage and fixes the remaining sweep/manual/report
+  delegated review path for artifact-backed local-readonly review execution.
+  When an acknowledged `review-json` report review-exit-code run hits a local
+  read-only runtime blocker before artifact writing, the report command writes
+  a conservative sanitized `manual_review_needed` review artifact instead of
+  returning an artifactless infrastructure code.
+- FOS-128 keeps parser errors, missing acknowledgement, default-block exits,
+  wrong modes, missing/malformed artifacts, decision/code mismatches, and
+  unsafe artifacts as sanitized failures. Review and sweep artifacts remain
+  local review/debug artifacts only; the tooling remains no-send,
+  non-enforcing, and not a source-of-truth mutation.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

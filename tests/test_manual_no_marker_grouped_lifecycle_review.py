@@ -88,6 +88,7 @@ def _assert_contract_diagnostics(
     artifact_contract_status: str,
     artifact_presence: str = "present",
     artifact_schema_kind: str | None = None,
+    child_exit_category: str | None = None,
     missing_required_field_names: list[str] | None = None,
 ) -> None:
     diagnostics = parsed["delegated_contract_diagnostics"]
@@ -97,6 +98,8 @@ def _assert_contract_diagnostics(
     assert diagnostics["validator_name"].startswith("_")
     if artifact_schema_kind is not None:
         assert diagnostics["artifact_schema_kind"] == artifact_schema_kind
+    if child_exit_category is not None:
+        assert diagnostics["child_exit_category"] == child_exit_category
     if missing_required_field_names is not None:
         assert diagnostics["missing_required_field_names"] == (
             missing_required_field_names
@@ -1235,6 +1238,45 @@ def test_manual_runner_accepts_valid_manual_review_with_delegated_stderr(
     _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
 
 
+def test_manual_runner_accepts_artifact_backed_report_runtime_review_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+
+    async def runtime_report(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        calls.append("report_builder")
+        raise review_script.NoMarkerGroupedLifecycleRuntimeError(
+            "synthetic construction error"
+        )
+
+    monkeypatch.setattr(
+        manual_script.review_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        runtime_report,
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == 30
+    assert calls == ["doctor", "report_builder"]
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert parsed == artifact_payload
+    assert parsed["operator_review_summary"]["decision"] == "manual_review_needed"
+    assert "local_review_source_unavailable" in parsed[
+        "operator_review_summary"
+    ]["reason_codes"]
+    assert "delegated_contract_diagnostics" not in parsed
+    _assert_no_raw_hash_values(parsed)
+    _assert_safe_output(captured.out)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
 def test_manual_runner_uses_delegated_report_artifact_contract(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1302,6 +1344,58 @@ def test_manual_runner_rejects_unexpected_delegated_exit_before_artifact(
         artifact_presence="missing",
         artifact_contract_status="not_observed",
         artifact_schema_kind="malformed",
+        child_exit_category="unexpected_exit",
+    )
+    _assert_safe_output(captured.out)
+
+
+def test_manual_runner_fos127_shape_reports_artifact_not_written_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+
+    def fake_report_main(argv: list[str] | None = None) -> int:
+        calls.append("report")
+        assert argv is not None
+        assert "--allow-local-data-readonly" in argv
+        assert "--review-exit-code" in argv
+        assert "--output-path" in argv
+        print(
+            json.dumps(
+                {
+                    "status": "blocked",
+                    "error_code": "runtime_error",
+                    "safety": {"read_only": True},
+                },
+                sort_keys=True,
+            )
+        )
+        return manual_script.EXIT_INVALID_USAGE
+
+    monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == manual_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "report"]
+    assert not artifact_path.exists()
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    _assert_contract_diagnostics(
+        parsed,
+        artifact_presence="missing",
+        artifact_contract_status="not_observed",
+        artifact_schema_kind="malformed",
+        child_exit_category="artifact_not_written",
+    )
+    assert parsed["delegated_contract_diagnostics"]["cli_contract_status"] == (
+        "unexpected_exit"
     )
     _assert_safe_output(captured.out)
 

@@ -472,6 +472,7 @@ def _delegated_report_contract_diagnostics(
     artifact_contract_status: str,
     validator_name: str,
     cli_contract_status: str | None = None,
+    child_exit_category: str | None = None,
     missing_required_field_names: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
@@ -481,6 +482,7 @@ def _delegated_report_contract_diagnostics(
         "artifact_schema_kind": review_script.review_artifact_schema_kind(payload),
         "artifact_contract_status": artifact_contract_status,
         "cli_contract_status": cli_contract_status or "not_observed",
+        "child_exit_category": child_exit_category or "not_observed",
         "missing_required_field_names": sorted(missing_required_field_names or []),
         "validator_name": validator_name,
     }
@@ -506,6 +508,34 @@ def _delegated_cli_contract_status(
         return "default_blocked"
     if error_code == "runtime_error":
         return "unexpected_exit"
+    return "unexpected_exit"
+
+
+def _delegated_child_exit_category(
+    *,
+    exit_code: int | None,
+    stdout_text: str,
+) -> str:
+    if exit_code in SAFE_REPORT_EXIT_CODES:
+        return "valid_review_outcome"
+    try:
+        payload = json.loads(stdout_text)
+    except json.JSONDecodeError:
+        return "parser_error" if exit_code == EXIT_INVALID_USAGE else "unexpected_exit"
+    if not isinstance(payload, Mapping):
+        return "unexpected_exit"
+    error_code = payload.get("error_code")
+    message = payload.get("message")
+    if error_code == "input_error":
+        return (
+            "missing_ack"
+            if message == "local_data_ack_required"
+            else "parser_error"
+        )
+    if error_code == "blocked":
+        return "default_blocked"
+    if error_code == "runtime_error":
+        return "artifact_not_written"
     return "unexpected_exit"
 
 
@@ -537,9 +567,14 @@ def _delegate_report(
             )
         except SystemExit as exc:
             exit_code = exc.code if isinstance(exc.code, int) else EXIT_INVALID_USAGE
+    delegated_stdout_text = delegated_stdout.getvalue()
     cli_contract_status = _delegated_cli_contract_status(
         exit_code=exit_code,
-        stdout_text=delegated_stdout.getvalue(),
+        stdout_text=delegated_stdout_text,
+    )
+    child_exit_category = _delegated_child_exit_category(
+        exit_code=exit_code,
+        stdout_text=delegated_stdout_text,
     )
     delegated_decision = REPORT_EXIT_CODE_DECISIONS.get(exit_code)
     if delegated_decision is None:
@@ -562,6 +597,7 @@ def _delegate_report(
                 artifact_contract_status=artifact_contract_status,
                 validator_name="_delegate_report",
                 cli_contract_status=cli_contract_status,
+                child_exit_category=child_exit_category,
             ),
         )
     try:
@@ -579,6 +615,7 @@ def _delegate_report(
                 ),
                 validator_name="_delegate_report",
                 cli_contract_status=cli_contract_status,
+                child_exit_category=child_exit_category,
             ),
         ) from exc
     if not isinstance(payload, Mapping):
@@ -592,6 +629,7 @@ def _delegate_report(
                 artifact_contract_status="malformed",
                 validator_name="_delegate_report",
                 cli_contract_status=cli_contract_status,
+                child_exit_category=child_exit_category,
             ),
         )
     missing_field_names = review_script.review_artifact_missing_required_field_names(
@@ -613,6 +651,7 @@ def _delegate_report(
                 artifact_contract_status=artifact_contract_status,
                 validator_name="_normalize_delegated_report_artifact",
                 cli_contract_status=cli_contract_status,
+                child_exit_category=child_exit_category,
                 missing_required_field_names=missing_field_names,
             ),
         ) from exc
@@ -628,6 +667,7 @@ def _delegate_report(
                 artifact_contract_status="decision_exit_code_mismatch",
                 validator_name="_decision_from_review_artifact",
                 cli_contract_status=cli_contract_status,
+                child_exit_category=child_exit_category,
                 missing_required_field_names=(
                     review_script.review_artifact_missing_required_field_names(
                         payload
@@ -648,6 +688,7 @@ def _delegate_report(
                 artifact_contract_status="unsafe",
                 validator_name="_assert_sanitized",
                 cli_contract_status=cli_contract_status,
+                child_exit_category=child_exit_category,
             ),
         ) from exc
     return DelegatedReportResult(exit_code=exit_code, payload=payload)

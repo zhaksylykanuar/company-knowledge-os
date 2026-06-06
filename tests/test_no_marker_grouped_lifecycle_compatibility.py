@@ -1567,6 +1567,56 @@ def test_review_exit_code_report_error_returns_usage_code(
     _assert_safe_output(captured.out + captured.err)
 
 
+def test_review_json_artifact_runtime_error_writes_conservative_review_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    async def blocked_report(*_args: object, **_kwargs: object) -> dict:
+        raise compat_script.NoMarkerGroupedLifecycleRuntimeError(
+            "synthetic construction error"
+        )
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        blocked_report,
+    )
+    artifact_path = tmp_path / "review" / "delegated-report.json"
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            LOCAL_READONLY_ACK_FLAG,
+            "--format",
+            "review-json",
+            "--review-exit-code",
+            "--output-path",
+            str(artifact_path),
+        ]
+    )
+
+    assert code == 30
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert parsed == artifact_payload
+    assert parsed["operator_review_summary"]["decision"] == "manual_review_needed"
+    assert parsed["manual_review_diagnostics"]["diagnostic_status"] == (
+        "manual_review_needed"
+    )
+    assert "local_review_source_unavailable" in parsed[
+        "operator_review_summary"
+    ]["reason_codes"]
+    _assert_grouped_lifecycle_report_contract(parsed)
+    _assert_no_raw_hash_values(parsed)
+    _assert_safe_output(captured.out + captured.err)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
 def test_synthetic_review_smoke_outputs_safe_decision_scenarios(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

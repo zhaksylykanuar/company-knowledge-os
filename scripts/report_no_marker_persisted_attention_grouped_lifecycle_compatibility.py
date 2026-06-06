@@ -1089,6 +1089,81 @@ def _blocked_result(*, error_code: str, message: str) -> dict[str, Any]:
     }
 
 
+def _runtime_review_artifact_allowed(
+    *,
+    args: argparse.Namespace,
+    artifact_path: Path | None,
+) -> bool:
+    return (
+        args.allow_local_data_readonly is True
+        and args.synthetic_review_smoke is False
+        and args.format == "review-json"
+        and args.review_exit_code is True
+        and artifact_path is not None
+    )
+
+
+def _conservative_runtime_review_report(
+    *,
+    query: NoMarkerGroupedLifecycleQuery,
+) -> dict[str, Any]:
+    """Build a sanitized review-required report for unavailable read-only inputs."""
+
+    compatibility = _compatibility(
+        visible_count=1,
+        canonical_lifecycle={},
+        canonical_text_sha256=None,
+        grouped_text_sha256=None,
+        grouped_hash_differs_from_canonical=False,
+        grouped_hash_matches_existing_draft=False,
+        grouped_hash_has_successful_delivery_result=False,
+    )
+    canonical_hash_guard_evaluation = _conservative_canonical_hash_guard_evaluation(
+        reason="local_review_source_unavailable",
+        current_hash=None,
+        canonical_hash=None,
+    )
+    operator_review_summary = _operator_review_summary(
+        compatibility=compatibility,
+        canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
+    )
+    manual_review_diagnostics = build_manual_review_diagnostics(
+        lifecycle_compatibility=compatibility,
+        canonical_hash_guard_evaluation=canonical_hash_guard_evaluation,
+        operator_review_summary=operator_review_summary,
+        resolved_window={
+            "start_at": query.start_at.isoformat(),
+            "end_at": query.end_at.isoformat(),
+        },
+    )
+    return {
+        "status": "no_marker_grouped_lifecycle_compatibility",
+        "start_at": query.start_at.isoformat(),
+        "end_at": query.end_at.isoformat(),
+        "activity_start_at": (
+            query.activity_start_at.isoformat()
+            if query.activity_start_at is not None
+            else None
+        ),
+        "activity_end_at": (
+            query.activity_end_at.isoformat()
+            if query.activity_end_at is not None
+            else None
+        ),
+        "limit": query.limit,
+        "debug_evidence": query.debug_evidence,
+        "cluster_threshold": query.cluster_threshold,
+        "marker_filter": PERSISTED_ATTENTION_MARKER_FILTER_NO_MARKER_ONLY,
+        "group_by": query.group_by,
+        "no_marker_not_production_truth": True,
+        "lifecycle_compatibility": compatibility,
+        "canonical_hash_guard_evaluation": canonical_hash_guard_evaluation,
+        "operator_review_summary": operator_review_summary,
+        "manual_review_diagnostics": manual_review_diagnostics,
+        "safety": _safety_metadata(),
+    }
+
+
 async def build_no_marker_grouped_lifecycle_compatibility_report(
     query: NoMarkerGroupedLifecycleQuery,
     *,
@@ -1732,6 +1807,27 @@ def main(argv: list[str] | None = None) -> int:
         )
     except NoMarkerGroupedLifecycleRuntimeError as exc:
         output_format = getattr(locals().get("args", None), "format", "json")
+        args_obj = locals().get("args", None)
+        artifact_path_obj = locals().get("artifact_path", None)
+        query_obj = locals().get("query", None)
+        if (
+            isinstance(args_obj, argparse.Namespace)
+            and isinstance(query_obj, NoMarkerGroupedLifecycleQuery)
+            and _runtime_review_artifact_allowed(
+                args=args_obj,
+                artifact_path=(
+                    artifact_path_obj if isinstance(artifact_path_obj, Path) else None
+                ),
+            )
+        ):
+            conservative_report = _conservative_runtime_review_report(
+                query=query_obj,
+            )
+            _emit_json(
+                format_review_json_report(conservative_report),
+                artifact_path=artifact_path_obj,
+            )
+            return _review_exit_code_for_report(conservative_report)
         if output_format in json_output_formats:
             _print_json(_blocked_result(error_code="runtime_error", message=str(exc)))
         else:

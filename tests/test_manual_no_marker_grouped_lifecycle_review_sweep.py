@@ -819,13 +819,20 @@ def test_sweep_acknowledged_manual_argv_includes_local_readonly_for_each_window(
     assert code == 0
     assert calls == ["doctor", "manual:6", "manual:24", "manual:72"]
     assert len(captured_argvs) == 3
+    output_paths: set[str] = set()
     for argv in captured_argvs:
         assert "--allow-local-data-readonly" in argv
         assert "--lookback-hours" in argv
         assert "--format" in argv
         assert argv[argv.index("--format") + 1] == "review-json"
         assert "--output-path" in argv
+        output_paths.add(argv[argv.index("--output-path") + 1])
         assert "--preflight-only" not in argv
+        parsed_manual_args = sweep_script.manual_script._parse_args(argv)
+        assert parsed_manual_args.allow_local_data_readonly is True
+        assert parsed_manual_args.format == "review-json"
+        assert parsed_manual_args.output_path in output_paths
+    assert len(output_paths) == 3
     parsed = _parse_stdout(capsys)
     assert parsed["status"] == "pass"
     assert parsed["executed_report_count"] == 3
@@ -969,6 +976,60 @@ def test_faithful_nested_synthetic_sweep_completes_artifact_backed_windows(
         assert artifact_payload["output_format"] == "review-json"
         assert "operator_review_summary" in artifact_payload
         assert "manual_review_diagnostics" in artifact_payload
+        _assert_no_raw_hash_values(artifact_payload)
+        _assert_safe_output(artifact_text)
+
+
+def test_nested_sweep_runtime_report_path_writes_conservative_review_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_manual_doctor_pass(monkeypatch, calls)
+
+    async def runtime_report(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        calls.append("report_builder")
+        raise review_script.NoMarkerGroupedLifecycleRuntimeError(
+            "synthetic construction error"
+        )
+
+    monkeypatch.setattr(
+        sweep_script.manual_script.review_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        runtime_report,
+    )
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6,24,72"))
+
+    assert code == 30
+    assert calls.count("doctor") == 1
+    assert calls.count("manual_doctor") == 3
+    assert calls.count("report_builder") == 3
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "pass"
+    assert parsed["executed_report_count"] == 3
+    assert parsed["aggregate_decision"] == "manual_review_needed"
+    assert len(parsed["windows"]) == 3
+    assert all(window["status"] == "completed" for window in parsed["windows"])
+    assert all(window["exit_code"] == 30 for window in parsed["windows"])
+    assert all(
+        window["decision"] == "manual_review_needed" for window in parsed["windows"]
+    )
+    assert "delegated_contract_diagnostics" not in parsed
+    artifact_paths = sorted((tmp_path / "sweep").glob("*.json"))
+    assert len(artifact_paths) == 3
+    for artifact_path in artifact_paths:
+        artifact_text = artifact_path.read_text(encoding="utf-8")
+        artifact_payload = json.loads(artifact_text)
+        assert artifact_payload["output_format"] == "review-json"
+        assert artifact_payload["operator_review_summary"]["decision"] == (
+            "manual_review_needed"
+        )
+        assert "local_review_source_unavailable" in artifact_payload[
+            "operator_review_summary"
+        ]["reason_codes"]
         _assert_no_raw_hash_values(artifact_payload)
         _assert_safe_output(artifact_text)
 

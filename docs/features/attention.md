@@ -1044,6 +1044,17 @@
   sanitized output/artifacts, no-send behavior, non-enforcement,
   source-of-truth immutability, human approval boundaries, and
   duplicate-success protection.
+- FOS-128 fixes the remaining sweep to manual to report delegated review
+  path when the acknowledged report command reaches a local read-only runtime
+  blocker before writing its review artifact. In artifact-backed `review-json`
+  review-exit-code mode, the report command now writes a conservative
+  sanitized `manual_review_needed` artifact instead of returning an
+  artifactless infrastructure code.
+- FOS-128 keeps parser errors, missing acknowledgement, default-block exits,
+  wrong modes, missing/malformed artifacts, decision/code mismatches, and
+  unsafe artifacts as sanitized failures. It preserves no-send,
+  non-enforcement, source-of-truth immutability, human approval boundaries, and
+  duplicate-success protection.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not
