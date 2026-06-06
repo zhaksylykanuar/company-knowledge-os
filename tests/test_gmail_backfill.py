@@ -7,11 +7,16 @@ from app.db.models import IngestedEvent
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.integrations.source_registry import validate_source_event_contract
 from app.main import app
+from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
 from app.services.raw_storage import sha256_text
 
 SAFE_GMAIL_QUERY = "label:founderos-test"
 BROAD_GMAIL_QUERY = "in:inbox OR in:sent"
 SAFE_GMAIL_LIMIT = 7
+PROD_OPERATION_PARAMS = {
+    "allow_production_operation": "true",
+    "confirm_production_operation": PRODUCTION_OPERATION_ACK,
+}
 
 
 class FakeAsyncSession:
@@ -169,7 +174,7 @@ def test_gmail_backfill_connector_failure_returns_safe_non_500(monkeypatch) -> N
     with TestClient(app) as client:
         response = client.post(
             "/v1/gmail/backfill",
-            params={"persist": "true"},
+            params={"persist": "true", **PROD_OPERATION_PARAMS},
         )
 
     assert response.status_code == 202
@@ -515,7 +520,12 @@ def test_gmail_backfill_persist_creates_source_document_and_chunk(monkeypatch, t
     with TestClient(app) as client:
         response = client.post(
             "/v1/gmail/backfill",
-            params={"max_results": 1, "persist": "true", "query": SAFE_GMAIL_QUERY},
+            params={
+                "max_results": 1,
+                "persist": "true",
+                "query": SAFE_GMAIL_QUERY,
+                **PROD_OPERATION_PARAMS,
+            },
         )
 
     assert response.status_code == 202
@@ -611,7 +621,12 @@ def test_gmail_backfill_persist_skips_source_event_without_subject(monkeypatch, 
     with TestClient(app) as client:
         response = client.post(
             "/v1/gmail/backfill",
-            params={"max_results": 1, "persist": "true", "query": SAFE_GMAIL_QUERY},
+            params={
+                "max_results": 1,
+                "persist": "true",
+                "query": SAFE_GMAIL_QUERY,
+                **PROD_OPERATION_PARAMS,
+            },
         )
 
     assert response.status_code == 202
@@ -679,7 +694,12 @@ def test_gmail_backfill_persist_reports_per_item_failure_safely(monkeypatch, tmp
     with TestClient(app) as client:
         response = client.post(
             "/v1/gmail/backfill",
-            params={"max_results": 5, "persist": "true", "query": SAFE_GMAIL_QUERY},
+            params={
+                "max_results": 5,
+                "persist": "true",
+                "query": SAFE_GMAIL_QUERY,
+                **PROD_OPERATION_PARAMS,
+            },
         )
 
     assert response.status_code == 202
@@ -768,7 +788,12 @@ def test_gmail_backfill_persist_reports_session_open_failure_safely(monkeypatch,
     with TestClient(app) as client:
         response = client.post(
             "/v1/gmail/backfill",
-            params={"max_results": 1, "persist": "true", "query": SAFE_GMAIL_QUERY},
+            params={
+                "max_results": 1,
+                "persist": "true",
+                "query": SAFE_GMAIL_QUERY,
+                **PROD_OPERATION_PARAMS,
+            },
         )
 
     assert response.status_code == 202

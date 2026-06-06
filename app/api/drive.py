@@ -7,6 +7,11 @@ from app.db.models import AuditLog, IngestedEvent
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.events.schemas import EventEnvelope
 from app.services.chunking import chunk_text
+from app.services.production_operation_guard import (
+    SOURCE_OF_TRUTH_MUTATION,
+    ProductionOperationBlockedError,
+    require_production_operation_ack,
+)
 from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json, write_text
 from app.services.source_events import normalize_ingested_event_to_source_event
 
@@ -64,13 +69,29 @@ def build_drive_event(file_metadata: dict) -> EventEnvelope:
     )
 
 
-def save_drive_raw_snapshot(file_metadata: dict, text: str) -> tuple[str, str]:
+def save_drive_raw_snapshot(
+    file_metadata: dict,
+    text: str,
+    *,
+    allow_production_operation: bool = False,
+    production_operation_ack: str | None = None,
+) -> tuple[str, str]:
     file_id = safe_path_part(file_metadata["id"])
     modified_time = safe_path_part(file_metadata.get("modifiedTime", "unknown"))
     snapshot_dir = raw_storage_root() / "drive" / file_id / modified_time
 
-    write_json(snapshot_dir / "metadata.json", file_metadata)
-    write_text(snapshot_dir / "content.txt", text)
+    write_json(
+        snapshot_dir / "metadata.json",
+        file_metadata,
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
+    )
+    write_text(
+        snapshot_dir / "content.txt",
+        text,
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
+    )
 
     metadata_ref = f"raw://drive/{file_id}/{modified_time}/metadata.json"
     content_ref = f"raw://drive/{file_id}/{modified_time}/content.txt"
@@ -127,8 +148,24 @@ async def drive_backfill(
         ge=1,
         le=DRIVE_BACKFILL_MAX_RESULTS,
     ),
+    allow_production_operation: bool = Query(False),
+    confirm_production_operation: str | None = Query(None),
 ) -> dict:
     _require_drive_backfill_enabled()
+    if persist:
+        try:
+            require_production_operation_ack(
+                operation_class=SOURCE_OF_TRUTH_MUTATION,
+                boundary="drive_backfill_persist",
+                allow_production_operation=allow_production_operation,
+                production_operation_ack=confirm_production_operation,
+            )
+        except ProductionOperationBlockedError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=exc.reason_code,
+            ) from exc
+
     files = list_ai_inbox_files(max_results=max_results)
     events = []
     saved = 0
@@ -174,7 +211,12 @@ async def drive_backfill(
                 continue
 
             text = download_file_text(file_metadata["id"], file_metadata.get("mimeType"))
-            metadata_ref, content_ref = save_drive_raw_snapshot(file_metadata, text)
+            metadata_ref, content_ref = save_drive_raw_snapshot(
+                file_metadata,
+                text,
+                allow_production_operation=allow_production_operation,
+                production_operation_ack=confirm_production_operation,
+            )
             content_hash = sha256_text(text)
             source_document_id = f"drive:{file_metadata['id']}:{content_hash[:12]}"
             chunks = chunk_text(text)

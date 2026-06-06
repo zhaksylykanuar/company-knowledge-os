@@ -1,5 +1,6 @@
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.services import knowledge_ingestion
+from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
 from app.services.raw_storage import sha256_text
 
 
@@ -44,7 +45,12 @@ async def test_ingest_text_uses_sha256_content_hashes(monkeypatch, tmp_path) -> 
         _fake_session_factory(added),
     )
 
-    result = await knowledge_ingestion.ingest_text(title="Manual note", text=text)
+    result = await knowledge_ingestion.ingest_text(
+        title="Manual note",
+        text=text,
+        allow_production_operation=True,
+        production_operation_ack=PRODUCTION_OPERATION_ACK,
+    )
 
     source_document = next(item for item in added if isinstance(item, SourceDocument))
     chunks = [item for item in added if isinstance(item, DocumentChunk)]
@@ -66,14 +72,24 @@ async def test_manual_ingestion_hashes_are_stable_sha256(monkeypatch, tmp_path) 
         "AsyncSessionLocal",
         _fake_session_factory(first_added),
     )
-    await knowledge_ingestion.ingest_text(title="First note", text=text)
+    await knowledge_ingestion.ingest_text(
+        title="First note",
+        text=text,
+        allow_production_operation=True,
+        production_operation_ack=PRODUCTION_OPERATION_ACK,
+    )
 
     monkeypatch.setattr(
         knowledge_ingestion,
         "AsyncSessionLocal",
         _fake_session_factory(second_added),
     )
-    await knowledge_ingestion.ingest_text(title="Second note", text=text)
+    await knowledge_ingestion.ingest_text(
+        title="Second note",
+        text=text,
+        allow_production_operation=True,
+        production_operation_ack=PRODUCTION_OPERATION_ACK,
+    )
 
     first_document = next(item for item in first_added if isinstance(item, SourceDocument))
     second_document = next(item for item in second_added if isinstance(item, SourceDocument))

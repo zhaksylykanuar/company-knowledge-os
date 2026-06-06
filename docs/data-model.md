@@ -95,6 +95,8 @@
   implemented
 - Default-denied production-operation guard baseline:
   implemented
+- Extended production-operation guard coverage for source-of-truth mutation:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -359,6 +361,10 @@
   no-send, non-enforcing, and not source-of-truth mutations. Migrations,
   production DB operations, scheduler execution, outbox execution, and automatic
   delivery remain out of scope.
+- Raw-storage writes, manual knowledge ingestion, and persisted Gmail/Drive
+  backfill writes are source-of-truth mutation boundaries and are default-denied
+  without the same production-operation acknowledgement. Guard diagnostics must
+  remain safe reason classes and operation classes only.
 - Local/dev-only synthetic persisted attention digest seed rows are explicit
   test fixtures in the local database, not company facts. The seed command uses
   deterministic IDs and fails closed on conflicts while writing only enough

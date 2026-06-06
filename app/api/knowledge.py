@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.services.knowledge_ingestion import ingest_text
@@ -7,6 +7,7 @@ from app.services.knowledge_qa import ask_knowledge
 from app.services.knowledge_search import search_knowledge
 from app.services.knowledge_score_processor import process_knowledge_scores
 from app.services.knowledge_attention import get_attention_dashboard
+from app.services.production_operation_guard import ProductionOperationBlockedError
 
 router = APIRouter(prefix="/v1/knowledge", tags=["knowledge"])
 
@@ -19,6 +20,8 @@ class IngestTextRequest(BaseModel):
     client_key: str | None = None
     people: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    allow_production_operation: bool = False
+    confirm_production_operation: str | None = None
 
 
 class AskKnowledgeRequest(BaseModel):
@@ -31,15 +34,23 @@ class ScoreKnowledgeRequest(BaseModel):
 
 @router.post("/ingest-text", status_code=202)
 async def ingest_text_endpoint(payload: IngestTextRequest) -> dict:
-    result = await ingest_text(
-        title=payload.title,
-        text=payload.text,
-        source_type=payload.source_type,
-        project_key=payload.project_key,
-        client_key=payload.client_key,
-        people=payload.people,
-        tags=payload.tags,
-    )
+    try:
+        result = await ingest_text(
+            title=payload.title,
+            text=payload.text,
+            source_type=payload.source_type,
+            project_key=payload.project_key,
+            client_key=payload.client_key,
+            people=payload.people,
+            tags=payload.tags,
+            allow_production_operation=payload.allow_production_operation,
+            production_operation_ack=payload.confirm_production_operation,
+        )
+    except ProductionOperationBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc.reason_code,
+        ) from exc
 
     return {
         "accepted": True,
@@ -49,15 +60,23 @@ async def ingest_text_endpoint(payload: IngestTextRequest) -> dict:
 
 @router.post("/ingest-text-process", status_code=202)
 async def ingest_text_process_endpoint(payload: IngestTextRequest) -> dict:
-    return await ingest_text_and_process(
-        title=payload.title,
-        text=payload.text,
-        source_type=payload.source_type,
-        project_key=payload.project_key,
-        client_key=payload.client_key,
-        people=payload.people,
-        tags=payload.tags,
-    )
+    try:
+        return await ingest_text_and_process(
+            title=payload.title,
+            text=payload.text,
+            source_type=payload.source_type,
+            project_key=payload.project_key,
+            client_key=payload.client_key,
+            people=payload.people,
+            tags=payload.tags,
+            allow_production_operation=payload.allow_production_operation,
+            production_operation_ack=payload.confirm_production_operation,
+        )
+    except ProductionOperationBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc.reason_code,
+        ) from exc
 
 
 @router.get("/search")

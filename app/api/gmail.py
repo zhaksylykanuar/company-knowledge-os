@@ -13,6 +13,11 @@ from app.db.models import AuditLog, IngestedEvent
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.events.schemas import EventEnvelope
 from app.services.chunking import chunk_text
+from app.services.production_operation_guard import (
+    SOURCE_OF_TRUTH_MUTATION,
+    ProductionOperationBlockedError,
+    require_production_operation_ack,
+)
 from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json
 from app.services.source_events import normalize_ingested_event_to_source_event
 
@@ -295,11 +300,21 @@ def build_gmail_event(msg: dict) -> EventEnvelope:
     )
 
 
-def save_gmail_raw_message(msg: dict) -> str:
+def save_gmail_raw_message(
+    msg: dict,
+    *,
+    allow_production_operation: bool = False,
+    production_operation_ack: str | None = None,
+) -> str:
     message_id = safe_path_part(msg["id"])
     history_id = safe_path_part(msg.get("historyId", "unknown"))
     path = raw_storage_root() / "gmail" / message_id / history_id / "message.json"
-    write_json(path, msg)
+    write_json(
+        path,
+        msg,
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
+    )
     return f"raw://gmail/{message_id}/{history_id}/message.json"
 
 
@@ -396,8 +411,24 @@ async def gmail_backfill(
     ),
     query: str | None = Query(None),
     persist: bool = Query(True),
+    allow_production_operation: bool = Query(False),
+    confirm_production_operation: str | None = Query(None),
 ) -> dict:
     safe_query = _safe_gmail_backfill_query(query)
+    if persist:
+        try:
+            require_production_operation_ack(
+                operation_class=SOURCE_OF_TRUTH_MUTATION,
+                boundary="gmail_backfill_persist",
+                allow_production_operation=allow_production_operation,
+                production_operation_ack=confirm_production_operation,
+            )
+        except ProductionOperationBlockedError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=exc.reason_code,
+            ) from exc
+
     try:
         refs = list_messages(query=safe_query, max_results=max_results)
     except Exception:
@@ -463,7 +494,11 @@ async def gmail_backfill(
                     )
                     continue
 
-                raw_ref = save_gmail_raw_message(msg)
+                raw_ref = save_gmail_raw_message(
+                    msg,
+                    allow_production_operation=allow_production_operation,
+                    production_operation_ack=confirm_production_operation,
+                )
                 event.raw_object_ref = raw_ref
                 event.payload = {**event.payload, "raw_object_ref": raw_ref}
                 source_document, document_chunks, _readable_text = build_gmail_document_records(

@@ -25,6 +25,8 @@ async def ingest_text_and_process(
     client_key: str | None = None,
     people: list[str] | None = None,
     tags: list[str] | None = None,
+    allow_production_operation: bool = False,
+    production_operation_ack: str | None = None,
 ) -> dict[str, Any]:
     ingestion = await ingest_text(
         title=title,
@@ -34,6 +36,8 @@ async def ingest_text_and_process(
         client_key=client_key,
         people=people,
         tags=tags,
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
     )
 
     document_id = ingestion["document_id"]

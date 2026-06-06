@@ -4,9 +4,14 @@ import app.api.drive as drive_api
 from app.db.models import IngestedEvent
 from app.integrations.source_registry import validate_source_event_contract
 from app.main import app
+from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
 
 DRIVE_FOLDER_ID = "drive-folder-test"
 SAFE_DRIVE_LIMIT = 7
+PROD_OPERATION_PARAMS = {
+    "allow_production_operation": "true",
+    "confirm_production_operation": PRODUCTION_OPERATION_ACK,
+}
 
 
 class FakeAsyncSession:
@@ -207,7 +212,10 @@ def test_drive_backfill_persist_normalizes_new_ingested_event(monkeypatch, tmp_p
     monkeypatch.setattr(drive_api, "normalize_ingested_event_to_source_event", fake_normalize)
 
     with TestClient(app) as client:
-        response = client.post("/v1/drive/backfill?persist=true")
+        response = client.post(
+            "/v1/drive/backfill",
+            params={"persist": "true", **PROD_OPERATION_PARAMS},
+        )
 
     assert response.status_code == 202
     body = response.json()
@@ -275,7 +283,12 @@ def test_drive_backfill_response_omits_raw_full_document_content(monkeypatch, tm
 
     with TestClient(app) as client:
         response = client.post(
-            f"/v1/drive/backfill?persist=true&max_results={SAFE_DRIVE_LIMIT}"
+            "/v1/drive/backfill",
+            params={
+                "persist": "true",
+                "max_results": SAFE_DRIVE_LIMIT,
+                **PROD_OPERATION_PARAMS,
+            },
         )
 
     assert response.status_code == 202

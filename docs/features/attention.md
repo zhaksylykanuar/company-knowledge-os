@@ -65,6 +65,9 @@
   Drive connector/client boundaries: implemented
 - Default-denied production-operation guard baseline for delivery execution and
   Obsidian export boundaries: implemented
+- Extended production-operation guard coverage for raw-storage, manual
+  ingestion, and persisted backfill source-of-truth mutation boundaries:
+  implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -231,6 +234,10 @@
   drafting, local reports, preflights, and grouped lifecycle tools remain
   no-send and no-source-of-truth mutation. Scheduler and automatic delivery are
   still out of scope.
+- Source-of-truth mutation paths for raw-storage writes, manual ingestion, and
+  persisted Gmail/Drive backfill now use the same production-operation guard.
+  Read-only reports, persist=false previews, digest draft review, and grouped
+  lifecycle tooling remain allowed without that acknowledgement.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

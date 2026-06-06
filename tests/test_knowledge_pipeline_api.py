@@ -11,6 +11,7 @@ from app.db.score_models import KnowledgeScore
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.db.task_models import ExtractedDecision, ExtractedRisk, ExtractedTask
 from app.main import app
+from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
 
 
 def _set_auth(monkeypatch, *, enabled: bool, key: SecretStr | str | None) -> None:
@@ -34,6 +35,8 @@ def _pipeline_payload(unique: str, *, text: str | None = None) -> dict[str, obje
         "client_key": "test-client",
         "people": ["test-user"],
         "tags": ["test", "fos-009"],
+        "allow_production_operation": True,
+        "confirm_production_operation": PRODUCTION_OPERATION_ACK,
     }
 
 

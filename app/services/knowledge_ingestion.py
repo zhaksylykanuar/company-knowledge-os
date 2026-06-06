@@ -1,4 +1,3 @@
-import json
 from uuid import uuid4
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,7 +6,11 @@ from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.source_models import SourceDocument, DocumentChunk
 from app.services.chunking import chunk_text
-from app.services.raw_storage import sha256_text
+from app.services.production_operation_guard import (
+    SOURCE_OF_TRUTH_MUTATION,
+    require_production_operation_ack,
+)
+from app.services.raw_storage import sha256_text, write_json, write_text
 
 
 def _now():
@@ -30,6 +33,8 @@ async def ingest_text(
     client_key: str | None = None,
     people: list[str] | None = None,
     tags: list[str] | None = None,
+    allow_production_operation: bool = False,
+    production_operation_ack: str | None = None,
 ) -> dict:
     """
     Главная функция ingestion:
@@ -37,6 +42,13 @@ async def ingest_text(
     - создаёт source_document
     - создаёт document_chunks
     """
+
+    require_production_operation_ack(
+        operation_class=SOURCE_OF_TRUTH_MUTATION,
+        boundary="manual_knowledge_ingestion",
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
+    )
 
     doc_id = f"doc_{uuid4().hex}"
 
@@ -46,7 +58,12 @@ async def ingest_text(
     content_file = raw_dir / "content.txt"
     meta_file = raw_dir / "metadata.json"
 
-    content_file.write_text(text, encoding="utf-8")
+    write_text(
+        content_file,
+        text,
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
+    )
 
     metadata = {
         "title": title,
@@ -58,7 +75,12 @@ async def ingest_text(
         "created_at": _now().isoformat(),
     }
 
-    meta_file.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json(
+        meta_file,
+        metadata,
+        allow_production_operation=allow_production_operation,
+        production_operation_ack=production_operation_ack,
+    )
 
     raw_ref = f"raw://manual/{doc_id}/content.txt"
 
