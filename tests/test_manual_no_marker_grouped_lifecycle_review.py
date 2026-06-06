@@ -199,6 +199,7 @@ def _patch_report(
     def fake_report_main(argv: list[str] | None = None) -> int:
         calls.append("report")
         assert argv is not None
+        assert "--allow-local-data-readonly" in argv
         assert "--format" in argv
         assert argv[argv.index("--format") + 1] == "review-json"
         assert "--review-exit-code" in argv
@@ -242,6 +243,7 @@ def _patch_production_report_artifact(
     def fake_report_main(argv: list[str] | None = None) -> int:
         calls.append("report")
         assert argv is not None
+        assert "--allow-local-data-readonly" in argv
         assert "--format" in argv
         assert argv[argv.index("--format") + 1] == "review-json"
         assert "--review-exit-code" in argv
@@ -282,6 +284,7 @@ def _patch_malformed_report(
     def fake_report_main(argv: list[str] | None = None) -> int:
         calls.append("report")
         assert argv is not None
+        assert "--allow-local-data-readonly" in argv
         assert "--output-path" in argv
         output_path = Path(argv[argv.index("--output-path") + 1])
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -306,6 +309,7 @@ def _patch_unsafe_review_report(
     def fake_report_main(argv: list[str] | None = None) -> int:
         calls.append("report")
         assert argv is not None
+        assert "--allow-local-data-readonly" in argv
         assert "--output-path" in argv
         output_path = Path(argv[argv.index("--output-path") + 1])
         review_script._write_json_artifact(payload, output_path)
@@ -330,6 +334,7 @@ def _patch_raw_hash_report(
     def fake_report_main(argv: list[str] | None = None) -> int:
         calls.append("report")
         assert argv is not None
+        assert "--allow-local-data-readonly" in argv
         if captured_report_args is not None:
             captured_report_args.append(list(argv))
         assert "--output-path" in argv
@@ -796,7 +801,7 @@ def test_manual_runner_acknowledged_run_accepts_lookback_hours(
     assert Path(report_args[report_args.index("--output-path") + 1]) == (
         tmp_path / "review" / "manual-review.json"
     )
-    assert "--allow-local-data-readonly" not in report_args
+    assert "--allow-local-data-readonly" in report_args
     assert "--preflight-only" not in report_args
     captured = capsys.readouterr()
     parsed = json.loads(captured.out)
@@ -837,8 +842,12 @@ def test_manual_runner_report_argv_requests_review_json_artifact_contract(
         artifact_path
     )
     assert "--review-exit-code" in report_args
-    assert "--allow-local-data-readonly" not in report_args
+    assert "--allow-local-data-readonly" in report_args
     assert "--preflight-only" not in report_args
+    parsed_report_args = review_script._parse_args(report_args)
+    assert parsed_report_args.allow_local_data_readonly is True
+    assert parsed_report_args.format == "review-json"
+    assert parsed_report_args.output_path == str(artifact_path)
 
 
 def test_manual_runner_doctor_failure_stops_before_report(
@@ -1192,7 +1201,7 @@ def test_manual_runner_delegated_report_boundary_does_not_check_nonzero_outcomes
     assert "check=True" not in source
     assert "CalledProcessError" not in source
     assert "delegated_report_stderr" not in source
-    assert "stdout.getvalue()" not in source
+    assert "json.loads(delegated_stdout" not in source
 
 
 def test_manual_runner_accepts_valid_manual_review_with_delegated_stderr(
@@ -1438,6 +1447,7 @@ def test_manual_runner_rejects_wrong_delegated_report_artifact_path(
     def fake_report_main(argv: list[str] | None = None) -> int:
         calls.append("report")
         assert argv is not None
+        assert "--allow-local-data-readonly" in argv
         assert "--format" in argv
         assert argv[argv.index("--format") + 1] == "review-json"
         assert "--output-path" in argv

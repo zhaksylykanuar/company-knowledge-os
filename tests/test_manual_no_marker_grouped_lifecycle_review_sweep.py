@@ -246,6 +246,7 @@ def _patch_nested_report_delegate(
 
     def fake_report_main(argv: list[str] | None = None) -> int:
         assert argv is not None
+        assert "--allow-local-data-readonly" in argv
         assert "--review-exit-code" in argv
         assert "--format" in argv
         assert argv[argv.index("--format") + 1] == "review-json"

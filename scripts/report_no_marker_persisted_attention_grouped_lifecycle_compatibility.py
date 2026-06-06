@@ -174,6 +174,15 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     synthetic_review_smoke_requested = "--synthetic-review-smoke" in raw_argv
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--allow-local-data-readonly",
+        action="store_true",
+        help=(
+            "Explicitly acknowledge a read-only local-data grouped lifecycle "
+            "compatibility review run. Without this flag, non-synthetic report "
+            "execution is default-blocked."
+        ),
+    )
+    parser.add_argument(
         "--start-at",
         required=not synthetic_review_smoke_requested,
         help="Timezone-aware ISO start for the persisted attention window.",
@@ -1683,6 +1692,8 @@ def main(argv: list[str] | None = None) -> int:
     json_output_formats = {"json", "review-json"}
     try:
         args = _parse_args(argv)
+        if not args.synthetic_review_smoke and not args.allow_local_data_readonly:
+            raise NoMarkerGroupedLifecycleInputError("local_data_ack_required")
         if args.output_path is not None and not _artifact_output_allowed(
             output_format=args.format,
             synthetic_review_smoke=bool(args.synthetic_review_smoke),

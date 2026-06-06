@@ -52,6 +52,7 @@ GROUPED_VARIANT_TREATMENTS = {
     "no_visible_candidate",
     "unknown",
 }
+LOCAL_READONLY_ACK_FLAG = "--allow-local-data-readonly"
 LIFECYCLE_COMPATIBILITY_REQUIRED_FIELDS = {
     "presentation_hash_present",
     "canonical_hash_present",
@@ -571,6 +572,8 @@ def test_help_lists_review_output_modes_before_execution(
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
     help_output = captured.out
+    assert LOCAL_READONLY_ACK_FLAG in help_output
+    assert "default-blocked" in help_output
     assert "--format" in help_output
     assert "text" in help_output
     assert "json" in help_output
@@ -600,6 +603,7 @@ def test_invalid_inputs_fail_before_execution(monkeypatch: pytest.MonkeyPatch) -
     )
 
     base = [
+        LOCAL_READONLY_ACK_FLAG,
         "--start-at",
         "2149-01-01T00:00:00+00:00",
         "--end-at",
@@ -645,6 +649,40 @@ def test_invalid_inputs_fail_before_execution(monkeypatch: pytest.MonkeyPatch) -
         )
         == 2
     )
+
+
+def test_cli_without_local_readonly_ack_blocks_before_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def forbidden_report(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("no-ack report must not execute")
+
+    monkeypatch.setattr(
+        compat_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        forbidden_report,
+    )
+
+    code = compat_script.main(
+        [
+            "--start-at",
+            "2149-01-01T00:00:00+00:00",
+            "--end-at",
+            "2149-01-02T00:00:00+00:00",
+            "--format",
+            "review-json",
+            "--review-exit-code",
+        ]
+    )
+
+    assert code == 2
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["status"] == "blocked"
+    assert parsed["error_code"] == "input_error"
+    assert captured.err == ""
+    _assert_safe_output(captured.out)
 
 
 def test_invalid_format_fails_before_execution(
@@ -1196,6 +1234,7 @@ async def test_report_stays_read_only_with_test_session_factory(
 
 def test_json_output_is_stable_and_sanitized() -> None:
     result = _run_script(
+        LOCAL_READONLY_ACK_FLAG,
         "--start-at",
         "2149-01-01T00:00:00+00:00",
         "--end-at",
@@ -1216,6 +1255,7 @@ def test_json_output_is_stable_and_sanitized() -> None:
 
 def test_review_json_output_is_decision_only_and_sanitized() -> None:
     result = _run_script(
+        LOCAL_READONLY_ACK_FLAG,
         "--start-at",
         "2149-01-01T00:00:00+00:00",
         "--end-at",
@@ -1288,10 +1328,12 @@ def test_review_json_projection_omits_raw_hash_values(
 
     code = compat_script.main(
         [
+            LOCAL_READONLY_ACK_FLAG,
             "--start-at",
             "2149-01-01T00:00:00+00:00",
             "--end-at",
             "2149-01-02T00:00:00+00:00",
+            LOCAL_READONLY_ACK_FLAG,
             "--format",
             "review-json",
             "--review-exit-code",
@@ -1432,6 +1474,7 @@ def test_review_exit_code_flag_defaults_to_zero_when_absent(
             "2149-01-01T00:00:00+00:00",
             "--end-at",
             "2149-01-02T00:00:00+00:00",
+            LOCAL_READONLY_ACK_FLAG,
             "--format",
             "review-json",
         ]
@@ -1471,6 +1514,7 @@ def test_review_exit_code_maps_operator_decisions(
             "2149-01-01T00:00:00+00:00",
             "--end-at",
             "2149-01-02T00:00:00+00:00",
+            LOCAL_READONLY_ACK_FLAG,
             "--format",
             "review-json",
             "--review-exit-code",
@@ -1508,6 +1552,7 @@ def test_review_exit_code_report_error_returns_usage_code(
             "2149-01-01T00:00:00+00:00",
             "--end-at",
             "2149-01-02T00:00:00+00:00",
+            LOCAL_READONLY_ACK_FLAG,
             "--format",
             "review-json",
             "--review-exit-code",
@@ -1707,6 +1752,7 @@ def test_review_json_output_path_writes_sanitized_artifact(
 
     code = compat_script.main(
         [
+            LOCAL_READONLY_ACK_FLAG,
             "--start-at",
             "2149-01-01T00:00:00+00:00",
             "--end-at",
@@ -1786,6 +1832,7 @@ def test_output_path_rejects_unsafe_output_modes_before_execution(
             "2149-01-01T00:00:00+00:00",
             "--end-at",
             "2149-01-02T00:00:00+00:00",
+            LOCAL_READONLY_ACK_FLAG,
             "--format",
             output_format,
             "--output-path",
@@ -1837,6 +1884,7 @@ def test_output_path_rejects_unsafe_paths_before_execution(
             "2149-01-01T00:00:00+00:00",
             "--end-at",
             "2149-01-02T00:00:00+00:00",
+            LOCAL_READONLY_ACK_FLAG,
             "--format",
             "review-json",
             "--output-path",

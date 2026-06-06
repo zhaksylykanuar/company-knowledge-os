@@ -917,6 +917,16 @@
   Delegated report failure summaries may include sanitized contract diagnostics
   with boundary, exit-code class, artifact presence, schema kind, contract
   status, validator, and missing field names only.
+- FOS-126 adds no storage and fixes the manual-runner to report delegated CLI
+  invocation. The compatibility report command is default-blocked for
+  non-synthetic review execution unless `--allow-local-data-readonly` is
+  present, and the manual runner passes that acknowledgement so the delegated
+  command reaches the artifact-writing review path.
+- FOS-126 keeps parser/default-block/infrastructure exits as sanitized
+  delegated failures with CLI contract diagnostics only. Review and sweep
+  artifacts remain local review/debug artifacts only; the tooling remains
+  doctor-gated, sanitized-output-only, no-send, non-enforcing, and not a
+  source-of-truth mutation.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service

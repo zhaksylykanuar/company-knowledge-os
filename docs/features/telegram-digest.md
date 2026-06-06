@@ -1057,6 +1057,16 @@ Implemented today:
   report failures now include sanitized contract diagnostics only: boundary,
   exit-code class, artifact presence, schema kind, contract status, validator,
   and missing field names.
+- FOS-126 fixes the manual-runner to report delegated CLI invocation. The
+  compatibility report command is default-blocked for non-synthetic review
+  execution unless `--allow-local-data-readonly` is present, and the manual
+  runner passes that acknowledgement so the delegated command reaches the
+  artifact-writing review path. Parser/default-block/infrastructure exits
+  remain sanitized delegated failures with CLI contract diagnostics.
+- FOS-126 preserves doctor gating, explicit local-readonly acknowledgement,
+  sanitized output/artifacts, no-send behavior, non-enforcement,
+  source-of-truth immutability, human approval boundaries, and
+  duplicate-success protection.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
