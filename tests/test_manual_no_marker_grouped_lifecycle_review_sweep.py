@@ -238,6 +238,7 @@ def _patch_nested_report_delegate(
     decisions: list[str],
     exit_codes: list[int] | None = None,
     artifact_kind: str = "review-json",
+    artifact_status: str | None = None,
     stderr_text: str | None = None,
     stdout_text: str | None = None,
 ) -> None:
@@ -263,6 +264,8 @@ def _patch_nested_report_delegate(
         if artifact_kind == "legacy-review-json":
             artifact_payload.pop("artifact_schema", None)
             artifact_payload.pop("output_format", None)
+        if artifact_status is not None:
+            artifact_payload["status"] = artifact_status
         calls.append(f"report:{decision}")
         review_script._write_json_artifact(artifact_payload, output_path)
         if stderr_text is not None:
@@ -886,6 +889,7 @@ def test_sweep_nested_report_boundary_accepts_legacy_review_json_contract(
             "already_sent_by_current_hash",
         ],
         artifact_kind="legacy-review-json",
+        artifact_status="pass",
         stderr_text="synthetic delegated stderr",
         stdout_text="synthetic delegated stdout",
     )
@@ -1199,6 +1203,57 @@ def test_manual_runner_boundary_missing_artifact_fails_safely(
     assert parsed["reason_code"] == "delegated_report_failed"
     assert parsed["executed_report_count"] == 0
     assert parsed["windows"] == []
+
+
+def test_sweep_surfaces_sanitized_delegated_contract_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+
+    def fake_manual_main(argv: list[str] | None = None) -> int:
+        assert argv is not None
+        calls.append("manual")
+        print(
+            json.dumps(
+                {
+                    "status": "blocked",
+                    "reason_code": "delegated_report_failed",
+                    "read_only": True,
+                    "enforced": False,
+                    "semantic_duplicate_claimed": False,
+                    "delegated_contract_diagnostics": {
+                        "delegated_boundary_name": "manual_runner_to_report",
+                        "delegated_exit_code_class": "30",
+                        "artifact_presence": "present",
+                        "artifact_schema_kind": "unknown",
+                        "artifact_contract_status": "wrong_schema",
+                        "missing_required_field_names": [],
+                        "validator_name": "_normalize_delegated_report_artifact",
+                    },
+                },
+                sort_keys=True,
+            )
+        )
+        return 2
+
+    monkeypatch.setattr(sweep_script.manual_script, "main", fake_manual_main)
+
+    code = sweep_script.main(_ack_args(tmp_path, lookbacks="6"))
+
+    assert code == sweep_script.EXIT_INVALID_USAGE
+    assert calls == ["doctor", "manual"]
+    parsed = _parse_stdout(capsys)
+    assert parsed["status"] == "fail"
+    assert parsed["reason_code"] == "delegated_report_failed"
+    diagnostics = parsed["delegated_contract_diagnostics"]
+    assert diagnostics["delegated_boundary_name"] == "manual_runner_to_report"
+    assert diagnostics["artifact_contract_status"] == "wrong_schema"
+    assert diagnostics["artifact_schema_kind"] == "unknown"
+    _assert_no_raw_hash_values(diagnostics)
+    _assert_safe_output(json.dumps(diagnostics, sort_keys=True))
 
 
 def test_manual_runner_boundary_malformed_artifact_fails_safely(

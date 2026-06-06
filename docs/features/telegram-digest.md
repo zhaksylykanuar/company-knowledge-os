@@ -1052,6 +1052,11 @@ Implemented today:
   schema-marked review artifacts, markerless legacy review-json artifacts, or
   full compatibility reports only after sanitized conversion, and fails safely
   for wrong-path, wrong-schema, malformed, mismatched, or unsafe artifacts.
+- FOS-124 refines markerless delegated review-json handling to key off the
+  required safe review sections instead of a single status value. Delegated
+  report failures now include sanitized contract diagnostics only: boundary,
+  exit-code class, artifact presence, schema kind, contract status, validator,
+  and missing field names.
 - FOS-018 adds a Telegram outbound delivery adapter for already-rendered plain
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.

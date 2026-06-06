@@ -63,6 +63,14 @@ FULL_REPORT_ONLY_KEYS = {
     "warnings",
     "limitations",
 }
+REVIEW_JSON_ARTIFACT_CORE_FIELDS = frozenset(
+    {
+        "lifecycle_compatibility",
+        "canonical_hash_guard_evaluation",
+        "operator_review_summary",
+        "manual_review_diagnostics",
+    }
+)
 MANUAL_REVIEW_SAFE_NEXT_STEPS = {
     "inspect_review_artifact",
     "repeat_with_bounded_window",
@@ -1292,12 +1300,18 @@ def is_full_compatibility_report_artifact(report: Mapping[str, Any]) -> bool:
     )
 
 
+def _has_review_json_core_fields(report: Mapping[str, Any]) -> bool:
+    return all(
+        isinstance(report.get(field_name), Mapping)
+        for field_name in REVIEW_JSON_ARTIFACT_CORE_FIELDS
+    )
+
+
 def is_review_json_artifact(report: Mapping[str, Any]) -> bool:
     return (
         report.get("artifact_schema") == REVIEW_JSON_ARTIFACT_SCHEMA
         and report.get("output_format") == "review-json"
-        and isinstance(report.get("operator_review_summary"), Mapping)
-        and isinstance(report.get("manual_review_diagnostics"), Mapping)
+        and _has_review_json_core_fields(report)
         and not any(key in report for key in FULL_REPORT_ONLY_KEYS)
     )
 
@@ -1305,13 +1319,35 @@ def is_review_json_artifact(report: Mapping[str, Any]) -> bool:
 def is_legacy_review_json_artifact(report: Mapping[str, Any]) -> bool:
     if "artifact_schema" in report:
         return False
+    if report.get("output_format") not in (None, "review-json"):
+        return False
     return (
-        report.get("status") == "no_marker_grouped_lifecycle_compatibility"
-        and isinstance(report.get("operator_review_summary"), Mapping)
-        and isinstance(report.get("manual_review_diagnostics"), Mapping)
-        and isinstance(report.get("lifecycle_compatibility"), Mapping)
-        and isinstance(report.get("canonical_hash_guard_evaluation"), Mapping)
+        _has_review_json_core_fields(report)
         and not any(key in report for key in FULL_REPORT_ONLY_KEYS)
+    )
+
+
+def review_artifact_schema_kind(value: Any) -> str:
+    if not isinstance(value, Mapping):
+        return "malformed"
+    if is_review_json_artifact(value):
+        return "review_json_marked"
+    if is_legacy_review_json_artifact(value):
+        return "review_json_legacy"
+    if is_full_compatibility_report_artifact(value):
+        return "full_compatibility"
+    if value.get("artifact_schema") not in (None, REVIEW_JSON_ARTIFACT_SCHEMA):
+        return "unknown"
+    return "unknown"
+
+
+def review_artifact_missing_required_field_names(value: Any) -> list[str]:
+    if not isinstance(value, Mapping):
+        return []
+    return sorted(
+        field_name
+        for field_name in REVIEW_JSON_ARTIFACT_CORE_FIELDS
+        if not isinstance(value.get(field_name), Mapping)
     )
 
 

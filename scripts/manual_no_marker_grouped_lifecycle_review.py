@@ -39,10 +39,17 @@ SAFE_REPORT_EXIT_CODES = frozenset(REPORT_EXIT_CODE_DECISIONS)
 
 
 class ManualReviewRunnerError(RuntimeError):
-    def __init__(self, reason_code: str, exit_code: int = EXIT_INVALID_USAGE) -> None:
+    def __init__(
+        self,
+        reason_code: str,
+        exit_code: int = EXIT_INVALID_USAGE,
+        *,
+        diagnostics: Mapping[str, Any] | None = None,
+    ) -> None:
         super().__init__(reason_code)
         self.reason_code = _safe_reason_code(reason_code)
         self.exit_code = exit_code
+        self.diagnostics = dict(diagnostics or {})
 
 
 @dataclass(frozen=True)
@@ -94,8 +101,9 @@ def _safe_blocked_result(
     reason_code: str,
     local_data_acknowledged: bool,
     executed_report: bool = False,
+    delegated_contract_diagnostics: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    result = {
         "mode": MANUAL_RUNNER_MODE,
         "status": "blocked",
         "reason_code": _safe_reason_code(reason_code),
@@ -109,6 +117,11 @@ def _safe_blocked_result(
         "enforced": False,
         "semantic_duplicate_claimed": False,
     }
+    if delegated_contract_diagnostics:
+        result["delegated_contract_diagnostics"] = dict(
+            delegated_contract_diagnostics
+        )
+    return result
 
 
 def _safe_preflight_result(
@@ -442,6 +455,34 @@ def _normalize_delegated_report_artifact(
     raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
 
 
+def _delegated_exit_code_class(exit_code: int | None) -> str:
+    if exit_code is None:
+        return "not_observed"
+    if exit_code in SAFE_REPORT_EXIT_CODES:
+        return str(exit_code)
+    return "unexpected"
+
+
+def _delegated_report_contract_diagnostics(
+    *,
+    exit_code: int | None,
+    artifact_presence: str,
+    payload: Any = None,
+    artifact_contract_status: str,
+    validator_name: str,
+    missing_required_field_names: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "delegated_boundary_name": "manual_runner_to_report",
+        "delegated_exit_code_class": _delegated_exit_code_class(exit_code),
+        "artifact_presence": artifact_presence,
+        "artifact_schema_kind": review_script.review_artifact_schema_kind(payload),
+        "artifact_contract_status": artifact_contract_status,
+        "missing_required_field_names": sorted(missing_required_field_names or []),
+        "validator_name": validator_name,
+    }
+
+
 def _decision_from_review_artifact(payload: Mapping[str, Any]) -> str | None:
     summary = payload.get("operator_review_summary")
     diagnostics = payload.get("manual_review_diagnostics")
@@ -468,29 +509,106 @@ def _delegate_report(
         )
     delegated_decision = REPORT_EXIT_CODE_DECISIONS.get(exit_code)
     if delegated_decision is None:
-        raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+        payload: Any = None
+        artifact_presence = "missing"
+        artifact_contract_status = "not_observed"
+        try:
+            payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+            artifact_presence = "present"
+            artifact_contract_status = "unexpected_exit_code"
+        except (OSError, json.JSONDecodeError):
+            pass
+        raise ManualReviewRunnerError(
+            "delegated_report_failed",
+            EXIT_INVALID_USAGE,
+            diagnostics=_delegated_report_contract_diagnostics(
+                exit_code=exit_code,
+                artifact_presence=artifact_presence,
+                payload=payload,
+                artifact_contract_status=artifact_contract_status,
+                validator_name="_delegate_report",
+            ),
+        )
     try:
         payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
+        artifact_presence = "present" if artifact_path.exists() else "missing"
         raise ManualReviewRunnerError(
             "delegated_report_invalid_json",
             EXIT_INVALID_USAGE,
+            diagnostics=_delegated_report_contract_diagnostics(
+                exit_code=exit_code,
+                artifact_presence=artifact_presence,
+                artifact_contract_status=(
+                    "malformed" if artifact_presence == "present" else "wrong_path"
+                ),
+                validator_name="_delegate_report",
+            ),
         ) from exc
     if not isinstance(payload, Mapping):
         raise ManualReviewRunnerError(
             "delegated_report_invalid_json",
             EXIT_INVALID_USAGE,
+            diagnostics=_delegated_report_contract_diagnostics(
+                exit_code=exit_code,
+                artifact_presence="present",
+                payload=payload,
+                artifact_contract_status="malformed",
+                validator_name="_delegate_report",
+            ),
         )
-    payload = _normalize_delegated_report_artifact(payload)
+    missing_field_names = review_script.review_artifact_missing_required_field_names(
+        payload
+    )
+    try:
+        payload = _normalize_delegated_report_artifact(payload)
+    except ManualReviewRunnerError as exc:
+        artifact_contract_status = (
+            "missing_required_fields" if missing_field_names else "wrong_schema"
+        )
+        raise ManualReviewRunnerError(
+            exc.reason_code,
+            exc.exit_code,
+            diagnostics=_delegated_report_contract_diagnostics(
+                exit_code=exit_code,
+                artifact_presence="present",
+                payload=payload,
+                artifact_contract_status=artifact_contract_status,
+                validator_name="_normalize_delegated_report_artifact",
+                missing_required_field_names=missing_field_names,
+            ),
+        ) from exc
     payload_decision = _decision_from_review_artifact(payload)
     if payload_decision != delegated_decision:
-        raise ManualReviewRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+        raise ManualReviewRunnerError(
+            "delegated_report_failed",
+            EXIT_INVALID_USAGE,
+            diagnostics=_delegated_report_contract_diagnostics(
+                exit_code=exit_code,
+                artifact_presence="present",
+                payload=payload,
+                artifact_contract_status="decision_exit_code_mismatch",
+                validator_name="_decision_from_review_artifact",
+                missing_required_field_names=(
+                    review_script.review_artifact_missing_required_field_names(
+                        payload
+                    )
+                ),
+            ),
+        )
     try:
         _assert_sanitized(payload)
     except Exception as exc:
         raise ManualReviewRunnerError(
             "delegated_report_failed",
             EXIT_INVALID_USAGE,
+            diagnostics=_delegated_report_contract_diagnostics(
+                exit_code=exit_code,
+                artifact_presence="present",
+                payload=payload,
+                artifact_contract_status="unsafe",
+                validator_name="_assert_sanitized",
+            ),
         ) from exc
     return DelegatedReportResult(exit_code=exit_code, payload=payload)
 
@@ -524,6 +642,7 @@ def main(argv: list[str] | None = None) -> int:
         result = _safe_blocked_result(
             reason_code=exc.reason_code,
             local_data_acknowledged=local_data_acknowledged,
+            delegated_contract_diagnostics=exc.diagnostics,
         )
         _print_json(result)
         return exc.exit_code

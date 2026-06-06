@@ -57,10 +57,17 @@ UNSAFE_OUTPUT_DIR_FRAGMENTS = (
 
 
 class SweepRunnerError(RuntimeError):
-    def __init__(self, reason_code: str, exit_code: int = EXIT_INVALID_USAGE) -> None:
+    def __init__(
+        self,
+        reason_code: str,
+        exit_code: int = EXIT_INVALID_USAGE,
+        *,
+        diagnostics: Mapping[str, Any] | None = None,
+    ) -> None:
         super().__init__(reason_code)
         self.reason_code = manual_script._safe_reason_code(reason_code)
         self.exit_code = exit_code
+        self.diagnostics = dict(diagnostics or {})
 
 
 @dataclass(frozen=True)
@@ -214,8 +221,9 @@ def _safe_base_result(
     aggregate_decision: str | None = None,
     aggregate_reason_codes: list[str] | None = None,
     recommended_operator_action: str | None = None,
+    delegated_contract_diagnostics: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    result = {
         "mode": SWEEP_MODE,
         "status": status,
         "reason_code": reason_code,
@@ -237,6 +245,11 @@ def _safe_base_result(
         "semantic_duplicate_claimed": False,
         "checks": checks or [],
     }
+    if delegated_contract_diagnostics:
+        result["delegated_contract_diagnostics"] = dict(
+            delegated_contract_diagnostics
+        )
+    return result
 
 
 def _run_doctor() -> Mapping[str, Any]:
@@ -460,6 +473,21 @@ def _exit_code_for_aggregate(aggregate_decision: str) -> int:
     return DELEGATED_REVIEW_DECISION_EXIT_CODES.get(aggregate_decision, 30)
 
 
+def _extract_delegated_contract_diagnostics(
+    delegated_stdout: str,
+) -> Mapping[str, Any] | None:
+    try:
+        payload = json.loads(delegated_stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    diagnostics = payload.get("delegated_contract_diagnostics")
+    if not isinstance(diagnostics, Mapping):
+        return None
+    return dict(diagnostics)
+
+
 def _delegate_window_review(
     args: argparse.Namespace,
     *,
@@ -471,13 +499,20 @@ def _delegate_window_review(
         lookback_hours=lookback_hours,
         output_path=output_path,
     )
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(
+    delegated_stdout = io.StringIO()
+    with contextlib.redirect_stdout(delegated_stdout), contextlib.redirect_stderr(
         io.StringIO()
     ):
         exit_code = manual_script.main(manual_argv)
     delegated_decision = _decision_from_delegated_exit_code(exit_code)
     if delegated_decision is None:
-        raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE)
+        raise SweepRunnerError(
+            "delegated_report_failed",
+            EXIT_INVALID_USAGE,
+            diagnostics=_extract_delegated_contract_diagnostics(
+                delegated_stdout.getvalue()
+            ),
+        )
     # The per-window artifact is the manual runner's durable sanitized contract.
     # Captured stdout can contain safe diagnostics and must not decide success.
     try:
@@ -546,6 +581,8 @@ def run_sweep(args: argparse.Namespace) -> tuple[int, Mapping[str, Any]]:
                 lookback_hours=lookback,
                 output_path=artifact_path,
             )
+        except SweepRunnerError:
+            raise
         except Exception as exc:
             raise SweepRunnerError("delegated_report_failed", EXIT_INVALID_USAGE) from exc
         delegated_decision = _decision_from_delegated_exit_code(delegated.exit_code)
@@ -598,6 +635,7 @@ def main(argv: list[str] | None = None) -> int:
             local_data_acknowledged=bool(
                 getattr(locals().get("args", None), "allow_local_data_readonly", False)
             ),
+            delegated_contract_diagnostics=exc.diagnostics,
         )
         _print_json(result)
         return exc.exit_code

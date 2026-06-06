@@ -1624,6 +1624,8 @@ def test_review_json_artifact_shape_predicates_distinguish_cli_contracts() -> No
     legacy_review_json = dict(scenario)
     legacy_review_json.pop("artifact_schema", None)
     legacy_review_json.pop("output_format", None)
+    legacy_review_json_status_drift = dict(legacy_review_json)
+    legacy_review_json_status_drift["status"] = "pass"
     full_report = {
         **legacy_review_json,
         "candidate": {},
@@ -1641,10 +1643,26 @@ def test_review_json_artifact_shape_predicates_distinguish_cli_contracts() -> No
     assert compat_script.is_full_compatibility_report_artifact(scenario) is False
     assert compat_script.is_review_json_artifact(legacy_review_json) is False
     assert compat_script.is_legacy_review_json_artifact(legacy_review_json) is True
+    assert (
+        compat_script.is_legacy_review_json_artifact(
+            legacy_review_json_status_drift
+        )
+        is True
+    )
     assert compat_script.is_full_compatibility_report_artifact(full_report) is True
     assert compat_script.is_review_json_artifact(wrong_schema) is False
     assert compat_script.is_legacy_review_json_artifact(wrong_schema) is False
     assert compat_script.is_full_compatibility_report_artifact(wrong_schema) is False
+    assert compat_script.review_artifact_schema_kind(scenario) == "review_json_marked"
+    assert (
+        compat_script.review_artifact_schema_kind(legacy_review_json_status_drift)
+        == "review_json_legacy"
+    )
+    assert (
+        compat_script.review_artifact_schema_kind(full_report)
+        == "full_compatibility"
+    )
+    assert compat_script.review_artifact_schema_kind(wrong_schema) == "unknown"
 
 
 def test_synthetic_review_smoke_review_exit_code_is_most_conservative(

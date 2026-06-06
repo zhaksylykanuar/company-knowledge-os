@@ -1029,6 +1029,11 @@
   schema-marked review artifacts, markerless legacy review-json artifacts, or
   full compatibility reports only after sanitized conversion, and fails safely
   for wrong-path, wrong-schema, malformed, mismatched, or unsafe artifacts.
+- FOS-124 refines markerless delegated review-json handling to key off the
+  required safe review sections instead of a single status value. Delegated
+  report failures now include sanitized contract diagnostics only: boundary,
+  exit-code class, artifact presence, schema kind, contract status, validator,
+  and missing field names.
 - FOS-047 adds provider-free activity normalization for GitHub pull requests,
   Jira issues, and Drive documents. This slice is mapping-only: it does not
   call GitHub, Jira, Drive, OpenAI, or other live providers, and it does not

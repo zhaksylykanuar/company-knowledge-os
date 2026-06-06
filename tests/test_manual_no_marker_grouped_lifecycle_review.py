@@ -82,6 +82,29 @@ def _assert_no_raw_hash_values(value: object) -> None:
     assert _raw_hash_value_paths(value) == []
 
 
+def _assert_contract_diagnostics(
+    parsed: dict[str, Any],
+    *,
+    artifact_contract_status: str,
+    artifact_presence: str = "present",
+    artifact_schema_kind: str | None = None,
+    missing_required_field_names: list[str] | None = None,
+) -> None:
+    diagnostics = parsed["delegated_contract_diagnostics"]
+    assert diagnostics["delegated_boundary_name"] == "manual_runner_to_report"
+    assert diagnostics["artifact_presence"] == artifact_presence
+    assert diagnostics["artifact_contract_status"] == artifact_contract_status
+    assert diagnostics["validator_name"].startswith("_")
+    if artifact_schema_kind is not None:
+        assert diagnostics["artifact_schema_kind"] == artifact_schema_kind
+    if missing_required_field_names is not None:
+        assert diagnostics["missing_required_field_names"] == (
+            missing_required_field_names
+        )
+    _assert_no_raw_hash_values(diagnostics)
+    _assert_safe_output(json.dumps(diagnostics, sort_keys=True))
+
+
 def _doctor_pass_report() -> dict[str, Any]:
     return {
         "mode": "grouped_lifecycle_review_doctor",
@@ -212,6 +235,7 @@ def _patch_production_report_artifact(
     stdout_text: str | None = None,
     drop_diagnostics: bool = False,
     artifact_kind: str = "review-json",
+    artifact_status: str | None = None,
 ) -> None:
     full_report = _full_report_for_decision(decision)
 
@@ -232,6 +256,8 @@ def _patch_production_report_artifact(
                 artifact_payload.pop("output_format", None)
             elif artifact_kind == "wrong-schema":
                 artifact_payload["artifact_schema"] = "unsupported_review_json.v1"
+        if artifact_status is not None:
+            artifact_payload["status"] = artifact_status
         if drop_diagnostics:
             artifact_payload.pop("manual_review_diagnostics", None)
         review_script._write_json_artifact(artifact_payload, output_path)
@@ -313,6 +339,23 @@ def _patch_raw_hash_report(
         return 0
 
     monkeypatch.setattr(manual_script.review_script, "main", fake_report_main)
+
+
+def _patch_report_builder(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    calls: list[str],
+    decision: str,
+) -> None:
+    async def fake_report_builder(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        calls.append("report_builder")
+        return _full_report_for_decision(decision)
+
+    monkeypatch.setattr(
+        manual_script.review_script,
+        "build_no_marker_grouped_lifecycle_compatibility_report",
+        fake_report_builder,
+    )
 
 
 def test_manual_runner_help_lists_lookback_and_preflight(
@@ -1028,6 +1071,42 @@ def test_manual_runner_accepts_production_report_artifact_contract(
     _assert_safe_output(captured.out)
 
 
+def test_manual_runner_accepts_real_report_entrypoint_artifact_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_report_builder(
+        monkeypatch,
+        calls=calls,
+        decision="manual_review_needed",
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == 30
+    assert calls == ["doctor", "report_builder"]
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert parsed == artifact_payload
+    assert parsed["artifact_schema"] == review_script.REVIEW_JSON_ARTIFACT_SCHEMA
+    assert parsed["output_format"] == "review-json"
+    assert parsed["operator_review_summary"]["decision"] == (
+        "manual_review_needed"
+    )
+    assert parsed["manual_review_diagnostics"]["diagnostic_status"] == (
+        "manual_review_needed"
+    )
+    assert "delegated_contract_diagnostics" not in parsed
+    _assert_no_raw_hash_values(parsed)
+    _assert_safe_output(captured.out)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
 def test_manual_runner_accepts_legacy_review_json_artifact_contract(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1063,6 +1142,45 @@ def test_manual_runner_accepts_legacy_review_json_artifact_contract(
     assert parsed["manual_review_diagnostics"]["diagnostic_status"] == (
         "manual_review_needed"
     )
+    _assert_no_raw_hash_values(parsed)
+    _assert_safe_output(captured.out)
+    _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
+
+
+def test_manual_runner_accepts_legacy_review_json_with_safe_status_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+    _patch_doctor_pass(monkeypatch, calls)
+    _patch_production_report_artifact(
+        monkeypatch,
+        calls=calls,
+        decision="manual_review_needed",
+        exit_code=30,
+        artifact_kind="legacy-review-json",
+        artifact_status="pass",
+        stderr_text="synthetic delegated stderr",
+        stdout_text="synthetic delegated stdout",
+    )
+    artifact_path = tmp_path / "review" / "manual-review.json"
+
+    code = manual_script.main(_base_args(tmp_path))
+
+    assert code == 30
+    assert calls == ["doctor", "report"]
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert parsed == artifact_payload
+    assert parsed["artifact_schema"] == review_script.REVIEW_JSON_ARTIFACT_SCHEMA
+    assert parsed["output_format"] == "review-json"
+    assert parsed["status"] == "pass"
+    assert parsed["operator_review_summary"]["decision"] == (
+        "manual_review_needed"
+    )
+    assert "delegated_contract_diagnostics" not in parsed
     _assert_no_raw_hash_values(parsed)
     _assert_safe_output(captured.out)
     _assert_safe_output(artifact_path.read_text(encoding="utf-8"))
@@ -1170,6 +1288,12 @@ def test_manual_runner_rejects_unexpected_delegated_exit_before_artifact(
     assert parsed["status"] == "blocked"
     assert parsed["reason_code"] == "delegated_report_failed"
     assert parsed["executed_report"] is False
+    _assert_contract_diagnostics(
+        parsed,
+        artifact_presence="missing",
+        artifact_contract_status="not_observed",
+        artifact_schema_kind="malformed",
+    )
     _assert_safe_output(captured.out)
 
 
@@ -1193,6 +1317,11 @@ def test_manual_runner_rejects_malformed_delegated_review_output(
     assert parsed["status"] == "blocked"
     assert parsed["reason_code"] == "delegated_report_invalid_json"
     assert parsed["executed_report"] is False
+    _assert_contract_diagnostics(
+        parsed,
+        artifact_contract_status="malformed",
+        artifact_schema_kind="malformed",
+    )
     _assert_safe_output(captured.out)
 
 
@@ -1221,6 +1350,11 @@ def test_manual_runner_rejects_delegated_exit_decision_mismatch(
     assert parsed["status"] == "blocked"
     assert parsed["reason_code"] == "delegated_report_failed"
     assert parsed["executed_report"] is False
+    _assert_contract_diagnostics(
+        parsed,
+        artifact_contract_status="decision_exit_code_mismatch",
+        artifact_schema_kind="review_json_marked",
+    )
     _assert_safe_output(captured.out)
 
 
@@ -1250,6 +1384,12 @@ def test_manual_runner_rejects_missing_delegated_report_diagnostics(
     assert parsed["status"] == "blocked"
     assert parsed["reason_code"] == "delegated_report_failed"
     assert parsed["executed_report"] is False
+    _assert_contract_diagnostics(
+        parsed,
+        artifact_contract_status="missing_required_fields",
+        artifact_schema_kind="unknown",
+        missing_required_field_names=["manual_review_diagnostics"],
+    )
     _assert_safe_output(captured.out)
 
 
@@ -1279,6 +1419,11 @@ def test_manual_runner_rejects_wrong_delegated_report_schema(
     assert parsed["status"] == "blocked"
     assert parsed["reason_code"] == "delegated_report_failed"
     assert parsed["executed_report"] is False
+    _assert_contract_diagnostics(
+        parsed,
+        artifact_contract_status="wrong_schema",
+        artifact_schema_kind="unknown",
+    )
     _assert_safe_output(captured.out)
 
 
@@ -1320,6 +1465,12 @@ def test_manual_runner_rejects_wrong_delegated_report_artifact_path(
     assert parsed["status"] == "blocked"
     assert parsed["reason_code"] == "delegated_report_invalid_json"
     assert parsed["executed_report"] is False
+    _assert_contract_diagnostics(
+        parsed,
+        artifact_presence="missing",
+        artifact_contract_status="wrong_path",
+        artifact_schema_kind="malformed",
+    )
     _assert_safe_output(captured.out)
 
 
@@ -1343,6 +1494,11 @@ def test_manual_runner_rejects_unsafe_delegated_review_output(
     assert parsed["status"] == "blocked"
     assert parsed["reason_code"] == "delegated_report_failed"
     assert parsed["executed_report"] is False
+    _assert_contract_diagnostics(
+        parsed,
+        artifact_contract_status="unsafe",
+        artifact_schema_kind="review_json_marked",
+    )
     _assert_safe_output(captured.out)
 
 

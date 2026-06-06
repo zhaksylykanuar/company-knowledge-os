@@ -912,6 +912,11 @@
   review-json artifacts, or full compatibility reports only after sanitized
   conversion, and keeps wrong-path, wrong-schema, malformed, mismatched, or
   unsafe artifacts as sanitized failures.
+- FOS-124 adds no storage and refines markerless delegated review-json
+  handling to require the safe review sections instead of one status value.
+  Delegated report failure summaries may include sanitized contract diagnostics
+  with boundary, exit-code class, artifact presence, schema kind, contract
+  status, validator, and missing field names only.
 - Provider-free persisted activity triage can classify one stored
   `normalized_activity_items` row through the shared `AttentionTriageAgent`
   contract and persist one linked `attention_triage_results` row. The service
