@@ -69,6 +69,7 @@
 - Extended production-operation guard coverage for raw-storage, manual
   ingestion, and persisted backfill source-of-truth mutation boundaries:
   implemented
+- Default-disabled scheduler/outbox execution guard baseline: implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -262,6 +263,13 @@ trusted facts.
   backfill writes also require the production-operation acknowledgement. Safe
   read-only previews and persist=false backfill checks remain available without
   source-of-truth mutation.
+- Scheduler/outbox/background delivery execution is default-disabled and still
+  out of scope. The bounded local Telegram send command remains a manual
+  operator path only and asserts that it is not running as a scheduler, outbox
+  drain, background dispatch, retry worker, or automatic delivery path before
+  provider and production-operation gates can be reached. Delivery intentions
+  remain durable handoff artifacts, and delivery results remain execution
+  outcome metadata only.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

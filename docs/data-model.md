@@ -97,6 +97,8 @@
   implemented
 - Extended production-operation guard coverage for source-of-truth mutation:
   implemented
+- Default-disabled scheduler/outbox execution guard baseline:
+  implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -365,6 +367,13 @@
   backfill writes are source-of-truth mutation boundaries and are default-denied
   without the same production-operation acknowledgement. Guard diagnostics must
   remain safe reason classes and operation classes only.
+- Scheduler, outbox drain, background dispatch, retry worker, and automatic
+  delivery execution are default-disabled runtime boundaries, not data model
+  tables. The current bounded Telegram send path remains manual-operator-only
+  and explicitly asserts it is not scheduler/outbox managed before reaching
+  provider or production-operation gates. Delivery intentions remain durable
+  handoff audit artifacts, and delivery results remain execution outcome
+  metadata only.
 - Local/dev-only synthetic persisted attention digest seed rows are explicit
   test fixtures in the local database, not company facts. The seed command uses
   deterministic IDs and fails closed on conflicts while writing only enough

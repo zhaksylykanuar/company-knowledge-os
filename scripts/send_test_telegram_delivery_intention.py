@@ -388,17 +388,26 @@ async def _send_bounded_chunks(
     transport: TelegramSendMessageTransport | None,
     allow_production_operation: bool = False,
     production_operation_ack: str | None = None,
+    execution_source: str | None = None,
 ) -> _BoundedTelegramSendResult:
     from app.services.production_operation_guard import (
         DELIVERY_EXECUTION,
         require_production_operation_ack,
     )
     from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
+    from app.services.scheduler_execution_guard import (
+        MANUAL_OPERATOR_EXECUTION,
+        require_no_scheduler_execution,
+    )
     from app.services.telegram_delivery import (
         DEFAULT_TELEGRAM_CHUNK_SIZE,
         send_telegram_plain_text,
     )
 
+    require_no_scheduler_execution(
+        boundary="test_telegram_delivery_execution",
+        execution_source=execution_source or MANUAL_OPERATOR_EXECUTION,
+    )
     require_production_operation_ack(
         operation_class=DELIVERY_EXECUTION,
         boundary="test_telegram_delivery_execution",
@@ -471,6 +480,7 @@ async def execute_test_send(
     telegram_transport: TelegramSendMessageTransport | None = None,
     telegram_bot_token: Any = _SETTING_UNSET,
     telegram_chat_id: Any = _SETTING_UNSET,
+    execution_source: str | None = None,
 ) -> dict[str, Any]:
     from app.core.config import settings
     from app.db.base import AsyncSessionLocal
@@ -485,10 +495,20 @@ async def execute_test_send(
         record_digest_delivery_result,
     )
     from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
+    from app.services.scheduler_execution_guard import (
+        MANUAL_OPERATOR_EXECUTION,
+        require_no_scheduler_execution,
+    )
     from app.services.telegram_delivery import split_telegram_plain_text
 
     if query.test_mode is not True:
         raise SendInputError("test_mode must be exactly true")
+
+    safe_execution_source = execution_source or MANUAL_OPERATOR_EXECUTION
+    require_no_scheduler_execution(
+        boundary="test_telegram_delivery_execution",
+        execution_source=safe_execution_source,
+    )
 
     delivery_intention_id = _clean_required_text(
         query.delivery_intention_id,
@@ -597,6 +617,7 @@ async def execute_test_send(
                 transport=telegram_transport,
                 allow_production_operation=True,
                 production_operation_ack=PRODUCTION_OPERATION_ACK,
+                execution_source=safe_execution_source,
             )
             result_status = _result_status(
                 planned_chunk_count=planned_chunk_count,

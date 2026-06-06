@@ -238,6 +238,12 @@
   persisted Gmail/Drive backfill now use the same production-operation guard.
   Read-only reports, persist=false previews, digest draft review, and grouped
   lifecycle tooling remain allowed without that acknowledgement.
+- Scheduler, outbox drain, background dispatch, retry worker, and automatic
+  delivery execution are default-disabled. The bounded local Telegram send path
+  is still manual-operator-only and must pass the scheduler non-execution guard,
+  provider guard, production-operation guard, human approval checks, and
+  duplicate-success protection before any test send adapter is invoked. Future
+  scheduler/outbox execution remains out of scope.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

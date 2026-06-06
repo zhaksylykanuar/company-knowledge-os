@@ -27,6 +27,11 @@ from app.services.digest_delivery_drafts import (
 from app.services.digest_rendering import render_persisted_attention_digest_text
 from app.services.production_operation_guard import PRODUCTION_OPERATION_ACK
 from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
+from app.services.scheduler_execution_guard import (
+    OUTBOX_DRAIN,
+    OUTBOX_DRAIN_DISABLED,
+    SchedulerExecutionBlockedError,
+)
 from app.services.telegram_delivery import TelegramDeliveryResult
 from scripts import send_test_telegram_delivery_intention as send_script
 
@@ -86,6 +91,35 @@ async def test_bounded_send_supplies_live_provider_ack_after_operator_gate(
     assert len(captured_calls) == 1
     assert captured_calls[0]["allow_live_provider_execution"] is True
     assert captured_calls[0]["provider_execution_ack"] == LIVE_PROVIDER_EXECUTION_ACK
+
+
+async def test_bounded_send_rejects_outbox_source_before_provider_or_db(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_calls: list[dict[str, Any]] = []
+
+    async def forbidden_send_telegram_plain_text(**kwargs: Any) -> TelegramDeliveryResult:
+        captured_calls.append(dict(kwargs))
+        raise AssertionError("outbox execution must not send")
+
+    monkeypatch.setattr(
+        "app.services.telegram_delivery.send_telegram_plain_text",
+        forbidden_send_telegram_plain_text,
+    )
+
+    with pytest.raises(SchedulerExecutionBlockedError) as exc_info:
+        await send_script._send_bounded_chunks(
+            bot_token=BOT_TOKEN_VALUE,
+            chat_id=CHAT_ID_VALUE,
+            chunks=["Source activity digest"],
+            transport=None,
+            allow_production_operation=True,
+            production_operation_ack=PRODUCTION_OPERATION_ACK,
+            execution_source=OUTBOX_DRAIN,
+        )
+
+    assert exc_info.value.reason_code == OUTBOX_DRAIN_DISABLED
+    assert captured_calls == []
 
 
 def _utc(year: int, month: int, day: int, hour: int = 0) -> datetime:
