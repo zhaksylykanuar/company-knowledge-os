@@ -53,6 +53,15 @@ counts/classes only. Persistent logging, queue routing, outbox routing, file
 output, or database storage remains a future separately gated production-ops
 decision.
 
+## Readiness Report
+
+`scripts/report_guarded_execution_readiness.py` is a read-only, no-send,
+provider-free, source-of-truth-mutation-free readiness report. It consolidates
+the current guard, doctor, sanitizer, audit metadata, audit sink, docs, and
+remaining-risk status into strict sanitized JSON. The report is not a full
+audit, not a production approval, and not an execution mechanism. Remaining
+risks are listed as safe classes only.
+
 ## Future Execution Requirements
 
 Any future scheduler or outbox execution must pass all applicable gates before

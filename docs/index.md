@@ -40,6 +40,7 @@ Navigation map for future Codex sessions.
 ## Doctor Scripts
 
 - `../scripts/doctor_guarded_execution.py`: read-only guarded-execution safety preflight.
+- `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.
 
 ## Agent Workflows
 

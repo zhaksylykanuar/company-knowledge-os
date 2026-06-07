@@ -103,6 +103,8 @@
   in-memory/read-only, implemented
 - Non-persistent guarded-execution audit sink:
   no-op/in-memory only, implemented
+- Read-only guarded-execution readiness report:
+  strict sanitized JSON, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -185,6 +187,10 @@
   guarded-execution doctor, but they do not write files, queues, audit rows,
   raw storage, Obsidian, provider systems, scheduler/outbox workers, or
   production databases.
+- The guarded-execution readiness report consolidates guard, doctor, audit
+  metadata, audit sink, docs, and remaining-risk status as strict sanitized
+  JSON. It is read-only operator-review metadata only, not a source-of-truth
+  record, not a full audit, not an approval, and not an execution path.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist

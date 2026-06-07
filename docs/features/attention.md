@@ -72,6 +72,8 @@
   in-memory/read-only, implemented
 - Non-persistent guarded-execution audit sink for safe summaries:
   no-op/in-memory only, implemented
+- Read-only guarded-execution readiness report:
+  strict sanitized JSON, implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -265,6 +267,10 @@
 - Guarded-execution audit sinks can collect that metadata only in no-op or
   in-memory form for tests and doctor preflight summaries. They do not persist,
   enqueue, schedule, send, call providers, or mutate source-of-truth stores.
+- `scripts/report_guarded_execution_readiness.py` consolidates the guarded
+  execution baseline as read-only sanitized JSON. It is not a full audit, not
+  a source-of-truth artifact, not an approval, and not an execution path; it
+  reports remaining production risks as safe classes only.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

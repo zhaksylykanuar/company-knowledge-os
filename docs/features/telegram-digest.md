@@ -74,6 +74,8 @@
   in-memory/read-only, implemented
 - Non-persistent guarded-execution audit sink for safe summaries:
   no-op/in-memory only, implemented
+- Read-only guarded-execution readiness report:
+  strict sanitized JSON, implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -291,6 +293,10 @@ trusted facts.
   collectors for safe summaries only. They do not create delivery results,
   audit rows, queues, outbox records, scheduler work, provider calls, sends, or
   source-of-truth mutations.
+- The guarded-execution readiness report is read-only operator-review metadata
+  only. It consolidates guard, doctor, sanitizer, audit, sink, docs, and
+  remaining-risk status without persisting artifacts, sending, scheduling,
+  calling providers, or approving production execution.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,
