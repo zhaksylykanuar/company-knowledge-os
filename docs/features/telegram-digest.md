@@ -70,6 +70,8 @@
   ingestion, and persisted backfill source-of-truth mutation boundaries:
   implemented
 - Default-disabled scheduler/outbox execution guard baseline: implemented
+- Guarded-execution audit-event metadata contract for guard decisions:
+  in-memory/read-only, implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -279,6 +281,10 @@ trusted facts.
   source-of-truth-mutation-free. It verifies the guard wiring and sanitizer
   diagnostics with synthetic checks only and does not approve, dispatch, send,
   schedule, or execute production operations.
+- Guarded-execution audit-event metadata can summarize provider, production,
+  scheduler, and sanitizer guard decisions for future logging or review. It is
+  JSON-serializable sanitized metadata only: it is not persisted by this
+  baseline, not a delivery result, not an approval, and not execution.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

@@ -99,6 +99,8 @@
   implemented
 - Default-disabled scheduler/outbox execution guard baseline:
   implemented
+- Guarded-execution audit-event metadata contract:
+  in-memory/read-only, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -171,6 +173,11 @@
   `normalized_activity_items`/`source_events`, and delivery draft audit logs for
   count-only window reconciliation. It appends no rows and introduces no new
   storage.
+- Guarded-execution audit-event metadata envelopes are JSON-serializable
+  sanitized metadata for provider, production-operation, scheduler, and
+  sanitizer guard decisions. They are suitable for future logging or review,
+  but this baseline does not persist them, append audit rows, execute delivery,
+  call providers, run scheduler work, or mutate source-of-truth stores.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist

@@ -16,6 +16,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from app.services.guarded_execution_audit import (  # noqa: E402
+    audit_event_from_operator_output_safety,
+    audit_event_from_production_diagnostics,
+    audit_event_from_provider_diagnostics,
+    audit_event_from_scheduler_diagnostics,
+    audit_event_summary,
+)
 from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
 from app.services.production_operation_guard import (  # noqa: E402
     PRODUCTION_OPERATION_DEFAULT_DENIED,
@@ -105,6 +112,14 @@ def _guard_safety_diagnostics(payload: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _safe_audit_summary(event: Mapping[str, Any]) -> dict[str, Any]:
+    summary = audit_event_summary(event)
+    safety = inspect_operator_output(summary).as_dict()
+    if safety["safe"] is not True:
+        raise DoctorCheckError("unsafe_audit_event_summary")
+    return summary
+
+
 def _check_provider_guard_default_denied() -> Mapping[str, Any]:
     callback_called = False
 
@@ -128,11 +143,13 @@ def _check_provider_guard_default_denied() -> Mapping[str, Any]:
     if diagnostics.get("reason_code") != PROVIDER_EXECUTION_DEFAULT_DENIED:
         raise DoctorCheckError("provider_guard_reason_mismatch")
     guard_safety = _guard_safety_diagnostics(diagnostics)
+    audit_event = audit_event_from_provider_diagnostics(diagnostics)
     return {
         "guard": "provider_execution_guard",
         "blocked_callback_called": False,
         "reason_code": diagnostics["reason_code"],
         "guard_safety": guard_safety,
+        "audit_event": _safe_audit_summary(audit_event),
     }
 
 
@@ -159,11 +176,13 @@ def _check_production_guard_default_denied() -> Mapping[str, Any]:
     if diagnostics.get("reason_code") != PRODUCTION_OPERATION_DEFAULT_DENIED:
         raise DoctorCheckError("production_guard_reason_mismatch")
     guard_safety = _guard_safety_diagnostics(diagnostics)
+    audit_event = audit_event_from_production_diagnostics(diagnostics)
     return {
         "guard": "production_operation_guard",
         "blocked_callback_called": False,
         "reason_code": diagnostics["reason_code"],
         "guard_safety": guard_safety,
+        "audit_event": _safe_audit_summary(audit_event),
     }
 
 
@@ -190,11 +209,13 @@ def _check_scheduler_guard_default_disabled() -> Mapping[str, Any]:
     if diagnostics.get("reason_code") != OUTBOX_DRAIN_DISABLED:
         raise DoctorCheckError("scheduler_guard_reason_mismatch")
     guard_safety = _guard_safety_diagnostics(diagnostics)
+    audit_event = audit_event_from_scheduler_diagnostics(diagnostics)
     return {
         "guard": "scheduler_execution_guard",
         "blocked_callback_called": False,
         "reason_code": diagnostics["reason_code"],
         "guard_safety": guard_safety,
+        "audit_event": _safe_audit_summary(audit_event),
     }
 
 
@@ -217,6 +238,7 @@ def _check_operator_output_sanitizer() -> Mapping[str, Any]:
     if diagnostics["safe"] is not False:
         raise DoctorCheckError("sanitizer_did_not_detect_unsafe_synthetic")
 
+    audit_event = audit_event_from_operator_output_safety(diagnostics)
     return {
         "safe": False,
         "unsafe_pattern_count": diagnostics["unsafe_pattern_count"],
@@ -227,6 +249,7 @@ def _check_operator_output_sanitizer() -> Mapping[str, Any]:
         "secret_like_value_count": diagnostics["secret_like_value_count"],
         "payload_like_value_count": diagnostics["payload_like_value_count"],
         "unsafe_json_flag_count": diagnostics["unsafe_json_flag_count"],
+        "audit_event": _safe_audit_summary(audit_event),
     }
 
 
@@ -257,11 +280,13 @@ async def _bounded_send_outbox_check() -> Mapping[str, Any]:
         raise DoctorCheckError("bounded_send_adapter_called")
     if diagnostics.get("reason_code") != OUTBOX_DRAIN_DISABLED:
         raise DoctorCheckError("bounded_send_scheduler_reason_mismatch")
+    audit_event = audit_event_from_scheduler_diagnostics(diagnostics)
     return {
         "guard": "scheduler_execution_guard",
         "adapter_called": False,
         "reason_code": diagnostics["reason_code"],
         "guard_safety": _guard_safety_diagnostics(diagnostics),
+        "audit_event": _safe_audit_summary(audit_event),
     }
 
 

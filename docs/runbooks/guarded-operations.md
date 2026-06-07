@@ -35,6 +35,15 @@ operator-output sanitizer diagnostics expose safe classes and counts only. The
 doctor does not approve, schedule, dispatch, send, run migrations, or execute
 production operations.
 
+## Audit-Event Metadata
+
+Guard decisions can be converted into sanitized guarded-execution audit-event
+metadata for logging or review. The metadata envelope is JSON-serializable and
+contains safe guard names, operation classes, decisions, reason codes, safety
+flags, and unsafe-content classes/counts only. This contract is metadata only:
+it does not persist audit events, write source-of-truth stores, approve
+execution, schedule work, dispatch delivery, or call providers.
+
 ## Future Execution Requirements
 
 Any future scheduler or outbox execution must pass all applicable gates before
@@ -49,6 +58,7 @@ classes, safe provider classes, and safe boundary classes. Diagnostics must not
 include credentials, network locations, database connection details, raw
 payloads, rendered message text, grouped previews, source object identifiers,
 raw hashes, local artifact contents, or person-identifying contact details.
-Operator-facing outputs and artifacts should expose unsafe-content classes and
-counts only. Raw data remains in source-of-truth stores; review artifacts,
-manual diagnostics, and CLI summaries are sanitized views.
+Operator-facing outputs, artifacts, and guarded-execution audit metadata should
+expose unsafe-content classes and counts only. Raw data remains in
+source-of-truth stores; review artifacts, manual diagnostics, audit metadata,
+and CLI summaries are sanitized views.

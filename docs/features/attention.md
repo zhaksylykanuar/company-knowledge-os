@@ -68,6 +68,8 @@
 - Extended production-operation guard coverage for raw-storage, manual
   ingestion, and persisted backfill source-of-truth mutation boundaries:
   implemented
+- Guarded-execution audit-event metadata contract for guard decisions:
+  in-memory/read-only, implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -255,6 +257,9 @@
   doctor for local safety preflight. It verifies default-denied/default-disabled
   guard behavior and sanitizer counts with synthetic inputs only; it does not
   run providers, mutate source-of-truth stores, send, schedule, or approve.
+- Guard decisions can produce sanitized guarded-execution audit-event metadata
+  for future logging or review. The metadata exposes safe classes/counts only
+  and is not persisted, not an approval, and not an execution path.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
