@@ -275,6 +275,10 @@ trusted facts.
   safe reason codes, classes, and counts only. Raw provider data, rendered
   message text, chunk text, source identifiers, hashes, credentials, and
   connection details remain out of those artifacts.
+- The guarded-execution doctor is read-only, no-send, provider-free, and
+  source-of-truth-mutation-free. It verifies the guard wiring and sanitizer
+  diagnostics with synthetic checks only and does not approve, dispatch, send,
+  schedule, or execute production operations.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

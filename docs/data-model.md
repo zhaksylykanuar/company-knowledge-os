@@ -380,6 +380,10 @@
   secrets, network locations, source identifiers, raw hashes, provider
   payloads, rendered digest text, grouped preview text, item text, person
   contact details, database connection details, or remote details.
+- `scripts/doctor_guarded_execution.py` is a read-only guarded-execution
+  doctor. It performs synthetic guard and sanitizer checks only and records no
+  source-of-truth mutation, delivery execution, provider call, scheduler job,
+  outbox drain, migration, or production operation.
 - Local/dev-only synthetic persisted attention digest seed rows are explicit
   test fixtures in the local database, not company facts. The seed command uses
   deterministic IDs and fails closed on conflicts while writing only enough

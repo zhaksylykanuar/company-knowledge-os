@@ -251,6 +251,10 @@
   bodies, provider payloads, rendered digest text, grouped preview text, item
   text, source identifiers, hashes, credentials, and connection details must
   stay out of review outputs.
+- `scripts/doctor_guarded_execution.py` provides a read-only guarded-execution
+  doctor for local safety preflight. It verifies default-denied/default-disabled
+  guard behavior and sanitizer counts with synthetic inputs only; it does not
+  run providers, mutate source-of-truth stores, send, schedule, or approve.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

@@ -25,6 +25,16 @@ intention creation is a durable handoff artifact, not delivery execution.
 Delivery results are execution outcome metadata, not source of truth.
 Telegram and Slack are delivery or interface surfaces only.
 
+## Guarded-Execution Doctor
+
+`scripts/doctor_guarded_execution.py` is a read-only, provider-free,
+source-of-truth-mutation-free, no-send doctor. It verifies that provider,
+production-operation, and scheduler guards are still default-denied or
+default-disabled, that blocked synthetic callbacks are not called, and that
+operator-output sanitizer diagnostics expose safe classes and counts only. The
+doctor does not approve, schedule, dispatch, send, run migrations, or execute
+production operations.
+
 ## Future Execution Requirements
 
 Any future scheduler or outbox execution must pass all applicable gates before

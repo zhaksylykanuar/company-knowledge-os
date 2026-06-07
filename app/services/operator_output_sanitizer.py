@@ -37,6 +37,17 @@ UNSAFE_JSON_FLAG_CLASSES = {
         "source_object_id",
     ),
 }
+SAFE_DIAGNOSTIC_CLASS_VALUES = frozenset(
+    {
+        "database_connection_like",
+        "email_like_value",
+        "payload_like_value",
+        "raw_hash_shaped_value",
+        "secret_like_value",
+        "url_like_value",
+        *UNSAFE_JSON_FLAG_CLASSES,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -138,6 +149,8 @@ def _inspect_key(key: str, value: Any, counts: dict[str, int]) -> None:
         return
 
     normalized = key.casefold()
+    if normalized == "unsafe_pattern_classes" or normalized.endswith("_count"):
+        return
     for class_name, markers in UNSAFE_JSON_FLAG_CLASSES.items():
         if any(marker in normalized for marker in markers):
             counts[class_name] += 1
@@ -153,6 +166,9 @@ def _inspect_key(key: str, value: Any, counts: dict[str, int]) -> None:
 
 
 def _inspect_string(value: str, counts: dict[str, int]) -> None:
+    if value in SAFE_DIAGNOSTIC_CLASS_VALUES:
+        return
+
     counts["raw_hash_shaped_value"] += len(RAW_HASH_RE.findall(value))
     counts["url_like_value"] += len(URL_RE.findall(value))
     counts["email_like_value"] += len(EMAIL_RE.findall(value))

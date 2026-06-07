@@ -37,6 +37,10 @@ Navigation map for future Codex sessions.
 - `runbooks/guarded-operations.md`: guarded execution boundaries and safe diagnostics.
 - `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
 
+## Doctor Scripts
+
+- `../scripts/doctor_guarded_execution.py`: read-only guarded-execution safety preflight.
+
 ## Agent Workflows
 
 - `agents/ingestion-agent.md`
