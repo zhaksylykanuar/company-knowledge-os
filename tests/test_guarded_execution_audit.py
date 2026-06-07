@@ -11,6 +11,9 @@ from app.services.guarded_execution_audit import (
     DECISION_DISABLED,
     DECISION_REVIEW_REQUIRED,
     EVENT_KIND,
+    InMemoryGuardedExecutionAuditSink,
+    NOOP_AUDIT_SINK,
+    NoOpGuardedExecutionAuditSink,
     OPERATOR_OUTPUT_SANITIZER,
     PRODUCTION_OPERATION_GUARD,
     PROVIDER_GUARD,
@@ -22,6 +25,7 @@ from app.services.guarded_execution_audit import (
     audit_event_from_provider_diagnostics,
     audit_event_from_scheduler_diagnostics,
     audit_event_summary,
+    guarded_execution_audit_coverage_manifest,
     guarded_execution_audit_event,
 )
 from app.services.operator_output_sanitizer import inspect_operator_output
@@ -282,3 +286,143 @@ def test_doctor_output_includes_sanitized_audit_summaries() -> None:
         "guard_name"
     ] == OPERATOR_OUTPUT_SANITIZER
     _assert_json_serializable_and_sanitized(result)
+
+
+def test_noop_audit_sink_accepts_sanitized_events_without_side_effects() -> None:
+    sink = NoOpGuardedExecutionAuditSink()
+    event = guarded_execution_audit_event(
+        guard_name=PROVIDER_GUARD,
+        operation_class="telegram",
+        decision=DECISION_BLOCKED,
+        reason_code=PROVIDER_EXECUTION_DEFAULT_DENIED,
+    )
+
+    summary = sink.record(event)
+
+    assert summary["guard_name"] == PROVIDER_GUARD
+    assert summary["decision"] == DECISION_BLOCKED
+    assert sink.summary() == {
+        "sink_kind": NOOP_AUDIT_SINK,
+        "event_count": 0,
+        "accepted": True,
+        "reason_code": "audit_sink_accepted",
+        "guard_counts": {},
+        "decision_counts": {},
+        "reason_counts": {},
+        "unsafe_pattern_count": 0,
+        "unsafe_pattern_classes": [],
+        "no_send": True,
+        "no_provider_calls": True,
+        "no_source_of_truth_mutation": True,
+        "scheduler_execution": SCHEDULER_DISABLED,
+    }
+    assert inspect_operator_output(sink.summary()).safe is True
+
+
+def test_in_memory_audit_sink_captures_guard_and_sanitizer_decisions() -> None:
+    with pytest.raises(ProviderExecutionBlockedError) as provider_exc:
+        require_live_provider_execution_ack(
+            provider="telegram",
+            boundary="telegram_send_message",
+        )
+    with pytest.raises(ProductionOperationBlockedError) as production_exc:
+        require_production_operation_ack(
+            operation_class=SOURCE_OF_TRUTH_MUTATION,
+            boundary="source_of_truth_operation",
+        )
+    with pytest.raises(SchedulerExecutionBlockedError) as scheduler_exc:
+        require_no_scheduler_execution(
+            boundary="test_telegram_delivery_execution",
+            execution_source=OUTBOX_DRAIN,
+        )
+    sanitizer_event = audit_event_from_operator_output_safety(
+        inspect_operator_output({"message": _unsafe_values()[0]}).as_dict()
+    )
+
+    sink = InMemoryGuardedExecutionAuditSink()
+    for event in (
+        audit_event_from_provider_diagnostics(provider_exc.value.diagnostics),
+        audit_event_from_production_diagnostics(production_exc.value.diagnostics),
+        audit_event_from_scheduler_diagnostics(scheduler_exc.value.diagnostics),
+        sanitizer_event,
+    ):
+        sink.record(event)
+
+    events = sink.events()
+    summary = sink.summary()
+
+    assert len(events) == 4
+    assert summary["event_count"] == 4
+    assert summary["guard_counts"] == {
+        OPERATOR_OUTPUT_SANITIZER: 1,
+        PRODUCTION_OPERATION_GUARD: 1,
+        PROVIDER_GUARD: 1,
+        SCHEDULER_EXECUTION_GUARD: 1,
+    }
+    assert summary["decision_counts"] == {
+        DECISION_BLOCKED: 2,
+        DECISION_DISABLED: 1,
+        DECISION_REVIEW_REQUIRED: 1,
+    }
+    assert summary["unsafe_pattern_count"] == 1
+    assert summary["unsafe_pattern_classes"] == ["url_like_value"]
+    assert summary["no_send"] is True
+    assert summary["no_provider_calls"] is True
+    assert summary["no_source_of_truth_mutation"] is True
+    assert summary["scheduler_execution"] == SCHEDULER_DISABLED
+    _assert_json_serializable_and_sanitized(summary)
+    for event in events:
+        _assert_json_serializable_and_sanitized(event)
+
+
+def test_in_memory_audit_sink_normalizes_unsafe_raw_event_fields() -> None:
+    unsafe = _unsafe_values()
+    sink = InMemoryGuardedExecutionAuditSink()
+
+    summary = sink.record(
+        {
+            "guard_name": unsafe[0],
+            "operation_class": unsafe[1],
+            "decision": unsafe[2],
+            "reason_code": unsafe[3],
+            "diagnostics": {
+                "boundary": unsafe[0],
+                "exception": unsafe[2],
+                "provider_payload": unsafe[5],
+                "rendered_digest_text": unsafe[7],
+                "grouped_preview_text": unsafe[8],
+                "chunk_text": unsafe[9],
+                "item_title": unsafe[10],
+            },
+        }
+    )
+
+    assert summary["guard_name"] == "guarded_execution_guard"
+    assert summary["decision"] == DECISION_REVIEW_REQUIRED
+    assert sink.summary()["event_count"] == 1
+    _assert_json_serializable_and_sanitized(summary)
+    _assert_json_serializable_and_sanitized(sink.summary())
+    for event in sink.events():
+        assert event["diagnostics"]["input_safety"]["unsafe_pattern_count"] > 0
+        _assert_json_serializable_and_sanitized(event)
+
+
+def test_guarded_execution_audit_coverage_manifest_uses_safe_classes() -> None:
+    manifest = guarded_execution_audit_coverage_manifest()
+
+    assert {item["coverage_name"] for item in manifest} == {
+        "bounded_send_path",
+        "guarded_execution_doctor",
+        OPERATOR_OUTPUT_SANITIZER,
+        PRODUCTION_OPERATION_GUARD,
+        PROVIDER_GUARD,
+        SCHEDULER_EXECUTION_GUARD,
+    }
+    assert {item["coverage_class"] for item in manifest} == {
+        "bounded_send_guard",
+        "doctor_preflight",
+        "guard_decision",
+        "sanitizer_decision",
+    }
+    for item in manifest:
+        _assert_json_serializable_and_sanitized(item)

@@ -70,6 +70,8 @@
   implemented
 - Guarded-execution audit-event metadata contract for guard decisions:
   in-memory/read-only, implemented
+- Non-persistent guarded-execution audit sink for safe summaries:
+  no-op/in-memory only, implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -260,6 +262,9 @@
 - Guard decisions can produce sanitized guarded-execution audit-event metadata
   for future logging or review. The metadata exposes safe classes/counts only
   and is not persisted, not an approval, and not an execution path.
+- Guarded-execution audit sinks can collect that metadata only in no-op or
+  in-memory form for tests and doctor preflight summaries. They do not persist,
+  enqueue, schedule, send, call providers, or mutate source-of-truth stores.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

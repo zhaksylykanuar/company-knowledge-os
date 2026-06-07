@@ -101,6 +101,8 @@
   implemented
 - Guarded-execution audit-event metadata contract:
   in-memory/read-only, implemented
+- Non-persistent guarded-execution audit sink:
+  no-op/in-memory only, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -178,6 +180,11 @@
   sanitizer guard decisions. They are suitable for future logging or review,
   but this baseline does not persist them, append audit rows, execute delivery,
   call providers, run scheduler work, or mutate source-of-truth stores.
+- Guarded-execution audit sinks are no-op or in-memory collectors for sanitized
+  audit-event metadata. They expose safe counts/classes for tests and the
+  guarded-execution doctor, but they do not write files, queues, audit rows,
+  raw storage, Obsidian, provider systems, scheduler/outbox workers, or
+  production databases.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist

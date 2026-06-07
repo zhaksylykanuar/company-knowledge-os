@@ -44,6 +44,14 @@ def test_guarded_execution_doctor_passes_synthetic_run() -> None:
     assert result["no_source_of_truth_mutation"] is True
     assert result["scheduler_execution"] == "disabled"
     assert result["diagnostics"]["failed_check_count"] == 0
+    audit_sink = result["diagnostics"]["guarded_execution_audit_sink"]
+    assert audit_sink["event_count"] == 5
+    assert audit_sink["unsafe_pattern_count"] == 0
+    assert audit_sink["unsafe_pattern_classes"] == []
+    assert audit_sink["no_send"] is True
+    assert audit_sink["no_provider_calls"] is True
+    assert audit_sink["no_source_of_truth_mutation"] is True
+    assert audit_sink["scheduler_execution"] == "disabled"
     assert {check["name"] for check in result["checks"]} == {
         "bounded_send_path_guarded",
         "operator_output_sanitizer",

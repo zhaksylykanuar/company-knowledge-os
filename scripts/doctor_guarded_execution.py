@@ -17,11 +17,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from app.services.guarded_execution_audit import (  # noqa: E402
+    InMemoryGuardedExecutionAuditSink,
     audit_event_from_operator_output_safety,
     audit_event_from_production_diagnostics,
     audit_event_from_provider_diagnostics,
     audit_event_from_scheduler_diagnostics,
     audit_event_summary,
+    guarded_execution_audit_coverage_summary,
 )
 from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
 from app.services.production_operation_guard import (  # noqa: E402
@@ -117,6 +119,22 @@ def _safe_audit_summary(event: Mapping[str, Any]) -> dict[str, Any]:
     safety = inspect_operator_output(summary).as_dict()
     if safety["safe"] is not True:
         raise DoctorCheckError("unsafe_audit_event_summary")
+    return summary
+
+
+def _audit_sink_summary(check_results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    sink = InMemoryGuardedExecutionAuditSink()
+    for check in check_results:
+        diagnostics = check.get("diagnostics")
+        if not isinstance(diagnostics, Mapping):
+            continue
+        audit_event = diagnostics.get("audit_event")
+        if isinstance(audit_event, Mapping):
+            sink.record(audit_event)
+    summary = sink.summary()
+    safety = inspect_operator_output(summary).as_dict()
+    if safety["safe"] is not True:
+        raise DoctorCheckError("unsafe_audit_sink_summary")
     return summary
 
 
@@ -383,6 +401,8 @@ def run_doctor(
             "check_count": len(check_results),
             "failed_check_count": len(failed_reason_codes),
             "reason_codes": sorted(set(failed_reason_codes)),
+            "guarded_execution_audit_sink": _audit_sink_summary(check_results),
+            "guarded_execution_audit_coverage": guarded_execution_audit_coverage_summary(),
             "operator_output_safety": inspect_operator_output(check_results).as_dict(),
         },
     }

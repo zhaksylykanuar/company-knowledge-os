@@ -44,6 +44,15 @@ flags, and unsafe-content classes/counts only. This contract is metadata only:
 it does not persist audit events, write source-of-truth stores, approve
 execution, schedule work, dispatch delivery, or call providers.
 
+## Audit Sinks
+
+Guarded-execution audit sinks are non-persistent in this baseline. The no-op
+sink accepts sanitized metadata without retaining it, and the in-memory sink is
+for tests and doctor preflight checks only. Sink summaries expose safe
+counts/classes only. Persistent logging, queue routing, outbox routing, file
+output, or database storage remains a future separately gated production-ops
+decision.
+
 ## Future Execution Requirements
 
 Any future scheduler or outbox execution must pass all applicable gates before

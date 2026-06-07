@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any
 
 from app.services.operator_output_sanitizer import inspect_operator_output
@@ -63,6 +64,10 @@ UNKNOWN_OPERATION_CLASS = "guarded_execution_operation"
 UNKNOWN_REASON_CODE = "guarded_execution_reason_code"
 UNKNOWN_BOUNDARY_CLASS = "guarded_execution_boundary"
 
+NOOP_AUDIT_SINK = "noop"
+IN_MEMORY_AUDIT_SINK = "in_memory"
+AUDIT_SINK_ACCEPTED = "audit_sink_accepted"
+
 SAFE_GUARD_NAMES = frozenset(
     {
         PROVIDER_GUARD,
@@ -122,6 +127,39 @@ SAFE_REASON_CODES = frozenset(
 )
 SAFE_SCHEDULER_STATUS = frozenset({SCHEDULER_DISABLED, SCHEDULER_NOT_REQUESTED})
 SAFE_EXECUTION_MODES = frozenset({"live_provider"})
+
+GUARDED_EXECUTION_AUDIT_COVERAGE = (
+    {
+        "coverage_name": PROVIDER_GUARD,
+        "coverage_class": "guard_decision",
+        "guard_name": PROVIDER_GUARD,
+    },
+    {
+        "coverage_name": PRODUCTION_OPERATION_GUARD,
+        "coverage_class": "guard_decision",
+        "guard_name": PRODUCTION_OPERATION_GUARD,
+    },
+    {
+        "coverage_name": SCHEDULER_EXECUTION_GUARD,
+        "coverage_class": "guard_decision",
+        "guard_name": SCHEDULER_EXECUTION_GUARD,
+    },
+    {
+        "coverage_name": OPERATOR_OUTPUT_SANITIZER,
+        "coverage_class": "sanitizer_decision",
+        "guard_name": OPERATOR_OUTPUT_SANITIZER,
+    },
+    {
+        "coverage_name": "guarded_execution_doctor",
+        "coverage_class": "doctor_preflight",
+        "guard_name": UNKNOWN_GUARD,
+    },
+    {
+        "coverage_name": "bounded_send_path",
+        "coverage_class": "bounded_send_guard",
+        "guard_name": SCHEDULER_EXECUTION_GUARD,
+    },
+)
 
 
 def guarded_execution_audit_event(
@@ -237,8 +275,11 @@ def audit_event_from_operator_output_safety(diagnostics: Any) -> dict[str, Any]:
 def audit_event_summary(event: Mapping[str, Any]) -> dict[str, Any]:
     diagnostics = event.get("diagnostics", {})
     input_safety = {}
+    unsafe_pattern_counts = event.get("unsafe_pattern_counts")
+    if isinstance(unsafe_pattern_counts, Mapping):
+        input_safety = unsafe_pattern_counts
     if isinstance(diagnostics, Mapping):
-        input_safety = diagnostics.get("input_safety", {})
+        input_safety = input_safety or diagnostics.get("input_safety", {})
     if not isinstance(input_safety, Mapping):
         input_safety = {}
     return {
@@ -266,6 +307,75 @@ def audit_event_summary(event: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_guarded_execution_audit_event(event: Mapping[str, Any]) -> dict[str, Any]:
+    diagnostics = event.get("diagnostics")
+    unsafe_pattern_counts = event.get("unsafe_pattern_counts")
+    return guarded_execution_audit_event(
+        guard_name=str(event.get("guard_name") or UNKNOWN_GUARD),
+        operation_class=str(event.get("operation_class") or UNKNOWN_OPERATION_CLASS),
+        decision=str(event.get("decision") or DECISION_REVIEW_REQUIRED),
+        reason_code=str(event.get("reason_code") or UNKNOWN_REASON_CODE),
+        diagnostics=diagnostics if isinstance(diagnostics, Mapping) else {},
+        unsafe_pattern_counts=(
+            unsafe_pattern_counts
+            if isinstance(unsafe_pattern_counts, Mapping)
+            else None
+        ),
+        no_send=True,
+        no_provider_calls=True,
+        no_source_of_truth_mutation=True,
+        scheduler_execution=str(event.get("scheduler_execution") or SCHEDULER_DISABLED),
+    )
+
+
+class NoOpGuardedExecutionAuditSink:
+    sink_kind = NOOP_AUDIT_SINK
+
+    def record(self, event: Mapping[str, Any]) -> dict[str, Any]:
+        normalized = normalize_guarded_execution_audit_event(event)
+        return audit_event_summary(normalized)
+
+    def summary(self) -> dict[str, Any]:
+        return _sink_summary(
+            sink_kind=self.sink_kind,
+            events=(),
+        )
+
+
+class InMemoryGuardedExecutionAuditSink:
+    sink_kind = IN_MEMORY_AUDIT_SINK
+
+    def __init__(self) -> None:
+        self._events: list[dict[str, Any]] = []
+
+    def record(self, event: Mapping[str, Any]) -> dict[str, Any]:
+        normalized = normalize_guarded_execution_audit_event(event)
+        self._events.append(normalized)
+        return audit_event_summary(normalized)
+
+    def events(self) -> tuple[dict[str, Any], ...]:
+        return tuple(deepcopy(self._events))
+
+    def summary(self) -> dict[str, Any]:
+        return _sink_summary(
+            sink_kind=self.sink_kind,
+            events=self._events,
+        )
+
+
+def guarded_execution_audit_coverage_manifest() -> tuple[dict[str, str], ...]:
+    return tuple(dict(item) for item in GUARDED_EXECUTION_AUDIT_COVERAGE)
+
+
+def guarded_execution_audit_coverage_summary() -> dict[str, Any]:
+    manifest = guarded_execution_audit_coverage_manifest()
+    return {
+        "coverage_count": len(manifest),
+        "coverage_classes": sorted({item["coverage_class"] for item in manifest}),
+        "guard_names": sorted({item["guard_name"] for item in manifest}),
+    }
+
+
 def _diagnostics_payload(diagnostics: Any) -> Mapping[str, Any]:
     if hasattr(diagnostics, "as_dict"):
         payload = diagnostics.as_dict()
@@ -274,6 +384,58 @@ def _diagnostics_payload(diagnostics: Any) -> Mapping[str, Any]:
     if isinstance(payload, Mapping):
         return payload
     return {}
+
+
+def _sink_summary(
+    *,
+    sink_kind: str,
+    events: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    guard_counts = _count_values(events, "guard_name", SAFE_GUARD_NAMES | {UNKNOWN_GUARD})
+    decision_counts = _count_values(events, "decision", SAFE_DECISIONS)
+    reason_counts = _count_values(
+        events,
+        "reason_code",
+        SAFE_REASON_CODES | {UNKNOWN_REASON_CODE},
+    )
+    unsafe_classes: set[str] = set()
+    unsafe_count = 0
+    for event in events:
+        summary = audit_event_summary(event)
+        unsafe_count += _safe_int(summary.get("unsafe_pattern_count"))
+        unsafe_classes.update(_safe_string_list(summary.get("unsafe_pattern_classes")))
+
+    return {
+        "sink_kind": _safe_enum(
+            sink_kind,
+            {NOOP_AUDIT_SINK, IN_MEMORY_AUDIT_SINK},
+            NOOP_AUDIT_SINK,
+        ),
+        "event_count": len(events),
+        "accepted": True,
+        "reason_code": AUDIT_SINK_ACCEPTED,
+        "guard_counts": guard_counts,
+        "decision_counts": decision_counts,
+        "reason_counts": reason_counts,
+        "unsafe_pattern_count": unsafe_count,
+        "unsafe_pattern_classes": sorted(unsafe_classes),
+        "no_send": True,
+        "no_provider_calls": True,
+        "no_source_of_truth_mutation": True,
+        "scheduler_execution": SCHEDULER_DISABLED,
+    }
+
+
+def _count_values(
+    events: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]],
+    field_name: str,
+    allowed: set[str] | frozenset[str],
+) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for event in events:
+        value = _safe_enum(event.get(field_name), allowed, UNKNOWN_REASON_CODE)
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def _safe_diagnostics(diagnostics: Mapping[str, Any]) -> dict[str, Any]:
