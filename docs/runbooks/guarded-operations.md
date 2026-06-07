@@ -39,3 +39,6 @@ classes, safe provider classes, and safe boundary classes. Diagnostics must not
 include credentials, network locations, database connection details, raw
 payloads, rendered message text, grouped previews, source object identifiers,
 raw hashes, local artifact contents, or person-identifying contact details.
+Operator-facing outputs and artifacts should expose unsafe-content classes and
+counts only. Raw data remains in source-of-truth stores; review artifacts,
+manual diagnostics, and CLI summaries are sanitized views.

@@ -375,6 +375,11 @@
   handoff audit artifacts, and delivery results remain execution outcome
   metadata only. See `runbooks/guarded-operations.md` for the concise operator
   guard summary and diagnostic rules.
+- Operator-facing diagnostics and artifacts must expose only safe classes,
+  reason codes, and counts for unsafe content. They must not include raw
+  secrets, network locations, source identifiers, raw hashes, provider
+  payloads, rendered digest text, grouped preview text, item text, person
+  contact details, database connection details, or remote details.
 - Local/dev-only synthetic persisted attention digest seed rows are explicit
   test fixtures in the local database, not company facts. The seed command uses
   deterministic IDs and fails closed on conflicts while writing only enough

@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from app.services.operator_output_sanitizer import inspect_operator_output
 from app.services.production_operation_guard import (
     PRODUCTION_OPERATION_DEFAULT_DENIED,
     SOURCE_OF_TRUTH_MUTATION,
@@ -53,6 +54,7 @@ def _assert_no_unsafe_marker(value: Any) -> None:
     for marker in _unsafe_markers():
         if marker.casefold() in serialized:
             raise AssertionError("unsafe diagnostic marker leaked")
+    assert inspect_operator_output(value).safe is True
 
 
 def test_provider_guard_sanitizes_unknown_provider_and_boundary_labels() -> None:

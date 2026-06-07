@@ -271,6 +271,10 @@ trusted facts.
   remain durable handoff artifacts, and delivery results remain execution
   outcome metadata only. The concise operator summary lives in
   `../runbooks/guarded-operations.md`.
+- Operator-facing delivery summaries, review artifacts, and diagnostics expose
+  safe reason codes, classes, and counts only. Raw provider data, rendered
+  message text, chunk text, source identifiers, hashes, credentials, and
+  connection details remain out of those artifacts.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

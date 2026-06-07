@@ -104,6 +104,11 @@ def _assert_contract_diagnostics(
         assert diagnostics["missing_required_field_names"] == (
             missing_required_field_names
         )
+    assert diagnostics["operator_output_safety"]["safe"] in {True, False}
+    assert isinstance(
+        diagnostics["operator_output_safety"]["unsafe_pattern_count"],
+        int,
+    )
     _assert_no_raw_hash_values(diagnostics)
     _assert_safe_output(json.dumps(diagnostics, sort_keys=True))
 

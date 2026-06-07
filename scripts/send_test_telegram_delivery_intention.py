@@ -19,6 +19,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
+
 CONFIRM_SEND_PHRASE = "SEND TEST TELEGRAM DIGEST"
 MAX_TEST_SEND_CHUNKS = 3
 _SETTING_UNSET = object()
@@ -283,9 +285,15 @@ def _blocked_result(*, error_code: str, message: str) -> dict[str, Any]:
     return {
         "status": "blocked",
         "error_code": error_code,
-        "message": message,
+        "message": _safe_operator_message(message),
         "safety": _blocked_safety_metadata(),
     }
+
+
+def _safe_operator_message(message: str) -> str:
+    if inspect_operator_output(message).safe:
+        return message
+    return "blocked_message_sanitized"
 
 
 def _duplicate_success_blocked_result(

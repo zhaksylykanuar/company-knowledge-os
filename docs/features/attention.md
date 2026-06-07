@@ -246,6 +246,11 @@
   scheduler/outbox execution remains out of scope. See
   `../runbooks/guarded-operations.md` for the concise guarded-operations
   summary.
+- Operator-facing attention review artifacts and diagnostics use sanitized
+  classes, reason codes, and counts for unsafe-content findings. Raw event
+  bodies, provider payloads, rendered digest text, grouped preview text, item
+  text, source identifiers, hashes, credentials, and connection details must
+  stay out of review outputs.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

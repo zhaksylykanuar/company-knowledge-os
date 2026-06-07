@@ -22,6 +22,7 @@ from scripts import doctor_no_marker_grouped_lifecycle_review as doctor_script  
 from scripts import (  # noqa: E402
     report_no_marker_persisted_attention_grouped_lifecycle_compatibility as review_script,
 )
+from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
 
 MANUAL_RUNNER_MODE = "manual_grouped_lifecycle_review"
 MANUAL_RUNNER_PREFLIGHT_MODE = "manual_grouped_lifecycle_review_preflight"
@@ -475,6 +476,7 @@ def _delegated_report_contract_diagnostics(
     child_exit_category: str | None = None,
     missing_required_field_names: list[str] | None = None,
 ) -> dict[str, Any]:
+    output_safety = inspect_operator_output(payload).as_dict()
     return {
         "delegated_boundary_name": "manual_runner_to_report",
         "delegated_exit_code_class": _delegated_exit_code_class(exit_code),
@@ -484,6 +486,7 @@ def _delegated_report_contract_diagnostics(
         "cli_contract_status": cli_contract_status or "not_observed",
         "child_exit_category": child_exit_category or "not_observed",
         "missing_required_field_names": sorted(missing_required_field_names or []),
+        "operator_output_safety": output_safety,
         "validator_name": validator_name,
     }
 
