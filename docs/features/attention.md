@@ -1238,3 +1238,9 @@
   remain separate later steps; no draft, renderer, read-model, or send behavior
   is changed yet.
 - GitHub/Jira/Drive digest integration is not implemented.
+- The external connector read-only smoke CLI supports GitHub/Jira onboarding
+  verification as strict sanitized JSON. It is no-live by default, synthetic
+  when requested, and live-read-only only after explicit manual provider
+  acknowledgement. Portfolio comparison and Jira mapping status are
+  counts/classes only and do not change attention scoring, persistence,
+  scheduler behavior, or delivery behavior.

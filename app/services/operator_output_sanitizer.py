@@ -32,6 +32,7 @@ UNSAFE_JSON_FLAG_CLASSES = {
         "raw_doctor_json",
         "raw_readiness_json",
         "raw_sink_contents",
+        "raw_smoke_json",
     ),
     "rendered_text_like": ("rendered_digest_text", "rendered_text"),
     "source_identifier": (

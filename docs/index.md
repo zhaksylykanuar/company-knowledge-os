@@ -41,6 +41,7 @@ Navigation map for future Codex sessions.
 
 - `../scripts/doctor_guarded_execution.py`: read-only guarded-execution safety preflight.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.
+- `../scripts/check_external_connectors_readonly.py`: read-only GitHub/Jira connector smoke report.
 
 ## Agent Workflows
 

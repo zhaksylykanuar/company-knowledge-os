@@ -29,6 +29,7 @@ AUDIT_EVENT_CONTRACT = "guarded_execution_audit_event"
 AUDIT_SINK_SUMMARY_CONTRACT = "guarded_execution_audit_sink_summary"
 DOCTOR_OUTPUT_CONTRACT = "guarded_execution_doctor_output"
 READINESS_REPORT_CONTRACT = "guarded_execution_readiness_report"
+CONNECTOR_READONLY_SMOKE_CONTRACT = "external_connector_readonly_smoke"
 
 VALIDATION_PASS = "pass"
 VALIDATION_FAIL = "fail"
@@ -102,6 +103,7 @@ READINESS_REPORT_REQUIRED_FIELDS = frozenset(
         "scheduler_execution",
         "checks",
         "connector_summary",
+        "connector_smoke_summary",
         "guard_summary",
         "portfolio_summary",
         "docs_summary",
@@ -113,17 +115,37 @@ READINESS_REPORT_ALLOWED_FIELDS = READINESS_REPORT_REQUIRED_FIELDS | {
     "contract_validation"
 }
 
+CONNECTOR_READONLY_SMOKE_REQUIRED_FIELDS = frozenset(
+    {
+        "status",
+        "reason_code",
+        "report_kind",
+        "no_send",
+        "no_provider_calls",
+        "no_source_of_truth_mutation",
+        "scheduler_execution",
+        "provider_calls",
+        "providers",
+        "diagnostics",
+    }
+)
+CONNECTOR_READONLY_SMOKE_ALLOWED_FIELDS = (
+    CONNECTOR_READONLY_SMOKE_REQUIRED_FIELDS | {"contract_validation"}
+)
+
 CONTRACT_REQUIRED_FIELDS = {
     AUDIT_EVENT_CONTRACT: AUDIT_EVENT_REQUIRED_FIELDS,
     AUDIT_SINK_SUMMARY_CONTRACT: AUDIT_SINK_SUMMARY_REQUIRED_FIELDS,
     DOCTOR_OUTPUT_CONTRACT: DOCTOR_OUTPUT_REQUIRED_FIELDS,
     READINESS_REPORT_CONTRACT: READINESS_REPORT_REQUIRED_FIELDS,
+    CONNECTOR_READONLY_SMOKE_CONTRACT: CONNECTOR_READONLY_SMOKE_REQUIRED_FIELDS,
 }
 CONTRACT_ALLOWED_FIELDS = {
     AUDIT_EVENT_CONTRACT: AUDIT_EVENT_ALLOWED_FIELDS,
     AUDIT_SINK_SUMMARY_CONTRACT: AUDIT_SINK_SUMMARY_ALLOWED_FIELDS,
     DOCTOR_OUTPUT_CONTRACT: DOCTOR_OUTPUT_ALLOWED_FIELDS,
     READINESS_REPORT_CONTRACT: READINESS_REPORT_ALLOWED_FIELDS,
+    CONNECTOR_READONLY_SMOKE_CONTRACT: CONNECTOR_READONLY_SMOKE_ALLOWED_FIELDS,
 }
 SAFE_CONTRACT_NAMES = frozenset(CONTRACT_REQUIRED_FIELDS)
 SAFE_STATUS_VALUES = frozenset({VALIDATION_PASS, VALIDATION_FAIL})
@@ -146,8 +168,14 @@ SAFE_REASON_CODES = AUDIT_SAFE_REASON_CODES | {
     "guarded_execution_readiness_exception",
 }
 SAFE_REPORT_KIND_VALUES = frozenset({"guarded_execution_readiness"})
+SAFE_CONNECTOR_SMOKE_REPORT_KIND_VALUES = frozenset(
+    {"external_connector_readonly_smoke"}
+)
 SAFE_DOCTOR_MODE_VALUES = frozenset({"guarded_execution_doctor"})
 SAFE_SINK_KIND_VALUES = frozenset({NOOP_AUDIT_SINK, IN_MEMORY_AUDIT_SINK})
+SAFE_PROVIDER_CALL_MODES = frozenset(
+    {"none", "synthetic", "live_readonly_attempted"}
+)
 
 
 @dataclass(frozen=True)
@@ -259,7 +287,26 @@ def validate_readiness_report_contract(
     return validate_guarded_execution_contract(READINESS_REPORT_CONTRACT, payload)
 
 
+def validate_connector_readonly_smoke_contract(
+    payload: Any,
+) -> GuardedExecutionContractValidation:
+    return validate_guarded_execution_contract(CONNECTOR_READONLY_SMOKE_CONTRACT, payload)
+
+
 def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> bool:
+    if contract_name == CONNECTOR_READONLY_SMOKE_CONTRACT:
+        return (
+            payload.get("report_kind") in SAFE_CONNECTOR_SMOKE_REPORT_KIND_VALUES
+            and payload.get("status") in SAFE_OUTPUT_STATUS_VALUES
+            and _safe_reason_or_none(payload.get("reason_code"))
+            and payload.get("no_send") is True
+            and isinstance(payload.get("no_provider_calls"), bool)
+            and payload.get("no_source_of_truth_mutation") is True
+            and payload.get("scheduler_execution") in SAFE_SCHEDULER_STATUS
+            and payload.get("provider_calls") in SAFE_PROVIDER_CALL_MODES
+            and isinstance(payload.get("providers"), Mapping)
+            and isinstance(payload.get("diagnostics"), Mapping)
+        )
     if not _common_safety_flags(payload):
         return False
     if contract_name == AUDIT_EVENT_CONTRACT:
@@ -302,6 +349,7 @@ def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> 
             and _safe_reason_or_none(payload.get("reason_code"))
             and isinstance(payload.get("checks"), list)
             and isinstance(payload.get("connector_summary"), Mapping)
+            and isinstance(payload.get("connector_smoke_summary"), Mapping)
             and isinstance(payload.get("guard_summary"), Mapping)
             and isinstance(payload.get("portfolio_summary"), Mapping)
             and isinstance(payload.get("docs_summary"), Mapping)

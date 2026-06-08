@@ -312,6 +312,10 @@ trusted facts.
   Live read-only API verification is a separate gated manual step; connector
   metadata stays sanitized, and provider payloads must pass through raw storage
   and validation boundaries before normalized activity mapping.
+- The external connector read-only smoke CLI is no-live by default, synthetic
+  when requested, and live-read-only only after explicit manual provider
+  acknowledgement. GitHub portfolio comparison and Jira mapping status remain
+  counts/classes only and do not affect digest rendering or delivery.
 - Repository portfolio readiness is static onboarding metadata only. It reports
   product-area, lifecycle, priority, and safe action-class counts for future
   GitHub/Jira planning, but does not execute repository updates, archive
@@ -1176,8 +1180,8 @@ Not implemented today:
 - Scheduled daily digest generation.
 - End-to-end scheduled Telegram digest delivery.
 - Telegram Q&A.
-- Jira connector.
-- GitHub repository connector.
+- Full Jira sync.
+- Full GitHub repository sync.
 - Calendar connector.
 - Full production Gmail/Drive sync.
 - LLM summarization for digests.

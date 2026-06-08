@@ -104,11 +104,12 @@ def test_operator_output_sanitizer_detects_raw_guarded_execution_payload_markers
             "raw_doctor_json": "synthetic marker",
             "raw_readiness_json": "synthetic marker",
             "raw_sink_contents": "synthetic marker",
+            "raw_smoke_json": "synthetic marker",
         }
     ).as_dict()
 
     assert diagnostics["safe"] is False
-    assert diagnostics["unsafe_json_flag_count"] == 5
+    assert diagnostics["unsafe_json_flag_count"] == 6
     assert diagnostics["unsafe_pattern_classes"] == [
         "raw_guarded_execution_payload_like"
     ]

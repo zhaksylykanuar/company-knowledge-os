@@ -43,6 +43,7 @@ CHECK_NAMES = (
     "guarded_execution_doctor",
     "guarded_execution_audit",
     "audit_sink",
+    "connector_smoke_cli",
     "external_connector_registry",
     "repository_portfolio_catalog",
     "github_connector",
@@ -107,8 +108,15 @@ def _run_readiness_report(
     docs_summary = _docs_summary(docs_root)
     guard_summary = _guard_summary(doctor_result, doctor_summary)
     connector_summary = connector_readiness_summary()
+    connector_smoke_summary = _connector_smoke_summary()
     portfolio_summary = repository_portfolio_public_summary()
-    checks = _checks(guard_summary, docs_summary, connector_summary, portfolio_summary)
+    checks = _checks(
+        guard_summary,
+        docs_summary,
+        connector_summary,
+        connector_smoke_summary,
+        portfolio_summary,
+    )
     failed_checks = [check["name"] for check in checks if check["status"] != STATUS_PASS]
     status = STATUS_PASS if not failed_checks else STATUS_FAIL
     result = {
@@ -124,6 +132,7 @@ def _run_readiness_report(
         "checks": checks,
         "guard_summary": guard_summary,
         "connector_summary": connector_summary,
+        "connector_smoke_summary": connector_smoke_summary,
         "portfolio_summary": portfolio_summary,
         "docs_summary": docs_summary,
         "remaining_risks": dict(REMAINING_RISKS),
@@ -138,6 +147,7 @@ def _run_readiness_report(
                     "checks": checks,
                     "guard_summary": guard_summary,
                     "connector_summary": connector_summary,
+                    "connector_smoke_summary": connector_smoke_summary,
                     "portfolio_summary": portfolio_summary,
                     "docs_summary": docs_summary,
                     "remaining_risks": REMAINING_RISKS,
@@ -240,10 +250,23 @@ def _docs_summary(docs_root: Path) -> dict[str, Any]:
     }
 
 
+def _connector_smoke_summary() -> dict[str, Any]:
+    return {
+        "connector_smoke_cli": "present",
+        "github_live_readonly_smoke": "gated",
+        "jira_live_readonly_smoke": "gated",
+        "portfolio_compare": "counts_only",
+        "no_send": True,
+        "no_source_of_truth_mutation": True,
+        "scheduler_execution": "disabled",
+    }
+
+
 def _checks(
     guard_summary: Mapping[str, str],
     docs_summary: Mapping[str, Any],
     connector_summary: Mapping[str, Any],
+    connector_smoke_summary: Mapping[str, Any],
     portfolio_summary: Mapping[str, Any],
 ) -> list[dict[str, str]]:
     statuses = {
@@ -254,6 +277,7 @@ def _checks(
         "guarded_execution_doctor": guard_summary["guarded_execution_doctor"],
         "guarded_execution_audit": guard_summary["guarded_execution_audit"],
         "audit_sink": guard_summary["audit_sink"],
+        "connector_smoke_cli": connector_smoke_summary["connector_smoke_cli"],
         "external_connector_registry": connector_summary["registry"],
         "repository_portfolio_catalog": portfolio_summary["portfolio_catalog"],
         "github_connector": connector_summary["github_connector"],
@@ -320,6 +344,7 @@ def _failure_report(
         "checks": [],
         "guard_summary": {},
         "connector_summary": {},
+        "connector_smoke_summary": {},
         "portfolio_summary": {},
         "docs_summary": {},
         "remaining_risks": dict(REMAINING_RISKS),

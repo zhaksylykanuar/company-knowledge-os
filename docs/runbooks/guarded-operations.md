@@ -49,6 +49,18 @@ planned manual read-only checks; this catalog does not update repositories,
 rotate credentials, write Jira data, persist source-of-truth rows, or call
 provider APIs.
 
+## Connector Smoke CLI
+
+`scripts/check_external_connectors_readonly.py` is a read-only, no-send,
+source-of-truth-mutation-free connector smoke report for GitHub and Jira.
+Default mode makes no live calls and reports that explicit acknowledgement is
+required. Synthetic mode uses synthetic transports only. Live read-only mode is
+reserved for a separate manual operator step with explicit provider guard
+acknowledgement and configuration presence checks. GitHub portfolio comparison
+and Jira mapping status are reported as counts/classes only; the CLI does not
+update repository metadata, write Jira data, persist rows, schedule work, or
+execute delivery.
+
 ## Guarded-Execution Doctor
 
 `scripts/doctor_guarded_execution.py` is a read-only, provider-free,
@@ -88,12 +100,12 @@ risks are listed as safe classes only.
 
 ## JSON Contracts
 
-Guarded-execution audit events, audit sink summaries, doctor output, and
-readiness report output use strict sanitized JSON contract validation. Contract
-validation reports safe field names, reason codes, classes, and counts only. It
-does not persist reports, approve operations, route logs, run providers,
-dispatch delivery, schedule work, run migrations, or mutate source-of-truth
-stores.
+Guarded-execution audit events, audit sink summaries, doctor output, readiness
+report output, and connector smoke output use strict sanitized JSON contract
+validation. Contract validation reports safe field names, reason codes,
+classes, and counts only. It does not persist reports, approve operations,
+route logs, run providers, dispatch delivery, schedule work, run migrations, or
+mutate source-of-truth stores.
 
 ## Future Execution Requirements
 

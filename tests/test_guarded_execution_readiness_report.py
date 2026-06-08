@@ -49,6 +49,7 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
     assert result["contract_validation"]["reason_code"] == "contract_validation_passed"
     assert {check["name"] for check in result["checks"]} == {
         "audit_sink",
+        "connector_smoke_cli",
         "core_docs_references",
         "external_connector_registry",
         "github_connector",
@@ -96,6 +97,15 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
     assert result["connector_summary"]["repository_portfolio"] == (
         "present/safe_counts_only"
     )
+    assert result["connector_smoke_summary"] == {
+        "connector_smoke_cli": "present",
+        "github_live_readonly_smoke": "gated",
+        "jira_live_readonly_smoke": "gated",
+        "no_send": True,
+        "no_source_of_truth_mutation": True,
+        "portfolio_compare": "counts_only",
+        "scheduler_execution": "disabled",
+    }
     assert result["portfolio_summary"]["portfolio_catalog"] == "present/safe_counts_only"
     assert result["portfolio_summary"]["repo_total_count"] == 19
     assert result["portfolio_summary"]["product_area_count"] == 7
@@ -173,6 +183,7 @@ def test_guarded_execution_readiness_report_failure_mode_is_sanitized() -> None:
     assert result["scheduler_execution"] == "disabled"
     assert result["contract_validation"]["validation_status"] == "pass"
     assert result["connector_summary"] == {}
+    assert result["connector_smoke_summary"] == {}
     assert result["portfolio_summary"] == {}
     _assert_no_raw_unsafe_values(result)
     assert inspect_operator_output(result).safe is True

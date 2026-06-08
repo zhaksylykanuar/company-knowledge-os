@@ -21,6 +21,7 @@ from app.services.guarded_execution_contracts import (
     VALIDATION_PASS,
     validate_audit_event_contract,
     validate_audit_sink_summary_contract,
+    validate_connector_readonly_smoke_contract,
     validate_doctor_output_contract,
     validate_readiness_report_contract,
 )
@@ -31,6 +32,7 @@ from app.services.provider_execution_guard import (
     require_live_provider_execution_ack,
 )
 from scripts import doctor_guarded_execution as doctor
+from scripts import check_external_connectors_readonly as connector_smoke
 from scripts import report_guarded_execution_readiness as readiness
 
 
@@ -51,6 +53,7 @@ def _unsafe_values() -> tuple[str, ...]:
         "raw_doctor_json contract body",
         "raw_readiness_json contract body",
         "raw_sink_contents contract body",
+        "raw_smoke_json contract body",
     )
 
 
@@ -124,6 +127,26 @@ def test_valid_readiness_report_contract_passes() -> None:
     _assert_validation_safe(validation.as_dict())
 
 
+def test_valid_connector_readonly_smoke_contract_passes() -> None:
+    result = connector_smoke.run_connector_readonly_smoke(
+        provider="all",
+        synthetic=True,
+        compare_portfolio=True,
+    )
+    validation = validate_connector_readonly_smoke_contract(result)
+
+    assert result["contract_validation"]["validation_status"] == VALIDATION_PASS
+    assert validation.passed is True
+    assert json.loads(json.dumps(result, sort_keys=True))["status"] == "pass"
+    assert result["no_send"] is True
+    assert result["no_provider_calls"] is True
+    assert result["no_source_of_truth_mutation"] is True
+    assert result["scheduler_execution"] == "disabled"
+    assert result["provider_calls"] == "synthetic"
+    _assert_validation_safe(result)
+    _assert_validation_safe(validation.as_dict())
+
+
 def test_missing_required_fields_fail_with_field_names_only() -> None:
     payload = _provider_blocked_event()
     payload.pop("guard_name")
@@ -180,6 +203,7 @@ def test_validation_result_is_sanitized_for_raw_output_markers() -> None:
         "raw_doctor_json": _unsafe_values()[12],
         "raw_readiness_json": _unsafe_values()[13],
         "raw_sink_contents": _unsafe_values()[14],
+        "raw_smoke_json": _unsafe_values()[15],
     }
 
     validation = validate_doctor_output_contract(payload).as_dict()
@@ -220,9 +244,13 @@ def test_doctor_and_readiness_scripts_use_contract_helpers() -> None:
     doctor_source = (doctor.REPO_ROOT / "scripts" / "doctor_guarded_execution.py").read_text(
         encoding="utf-8"
     )
+    smoke_source = (
+        connector_smoke.REPO_ROOT / "scripts" / "check_external_connectors_readonly.py"
+    ).read_text(encoding="utf-8")
     readiness_source = (
         readiness.REPO_ROOT / "scripts" / "report_guarded_execution_readiness.py"
     ).read_text(encoding="utf-8")
 
     assert "validate_doctor_output_contract" in doctor_source
+    assert "validate_connector_readonly_smoke_contract" in smoke_source
     assert "validate_readiness_report_contract" in readiness_source

@@ -111,6 +111,8 @@
   GitHub/Jira guarded raw-event foundations, implemented
 - Repository portfolio onboarding catalog:
   static safe metadata counts/classes, implemented
+- Read-only external connector smoke report:
+  strict sanitized JSON, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -215,6 +217,13 @@
   only. The catalog is not source of truth, does not call providers, does not
   update repository metadata, does not rotate secrets, and does not write Jira,
   raw storage, Obsidian, or Postgres data.
+- The external connector read-only smoke report is operator-review metadata for
+  GitHub/Jira onboarding. Default mode makes no live calls, synthetic mode uses
+  synthetic transports, and live read-only mode requires a separate explicit
+  provider acknowledgement. GitHub portfolio comparison and Jira mapping checks
+  expose counts/classes only. The report is not source of truth and does not
+  persist data, update repositories, write Jira data, run scheduler work,
+  execute delivery, or mutate raw storage, Obsidian, or Postgres.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist
