@@ -100,6 +100,7 @@ def test_operator_output_sanitizer_detects_raw_guarded_execution_payload_markers
     diagnostics = inspect_operator_output(
         {
             "raw_audit_json": "synthetic marker",
+            "raw_config_doctor_json": "synthetic marker",
             "raw_contract_validation_payload": "synthetic marker",
             "raw_doctor_json": "synthetic marker",
             "raw_readiness_json": "synthetic marker",
@@ -109,7 +110,7 @@ def test_operator_output_sanitizer_detects_raw_guarded_execution_payload_markers
     ).as_dict()
 
     assert diagnostics["safe"] is False
-    assert diagnostics["unsafe_json_flag_count"] == 6
+    assert diagnostics["unsafe_json_flag_count"] == 7
     assert diagnostics["unsafe_pattern_classes"] == [
         "raw_guarded_execution_payload_like"
     ]
@@ -122,6 +123,24 @@ def test_operator_output_sanitizer_allows_safe_secret_rotation_action_class() ->
             "action_class_counts": {
                 "secret_rotation_required": 1,
             }
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["secret_like_value_count"] == 0
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
+def test_operator_output_sanitizer_allows_expected_connector_env_names() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "required_environment_variables": [
+                "FOS_GITHUB_READONLY_TOKEN",
+                "FOS_GITHUB_READONLY_ACCOUNT",
+                "FOS_JIRA_READONLY_SITE",
+                "FOS_JIRA_READONLY_USER",
+                "FOS_JIRA_READONLY_TOKEN",
+            ]
         }
     ).as_dict()
 

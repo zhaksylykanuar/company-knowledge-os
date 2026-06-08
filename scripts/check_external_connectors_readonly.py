@@ -23,6 +23,11 @@ from app.services.guarded_execution_contracts import (  # noqa: E402
     validate_connector_readonly_smoke_contract,
 )
 from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
+from app.services.external_connector_config import (  # noqa: E402
+    PROVIDER_GITHUB,
+    PROVIDER_JIRA,
+    is_provider_configured,
+)
 from app.services.provider_execution_guard import (  # noqa: E402
     LIVE_PROVIDER_EXECUTION_ACK,
     PROVIDER_EXECUTION_ACK_REQUIRED,
@@ -64,17 +69,6 @@ SMOKE_OUTPUT_UNSAFE = "external_connector_readonly_smoke_output_unsafe"
 SMOKE_CONTRACT_INVALID = "external_connector_readonly_smoke_contract_invalid"
 GITHUB_LIVE_FAILED = "github_live_readonly_failed"
 JIRA_LIVE_FAILED = "jira_live_readonly_failed"
-
-GITHUB_ENV_KEYS = (
-    "FOS_GITHUB_READONLY_TOKEN",
-    "FOS_GITHUB_READONLY_ACCOUNT",
-)
-JIRA_ENV_KEYS = (
-    "FOS_JIRA_READONLY_SITE",
-    "FOS_JIRA_READONLY_USER",
-    "FOS_JIRA_READONLY_TOKEN",
-)
-
 
 def run_connector_readonly_smoke(
     *,
@@ -235,7 +229,7 @@ def _github_provider_result(
         )
         return result
 
-    if not _configured(environ, GITHUB_ENV_KEYS):
+    if not is_provider_configured(PROVIDER_GITHUB, environ):
         result.update(
             {
                 "configured_status": NOT_CONFIGURED,
@@ -333,7 +327,7 @@ def _jira_provider_result(
         )
         return result
 
-    if not _configured(environ, JIRA_ENV_KEYS):
+    if not is_provider_configured(PROVIDER_JIRA, environ):
         result.update(
             {
                 "configured_status": NOT_CONFIGURED,
@@ -617,10 +611,6 @@ def _expected_count_class(observed_count: int, expected_count: int) -> str:
 
 def _zero_nonzero_count_class(count: int) -> str:
     return COUNT_ZERO if count == 0 else COUNT_NONZERO
-
-
-def _configured(environ: Mapping[str, str], env_keys: tuple[str, ...]) -> bool:
-    return all(bool(environ.get(key)) for key in env_keys)
 
 
 def _https_base(host: str) -> str:

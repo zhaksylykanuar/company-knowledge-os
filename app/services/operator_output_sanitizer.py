@@ -28,6 +28,7 @@ UNSAFE_JSON_FLAG_CLASSES = {
     "preview_text_like": ("grouped_preview", "grouped_preview_text"),
     "raw_guarded_execution_payload_like": (
         "raw_audit_json",
+        "raw_config_doctor_json",
         "raw_contract_validation_payload",
         "raw_doctor_json",
         "raw_readiness_json",
@@ -55,6 +56,15 @@ SAFE_DIAGNOSTIC_CLASS_VALUES = frozenset(
         "secret_like_value",
         "url_like_value",
         *UNSAFE_JSON_FLAG_CLASSES,
+    }
+)
+SAFE_ENVIRONMENT_VARIABLE_NAMES = frozenset(
+    {
+        "FOS_GITHUB_READONLY_ACCOUNT",
+        "FOS_GITHUB_READONLY_TOKEN",
+        "FOS_JIRA_READONLY_SITE",
+        "FOS_JIRA_READONLY_TOKEN",
+        "FOS_JIRA_READONLY_USER",
     }
 )
 
@@ -177,7 +187,7 @@ def _inspect_key(key: str, value: Any, counts: dict[str, int]) -> None:
 
 
 def _inspect_string(value: str, counts: dict[str, int]) -> None:
-    if value in SAFE_DIAGNOSTIC_CLASS_VALUES:
+    if value in SAFE_DIAGNOSTIC_CLASS_VALUES or value in SAFE_ENVIRONMENT_VARIABLE_NAMES:
         return
 
     counts["raw_hash_shaped_value"] += len(RAW_HASH_RE.findall(value))

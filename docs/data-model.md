@@ -113,6 +113,8 @@
   static safe metadata counts/classes, implemented
 - Read-only external connector smoke report:
   strict sanitized JSON, implemented
+- Read-only external connector configuration doctor:
+  presence-only sanitized JSON, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -223,6 +225,14 @@
   provider acknowledgement. GitHub portfolio comparison and Jira mapping checks
   expose counts/classes only. The report is not source of truth and does not
   persist data, update repositories, write Jira data, run scheduler work,
+  execute delivery, or mutate raw storage, Obsidian, or Postgres.
+- The external connector configuration doctor is operator-review metadata for
+  GitHub/Jira setup readiness. It checks expected environment variable
+  presence by name only, never reads local env files, never prints values, and
+  never calls providers. It reports configured, partially configured, or not
+  configured classes plus safe next-action classes for the later manually
+  acknowledged live-read-only smoke step. It is not source of truth and does
+  not persist data, update repositories, write Jira data, run scheduler work,
   execute delivery, or mutate raw storage, Obsidian, or Postgres.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only

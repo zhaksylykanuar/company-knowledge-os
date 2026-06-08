@@ -1244,3 +1244,8 @@
   acknowledgement. Portfolio comparison and Jira mapping status are
   counts/classes only and do not change attention scoring, persistence,
   scheduler behavior, or delivery behavior.
+- The external connector configuration doctor reports GitHub/Jira setup
+  presence by environment variable name only. It never reads local env files,
+  never prints values, and does not call providers. Its configured/not-
+  configured classes are readiness metadata for a later manually acknowledged
+  live-read-only smoke step, not attention input or source-of-truth data.

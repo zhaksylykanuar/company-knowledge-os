@@ -51,6 +51,7 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
         "audit_sink",
         "connector_smoke_cli",
         "core_docs_references",
+        "external_connector_config_doctor",
         "external_connector_registry",
         "github_connector",
         "guarded_execution_audit",
@@ -106,6 +107,24 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
         "portfolio_compare": "counts_only",
         "scheduler_execution": "disabled",
     }
+    config_summary = result["external_connector_config_summary"]
+    assert config_summary["external_connector_config_doctor"] == "present"
+    assert config_summary["github_config_status"] in {
+        "configured",
+        "not_configured",
+        "partially_configured",
+    }
+    assert config_summary["jira_config_status"] in {
+        "configured",
+        "not_configured",
+        "partially_configured",
+    }
+    assert config_summary["github_live_readonly_ready"] in {"ready", "not_ready"}
+    assert config_summary["jira_live_readonly_ready"] in {"ready", "not_ready"}
+    assert config_summary["no_live_calls"] == "absent"
+    assert config_summary["no_send"] is True
+    assert config_summary["no_source_of_truth_mutation"] is True
+    assert config_summary["scheduler_execution"] == "disabled"
     assert result["portfolio_summary"]["portfolio_catalog"] == "present/safe_counts_only"
     assert result["portfolio_summary"]["repo_total_count"] == 19
     assert result["portfolio_summary"]["product_area_count"] == 7
@@ -183,6 +202,7 @@ def test_guarded_execution_readiness_report_failure_mode_is_sanitized() -> None:
     assert result["scheduler_execution"] == "disabled"
     assert result["contract_validation"]["validation_status"] == "pass"
     assert result["connector_summary"] == {}
+    assert result["external_connector_config_summary"] == {}
     assert result["connector_smoke_summary"] == {}
     assert result["portfolio_summary"] == {}
     _assert_no_raw_unsafe_values(result)

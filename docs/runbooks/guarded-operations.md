@@ -61,6 +61,16 @@ and Jira mapping status are reported as counts/classes only; the CLI does not
 update repository metadata, write Jira data, persist rows, schedule work, or
 execute delivery.
 
+## Connector Config Doctor
+
+`scripts/doctor_external_connector_config.py` is a read-only, no-send,
+source-of-truth-mutation-free configuration doctor for GitHub/Jira onboarding.
+It reports expected environment variable names and presence/missing classes
+only, never reads local env files, never prints values, and never calls
+providers. When all required variables are present, the next safe action class
+is a separate manually acknowledged live-read-only smoke check through the
+guarded connector smoke CLI.
+
 ## Guarded-Execution Doctor
 
 `scripts/doctor_guarded_execution.py` is a read-only, provider-free,

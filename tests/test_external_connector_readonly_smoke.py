@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.connectors import github, jira
+from app.services.external_connector_config import GITHUB_ENV_KEYS, JIRA_ENV_KEYS
 from app.services.operator_output_sanitizer import inspect_operator_output
 from app.services.provider_execution_guard import (
     LIVE_PROVIDER_EXECUTION_ACK,
@@ -51,8 +52,8 @@ def _assert_smoke_output_safe(value: dict[str, Any]) -> None:
 
 def _configured_env() -> dict[str, str]:
     return {
-        **dict.fromkeys(smoke.GITHUB_ENV_KEYS, "configured_value"),
-        **dict.fromkeys(smoke.JIRA_ENV_KEYS, "configured_value"),
+        **dict.fromkeys(GITHUB_ENV_KEYS, "configured_value"),
+        **dict.fromkeys(JIRA_ENV_KEYS, "configured_value"),
     }
 
 

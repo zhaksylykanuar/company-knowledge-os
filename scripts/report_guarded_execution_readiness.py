@@ -24,6 +24,9 @@ from app.services.operator_output_sanitizer import inspect_operator_output  # no
 from app.services.external_connector_registry import (  # noqa: E402
     connector_readiness_summary,
 )
+from app.services.external_connector_config import (  # noqa: E402
+    external_connector_config_doctor_summary,
+)
 from app.services.repository_portfolio import (  # noqa: E402
     repository_portfolio_public_summary,
 )
@@ -44,6 +47,7 @@ CHECK_NAMES = (
     "guarded_execution_audit",
     "audit_sink",
     "connector_smoke_cli",
+    "external_connector_config_doctor",
     "external_connector_registry",
     "repository_portfolio_catalog",
     "github_connector",
@@ -108,12 +112,14 @@ def _run_readiness_report(
     docs_summary = _docs_summary(docs_root)
     guard_summary = _guard_summary(doctor_result, doctor_summary)
     connector_summary = connector_readiness_summary()
+    external_connector_config_summary = external_connector_config_doctor_summary()
     connector_smoke_summary = _connector_smoke_summary()
     portfolio_summary = repository_portfolio_public_summary()
     checks = _checks(
         guard_summary,
         docs_summary,
         connector_summary,
+        external_connector_config_summary,
         connector_smoke_summary,
         portfolio_summary,
     )
@@ -132,6 +138,7 @@ def _run_readiness_report(
         "checks": checks,
         "guard_summary": guard_summary,
         "connector_summary": connector_summary,
+        "external_connector_config_summary": external_connector_config_summary,
         "connector_smoke_summary": connector_smoke_summary,
         "portfolio_summary": portfolio_summary,
         "docs_summary": docs_summary,
@@ -147,6 +154,7 @@ def _run_readiness_report(
                     "checks": checks,
                     "guard_summary": guard_summary,
                     "connector_summary": connector_summary,
+                    "external_connector_config_summary": external_connector_config_summary,
                     "connector_smoke_summary": connector_smoke_summary,
                     "portfolio_summary": portfolio_summary,
                     "docs_summary": docs_summary,
@@ -266,6 +274,7 @@ def _checks(
     guard_summary: Mapping[str, str],
     docs_summary: Mapping[str, Any],
     connector_summary: Mapping[str, Any],
+    external_connector_config_summary: Mapping[str, Any],
     connector_smoke_summary: Mapping[str, Any],
     portfolio_summary: Mapping[str, Any],
 ) -> list[dict[str, str]]:
@@ -278,6 +287,9 @@ def _checks(
         "guarded_execution_audit": guard_summary["guarded_execution_audit"],
         "audit_sink": guard_summary["audit_sink"],
         "connector_smoke_cli": connector_smoke_summary["connector_smoke_cli"],
+        "external_connector_config_doctor": external_connector_config_summary[
+            "external_connector_config_doctor"
+        ],
         "external_connector_registry": connector_summary["registry"],
         "repository_portfolio_catalog": portfolio_summary["portfolio_catalog"],
         "github_connector": connector_summary["github_connector"],
@@ -344,6 +356,7 @@ def _failure_report(
         "checks": [],
         "guard_summary": {},
         "connector_summary": {},
+        "external_connector_config_summary": {},
         "connector_smoke_summary": {},
         "portfolio_summary": {},
         "docs_summary": {},

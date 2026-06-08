@@ -40,6 +40,7 @@ Navigation map for future Codex sessions.
 ## Doctor Scripts
 
 - `../scripts/doctor_guarded_execution.py`: read-only guarded-execution safety preflight.
+- `../scripts/doctor_external_connector_config.py`: read-only GitHub/Jira configuration doctor.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.
 - `../scripts/check_external_connectors_readonly.py`: read-only GitHub/Jira connector smoke report.
 
