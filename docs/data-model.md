@@ -105,6 +105,8 @@
   no-op/in-memory only, implemented
 - Read-only guarded-execution readiness report:
   strict sanitized JSON, implemented
+- Guarded-execution JSON contract validation:
+  strict sanitized JSON, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -191,6 +193,11 @@
   metadata, audit sink, docs, and remaining-risk status as strict sanitized
   JSON. It is read-only operator-review metadata only, not a source-of-truth
   record, not a full audit, not an approval, and not an execution path.
+- Guarded-execution audit events, audit sink summaries, doctor output, and
+  readiness report output are validated against reusable strict sanitized JSON
+  contracts. Contract validation exposes safe field names, reason codes,
+  classes, and counts only; it does not persist metadata, approve execution,
+  route logs, run providers, schedule work, or mutate source-of-truth stores.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist

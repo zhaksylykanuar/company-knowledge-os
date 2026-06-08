@@ -62,6 +62,15 @@ remaining-risk status into strict sanitized JSON. The report is not a full
 audit, not a production approval, and not an execution mechanism. Remaining
 risks are listed as safe classes only.
 
+## JSON Contracts
+
+Guarded-execution audit events, audit sink summaries, doctor output, and
+readiness report output use strict sanitized JSON contract validation. Contract
+validation reports safe field names, reason codes, classes, and counts only. It
+does not persist reports, approve operations, route logs, run providers,
+dispatch delivery, schedule work, run migrations, or mutate source-of-truth
+stores.
+
 ## Future Execution Requirements
 
 Any future scheduler or outbox execution must pass all applicable gates before

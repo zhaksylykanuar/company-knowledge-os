@@ -96,6 +96,25 @@ def test_operator_output_sanitizer_allows_safe_synthetic_summary() -> None:
     assert diagnostics.unsafe_pattern_count == 0
 
 
+def test_operator_output_sanitizer_detects_raw_guarded_execution_payload_markers() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "raw_audit_json": "synthetic marker",
+            "raw_contract_validation_payload": "synthetic marker",
+            "raw_doctor_json": "synthetic marker",
+            "raw_readiness_json": "synthetic marker",
+            "raw_sink_contents": "synthetic marker",
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is False
+    assert diagnostics["unsafe_json_flag_count"] == 5
+    assert diagnostics["unsafe_pattern_classes"] == [
+        "raw_guarded_execution_payload_like"
+    ]
+    _assert_raw_values_absent(diagnostics)
+
+
 def test_operator_output_sanitizer_raises_safe_reason_only() -> None:
     with pytest.raises(ValueError) as exc_info:
         assert_operator_output_safe({"message": _unsafe_values()["url"]})

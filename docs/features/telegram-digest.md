@@ -76,6 +76,8 @@
   no-op/in-memory only, implemented
 - Read-only guarded-execution readiness report:
   strict sanitized JSON, implemented
+- Guarded-execution JSON contract validation:
+  strict sanitized JSON, implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -297,6 +299,11 @@ trusted facts.
   only. It consolidates guard, doctor, sanitizer, audit, sink, docs, and
   remaining-risk status without persisting artifacts, sending, scheduling,
   calling providers, or approving production execution.
+- Guarded-execution audit events, audit sink summaries, doctor output, and
+  readiness report output use strict sanitized JSON contract validation.
+  Validation exposes safe field names, reason codes, classes, and counts only,
+  and it does not persist, approve, send, schedule, or mutate source-of-truth
+  stores.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

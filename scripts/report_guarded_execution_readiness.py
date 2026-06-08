@@ -17,6 +17,9 @@ if str(REPO_ROOT) not in sys.path:
 from app.services.guarded_execution_audit import (  # noqa: E402
     guarded_execution_audit_coverage_summary,
 )
+from app.services.guarded_execution_contracts import (  # noqa: E402
+    validate_readiness_report_contract,
+)
 from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
 from scripts import doctor_guarded_execution as doctor  # noqa: E402
 
@@ -129,6 +132,13 @@ def _run_readiness_report(
     }
     if inspect_operator_output(result).safe is not True:
         raise ReadinessReportError("guarded_execution_readiness_output_unsafe")
+    validation = validate_readiness_report_contract(result).as_dict()
+    result["contract_validation"] = validation
+    if validation["validation_status"] != STATUS_PASS:
+        return _failure_report(
+            "guarded_execution_readiness_contract_invalid",
+            contract_validation=validation,
+        )
     return result
 
 
@@ -270,8 +280,12 @@ def _guard_status(
     return pass_state if check.get("status") == STATUS_PASS else "present/fail"
 
 
-def _failure_report(reason_code: str) -> dict[str, Any]:
-    return {
+def _failure_report(
+    reason_code: str,
+    *,
+    contract_validation: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    result = {
         "status": STATUS_FAIL,
         "reason_code": _safe_reason_code(reason_code),
         "report_kind": REPORT_KIND,
@@ -289,6 +303,10 @@ def _failure_report(reason_code: str) -> dict[str, Any]:
             "failed_check_names": [],
         },
     }
+    if contract_validation is None:
+        contract_validation = validate_readiness_report_contract(result).as_dict()
+    result["contract_validation"] = dict(contract_validation)
+    return result
 
 
 def _safe_status(value: Any) -> str:

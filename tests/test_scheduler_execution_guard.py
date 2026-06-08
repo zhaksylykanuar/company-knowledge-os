@@ -214,6 +214,7 @@ def test_scheduler_outbox_static_inventory_has_no_unguarded_execution_entrypoint
         "retry_worker",
     )
     ignored_paths = {
+        "app/services/guarded_execution_contracts.py",
         "app/services/guarded_execution_audit.py",
         "app/services/production_operation_guard.py",
         "app/services/scheduler_execution_guard.py",

@@ -509,6 +509,7 @@ def _safe_string_list(value: Any) -> list[str]:
                 "payload_like_value",
                 "preview_text_like",
                 "raw_hash_shaped_value",
+                "raw_guarded_execution_payload_like",
                 "rendered_text_like",
                 "secret_like_value",
                 "source_identifier",

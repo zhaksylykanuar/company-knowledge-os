@@ -45,6 +45,8 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
     assert result["no_provider_calls"] is True
     assert result["no_source_of_truth_mutation"] is True
     assert result["scheduler_execution"] == "disabled"
+    assert result["contract_validation"]["validation_status"] == "pass"
+    assert result["contract_validation"]["reason_code"] == "contract_validation_passed"
     assert {check["name"] for check in result["checks"]} == {
         "audit_sink",
         "core_docs_references",
@@ -120,6 +122,7 @@ def test_guarded_execution_readiness_report_cli_outputs_strict_json() -> None:
     payload = json.loads(completed.stdout)
     assert payload["status"] == "pass"
     assert payload["report_kind"] == "guarded_execution_readiness"
+    assert payload["contract_validation"]["validation_status"] == "pass"
     assert payload["diagnostics"]["failed_check_count"] == 0
     _assert_no_raw_unsafe_values(payload)
     assert inspect_operator_output(payload).safe is True
@@ -138,6 +141,7 @@ def test_guarded_execution_readiness_report_failure_mode_is_sanitized() -> None:
     assert result["no_provider_calls"] is True
     assert result["no_source_of_truth_mutation"] is True
     assert result["scheduler_execution"] == "disabled"
+    assert result["contract_validation"]["validation_status"] == "pass"
     _assert_no_raw_unsafe_values(result)
     assert inspect_operator_output(result).safe is True
 
@@ -152,6 +156,7 @@ def test_guarded_execution_readiness_report_missing_docs_fails_safely(
     assert result["docs_summary"]["guarded_operations_runbook"] == "missing"
     assert result["docs_summary"]["core_docs_references"] == "missing"
     assert result["diagnostics"]["failed_check_count"] == 2
+    assert result["contract_validation"]["validation_status"] == "pass"
     _assert_no_raw_unsafe_values(result)
     assert inspect_operator_output(result).safe is True
 

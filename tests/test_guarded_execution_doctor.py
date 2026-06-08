@@ -43,6 +43,8 @@ def test_guarded_execution_doctor_passes_synthetic_run() -> None:
     assert result["no_provider_calls"] is True
     assert result["no_source_of_truth_mutation"] is True
     assert result["scheduler_execution"] == "disabled"
+    assert result["contract_validation"]["validation_status"] == "pass"
+    assert result["contract_validation"]["reason_code"] == "contract_validation_passed"
     assert result["diagnostics"]["failed_check_count"] == 0
     audit_sink = result["diagnostics"]["guarded_execution_audit_sink"]
     assert audit_sink["event_count"] == 5
@@ -81,6 +83,7 @@ def test_guarded_execution_doctor_cli_outputs_strict_json() -> None:
     assert payload["no_provider_calls"] is True
     assert payload["no_source_of_truth_mutation"] is True
     assert payload["scheduler_execution"] == "disabled"
+    assert payload["contract_validation"]["validation_status"] == "pass"
     _assert_no_raw_unsafe_values(payload)
 
 
@@ -137,6 +140,7 @@ def test_guarded_execution_doctor_failure_mode_is_sanitized() -> None:
             "reason_code": "unsafe_https_synthetic_invalid_path",
         }
     ]
+    assert result["contract_validation"]["validation_status"] == "pass"
     _assert_no_raw_unsafe_values(result)
 
 

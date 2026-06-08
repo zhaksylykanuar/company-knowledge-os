@@ -26,6 +26,13 @@ UNSAFE_JSON_FLAG_CLASSES = {
         "safe_summary",
     ),
     "preview_text_like": ("grouped_preview", "grouped_preview_text"),
+    "raw_guarded_execution_payload_like": (
+        "raw_audit_json",
+        "raw_contract_validation_payload",
+        "raw_doctor_json",
+        "raw_readiness_json",
+        "raw_sink_contents",
+    ),
     "rendered_text_like": ("rendered_digest_text", "rendered_text"),
     "source_identifier": (
         "author_email",

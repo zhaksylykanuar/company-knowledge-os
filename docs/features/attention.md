@@ -74,6 +74,8 @@
   no-op/in-memory only, implemented
 - Read-only guarded-execution readiness report:
   strict sanitized JSON, implemented
+- Guarded-execution JSON contract validation:
+  strict sanitized JSON, implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -271,6 +273,10 @@
   execution baseline as read-only sanitized JSON. It is not a full audit, not
   a source-of-truth artifact, not an approval, and not an execution path; it
   reports remaining production risks as safe classes only.
+- Guarded-execution audit events, audit sink summaries, doctor output, and
+  readiness report output are validated as strict sanitized JSON. Validation
+  exposes safe field names, reason codes, classes, and counts only, and does
+  not persist, approve, send, schedule, or mutate source-of-truth stores.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

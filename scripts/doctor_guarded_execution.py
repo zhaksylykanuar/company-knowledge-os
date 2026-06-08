@@ -25,6 +25,9 @@ from app.services.guarded_execution_audit import (  # noqa: E402
     audit_event_summary,
     guarded_execution_audit_coverage_summary,
 )
+from app.services.guarded_execution_contracts import (  # noqa: E402
+    validate_doctor_output_contract,
+)
 from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
 from app.services.production_operation_guard import (  # noqa: E402
     PRODUCTION_OPERATION_DEFAULT_DENIED,
@@ -421,6 +424,42 @@ def run_doctor(
                 "failed_check_count": 1,
                 "reason_codes": ["guarded_execution_doctor_output_unsafe"],
             },
+            "contract_validation": validate_doctor_output_contract(
+                {
+                    "mode": DOCTOR_MODE,
+                    "status": CHECK_FAIL,
+                    "reason_code": "guarded_execution_doctor_output_unsafe",
+                    "checks": [],
+                    "no_send": True,
+                    "no_provider_calls": True,
+                    "no_source_of_truth_mutation": True,
+                    "scheduler_execution": "disabled",
+                    "diagnostics": {
+                        "check_count": 0,
+                        "failed_check_count": 1,
+                        "reason_codes": ["guarded_execution_doctor_output_unsafe"],
+                    },
+                }
+            ).as_dict(),
+        }
+    validation = validate_doctor_output_contract(result).as_dict()
+    result["contract_validation"] = validation
+    if validation["validation_status"] != CHECK_PASS:
+        return {
+            "mode": DOCTOR_MODE,
+            "status": CHECK_FAIL,
+            "reason_code": "guarded_execution_doctor_contract_invalid",
+            "checks": [],
+            "no_send": True,
+            "no_provider_calls": True,
+            "no_source_of_truth_mutation": True,
+            "scheduler_execution": "disabled",
+            "diagnostics": {
+                "check_count": 0,
+                "failed_check_count": 1,
+                "reason_codes": ["guarded_execution_doctor_contract_invalid"],
+            },
+            "contract_validation": validation,
         }
     return result
 
