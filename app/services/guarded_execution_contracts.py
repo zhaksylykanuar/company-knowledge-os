@@ -103,6 +103,7 @@ READINESS_REPORT_REQUIRED_FIELDS = frozenset(
         "checks",
         "connector_summary",
         "guard_summary",
+        "portfolio_summary",
         "docs_summary",
         "remaining_risks",
         "diagnostics",
@@ -302,6 +303,7 @@ def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> 
             and isinstance(payload.get("checks"), list)
             and isinstance(payload.get("connector_summary"), Mapping)
             and isinstance(payload.get("guard_summary"), Mapping)
+            and isinstance(payload.get("portfolio_summary"), Mapping)
             and isinstance(payload.get("docs_summary"), Mapping)
             and isinstance(payload.get("remaining_risks"), Mapping)
             and isinstance(payload.get("diagnostics"), Mapping)

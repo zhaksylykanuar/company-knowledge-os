@@ -50,6 +50,7 @@ SAFE_DIAGNOSTIC_CLASS_VALUES = frozenset(
         "email_like_value",
         "payload_like_value",
         "raw_hash_shaped_value",
+        "secret_rotation_required",
         "secret_like_value",
         "url_like_value",
         *UNSAFE_JSON_FLAG_CLASSES,
@@ -157,6 +158,8 @@ def _inspect_key(key: str, value: Any, counts: dict[str, int]) -> None:
 
     normalized = key.casefold()
     if normalized == "unsafe_pattern_classes" or normalized.endswith("_count"):
+        return
+    if normalized in SAFE_DIAGNOSTIC_CLASS_VALUES:
         return
     for class_name, markers in UNSAFE_JSON_FLAG_CLASSES.items():
         if any(marker in normalized for marker in markers):

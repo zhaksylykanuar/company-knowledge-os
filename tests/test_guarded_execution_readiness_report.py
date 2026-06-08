@@ -57,6 +57,7 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
         "guarded_operations_runbook",
         "jira_connector",
         "operator_output_sanitizer",
+        "repository_portfolio_catalog",
         "production_operation_guard",
         "provider_execution_guard",
         "scheduler_execution_guard",
@@ -92,6 +93,21 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
     assert result["connector_summary"]["source_of_truth_mutation"] == "absent"
     assert result["connector_summary"]["scheduler_execution"] == "disabled"
     assert result["connector_summary"]["payload_leakage"] == "absent"
+    assert result["connector_summary"]["repository_portfolio"] == (
+        "present/safe_counts_only"
+    )
+    assert result["portfolio_summary"]["portfolio_catalog"] == "present/safe_counts_only"
+    assert result["portfolio_summary"]["repo_total_count"] == 19
+    assert result["portfolio_summary"]["product_area_count"] == 7
+    assert result["portfolio_summary"]["github_live_inventory_status"] == (
+        "gated_not_verified"
+    )
+    assert result["portfolio_summary"]["jira_mapping_status"] == (
+        "planned_not_verified"
+    )
+    assert result["portfolio_summary"]["action_class_counts"][
+        "secret_rotation_required"
+    ] == 1
 
 
 def test_guarded_execution_readiness_report_reports_remaining_risks_as_classes() -> None:
@@ -157,6 +173,7 @@ def test_guarded_execution_readiness_report_failure_mode_is_sanitized() -> None:
     assert result["scheduler_execution"] == "disabled"
     assert result["contract_validation"]["validation_status"] == "pass"
     assert result["connector_summary"] == {}
+    assert result["portfolio_summary"] == {}
     _assert_no_raw_unsafe_values(result)
     assert inspect_operator_output(result).safe is True
 

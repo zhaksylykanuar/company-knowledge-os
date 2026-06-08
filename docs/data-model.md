@@ -109,6 +109,8 @@
   strict sanitized JSON, implemented
 - External API connector launchpad:
   GitHub/Jira guarded raw-event foundations, implemented
+- Repository portfolio onboarding catalog:
+  static safe metadata counts/classes, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -207,6 +209,12 @@
   transports for tests. They do not persist, call live APIs by default, treat
   provider payloads as interpreted truth, run scheduler work, or mutate
   source-of-truth stores.
+- The repository portfolio catalog is static onboarding metadata for future
+  GitHub inventory comparison and Jira mapping. Public summaries expose counts
+  by product area, lifecycle status, connector priority, and safe action class
+  only. The catalog is not source of truth, does not call providers, does not
+  update repository metadata, does not rotate secrets, and does not write Jira,
+  raw storage, Obsidian, or Postgres data.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist

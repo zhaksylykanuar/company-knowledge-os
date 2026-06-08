@@ -115,6 +115,20 @@ def test_operator_output_sanitizer_detects_raw_guarded_execution_payload_markers
     _assert_raw_values_absent(diagnostics)
 
 
+def test_operator_output_sanitizer_allows_safe_secret_rotation_action_class() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "action_class_counts": {
+                "secret_rotation_required": 1,
+            }
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["secret_like_value_count"] == 0
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
 def test_operator_output_sanitizer_raises_safe_reason_only() -> None:
     with pytest.raises(ValueError) as exc_info:
         assert_operator_output_safe({"message": _unsafe_values()["url"]})

@@ -37,6 +37,18 @@ approval, persistence, scheduling, delivery execution, or interpreted truth.
 Raw provider payloads must pass through raw storage and validation boundaries
 before they can become normalized activity items.
 
+## Repository Portfolio
+
+The repository portfolio catalog is static onboarding metadata seeded from a
+provided overview. Operator-facing reports expose product-area, lifecycle,
+priority, and action-class counts only. Repository maintenance actions such as
+description updates, README work, topic updates, archive candidates, and
+credential rotation remain safe action classes until a separate operator
+execution path exists. Live GitHub inventory comparison and Jira mapping are
+planned manual read-only checks; this catalog does not update repositories,
+rotate credentials, write Jira data, persist source-of-truth rows, or call
+provider APIs.
+
 ## Guarded-Execution Doctor
 
 `scripts/doctor_guarded_execution.py` is a read-only, provider-free,

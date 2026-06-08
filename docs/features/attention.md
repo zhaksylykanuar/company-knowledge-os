@@ -78,6 +78,8 @@
   strict sanitized JSON, implemented
 - External API connector launchpad for GitHub/Jira:
   guarded raw-event foundations, implemented
+- Repository portfolio onboarding catalog:
+  static safe metadata counts/classes, implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -283,6 +285,10 @@
   GitHub and Jira are raw event sources, not interpreted truth; live read-only
   API verification remains a separate guarded manual step, and connector
   readiness is not production approval or persistence.
+- The repository portfolio catalog seeds multi-repository onboarding with safe
+  counts/classes only. GitHub live inventory comparison and Jira project
+  mapping remain separate gated manual steps, and repository actions are only
+  action classes until a future approved execution path exists.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.

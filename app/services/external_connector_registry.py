@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.services.operator_output_sanitizer import inspect_operator_output
+from app.services.repository_portfolio import repository_portfolio_public_summary
 
 CONNECTOR_STATUS_IMPLEMENTED = "implemented"
 CONNECTOR_STATUS_PLANNED = "planned"
@@ -144,6 +145,7 @@ def get_connector_spec(provider_key: str) -> ExternalConnectorSpec | None:
 
 def connector_readiness_summary() -> dict[str, Any]:
     catalog = connector_catalog()
+    portfolio = repository_portfolio_public_summary()
     provider_statuses = {
         item["provider_key"]: item["readiness_category"] for item in catalog
     }
@@ -160,6 +162,10 @@ def connector_readiness_summary() -> dict[str, Any]:
         "source_of_truth_mutation": SOURCE_OF_TRUTH_MUTATION_ABSENT,
         "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
         "payload_leakage": PROVIDER_PAYLOAD_LEAKAGE_ABSENT,
+        "repository_portfolio": portfolio["portfolio_catalog"],
+        "repository_portfolio_repo_count": portfolio["repo_total_count"],
+        "github_live_inventory_status": portfolio["github_live_inventory_status"],
+        "jira_mapping_status": portfolio["jira_mapping_status"],
     }
     _assert_registry_safe(summary)
     return summary

@@ -80,6 +80,8 @@
   strict sanitized JSON, implemented
 - External API connector launchpad for GitHub/Jira:
   guarded raw-event foundations, implemented
+- Repository portfolio onboarding catalog:
+  static safe metadata counts/classes, implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -310,6 +312,11 @@ trusted facts.
   Live read-only API verification is a separate gated manual step; connector
   metadata stays sanitized, and provider payloads must pass through raw storage
   and validation boundaries before normalized activity mapping.
+- Repository portfolio readiness is static onboarding metadata only. It reports
+  product-area, lifecycle, priority, and safe action-class counts for future
+  GitHub/Jira planning, but does not execute repository updates, archive
+  operations, secret rotation, provider calls, sends, scheduler work, or
+  source-of-truth mutation.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,
