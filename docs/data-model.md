@@ -107,6 +107,8 @@
   strict sanitized JSON, implemented
 - Guarded-execution JSON contract validation:
   strict sanitized JSON, implemented
+- External API connector launchpad:
+  GitHub/Jira guarded raw-event foundations, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -198,6 +200,13 @@
   contracts. Contract validation exposes safe field names, reason codes,
   classes, and counts only; it does not persist metadata, approve execution,
   route logs, run providers, schedule work, or mutate source-of-truth stores.
+- The external connector registry records safe onboarding metadata only:
+  provider keys, guard requirements, execution modes, source-of-truth roles,
+  and readiness classes. GitHub and Jira connector foundations produce
+  raw-event-source envelopes through guarded live boundaries or synthetic
+  transports for tests. They do not persist, call live APIs by default, treat
+  provider payloads as interpreted truth, run scheduler work, or mutate
+  source-of-truth stores.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist

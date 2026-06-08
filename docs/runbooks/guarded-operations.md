@@ -25,6 +25,18 @@ intention creation is a durable handoff artifact, not delivery execution.
 Delivery results are execution outcome metadata, not source of truth.
 Telegram and Slack are delivery or interface surfaces only.
 
+## External API Connectors
+
+The connector registry contains safe metadata only for provider onboarding:
+provider keys, guard classes, execution modes, source-of-truth roles, and
+readiness classes. GitHub and Jira connector foundations are guarded read-only
+raw-event-source boundaries with synthetic transport support for tests. Live
+read-only API verification remains a separate manual operator step and must
+pass the provider execution guard; connector readiness is not production
+approval, persistence, scheduling, delivery execution, or interpreted truth.
+Raw provider payloads must pass through raw storage and validation boundaries
+before they can become normalized activity items.
+
 ## Guarded-Execution Doctor
 
 `scripts/doctor_guarded_execution.py` is a read-only, provider-free,

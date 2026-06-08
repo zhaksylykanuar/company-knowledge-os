@@ -21,6 +21,9 @@ from app.services.guarded_execution_contracts import (  # noqa: E402
     validate_readiness_report_contract,
 )
 from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
+from app.services.external_connector_registry import (  # noqa: E402
+    connector_readiness_summary,
+)
 from scripts import doctor_guarded_execution as doctor  # noqa: E402
 
 REPORT_KIND = "guarded_execution_readiness"
@@ -37,6 +40,9 @@ CHECK_NAMES = (
     "guarded_execution_doctor",
     "guarded_execution_audit",
     "audit_sink",
+    "external_connector_registry",
+    "github_connector",
+    "jira_connector",
     "guarded_operations_runbook",
     "core_docs_references",
 )
@@ -96,7 +102,8 @@ def _run_readiness_report(
     doctor_summary = _doctor_summary(doctor_result)
     docs_summary = _docs_summary(docs_root)
     guard_summary = _guard_summary(doctor_result, doctor_summary)
-    checks = _checks(guard_summary, docs_summary)
+    connector_summary = connector_readiness_summary()
+    checks = _checks(guard_summary, docs_summary, connector_summary)
     failed_checks = [check["name"] for check in checks if check["status"] != STATUS_PASS]
     status = STATUS_PASS if not failed_checks else STATUS_FAIL
     result = {
@@ -111,6 +118,7 @@ def _run_readiness_report(
         "scheduler_execution": "disabled",
         "checks": checks,
         "guard_summary": guard_summary,
+        "connector_summary": connector_summary,
         "docs_summary": docs_summary,
         "remaining_risks": dict(REMAINING_RISKS),
         "diagnostics": {
@@ -123,6 +131,7 @@ def _run_readiness_report(
                 {
                     "checks": checks,
                     "guard_summary": guard_summary,
+                    "connector_summary": connector_summary,
                     "docs_summary": docs_summary,
                     "remaining_risks": REMAINING_RISKS,
                     "doctor": doctor_summary,
@@ -227,6 +236,7 @@ def _docs_summary(docs_root: Path) -> dict[str, Any]:
 def _checks(
     guard_summary: Mapping[str, str],
     docs_summary: Mapping[str, Any],
+    connector_summary: Mapping[str, Any],
 ) -> list[dict[str, str]]:
     statuses = {
         "provider_execution_guard": guard_summary["provider_execution_guard"],
@@ -236,6 +246,9 @@ def _checks(
         "guarded_execution_doctor": guard_summary["guarded_execution_doctor"],
         "guarded_execution_audit": guard_summary["guarded_execution_audit"],
         "audit_sink": guard_summary["audit_sink"],
+        "external_connector_registry": connector_summary["registry"],
+        "github_connector": connector_summary["github_connector"],
+        "jira_connector": connector_summary["jira_connector"],
         "guarded_operations_runbook": docs_summary["guarded_operations_runbook"],
         "core_docs_references": docs_summary["core_docs_references"],
     }
@@ -250,7 +263,9 @@ def _checks(
                 "present/default_disabled",
                 "present/non_persistent",
                 "present/pass",
+                "present/guarded/synthetic_ready",
                 "present/safe_counts_only",
+                "present/safe_metadata_only",
                 "present/sanitized_metadata",
             }
             else STATUS_FAIL,
@@ -295,6 +310,7 @@ def _failure_report(
         "scheduler_execution": "disabled",
         "checks": [],
         "guard_summary": {},
+        "connector_summary": {},
         "docs_summary": {},
         "remaining_risks": dict(REMAINING_RISKS),
         "diagnostics": {

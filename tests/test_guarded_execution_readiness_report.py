@@ -50,9 +50,12 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
     assert {check["name"] for check in result["checks"]} == {
         "audit_sink",
         "core_docs_references",
+        "external_connector_registry",
+        "github_connector",
         "guarded_execution_audit",
         "guarded_execution_doctor",
         "guarded_operations_runbook",
+        "jira_connector",
         "operator_output_sanitizer",
         "production_operation_guard",
         "provider_execution_guard",
@@ -78,6 +81,17 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
     assert result["diagnostics"]["doctor"]["audit_sink_event_count"] == 5
     assert result["diagnostics"]["doctor"]["failed_check_count"] == 0
     assert result["diagnostics"]["doctor"]["unsafe_pattern_count"] == 0
+    assert result["connector_summary"]["registry"] == "present/safe_metadata_only"
+    assert result["connector_summary"]["github_connector"] == (
+        "present/guarded/synthetic_ready"
+    )
+    assert result["connector_summary"]["jira_connector"] == (
+        "present/guarded/synthetic_ready"
+    )
+    assert result["connector_summary"]["live_calls"] == "default_denied"
+    assert result["connector_summary"]["source_of_truth_mutation"] == "absent"
+    assert result["connector_summary"]["scheduler_execution"] == "disabled"
+    assert result["connector_summary"]["payload_leakage"] == "absent"
 
 
 def test_guarded_execution_readiness_report_reports_remaining_risks_as_classes() -> None:
@@ -142,6 +156,7 @@ def test_guarded_execution_readiness_report_failure_mode_is_sanitized() -> None:
     assert result["no_source_of_truth_mutation"] is True
     assert result["scheduler_execution"] == "disabled"
     assert result["contract_validation"]["validation_status"] == "pass"
+    assert result["connector_summary"] == {}
     _assert_no_raw_unsafe_values(result)
     assert inspect_operator_output(result).safe is True
 

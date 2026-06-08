@@ -78,6 +78,8 @@
   strict sanitized JSON, implemented
 - Guarded-execution JSON contract validation:
   strict sanitized JSON, implemented
+- External API connector launchpad for GitHub/Jira:
+  guarded raw-event foundations, implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
@@ -304,6 +306,10 @@ trusted facts.
   Validation exposes safe field names, reason codes, classes, and counts only,
   and it does not persist, approve, send, schedule, or mutate source-of-truth
   stores.
+- GitHub and Jira connector readiness is a raw-event-source launchpad only.
+  Live read-only API verification is a separate gated manual step; connector
+  metadata stays sanitized, and provider payloads must pass through raw storage
+  and validation boundaries before normalized activity mapping.
 - Local/dev-only synthetic persisted attention digest seed data may be created
   only through the explicit operator seed command when a local database has no
   visible persisted attention digest items. The seed must be clearly synthetic,

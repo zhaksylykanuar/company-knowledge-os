@@ -24,6 +24,11 @@ PROVIDER_BOUNDARY_INVENTORY = {
     "app/connectors/google_drive.py::get_drive_service": "guarded_live_boundary",
     "app/connectors/google_drive.py::list_ai_inbox_files": "guarded_live_boundary",
     "app/connectors/google_drive.py::download_file_text": "guarded_live_boundary",
+    "app/connectors/github.py::list_repository_events": "guarded_live_boundary",
+    "app/connectors/github.py::fetch_issue_events": "guarded_live_boundary",
+    "app/connectors/github.py::fetch_pull_request_events": "guarded_live_boundary",
+    "app/connectors/jira.py::search_issue_events": "guarded_live_boundary",
+    "app/connectors/jira.py::fetch_project_issue_events": "guarded_live_boundary",
     "app/agents/llm_runner.py::get_openai_client": "guarded_live_boundary",
     "app/agents/llm_runner.py::LLMAgentRunner.extract": "guarded_live_boundary",
     "app/services/attention_triage.py::OpenAIAttentionTriageProvider": (
@@ -33,8 +38,10 @@ PROVIDER_BOUNDARY_INVENTORY = {
 
 GUARDED_LIVE_PROVIDER_FILES = {
     "app/agents/llm_runner.py",
+    "app/connectors/github.py",
     "app/connectors/gmail.py",
     "app/connectors/google_drive.py",
+    "app/connectors/jira.py",
     "app/services/telegram_delivery.py",
 }
 
@@ -100,6 +107,23 @@ def test_provider_execution_guard_allows_explicit_live_ack() -> None:
         "reason_code": PROVIDER_EXECUTION_ALLOWED,
         "allowed": True,
     }
+
+
+def test_provider_execution_guard_knows_github_and_jira_boundaries() -> None:
+    for provider, boundary in (
+        ("github", "github_issue_events"),
+        ("jira", "jira_issue_events"),
+    ):
+        diagnostics = require_live_provider_execution_ack(
+            provider=provider,
+            boundary=boundary,
+            allow_live_provider_execution=True,
+            provider_execution_ack=LIVE_PROVIDER_EXECUTION_ACK,
+        )
+
+        assert diagnostics.provider == provider
+        assert diagnostics.boundary == boundary
+        assert diagnostics.reason_code == PROVIDER_EXECUTION_ALLOWED
 
 
 def test_provider_boundary_inventory_uses_safe_categories_only() -> None:

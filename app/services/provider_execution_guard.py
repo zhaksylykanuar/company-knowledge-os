@@ -11,8 +11,10 @@ UNKNOWN_PROVIDER_BOUNDARY = "provider_boundary"
 
 SAFE_PROVIDERS = frozenset(
     {
+        "github",
         "gmail",
         "google_drive",
+        "jira",
         "openai",
         "telegram",
     }
@@ -20,7 +22,12 @@ SAFE_PROVIDERS = frozenset(
 SAFE_PROVIDER_BOUNDARIES = frozenset(
     {
         "drive_service",
+        "github_issue_events",
+        "github_pull_request_events",
+        "github_repository_events",
         "gmail_service",
+        "jira_issue_events",
+        "jira_project_issue_events",
         "llm_runner_client",
         "telegram_send_message",
     }

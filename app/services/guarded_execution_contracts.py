@@ -101,6 +101,7 @@ READINESS_REPORT_REQUIRED_FIELDS = frozenset(
         "no_source_of_truth_mutation",
         "scheduler_execution",
         "checks",
+        "connector_summary",
         "guard_summary",
         "docs_summary",
         "remaining_risks",
@@ -299,6 +300,7 @@ def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> 
             and payload.get("status") in SAFE_OUTPUT_STATUS_VALUES
             and _safe_reason_or_none(payload.get("reason_code"))
             and isinstance(payload.get("checks"), list)
+            and isinstance(payload.get("connector_summary"), Mapping)
             and isinstance(payload.get("guard_summary"), Mapping)
             and isinstance(payload.get("docs_summary"), Mapping)
             and isinstance(payload.get("remaining_risks"), Mapping)

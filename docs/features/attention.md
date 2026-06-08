@@ -76,6 +76,8 @@
   strict sanitized JSON, implemented
 - Guarded-execution JSON contract validation:
   strict sanitized JSON, implemented
+- External API connector launchpad for GitHub/Jira:
+  guarded raw-event foundations, implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned
@@ -277,6 +279,10 @@
   readiness report output are validated as strict sanitized JSON. Validation
   exposes safe field names, reason codes, classes, and counts only, and does
   not persist, approve, send, schedule, or mutate source-of-truth stores.
+- The connector registry exposes safe provider onboarding metadata only.
+  GitHub and Jira are raw event sources, not interpreted truth; live read-only
+  API verification remains a separate guarded manual step, and connector
+  readiness is not production approval or persistence.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
