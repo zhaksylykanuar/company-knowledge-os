@@ -123,7 +123,7 @@ def test_config_doctor_hides_unsafe_looking_values() -> None:
 
 def test_config_doctor_cli_outputs_strict_json_without_live_imports() -> None:
     completed = subprocess.run(
-        [sys.executable, str(SCRIPT), "--json"],
+        [sys.executable, str(SCRIPT), "--json", "--no-connector-env-file"],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
@@ -138,6 +138,65 @@ def test_config_doctor_cli_outputs_strict_json_without_live_imports() -> None:
     assert payload["status"] == "pass"
     assert payload["summary"]["not_configured_provider_count"] == 2
     _assert_config_doctor_safe(payload)
+
+
+def test_config_doctor_cli_loads_synthetic_connector_env_file(tmp_path: Path) -> None:
+    env_file = tmp_path / "connectors.env"
+    env_file.write_text(
+        "\n".join(
+            [f"{key}=hidden_value" for key in (*GITHUB_ENV_KEYS, *JIRA_ENV_KEYS)]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--json",
+            "--connector-env-file",
+            str(env_file),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        env={},
+    )
+
+    assert completed.returncode == 0
+    assert completed.stderr == ""
+    payload = json.loads(completed.stdout)
+    assert payload["summary"]["configured_provider_count"] == 2
+    assert payload["diagnostics"]["connector_env_file"]["env_file_status"] == "loaded"
+    assert payload["diagnostics"]["connector_env_file"]["loaded_allowed_key_count"] == (
+        len(GITHUB_ENV_KEYS) + len(JIRA_ENV_KEYS)
+    )
+    assert "hidden_value" not in completed.stdout
+    _assert_config_doctor_safe(payload)
+
+
+def test_config_doctor_synthetic_env_file_partial_config_is_sanitized(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "connectors.env"
+    env_file.write_text(
+        f"{GITHUB_ENV_KEYS[0]}={_unsafe_values()[0]}\n",
+        encoding="utf-8",
+    )
+
+    result = config_doctor.run_external_connector_config_doctor(
+        environ={},
+        connector_env_file=env_file,
+        use_connector_env_file=True,
+    )
+
+    assert result["providers"]["github"]["configured_status"] == "partially_configured"
+    assert result["providers"]["jira"]["configured_status"] == "not_configured"
+    assert result["diagnostics"]["connector_env_file"]["loaded_allowed_key_count"] == 1
+    assert _unsafe_values()[0] not in json.dumps(result, sort_keys=True)
+    _assert_config_doctor_safe(result)
 
 
 def test_config_doctor_source_does_not_use_live_provider_clients_or_dotenv() -> None:

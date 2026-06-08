@@ -265,6 +265,7 @@ def test_connector_smoke_cli_outputs_strict_json_in_synthetic_mode() -> None:
             "--synthetic",
             "--compare-portfolio",
             "--json",
+            "--no-connector-env-file",
         ],
         cwd=REPO_ROOT,
         check=False,
@@ -290,6 +291,7 @@ def test_connector_smoke_cli_outputs_strict_json_in_default_no_live_mode() -> No
             "all",
             "--compare-portfolio",
             "--json",
+            "--no-connector-env-file",
         ],
         cwd=REPO_ROOT,
         check=False,
@@ -305,3 +307,81 @@ def test_connector_smoke_cli_outputs_strict_json_in_default_no_live_mode() -> No
     assert payload["providers"]["github"]["default_denied"] == "pass"
     assert payload["providers"]["jira"]["default_denied"] == "pass"
     _assert_smoke_output_safe(payload)
+
+
+def test_connector_smoke_cli_uses_synthetic_env_file_for_config_status(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "connectors.env"
+    env_file.write_text(
+        "\n".join(
+            [f"{key}=configured_value" for key in (*GITHUB_ENV_KEYS, *JIRA_ENV_KEYS)]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--provider",
+            "all",
+            "--compare-portfolio",
+            "--json",
+            "--connector-env-file",
+            str(env_file),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        env={},
+    )
+
+    assert completed.returncode == 0
+    assert completed.stderr == ""
+    payload = json.loads(completed.stdout)
+    assert payload["provider_calls"] == "none"
+    assert payload["diagnostics"]["connector_env_file"]["env_file_status"] == "loaded"
+    assert payload["diagnostics"]["connector_env_file"]["loaded_allowed_key_count"] == (
+        len(GITHUB_ENV_KEYS) + len(JIRA_ENV_KEYS)
+    )
+    assert payload["providers"]["github"]["live_readonly_status"] == "not_run"
+    assert payload["providers"]["jira"]["live_readonly_status"] == "not_run"
+    assert "configured_value" not in completed.stdout
+    _assert_smoke_output_safe(payload)
+
+
+def test_connector_smoke_live_readonly_uses_env_file_but_remains_ack_gated(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "connectors.env"
+    env_file.write_text(
+        "\n".join(
+            [f"{key}={_unsafe_values()[0]}" for key in (*GITHUB_ENV_KEYS, *JIRA_ENV_KEYS)]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = smoke.run_connector_readonly_smoke(
+        provider="all",
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk="wrong_ack",
+        compare_portfolio=True,
+        environ={},
+        connector_env_file=env_file,
+        use_connector_env_file=True,
+    )
+
+    assert result["status"] == "fail"
+    assert result["provider_calls"] == "none"
+    assert result["providers"]["github"]["provider_reason_code"] == (
+        PROVIDER_EXECUTION_ACK_REQUIRED
+    )
+    assert result["providers"]["jira"]["provider_reason_code"] == (
+        PROVIDER_EXECUTION_ACK_REQUIRED
+    )
+    assert _unsafe_values()[0] not in json.dumps(result, sort_keys=True)
+    _assert_smoke_output_safe(result)

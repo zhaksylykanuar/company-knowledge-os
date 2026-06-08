@@ -317,10 +317,12 @@ trusted facts.
   acknowledgement. GitHub portfolio comparison and Jira mapping status remain
   counts/classes only and do not affect digest rendering or delivery.
 - The external connector configuration doctor checks GitHub/Jira environment
-  variable presence by name only. It never reads local env files, never prints
-  values, and does not call providers. Configured/partially-configured/not-
-  configured classes only prepare the later manually acknowledged live-
-  read-only smoke step.
+  variable presence by name only. It never reads `.env`, never prints values,
+  and does not call providers. The doctor and smoke CLI can load allowlisted
+  connector variables from a local connector env file; shell values take
+  precedence, and diagnostics expose only status/count classes.
+  Configured/partially-configured/not-configured classes only prepare the later
+  manually acknowledged live-read-only smoke step.
 - Repository portfolio readiness is static onboarding metadata only. It reports
   product-area, lifecycle, priority, and safe action-class counts for future
   GitHub/Jira planning, but does not execute repository updates, archive

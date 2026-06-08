@@ -44,6 +44,10 @@ Navigation map for future Codex sessions.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.
 - `../scripts/check_external_connectors_readonly.py`: read-only GitHub/Jira connector smoke report.
 
+## Examples
+
+- `examples/connectors.env.example`: placeholder-only local GitHub/Jira connector env-file template.
+
 ## Agent Workflows
 
 - `agents/ingestion-agent.md`

@@ -228,12 +228,15 @@
   execute delivery, or mutate raw storage, Obsidian, or Postgres.
 - The external connector configuration doctor is operator-review metadata for
   GitHub/Jira setup readiness. It checks expected environment variable
-  presence by name only, never reads local env files, never prints values, and
-  never calls providers. It reports configured, partially configured, or not
-  configured classes plus safe next-action classes for the later manually
-  acknowledged live-read-only smoke step. It is not source of truth and does
-  not persist data, update repositories, write Jira data, run scheduler work,
-  execute delivery, or mutate raw storage, Obsidian, or Postgres.
+  presence by name only, never reads `.env`, never prints values, and never
+  calls providers. It can merge allowlisted connector keys from a local
+  connector env file before evaluating presence; shell environment values take
+  precedence, and env-file diagnostics expose only status/count classes. It
+  reports configured, partially configured, or not configured classes plus safe
+  next-action classes for the later manually acknowledged live-read-only smoke
+  step. It is not source of truth and does not persist data, update
+  repositories, write Jira data, run scheduler work, execute delivery, or
+  mutate raw storage, Obsidian, or Postgres.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist

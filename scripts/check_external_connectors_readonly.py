@@ -28,6 +28,11 @@ from app.services.external_connector_config import (  # noqa: E402
     PROVIDER_JIRA,
     is_provider_configured,
 )
+from app.services.local_connector_env import (  # noqa: E402
+    add_connector_env_file_arguments,
+    connector_env_cli_kwargs,
+    load_local_connector_environment,
+)
 from app.services.provider_execution_guard import (  # noqa: E402
     LIVE_PROVIDER_EXECUTION_ACK,
     PROVIDER_EXECUTION_ACK_REQUIRED,
@@ -80,9 +85,16 @@ def run_connector_readonly_smoke(
     github_live_transport: github.GitHubTransport | None = None,
     jira_live_transport: jira.JiraTransport | None = None,
     environ: Mapping[str, str] | None = None,
+    connector_env_file: str | Path | None = None,
+    use_connector_env_file: bool = False,
 ) -> dict[str, Any]:
     selected_providers = _selected_providers(provider)
-    environment = environ if environ is not None else os.environ
+    env_result = load_local_connector_environment(
+        environ=environ if environ is not None else os.environ,
+        connector_env_file=connector_env_file,
+        use_connector_env_file=use_connector_env_file,
+    )
+    environment = env_result.environment
 
     github_result = _github_provider_result(
         selected="github" in selected_providers,
@@ -160,6 +172,7 @@ def run_connector_readonly_smoke(
             "live_readonly_attempt_count": live_attempt_count,
             "synthetic_mode": synthetic,
             "portfolio_compare_requested": compare_portfolio,
+            "connector_env_file": dict(env_result.diagnostics),
         },
     }
     return _finalize_result(result)
@@ -703,6 +716,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help="Output strict JSON. This is the default and only output mode.",
     )
+    add_connector_env_file_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -714,6 +728,7 @@ def main(argv: list[str] | None = None) -> int:
         allow_live_readonly_apis=args.allow_live_readonly_apis,
         acknowledge_live_readonly_risk=args.acknowledge_live_readonly_risk,
         compare_portfolio=args.compare_portfolio,
+        **connector_env_cli_kwargs(args),
     )
     print(_json_text(result), end="")
     return 0 if result["status"] == STATUS_PASS else 1

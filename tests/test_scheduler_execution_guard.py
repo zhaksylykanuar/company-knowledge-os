@@ -216,9 +216,10 @@ def test_scheduler_outbox_static_inventory_has_no_unguarded_execution_entrypoint
     ignored_paths = {
         "app/services/guarded_execution_contracts.py",
         "app/services/guarded_execution_audit.py",
-        "app/services/external_connector_registry.py",
-        "app/services/external_connector_config.py",
-        "app/services/production_operation_guard.py",
+            "app/services/external_connector_registry.py",
+            "app/services/external_connector_config.py",
+            "app/services/local_connector_env.py",
+            "app/services/production_operation_guard.py",
         "app/services/repository_portfolio.py",
         "app/services/scheduler_execution_guard.py",
         "scripts/check_external_connectors_readonly.py",

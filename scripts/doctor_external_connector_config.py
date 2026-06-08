@@ -23,6 +23,11 @@ from app.services.external_connector_config import (  # noqa: E402
 from app.services.guarded_execution_contracts import (  # noqa: E402
     validate_external_connector_config_doctor_contract,
 )
+from app.services.local_connector_env import (  # noqa: E402
+    add_connector_env_file_arguments,
+    connector_env_cli_kwargs,
+    load_local_connector_environment,
+)
 from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
 
 REPORT_KIND = "external_connector_config_doctor"
@@ -38,8 +43,15 @@ SCHEDULER_EXECUTION_DISABLED = "disabled"
 def run_external_connector_config_doctor(
     *,
     environ: Mapping[str, str] | None = None,
+    connector_env_file: str | Path | None = None,
+    use_connector_env_file: bool = False,
 ) -> dict[str, Any]:
-    environment = environ if environ is not None else os.environ
+    env_result = load_local_connector_environment(
+        environ=environ if environ is not None else os.environ,
+        connector_env_file=connector_env_file,
+        use_connector_env_file=use_connector_env_file,
+    )
+    environment = env_result.environment
     try:
         providers = external_connector_config_doctor_providers(environ=environment)
         summary = external_connector_config_doctor_summary(environ=environment)
@@ -73,6 +85,7 @@ def run_external_connector_config_doctor(
                 "check_count": len(checks),
                 "failed_check_count": 0,
                 "no_live_calls": summary["no_live_calls"],
+                "connector_env_file": dict(env_result.diagnostics),
             },
         }
         return _finalize_result(result)
@@ -182,12 +195,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help="Output strict JSON. This is the default and only output mode.",
     )
+    add_connector_env_file_arguments(parser)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
-    _parse_args(argv)
-    result = run_external_connector_config_doctor()
+    args = _parse_args(argv)
+    result = run_external_connector_config_doctor(**connector_env_cli_kwargs(args))
     print(_json_text(result), end="")
     return 0 if result["status"] == STATUS_PASS else 1
 

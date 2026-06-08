@@ -66,10 +66,16 @@ execute delivery.
 `scripts/doctor_external_connector_config.py` is a read-only, no-send,
 source-of-truth-mutation-free configuration doctor for GitHub/Jira onboarding.
 It reports expected environment variable names and presence/missing classes
-only, never reads local env files, never prints values, and never calls
-providers. When all required variables are present, the next safe action class
-is a separate manually acknowledged live-read-only smoke check through the
-guarded connector smoke CLI.
+only, never prints values, and never calls providers. Direct shell environment
+variables still work. For local operator setup, the doctor and connector smoke
+CLI can load allowlisted keys from `~/.config/company-knowledge-os/connectors.env`
+or an explicit `--connector-env-file`; shell values take precedence over file
+values. The loader never reads `.env`, skips non-allowlisted keys, and reports
+only env-file status/count diagnostics. Use `docs/examples/connectors.env.example`
+as a placeholder-only template and keep the real file outside the repo. When
+all required variables are present, the next safe action class is a separate
+manually acknowledged live-read-only smoke check through the guarded connector
+smoke CLI.
 
 ## Guarded-Execution Doctor
 
