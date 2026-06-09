@@ -140,7 +140,49 @@ def test_operator_output_sanitizer_allows_expected_connector_env_names() -> None
                 "FOS_JIRA_READONLY_SITE",
                 "FOS_JIRA_READONLY_USER",
                 "FOS_JIRA_READONLY_TOKEN",
+                "FOS_OPENAI_API_KEY",
+                "FOS_TELEGRAM_BOT_TOKEN",
+                "FOS_TELEGRAM_CHAT_ID",
+                "FOS_SLACK_BOT_TOKEN",
+                "FOS_SLACK_CHANNEL_ID",
+                "FOS_GMAIL_READONLY_CLIENT_ID",
+                "FOS_GMAIL_READONLY_CLIENT_SECRET",
+                "FOS_GOOGLE_DRIVE_READONLY_CLIENT_ID",
+                "FOS_GOOGLE_DRIVE_READONLY_CLIENT_SECRET",
             ]
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["secret_like_value_count"] == 0
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
+def test_operator_output_sanitizer_allows_cleanup_planner_classes() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "class_counts": {
+                "env_secret_file": 1,
+                "cache_directory": 1,
+                "python_cache": 1,
+                "node_modules": 1,
+                "build_output": 1,
+                "test_artifact": 1,
+                "temp_artifact": 1,
+                "log_file": 1,
+                "local_database": 1,
+                "raw_source_of_truth_store": 1,
+                "obsidian_vault_store": 1,
+                "unknown_ignored": 1,
+            },
+            "action_class_counts": {
+                "keep_local_secret": 1,
+                "safe_to_delete_candidate": 1,
+                "review_before_delete": 1,
+                "keep_cache": 1,
+                "ignore_rule_review": 1,
+                "source_of_truth_do_not_touch": 1,
+            },
         }
     ).as_dict()
 

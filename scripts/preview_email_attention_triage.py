@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-OPERATOR_ENV_FILE = REPO_ROOT / ".env.operator"
+OPERATOR_ENV_FILE = REPO_ROOT / ".env"
 
 
 def _load_operator_env_file() -> None:

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 
-OPERATOR_ENV_FILE = ".env.operator"
+OPERATOR_ENV_FILE = ".env"
 
 BOOLEAN_KEYS = {
     "API_AUTH_ENABLED",

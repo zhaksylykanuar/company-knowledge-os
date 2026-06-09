@@ -6,85 +6,20 @@
 - Daily digest generation: planned
 - Telegram delivery: planned
 - Telegram Q&A: planned
-- Internal deterministic source activity digest builder: implemented
-- Protected source activity digest API: implemented
-- Protected rendered source activity digest text API: implemented
-- Protected persisted attention digest preview API: implemented
-- Internal persisted attention digest text renderer: implemented
-- Synthetic manual pilot persisted attention digest preview artifact: implemented
-- Read-only persisted attention digest operator preview script: implemented
-- Read-only persisted attention digest delivery draft preview: implemented
-- Audit-log-backed persisted attention digest delivery draft review records:
-  implemented
-- Audit-log-backed persisted attention digest delivery draft approval decisions:
-  implemented
-- Read-only persisted attention digest delivery readiness preview: implemented
-- Audit-log-backed persisted attention digest delivery intention records:
-  implemented
-- Pure Telegram delivery plan preview for delivery intentions: implemented
-- Read-only delivery intention operator review command: implemented
-- Read-only Telegram execution preflight for delivery intentions: implemented
-- Delivery result audit contract for future Telegram sends: implemented
-- Read-only bounded Telegram execution gate preview: implemented
-- Test-only bounded Telegram delivery intention send command: implemented
-- Local/dev-only synthetic persisted attention digest seed command: implemented
-- Duplicate-success protection for test-only Telegram sends: implemented
-- Local approved-draft manual pilot handoff command: implemented
-- Read-only manual pilot status report by sample/window: implemented
-- Read-only persisted attention window discovery for manual pilots:
-  implemented
-- Read-only real stored local data readiness discovery: implemented
-- Read-only stored source event normalization preview: implemented
-- Local/dev-only stored source event normalization command: implemented
-- Read-only normalized activity triage readiness preview: implemented
-- Local/dev-only provider-free normalized activity triage command: implemented
-- Read-only persisted attention window reconciliation report: implemented
-- Read-only no-marker persisted attention candidate report: implemented
-- Local/dev-only no-marker persisted attention delivery draft preparation:
-  implemented
-- Read-only no-marker persisted attention digest quality report: implemented
-- Read-only no-marker duplicate root-cause linkage report: implemented
 - Telegram outbound delivery adapter for already-rendered text: implemented
-- Read-only presentation-variant canonical hash duplicate guard evaluator:
-  implemented
-- Read-only grouped lifecycle canonical hash guard review: implemented
-- Read-only grouped lifecycle operator decision summary: implemented
-- Sanitized grouped lifecycle report contract tests: implemented
-- Decision-only grouped lifecycle review JSON output: implemented
-- Grouped lifecycle CLI help and synthetic review smoke mode: implemented
-- Grouped lifecycle review exit codes and sanitized artifacts: implemented
-- Provider-free grouped lifecycle review operator doctor: implemented
-- Gated manual local grouped lifecycle review runner: implemented
-- Safe grouped lifecycle manual runner window presets and preflight:
-  implemented
-- Sanitized grouped lifecycle manual-review diagnostics: implemented
-- Grouped lifecycle review artifact hash redaction: implemented
-- Gated grouped lifecycle review window sweep runner: implemented
-- Default-denied live provider execution guard for the Telegram adapter:
-  implemented
-- Default-denied live provider execution guard coverage for OpenAI, Gmail, and
-  Drive connector/client boundaries: implemented
-- Default-denied production-operation guard baseline for delivery execution and
-  Obsidian export boundaries: implemented
-- Extended production-operation guard coverage for raw-storage, manual
-  ingestion, and persisted backfill source-of-truth mutation boundaries:
-  implemented
+  (used only by the bounded, test-only send path)
 - Default-disabled scheduler/outbox execution guard baseline: implemented
-- Guarded-execution audit-event metadata contract for guard decisions:
-  in-memory/read-only, implemented
-- Non-persistent guarded-execution audit sink for safe summaries:
-  no-op/in-memory only, implemented
-- Read-only guarded-execution readiness report:
-  strict sanitized JSON, implemented
-- Guarded-execution JSON contract validation:
-  strict sanitized JSON, implemented
-- External API connector launchpad for GitHub/Jira:
-  guarded raw-event foundations, implemented
-- Repository portfolio onboarding catalog:
-  static safe metadata counts/classes, implemented
 - Current implemented MVP: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
+
+The persisted-attention digest read model and renderer, the
+delivery-draft -> approval -> intention -> result lifecycle, guarded-execution
+boundaries, and the no-marker diagnostic family (candidate / quality /
+duplicate-root-cause / grouped-preview / grouped-lifecycle) that this Telegram
+feature builds on are tracked authoritatively in
+[`attention.md`](attention.md#status). That status list is intentionally not
+duplicated here to avoid drift between the two documents.
 
 This document is a product and architecture contract for a future feature. It
 does not describe an implemented Telegram bot, scheduled digest, Jira connector,
@@ -317,12 +252,17 @@ trusted facts.
   acknowledgement. GitHub portfolio comparison and Jira mapping status remain
   counts/classes only and do not affect digest rendering or delivery.
 - The external connector configuration doctor checks GitHub/Jira environment
-  variable presence by name only. It never reads `.env`, never prints values,
-  and does not call providers. The doctor and smoke CLI can load allowlisted
-  connector variables from a local connector env file; shell values take
-  precedence, and diagnostics expose only status/count classes.
+  variable presence by name only. It never prints values and does not call
+  providers. The doctor and smoke CLI can load allowlisted connector variables
+  from project-root `.env`, fall back to the older user-config connector file,
+  or use an explicit env-file override; shell values take precedence, and
+  diagnostics expose only status/count classes.
   Configured/partially-configured/not-configured classes only prepare the later
   manually acknowledged live-read-only smoke step.
+- The ignored-file cleanup planner is read-only and no-delete. It reports
+  ignored local file cleanup candidates as safe classes/counts only and does
+  not read ignored contents, execute cleanup, call providers, schedule work, or
+  affect delivery.
 - Repository portfolio readiness is static onboarding metadata only. It reports
   product-area, lifecycle, priority, and safe action-class counts for future
   GitHub/Jira planning, but does not execute repository updates, archive

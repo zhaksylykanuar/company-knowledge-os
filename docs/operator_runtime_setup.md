@@ -1,43 +1,38 @@
 # Operator Runtime Setup
 
-FounderOS uses `.env.operator` as the local runtime environment for operator
-sessions. It is ignored by git and should contain only local secrets, local
-credential locations, and local runtime switches needed to launch Codex safely.
+FounderOS uses the project root `.env` file as the primary local operator
+configuration file. It is ignored by git and should contain only local secrets,
+local credential locations, and local runtime switches needed for guarded local
+work.
 
-Do not commit `.env.operator`. Do not paste its values into issues, chats,
-logs, docs, or test output.
+Do not commit `.env`. Do not paste its values into issues, chats, logs, docs,
+or test output. Shell environment variables override values loaded from `.env`.
 
 ## Create The Local File
 
 Start from the tracked placeholder template:
 
 ```bash
-cp .env.operator.example .env.operator
+cp .env.example .env
 ```
 
-Then edit `.env.operator` locally. Keep the file shell-compatible:
+Then edit `.env` locally. Keep the file shell-compatible:
 
 ```bash
-KEY=value
-QUOTED_KEY="value with spaces"
+KEY=
+QUOTED_KEY=
 ```
 
 Avoid shell commands, command substitutions, and unquoted values containing
-spaces.
+spaces. Blank values in `.env` are treated as missing.
 
 ## Fill It Safely
 
-Use placeholders only in `.env.operator.example`; put real local values only in
-`.env.operator`.
-
-Generate `API_AUTH_KEY` locally with:
-
-```bash
-python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
-```
-
-Paste the generated value into `.env.operator` only. It can be any strong local
-random secret.
+Use placeholders only in `.env.example`; put real local values only in `.env`.
+Do not put `<set locally>` or other placeholder text into `.env`, because
+connector and operator checks treat blank and placeholder-like values as
+missing. Generate any local random API auth value on your machine and paste it
+into `.env` only.
 
 Minimum FOS-036 Gmail validation keys:
 
@@ -89,6 +84,25 @@ hidden from the main digest by default and summarized by count. Debug evidence
 and debug triage are off by default because they can expose raw refs or rule
 details intended only for explicit operator troubleshooting.
 
+## Connector Configuration
+
+GitHub and Jira connector config also use `.env` as the primary local file.
+The legacy user config file under the operator's home directory remains a
+fallback only. Connector scripts load allowlisted variables from `.env`, keep
+configured shell environment values first, treat blank and placeholder-like
+values as missing, and report configured/not_configured metadata without
+printing values.
+
+Run the connector config doctor after local edits:
+
+```bash
+uv run python scripts/doctor_external_connector_config.py --json
+```
+
+Live read-only connector smoke checks remain a separate manual step and require
+explicit acknowledgement. Default smoke mode is no-live, no-send, and no source
+of truth mutation.
+
 ## Health Check
 
 Run the safe local FOS-036 check without launching Codex:
@@ -116,16 +130,25 @@ After the FOS-036 health status is `ready`, launch Codex through the wrapper:
 ./scripts/launch_codex_operator.sh
 ```
 
-The launcher starts at the repo root, loads `.env.operator` into the
-environment, runs the FOS-036 health check, and then executes:
+The launcher starts at the repo root, loads `.env` into the environment, runs
+the FOS-036 health check, and then executes Codex.
+
+## Cleanup Planning
+
+The ignored-file cleanup planner reports ignored and local files by safe
+classes/counts only. It does not read ignored file contents and does not delete
+anything by default.
 
 ```bash
-exec codex "$@"
+uv run python scripts/report_ignored_file_cleanup_plan.py --json
 ```
+
+Secret-like and env-like paths are suppressed in default output. Ambiguous
+cleanup remains manual and review-gated.
 
 ## If Health Says Blocked
 
-Open `.env.operator` locally and fill the missing key names reported in
+Open `.env` locally and fill the missing key names reported in
 `missing_required_keys`. If a boolean key is invalid, use `true` or `false`.
 If a required file path reports `exists: false`, create or point to the local
 file before doing Google work. If a placeholder key is reported, replace the

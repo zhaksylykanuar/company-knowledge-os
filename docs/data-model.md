@@ -1,5 +1,13 @@
 # Data Model
 
+> **Reading this status list:** "implemented" here means the **data model and
+> supporting infrastructure** exist and are tested (tables, read models, audit
+> records, draft/intention/result lifecycle, guards). It does **not** mean a
+> user-facing feature is live. End-to-end Telegram delivery, scheduled digests,
+> and live GitHub/Jira connectors remain **planned** — see
+> [`features/telegram-digest.md`](features/telegram-digest.md) and
+> [`features/attention.md`](features/attention.md) for the user-facing status.
+
 ## Status
 
 - Audit logs: implemented
@@ -228,15 +236,20 @@
   execute delivery, or mutate raw storage, Obsidian, or Postgres.
 - The external connector configuration doctor is operator-review metadata for
   GitHub/Jira setup readiness. It checks expected environment variable
-  presence by name only, never reads `.env`, never prints values, and never
-  calls providers. It can merge allowlisted connector keys from a local
-  connector env file before evaluating presence; shell environment values take
-  precedence, and env-file diagnostics expose only status/count classes. It
-  reports configured, partially configured, or not configured classes plus safe
-  next-action classes for the later manually acknowledged live-read-only smoke
-  step. It is not source of truth and does not persist data, update
-  repositories, write Jira data, run scheduler work, execute delivery, or
-  mutate raw storage, Obsidian, or Postgres.
+  presence by name only, never prints values, and never calls providers. It can
+  merge allowlisted keys from project-root `.env`, fall back to the older
+  user-config connector file, or use an explicit env-file override before
+  evaluating presence; shell environment values take precedence, and env-file
+  diagnostics expose only status/count classes. It reports configured,
+  partially configured, or not configured classes plus safe next-action classes
+  for the later manually acknowledged live-read-only smoke step. It is not
+  source of truth and does not persist data, update repositories, write Jira
+  data, run scheduler work, execute delivery, or mutate raw storage, Obsidian,
+  or Postgres.
+- The ignored-file cleanup planner is read-only operator-review metadata for
+  local hygiene. It uses ignored-path metadata only, excludes raw storage and
+  Obsidian vault trees, reads no ignored file contents, deletes nothing, and
+  reports safe classes/counts plus action classes only.
 - `ingested_events`, `source_events`, `normalized_activity_items`, and
   `attention_triage_results` may contain explicitly labeled local/dev-only
   synthetic rows created by the FOS-071 operator seed command. Those rows exist

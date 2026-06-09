@@ -67,15 +67,26 @@ execute delivery.
 source-of-truth-mutation-free configuration doctor for GitHub/Jira onboarding.
 It reports expected environment variable names and presence/missing classes
 only, never prints values, and never calls providers. Direct shell environment
-variables still work. For local operator setup, the doctor and connector smoke
-CLI can load allowlisted keys from `~/.config/company-knowledge-os/connectors.env`
-or an explicit `--connector-env-file`; shell values take precedence over file
-values. The loader never reads `.env`, skips non-allowlisted keys, and reports
-only env-file status/count diagnostics. Use `docs/examples/connectors.env.example`
-as a placeholder-only template and keep the real file outside the repo. When
-all required variables are present, the next safe action class is a separate
-manually acknowledged live-read-only smoke check through the guarded connector
-smoke CLI.
+variables still work. For local operator setup, copy `.env.example` to `.env`
+and fill values locally; `.env` is ignored and must never be committed or
+pasted into chat. The doctor and connector smoke CLI can load allowlisted keys
+from project-root `.env`, then fall back to the older user-config connector
+file for compatibility, or use an explicit `--connector-env-file`; shell values
+take precedence over file values when they are configured. Blank and
+placeholder-like values are treated as missing, and placeholders belong only in
+`.env.example`. The loader skips non-allowlisted keys and reports only
+env-file status/count diagnostics. When all required variables are present,
+the next safe action class is a separate manually acknowledged live-read-only
+smoke check through the guarded connector smoke CLI.
+
+## Ignored-File Cleanup Planner
+
+`scripts/report_ignored_file_cleanup_plan.py` is a read-only, no-delete,
+metadata-only cleanup planner for ignored local files. It asks git for ignored
+paths while excluding raw storage and Obsidian vault trees, never reads file
+contents, never prints ignored paths by default, and reports safe classes,
+counts, and action classes only. The report is planning metadata only; deletion
+or cleanup execution remains a separate manual operator action.
 
 ## Guarded-Execution Doctor
 

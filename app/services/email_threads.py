@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import getaddresses, parsedate_to_datetime
 from hashlib import sha256
-from typing import Any, Iterable, Protocol
+from typing import Any, Iterable
 
-from sqlalchemy import desc, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -217,13 +217,6 @@ class EmailTriageResult:
     show_in_digest: bool
     reason: str
     confidence: float
-
-
-class EmailSemanticTriageClassifier(Protocol):
-    """Optional strict-JSON semantic triage interface; not called by default."""
-
-    def classify(self, payload: dict[str, Any]) -> EmailTriageResult | None:
-        ...
 
 
 SEMANTIC_TRIAGE_JSON_SCHEMA: dict[str, Any] = {
@@ -832,19 +825,6 @@ def _parse_datetime(value: Any) -> datetime | None:
 def _message_sort_key(message: EmailMessageSnapshot) -> tuple[str, str]:
     message_at = message.message_at.isoformat() if message.message_at else ""
     return (message_at, message.message_id)
-
-
-def compute_thread_key(message: EmailMessageSnapshot) -> str:
-    if message.provider_thread_id:
-        return f"gmail:thread:{_hash_value(message.provider_thread_id)}"
-
-    if message.message_id_header:
-        return f"gmail:message-header:{_hash_value(message.message_id_header)}"
-
-    subject = normalize_email_subject(message.subject)
-    participants = ",".join(sorted(_participant_addresses(message)))
-    fallback_key = f"{subject}:{participants}:{message.message_id}"
-    return f"gmail:subject-participants:{_hash_value(fallback_key)}"
 
 
 def classify_thread_status(
@@ -1476,26 +1456,3 @@ async def rebuild_email_thread_states_from_stored_gmail(
             Counter(str(candidate.show_in_digest).lower() for candidate in candidates)
         ),
     )
-
-
-async def get_active_email_thread_states(
-    *,
-    limit: int = 20,
-    statuses: tuple[str, ...] = (
-        THREAD_STATUS_NEEDS_MY_REPLY,
-        THREAD_STATUS_MANUAL_ACTION_REQUIRED,
-        THREAD_STATUS_WAITING_FOR_EXTERNAL_REPLY,
-        THREAD_STATUS_INFORMATIONAL,
-    ),
-) -> list[EmailThreadState]:
-    safe_limit = max(1, min(int(limit), 50))
-
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(EmailThreadState)
-            .where(EmailThreadState.source == EMAIL_SOURCE_GMAIL)
-            .where(EmailThreadState.status.in_(statuses))
-            .order_by(desc(EmailThreadState.last_message_at), desc(EmailThreadState.id))
-            .limit(safe_limit)
-        )
-        return list(result.scalars().all())

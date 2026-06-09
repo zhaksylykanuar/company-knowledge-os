@@ -33,7 +33,7 @@ Navigation map for future Codex sessions.
 
 ## Runbooks
 
-- `operator_runtime_setup.md`: local operator env, health checks, and Codex launcher setup.
+- `operator_runtime_setup.md`: project-local `.env`, health checks, and Codex launcher setup.
 - `runbooks/guarded-operations.md`: guarded execution boundaries and safe diagnostics.
 - `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
 
@@ -43,10 +43,11 @@ Navigation map for future Codex sessions.
 - `../scripts/doctor_external_connector_config.py`: read-only GitHub/Jira configuration doctor.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.
 - `../scripts/check_external_connectors_readonly.py`: read-only GitHub/Jira connector smoke report.
+- `../scripts/report_ignored_file_cleanup_plan.py`: read-only ignored/local file cleanup planner.
 
 ## Examples
 
-- `examples/connectors.env.example`: placeholder-only local GitHub/Jira connector env-file template.
+- `../.env.example`: placeholder-only project-local operator config template.
 
 ## Agent Workflows
 

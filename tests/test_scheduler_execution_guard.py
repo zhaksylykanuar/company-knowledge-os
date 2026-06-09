@@ -143,7 +143,7 @@ async def test_scheduler_source_blocks_bounded_send_before_adapter(
 
     with pytest.raises(SchedulerExecutionBlockedError) as exc_info:
         await send_script._send_bounded_chunks(
-            bot_token="TELEGRAM_BOT_TOKEN",
+            bot_token="<set locally>",
             chat_id="TELEGRAM_CHAT_ID",
             chunks=["synthetic digest"],
             transport=None,
@@ -224,6 +224,7 @@ def test_scheduler_outbox_static_inventory_has_no_unguarded_execution_entrypoint
         "app/services/scheduler_execution_guard.py",
         "scripts/check_external_connectors_readonly.py",
         "scripts/doctor_external_connector_config.py",
+        "scripts/report_ignored_file_cleanup_plan.py",
         "scripts/report_guarded_execution_readiness.py",
     }
     candidates: list[str] = []

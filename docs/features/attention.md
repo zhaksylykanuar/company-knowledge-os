@@ -1245,10 +1245,14 @@
   counts/classes only and do not change attention scoring, persistence,
   scheduler behavior, or delivery behavior.
 - The external connector configuration doctor reports GitHub/Jira setup
-  presence by environment variable name only. It never reads `.env`, never
-  prints values, and does not call providers. The doctor and smoke CLI can load
-  allowlisted connector variables from a local connector env file; shell values
-  take precedence, and diagnostics expose only status/count classes. Its
-  configured/not-configured classes are readiness metadata for a later
-  manually acknowledged live-read-only smoke step, not attention input or
+  presence by environment variable name only. It never prints values and does
+  not call providers. The doctor and smoke CLI can load allowlisted connector
+  variables from project-root `.env`, fall back to the older user-config
+  connector file, or use an explicit env-file override; shell values take
+  precedence, and diagnostics expose only status/count classes. Its
+  configured/not-configured classes are readiness metadata for a later manually
+  acknowledged live-read-only smoke step, not attention input or
   source-of-truth data.
+- The ignored-file cleanup planner reports ignored local file hygiene as safe
+  classes/counts only. It does not read ignored file contents, delete files,
+  call providers, or affect attention scoring/persistence.

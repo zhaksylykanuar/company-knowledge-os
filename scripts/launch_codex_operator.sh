@@ -10,11 +10,11 @@ if [[ -x ".venv/bin/python" ]]; then
   PYTHON_BIN=".venv/bin/python"
 fi
 
-if [[ -f ".env.operator" ]]; then
+if [[ -f ".env" ]]; then
   set -a
-  if ! source ".env.operator" >/dev/null 2>&1; then
+  if ! source ".env" >/dev/null 2>&1; then
     set +a
-    echo "Failed to load .env.operator. Check shell syntax." >&2
+    echo "Failed to load .env. Check shell syntax." >&2
     exit 1
   fi
   set +a

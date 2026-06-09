@@ -11,8 +11,8 @@ PROVIDER_GITHUB = "github"
 PROVIDER_JIRA = "jira"
 
 GITHUB_ENV_KEYS = (
-    "FOS_GITHUB_READONLY_TOKEN",
     "FOS_GITHUB_READONLY_ACCOUNT",
+    "FOS_GITHUB_READONLY_TOKEN",
 )
 JIRA_ENV_KEYS = (
     "FOS_JIRA_READONLY_SITE",
@@ -31,6 +31,19 @@ READINESS_BLOCKED_BY_MISSING_CONFIG = "blocked_by_missing_config"
 
 PRESENCE_PRESENT = "present"
 PRESENCE_MISSING = "missing"
+
+PLACEHOLDER_ENV_VALUES = {
+    "<set locally>",
+    "<set-locally>",
+    "<unset>",
+    "<missing>",
+    "set locally",
+    "placeholder",
+    "replace",
+    "replace-me",
+    "change-me",
+    "changeme",
+}
 
 ACKNOWLEDGEMENT_CLASS = "provider_execution_guard_ack_required"
 SMOKE_COMMAND_GITHUB = "github_live_readonly_smoke"
@@ -176,11 +189,6 @@ def external_connector_config_doctor_providers(
     return providers
 
 
-def get_required_environment_variable_names(provider_key: str) -> tuple[str, ...]:
-    spec = _get_spec(provider_key)
-    return spec.required_environment_variable_names if spec else ()
-
-
 def is_provider_configured(
     provider_key: str,
     environ: Mapping[str, str],
@@ -244,7 +252,27 @@ def _provider_config_summary(
 
 
 def _presence_status(environ: Mapping[str, str], variable_name: str) -> str:
-    return PRESENCE_PRESENT if bool(environ.get(variable_name)) else PRESENCE_MISSING
+    return (
+        PRESENCE_PRESENT
+        if is_configured_environment_value(environ.get(variable_name))
+        else PRESENCE_MISSING
+    )
+
+
+def is_configured_environment_value(value: str | None) -> bool:
+    if value is None:
+        return False
+    normalized = value.strip()
+    if not normalized:
+        return False
+    lowered = normalized.casefold()
+    if lowered in PLACEHOLDER_ENV_VALUES:
+        return False
+    if lowered.startswith("<") and lowered.endswith(">"):
+        return False
+    if "placeholder" in lowered:
+        return False
+    return True
 
 
 def _configured_status(*, required_count: int, present_count: int) -> str:

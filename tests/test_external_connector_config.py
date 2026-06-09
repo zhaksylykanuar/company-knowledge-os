@@ -77,6 +77,24 @@ def test_absent_connector_config_reports_not_configured() -> None:
     _assert_config_output_safe({"providers": providers, "summary": summary})
 
 
+def test_placeholder_connector_config_reports_not_configured() -> None:
+    environment = {
+        **dict.fromkeys(GITHUB_ENV_KEYS, "<set locally>"),
+        **dict.fromkeys(JIRA_ENV_KEYS, "placeholder"),
+    }
+    providers = external_connector_config_doctor_providers(environ=environment)
+    summary = external_connector_config_doctor_summary(environ=environment)
+
+    assert providers["github"]["configured_status"] == "not_configured"
+    assert providers["jira"]["configured_status"] == "not_configured"
+    assert providers["github"]["present_required_variable_count"] == 0
+    assert providers["jira"]["present_required_variable_count"] == 0
+    assert summary["not_configured_provider_count"] == 2
+    assert is_provider_configured("github", environment) is False
+    assert is_provider_configured("jira", environment) is False
+    _assert_config_output_safe({"providers": providers, "summary": summary})
+
+
 def test_partial_connector_config_reports_partially_configured() -> None:
     providers = external_connector_config_doctor_providers(
         environ={

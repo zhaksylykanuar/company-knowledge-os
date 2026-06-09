@@ -1,9 +1,10 @@
 .env
 .env.*
 !.env.example
-!.env.operator.example
 *.env
 connectors.env
+local.env
+secrets.env
 .local/
 .env.operator
 .env.local

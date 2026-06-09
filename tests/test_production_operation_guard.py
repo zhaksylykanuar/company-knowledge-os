@@ -214,7 +214,7 @@ async def test_bounded_delivery_default_denies_before_send_adapter(
 
     with pytest.raises(ProductionOperationBlockedError) as exc_info:
         await send_script._send_bounded_chunks(
-            bot_token="TELEGRAM_BOT_TOKEN",
+            bot_token="<set locally>",
             chat_id="TELEGRAM_CHAT_ID",
             chunks=["synthetic digest"],
             transport=None,
@@ -246,7 +246,7 @@ async def test_bounded_delivery_allows_explicit_ack_with_synthetic_send(
     )
 
     result = await send_script._send_bounded_chunks(
-        bot_token="TELEGRAM_BOT_TOKEN",
+        bot_token="<set locally>",
         chat_id="TELEGRAM_CHAT_ID",
         chunks=["synthetic digest"],
         transport=None,
@@ -374,6 +374,7 @@ async def test_export_script_default_denies_before_score_refresh_or_export(
 def test_gmail_backfill_persist_default_denies_before_connector(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(gmail_api.settings, "api_auth_enabled", False)
     monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", True)
     monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_query", "label:synthetic")
 
@@ -400,6 +401,7 @@ def test_gmail_backfill_persist_default_denies_before_connector(
 def test_drive_backfill_persist_default_denies_before_connector(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(drive_api.settings, "api_auth_enabled", False)
     monkeypatch.setattr(drive_api.settings, "google_drive_backfill_enabled", True)
     monkeypatch.setattr(drive_api.settings, "google_drive_ai_inbox_folder_id", "synthetic")
 

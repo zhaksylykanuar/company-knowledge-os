@@ -19,11 +19,6 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def sha256_json(payload: Any) -> str:
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
 def raw_storage_root() -> Path:
     return Path(settings.raw_storage_dir)
 
