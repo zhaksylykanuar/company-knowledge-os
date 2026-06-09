@@ -96,9 +96,10 @@ printing values.
 `FOS_GITHUB_TARGET_ORG` is an optional future organization-planning key. The
 code also carries `qtwin-io` as safe target metadata, so current read-only
 GitHub/Jira checks do not require this variable. The legacy repository overview
-remains seed metadata only; future organization inventory requires a separate
-authenticated read-only verification step, and repository transfers or edits
-are not performed by these scripts.
+remains seed metadata only. The GitHub organization inventory CLI supports
+default no-live, synthetic, and later manually acknowledged live-read-only
+checks for counts/classes only; repository transfers or edits are not performed
+by these scripts.
 
 Atlassian/Jira credentials are separated by profile. The Jira read-only data
 API profile uses the site REST API with a basic email/API-token auth class for

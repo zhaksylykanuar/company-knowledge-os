@@ -121,6 +121,8 @@
   static safe metadata counts/classes, implemented
 - GitHub organization target model:
   legacy seed metadata and target organization migration classes, implemented
+- GitHub organization read-only inventory report:
+  strict sanitized JSON, no-write migration-readiness metadata, implemented
 - Read-only external connector smoke report:
   strict sanitized JSON, implemented
 - Read-only external connector configuration doctor:
@@ -238,6 +240,16 @@
   catalog is not source of truth, does not call providers, does not transfer
   repositories, does not update repository metadata, does not rotate secrets,
   and does not write Jira, raw storage, Obsidian, or Postgres data.
+- The GitHub organization read-only inventory report is operator-review
+  metadata for checking the target organization migration state. Default mode
+  makes no live calls, synthetic mode uses provider-free inventory, and live
+  read-only mode requires separate explicit provider acknowledgement. It
+  exposes target-owner class, target organization key, seed counts, observed
+  count classes, matched/missing/extra count classes, migration-readiness
+  classes, and disabled write/transfer/edit classes only. It does not persist
+  inventory, ingest GitHub events, print repository identities, call live APIs
+  by default, create or transfer repositories, edit repository metadata, rotate
+  secrets, run scheduler work, or mutate raw storage, Obsidian, or Postgres.
 - The external connector read-only smoke report is operator-review metadata for
   GitHub/Jira onboarding. Default mode makes no live calls, synthetic mode uses
   synthetic transports, and live read-only mode requires a separate explicit

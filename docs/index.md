@@ -46,6 +46,7 @@ Navigation map for future Codex sessions.
 - `../scripts/doctor_external_connector_config.py`: read-only GitHub/Jira configuration doctor.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.
 - `../scripts/check_external_connectors_readonly.py`: read-only GitHub/Jira connector smoke report.
+- `../scripts/check_github_org_readonly_inventory.py`: read-only GitHub organization inventory and migration-readiness report.
 - `../scripts/check_jira_readonly_inventory.py`: read-only Jira inventory and portfolio-mapping report.
 - `../scripts/plan_jira_creation_dry_run.py`: no-live, no-write Jira creation dry-run report.
 - `../scripts/plan_jira_write_readiness.py`: no-live, no-write Jira write-readiness report.

@@ -55,6 +55,8 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
         "external_connector_registry",
         "github_connector",
         "github_org_current_repo_count_class",
+        "github_org_inventory_cli",
+        "github_org_live_inventory",
         "github_org_live_inventory_status",
         "github_org_migration_status",
         "github_repo_edit_operations",
@@ -132,6 +134,8 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
     assert result["connector_summary"]["github_org_migration_status"] == (
         "manual_org_migration_planned"
     )
+    assert result["connector_summary"]["github_org_inventory_cli"] == "present"
+    assert result["connector_summary"]["github_org_live_inventory"] == "gated"
     assert result["connector_summary"]["github_org_live_inventory_status"] == (
         "gated_not_verified"
     )

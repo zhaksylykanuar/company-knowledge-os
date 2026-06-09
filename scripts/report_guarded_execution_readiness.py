@@ -80,6 +80,8 @@ CHECK_NAMES = (
     "github_target_owner_class",
     "github_target_org_key",
     "github_org_migration_status",
+    "github_org_inventory_cli",
+    "github_org_live_inventory",
     "github_org_current_repo_count_class",
     "github_org_live_inventory_status",
     "github_repo_transfer_operations",
@@ -367,6 +369,8 @@ def _checks(
         "github_target_owner_class": portfolio_summary["target_owner_class"],
         "github_target_org_key": portfolio_summary["target_org_key"],
         "github_org_migration_status": portfolio_summary["migration_status_class"],
+        "github_org_inventory_cli": connector_summary["github_org_inventory_cli"],
+        "github_org_live_inventory": connector_summary["github_org_live_inventory"],
         "github_org_current_repo_count_class": portfolio_summary[
             "target_org_current_repo_count_class"
         ],
@@ -414,6 +418,7 @@ def _checks(
                 "github_organization",
                 "qtwin-io",
                 "manual_org_migration_planned",
+                "gated",
                 "gated_not_verified",
                 "dry_run_only",
                 "disabled",

@@ -8,6 +8,7 @@ from app.connectors import github
 from app.integrations.payload_mapper import map_connector_payload_to_ingested_event
 from app.services.operator_output_sanitizer import inspect_operator_output
 from app.services.provider_execution_guard import (
+    LIVE_PROVIDER_EXECUTION_ACK,
     PROVIDER_EXECUTION_ACK_REQUIRED,
     PROVIDER_EXECUTION_DEFAULT_DENIED,
     ProviderExecutionBlockedError,
@@ -127,3 +128,72 @@ def test_github_connector_diagnostics_are_sanitized_and_json_serializable() -> N
     assert diagnostics["provider_payload_in_diagnostics"] is False
     json.dumps(diagnostics, sort_keys=True)
     assert inspect_operator_output(diagnostics).safe is True
+
+
+def test_github_org_inventory_default_denies_before_transport_call() -> None:
+    transport_called = False
+
+    def forbidden_transport(request: github.GitHubConnectorRequest) -> list[dict[str, str]]:
+        nonlocal transport_called
+        transport_called = True
+        return [{"repo_key": "synthetic_repo"}]
+
+    with pytest.raises(ProviderExecutionBlockedError) as exc_info:
+        github.fetch_org_repository_inventory_summary(
+            transport=forbidden_transport,
+            seed_repository_keys=("seed_repo",),
+        )
+
+    assert exc_info.value.reason_code == PROVIDER_EXECUTION_DEFAULT_DENIED
+    assert transport_called is False
+
+
+def test_github_org_inventory_synthetic_summary_uses_counts_only() -> None:
+    summary = github.fetch_org_repository_inventory_summary(
+        transport=lambda request: [{"repo_key": "seed_repo"}],
+        execution_mode=github.SYNTHETIC_EXECUTION_MODE,
+        seed_repository_keys=("seed_repo", "missing_repo"),
+    )
+
+    assert summary == {
+        "target_org_repo_count_class": "nonzero_count",
+        "matched_seed_count_class": "nonzero_count",
+        "missing_seed_count_class": "nonzero_count",
+        "extra_org_count_class": "zero_count",
+        "provider_payload_visibility": "suppressed",
+        "no_send": True,
+        "no_source_of_truth_mutation": True,
+    }
+    assert "seed_repo" not in json.dumps(summary, sort_keys=True)
+    assert inspect_operator_output(summary).safe is True
+
+
+def test_github_org_inventory_mocked_live_readonly_calls_transport_once() -> None:
+    call_count = 0
+    request_seen: github.GitHubConnectorRequest | None = None
+
+    def mocked_transport(
+        request: github.GitHubConnectorRequest,
+    ) -> list[dict[str, str]]:
+        nonlocal call_count, request_seen
+        call_count += 1
+        request_seen = request
+        return [{"repo_key": "seed_repo"}, {"repo_key": "extra_repo"}]
+
+    summary = github.fetch_org_repository_inventory_summary(
+        transport=mocked_transport,
+        execution_mode=github.LIVE_EXECUTION_MODE,
+        allow_live_provider_execution=True,
+        provider_execution_ack=LIVE_PROVIDER_EXECUTION_ACK,
+        seed_repository_keys=("seed_repo", "missing_repo"),
+    )
+
+    assert call_count == 1
+    assert request_seen is not None
+    assert request_seen.operation == "fetch_org_repository_inventory_summary"
+    assert summary["target_org_repo_count_class"] == "nonzero_count"
+    assert summary["matched_seed_count_class"] == "nonzero_count"
+    assert summary["missing_seed_count_class"] == "nonzero_count"
+    assert summary["extra_org_count_class"] == "nonzero_count"
+    assert "seed_repo" not in json.dumps(summary, sort_keys=True)
+    assert inspect_operator_output(summary).safe is True

@@ -45,10 +45,11 @@ Other safe strategy classes:
 
 Component mapping remains manual review metadata. Components can represent
 migrated organization repositories or services after the operator migration is
-complete. Current organization inventory is not live-verified by this runbook;
-one frontend repository is reported by the operator. The mapping flow does not
-update Jira, transfer repositories, write repository metadata, or persist
-provider inventory.
+complete. The GitHub organization inventory CLI is the separate gated
+read-only path for checking target organization counts/classes; one frontend
+repository is reported by the operator, but no Jira runbook step transfers or
+edits repositories. The mapping flow does not update Jira, transfer
+repositories, write repository metadata, or persist provider inventory.
 
 ## Creation Dry-Run
 

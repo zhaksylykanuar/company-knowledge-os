@@ -27,6 +27,9 @@ PROVIDER_BOUNDARY_INVENTORY = {
     "app/connectors/github.py::list_repository_events": "guarded_live_boundary",
     "app/connectors/github.py::fetch_issue_events": "guarded_live_boundary",
     "app/connectors/github.py::fetch_pull_request_events": "guarded_live_boundary",
+    "app/connectors/github.py::fetch_org_repository_inventory_summary": (
+        "guarded_live_boundary"
+    ),
     "app/connectors/jira.py::search_issue_events": "guarded_live_boundary",
     "app/connectors/jira.py::fetch_project_issue_events": "guarded_live_boundary",
     "app/agents/llm_runner.py::get_openai_client": "guarded_live_boundary",

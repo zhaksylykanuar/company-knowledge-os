@@ -55,6 +55,23 @@ catalog does not transfer repositories, edit repository metadata, rotate
 credentials, write Jira data, persist source-of-truth rows, or call provider
 APIs.
 
+## GitHub Organization Read-Only Inventory
+
+`scripts/check_github_org_readonly_inventory.py` prepares the target
+organization inventory check for `qtwin-io`. Default mode makes no live calls
+and reports that explicit acknowledgement is required. Synthetic mode uses
+provider-free inventory for tests. Live read-only mode is reserved for a later
+manual verification step with explicit provider guard acknowledgement.
+
+The report distinguishes the legacy seed portfolio from target organization
+inventory, compares counts/classes only, and suppresses provider payloads. It
+does not print repository names, owner names, provider locations, object
+identifiers, pull request identifiers, issue titles, authors, emails,
+credentials, raw payloads, or response bodies. It does not transfer
+repositories, create repositories, edit metadata, update topics or READMEs,
+archive repositories, perform credential rotation, write raw storage, write
+Postgres, run scheduler work, or execute delivery.
+
 ## Connector Smoke CLI
 
 `scripts/check_external_connectors_readonly.py` is a read-only, no-send,
@@ -64,7 +81,8 @@ required. Synthetic mode uses synthetic transports only. Live read-only mode is
 reserved for a separate manual operator step with explicit provider guard
 acknowledgement and configuration presence checks. GitHub portfolio comparison
 is a seed-portfolio count comparison only; target organization inventory is a
-future gated manual read-only check. Jira mapping status is reported as
+separate gated manual read-only check through
+`check_github_org_readonly_inventory.py`. Jira mapping status is reported as
 counts/classes only. The CLI does not update repository metadata, transfer
 repositories, write Jira data, persist rows, schedule work, or execute delivery.
 

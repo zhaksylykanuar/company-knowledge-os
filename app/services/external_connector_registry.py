@@ -169,6 +169,8 @@ def connector_readiness_summary() -> dict[str, Any]:
         "github_target_org_key": portfolio["target_org_key"],
         "github_legacy_seed_status": portfolio["seed_portfolio_status"],
         "github_org_migration_status": portfolio["migration_status_class"],
+        "github_org_inventory_cli": "present",
+        "github_org_live_inventory": "gated",
         "github_org_live_inventory_status": portfolio["target_org_inventory_status"],
         "github_write_operations": portfolio["github_write_operations"],
         "github_repo_transfer_operations": portfolio[

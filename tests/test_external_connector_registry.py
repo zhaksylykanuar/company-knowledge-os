@@ -84,6 +84,8 @@ def test_external_connector_readiness_summary_uses_safe_classes_only() -> None:
     assert summary["github_target_org_key"] == "qtwin-io"
     assert summary["github_legacy_seed_status"] == "present"
     assert summary["github_org_migration_status"] == "manual_org_migration_planned"
+    assert summary["github_org_inventory_cli"] == "present"
+    assert summary["github_org_live_inventory"] == "gated"
     assert summary["github_org_live_inventory_status"] == "gated_not_verified"
     assert summary["github_write_operations"] == "disabled"
     assert summary["github_repo_transfer_operations"] == "disabled"

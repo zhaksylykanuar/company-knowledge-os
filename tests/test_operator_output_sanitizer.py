@@ -245,18 +245,29 @@ def test_operator_output_sanitizer_allows_jira_inventory_safe_fields() -> None:
 def test_operator_output_sanitizer_allows_github_org_migration_safe_fields() -> None:
     diagnostics = inspect_operator_output(
         {
+            "report_kind": "github_org_readonly_inventory",
             "target_owner_class": "github_organization",
             "target_org_key": "qtwin-io",
+            "org_inventory_status": "synthetic_verified",
+            "org_repo_count_class": "nonzero_count",
             "seed_source_class": "legacy_personal_account_seed",
             "seed_portfolio_status": "present",
+            "seed_repo_count": 19,
+            "expected_migration_count": 19,
+            "matched_count_class": "nonzero_count",
+            "missing_count_class": "nonzero_count",
+            "extra_count_class": "zero_count",
             "migration_status_class": "manual_org_migration_planned",
             "target_org_inventory_status": "gated_not_verified",
             "target_org_current_repo_count_class": "one_repo_reported_by_operator",
             "target_remaining_migration_count_class": "nonzero_count",
+            "frontend_repo_reported_class": "one_repo_reported_by_operator",
             "source_of_truth_status": "planning_metadata_only",
             "github_write_operations": "disabled",
             "github_repo_transfer_operations": "disabled",
             "github_repo_edit_operations": "disabled",
+            "provider_payload_visibility": "suppressed",
+            "next_action_class": "review_manual_org_migration_status",
         }
     ).as_dict()
 

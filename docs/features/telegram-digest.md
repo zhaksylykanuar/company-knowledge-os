@@ -256,6 +256,12 @@ trusted facts.
   target organization inventory remains gated and not verified. Jira mapping
   status remains counts/classes only and does not affect digest rendering or
   delivery.
+- The GitHub organization inventory CLI is no-live by default, synthetic when
+  requested, and live-read-only only after explicit manual provider
+  acknowledgement. It reports target organization migration readiness as
+  counts/classes only and does not ingest GitHub events, transfer repositories,
+  edit repository metadata, run scheduler work, or affect digest rendering or
+  delivery.
 - The Jira read-only inventory CLI is also no-live by default, synthetic when
   requested, and live-read-only only after explicit manual provider
   acknowledgement. It reports Jira inventory and portfolio mapping as

@@ -25,6 +25,7 @@ from app.services.guarded_execution_contracts import (
     validate_connector_readonly_smoke_contract,
     validate_doctor_output_contract,
     validate_external_connector_config_doctor_contract,
+    validate_github_org_readonly_inventory_contract,
     validate_jira_creation_dry_run_contract,
     validate_jira_readonly_inventory_contract,
     validate_jira_write_readiness_contract,
@@ -38,6 +39,7 @@ from app.services.provider_execution_guard import (
 )
 from scripts import doctor_guarded_execution as doctor
 from scripts import check_external_connectors_readonly as connector_smoke
+from scripts import check_github_org_readonly_inventory as github_org_inventory
 from scripts import doctor_external_connector_config as config_doctor
 from scripts import check_jira_readonly_inventory as jira_inventory
 from scripts import plan_jira_creation_dry_run as jira_creation_dry_run
@@ -153,6 +155,33 @@ def test_valid_connector_readonly_smoke_contract_passes() -> None:
     assert result["no_source_of_truth_mutation"] is True
     assert result["scheduler_execution"] == "disabled"
     assert result["provider_calls"] == "synthetic"
+    _assert_validation_safe(result)
+    _assert_validation_safe(validation.as_dict())
+
+
+def test_valid_github_org_readonly_inventory_contract_passes() -> None:
+    result = github_org_inventory.run_github_org_readonly_inventory(
+        synthetic=True,
+        compare_portfolio=True,
+        environ={},
+        use_connector_env_file=False,
+    )
+    validation = validate_github_org_readonly_inventory_contract(result)
+
+    assert result["contract_validation"]["validation_status"] == VALIDATION_PASS
+    assert validation.passed is True
+    assert result["status"] == "pass"
+    assert result["report_kind"] == "github_org_readonly_inventory"
+    assert result["provider_calls"] == "synthetic"
+    assert result["github"]["target_org_key"] == "qtwin-io"
+    assert result["github"]["target_owner_class"] == "github_organization"
+    assert result["github"]["org_inventory_status"] == "synthetic_verified"
+    assert result["github"]["seed_repo_count"] == 19
+    assert result["github"]["expected_migration_count"] == 19
+    assert result["github"]["write_operations"] == "disabled"
+    assert result["migration_readiness"]["migration_status_class"] == (
+        "manual_org_migration_planned"
+    )
     _assert_validation_safe(result)
     _assert_validation_safe(validation.as_dict())
 

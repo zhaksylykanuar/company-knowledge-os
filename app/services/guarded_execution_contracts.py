@@ -31,6 +31,7 @@ DOCTOR_OUTPUT_CONTRACT = "guarded_execution_doctor_output"
 READINESS_REPORT_CONTRACT = "guarded_execution_readiness_report"
 CONNECTOR_READONLY_SMOKE_CONTRACT = "external_connector_readonly_smoke"
 EXTERNAL_CONNECTOR_CONFIG_DOCTOR_CONTRACT = "external_connector_config_doctor"
+GITHUB_ORG_READONLY_INVENTORY_CONTRACT = "github_org_readonly_inventory"
 JIRA_READONLY_INVENTORY_CONTRACT = "jira_readonly_inventory"
 JIRA_CREATION_DRY_RUN_CONTRACT = "jira_creation_dry_run"
 ATLASSIAN_API_PROFILE_SUMMARY_CONTRACT = "atlassian_api_profile_summary"
@@ -160,6 +161,25 @@ EXTERNAL_CONNECTOR_CONFIG_DOCTOR_ALLOWED_FIELDS = (
     | {"credential_profiles", "contract_validation"}
 )
 
+GITHUB_ORG_READONLY_INVENTORY_REQUIRED_FIELDS = frozenset(
+    {
+        "status",
+        "reason_code",
+        "report_kind",
+        "no_send",
+        "no_provider_calls",
+        "no_source_of_truth_mutation",
+        "scheduler_execution",
+        "provider_calls",
+        "github",
+        "migration_readiness",
+        "diagnostics",
+    }
+)
+GITHUB_ORG_READONLY_INVENTORY_ALLOWED_FIELDS = (
+    GITHUB_ORG_READONLY_INVENTORY_REQUIRED_FIELDS | {"contract_validation"}
+)
+
 JIRA_READONLY_INVENTORY_REQUIRED_FIELDS = frozenset(
     {
         "status",
@@ -271,6 +291,9 @@ CONTRACT_REQUIRED_FIELDS = {
     EXTERNAL_CONNECTOR_CONFIG_DOCTOR_CONTRACT: (
         EXTERNAL_CONNECTOR_CONFIG_DOCTOR_REQUIRED_FIELDS
     ),
+    GITHUB_ORG_READONLY_INVENTORY_CONTRACT: (
+        GITHUB_ORG_READONLY_INVENTORY_REQUIRED_FIELDS
+    ),
     JIRA_READONLY_INVENTORY_CONTRACT: JIRA_READONLY_INVENTORY_REQUIRED_FIELDS,
     JIRA_CREATION_DRY_RUN_CONTRACT: JIRA_CREATION_DRY_RUN_REQUIRED_FIELDS,
     ATLASSIAN_API_PROFILE_SUMMARY_CONTRACT: ATLASSIAN_API_PROFILE_SUMMARY_REQUIRED_FIELDS,
@@ -284,6 +307,9 @@ CONTRACT_ALLOWED_FIELDS = {
     CONNECTOR_READONLY_SMOKE_CONTRACT: CONNECTOR_READONLY_SMOKE_ALLOWED_FIELDS,
     EXTERNAL_CONNECTOR_CONFIG_DOCTOR_CONTRACT: (
         EXTERNAL_CONNECTOR_CONFIG_DOCTOR_ALLOWED_FIELDS
+    ),
+    GITHUB_ORG_READONLY_INVENTORY_CONTRACT: (
+        GITHUB_ORG_READONLY_INVENTORY_ALLOWED_FIELDS
     ),
     JIRA_READONLY_INVENTORY_CONTRACT: JIRA_READONLY_INVENTORY_ALLOWED_FIELDS,
     JIRA_CREATION_DRY_RUN_CONTRACT: JIRA_CREATION_DRY_RUN_ALLOWED_FIELDS,
@@ -316,6 +342,9 @@ SAFE_CONNECTOR_SMOKE_REPORT_KIND_VALUES = frozenset(
 )
 SAFE_CONNECTOR_CONFIG_DOCTOR_REPORT_KIND_VALUES = frozenset(
     {"external_connector_config_doctor"}
+)
+SAFE_GITHUB_ORG_READONLY_INVENTORY_REPORT_KIND_VALUES = frozenset(
+    {"github_org_readonly_inventory"}
 )
 SAFE_JIRA_READONLY_INVENTORY_REPORT_KIND_VALUES = frozenset(
     {"jira_readonly_inventory"}
@@ -456,6 +485,15 @@ def validate_external_connector_config_doctor_contract(
     )
 
 
+def validate_github_org_readonly_inventory_contract(
+    payload: Any,
+) -> GuardedExecutionContractValidation:
+    return validate_guarded_execution_contract(
+        GITHUB_ORG_READONLY_INVENTORY_CONTRACT,
+        payload,
+    )
+
+
 def validate_jira_readonly_inventory_contract(
     payload: Any,
 ) -> GuardedExecutionContractValidation:
@@ -510,6 +548,21 @@ def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> 
             and payload.get("scheduler_execution") in SAFE_SCHEDULER_STATUS
             and payload.get("provider_calls") in SAFE_PROVIDER_CALL_MODES
             and isinstance(payload.get("providers"), Mapping)
+            and isinstance(payload.get("diagnostics"), Mapping)
+        )
+    if contract_name == GITHUB_ORG_READONLY_INVENTORY_CONTRACT:
+        return (
+            payload.get("report_kind")
+            in SAFE_GITHUB_ORG_READONLY_INVENTORY_REPORT_KIND_VALUES
+            and payload.get("status") in SAFE_OUTPUT_STATUS_VALUES
+            and _safe_reason_or_none(payload.get("reason_code"))
+            and payload.get("no_send") is True
+            and isinstance(payload.get("no_provider_calls"), bool)
+            and payload.get("no_source_of_truth_mutation") is True
+            and payload.get("scheduler_execution") in SAFE_SCHEDULER_STATUS
+            and payload.get("provider_calls") in SAFE_PROVIDER_CALL_MODES
+            and isinstance(payload.get("github"), Mapping)
+            and isinstance(payload.get("migration_readiness"), Mapping)
             and isinstance(payload.get("diagnostics"), Mapping)
         )
     if contract_name == JIRA_READONLY_INVENTORY_CONTRACT:
