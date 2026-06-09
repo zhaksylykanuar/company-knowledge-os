@@ -123,6 +123,60 @@ def test_jira_live_readonly_fetch_calls_transport_once_with_ack() -> None:
     assert events[0]["interpreted_truth"] is False
 
 
+def test_jira_readonly_inventory_default_denies_before_transport_call() -> None:
+    transport_called = False
+
+    def forbidden_transport(request: jira.JiraConnectorRequest) -> list[dict[str, int]]:
+        nonlocal transport_called
+        transport_called = True
+        return [{"issue_count": 1}]
+
+    with pytest.raises(ProviderExecutionBlockedError) as exc_info:
+        jira.fetch_readonly_inventory_summary(transport=forbidden_transport)
+
+    assert exc_info.value.reason_code == PROVIDER_EXECUTION_DEFAULT_DENIED
+    assert transport_called is False
+
+
+def test_jira_readonly_inventory_synthetic_summary_counts_only() -> None:
+    request_seen: jira.JiraConnectorRequest | None = None
+
+    def synthetic_transport(request: jira.JiraConnectorRequest) -> list[dict[str, int | bool]]:
+        nonlocal request_seen
+        request_seen = request
+        return [
+            {"accessible": True, "issue_count": 2},
+            {"accessible": False, "permission_limited": True},
+        ]
+
+    summary = jira.fetch_readonly_inventory_summary(
+        transport=synthetic_transport,
+        execution_mode=jira.SYNTHETIC_EXECUTION_MODE,
+    )
+
+    assert request_seen is not None
+    assert request_seen.operation == "fetch_readonly_inventory_summary"
+    assert request_seen.execution_mode == jira.SYNTHETIC_EXECUTION_MODE
+    assert summary["project_count"] == 2
+    assert summary["project_count_class"] == "nonzero_count"
+    assert summary["accessible_project_count_class"] == "nonzero_count"
+    assert summary["inaccessible_project_count_class"] == "nonzero_count"
+    assert summary["permission_limited_count_class"] == "nonzero_count"
+    assert summary["issue_count_class"] == "nonzero_count"
+    assert summary["provider_payload_visibility"] == "suppressed"
+    assert inspect_operator_output(summary).safe is True
+
+
+def test_jira_readonly_inventory_rejects_malformed_transport_payload() -> None:
+    with pytest.raises(jira.JiraConnectorError) as exc_info:
+        jira.fetch_readonly_inventory_summary(
+            transport=lambda request: ["not-a-mapping"],
+            execution_mode=jira.SYNTHETIC_EXECUTION_MODE,
+        )
+
+    assert exc_info.value.reason_code == jira.JIRA_INVENTORY_RESPONSE_CONTRACT_INVALID
+
+
 def test_jira_raw_event_contract_rejects_invalid_synthetic_payload() -> None:
     with pytest.raises(jira.JiraConnectorError) as exc_info:
         jira.search_issue_events(

@@ -43,6 +43,7 @@ Navigation map for future Codex sessions.
 - `../scripts/doctor_external_connector_config.py`: read-only GitHub/Jira configuration doctor.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.
 - `../scripts/check_external_connectors_readonly.py`: read-only GitHub/Jira connector smoke report.
+- `../scripts/check_jira_readonly_inventory.py`: read-only Jira inventory and portfolio-mapping report.
 - `../scripts/report_ignored_file_cleanup_plan.py`: read-only ignored/local file cleanup planner.
 
 ## Examples

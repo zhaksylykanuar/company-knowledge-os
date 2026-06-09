@@ -71,6 +71,21 @@ response bodies. Fixing live Jira access remains a manual credential,
 permission, and provider-configuration task; the smoke path stays read-only and
 does not persist or mutate data.
 
+## Jira Read-Only Inventory
+
+`scripts/check_jira_readonly_inventory.py` is a read-only, no-send,
+source-of-truth-mutation-free inventory and portfolio-mapping report for Jira.
+Default mode makes no live calls and reports that explicit acknowledgement is
+required. Synthetic mode uses synthetic inventory only. Live read-only mode is
+reserved for a separate manual operator step with explicit provider guard
+acknowledgement and configuration presence checks. Inventory output exposes
+project and issue counts/classes only, suppresses provider payloads, and never
+prints Jira project details, issue details, provider locations, credentials,
+object identifiers, raw provider payloads, or response bodies. Portfolio
+mapping is planning metadata against repository product-area counts; it is not
+source of truth and does not ingest issues, write Jira, persist raw storage,
+write Postgres, run scheduler work, or execute delivery.
+
 ## Connector Config Doctor
 
 `scripts/doctor_external_connector_config.py` is a read-only, no-send,

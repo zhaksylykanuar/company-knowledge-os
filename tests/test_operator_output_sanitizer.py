@@ -207,6 +207,28 @@ def test_operator_output_sanitizer_allows_jira_live_smoke_safe_fields() -> None:
     assert diagnostics["unsafe_pattern_count"] == 0
 
 
+def test_operator_output_sanitizer_allows_jira_inventory_safe_fields() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "report_kind": "jira_readonly_inventory",
+            "inventory_status": "synthetic_verified",
+            "project_count_class": "nonzero_count",
+            "issue_count_class": "not_observed",
+            "accessible_project_count_class": "nonzero_count",
+            "inaccessible_project_count_class": "zero_count",
+            "permission_limited_count_class": "zero_count",
+            "portfolio_mapping": {
+                "mapping_status": "planned_not_verified",
+                "mapped_area_count_class": "zero_count",
+                "needs_manual_mapping_count_class": "nonzero_count",
+            },
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
 def test_operator_output_sanitizer_raises_safe_reason_only() -> None:
     with pytest.raises(ValueError) as exc_info:
         assert_operator_output_safe({"message": _unsafe_values()["url"]})

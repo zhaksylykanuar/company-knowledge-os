@@ -1244,6 +1244,12 @@
   acknowledgement. Portfolio comparison and Jira mapping status are
   counts/classes only and do not change attention scoring, persistence,
   scheduler behavior, or delivery behavior.
+- The Jira read-only inventory CLI prepares Jira inventory and portfolio
+  mapping as strict sanitized JSON. Default mode is no-live, synthetic mode is
+  provider-free, and live read-only mode requires explicit manual provider
+  acknowledgement. It reports Jira inventory and product-area mapping as
+  counts/classes only and does not provide attention input, issue ingestion,
+  raw-storage writes, database writes, scheduler execution, or Jira writes.
 - The external connector configuration doctor reports GitHub/Jira setup
   presence by environment variable name only. It never prints values and does
   not call providers. The doctor and smoke CLI can load allowlisted connector

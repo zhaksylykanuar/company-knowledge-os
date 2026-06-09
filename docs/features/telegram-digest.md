@@ -251,6 +251,11 @@ trusted facts.
   when requested, and live-read-only only after explicit manual provider
   acknowledgement. GitHub portfolio comparison and Jira mapping status remain
   counts/classes only and do not affect digest rendering or delivery.
+- The Jira read-only inventory CLI is also no-live by default, synthetic when
+  requested, and live-read-only only after explicit manual provider
+  acknowledgement. It reports Jira inventory and portfolio mapping as
+  counts/classes only and does not ingest issues, write raw storage or
+  Postgres, mutate Jira, schedule work, or affect digest rendering/delivery.
 - The external connector configuration doctor checks GitHub/Jira environment
   variable presence by name only. It never prints values and does not call
   providers. The doctor and smoke CLI can load allowlisted connector variables

@@ -30,6 +30,9 @@ from app.services.external_connector_config import (  # noqa: E402
 from app.services.repository_portfolio import (  # noqa: E402
     repository_portfolio_public_summary,
 )
+from app.services.jira_portfolio_mapping import (  # noqa: E402
+    jira_inventory_readiness_summary,
+)
 from scripts import doctor_guarded_execution as doctor  # noqa: E402
 
 REPORT_KIND = "guarded_execution_readiness"
@@ -47,6 +50,8 @@ CHECK_NAMES = (
     "guarded_execution_audit",
     "audit_sink",
     "connector_smoke_cli",
+    "jira_readonly_inventory_cli",
+    "jira_portfolio_mapping",
     "external_connector_config_doctor",
     "external_connector_registry",
     "repository_portfolio_catalog",
@@ -114,6 +119,7 @@ def _run_readiness_report(
     connector_summary = connector_readiness_summary()
     external_connector_config_summary = external_connector_config_doctor_summary()
     connector_smoke_summary = _connector_smoke_summary()
+    jira_inventory_summary = jira_inventory_readiness_summary()
     portfolio_summary = repository_portfolio_public_summary()
     checks = _checks(
         guard_summary,
@@ -121,6 +127,7 @@ def _run_readiness_report(
         connector_summary,
         external_connector_config_summary,
         connector_smoke_summary,
+        jira_inventory_summary,
         portfolio_summary,
     )
     failed_checks = [check["name"] for check in checks if check["status"] != STATUS_PASS]
@@ -140,6 +147,7 @@ def _run_readiness_report(
         "connector_summary": connector_summary,
         "external_connector_config_summary": external_connector_config_summary,
         "connector_smoke_summary": connector_smoke_summary,
+        "jira_inventory_summary": jira_inventory_summary,
         "portfolio_summary": portfolio_summary,
         "docs_summary": docs_summary,
         "remaining_risks": dict(REMAINING_RISKS),
@@ -156,6 +164,7 @@ def _run_readiness_report(
                     "connector_summary": connector_summary,
                     "external_connector_config_summary": external_connector_config_summary,
                     "connector_smoke_summary": connector_smoke_summary,
+                    "jira_inventory_summary": jira_inventory_summary,
                     "portfolio_summary": portfolio_summary,
                     "docs_summary": docs_summary,
                     "remaining_risks": REMAINING_RISKS,
@@ -276,6 +285,7 @@ def _checks(
     connector_summary: Mapping[str, Any],
     external_connector_config_summary: Mapping[str, Any],
     connector_smoke_summary: Mapping[str, Any],
+    jira_inventory_summary: Mapping[str, Any],
     portfolio_summary: Mapping[str, Any],
 ) -> list[dict[str, str]]:
     statuses = {
@@ -287,6 +297,10 @@ def _checks(
         "guarded_execution_audit": guard_summary["guarded_execution_audit"],
         "audit_sink": guard_summary["audit_sink"],
         "connector_smoke_cli": connector_smoke_summary["connector_smoke_cli"],
+        "jira_readonly_inventory_cli": jira_inventory_summary[
+            "jira_inventory_cli"
+        ],
+        "jira_portfolio_mapping": jira_inventory_summary["jira_portfolio_mapping"],
         "external_connector_config_doctor": external_connector_config_summary[
             "external_connector_config_doctor"
         ],
@@ -312,6 +326,7 @@ def _checks(
                 "present/safe_counts_only",
                 "present/safe_metadata_only",
                 "present/sanitized_metadata",
+                "synthetic_ready",
             }
             else STATUS_FAIL,
             "state": statuses[name],
@@ -358,6 +373,7 @@ def _failure_report(
         "connector_summary": {},
         "external_connector_config_summary": {},
         "connector_smoke_summary": {},
+        "jira_inventory_summary": {},
         "portfolio_summary": {},
         "docs_summary": {},
         "remaining_risks": dict(REMAINING_RISKS),

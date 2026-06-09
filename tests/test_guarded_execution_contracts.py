@@ -24,6 +24,7 @@ from app.services.guarded_execution_contracts import (
     validate_connector_readonly_smoke_contract,
     validate_doctor_output_contract,
     validate_external_connector_config_doctor_contract,
+    validate_jira_readonly_inventory_contract,
     validate_readiness_report_contract,
 )
 from app.services.operator_output_sanitizer import inspect_operator_output
@@ -35,6 +36,7 @@ from app.services.provider_execution_guard import (
 from scripts import doctor_guarded_execution as doctor
 from scripts import check_external_connectors_readonly as connector_smoke
 from scripts import doctor_external_connector_config as config_doctor
+from scripts import check_jira_readonly_inventory as jira_inventory
 from scripts import report_guarded_execution_readiness as readiness
 
 
@@ -189,6 +191,26 @@ def test_valid_external_connector_config_doctor_contract_passes() -> None:
     _assert_validation_safe(validation.as_dict())
 
 
+def test_valid_jira_readonly_inventory_contract_passes() -> None:
+    result = jira_inventory.run_jira_readonly_inventory(
+        synthetic=True,
+        compare_portfolio=True,
+    )
+    validation = validate_jira_readonly_inventory_contract(result)
+
+    assert result["contract_validation"]["validation_status"] == VALIDATION_PASS
+    assert validation.passed is True
+    assert json.loads(json.dumps(result, sort_keys=True))["status"] == "pass"
+    assert result["no_send"] is True
+    assert result["no_provider_calls"] is True
+    assert result["no_source_of_truth_mutation"] is True
+    assert result["scheduler_execution"] == "disabled"
+    assert result["provider_calls"] == "synthetic"
+    assert result["jira"]["provider_payload_visibility"] == "suppressed"
+    _assert_validation_safe(result)
+    _assert_validation_safe(validation.as_dict())
+
+
 def test_missing_required_fields_fail_with_field_names_only() -> None:
     payload = _provider_blocked_event()
     payload.pop("guard_name")
@@ -300,4 +322,7 @@ def test_doctor_and_readiness_scripts_use_contract_helpers() -> None:
     assert "validate_doctor_output_contract" in doctor_source
     assert "validate_external_connector_config_doctor_contract" in config_doctor_source
     assert "validate_connector_readonly_smoke_contract" in smoke_source
+    assert "validate_jira_readonly_inventory_contract" in (
+        connector_smoke.REPO_ROOT / "scripts" / "check_jira_readonly_inventory.py"
+    ).read_text(encoding="utf-8")
     assert "validate_readiness_report_contract" in readiness_source

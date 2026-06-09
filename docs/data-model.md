@@ -239,6 +239,14 @@
   rate limit, server error, transport error, timeout, malformed response, or
   response-contract mismatch. Raw provider locations, credentials, project or
   issue identifiers, payloads, and response bodies are never part of the report.
+- The Jira read-only inventory report is operator-review metadata for Jira
+  project inventory and portfolio-mapping preparation. Default mode makes no
+  live calls, synthetic mode uses synthetic inventory, and live read-only mode
+  requires explicit provider acknowledgement. It exposes project counts and
+  issue-count classes only, suppresses provider payloads, and never persists
+  Jira data, ingests issues, writes raw storage, writes Postgres, runs
+  scheduler work, or mutates Jira. Portfolio mapping remains safe planning
+  metadata against repository product-area counts, not source of truth.
 - The external connector configuration doctor is operator-review metadata for
   GitHub/Jira setup readiness. It checks expected environment variable
   presence by name only, never prints values, and never calls providers. It can

@@ -58,6 +58,8 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
         "guarded_execution_doctor",
         "guarded_operations_runbook",
         "jira_connector",
+        "jira_portfolio_mapping",
+        "jira_readonly_inventory_cli",
         "operator_output_sanitizer",
         "repository_portfolio_catalog",
         "production_operation_guard",
@@ -105,6 +107,15 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
         "no_send": True,
         "no_source_of_truth_mutation": True,
         "portfolio_compare": "counts_only",
+        "scheduler_execution": "disabled",
+    }
+    assert result["jira_inventory_summary"] == {
+        "jira_inventory_cli": "present",
+        "jira_inventory_live_readonly": "gated",
+        "jira_portfolio_mapping": "synthetic_ready",
+        "source_of_truth_mutation": "absent",
+        "no_send": True,
+        "no_source_of_truth_mutation": True,
         "scheduler_execution": "disabled",
     }
     config_summary = result["external_connector_config_summary"]
@@ -204,6 +215,7 @@ def test_guarded_execution_readiness_report_failure_mode_is_sanitized() -> None:
     assert result["connector_summary"] == {}
     assert result["external_connector_config_summary"] == {}
     assert result["connector_smoke_summary"] == {}
+    assert result["jira_inventory_summary"] == {}
     assert result["portfolio_summary"] == {}
     _assert_no_raw_unsafe_values(result)
     assert inspect_operator_output(result).safe is True

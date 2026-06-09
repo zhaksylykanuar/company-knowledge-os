@@ -745,7 +745,10 @@ def _classify_jira_live_readonly_failure(
     if isinstance(exc, JiraLiveReadonlySmokeError):
         return exc
     if isinstance(exc, jira.JiraConnectorError):
-        if exc.reason_code == jira.JIRA_RAW_EVENT_CONTRACT_INVALID:
+        if exc.reason_code in {
+            jira.JIRA_RAW_EVENT_CONTRACT_INVALID,
+            jira.JIRA_INVENTORY_RESPONSE_CONTRACT_INVALID,
+        }:
             return JiraLiveReadonlySmokeError(
                 JIRA_RESPONSE_CONTRACT_MISMATCH,
                 transport_status_class=JIRA_TRANSPORT_PASS,
