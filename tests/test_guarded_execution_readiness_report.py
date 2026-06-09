@@ -54,6 +54,14 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
         "external_connector_config_doctor",
         "external_connector_registry",
         "github_connector",
+        "github_org_current_repo_count_class",
+        "github_org_live_inventory_status",
+        "github_org_migration_status",
+        "github_repo_edit_operations",
+        "github_repo_transfer_operations",
+        "github_target_org_key",
+        "github_target_owner_class",
+        "github_write_operations",
         "guarded_execution_audit",
         "guarded_execution_doctor",
         "guarded_operations_runbook",
@@ -77,6 +85,7 @@ def test_guarded_execution_readiness_report_passes_synthetic_run() -> None:
         "manual_approval_required",
         "operator_output_sanitizer",
         "repository_portfolio_catalog",
+        "repository_portfolio_seed",
         "production_operation_guard",
         "provider_execution_guard",
         "scheduler_execution_guard",
@@ -115,6 +124,22 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
     assert result["connector_summary"]["repository_portfolio"] == (
         "present/safe_counts_only"
     )
+    assert result["connector_summary"]["github_target_owner_class"] == (
+        "github_organization"
+    )
+    assert result["connector_summary"]["github_target_org_key"] == "qtwin-io"
+    assert result["connector_summary"]["github_legacy_seed_status"] == "present"
+    assert result["connector_summary"]["github_org_migration_status"] == (
+        "manual_org_migration_planned"
+    )
+    assert result["connector_summary"]["github_org_live_inventory_status"] == (
+        "gated_not_verified"
+    )
+    assert result["connector_summary"]["github_write_operations"] == "disabled"
+    assert result["connector_summary"]["github_repo_transfer_operations"] == (
+        "disabled"
+    )
+    assert result["connector_summary"]["github_repo_edit_operations"] == "disabled"
     assert result["connector_smoke_summary"] == {
         "connector_smoke_cli": "present",
         "github_live_readonly_smoke": "gated",
@@ -171,8 +196,27 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
     assert config_summary["no_source_of_truth_mutation"] is True
     assert config_summary["scheduler_execution"] == "disabled"
     assert result["portfolio_summary"]["portfolio_catalog"] == "present/safe_counts_only"
+    assert result["portfolio_summary"]["seed_source_class"] == (
+        "legacy_personal_account_seed"
+    )
+    assert result["portfolio_summary"]["seed_portfolio_status"] == "present"
     assert result["portfolio_summary"]["repo_total_count"] == 19
     assert result["portfolio_summary"]["product_area_count"] == 7
+    assert result["portfolio_summary"]["target_owner_class"] == "github_organization"
+    assert result["portfolio_summary"]["target_org_key"] == "qtwin-io"
+    assert result["portfolio_summary"]["migration_status_class"] == (
+        "manual_org_migration_planned"
+    )
+    assert result["portfolio_summary"]["target_org_current_repo_count_class"] == (
+        "one_repo_reported_by_operator"
+    )
+    assert result["portfolio_summary"]["target_expected_migration_count"] == 19
+    assert result["portfolio_summary"]["target_remaining_migration_count_class"] == (
+        "nonzero_count"
+    )
+    assert result["portfolio_summary"]["github_repo_transfer_operations"] == "disabled"
+    assert result["portfolio_summary"]["github_repo_edit_operations"] == "disabled"
+    assert result["portfolio_summary"]["github_write_operations"] == "disabled"
     assert result["portfolio_summary"]["github_live_inventory_status"] == (
         "gated_not_verified"
     )

@@ -44,10 +44,16 @@ provided overview. Operator-facing reports expose product-area, lifecycle,
 priority, and action-class counts only. Repository maintenance actions such as
 description updates, README work, topic updates, archive candidates, and
 credential rotation remain safe action classes until a separate operator
-execution path exists. Live GitHub inventory comparison and Jira mapping are
-planned manual read-only checks; this catalog does not update repositories,
-rotate credentials, write Jira data, persist source-of-truth rows, or call
-provider APIs.
+execution path exists.
+
+The seeded catalog is planning metadata only. The future canonical GitHub owner
+is the `qtwin-io` organization, while the older overview remains a legacy seed
+source. Organization migration is manual and currently classified as
+`manual_org_migration_planned`; one organization repository is reported by the
+operator, but live organization inventory is still `gated_not_verified`. This
+catalog does not transfer repositories, edit repository metadata, rotate
+credentials, write Jira data, persist source-of-truth rows, or call provider
+APIs.
 
 ## Connector Smoke CLI
 
@@ -57,9 +63,10 @@ Default mode makes no live calls and reports that explicit acknowledgement is
 required. Synthetic mode uses synthetic transports only. Live read-only mode is
 reserved for a separate manual operator step with explicit provider guard
 acknowledgement and configuration presence checks. GitHub portfolio comparison
-and Jira mapping status are reported as counts/classes only; the CLI does not
-update repository metadata, write Jira data, persist rows, schedule work, or
-execute delivery.
+is a seed-portfolio count comparison only; target organization inventory is a
+future gated manual read-only check. Jira mapping status is reported as
+counts/classes only. The CLI does not update repository metadata, transfer
+repositories, write Jira data, persist rows, schedule work, or execute delivery.
 
 Jira live-read-only smoke diagnostics expose only sanitized failure classes.
 Common safe classes include invalid site configuration, authentication failure,
@@ -137,9 +144,11 @@ file for compatibility, or use an explicit `--connector-env-file`; shell values
 take precedence over file values when they are configured. Blank and
 placeholder-like values are treated as missing, and placeholders belong only in
 `.env.example`. The loader skips non-allowlisted keys and reports only
-env-file status/count diagnostics. When all required variables are present,
-the next safe action class is a separate manually acknowledged live-read-only
-smoke check through the guarded connector smoke CLI.
+env-file status/count diagnostics. `FOS_GITHUB_TARGET_ORG` is optional future
+organization-planning metadata and is never required for current read-only
+smoke checks. When all required variables are present, the next safe action
+class is a separate manually acknowledged live-read-only smoke check through
+the guarded connector smoke CLI.
 
 ## Ignored-File Cleanup Planner
 

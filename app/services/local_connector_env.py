@@ -10,6 +10,7 @@ from typing import Any
 from app.services.external_connector_config import (
     ATLASSIAN_ADMIN_ENV_KEYS,
     GITHUB_ENV_KEYS,
+    GITHUB_TARGET_ORG_ENV_KEYS,
     JIRA_ENV_KEYS,
     JIRA_WRITE_ENV_KEYS,
     is_configured_environment_value,
@@ -22,6 +23,7 @@ USER_CONFIG_CONNECTOR_ENV_PATH = (
 DEFAULT_CONNECTOR_ENV_PATH = PROJECT_LOCAL_ENV_PATH
 CANONICAL_CONNECTOR_ENV_SECTIONS = (
     ("GitHub read-only", GITHUB_ENV_KEYS),
+    ("GitHub target organization", GITHUB_TARGET_ORG_ENV_KEYS),
     ("Jira read-only", JIRA_ENV_KEYS),
     ("Jira write dry-run", JIRA_WRITE_ENV_KEYS),
     ("Atlassian Admin dry-run", ATLASSIAN_ADMIN_ENV_KEYS),

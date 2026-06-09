@@ -6,6 +6,7 @@ from typing import Any
 from app.services.external_connector_config import (
     ATLASSIAN_ADMIN_ENV_KEYS,
     GITHUB_ENV_KEYS,
+    GITHUB_TARGET_ORG_ENV_KEYS,
     JIRA_ENV_KEYS,
     JIRA_WRITE_ENV_KEYS,
     external_connector_config_doctor_providers,
@@ -62,6 +63,10 @@ def test_external_connector_config_specs_use_safe_metadata_only() -> None:
     assert all(spec["scheduler_execution"] == "disabled" for spec in specs)
     assert any("FOS_GITHUB_READONLY_TOKEN" in spec["required_environment_variable_names"] for spec in specs)
     assert any("FOS_JIRA_READONLY_TOKEN" in spec["required_environment_variable_names"] for spec in specs)
+    github_spec = next(spec for spec in specs if spec["provider_key"] == "github")
+    assert github_spec["optional_environment_variable_names"] == [
+        *GITHUB_TARGET_ORG_ENV_KEYS
+    ]
     jira_spec = next(spec for spec in specs if spec["provider_key"] == "jira")
     assert set(jira_spec["optional_environment_variable_names"]) == {
         *JIRA_WRITE_ENV_KEYS,
@@ -80,6 +85,14 @@ def test_absent_connector_config_reports_not_configured() -> None:
     assert providers["jira"]["missing_required_variable_count"] == len(JIRA_ENV_KEYS)
     assert summary["not_configured_provider_count"] == 2
     assert summary["live_readonly_ready_provider_count"] == 0
+    assert providers["github"]["target_org_config_status"] == "missing"
+    assert providers["github"]["target_org_planning_status"] == (
+        "default_target_org_metadata_available"
+    )
+    assert summary["github_target_org_config_status"] == "missing"
+    assert summary["github_target_org_planning_status"] == (
+        "default_target_org_metadata_available"
+    )
     assert summary["no_live_calls"] == "absent"
     _assert_config_output_safe({"providers": providers, "summary": summary})
 
@@ -99,6 +112,7 @@ def test_placeholder_connector_config_reports_not_configured() -> None:
     assert summary["not_configured_provider_count"] == 2
     assert is_provider_configured("github", environment) is False
     assert is_provider_configured("jira", environment) is False
+    assert providers["github"]["target_org_config_status"] == "missing"
     _assert_config_output_safe({"providers": providers, "summary": summary})
 
 
@@ -128,6 +142,10 @@ def test_complete_connector_config_reports_configured_ready_without_values() -> 
     assert providers["jira"]["configured_status"] == "configured"
     assert providers["github"]["live_readonly_readiness"] == "ready"
     assert providers["jira"]["live_readonly_readiness"] == "ready"
+    assert providers["github"]["target_org_config_status"] == "missing"
+    assert providers["github"]["target_org_planning_status"] == (
+        "default_target_org_metadata_available"
+    )
     assert set(providers["jira"]["optional_environment_variable_names"]) == {
         *JIRA_WRITE_ENV_KEYS,
         *ATLASSIAN_ADMIN_ENV_KEYS,
@@ -139,6 +157,28 @@ def test_complete_connector_config_reports_configured_ready_without_values() -> 
     serialized = json.dumps({"providers": providers, "summary": summary}, sort_keys=True)
     for raw_value in set(environment.values()):
         assert raw_value not in serialized
+    _assert_config_output_safe({"providers": providers, "summary": summary})
+
+
+def test_github_target_org_config_is_optional_and_value_hidden() -> None:
+    environment = {
+        **_configured_env(),
+        GITHUB_TARGET_ORG_ENV_KEYS[0]: "qtwin-io",
+    }
+    providers = external_connector_config_doctor_providers(environ=environment)
+    summary = external_connector_config_doctor_summary(environ=environment)
+
+    assert providers["github"]["configured_status"] == "configured"
+    assert providers["github"]["target_org_config_status"] == "present"
+    assert providers["github"]["target_org_planning_status"] == (
+        "configured_for_future_inventory"
+    )
+    assert summary["github_target_org_config_status"] == "present"
+    assert summary["github_target_org_planning_status"] == (
+        "configured_for_future_inventory"
+    )
+    serialized = json.dumps({"providers": providers, "summary": summary}, sort_keys=True)
+    assert "qtwin-io" not in serialized
     _assert_config_output_safe({"providers": providers, "summary": summary})
 
 

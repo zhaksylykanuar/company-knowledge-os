@@ -252,8 +252,10 @@ trusted facts.
   and validation boundaries before normalized activity mapping.
 - The external connector read-only smoke CLI is no-live by default, synthetic
   when requested, and live-read-only only after explicit manual provider
-  acknowledgement. GitHub portfolio comparison and Jira mapping status remain
-  counts/classes only and do not affect digest rendering or delivery.
+  acknowledgement. GitHub portfolio comparison is seed-count metadata only;
+  target organization inventory remains gated and not verified. Jira mapping
+  status remains counts/classes only and does not affect digest rendering or
+  delivery.
 - The Jira read-only inventory CLI is also no-live by default, synthetic when
   requested, and live-read-only only after explicit manual provider
   acknowledgement. It reports Jira inventory and portfolio mapping as
@@ -276,8 +278,10 @@ trusted facts.
   not read ignored contents, execute cleanup, call providers, schedule work, or
   affect delivery.
 - Repository portfolio readiness is static onboarding metadata only. It reports
-  product-area, lifecycle, priority, and safe action-class counts for future
-  GitHub/Jira planning, but does not execute repository updates, archive
+  product-area, lifecycle, priority, safe action-class counts, and target-org
+  migration classes for future GitHub/Jira planning. The canonical future
+  owner is `qtwin-io`, while the seed catalog remains planning metadata only.
+  It does not execute repository transfers, repository edits, archive
   operations, secret rotation, provider calls, sends, scheduler work, or
   source-of-truth mutation.
 - Local/dev-only synthetic persisted attention digest seed data may be created

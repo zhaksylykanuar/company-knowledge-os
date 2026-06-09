@@ -80,6 +80,14 @@ def test_external_connector_readiness_summary_uses_safe_classes_only() -> None:
     assert summary["repository_portfolio"] == "present/safe_counts_only"
     assert summary["repository_portfolio_repo_count"] == 19
     assert summary["github_live_inventory_status"] == "gated_not_verified"
+    assert summary["github_target_owner_class"] == "github_organization"
+    assert summary["github_target_org_key"] == "qtwin-io"
+    assert summary["github_legacy_seed_status"] == "present"
+    assert summary["github_org_migration_status"] == "manual_org_migration_planned"
+    assert summary["github_org_live_inventory_status"] == "gated_not_verified"
+    assert summary["github_write_operations"] == "disabled"
+    assert summary["github_repo_transfer_operations"] == "disabled"
+    assert summary["github_repo_edit_operations"] == "disabled"
     assert summary["jira_mapping_status"] == "planned_not_verified"
     assert summary["synthetic_connector_count"] == 2
     _assert_safe(summary)

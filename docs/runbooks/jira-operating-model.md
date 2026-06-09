@@ -10,6 +10,12 @@ Use product or operating areas for Jira projects, not one project per
 repository. Repositories should normally map to Components so issues can stay
 organized by codebase without multiplying Jira projects.
 
+GitHub repository ownership is moving to the `qtwin-io` organization. The
+older 19-entry overview remains seed/planning metadata only; Jira should map to
+portfolio product areas and future organization repositories/services, not the
+legacy seed owner. Repository migration to the organization is manual and
+separate from Jira creation.
+
 Recommended project-area classes:
 
 - `ssap_digital_twin`
@@ -37,8 +43,12 @@ Other safe strategy classes:
 - `service_as_component`
 - `product_area_component_group`
 
-Component mapping remains manual review metadata. It does not update Jira,
-write repository metadata, or persist provider inventory.
+Component mapping remains manual review metadata. Components can represent
+migrated organization repositories or services after the operator migration is
+complete. Current organization inventory is not live-verified by this runbook;
+one frontend repository is reported by the operator. The mapping flow does not
+update Jira, transfer repositories, write repository metadata, or persist
+provider inventory.
 
 ## Creation Dry-Run
 
@@ -54,6 +64,11 @@ but keeps issue-search inventory as a separate follow-up class. It does not
 create or modify Jira projects, components, issue types, workflows, boards,
 fields, or issues. Any later Jira creation requires a separate manual approval
 and a separate write-enabled prompt.
+
+The Jira creation dry-run is independent of GitHub repository migration.
+GitHub writes, transfers, edits, topic updates, README updates, archive
+operations, and secret-rotation execution remain disabled until a separate
+manual approval path exists.
 
 ## Credential Profiles And Write Readiness
 

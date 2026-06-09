@@ -288,9 +288,11 @@
   API verification remains a separate guarded manual step, and connector
   readiness is not production approval or persistence.
 - The repository portfolio catalog seeds multi-repository onboarding with safe
-  counts/classes only. GitHub live inventory comparison and Jira project
-  mapping remain separate gated manual steps, and repository actions are only
-  action classes until a future approved execution path exists.
+  counts/classes only. The older 19-entry overview is planning metadata, and
+  the future canonical owner is the `qtwin-io` GitHub organization. Target-org
+  inventory remains a separate authenticated read-only check, repository
+  migration is manual, and repository actions are only action classes until a
+  future approved execution path exists.
 - GitHub, Jira, and Drive source-event-like inputs can be mapped into
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
@@ -1243,9 +1245,10 @@
 - The external connector read-only smoke CLI supports GitHub/Jira onboarding
   verification as strict sanitized JSON. It is no-live by default, synthetic
   when requested, and live-read-only only after explicit manual provider
-  acknowledgement. Portfolio comparison and Jira mapping status are
-  counts/classes only and do not change attention scoring, persistence,
-  scheduler behavior, or delivery behavior.
+  acknowledgement. GitHub portfolio comparison is seed-count metadata only;
+  target organization inventory remains gated and not verified. Jira mapping
+  status is counts/classes only and does not change attention scoring,
+  persistence, scheduler behavior, or delivery behavior.
 - The Jira read-only inventory CLI prepares Jira inventory and portfolio
   mapping as strict sanitized JSON. Default mode is no-live, synthetic mode is
   provider-free, and live read-only mode requires explicit manual provider

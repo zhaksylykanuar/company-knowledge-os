@@ -11,6 +11,21 @@ PORTFOLIO_PROVIDER_KEY = "github"
 PORTFOLIO_SOURCE_CLASS = "static_repository_overview"
 PORTFOLIO_CURRENT_AS_OF = "2026_06_01"
 PORTFOLIO_TOTAL_COUNT = 19
+PORTFOLIO_SEED_SOURCE_CLASS = "legacy_personal_account_seed"
+PORTFOLIO_SEED_STATUS = "present"
+PORTFOLIO_SOURCE_OF_TRUTH_STATUS = "planning_metadata_only"
+
+TARGET_OWNER_CLASS = "github_organization"
+TARGET_ORG_KEY = "qtwin-io"
+TARGET_ORG_STATUS_CLASS = "manual_migration_target"
+TARGET_ORG_INVENTORY_STATUS = "gated_not_verified"
+TARGET_ORG_CURRENT_REPO_COUNT_CLASS = "one_repo_reported_by_operator"
+TARGET_ORG_EXISTING_ROLE_CLASS = "frontend_repo_present"
+TARGET_REMAINING_MIGRATION_COUNT_CLASS = "nonzero_count"
+MIGRATION_STATUS_CLASS = "manual_org_migration_planned"
+GITHUB_WRITE_OPERATIONS_DISABLED = "disabled"
+GITHUB_REPO_TRANSFER_OPERATIONS_DISABLED = "disabled"
+GITHUB_REPO_EDIT_OPERATIONS_DISABLED = "disabled"
 
 LIFECYCLE_ACTIVE = "active"
 LIFECYCLE_SUPPORT = "support_or_periodic"
@@ -310,10 +325,14 @@ def repository_portfolio_catalog() -> tuple[dict[str, Any], ...]:
 
 def repository_portfolio_public_summary() -> dict[str, Any]:
     validation = validate_repository_portfolio()
+    target_org = summarize_target_org_status()
+    migration_counts = summarize_portfolio_migration_counts()
     summary = {
         "portfolio_catalog": PORTFOLIO_CATALOG_PRESENT,
         "provider_key": PORTFOLIO_PROVIDER_KEY,
         "source_class": PORTFOLIO_SOURCE_CLASS,
+        "seed_source_class": PORTFOLIO_SEED_SOURCE_CLASS,
+        "seed_portfolio_status": PORTFOLIO_SEED_STATUS,
         "overview_current_as_of": PORTFOLIO_CURRENT_AS_OF,
         "repo_total_count": len(REPOSITORY_PORTFOLIO),
         "product_area_count": len(_count_by("product_area")),
@@ -323,6 +342,25 @@ def repository_portfolio_public_summary() -> dict[str, Any]:
         "connector_priority_counts": _count_by("connector_priority"),
         "stack_class_count": len(_count_by("stack_class")),
         "github_live_inventory_status": GITHUB_LIVE_INVENTORY_GATED_NOT_VERIFIED,
+        "target_owner_class": target_org["target_owner_class"],
+        "target_org_key": target_org["target_org_key"],
+        "target_org_status_class": target_org["target_org_status_class"],
+        "migration_status_class": target_org["migration_status_class"],
+        "target_org_inventory_status": target_org["target_org_inventory_status"],
+        "target_org_current_repo_count_class": target_org[
+            "target_org_current_repo_count_class"
+        ],
+        "target_org_existing_role_class": target_org["target_org_existing_role_class"],
+        "target_expected_migration_count": migration_counts[
+            "target_expected_migration_count"
+        ],
+        "target_remaining_migration_count_class": migration_counts[
+            "target_remaining_migration_count_class"
+        ],
+        "source_of_truth_status": PORTFOLIO_SOURCE_OF_TRUTH_STATUS,
+        "github_write_operations": GITHUB_WRITE_OPERATIONS_DISABLED,
+        "github_repo_transfer_operations": GITHUB_REPO_TRANSFER_OPERATIONS_DISABLED,
+        "github_repo_edit_operations": GITHUB_REPO_EDIT_OPERATIONS_DISABLED,
         "jira_mapping_status": JIRA_MAPPING_PLANNED_NOT_VERIFIED,
         "validation_status": validation["validation_status"],
         "validation_reason_code": validation["reason_code"],
@@ -387,12 +425,24 @@ def validate_repository_portfolio() -> dict[str, Any]:
 def repository_portfolio_onboarding_plan_summary() -> dict[str, Any]:
     summary = repository_portfolio_public_summary()
     plan = {
-        "github_inventory_step": "manual_readonly_gated",
+        "github_inventory_step": "target_org_manual_readonly_gated",
+        "github_seed_comparison_step": "seed_portfolio_counts_only",
+        "github_target_owner_class": summary["target_owner_class"],
+        "github_target_org_key": summary["target_org_key"],
+        "github_org_migration_status": summary["migration_status_class"],
+        "github_org_live_inventory_status": summary["target_org_inventory_status"],
         "jira_mapping_step": "manual_mapping_planned",
         "metadata_update_execution": "not_implemented",
         "archive_execution": "not_implemented",
         "secret_rotation_execution": "not_implemented",
         "repo_total_count": summary["repo_total_count"],
+        "target_expected_migration_count": summary["target_expected_migration_count"],
+        "target_remaining_migration_count_class": summary[
+            "target_remaining_migration_count_class"
+        ],
+        "github_write_operations": summary["github_write_operations"],
+        "github_repo_transfer_operations": summary["github_repo_transfer_operations"],
+        "github_repo_edit_operations": summary["github_repo_edit_operations"],
         "action_class_counts": summary["action_class_counts"],
         "no_send": True,
         "no_source_of_truth_mutation": True,
@@ -400,6 +450,76 @@ def repository_portfolio_onboarding_plan_summary() -> dict[str, Any]:
     }
     _assert_public_summary_safe(plan)
     return plan
+
+
+def summarize_target_org_status() -> dict[str, Any]:
+    summary = {
+        "target_owner_class": TARGET_OWNER_CLASS,
+        "target_org_key": TARGET_ORG_KEY,
+        "target_org_status_class": TARGET_ORG_STATUS_CLASS,
+        "migration_status_class": MIGRATION_STATUS_CLASS,
+        "target_org_inventory_status": TARGET_ORG_INVENTORY_STATUS,
+        "target_org_current_repo_count_class": TARGET_ORG_CURRENT_REPO_COUNT_CLASS,
+        "target_org_existing_role_class": TARGET_ORG_EXISTING_ROLE_CLASS,
+        "github_write_operations": GITHUB_WRITE_OPERATIONS_DISABLED,
+        "github_repo_transfer_operations": GITHUB_REPO_TRANSFER_OPERATIONS_DISABLED,
+        "github_repo_edit_operations": GITHUB_REPO_EDIT_OPERATIONS_DISABLED,
+        "no_send": True,
+        "no_source_of_truth_mutation": True,
+        "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
+    }
+    _assert_public_summary_safe(summary)
+    return summary
+
+
+def summarize_portfolio_migration_counts() -> dict[str, Any]:
+    summary = {
+        "seed_portfolio_count": len(REPOSITORY_PORTFOLIO),
+        "target_expected_migration_count": len(REPOSITORY_PORTFOLIO),
+        "target_org_current_repo_count_class": TARGET_ORG_CURRENT_REPO_COUNT_CLASS,
+        "target_remaining_migration_count_class": TARGET_REMAINING_MIGRATION_COUNT_CLASS,
+        "migration_status_class": MIGRATION_STATUS_CLASS,
+        "source_of_truth_status": PORTFOLIO_SOURCE_OF_TRUTH_STATUS,
+        "no_send": True,
+        "no_source_of_truth_mutation": True,
+        "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
+    }
+    _assert_public_summary_safe(summary)
+    return summary
+
+
+def summarize_org_migration_readiness() -> dict[str, Any]:
+    target_org = summarize_target_org_status()
+    migration_counts = summarize_portfolio_migration_counts()
+    summary = {
+        "seed_source_class": PORTFOLIO_SEED_SOURCE_CLASS,
+        "seed_portfolio_status": PORTFOLIO_SEED_STATUS,
+        "seed_portfolio_count": migration_counts["seed_portfolio_count"],
+        "target_owner_class": target_org["target_owner_class"],
+        "target_org_key": target_org["target_org_key"],
+        "target_org_current_repo_count_class": target_org[
+            "target_org_current_repo_count_class"
+        ],
+        "target_expected_migration_count": migration_counts[
+            "target_expected_migration_count"
+        ],
+        "target_remaining_migration_count_class": migration_counts[
+            "target_remaining_migration_count_class"
+        ],
+        "migration_status_class": target_org["migration_status_class"],
+        "target_org_inventory_status": target_org["target_org_inventory_status"],
+        "source_of_truth_status": PORTFOLIO_SOURCE_OF_TRUTH_STATUS,
+        "github_write_operations": target_org["github_write_operations"],
+        "github_repo_transfer_operations": target_org[
+            "github_repo_transfer_operations"
+        ],
+        "github_repo_edit_operations": target_org["github_repo_edit_operations"],
+        "no_send": True,
+        "no_source_of_truth_mutation": True,
+        "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
+    }
+    _assert_public_summary_safe(summary)
+    return summary
 
 
 def _count_by(field_name: str) -> dict[str, int]:

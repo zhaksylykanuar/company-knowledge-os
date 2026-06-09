@@ -9,6 +9,7 @@ from typing import Any
 from app.services.external_connector_config import (
     ATLASSIAN_ADMIN_ENV_KEYS,
     GITHUB_ENV_KEYS,
+    GITHUB_TARGET_ORG_ENV_KEYS,
     JIRA_ENV_KEYS,
     JIRA_WRITE_ENV_KEYS,
 )
@@ -76,6 +77,10 @@ def test_config_doctor_absent_variables_reports_not_configured() -> None:
     assert result["providers"]["jira"]["configured_status"] == "not_configured"
     assert result["summary"]["not_configured_provider_count"] == 2
     assert result["summary"]["live_readonly_ready_provider_count"] == 0
+    assert result["summary"]["github_target_org_config_status"] == "missing"
+    assert result["summary"]["github_target_org_planning_status"] == (
+        "default_target_org_metadata_available"
+    )
     assert result["credential_profiles"]["jira_readonly_profile_status"] == (
         "not_configured"
     )
@@ -113,6 +118,7 @@ def test_config_doctor_complete_variables_reports_ready_without_values() -> None
     assert result["providers"]["jira"]["live_readonly_readiness"] == "ready"
     assert result["summary"]["configured_provider_count"] == 2
     assert result["summary"]["live_readonly_ready_provider_count"] == 2
+    assert result["summary"]["github_target_org_config_status"] == "missing"
     assert result["summary"]["jira_readonly_profile_status"] == "configured"
     assert result["summary"]["jira_write_profile_status"] == "partially_configured"
     assert result["summary"]["atlassian_admin_scoped_profile_status"] == (
@@ -198,8 +204,46 @@ def test_config_doctor_cli_loads_synthetic_connector_env_file(tmp_path: Path) ->
     assert payload["credential_profiles"]["jira_write_profile_status"] == (
         "partially_configured"
     )
+    assert payload["providers"]["github"]["target_org_config_status"] == "missing"
     assert "hidden_value" not in completed.stdout
     _assert_config_doctor_safe(payload)
+
+
+def test_config_doctor_accepts_optional_github_target_org_without_printing_value(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "connectors.env"
+    env_file.write_text(
+        "\n".join(
+            [
+                *(f"{key}=hidden_value" for key in (*GITHUB_ENV_KEYS, *JIRA_ENV_KEYS)),
+                f"{GITHUB_TARGET_ORG_ENV_KEYS[0]}=qtwin-io",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = config_doctor.run_external_connector_config_doctor(
+        environ={},
+        connector_env_file=env_file,
+        use_connector_env_file=True,
+    )
+
+    assert result["providers"]["github"]["configured_status"] == "configured"
+    assert result["providers"]["github"]["target_org_config_status"] == "present"
+    assert result["providers"]["github"]["target_org_planning_status"] == (
+        "configured_for_future_inventory"
+    )
+    assert result["summary"]["github_target_org_config_status"] == "present"
+    assert result["summary"]["github_target_org_planning_status"] == (
+        "configured_for_future_inventory"
+    )
+    assert result["diagnostics"]["connector_env_file"]["loaded_allowed_key_count"] == (
+        len(GITHUB_ENV_KEYS) + len(JIRA_ENV_KEYS) + len(GITHUB_TARGET_ORG_ENV_KEYS)
+    )
+    assert "qtwin-io" not in json.dumps(result, sort_keys=True)
+    _assert_config_doctor_safe(result)
 
 
 def test_config_doctor_reports_optional_write_and_admin_profiles_from_synthetic_env(

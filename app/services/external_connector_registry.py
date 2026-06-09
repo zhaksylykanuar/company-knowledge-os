@@ -165,6 +165,16 @@ def connector_readiness_summary() -> dict[str, Any]:
         "repository_portfolio": portfolio["portfolio_catalog"],
         "repository_portfolio_repo_count": portfolio["repo_total_count"],
         "github_live_inventory_status": portfolio["github_live_inventory_status"],
+        "github_target_owner_class": portfolio["target_owner_class"],
+        "github_target_org_key": portfolio["target_org_key"],
+        "github_legacy_seed_status": portfolio["seed_portfolio_status"],
+        "github_org_migration_status": portfolio["migration_status_class"],
+        "github_org_live_inventory_status": portfolio["target_org_inventory_status"],
+        "github_write_operations": portfolio["github_write_operations"],
+        "github_repo_transfer_operations": portfolio[
+            "github_repo_transfer_operations"
+        ],
+        "github_repo_edit_operations": portfolio["github_repo_edit_operations"],
         "jira_mapping_status": portfolio["jira_mapping_status"],
     }
     _assert_registry_safe(summary)

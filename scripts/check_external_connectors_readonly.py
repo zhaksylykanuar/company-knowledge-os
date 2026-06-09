@@ -44,6 +44,7 @@ from app.services.provider_execution_guard import (  # noqa: E402
 from app.services.repository_portfolio import (  # noqa: E402
     PORTFOLIO_TOTAL_COUNT,
     repository_portfolio_catalog,
+    repository_portfolio_public_summary,
 )
 
 REPORT_KIND = "external_connector_readonly_smoke"
@@ -436,6 +437,7 @@ def _jira_provider_result(
 
 
 def _base_github_result(*, selected: bool, compare_portfolio: bool) -> dict[str, Any]:
+    portfolio_summary = repository_portfolio_public_summary()
     result = {
         "status": STATUS_PASS,
         "selection_status": SELECTED if selected else NOT_SELECTED,
@@ -446,7 +448,21 @@ def _base_github_result(*, selected: bool, compare_portfolio: bool) -> dict[str,
         "gated_status": REQUIRES_ACKNOWLEDGEMENT if selected else NOT_RUN,
         "provider_reason_code": None,
         "portfolio_expected_count": PORTFOLIO_TOTAL_COUNT if compare_portfolio else 0,
+        "portfolio_compare_scope": "seed_portfolio_counts_only"
+        if compare_portfolio
+        else "not_requested",
         "portfolio_compare": "not_requested",
+        "github_target_owner_class": portfolio_summary["target_owner_class"],
+        "github_target_org_key": portfolio_summary["target_org_key"],
+        "github_org_migration_status": portfolio_summary["migration_status_class"],
+        "github_org_live_inventory_status": portfolio_summary[
+            "target_org_inventory_status"
+        ],
+        "github_write_operations": portfolio_summary["github_write_operations"],
+        "github_repo_transfer_operations": portfolio_summary[
+            "github_repo_transfer_operations"
+        ],
+        "github_repo_edit_operations": portfolio_summary["github_repo_edit_operations"],
         "live_inventory_count_class": COUNT_NOT_OBSERVED,
         "matched_count": 0,
         "matched_count_class": COUNT_NOT_OBSERVED,
@@ -788,6 +804,7 @@ def _portfolio_compare_summary(observed_repo_keys: set[str]) -> dict[str, Any]:
     return {
         "portfolio_expected_count": len(expected_repo_keys),
         "portfolio_compare": "counts_only",
+        "portfolio_compare_scope": "seed_portfolio_counts_only",
         "live_inventory_count_class": _expected_count_class(
             observed_count,
             len(expected_repo_keys),

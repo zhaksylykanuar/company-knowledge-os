@@ -137,6 +137,7 @@ def test_operator_output_sanitizer_allows_expected_connector_env_names() -> None
             "required_environment_variables": [
                 "FOS_GITHUB_READONLY_TOKEN",
                 "FOS_GITHUB_READONLY_ACCOUNT",
+                "FOS_GITHUB_TARGET_ORG",
                 "FOS_JIRA_READONLY_SITE",
                 "FOS_JIRA_READONLY_USER",
                 "FOS_JIRA_READONLY_TOKEN",
@@ -234,6 +235,28 @@ def test_operator_output_sanitizer_allows_jira_inventory_safe_fields() -> None:
                 "repo_component_strategy": "repo_as_component",
             },
             "recommended_next_action_class": "verify_jira_project_permissions",
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
+def test_operator_output_sanitizer_allows_github_org_migration_safe_fields() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "target_owner_class": "github_organization",
+            "target_org_key": "qtwin-io",
+            "seed_source_class": "legacy_personal_account_seed",
+            "seed_portfolio_status": "present",
+            "migration_status_class": "manual_org_migration_planned",
+            "target_org_inventory_status": "gated_not_verified",
+            "target_org_current_repo_count_class": "one_repo_reported_by_operator",
+            "target_remaining_migration_count_class": "nonzero_count",
+            "source_of_truth_status": "planning_metadata_only",
+            "github_write_operations": "disabled",
+            "github_repo_transfer_operations": "disabled",
+            "github_repo_edit_operations": "disabled",
         }
     ).as_dict()
 

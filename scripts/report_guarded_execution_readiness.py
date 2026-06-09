@@ -76,6 +76,15 @@ CHECK_NAMES = (
     "external_connector_config_doctor",
     "external_connector_registry",
     "repository_portfolio_catalog",
+    "repository_portfolio_seed",
+    "github_target_owner_class",
+    "github_target_org_key",
+    "github_org_migration_status",
+    "github_org_current_repo_count_class",
+    "github_org_live_inventory_status",
+    "github_repo_transfer_operations",
+    "github_repo_edit_operations",
+    "github_write_operations",
     "github_connector",
     "jira_connector",
     "guarded_operations_runbook",
@@ -354,6 +363,23 @@ def _checks(
         ],
         "external_connector_registry": connector_summary["registry"],
         "repository_portfolio_catalog": portfolio_summary["portfolio_catalog"],
+        "repository_portfolio_seed": portfolio_summary["seed_portfolio_status"],
+        "github_target_owner_class": portfolio_summary["target_owner_class"],
+        "github_target_org_key": portfolio_summary["target_org_key"],
+        "github_org_migration_status": portfolio_summary["migration_status_class"],
+        "github_org_current_repo_count_class": portfolio_summary[
+            "target_org_current_repo_count_class"
+        ],
+        "github_org_live_inventory_status": portfolio_summary[
+            "target_org_inventory_status"
+        ],
+        "github_repo_transfer_operations": portfolio_summary[
+            "github_repo_transfer_operations"
+        ],
+        "github_repo_edit_operations": portfolio_summary[
+            "github_repo_edit_operations"
+        ],
+        "github_write_operations": portfolio_summary["github_write_operations"],
         "github_connector": connector_summary["github_connector"],
         "jira_connector": connector_summary["jira_connector"],
         "guarded_operations_runbook": docs_summary["guarded_operations_runbook"],
@@ -384,6 +410,11 @@ def _checks(
                 "partially_configured",
                 "zero_count",
                 "nonzero_count",
+                "one_repo_reported_by_operator",
+                "github_organization",
+                "qtwin-io",
+                "manual_org_migration_planned",
+                "gated_not_verified",
                 "dry_run_only",
                 "disabled",
             }

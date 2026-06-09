@@ -119,6 +119,8 @@
   GitHub/Jira guarded raw-event foundations, implemented
 - Repository portfolio onboarding catalog:
   static safe metadata counts/classes, implemented
+- GitHub organization target model:
+  legacy seed metadata and target organization migration classes, implemented
 - Read-only external connector smoke report:
   strict sanitized JSON, implemented
 - Read-only external connector configuration doctor:
@@ -228,18 +230,24 @@
   provider payloads as interpreted truth, run scheduler work, or mutate
   source-of-truth stores.
 - The repository portfolio catalog is static onboarding metadata for future
-  GitHub inventory comparison and Jira mapping. Public summaries expose counts
-  by product area, lifecycle status, connector priority, and safe action class
-  only. The catalog is not source of truth, does not call providers, does not
-  update repository metadata, does not rotate secrets, and does not write Jira,
-  raw storage, Obsidian, or Postgres data.
+  GitHub inventory comparison and Jira mapping. The 19-entry legacy seed
+  overview is planning metadata only; the future canonical GitHub owner is the
+  `qtwin-io` organization. Public summaries expose counts by product area,
+  lifecycle status, connector priority, safe action class, target-owner class,
+  migration-status class, and target organization inventory class only. The
+  catalog is not source of truth, does not call providers, does not transfer
+  repositories, does not update repository metadata, does not rotate secrets,
+  and does not write Jira, raw storage, Obsidian, or Postgres data.
 - The external connector read-only smoke report is operator-review metadata for
   GitHub/Jira onboarding. Default mode makes no live calls, synthetic mode uses
   synthetic transports, and live read-only mode requires a separate explicit
-  provider acknowledgement. GitHub portfolio comparison and Jira mapping checks
+  provider acknowledgement. GitHub portfolio comparison is a seed-portfolio
+  count comparison; target organization inventory remains gated and not
+  verified until a later authenticated read-only check. Jira mapping checks
   expose counts/classes only. The report is not source of truth and does not
-  persist data, update repositories, write Jira data, run scheduler work,
-  execute delivery, or mutate raw storage, Obsidian, or Postgres.
+  persist data, transfer repositories, update repositories, write Jira data,
+  run scheduler work, execute delivery, or mutate raw storage, Obsidian, or
+  Postgres.
   Jira live-read-only failures are classified as sanitized operator classes
   such as invalid configuration, auth or permission failure, wrong site,
   rate limit, server error, transport error, timeout, malformed response, or

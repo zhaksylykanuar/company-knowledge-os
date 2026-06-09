@@ -107,6 +107,21 @@ def test_connector_smoke_default_mode_makes_no_live_calls() -> None:
     assert result["providers"]["github"]["live_readonly_status"] == "not_run"
     assert result["providers"]["jira"]["live_readonly_status"] == "not_run"
     assert result["providers"]["github"]["portfolio_expected_count"] == 19
+    assert result["providers"]["github"]["portfolio_compare_scope"] == (
+        "seed_portfolio_counts_only"
+    )
+    assert result["providers"]["github"]["github_target_owner_class"] == (
+        "github_organization"
+    )
+    assert result["providers"]["github"]["github_target_org_key"] == "qtwin-io"
+    assert result["providers"]["github"]["github_org_live_inventory_status"] == (
+        "gated_not_verified"
+    )
+    assert result["providers"]["github"]["github_write_operations"] == "disabled"
+    assert result["providers"]["github"]["github_repo_transfer_operations"] == (
+        "disabled"
+    )
+    assert result["providers"]["github"]["github_repo_edit_operations"] == "disabled"
     assert github_called is False
     assert jira_called is False
     _assert_smoke_output_safe(result)
@@ -165,6 +180,11 @@ def test_connector_smoke_synthetic_mode_reports_counts_only() -> None:
     assert result["no_provider_calls"] is True
     assert github_result["synthetic_status"] == "pass"
     assert github_result["portfolio_expected_count"] == 19
+    assert github_result["portfolio_compare_scope"] == "seed_portfolio_counts_only"
+    assert github_result["github_org_migration_status"] == (
+        "manual_org_migration_planned"
+    )
+    assert github_result["github_org_live_inventory_status"] == "gated_not_verified"
     assert github_result["live_inventory_count_class"] == "matches_expected_count"
     assert github_result["matched_count"] == 19
     assert github_result["missing_count"] == 0

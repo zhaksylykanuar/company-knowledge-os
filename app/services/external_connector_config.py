@@ -14,6 +14,7 @@ GITHUB_ENV_KEYS = (
     "FOS_GITHUB_READONLY_ACCOUNT",
     "FOS_GITHUB_READONLY_TOKEN",
 )
+GITHUB_TARGET_ORG_ENV_KEYS = ("FOS_GITHUB_TARGET_ORG",)
 JIRA_ENV_KEYS = (
     "FOS_JIRA_READONLY_SITE",
     "FOS_JIRA_READONLY_USER",
@@ -109,7 +110,7 @@ CONNECTOR_CONFIG_SPECS = (
     ExternalConnectorConfigSpec(
         provider_key=PROVIDER_GITHUB,
         required_environment_variable_names=GITHUB_ENV_KEYS,
-        optional_environment_variable_names=(),
+        optional_environment_variable_names=GITHUB_TARGET_ORG_ENV_KEYS,
         expected_smoke_command_class=SMOKE_COMMAND_GITHUB,
         missing_config_action_class=ACTION_SET_GITHUB_CONFIG,
         ready_action_class=ACTION_RUN_GITHUB_SMOKE,
@@ -179,6 +180,12 @@ def external_connector_config_doctor_summary(
         "jira_config_status": providers[PROVIDER_JIRA]["configured_status"],
         "github_live_readonly_ready": _ready_status(providers[PROVIDER_GITHUB]),
         "jira_live_readonly_ready": _ready_status(providers[PROVIDER_JIRA]),
+        "github_target_org_config_status": providers[PROVIDER_GITHUB][
+            "target_org_config_status"
+        ],
+        "github_target_org_planning_status": providers[PROVIDER_GITHUB][
+            "target_org_planning_status"
+        ],
         "no_live_calls": NO_LIVE_CALLS_IN_CONFIG_DOCTOR,
         "no_send": True,
         "no_source_of_truth_mutation": True,
@@ -255,6 +262,8 @@ def _provider_config_summary(
         "expected_smoke_command_class": spec.expected_smoke_command_class,
         "required_acknowledgement_class": spec.required_acknowledgement_class,
         "next_action_classes": next_action_classes,
+        "target_org_config_status": _target_org_config_status(spec, environ),
+        "target_org_planning_status": _target_org_planning_status(spec, environ),
         "no_send": True,
         "no_source_of_truth_mutation": True,
         "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
@@ -303,6 +312,33 @@ def _ready_status(provider_summary: Mapping[str, Any]) -> str:
         if provider_summary.get("live_readonly_readiness") == READINESS_READY
         else READINESS_NOT_READY
     )
+
+
+def _target_org_config_status(
+    spec: ExternalConnectorConfigSpec,
+    environ: Mapping[str, str],
+) -> str:
+    if spec.provider_key != PROVIDER_GITHUB:
+        return "not_required"
+    return (
+        PRESENCE_PRESENT
+        if any(
+            is_configured_environment_value(environ.get(key))
+            for key in GITHUB_TARGET_ORG_ENV_KEYS
+        )
+        else PRESENCE_MISSING
+    )
+
+
+def _target_org_planning_status(
+    spec: ExternalConnectorConfigSpec,
+    environ: Mapping[str, str],
+) -> str:
+    if spec.provider_key != PROVIDER_GITHUB:
+        return "not_required"
+    if _target_org_config_status(spec, environ) == PRESENCE_PRESENT:
+        return "configured_for_future_inventory"
+    return "default_target_org_metadata_available"
 
 
 def _get_spec(provider_key: str) -> ExternalConnectorConfigSpec | None:
