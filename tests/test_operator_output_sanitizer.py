@@ -241,6 +241,50 @@ def test_operator_output_sanitizer_allows_jira_inventory_safe_fields() -> None:
     assert diagnostics["unsafe_pattern_count"] == 0
 
 
+def test_operator_output_sanitizer_allows_jira_creation_dry_run_safe_fields() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "report_kind": "jira_creation_dry_run",
+            "dry_run_only": True,
+            "jira_write_operations": "disabled",
+            "manual_approval_required": True,
+            "current_jira_assessment_class": "existing_projects_visible",
+            "migration_recommendation_class": "new_clean_structure_recommended",
+            "proposed_structure": {
+                "recommended_model_class": "product_area_model",
+                "project_class_count": 6,
+                "component_strategy_class": "repo_as_component",
+                "component_count_class": "nonzero_count",
+                "issue_type_class_count": 8,
+                "workflow_status_class_count": 8,
+                "board_class_count": 4,
+                "governance_rule_count": 7,
+            },
+            "proposed_project_classes": [
+                "ssap_digital_twin",
+                "kazscan_corporate",
+                "infrastructure_data",
+                "rd_3d_ar",
+                "marketing_corporate",
+                "ops_support",
+            ],
+            "follow_up_classes": [
+                "issue_search_inventory_follow_up",
+                "current_jira_project_visibility_confirmed",
+                "creation_requires_write_approval",
+                "migration_requires_manual_mapping",
+            ],
+            "blocked_write_operation_classes": [
+                "create_jira_projects_blocked",
+                "create_jira_components_blocked",
+            ],
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
 def test_operator_output_sanitizer_raises_safe_reason_only() -> None:
     with pytest.raises(ValueError) as exc_info:
         assert_operator_output_safe({"message": _unsafe_values()["url"]})

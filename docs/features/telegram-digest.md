@@ -259,6 +259,10 @@ trusted facts.
   acknowledgement. It reports Jira inventory and portfolio mapping as
   counts/classes only and does not ingest issues, write raw storage or
   Postgres, mutate Jira, schedule work, or affect digest rendering/delivery.
+- The Jira creation dry-run CLI is no-live and no-write. It produces a
+  sanitized review artifact for future Jira structure approval, keeps
+  issue-search inventory as a follow-up class, and does not affect digest
+  rendering, delivery, storage, scheduler execution, or Jira state.
 - The external connector configuration doctor checks GitHub/Jira environment
   variable presence by name only. It never prints values and does not call
   providers. The doctor and smoke CLI can load allowlisted connector variables

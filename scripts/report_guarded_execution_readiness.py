@@ -33,6 +33,9 @@ from app.services.repository_portfolio import (  # noqa: E402
 from app.services.jira_portfolio_mapping import (  # noqa: E402
     jira_inventory_readiness_summary,
 )
+from app.services.jira_creation_dry_run import (  # noqa: E402
+    jira_creation_dry_run_readiness_summary,
+)
 from scripts import doctor_guarded_execution as doctor  # noqa: E402
 
 REPORT_KIND = "guarded_execution_readiness"
@@ -55,6 +58,11 @@ CHECK_NAMES = (
     "jira_portfolio_mapping",
     "jira_mapping_readiness",
     "jira_operating_model",
+    "jira_creation_dry_run",
+    "jira_creation_execution",
+    "manual_approval_required",
+    "current_jira_project_visibility",
+    "issue_search_follow_up",
     "jira_write_operations",
     "external_connector_config_doctor",
     "external_connector_registry",
@@ -123,7 +131,10 @@ def _run_readiness_report(
     connector_summary = connector_readiness_summary()
     external_connector_config_summary = external_connector_config_doctor_summary()
     connector_smoke_summary = _connector_smoke_summary()
-    jira_inventory_summary = jira_inventory_readiness_summary()
+    jira_inventory_summary = {
+        **jira_inventory_readiness_summary(),
+        **jira_creation_dry_run_readiness_summary(),
+    }
     portfolio_summary = repository_portfolio_public_summary()
     checks = _checks(
         guard_summary,
@@ -310,6 +321,13 @@ def _checks(
         "jira_portfolio_mapping": jira_inventory_summary["jira_portfolio_mapping"],
         "jira_mapping_readiness": jira_inventory_summary["jira_mapping_readiness"],
         "jira_operating_model": jira_inventory_summary["jira_operating_model"],
+        "jira_creation_dry_run": jira_inventory_summary["jira_creation_dry_run"],
+        "jira_creation_execution": jira_inventory_summary["jira_creation_execution"],
+        "manual_approval_required": jira_inventory_summary["manual_approval_required"],
+        "current_jira_project_visibility": jira_inventory_summary[
+            "current_jira_project_visibility"
+        ],
+        "issue_search_follow_up": jira_inventory_summary["issue_search_follow_up"],
         "jira_write_operations": jira_inventory_summary["jira_write_operations"],
         "external_connector_config_doctor": external_connector_config_summary[
             "external_connector_config_doctor"
@@ -338,6 +356,9 @@ def _checks(
                 "present/sanitized_metadata",
                 "synthetic_ready",
                 "planned_or_observed",
+                "yes",
+                "confirmed",
+                "needed",
                 "disabled",
             }
             else STATUS_FAIL,

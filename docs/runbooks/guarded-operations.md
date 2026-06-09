@@ -95,6 +95,20 @@ strategy, and a next-action class such as access review, mapping configuration,
 issue-count inventory, operating-model review, or response-contract
 investigation. The detailed operating model is in `jira-operating-model.md`.
 
+## Jira Creation Dry-Run
+
+`scripts/plan_jira_creation_dry_run.py` converts the safe Jira operating model
+and repository portfolio summary into a non-executing creation plan. It makes
+no provider calls, performs no Jira writes, mutates no source of truth, and
+keeps scheduler execution disabled. The output is strict sanitized JSON with
+project, component, issue type, workflow, board, governance, migration, blocked
+write, and follow-up classes only.
+
+The dry-run is the review artifact before any future Jira write prompt. It
+records current project visibility as confirmed, keeps issue-search inventory
+as a follow-up, and requires separate manual approval before project,
+component, workflow, board, field, or issue operations can be considered.
+
 ## Connector Config Doctor
 
 `scripts/doctor_external_connector_config.py` is a read-only, no-send,

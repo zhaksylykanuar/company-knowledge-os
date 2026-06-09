@@ -40,6 +40,21 @@ Other safe strategy classes:
 Component mapping remains manual review metadata. It does not update Jira,
 write repository metadata, or persist provider inventory.
 
+## Creation Dry-Run
+
+`scripts/plan_jira_creation_dry_run.py` produces the review artifact for a
+future Jira structure change. It is no-live, no-send, source-of-truth-mutation
+free, and write-disabled. The report uses safe classes/counts only for the
+proposed product-area model, project classes, component strategy, issue type
+classes, workflow status classes, board classes, governance rule classes, and
+migration step classes.
+
+The dry-run confirms that existing Jira project visibility has been observed,
+but keeps issue-search inventory as a separate follow-up class. It does not
+create or modify Jira projects, components, issue types, workflows, boards,
+fields, or issues. Any later Jira creation requires a separate manual approval
+and a separate write-enabled prompt.
+
 ## Issue Types
 
 Recommended issue type classes:

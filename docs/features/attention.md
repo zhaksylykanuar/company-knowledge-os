@@ -1252,6 +1252,11 @@
   acknowledgement. It reports Jira inventory and product-area mapping as
   counts/classes only and does not provide attention input, issue ingestion,
   raw-storage writes, database writes, scheduler execution, or Jira writes.
+- The Jira creation dry-run CLI prepares the future Jira structure review as
+  strict sanitized JSON. It is no-live and no-write, requires later manual
+  approval before any Jira creation path, and does not affect attention
+  scoring, persistence, scheduler behavior, or delivery behavior. Issue-search
+  inventory remains a separate follow-up class.
 - The external connector configuration doctor reports GitHub/Jira setup
   presence by environment variable name only. It never prints values and does
   not call providers. The doctor and smoke CLI can load allowlisted connector

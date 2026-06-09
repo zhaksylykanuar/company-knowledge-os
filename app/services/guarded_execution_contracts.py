@@ -32,6 +32,7 @@ READINESS_REPORT_CONTRACT = "guarded_execution_readiness_report"
 CONNECTOR_READONLY_SMOKE_CONTRACT = "external_connector_readonly_smoke"
 EXTERNAL_CONNECTOR_CONFIG_DOCTOR_CONTRACT = "external_connector_config_doctor"
 JIRA_READONLY_INVENTORY_CONTRACT = "jira_readonly_inventory"
+JIRA_CREATION_DRY_RUN_CONTRACT = "jira_creation_dry_run"
 
 VALIDATION_PASS = "pass"
 VALIDATION_FAIL = "fail"
@@ -176,6 +177,36 @@ JIRA_READONLY_INVENTORY_REQUIRED_FIELDS = frozenset(
 JIRA_READONLY_INVENTORY_ALLOWED_FIELDS = JIRA_READONLY_INVENTORY_REQUIRED_FIELDS | {
     "contract_validation"
 }
+JIRA_CREATION_DRY_RUN_REQUIRED_FIELDS = frozenset(
+    {
+        "status",
+        "reason_code",
+        "report_kind",
+        "dry_run_only",
+        "no_send",
+        "no_provider_calls",
+        "no_source_of_truth_mutation",
+        "scheduler_execution",
+        "jira_write_operations",
+        "manual_approval_required",
+        "current_jira_assessment_class",
+        "migration_recommendation_class",
+        "proposed_structure",
+        "proposed_project_classes",
+        "proposed_issue_type_classes",
+        "proposed_workflow_status_classes",
+        "proposed_board_classes",
+        "governance_rule_classes",
+        "migration_step_classes",
+        "blocked_write_operation_classes",
+        "follow_up_classes",
+        "next_step_class",
+        "diagnostics",
+    }
+)
+JIRA_CREATION_DRY_RUN_ALLOWED_FIELDS = JIRA_CREATION_DRY_RUN_REQUIRED_FIELDS | {
+    "contract_validation"
+}
 
 CONTRACT_REQUIRED_FIELDS = {
     AUDIT_EVENT_CONTRACT: AUDIT_EVENT_REQUIRED_FIELDS,
@@ -187,6 +218,7 @@ CONTRACT_REQUIRED_FIELDS = {
         EXTERNAL_CONNECTOR_CONFIG_DOCTOR_REQUIRED_FIELDS
     ),
     JIRA_READONLY_INVENTORY_CONTRACT: JIRA_READONLY_INVENTORY_REQUIRED_FIELDS,
+    JIRA_CREATION_DRY_RUN_CONTRACT: JIRA_CREATION_DRY_RUN_REQUIRED_FIELDS,
 }
 CONTRACT_ALLOWED_FIELDS = {
     AUDIT_EVENT_CONTRACT: AUDIT_EVENT_ALLOWED_FIELDS,
@@ -198,6 +230,7 @@ CONTRACT_ALLOWED_FIELDS = {
         EXTERNAL_CONNECTOR_CONFIG_DOCTOR_ALLOWED_FIELDS
     ),
     JIRA_READONLY_INVENTORY_CONTRACT: JIRA_READONLY_INVENTORY_ALLOWED_FIELDS,
+    JIRA_CREATION_DRY_RUN_CONTRACT: JIRA_CREATION_DRY_RUN_ALLOWED_FIELDS,
 }
 SAFE_CONTRACT_NAMES = frozenset(CONTRACT_REQUIRED_FIELDS)
 SAFE_STATUS_VALUES = frozenset({VALIDATION_PASS, VALIDATION_FAIL})
@@ -229,6 +262,7 @@ SAFE_CONNECTOR_CONFIG_DOCTOR_REPORT_KIND_VALUES = frozenset(
 SAFE_JIRA_READONLY_INVENTORY_REPORT_KIND_VALUES = frozenset(
     {"jira_readonly_inventory"}
 )
+SAFE_JIRA_CREATION_DRY_RUN_REPORT_KIND_VALUES = frozenset({"jira_creation_dry_run"})
 SAFE_DOCTOR_MODE_VALUES = frozenset({"guarded_execution_doctor"})
 SAFE_SINK_KIND_VALUES = frozenset({NOOP_AUDIT_SINK, IN_MEMORY_AUDIT_SINK})
 SAFE_PROVIDER_CALL_MODES = frozenset(
@@ -366,6 +400,12 @@ def validate_jira_readonly_inventory_contract(
     return validate_guarded_execution_contract(JIRA_READONLY_INVENTORY_CONTRACT, payload)
 
 
+def validate_jira_creation_dry_run_contract(
+    payload: Any,
+) -> GuardedExecutionContractValidation:
+    return validate_guarded_execution_contract(JIRA_CREATION_DRY_RUN_CONTRACT, payload)
+
+
 def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> bool:
     if contract_name == EXTERNAL_CONNECTOR_CONFIG_DOCTOR_CONTRACT:
         return (
@@ -405,6 +445,29 @@ def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> 
             and isinstance(payload.get("portfolio_mapping"), Mapping)
             and isinstance(payload.get("operating_model"), Mapping)
             and _safe_reason_or_none(payload.get("recommended_next_action_class"))
+            and isinstance(payload.get("diagnostics"), Mapping)
+        )
+    if contract_name == JIRA_CREATION_DRY_RUN_CONTRACT:
+        return (
+            payload.get("report_kind") in SAFE_JIRA_CREATION_DRY_RUN_REPORT_KIND_VALUES
+            and payload.get("status") in SAFE_OUTPUT_STATUS_VALUES
+            and _safe_reason_or_none(payload.get("reason_code"))
+            and payload.get("dry_run_only") is True
+            and _common_safety_flags(payload)
+            and payload.get("jira_write_operations") == "disabled"
+            and payload.get("manual_approval_required") is True
+            and isinstance(payload.get("current_jira_assessment_class"), str)
+            and isinstance(payload.get("migration_recommendation_class"), str)
+            and isinstance(payload.get("proposed_structure"), Mapping)
+            and _is_safe_string_list(payload.get("proposed_project_classes"))
+            and _is_safe_string_list(payload.get("proposed_issue_type_classes"))
+            and _is_safe_string_list(payload.get("proposed_workflow_status_classes"))
+            and _is_safe_string_list(payload.get("proposed_board_classes"))
+            and _is_safe_string_list(payload.get("governance_rule_classes"))
+            and _is_safe_string_list(payload.get("migration_step_classes"))
+            and _is_safe_string_list(payload.get("blocked_write_operation_classes"))
+            and _is_safe_string_list(payload.get("follow_up_classes"))
+            and isinstance(payload.get("next_step_class"), str)
             and isinstance(payload.get("diagnostics"), Mapping)
         )
     if not _common_safety_flags(payload):

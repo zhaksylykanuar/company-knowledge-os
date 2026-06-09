@@ -125,6 +125,8 @@
   presence-only sanitized JSON, implemented
 - Read-only Jira inventory diagnostics and operating-model planner:
   strict sanitized JSON, implemented
+- Jira creation dry-run planner:
+  strict sanitized JSON, no-write review metadata, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -256,6 +258,14 @@
   recommended operating model as safe classes/counts. They do not store Jira
   project or issue details, write Jira, ingest issues, write source-of-truth
   stores, run scheduler work, or execute delivery.
+- The Jira creation dry-run planner is operator-review metadata for a future
+  manually approved Jira structure change. It combines the safe operating model
+  and repository portfolio counts into project, component, issue type,
+  workflow, board, governance, migration, blocked-write, and follow-up classes.
+  It makes no provider calls, writes no Jira data, creates no projects,
+  components, workflows, boards, fields, or issues, persists nothing, and keeps
+  scheduler execution disabled. Issue-search inventory remains a separate
+  follow-up class.
 - The external connector configuration doctor is operator-review metadata for
   GitHub/Jira setup readiness. It checks expected environment variable
   presence by name only, never prints values, and never calls providers. It can

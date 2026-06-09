@@ -35,7 +35,8 @@ Navigation map for future Codex sessions.
 
 - `operator_runtime_setup.md`: project-local `.env`, health checks, and Codex launcher setup.
 - `runbooks/guarded-operations.md`: guarded execution boundaries and safe diagnostics.
-- `runbooks/jira-operating-model.md`: safe Jira inventory diagnostics and operating model.
+- `runbooks/jira-operating-model.md`: safe Jira inventory diagnostics,
+  operating model, and creation dry-run boundary.
 - `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
 
 ## Doctor Scripts
@@ -45,6 +46,7 @@ Navigation map for future Codex sessions.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.
 - `../scripts/check_external_connectors_readonly.py`: read-only GitHub/Jira connector smoke report.
 - `../scripts/check_jira_readonly_inventory.py`: read-only Jira inventory and portfolio-mapping report.
+- `../scripts/plan_jira_creation_dry_run.py`: no-live, no-write Jira creation dry-run report.
 - `../scripts/report_ignored_file_cleanup_plan.py`: read-only ignored/local file cleanup planner.
 
 ## Examples
