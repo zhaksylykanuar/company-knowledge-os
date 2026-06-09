@@ -285,6 +285,63 @@ def test_operator_output_sanitizer_allows_jira_creation_dry_run_safe_fields() ->
     assert diagnostics["unsafe_pattern_count"] == 0
 
 
+def test_operator_output_sanitizer_allows_atlassian_profile_safe_fields() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "report_kind": "atlassian_api_profile_summary",
+            "profile_key": "atlassian_admin_org_api_scoped",
+            "auth_class": "bearer_admin_api_key",
+            "endpoint_class": "atlassian_admin_api",
+            "intended_operation_class": "atlassian_org_admin_diagnostics_dry_run",
+            "live_read_status": "gated",
+            "live_write_status": "dry_run_only",
+            "org_id_presence_class": "present",
+            "values_visibility": "hidden",
+            "write_operations": "disabled",
+            "admin_live_calls": "not_run",
+            "required_environment_variable_names": [
+                "FOS_ATLASSIAN_ORG_ID",
+                "FOS_ATLASSIAN_ADMIN_API_TOKEN_SCOPED",
+                "FOS_ATLASSIAN_ADMIN_API_TOKEN_UNSCOPED",
+                "FOS_JIRA_WRITE_USER",
+                "FOS_JIRA_WRITE_TOKEN",
+            ],
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
+def test_operator_output_sanitizer_allows_jira_write_readiness_safe_fields() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "report_kind": "jira_write_readiness",
+            "write_execution_status": "disabled",
+            "dry_run_only": True,
+            "manual_approval_required": True,
+            "required_profile_classes": [
+                "jira_write_site_api",
+                "atlassian_admin_org_api_scoped",
+            ],
+            "configured_profile_count_class": "zero_count",
+            "missing_profile_count_class": "nonzero_count",
+            "blocked_write_operation_classes": [
+                "create_jira_project",
+                "create_jira_component",
+                "create_jira_board",
+                "configure_jira_workflow",
+                "configure_jira_issue_type",
+            ],
+            "next_approval_class": "approve_jira_write_execution_prompt",
+            "creation_dry_run_status": "present",
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
 def test_operator_output_sanitizer_raises_safe_reason_only() -> None:
     with pytest.raises(ValueError) as exc_info:
         assert_operator_output_safe({"message": _unsafe_values()["url"]})

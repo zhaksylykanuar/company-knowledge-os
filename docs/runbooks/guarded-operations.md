@@ -109,6 +109,20 @@ records current project visibility as confirmed, keeps issue-search inventory
 as a follow-up, and requires separate manual approval before project,
 component, workflow, board, field, or issue operations can be considered.
 
+## Jira Write-Readiness Dry-Run
+
+`scripts/plan_jira_write_readiness.py` checks Atlassian/Jira credential profile
+readiness without live calls or writes. It distinguishes the read-only Jira
+data API profile, the future Jira write-site profile, and Atlassian Admin
+profile classes. Values, provider locations, Org ID, and credentials remain
+hidden; the report exposes only configured/missing classes and counts.
+
+Write-readiness stays `dry_run_only`: Jira project, component, board, workflow,
+issue-type, and migration operations are blocked until a future manual
+write-enabled prompt. Atlassian Admin APIs are not called in this flow and are
+not required for Jira project creation unless a later org-level diagnostic is
+explicitly approved.
+
 ## Connector Config Doctor
 
 `scripts/doctor_external_connector_config.py` is a read-only, no-send,

@@ -20,6 +20,9 @@ from app.services.external_connector_config import (  # noqa: E402
     external_connector_config_doctor_providers,
     external_connector_config_doctor_summary,
 )
+from app.services.atlassian_api_profiles import (  # noqa: E402
+    atlassian_api_profile_summary,
+)
 from app.services.guarded_execution_contracts import (  # noqa: E402
     validate_external_connector_config_doctor_contract,
 )
@@ -55,6 +58,25 @@ def run_external_connector_config_doctor(
     try:
         providers = external_connector_config_doctor_providers(environ=environment)
         summary = external_connector_config_doctor_summary(environ=environment)
+        credential_profiles = atlassian_api_profile_summary(environ=environment)
+        summary = {
+            **summary,
+            "jira_readonly_profile_status": credential_profiles[
+                "jira_readonly_profile_status"
+            ],
+            "jira_write_profile_status": credential_profiles[
+                "jira_write_profile_status"
+            ],
+            "atlassian_admin_scoped_profile_status": credential_profiles[
+                "atlassian_admin_scoped_profile_status"
+            ],
+            "atlassian_admin_unscoped_profile_status": credential_profiles[
+                "atlassian_admin_unscoped_profile_status"
+            ],
+            "org_id_presence_class": credential_profiles["org_id_presence_class"],
+            "write_operations": credential_profiles["write_operations"],
+            "admin_live_calls": credential_profiles["admin_live_calls"],
+        }
         checks = _checks(providers)
         result = {
             "status": STATUS_PASS,
@@ -66,6 +88,7 @@ def run_external_connector_config_doctor(
             "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
             "providers": providers,
             "summary": summary,
+            "credential_profiles": credential_profiles,
             "checks": checks,
             "diagnostics": {
                 "provider_count": summary["provider_count"],
@@ -85,6 +108,21 @@ def run_external_connector_config_doctor(
                 "check_count": len(checks),
                 "failed_check_count": 0,
                 "no_live_calls": summary["no_live_calls"],
+                "jira_readonly_profile_status": credential_profiles[
+                    "jira_readonly_profile_status"
+                ],
+                "jira_write_profile_status": credential_profiles[
+                    "jira_write_profile_status"
+                ],
+                "atlassian_admin_scoped_profile_status": credential_profiles[
+                    "atlassian_admin_scoped_profile_status"
+                ],
+                "atlassian_admin_unscoped_profile_status": credential_profiles[
+                    "atlassian_admin_unscoped_profile_status"
+                ],
+                "org_id_presence_class": credential_profiles["org_id_presence_class"],
+                "write_operations": credential_profiles["write_operations"],
+                "admin_live_calls": credential_profiles["admin_live_calls"],
                 "connector_env_file": dict(env_result.diagnostics),
             },
         }
@@ -153,6 +191,7 @@ def _failure_report(
         "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
         "providers": {},
         "summary": {},
+        "credential_profiles": {},
         "checks": [],
         "diagnostics": {
             "provider_count": 0,

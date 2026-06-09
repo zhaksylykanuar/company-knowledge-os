@@ -19,6 +19,7 @@ from app.services.guarded_execution_contracts import (
     CONTRACT_VALIDATION_PASSED,
     VALIDATION_FAIL,
     VALIDATION_PASS,
+    validate_atlassian_api_profile_summary_contract,
     validate_audit_event_contract,
     validate_audit_sink_summary_contract,
     validate_connector_readonly_smoke_contract,
@@ -26,6 +27,7 @@ from app.services.guarded_execution_contracts import (
     validate_external_connector_config_doctor_contract,
     validate_jira_creation_dry_run_contract,
     validate_jira_readonly_inventory_contract,
+    validate_jira_write_readiness_contract,
     validate_readiness_report_contract,
 )
 from app.services.operator_output_sanitizer import inspect_operator_output
@@ -39,6 +41,7 @@ from scripts import check_external_connectors_readonly as connector_smoke
 from scripts import doctor_external_connector_config as config_doctor
 from scripts import check_jira_readonly_inventory as jira_inventory
 from scripts import plan_jira_creation_dry_run as jira_creation_dry_run
+from scripts import plan_jira_write_readiness as jira_write_readiness
 from scripts import report_guarded_execution_readiness as readiness
 
 
@@ -247,6 +250,45 @@ def test_valid_jira_creation_dry_run_contract_passes() -> None:
     _assert_validation_safe(validation.as_dict())
 
 
+def test_valid_atlassian_api_profile_summary_contract_passes() -> None:
+    result = jira_write_readiness.run_jira_write_readiness(
+        environ={},
+        use_connector_env_file=False,
+    )["credential_profiles"]
+    validation = validate_atlassian_api_profile_summary_contract(result)
+
+    assert validation.passed is True
+    assert result["report_kind"] == "atlassian_api_profile_summary"
+    assert result["profile_count"] == 4
+    assert result["jira_readonly_profile_status"] == "not_configured"
+    assert result["jira_write_profile_status"] == "not_configured"
+    assert result["write_operations"] == "disabled"
+    assert result["admin_live_calls"] == "not_run"
+    _assert_validation_safe(result)
+    _assert_validation_safe(validation.as_dict())
+
+
+def test_valid_jira_write_readiness_contract_passes() -> None:
+    result = jira_write_readiness.run_jira_write_readiness(
+        environ={},
+        use_connector_env_file=False,
+    )
+    validation = validate_jira_write_readiness_contract(result)
+
+    assert result["contract_validation"]["validation_status"] == VALIDATION_PASS
+    assert validation.passed is True
+    assert result["status"] == "pass"
+    assert result["write_execution_status"] == "disabled"
+    assert result["dry_run_only"] is True
+    assert result["manual_approval_required"] is True
+    assert result["no_provider_calls"] is True
+    assert result["scheduler_execution"] == "disabled"
+    assert result["creation_dry_run_status"] == "present"
+    assert result["next_approval_class"] == "approve_jira_write_execution_prompt"
+    _assert_validation_safe(result)
+    _assert_validation_safe(validation.as_dict())
+
+
 def test_missing_required_fields_fail_with_field_names_only() -> None:
     payload = _provider_blocked_event()
     payload.pop("guard_name")
@@ -357,6 +399,9 @@ def test_doctor_and_readiness_scripts_use_contract_helpers() -> None:
     dry_run_source = (
         jira_creation_dry_run.REPO_ROOT / "scripts" / "plan_jira_creation_dry_run.py"
     ).read_text(encoding="utf-8")
+    write_readiness_source = (
+        jira_write_readiness.REPO_ROOT / "scripts" / "plan_jira_write_readiness.py"
+    ).read_text(encoding="utf-8")
 
     assert "validate_doctor_output_contract" in doctor_source
     assert "validate_external_connector_config_doctor_contract" in config_doctor_source
@@ -365,4 +410,5 @@ def test_doctor_and_readiness_scripts_use_contract_helpers() -> None:
         connector_smoke.REPO_ROOT / "scripts" / "check_jira_readonly_inventory.py"
     ).read_text(encoding="utf-8")
     assert "validate_jira_creation_dry_run_contract" in dry_run_source
+    assert "validate_jira_write_readiness_contract" in write_readiness_source
     assert "validate_readiness_report_contract" in readiness_source

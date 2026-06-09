@@ -19,6 +19,15 @@ JIRA_ENV_KEYS = (
     "FOS_JIRA_READONLY_USER",
     "FOS_JIRA_READONLY_TOKEN",
 )
+JIRA_WRITE_ENV_KEYS = (
+    "FOS_JIRA_WRITE_USER",
+    "FOS_JIRA_WRITE_TOKEN",
+)
+ATLASSIAN_ADMIN_ENV_KEYS = (
+    "FOS_ATLASSIAN_ORG_ID",
+    "FOS_ATLASSIAN_ADMIN_API_TOKEN_SCOPED",
+    "FOS_ATLASSIAN_ADMIN_API_TOKEN_UNSCOPED",
+)
 
 STATUS_CONFIGURED = "configured"
 STATUS_NOT_CONFIGURED = "not_configured"
@@ -108,7 +117,10 @@ CONNECTOR_CONFIG_SPECS = (
     ExternalConnectorConfigSpec(
         provider_key=PROVIDER_JIRA,
         required_environment_variable_names=JIRA_ENV_KEYS,
-        optional_environment_variable_names=(),
+        optional_environment_variable_names=(
+            *JIRA_WRITE_ENV_KEYS,
+            *ATLASSIAN_ADMIN_ENV_KEYS,
+        ),
         expected_smoke_command_class=SMOKE_COMMAND_JIRA,
         missing_config_action_class=ACTION_SET_JIRA_CONFIG,
         ready_action_class=ACTION_RUN_JIRA_SMOKE,

@@ -33,6 +33,8 @@ CONNECTOR_READONLY_SMOKE_CONTRACT = "external_connector_readonly_smoke"
 EXTERNAL_CONNECTOR_CONFIG_DOCTOR_CONTRACT = "external_connector_config_doctor"
 JIRA_READONLY_INVENTORY_CONTRACT = "jira_readonly_inventory"
 JIRA_CREATION_DRY_RUN_CONTRACT = "jira_creation_dry_run"
+ATLASSIAN_API_PROFILE_SUMMARY_CONTRACT = "atlassian_api_profile_summary"
+JIRA_WRITE_READINESS_CONTRACT = "jira_write_readiness"
 
 VALIDATION_PASS = "pass"
 VALIDATION_FAIL = "fail"
@@ -154,7 +156,8 @@ EXTERNAL_CONNECTOR_CONFIG_DOCTOR_REQUIRED_FIELDS = frozenset(
     }
 )
 EXTERNAL_CONNECTOR_CONFIG_DOCTOR_ALLOWED_FIELDS = (
-    EXTERNAL_CONNECTOR_CONFIG_DOCTOR_REQUIRED_FIELDS | {"contract_validation"}
+    EXTERNAL_CONNECTOR_CONFIG_DOCTOR_REQUIRED_FIELDS
+    | {"credential_profiles", "contract_validation"}
 )
 
 JIRA_READONLY_INVENTORY_REQUIRED_FIELDS = frozenset(
@@ -207,6 +210,57 @@ JIRA_CREATION_DRY_RUN_REQUIRED_FIELDS = frozenset(
 JIRA_CREATION_DRY_RUN_ALLOWED_FIELDS = JIRA_CREATION_DRY_RUN_REQUIRED_FIELDS | {
     "contract_validation"
 }
+ATLASSIAN_API_PROFILE_SUMMARY_REQUIRED_FIELDS = frozenset(
+    {
+        "report_kind",
+        "profile_count",
+        "configured_profile_count",
+        "configured_profile_count_class",
+        "missing_profile_count",
+        "missing_profile_count_class",
+        "jira_readonly_profile_status",
+        "jira_write_profile_status",
+        "atlassian_admin_scoped_profile_status",
+        "atlassian_admin_unscoped_profile_status",
+        "org_id_presence_class",
+        "values_visibility",
+        "write_operations",
+        "admin_live_calls",
+        "profiles",
+        "no_send",
+        "no_provider_calls",
+        "no_source_of_truth_mutation",
+        "scheduler_execution",
+    }
+)
+ATLASSIAN_API_PROFILE_SUMMARY_ALLOWED_FIELDS = (
+    ATLASSIAN_API_PROFILE_SUMMARY_REQUIRED_FIELDS | {"contract_validation"}
+)
+JIRA_WRITE_READINESS_REQUIRED_FIELDS = frozenset(
+    {
+        "status",
+        "reason_code",
+        "report_kind",
+        "write_execution_status",
+        "dry_run_only",
+        "manual_approval_required",
+        "no_send",
+        "no_provider_calls",
+        "no_source_of_truth_mutation",
+        "scheduler_execution",
+        "required_profile_classes",
+        "configured_profile_count_class",
+        "missing_profile_count_class",
+        "blocked_write_operation_classes",
+        "next_approval_class",
+        "creation_dry_run_status",
+        "credential_profiles",
+        "diagnostics",
+    }
+)
+JIRA_WRITE_READINESS_ALLOWED_FIELDS = JIRA_WRITE_READINESS_REQUIRED_FIELDS | {
+    "contract_validation"
+}
 
 CONTRACT_REQUIRED_FIELDS = {
     AUDIT_EVENT_CONTRACT: AUDIT_EVENT_REQUIRED_FIELDS,
@@ -219,6 +273,8 @@ CONTRACT_REQUIRED_FIELDS = {
     ),
     JIRA_READONLY_INVENTORY_CONTRACT: JIRA_READONLY_INVENTORY_REQUIRED_FIELDS,
     JIRA_CREATION_DRY_RUN_CONTRACT: JIRA_CREATION_DRY_RUN_REQUIRED_FIELDS,
+    ATLASSIAN_API_PROFILE_SUMMARY_CONTRACT: ATLASSIAN_API_PROFILE_SUMMARY_REQUIRED_FIELDS,
+    JIRA_WRITE_READINESS_CONTRACT: JIRA_WRITE_READINESS_REQUIRED_FIELDS,
 }
 CONTRACT_ALLOWED_FIELDS = {
     AUDIT_EVENT_CONTRACT: AUDIT_EVENT_ALLOWED_FIELDS,
@@ -231,6 +287,8 @@ CONTRACT_ALLOWED_FIELDS = {
     ),
     JIRA_READONLY_INVENTORY_CONTRACT: JIRA_READONLY_INVENTORY_ALLOWED_FIELDS,
     JIRA_CREATION_DRY_RUN_CONTRACT: JIRA_CREATION_DRY_RUN_ALLOWED_FIELDS,
+    ATLASSIAN_API_PROFILE_SUMMARY_CONTRACT: ATLASSIAN_API_PROFILE_SUMMARY_ALLOWED_FIELDS,
+    JIRA_WRITE_READINESS_CONTRACT: JIRA_WRITE_READINESS_ALLOWED_FIELDS,
 }
 SAFE_CONTRACT_NAMES = frozenset(CONTRACT_REQUIRED_FIELDS)
 SAFE_STATUS_VALUES = frozenset({VALIDATION_PASS, VALIDATION_FAIL})
@@ -263,6 +321,10 @@ SAFE_JIRA_READONLY_INVENTORY_REPORT_KIND_VALUES = frozenset(
     {"jira_readonly_inventory"}
 )
 SAFE_JIRA_CREATION_DRY_RUN_REPORT_KIND_VALUES = frozenset({"jira_creation_dry_run"})
+SAFE_ATLASSIAN_API_PROFILE_REPORT_KIND_VALUES = frozenset(
+    {"atlassian_api_profile_summary"}
+)
+SAFE_JIRA_WRITE_READINESS_REPORT_KIND_VALUES = frozenset({"jira_write_readiness"})
 SAFE_DOCTOR_MODE_VALUES = frozenset({"guarded_execution_doctor"})
 SAFE_SINK_KIND_VALUES = frozenset({NOOP_AUDIT_SINK, IN_MEMORY_AUDIT_SINK})
 SAFE_PROVIDER_CALL_MODES = frozenset(
@@ -406,6 +468,21 @@ def validate_jira_creation_dry_run_contract(
     return validate_guarded_execution_contract(JIRA_CREATION_DRY_RUN_CONTRACT, payload)
 
 
+def validate_atlassian_api_profile_summary_contract(
+    payload: Any,
+) -> GuardedExecutionContractValidation:
+    return validate_guarded_execution_contract(
+        ATLASSIAN_API_PROFILE_SUMMARY_CONTRACT,
+        payload,
+    )
+
+
+def validate_jira_write_readiness_contract(
+    payload: Any,
+) -> GuardedExecutionContractValidation:
+    return validate_guarded_execution_contract(JIRA_WRITE_READINESS_CONTRACT, payload)
+
+
 def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> bool:
     if contract_name == EXTERNAL_CONNECTOR_CONFIG_DOCTOR_CONTRACT:
         return (
@@ -415,6 +492,10 @@ def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> 
             and _common_safety_flags(payload)
             and isinstance(payload.get("providers"), Mapping)
             and isinstance(payload.get("summary"), Mapping)
+            and (
+                "credential_profiles" not in payload
+                or isinstance(payload.get("credential_profiles"), Mapping)
+            )
             and isinstance(payload.get("checks"), list)
             and isinstance(payload.get("diagnostics"), Mapping)
         )
@@ -468,6 +549,43 @@ def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> 
             and _is_safe_string_list(payload.get("blocked_write_operation_classes"))
             and _is_safe_string_list(payload.get("follow_up_classes"))
             and isinstance(payload.get("next_step_class"), str)
+            and isinstance(payload.get("diagnostics"), Mapping)
+        )
+    if contract_name == ATLASSIAN_API_PROFILE_SUMMARY_CONTRACT:
+        return (
+            payload.get("report_kind") in SAFE_ATLASSIAN_API_PROFILE_REPORT_KIND_VALUES
+            and isinstance(payload.get("profile_count"), int)
+            and isinstance(payload.get("configured_profile_count"), int)
+            and isinstance(payload.get("missing_profile_count"), int)
+            and isinstance(payload.get("configured_profile_count_class"), str)
+            and isinstance(payload.get("missing_profile_count_class"), str)
+            and isinstance(payload.get("jira_readonly_profile_status"), str)
+            and isinstance(payload.get("jira_write_profile_status"), str)
+            and isinstance(payload.get("atlassian_admin_scoped_profile_status"), str)
+            and isinstance(payload.get("atlassian_admin_unscoped_profile_status"), str)
+            and isinstance(payload.get("org_id_presence_class"), str)
+            and payload.get("values_visibility") == "hidden"
+            and payload.get("write_operations") == "disabled"
+            and payload.get("admin_live_calls") == "not_run"
+            and isinstance(payload.get("profiles"), Mapping)
+            and _common_safety_flags(payload)
+        )
+    if contract_name == JIRA_WRITE_READINESS_CONTRACT:
+        return (
+            payload.get("report_kind") in SAFE_JIRA_WRITE_READINESS_REPORT_KIND_VALUES
+            and payload.get("status") in SAFE_OUTPUT_STATUS_VALUES
+            and _safe_reason_or_none(payload.get("reason_code"))
+            and payload.get("write_execution_status") == "disabled"
+            and payload.get("dry_run_only") is True
+            and payload.get("manual_approval_required") is True
+            and _common_safety_flags(payload)
+            and _is_safe_string_list(payload.get("required_profile_classes"))
+            and isinstance(payload.get("configured_profile_count_class"), str)
+            and isinstance(payload.get("missing_profile_count_class"), str)
+            and _is_safe_string_list(payload.get("blocked_write_operation_classes"))
+            and isinstance(payload.get("next_approval_class"), str)
+            and isinstance(payload.get("creation_dry_run_status"), str)
+            and isinstance(payload.get("credential_profiles"), Mapping)
             and isinstance(payload.get("diagnostics"), Mapping)
         )
     if not _common_safety_flags(payload):

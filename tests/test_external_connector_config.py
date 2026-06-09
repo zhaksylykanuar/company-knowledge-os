@@ -4,8 +4,10 @@ import json
 from typing import Any
 
 from app.services.external_connector_config import (
+    ATLASSIAN_ADMIN_ENV_KEYS,
     GITHUB_ENV_KEYS,
     JIRA_ENV_KEYS,
+    JIRA_WRITE_ENV_KEYS,
     external_connector_config_doctor_providers,
     external_connector_config_doctor_summary,
     external_connector_config_specs,
@@ -60,6 +62,11 @@ def test_external_connector_config_specs_use_safe_metadata_only() -> None:
     assert all(spec["scheduler_execution"] == "disabled" for spec in specs)
     assert any("FOS_GITHUB_READONLY_TOKEN" in spec["required_environment_variable_names"] for spec in specs)
     assert any("FOS_JIRA_READONLY_TOKEN" in spec["required_environment_variable_names"] for spec in specs)
+    jira_spec = next(spec for spec in specs if spec["provider_key"] == "jira")
+    assert set(jira_spec["optional_environment_variable_names"]) == {
+        *JIRA_WRITE_ENV_KEYS,
+        *ATLASSIAN_ADMIN_ENV_KEYS,
+    }
     _assert_config_output_safe(specs)
 
 
@@ -121,6 +128,10 @@ def test_complete_connector_config_reports_configured_ready_without_values() -> 
     assert providers["jira"]["configured_status"] == "configured"
     assert providers["github"]["live_readonly_readiness"] == "ready"
     assert providers["jira"]["live_readonly_readiness"] == "ready"
+    assert set(providers["jira"]["optional_environment_variable_names"]) == {
+        *JIRA_WRITE_ENV_KEYS,
+        *ATLASSIAN_ADMIN_ENV_KEYS,
+    }
     assert summary["configured_provider_count"] == 2
     assert summary["live_readonly_ready_provider_count"] == 2
     assert is_provider_configured("github", environment) is True

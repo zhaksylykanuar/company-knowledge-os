@@ -36,6 +36,9 @@ from app.services.jira_portfolio_mapping import (  # noqa: E402
 from app.services.jira_creation_dry_run import (  # noqa: E402
     jira_creation_dry_run_readiness_summary,
 )
+from app.services.jira_write_readiness import (  # noqa: E402
+    jira_write_readiness_readiness_summary,
+)
 from scripts import doctor_guarded_execution as doctor  # noqa: E402
 
 REPORT_KIND = "guarded_execution_readiness"
@@ -63,6 +66,12 @@ CHECK_NAMES = (
     "manual_approval_required",
     "current_jira_project_visibility",
     "issue_search_follow_up",
+    "atlassian_api_profiles",
+    "jira_readonly_profile",
+    "jira_write_profile",
+    "atlassian_admin_profiles",
+    "jira_write_readiness",
+    "admin_api_live_calls",
     "jira_write_operations",
     "external_connector_config_doctor",
     "external_connector_registry",
@@ -134,6 +143,7 @@ def _run_readiness_report(
     jira_inventory_summary = {
         **jira_inventory_readiness_summary(),
         **jira_creation_dry_run_readiness_summary(),
+        **jira_write_readiness_readiness_summary(),
     }
     portfolio_summary = repository_portfolio_public_summary()
     checks = _checks(
@@ -328,6 +338,16 @@ def _checks(
             "current_jira_project_visibility"
         ],
         "issue_search_follow_up": jira_inventory_summary["issue_search_follow_up"],
+        "atlassian_api_profiles": jira_inventory_summary["atlassian_api_profiles"],
+        "jira_readonly_profile": jira_inventory_summary["jira_readonly_profile"],
+        "jira_write_profile": jira_inventory_summary["jira_write_profile"],
+        "atlassian_admin_profiles": (
+            jira_inventory_summary[
+                "atlassian_admin_profiles_configured_count_class"
+            ]
+        ),
+        "jira_write_readiness": jira_inventory_summary["jira_write_readiness"],
+        "admin_api_live_calls": jira_inventory_summary["admin_api_live_calls"],
         "jira_write_operations": jira_inventory_summary["jira_write_operations"],
         "external_connector_config_doctor": external_connector_config_summary[
             "external_connector_config_doctor"
@@ -359,6 +379,12 @@ def _checks(
                 "yes",
                 "confirmed",
                 "needed",
+                "configured",
+                "not_configured",
+                "partially_configured",
+                "zero_count",
+                "nonzero_count",
+                "dry_run_only",
                 "disabled",
             }
             else STATUS_FAIL,

@@ -1257,6 +1257,10 @@
   approval before any Jira creation path, and does not affect attention
   scoring, persistence, scheduler behavior, or delivery behavior. Issue-search
   inventory remains a separate follow-up class.
+- Atlassian/Jira credential profile and write-readiness reports separate
+  read-only, future write-site, and admin profile classes. They expose only
+  configured/missing classes and counts, keep writes disabled, make no live
+  admin calls, and do not provide attention input or source-of-truth data.
 - The external connector configuration doctor reports GitHub/Jira setup
   presence by environment variable name only. It never prints values and does
   not call providers. The doctor and smoke CLI can load allowlisted connector

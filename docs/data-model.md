@@ -127,6 +127,8 @@
   strict sanitized JSON, implemented
 - Jira creation dry-run planner:
   strict sanitized JSON, no-write review metadata, implemented
+- Atlassian/Jira credential profile and write-readiness dry-run:
+  strict sanitized JSON, no-write profile metadata, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -266,6 +268,13 @@
   components, workflows, boards, fields, or issues, persists nothing, and keeps
   scheduler execution disabled. Issue-search inventory remains a separate
   follow-up class.
+- Atlassian/Jira credential profiles and write-readiness reports are
+  operator-review metadata for future approval planning. They separate Jira
+  read-only data API, Jira write-site API, and Atlassian Admin API profile
+  classes, expose only presence/configured classes and counts, hide all
+  values, and keep Jira and admin writes disabled. They do not call providers,
+  persist Org ID or credential material, create Jira objects, run scheduler
+  work, or mutate source-of-truth stores.
 - The external connector configuration doctor is operator-review metadata for
   GitHub/Jira setup readiness. It checks expected environment variable
   presence by name only, never prints values, and never calls providers. It can

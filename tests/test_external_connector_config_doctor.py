@@ -6,7 +6,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from app.services.external_connector_config import GITHUB_ENV_KEYS, JIRA_ENV_KEYS
+from app.services.external_connector_config import (
+    ATLASSIAN_ADMIN_ENV_KEYS,
+    GITHUB_ENV_KEYS,
+    JIRA_ENV_KEYS,
+    JIRA_WRITE_ENV_KEYS,
+)
 from app.services.guarded_execution_contracts import (
     validate_external_connector_config_doctor_contract,
 )
@@ -71,6 +76,15 @@ def test_config_doctor_absent_variables_reports_not_configured() -> None:
     assert result["providers"]["jira"]["configured_status"] == "not_configured"
     assert result["summary"]["not_configured_provider_count"] == 2
     assert result["summary"]["live_readonly_ready_provider_count"] == 0
+    assert result["credential_profiles"]["jira_readonly_profile_status"] == (
+        "not_configured"
+    )
+    assert result["credential_profiles"]["jira_write_profile_status"] == (
+        "not_configured"
+    )
+    assert result["credential_profiles"]["org_id_presence_class"] == "missing"
+    assert result["credential_profiles"]["write_operations"] == "disabled"
+    assert result["credential_profiles"]["admin_live_calls"] == "not_run"
     _assert_config_doctor_safe(result)
 
 
@@ -99,6 +113,11 @@ def test_config_doctor_complete_variables_reports_ready_without_values() -> None
     assert result["providers"]["jira"]["live_readonly_readiness"] == "ready"
     assert result["summary"]["configured_provider_count"] == 2
     assert result["summary"]["live_readonly_ready_provider_count"] == 2
+    assert result["summary"]["jira_readonly_profile_status"] == "configured"
+    assert result["summary"]["jira_write_profile_status"] == "partially_configured"
+    assert result["summary"]["atlassian_admin_scoped_profile_status"] == (
+        "not_configured"
+    )
     serialized = json.dumps(result, sort_keys=True)
     for raw_value in set(environment.values()):
         assert raw_value not in serialized
@@ -173,8 +192,57 @@ def test_config_doctor_cli_loads_synthetic_connector_env_file(tmp_path: Path) ->
     assert payload["diagnostics"]["connector_env_file"]["loaded_allowed_key_count"] == (
         len(GITHUB_ENV_KEYS) + len(JIRA_ENV_KEYS)
     )
+    assert payload["credential_profiles"]["jira_readonly_profile_status"] == (
+        "configured"
+    )
+    assert payload["credential_profiles"]["jira_write_profile_status"] == (
+        "partially_configured"
+    )
     assert "hidden_value" not in completed.stdout
     _assert_config_doctor_safe(payload)
+
+
+def test_config_doctor_reports_optional_write_and_admin_profiles_from_synthetic_env(
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "connectors.env"
+    env_file.write_text(
+        "\n".join(
+            [
+                f"{key}=hidden_value"
+                for key in (
+                    *JIRA_ENV_KEYS,
+                    *JIRA_WRITE_ENV_KEYS,
+                    *ATLASSIAN_ADMIN_ENV_KEYS,
+                )
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = config_doctor.run_external_connector_config_doctor(
+        environ={},
+        connector_env_file=env_file,
+        use_connector_env_file=True,
+    )
+
+    assert result["credential_profiles"]["jira_readonly_profile_status"] == "configured"
+    assert result["credential_profiles"]["jira_write_profile_status"] == "configured"
+    assert result["credential_profiles"]["atlassian_admin_scoped_profile_status"] == (
+        "configured"
+    )
+    assert result["credential_profiles"]["atlassian_admin_unscoped_profile_status"] == (
+        "configured"
+    )
+    assert result["credential_profiles"]["org_id_presence_class"] == "present"
+    assert result["credential_profiles"]["write_operations"] == "disabled"
+    assert result["credential_profiles"]["admin_live_calls"] == "not_run"
+    assert result["diagnostics"]["connector_env_file"]["loaded_allowed_key_count"] == (
+        len(JIRA_ENV_KEYS) + len(JIRA_WRITE_ENV_KEYS) + len(ATLASSIAN_ADMIN_ENV_KEYS)
+    )
+    assert "hidden_value" not in json.dumps(result, sort_keys=True)
+    _assert_config_doctor_safe(result)
 
 
 def test_config_doctor_synthetic_env_file_partial_config_is_sanitized(

@@ -93,6 +93,14 @@ configured shell environment values first, treat blank and placeholder-like
 values as missing, and report configured/not_configured metadata without
 printing values.
 
+Atlassian/Jira credentials are separated by profile. The Jira read-only data
+API profile uses the site REST API with a basic email/API-token auth class for
+smoke, inventory, and read-only diagnostics. The future Jira write profile uses
+the same site REST API auth class, but remains dry-run only. Atlassian Admin
+profiles use a bearer admin API-key auth class plus Org ID presence metadata
+for future admin diagnostics only; admin live calls and writes are disabled in
+the current workflow. Keep all values in `.env` only.
+
 Run the connector config doctor after local edits:
 
 ```bash

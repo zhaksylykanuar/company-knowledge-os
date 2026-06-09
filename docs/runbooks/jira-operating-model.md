@@ -55,6 +55,24 @@ create or modify Jira projects, components, issue types, workflows, boards,
 fields, or issues. Any later Jira creation requires a separate manual approval
 and a separate write-enabled prompt.
 
+## Credential Profiles And Write Readiness
+
+Jira read-only diagnostics use a `jira_readonly_data_api` profile with a
+`basic_email_api_token` auth class and `jira_site_rest_api` endpoint class.
+That profile remains read-only and write-disabled.
+
+Future Jira structure creation is represented by a separate
+`jira_write_site_api` profile with the same endpoint class. It is classified as
+`dry_run_only` until a future operator prompt explicitly enables write
+execution. Atlassian Admin diagnostics use separate admin profile classes with
+`bearer_admin_api_key` and `atlassian_admin_api`; Org ID is reported only as a
+presence class. Admin live calls are disabled in this workflow.
+
+`scripts/plan_jira_write_readiness.py` reports which future write/admin profile
+classes are configured, which write operations remain blocked, and which manual
+approval class is required. It makes no live provider calls and performs no
+Jira or Atlassian Admin writes.
+
 ## Issue Types
 
 Recommended issue type classes:
