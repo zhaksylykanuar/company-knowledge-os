@@ -78,8 +78,12 @@ def test_jira_inventory_default_mode_makes_no_live_call() -> None:
     assert result["provider_calls"] == "none"
     assert result["no_provider_calls"] is True
     assert result["jira"]["inventory_status"] == "configured_not_executed"
+    assert result["jira"]["project_inventory_status"] == "not_run"
+    assert result["jira"]["issue_inventory_status"] == "not_run"
+    assert result["jira"]["access_diagnostic_class"] == "jira_inventory_not_run"
     assert result["jira"]["failure_class"] == "requires_acknowledgement"
     assert result["portfolio_mapping"]["mapping_status"] == "planned_not_verified"
+    assert result["recommended_next_action_class"] == "review_jira_operating_model"
     assert transport_called is False
     _assert_inventory_output_safe(result)
 
@@ -116,13 +120,19 @@ def test_jira_inventory_synthetic_mode_reports_safe_counts() -> None:
     assert result["provider_calls"] == "synthetic"
     assert result["no_provider_calls"] is True
     assert result["jira"]["inventory_status"] == "synthetic_verified"
+    assert result["jira"]["project_inventory_status"] == "synthetic_verified"
+    assert result["jira"]["issue_inventory_status"] == "synthetic_verified"
+    assert result["jira"]["access_diagnostic_class"] == "jira_inventory_synthetic_verified"
     assert result["jira"]["project_count"] == 3
     assert result["jira"]["project_count_class"] == "nonzero_count"
     assert result["jira"]["issue_count_class"] == "nonzero_count"
     assert result["portfolio_mapping"]["mapping_status"] == "synthetic_verified"
+    assert result["portfolio_mapping"]["mapping_readiness_status"] == "synthetic_verified"
     assert result["portfolio_mapping"]["mapped_area_count_class"] == (
         "matches_portfolio_area_count"
     )
+    assert result["operating_model"]["recommended_model_class"] == "product_area_model"
+    assert result["recommended_next_action_class"] == "review_jira_operating_model"
     _assert_inventory_output_safe(result)
 
 
@@ -151,9 +161,16 @@ def test_jira_inventory_mocked_live_readonly_calls_transport_once() -> None:
     assert request_seen is not None
     assert request_seen.operation == "fetch_readonly_inventory_summary"
     assert result["jira"]["inventory_status"] == "live_readonly_verified"
+    assert result["jira"]["project_inventory_status"] == "live_readonly_verified"
+    assert result["jira"]["issue_inventory_status"] == "live_readonly_verified"
+    assert result["jira"]["access_diagnostic_class"] == "jira_inventory_live_verified"
     assert result["jira"]["project_count"] == 2
     assert result["jira"]["provider_payload_visibility"] == "suppressed"
     assert result["portfolio_mapping"]["mapping_status"] == "live_readonly_observed"
+    assert result["portfolio_mapping"]["mapping_readiness_status"] == (
+        "ready_for_manual_mapping"
+    )
+    assert result["recommended_next_action_class"] == "configure_project_mapping"
     _assert_inventory_output_safe(result)
 
 
@@ -176,6 +193,7 @@ def test_jira_inventory_live_failure_maps_to_safe_class() -> None:
     assert result["jira"]["inventory_status"] == "fail"
     assert result["jira"]["failure_class"] == "jira_auth_failed"
     assert result["jira"]["auth_status_class"] == "jira_auth_failed"
+    assert result["recommended_next_action_class"] == "verify_jira_project_permissions"
     _assert_inventory_output_safe(result)
 
 
@@ -191,10 +209,15 @@ def test_jira_inventory_malformed_mocked_response_is_safe_contract_mismatch() ->
     )
 
     assert result["status"] == "fail"
+    assert result["jira"]["project_inventory_status"] == "contract_mismatch"
+    assert result["jira"]["access_diagnostic_class"] == (
+        "jira_project_inventory_contract_mismatch"
+    )
     assert result["jira"]["failure_class"] == "jira_response_contract_mismatch"
     assert result["jira"]["response_contract_status"] == (
         "jira_response_contract_mismatch"
     )
+    assert result["recommended_next_action_class"] == "investigate_response_contract"
     _assert_inventory_output_safe(result)
 
 
@@ -224,6 +247,65 @@ def test_jira_inventory_does_not_echo_raw_provider_values() -> None:
 
     assert result["status"] == "pass"
     assert result["jira"]["project_count"] == 1
+    _assert_inventory_output_safe(result)
+
+
+def test_jira_inventory_zero_project_live_response_is_actionable() -> None:
+    result = inventory.run_jira_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        compare_portfolio=True,
+        jira_live_transport=lambda request: [],
+        environ=_configured_jira_env(),
+    )
+
+    assert result["status"] == "pass"
+    assert result["jira"]["inventory_status"] == "live_readonly_verified"
+    assert result["jira"]["project_inventory_status"] == "empty"
+    assert result["jira"]["project_count_class"] == "zero_count"
+    assert result["jira"]["issue_inventory_status"] == "not_observed"
+    assert result["jira"]["access_diagnostic_class"] == "jira_project_inventory_empty"
+    assert result["recommended_next_action_class"] == "verify_jira_project_permissions"
+    _assert_inventory_output_safe(result)
+
+
+def test_jira_inventory_live_issue_not_observed_is_actionable() -> None:
+    result = inventory.run_jira_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        compare_portfolio=True,
+        jira_live_transport=lambda request: [{"accessible": True}],
+        environ=_configured_jira_env(),
+    )
+
+    assert result["status"] == "pass"
+    assert result["jira"]["project_inventory_status"] == "live_readonly_verified"
+    assert result["jira"]["issue_inventory_status"] == "not_observed"
+    assert result["jira"]["issue_count_class"] == "not_observed"
+    assert result["recommended_next_action_class"] == (
+        "run_live_inventory_with_issue_count"
+    )
+    _assert_inventory_output_safe(result)
+
+
+def test_jira_inventory_permission_limited_response_is_actionable() -> None:
+    result = inventory.run_jira_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        compare_portfolio=True,
+        jira_live_transport=lambda request: [
+            {"accessible": False, "permission_limited": True}
+        ],
+        environ=_configured_jira_env(),
+    )
+
+    assert result["status"] == "pass"
+    assert result["jira"]["project_inventory_status"] == "permission_limited"
+    assert result["jira"]["issue_inventory_status"] == "permission_limited"
+    assert result["jira"]["access_diagnostic_class"] == (
+        "jira_project_inventory_permission_limited"
+    )
+    assert result["recommended_next_action_class"] == "verify_jira_project_permissions"
     _assert_inventory_output_safe(result)
 
 

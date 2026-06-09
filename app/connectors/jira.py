@@ -28,6 +28,31 @@ COUNT_NONZERO = "nonzero_count"
 INVENTORY_RESPONSE_CONTRACT_PASS = "pass"
 PROVIDER_PAYLOAD_VISIBILITY_SUPPRESSED = "suppressed"
 
+PROJECT_INVENTORY_STATUS_NOT_RUN = "not_run"
+PROJECT_INVENTORY_STATUS_SYNTHETIC_VERIFIED = "synthetic_verified"
+PROJECT_INVENTORY_STATUS_LIVE_READONLY_VERIFIED = "live_readonly_verified"
+PROJECT_INVENTORY_STATUS_EMPTY = "empty"
+PROJECT_INVENTORY_STATUS_ACCESS_ZERO = "access_zero"
+PROJECT_INVENTORY_STATUS_PERMISSION_LIMITED = "permission_limited"
+PROJECT_INVENTORY_STATUS_MALFORMED = "malformed"
+PROJECT_INVENTORY_STATUS_CONTRACT_MISMATCH = "contract_mismatch"
+
+ISSUE_INVENTORY_STATUS_NOT_RUN = "not_run"
+ISSUE_INVENTORY_STATUS_NOT_OBSERVED = "not_observed"
+ISSUE_INVENTORY_STATUS_SYNTHETIC_VERIFIED = "synthetic_verified"
+ISSUE_INVENTORY_STATUS_LIVE_READONLY_VERIFIED = "live_readonly_verified"
+ISSUE_INVENTORY_STATUS_PERMISSION_LIMITED = "permission_limited"
+
+ACCESS_DIAGNOSTIC_NOT_RUN = "jira_inventory_not_run"
+ACCESS_DIAGNOSTIC_SYNTHETIC_VERIFIED = "jira_inventory_synthetic_verified"
+ACCESS_DIAGNOSTIC_LIVE_VERIFIED = "jira_inventory_live_verified"
+ACCESS_DIAGNOSTIC_PROJECT_EMPTY = "jira_project_inventory_empty"
+ACCESS_DIAGNOSTIC_PROJECT_ACCESS_ZERO = "jira_project_access_zero"
+ACCESS_DIAGNOSTIC_PERMISSION_LIMITED = "jira_project_inventory_permission_limited"
+ACCESS_DIAGNOSTIC_RESPONSE_MALFORMED = "jira_project_inventory_response_malformed"
+ACCESS_DIAGNOSTIC_CONTRACT_MISMATCH = "jira_project_inventory_contract_mismatch"
+ACCESS_DIAGNOSTIC_UNKNOWN = "jira_inventory_unknown_state"
+
 
 @dataclass(frozen=True)
 class JiraConnectorRequest:
@@ -151,18 +176,32 @@ def fetch_readonly_inventory_summary(
         for payload in bounded_payloads
         if isinstance(payload.get("issue_count"), int) and payload.get("issue_count", 0) >= 0
     )
+    project_inventory_status, access_diagnostic_class = _project_inventory_diagnostic(
+        execution_mode=execution_mode,
+        project_count=project_count,
+        accessible_count=accessible_count,
+        permission_limited_count=permission_limited_count,
+    )
+    issue_inventory_status = _issue_inventory_status(
+        execution_mode=execution_mode,
+        issue_count_observed=issue_count_observed,
+        permission_limited_count=permission_limited_count,
+    )
     summary = {
         "provider_key": JIRA_PROVIDER,
         "project_count": project_count,
+        "project_inventory_status": project_inventory_status,
         "project_count_class": _zero_nonzero_count_class(project_count),
         "accessible_project_count_class": _zero_nonzero_count_class(accessible_count),
         "inaccessible_project_count_class": _zero_nonzero_count_class(inaccessible_count),
         "permission_limited_count_class": _zero_nonzero_count_class(
             permission_limited_count
         ),
+        "issue_inventory_status": issue_inventory_status,
         "issue_count_class": _zero_nonzero_count_class(issue_count_total)
         if issue_count_observed
         else COUNT_NOT_OBSERVED,
+        "access_diagnostic_class": access_diagnostic_class,
         "response_contract_status": INVENTORY_RESPONSE_CONTRACT_PASS,
         "provider_payload_visibility": PROVIDER_PAYLOAD_VISIBILITY_SUPPRESSED,
         "max_results_class": "bounded",
@@ -269,6 +308,52 @@ def _safe_max_results(value: int) -> int:
     if not isinstance(value, int):
         return 50
     return min(max(value, 1), 100)
+
+
+def _project_inventory_diagnostic(
+    *,
+    execution_mode: str,
+    project_count: int,
+    accessible_count: int,
+    permission_limited_count: int,
+) -> tuple[str, str]:
+    if project_count == 0:
+        return PROJECT_INVENTORY_STATUS_EMPTY, ACCESS_DIAGNOSTIC_PROJECT_EMPTY
+    if permission_limited_count > 0:
+        return (
+            PROJECT_INVENTORY_STATUS_PERMISSION_LIMITED,
+            ACCESS_DIAGNOSTIC_PERMISSION_LIMITED,
+        )
+    if accessible_count == 0:
+        return PROJECT_INVENTORY_STATUS_ACCESS_ZERO, ACCESS_DIAGNOSTIC_PROJECT_ACCESS_ZERO
+    if execution_mode == SYNTHETIC_EXECUTION_MODE:
+        return (
+            PROJECT_INVENTORY_STATUS_SYNTHETIC_VERIFIED,
+            ACCESS_DIAGNOSTIC_SYNTHETIC_VERIFIED,
+        )
+    if execution_mode == LIVE_EXECUTION_MODE:
+        return (
+            PROJECT_INVENTORY_STATUS_LIVE_READONLY_VERIFIED,
+            ACCESS_DIAGNOSTIC_LIVE_VERIFIED,
+        )
+    return PROJECT_INVENTORY_STATUS_CONTRACT_MISMATCH, ACCESS_DIAGNOSTIC_UNKNOWN
+
+
+def _issue_inventory_status(
+    *,
+    execution_mode: str,
+    issue_count_observed: bool,
+    permission_limited_count: int,
+) -> str:
+    if permission_limited_count > 0:
+        return ISSUE_INVENTORY_STATUS_PERMISSION_LIMITED
+    if not issue_count_observed:
+        return ISSUE_INVENTORY_STATUS_NOT_OBSERVED
+    if execution_mode == SYNTHETIC_EXECUTION_MODE:
+        return ISSUE_INVENTORY_STATUS_SYNTHETIC_VERIFIED
+    if execution_mode == LIVE_EXECUTION_MODE:
+        return ISSUE_INVENTORY_STATUS_LIVE_READONLY_VERIFIED
+    return ISSUE_INVENTORY_STATUS_NOT_OBSERVED
 
 
 def _zero_nonzero_count_class(count: int) -> str:

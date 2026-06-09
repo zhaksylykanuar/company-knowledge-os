@@ -212,16 +212,28 @@ def test_operator_output_sanitizer_allows_jira_inventory_safe_fields() -> None:
         {
             "report_kind": "jira_readonly_inventory",
             "inventory_status": "synthetic_verified",
+            "project_inventory_status": "permission_limited",
             "project_count_class": "nonzero_count",
+            "issue_inventory_status": "not_observed",
             "issue_count_class": "not_observed",
             "accessible_project_count_class": "nonzero_count",
             "inaccessible_project_count_class": "zero_count",
             "permission_limited_count_class": "zero_count",
+            "access_diagnostic_class": "jira_project_inventory_permission_limited",
             "portfolio_mapping": {
                 "mapping_status": "planned_not_verified",
+                "mapping_readiness_status": "ready_for_manual_mapping",
                 "mapped_area_count_class": "zero_count",
                 "needs_manual_mapping_count_class": "nonzero_count",
+                "manual_mapping_required_count_class": "nonzero_count",
+                "repo_component_strategy": "repo_as_component",
             },
+            "operating_model": {
+                "recommended_model_class": "product_area_model",
+                "recommended_project_class_count": 6,
+                "repo_component_strategy": "repo_as_component",
+            },
+            "recommended_next_action_class": "verify_jira_project_permissions",
         }
     ).as_dict()
 

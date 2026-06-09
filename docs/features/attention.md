@@ -80,6 +80,8 @@
   guarded raw-event foundations, implemented
 - Repository portfolio onboarding catalog:
   static safe metadata counts/classes, implemented
+- Jira read-only inventory diagnostics and operating-model planner:
+  strict sanitized JSON, implemented
 - GitHub/Jira/Drive activity normalization: implemented
 - LLM-generated digest: planned
 - Telegram delivery: planned

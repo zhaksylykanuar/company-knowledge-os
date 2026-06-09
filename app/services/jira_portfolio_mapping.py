@@ -3,6 +3,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from app.services.jira_operating_model import (
+    COMPONENT_STRATEGY_REPO,
+    jira_operating_model_summary,
+)
 from app.services.operator_output_sanitizer import inspect_operator_output
 from app.services.repository_portfolio import repository_portfolio_public_summary
 
@@ -10,6 +14,13 @@ MAPPING_STATUS_PLANNED_NOT_VERIFIED = "planned_not_verified"
 MAPPING_STATUS_SYNTHETIC_VERIFIED = "synthetic_verified"
 MAPPING_STATUS_LIVE_READONLY_OBSERVED = "live_readonly_observed"
 MAPPING_STATUS_NEEDS_MANUAL_MAPPING = "needs_manual_mapping"
+
+MAPPING_READINESS_PLANNED_NOT_VERIFIED = "planned_not_verified"
+MAPPING_READINESS_INVENTORY_OBSERVED_MAPPING_PENDING = (
+    "inventory_observed_mapping_pending"
+)
+MAPPING_READINESS_READY_FOR_MANUAL_MAPPING = "ready_for_manual_mapping"
+MAPPING_READINESS_SYNTHETIC_VERIFIED = "synthetic_verified"
 
 JIRA_INVENTORY_STATUS_NOT_RUN = "not_run"
 JIRA_INVENTORY_STATUS_NOT_CONFIGURED = "not_configured"
@@ -31,6 +42,7 @@ def jira_portfolio_mapping_summary(
 ) -> dict[str, Any]:
     portfolio_summary = repository_portfolio_public_summary()
     portfolio_area_count = int(portfolio_summary["product_area_count"])
+    operating_model = jira_operating_model_summary()
     if mapping_status == MAPPING_STATUS_SYNTHETIC_VERIFIED:
         mapped_area_count = portfolio_area_count
         unmapped_area_count = 0
@@ -44,12 +56,23 @@ def jira_portfolio_mapping_summary(
         "portfolio_area_count": portfolio_area_count,
         "mapping_status": _safe_mapping_status(mapping_status),
         "jira_inventory_status": _safe_inventory_status(jira_inventory_status),
+        "mapping_readiness_status": _mapping_readiness_status(
+            jira_inventory_status=jira_inventory_status,
+            mapping_status=mapping_status,
+        ),
+        "recommended_jira_project_class_count": operating_model[
+            "recommended_project_class_count"
+        ],
+        "repo_component_strategy": COMPONENT_STRATEGY_REPO,
         "mapped_area_count_class": _area_count_class(
             mapped_area_count,
             portfolio_area_count,
         ),
         "unmapped_area_count_class": _zero_nonzero_count_class(unmapped_area_count),
         "needs_manual_mapping_count_class": _zero_nonzero_count_class(
+            needs_manual_mapping_count
+        ),
+        "manual_mapping_required_count_class": _zero_nonzero_count_class(
             needs_manual_mapping_count
         ),
         "source_of_truth_mutation": SOURCE_OF_TRUTH_MUTATION_ABSENT,
@@ -65,7 +88,11 @@ def jira_inventory_readiness_summary() -> dict[str, Any]:
     summary = {
         "jira_inventory_cli": "present",
         "jira_inventory_live_readonly": "gated",
+        "jira_inventory_diagnostics": "present",
         "jira_portfolio_mapping": "synthetic_ready",
+        "jira_mapping_readiness": "planned_or_observed",
+        "jira_operating_model": "present",
+        "jira_write_operations": "disabled",
         "source_of_truth_mutation": SOURCE_OF_TRUTH_MUTATION_ABSENT,
         "no_send": True,
         "no_source_of_truth_mutation": True,
@@ -96,6 +123,20 @@ def _safe_inventory_status(value: str) -> str:
     }:
         return value
     return JIRA_INVENTORY_STATUS_NOT_RUN
+
+
+def _mapping_readiness_status(
+    *,
+    jira_inventory_status: str,
+    mapping_status: str,
+) -> str:
+    if mapping_status == MAPPING_STATUS_SYNTHETIC_VERIFIED:
+        return MAPPING_READINESS_SYNTHETIC_VERIFIED
+    if jira_inventory_status == JIRA_INVENTORY_STATUS_LIVE_READONLY_VERIFIED:
+        if mapping_status == MAPPING_STATUS_LIVE_READONLY_OBSERVED:
+            return MAPPING_READINESS_READY_FOR_MANUAL_MAPPING
+        return MAPPING_READINESS_INVENTORY_OBSERVED_MAPPING_PENDING
+    return MAPPING_READINESS_PLANNED_NOT_VERIFIED
 
 
 def _area_count_class(count: int, expected_count: int) -> str:

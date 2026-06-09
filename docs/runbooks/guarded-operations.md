@@ -86,6 +86,15 @@ mapping is planning metadata against repository product-area counts; it is not
 source of truth and does not ingest issues, write Jira, persist raw storage,
 write Postgres, run scheduler work, or execute delivery.
 
+Inventory diagnostics explain zero or incomplete results as safe classes:
+empty inventory, zero accessible projects, permission-limited inventory,
+issue inventory not observed, malformed response, response-contract mismatch,
+and mapping not configured. The report also includes a safe operating-model
+summary with a `product_area_model` recommendation, a repo-as-component
+strategy, and a next-action class such as access review, mapping configuration,
+issue-count inventory, operating-model review, or response-contract
+investigation. The detailed operating model is in `jira-operating-model.md`.
+
 ## Connector Config Doctor
 
 `scripts/doctor_external_connector_config.py` is a read-only, no-send,

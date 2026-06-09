@@ -35,6 +35,7 @@ Navigation map for future Codex sessions.
 
 - `operator_runtime_setup.md`: project-local `.env`, health checks, and Codex launcher setup.
 - `runbooks/guarded-operations.md`: guarded execution boundaries and safe diagnostics.
+- `runbooks/jira-operating-model.md`: safe Jira inventory diagnostics and operating model.
 - `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
 
 ## Doctor Scripts

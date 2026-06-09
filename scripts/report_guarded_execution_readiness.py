@@ -51,7 +51,11 @@ CHECK_NAMES = (
     "audit_sink",
     "connector_smoke_cli",
     "jira_readonly_inventory_cli",
+    "jira_inventory_diagnostics",
     "jira_portfolio_mapping",
+    "jira_mapping_readiness",
+    "jira_operating_model",
+    "jira_write_operations",
     "external_connector_config_doctor",
     "external_connector_registry",
     "repository_portfolio_catalog",
@@ -300,7 +304,13 @@ def _checks(
         "jira_readonly_inventory_cli": jira_inventory_summary[
             "jira_inventory_cli"
         ],
+        "jira_inventory_diagnostics": jira_inventory_summary[
+            "jira_inventory_diagnostics"
+        ],
         "jira_portfolio_mapping": jira_inventory_summary["jira_portfolio_mapping"],
+        "jira_mapping_readiness": jira_inventory_summary["jira_mapping_readiness"],
+        "jira_operating_model": jira_inventory_summary["jira_operating_model"],
+        "jira_write_operations": jira_inventory_summary["jira_write_operations"],
         "external_connector_config_doctor": external_connector_config_summary[
             "external_connector_config_doctor"
         ],
@@ -327,6 +337,8 @@ def _checks(
                 "present/safe_metadata_only",
                 "present/sanitized_metadata",
                 "synthetic_ready",
+                "planned_or_observed",
+                "disabled",
             }
             else STATUS_FAIL,
             "state": statuses[name],

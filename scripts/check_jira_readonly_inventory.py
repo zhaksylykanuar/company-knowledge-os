@@ -37,6 +37,7 @@ from app.services.jira_portfolio_mapping import (  # noqa: E402
     MAPPING_STATUS_SYNTHETIC_VERIFIED,
     jira_portfolio_mapping_summary,
 )
+from app.services.jira_operating_model import jira_operating_model_summary  # noqa: E402
 from app.services.local_connector_env import (  # noqa: E402
     add_connector_env_file_arguments,
     connector_env_cli_kwargs,
@@ -65,6 +66,12 @@ INVENTORY_FAILED = "jira_readonly_inventory_failed"
 INVENTORY_OUTPUT_UNSAFE = "jira_readonly_inventory_output_unsafe"
 INVENTORY_CONTRACT_INVALID = "jira_readonly_inventory_contract_invalid"
 PAYLOAD_VISIBILITY_SUPPRESSED = "suppressed"
+ACTION_VERIFY_JIRA_PROJECT_PERMISSIONS = "verify_jira_project_permissions"
+ACTION_CONFIGURE_PROJECT_MAPPING = "configure_project_mapping"
+ACTION_RUN_LIVE_INVENTORY_WITH_ISSUE_COUNT = "run_live_inventory_with_issue_count"
+ACTION_REVIEW_JIRA_OPERATING_MODEL = "review_jira_operating_model"
+ACTION_PROCEED_TO_MAPPING = "proceed_to_mapping"
+ACTION_INVESTIGATE_RESPONSE_CONTRACT = "investigate_response_contract"
 
 
 def run_jira_readonly_inventory(
@@ -165,6 +172,9 @@ def run_jira_readonly_inventory(
                 {
                     "status": STATUS_FAIL,
                     "inventory_status": STATUS_FAIL,
+                    "project_inventory_status": _project_failure_status(failure),
+                    "issue_inventory_status": jira.ISSUE_INVENTORY_STATUS_NOT_OBSERVED,
+                    "access_diagnostic_class": _access_failure_diagnostic(failure),
                     "failure_class": failure.failure_class,
                     "auth_status_class": failure.auth_status_class,
                     "transport_status_class": failure.transport_status_class,
@@ -186,6 +196,13 @@ def run_jira_readonly_inventory(
         if compare_portfolio
         else jira_portfolio_mapping_summary()
     )
+    operating_model = jira_operating_model_summary()
+    recommended_next_action_class = _recommended_next_action_class(
+        jira_result=jira_result,
+        portfolio_mapping=portfolio_mapping,
+        synthetic=synthetic,
+        allow_live_readonly_apis=allow_live_readonly_apis,
+    )
 
     result = {
         "status": status,
@@ -198,10 +215,16 @@ def run_jira_readonly_inventory(
         "provider_calls": provider_calls,
         "jira": jira_result,
         "portfolio_mapping": portfolio_mapping,
+        "operating_model": operating_model,
+        "recommended_next_action_class": recommended_next_action_class,
         "diagnostics": {
             "synthetic_mode": synthetic,
             "portfolio_compare_requested": compare_portfolio,
             "max_results_class": "bounded",
+            "inventory_diagnostic_class": jira_result.get(
+                "access_diagnostic_class",
+                jira.ACCESS_DIAGNOSTIC_UNKNOWN,
+            ),
             "connector_env_file": dict(env_result.diagnostics),
         },
     }
@@ -213,12 +236,15 @@ def _base_jira_result(*, config_status: str) -> dict[str, Any]:
         "status": STATUS_PASS,
         "config_status": config_status,
         "inventory_status": JIRA_INVENTORY_STATUS_NOT_RUN,
+        "project_inventory_status": jira.PROJECT_INVENTORY_STATUS_NOT_RUN,
         "project_count": 0,
         "project_count_class": jira.COUNT_NOT_OBSERVED,
+        "issue_inventory_status": jira.ISSUE_INVENTORY_STATUS_NOT_RUN,
         "issue_count_class": jira.COUNT_NOT_OBSERVED,
         "accessible_project_count_class": jira.COUNT_NOT_OBSERVED,
         "inaccessible_project_count_class": jira.COUNT_NOT_OBSERVED,
         "permission_limited_count_class": jira.COUNT_NOT_OBSERVED,
+        "access_diagnostic_class": jira.ACCESS_DIAGNOSTIC_NOT_RUN,
         "failure_class": None,
         "auth_status_class": smoke.JIRA_TRANSPORT_NOT_OBSERVED,
         "transport_status_class": smoke.JIRA_TRANSPORT_NOT_OBSERVED,
@@ -244,7 +270,7 @@ def _synthetic_inventory_transport() -> jira.JiraTransport:
         return (
             {"accessible": True, "issue_count": 2},
             {"accessible": True, "issue_count": 1},
-            {"accessible": False, "permission_limited": True},
+            {"accessible": True, "issue_count": 0},
         )
 
     return transport
@@ -311,6 +337,66 @@ def _jira_inventory_http_transport(
     return transport
 
 
+def _project_failure_status(smoke_failure: smoke.JiraLiveReadonlySmokeFailure) -> str:
+    if smoke_failure.response_contract_status == smoke.JIRA_RESPONSE_MALFORMED:
+        return jira.PROJECT_INVENTORY_STATUS_MALFORMED
+    if smoke_failure.response_contract_status == smoke.JIRA_RESPONSE_CONTRACT_MISMATCH:
+        return jira.PROJECT_INVENTORY_STATUS_CONTRACT_MISMATCH
+    return jira.PROJECT_INVENTORY_STATUS_NOT_RUN
+
+
+def _access_failure_diagnostic(
+    smoke_failure: smoke.JiraLiveReadonlySmokeFailure,
+) -> str:
+    if smoke_failure.response_contract_status == smoke.JIRA_RESPONSE_MALFORMED:
+        return jira.ACCESS_DIAGNOSTIC_RESPONSE_MALFORMED
+    if smoke_failure.response_contract_status == smoke.JIRA_RESPONSE_CONTRACT_MISMATCH:
+        return jira.ACCESS_DIAGNOSTIC_CONTRACT_MISMATCH
+    if smoke_failure.failure_class == smoke.JIRA_PERMISSION_DENIED:
+        return jira.ACCESS_DIAGNOSTIC_PERMISSION_LIMITED
+    return smoke_failure.failure_class
+
+
+def _recommended_next_action_class(
+    *,
+    jira_result: Mapping[str, Any],
+    portfolio_mapping: Mapping[str, Any],
+    synthetic: bool,
+    allow_live_readonly_apis: bool,
+) -> str:
+    project_status = jira_result.get("project_inventory_status")
+    issue_status = jira_result.get("issue_inventory_status")
+    access_class = jira_result.get("access_diagnostic_class")
+    failure_class = jira_result.get("failure_class")
+    mapping_readiness = portfolio_mapping.get("mapping_readiness_status")
+    if project_status in {
+        jira.PROJECT_INVENTORY_STATUS_MALFORMED,
+        jira.PROJECT_INVENTORY_STATUS_CONTRACT_MISMATCH,
+    } or access_class in {
+        jira.ACCESS_DIAGNOSTIC_RESPONSE_MALFORMED,
+        jira.ACCESS_DIAGNOSTIC_CONTRACT_MISMATCH,
+    }:
+        return ACTION_INVESTIGATE_RESPONSE_CONTRACT
+    if project_status in {
+        jira.PROJECT_INVENTORY_STATUS_EMPTY,
+        jira.PROJECT_INVENTORY_STATUS_ACCESS_ZERO,
+        jira.PROJECT_INVENTORY_STATUS_PERMISSION_LIMITED,
+    } or failure_class in {smoke.JIRA_AUTH_FAILED, smoke.JIRA_PERMISSION_DENIED}:
+        return ACTION_VERIFY_JIRA_PROJECT_PERMISSIONS
+    if failure_class not in {None, REQUIRES_ACKNOWLEDGEMENT, NOT_CONFIGURED}:
+        return ACTION_REVIEW_JIRA_OPERATING_MODEL
+    if issue_status == jira.ISSUE_INVENTORY_STATUS_NOT_OBSERVED:
+        return ACTION_RUN_LIVE_INVENTORY_WITH_ISSUE_COUNT
+    if mapping_readiness in {
+        "inventory_observed_mapping_pending",
+        "ready_for_manual_mapping",
+    }:
+        return ACTION_CONFIGURE_PROJECT_MAPPING
+    if synthetic or not allow_live_readonly_apis:
+        return ACTION_REVIEW_JIRA_OPERATING_MODEL
+    return ACTION_PROCEED_TO_MAPPING
+
+
 def _finalize_result(result: dict[str, Any]) -> dict[str, Any]:
     safety = inspect_operator_output(result)
     if not safety.safe:
@@ -345,10 +431,13 @@ def _failure_report(
         "provider_calls": PROVIDER_CALLS_NONE,
         "jira": _base_jira_result(config_status=NOT_CONFIGURED),
         "portfolio_mapping": jira_portfolio_mapping_summary(),
+        "operating_model": jira_operating_model_summary(),
+        "recommended_next_action_class": ACTION_INVESTIGATE_RESPONSE_CONTRACT,
         "diagnostics": {
             "synthetic_mode": False,
             "portfolio_compare_requested": False,
             "max_results_class": "bounded",
+            "inventory_diagnostic_class": jira.ACCESS_DIAGNOSTIC_UNKNOWN,
             "operator_output_safety": dict(operator_output_safety or {}),
         },
     }

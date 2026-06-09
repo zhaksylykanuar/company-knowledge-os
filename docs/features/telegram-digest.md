@@ -63,6 +63,9 @@ must be normalized into stored source events, source documents, and chunks befor
 it can be trusted by extraction, retrieval, Q&A, or digest workflows.
 Future real source connectivity must follow the credentials, source identity,
 activation, and allowlist contract in `source-integrations.md`.
+The current Jira read-only inventory path is access diagnostics and operating
+model planning only. It reports safe classes/counts and does not ingest issues,
+write Jira, persist raw storage, or expose Jira project or issue details.
 
 ## Planned Daily Digest Flow
 

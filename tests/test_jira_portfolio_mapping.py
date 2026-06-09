@@ -7,6 +7,9 @@ from app.services.jira_portfolio_mapping import (
     JIRA_INVENTORY_STATUS_LIVE_READONLY_VERIFIED,
     JIRA_INVENTORY_STATUS_NOT_RUN,
     JIRA_INVENTORY_STATUS_SYNTHETIC_VERIFIED,
+    MAPPING_READINESS_PLANNED_NOT_VERIFIED,
+    MAPPING_READINESS_READY_FOR_MANUAL_MAPPING,
+    MAPPING_READINESS_SYNTHETIC_VERIFIED,
     MAPPING_STATUS_LIVE_READONLY_OBSERVED,
     MAPPING_STATUS_PLANNED_NOT_VERIFIED,
     MAPPING_STATUS_SYNTHETIC_VERIFIED,
@@ -43,9 +46,13 @@ def test_jira_portfolio_mapping_default_is_planned_counts_only() -> None:
     assert summary["portfolio_area_count"] == 7
     assert summary["mapping_status"] == MAPPING_STATUS_PLANNED_NOT_VERIFIED
     assert summary["jira_inventory_status"] == JIRA_INVENTORY_STATUS_NOT_RUN
+    assert summary["mapping_readiness_status"] == MAPPING_READINESS_PLANNED_NOT_VERIFIED
+    assert summary["recommended_jira_project_class_count"] == 6
+    assert summary["repo_component_strategy"] == "repo_as_component"
     assert summary["mapped_area_count_class"] == "zero_count"
     assert summary["unmapped_area_count_class"] == "nonzero_count"
     assert summary["needs_manual_mapping_count_class"] == "nonzero_count"
+    assert summary["manual_mapping_required_count_class"] == "nonzero_count"
     assert summary["no_send"] is True
     assert summary["no_source_of_truth_mutation"] is True
     assert summary["scheduler_execution"] == "disabled"
@@ -59,9 +66,11 @@ def test_jira_portfolio_mapping_synthetic_can_match_portfolio_area_count() -> No
     )
 
     assert summary["portfolio_area_count"] == 7
+    assert summary["mapping_readiness_status"] == MAPPING_READINESS_SYNTHETIC_VERIFIED
     assert summary["mapped_area_count_class"] == "matches_portfolio_area_count"
     assert summary["unmapped_area_count_class"] == "zero_count"
     assert summary["needs_manual_mapping_count_class"] == "zero_count"
+    assert summary["manual_mapping_required_count_class"] == "zero_count"
     _assert_safe(summary)
 
 
@@ -72,8 +81,12 @@ def test_jira_portfolio_mapping_live_observed_still_needs_manual_mapping() -> No
     )
 
     assert summary["mapping_status"] == MAPPING_STATUS_LIVE_READONLY_OBSERVED
+    assert summary["mapping_readiness_status"] == (
+        MAPPING_READINESS_READY_FOR_MANUAL_MAPPING
+    )
     assert summary["mapped_area_count_class"] == "zero_count"
     assert summary["needs_manual_mapping_count_class"] == "nonzero_count"
+    assert summary["manual_mapping_required_count_class"] == "nonzero_count"
     _assert_safe(summary)
 
 
@@ -83,7 +96,11 @@ def test_jira_inventory_readiness_summary_is_safe() -> None:
     assert summary == {
         "jira_inventory_cli": "present",
         "jira_inventory_live_readonly": "gated",
+        "jira_inventory_diagnostics": "present",
         "jira_portfolio_mapping": "synthetic_ready",
+        "jira_mapping_readiness": "planned_or_observed",
+        "jira_operating_model": "present",
+        "jira_write_operations": "disabled",
         "source_of_truth_mutation": "absent",
         "no_send": True,
         "no_source_of_truth_mutation": True,

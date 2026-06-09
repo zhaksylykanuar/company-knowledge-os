@@ -158,12 +158,45 @@ def test_jira_readonly_inventory_synthetic_summary_counts_only() -> None:
     assert request_seen.operation == "fetch_readonly_inventory_summary"
     assert request_seen.execution_mode == jira.SYNTHETIC_EXECUTION_MODE
     assert summary["project_count"] == 2
+    assert summary["project_inventory_status"] == "permission_limited"
     assert summary["project_count_class"] == "nonzero_count"
     assert summary["accessible_project_count_class"] == "nonzero_count"
     assert summary["inaccessible_project_count_class"] == "nonzero_count"
     assert summary["permission_limited_count_class"] == "nonzero_count"
+    assert summary["issue_inventory_status"] == "permission_limited"
     assert summary["issue_count_class"] == "nonzero_count"
+    assert summary["access_diagnostic_class"] == (
+        "jira_project_inventory_permission_limited"
+    )
     assert summary["provider_payload_visibility"] == "suppressed"
+    assert inspect_operator_output(summary).safe is True
+
+
+def test_jira_readonly_inventory_zero_projects_has_specific_diagnostic() -> None:
+    summary = jira.fetch_readonly_inventory_summary(
+        transport=lambda request: [],
+        execution_mode=jira.SYNTHETIC_EXECUTION_MODE,
+    )
+
+    assert summary["project_count"] == 0
+    assert summary["project_inventory_status"] == "empty"
+    assert summary["project_count_class"] == "zero_count"
+    assert summary["issue_inventory_status"] == "not_observed"
+    assert summary["issue_count_class"] == "not_observed"
+    assert summary["access_diagnostic_class"] == "jira_project_inventory_empty"
+    assert inspect_operator_output(summary).safe is True
+
+
+def test_jira_readonly_inventory_access_zero_has_specific_diagnostic() -> None:
+    summary = jira.fetch_readonly_inventory_summary(
+        transport=lambda request: [{"accessible": False}],
+        execution_mode=jira.SYNTHETIC_EXECUTION_MODE,
+    )
+
+    assert summary["project_inventory_status"] == "access_zero"
+    assert summary["accessible_project_count_class"] == "zero_count"
+    assert summary["inaccessible_project_count_class"] == "nonzero_count"
+    assert summary["access_diagnostic_class"] == "jira_project_access_zero"
     assert inspect_operator_output(summary).safe is True
 
 

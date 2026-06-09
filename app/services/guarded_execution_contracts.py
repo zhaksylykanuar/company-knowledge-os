@@ -168,6 +168,8 @@ JIRA_READONLY_INVENTORY_REQUIRED_FIELDS = frozenset(
         "provider_calls",
         "jira",
         "portfolio_mapping",
+        "operating_model",
+        "recommended_next_action_class",
         "diagnostics",
     }
 )
@@ -401,6 +403,8 @@ def _matches_contract_schema(contract_name: str, payload: Mapping[str, Any]) -> 
             and payload.get("provider_calls") in SAFE_PROVIDER_CALL_MODES
             and isinstance(payload.get("jira"), Mapping)
             and isinstance(payload.get("portfolio_mapping"), Mapping)
+            and isinstance(payload.get("operating_model"), Mapping)
+            and _safe_reason_or_none(payload.get("recommended_next_action_class"))
             and isinstance(payload.get("diagnostics"), Mapping)
         )
     if not _common_safety_flags(payload):

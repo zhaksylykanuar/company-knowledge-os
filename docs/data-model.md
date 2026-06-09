@@ -123,6 +123,8 @@
   strict sanitized JSON, implemented
 - Read-only external connector configuration doctor:
   presence-only sanitized JSON, implemented
+- Read-only Jira inventory diagnostics and operating-model planner:
+  strict sanitized JSON, implemented
 - Meeting transcript artifacts: draft-only, not persisted
 - Approval/action execution tables: planned
 
@@ -247,6 +249,13 @@
   Jira data, ingests issues, writes raw storage, writes Postgres, runs
   scheduler work, or mutates Jira. Portfolio mapping remains safe planning
   metadata against repository product-area counts, not source of truth.
+- Jira inventory diagnostics and the Jira operating-model planner are
+  operator-review metadata only. They classify empty inventory, zero access,
+  permission limits, issue inventory not observed, malformed responses,
+  response-contract mismatch, mapping readiness, next-action class, and the
+  recommended operating model as safe classes/counts. They do not store Jira
+  project or issue details, write Jira, ingest issues, write source-of-truth
+  stores, run scheduler work, or execute delivery.
 - The external connector configuration doctor is operator-review metadata for
   GitHub/Jira setup readiness. It checks expected environment variable
   presence by name only, never prints values, and never calls providers. It can

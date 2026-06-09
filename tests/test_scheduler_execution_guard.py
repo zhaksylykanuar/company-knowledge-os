@@ -218,6 +218,7 @@ def test_scheduler_outbox_static_inventory_has_no_unguarded_execution_entrypoint
         "app/services/guarded_execution_audit.py",
             "app/services/external_connector_registry.py",
             "app/services/external_connector_config.py",
+            "app/services/jira_operating_model.py",
             "app/services/jira_portfolio_mapping.py",
             "app/services/local_connector_env.py",
             "app/services/production_operation_guard.py",

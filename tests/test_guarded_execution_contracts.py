@@ -207,6 +207,12 @@ def test_valid_jira_readonly_inventory_contract_passes() -> None:
     assert result["scheduler_execution"] == "disabled"
     assert result["provider_calls"] == "synthetic"
     assert result["jira"]["provider_payload_visibility"] == "suppressed"
+    assert result["jira"]["project_inventory_status"] == "synthetic_verified"
+    assert result["jira"]["issue_inventory_status"] == "synthetic_verified"
+    assert result["jira"]["access_diagnostic_class"] == "jira_inventory_synthetic_verified"
+    assert result["portfolio_mapping"]["mapping_readiness_status"] == "synthetic_verified"
+    assert result["operating_model"]["recommended_model_class"] == "product_area_model"
+    assert result["recommended_next_action_class"] == "review_jira_operating_model"
     _assert_validation_safe(result)
     _assert_validation_safe(validation.as_dict())
 
