@@ -94,6 +94,15 @@ SAFE_ENVIRONMENT_VARIABLE_NAMES = frozenset(
         "FOS_TELEGRAM_CHAT_ID",
     }
 )
+SAFE_OPERATOR_OUTPUT_FIELD_NAMES = frozenset(
+    {
+        "auth_status_class",
+        "live_failure_class",
+        "provider_payload_visibility",
+        "response_contract_status",
+        "transport_status_class",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -195,6 +204,8 @@ def _inspect_key(key: str, value: Any, counts: dict[str, int]) -> None:
         return
 
     normalized = key.casefold()
+    if normalized in SAFE_OPERATOR_OUTPUT_FIELD_NAMES:
+        return
     if normalized == "unsafe_pattern_classes" or normalized.endswith("_count"):
         return
     if normalized in SAFE_DIAGNOSTIC_CLASS_VALUES:

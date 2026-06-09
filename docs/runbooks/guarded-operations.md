@@ -61,6 +61,16 @@ and Jira mapping status are reported as counts/classes only; the CLI does not
 update repository metadata, write Jira data, persist rows, schedule work, or
 execute delivery.
 
+Jira live-read-only smoke diagnostics expose only sanitized failure classes.
+Common safe classes include invalid site configuration, authentication failure,
+permission denial, wrong site or not-found, rate limiting, server error,
+transport error, timeout, malformed response, and response-contract mismatch.
+The smoke report never prints the configured Jira site, credentials, project
+names, project keys, issue keys, object identifiers, raw provider payloads, or
+response bodies. Fixing live Jira access remains a manual credential,
+permission, and provider-configuration task; the smoke path stays read-only and
+does not persist or mutate data.
+
 ## Connector Config Doctor
 
 `scripts/doctor_external_connector_config.py` is a read-only, no-send,

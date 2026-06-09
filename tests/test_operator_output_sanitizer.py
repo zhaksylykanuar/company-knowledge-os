@@ -191,6 +191,22 @@ def test_operator_output_sanitizer_allows_cleanup_planner_classes() -> None:
     assert diagnostics["unsafe_pattern_count"] == 0
 
 
+def test_operator_output_sanitizer_allows_jira_live_smoke_safe_fields() -> None:
+    diagnostics = inspect_operator_output(
+        {
+            "live_failure_class": "jira_auth_failed",
+            "auth_status_class": "jira_auth_failed",
+            "transport_status_class": "jira_transport_http_error",
+            "response_contract_status": "not_observed",
+            "provider_payload_visibility": "suppressed",
+        }
+    ).as_dict()
+
+    assert diagnostics["safe"] is True
+    assert diagnostics["payload_like_value_count"] == 0
+    assert diagnostics["unsafe_pattern_count"] == 0
+
+
 def test_operator_output_sanitizer_raises_safe_reason_only() -> None:
     with pytest.raises(ValueError) as exc_info:
         assert_operator_output_safe({"message": _unsafe_values()["url"]})

@@ -150,6 +150,29 @@ def test_valid_connector_readonly_smoke_contract_passes() -> None:
     _assert_validation_safe(validation.as_dict())
 
 
+def test_connector_readonly_smoke_contract_allows_safe_jira_failure_classes() -> None:
+    result = connector_smoke.run_connector_readonly_smoke(
+        provider="jira",
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk="ALLOW LIVE PROVIDER EXECUTION",
+        environ={
+            "FOS_JIRA_READONLY_SITE": "invalid site",
+            "FOS_JIRA_READONLY_USER": "configured_value",
+            "FOS_JIRA_READONLY_TOKEN": "configured_value",
+        },
+    )
+    validation = validate_connector_readonly_smoke_contract(result)
+
+    assert result["status"] == "fail"
+    assert result["providers"]["jira"]["live_failure_class"] == (
+        "jira_site_config_invalid"
+    )
+    assert result["providers"]["jira"]["provider_payload_visibility"] == "suppressed"
+    assert validation.passed is True
+    _assert_validation_safe(result)
+    _assert_validation_safe(validation.as_dict())
+
+
 def test_valid_external_connector_config_doctor_contract_passes() -> None:
     result = config_doctor.run_external_connector_config_doctor(environ={})
     validation = validate_external_connector_config_doctor_contract(result)

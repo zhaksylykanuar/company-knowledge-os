@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,14 @@ def _configured_env() -> dict[str, str]:
         **dict.fromkeys(GITHUB_ENV_KEYS, "configured_value"),
         **dict.fromkeys(JIRA_ENV_KEYS, "configured_value"),
     }
+
+
+def _configured_jira_env(*, site: str | None = None) -> dict[str, str]:
+    configured = _configured_env()
+    configured["FOS_JIRA_READONLY_SITE"] = site or ("https" + "://jira.invalid")
+    configured["FOS_JIRA_READONLY_USER"] = "configured_value"
+    configured["FOS_JIRA_READONLY_TOKEN"] = "configured_value"
+    return configured
 
 
 def _payload(**extra: Any) -> dict[str, Any]:
@@ -223,6 +232,242 @@ def test_connector_smoke_mocked_live_readonly_path_reports_safe_counts_only() ->
     assert result["providers"]["jira"]["mapping_status"] == "live_readonly_verified"
     assert github_called is True
     assert jira_called is True
+    _assert_smoke_output_safe(result)
+
+
+def test_jira_live_readonly_success_reports_safe_adapter_diagnostics() -> None:
+    jira_called = 0
+    request_seen: jira.JiraConnectorRequest | None = None
+
+    def mocked_jira(request: jira.JiraConnectorRequest) -> list[dict[str, str]]:
+        nonlocal jira_called, request_seen
+        jira_called += 1
+        request_seen = request
+        return [_payload(), _payload()]
+
+    result = smoke.run_connector_readonly_smoke(
+        provider="jira",
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        jira_live_transport=mocked_jira,
+        environ=_configured_jira_env(),
+    )
+
+    jira_result = result["providers"]["jira"]
+    assert result["status"] == "pass"
+    assert result["provider_calls"] == "live_readonly_attempted"
+    assert jira_called == 1
+    assert request_seen is not None
+    assert request_seen.operation == "fetch_project_issue_events"
+    assert jira_result["live_readonly_status"] == "pass"
+    assert jira_result["live_failure_class"] is None
+    assert jira_result["auth_status_class"] == "jira_auth_accepted"
+    assert jira_result["transport_status_class"] == "jira_transport_pass"
+    assert jira_result["response_contract_status"] == "pass"
+    assert jira_result["provider_payload_visibility"] == "suppressed"
+    assert jira_result["project_count"] == 2
+    _assert_smoke_output_safe(result)
+
+
+def test_jira_live_readonly_invalid_site_config_is_sanitized(
+    monkeypatch: Any,
+) -> None:
+    urlopen_called = False
+
+    def forbidden_urlopen(*args: Any, **kwargs: Any) -> object:
+        nonlocal urlopen_called
+        urlopen_called = True
+        raise AssertionError("urlopen should not be called")
+
+    monkeypatch.setattr(smoke.urllib.request, "urlopen", forbidden_urlopen)
+
+    result = smoke.run_connector_readonly_smoke(
+        provider="jira",
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        environ=_configured_jira_env(site="not a valid site"),
+    )
+
+    jira_result = result["providers"]["jira"]
+    assert result["status"] == "fail"
+    assert result["provider_calls"] == "live_readonly_attempted"
+    assert jira_result["live_readonly_status"] == "fail"
+    assert jira_result["provider_reason_code"] == "jira_site_config_invalid"
+    assert jira_result["live_failure_class"] == "jira_site_config_invalid"
+    assert jira_result["transport_status_class"] == "jira_transport_not_started"
+    assert urlopen_called is False
+    _assert_smoke_output_safe(result)
+
+
+def test_jira_live_readonly_normalizes_site_before_safe_readonly_request(
+    monkeypatch: Any,
+) -> None:
+    urlopen_called = 0
+
+    class SafeResponse:
+        def __enter__(self) -> SafeResponse:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self, limit: int) -> bytes:
+            return b'{"values":[{},{}]}'
+
+    def fake_urlopen(request: object, timeout: int) -> SafeResponse:
+        nonlocal urlopen_called
+        urlopen_called += 1
+        assert timeout == 10
+        return SafeResponse()
+
+    monkeypatch.setattr(smoke.urllib.request, "urlopen", fake_urlopen)
+
+    result = smoke.run_connector_readonly_smoke(
+        provider="jira",
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        environ=_configured_jira_env(site="jira.invalid"),
+    )
+
+    jira_result = result["providers"]["jira"]
+    assert result["status"] == "pass"
+    assert urlopen_called == 1
+    assert jira_result["live_readonly_status"] == "pass"
+    assert jira_result["project_count"] == 2
+    _assert_smoke_output_safe(result)
+
+
+def test_jira_live_readonly_http_failures_map_to_safe_classes(
+    monkeypatch: Any,
+) -> None:
+    cases = {
+        401: "jira_auth_failed",
+        403: "jira_permission_denied",
+        404: "jira_not_found_or_wrong_site",
+        429: "jira_rate_limited",
+        500: "jira_server_error",
+    }
+
+    for status_code, expected_class in cases.items():
+
+        def fake_urlopen(request: object, timeout: int) -> object:
+            raise urllib.error.HTTPError(
+                url="safe_endpoint",
+                code=status_code,
+                msg="safe",
+                hdrs=None,
+                fp=None,
+            )
+
+        monkeypatch.setattr(smoke.urllib.request, "urlopen", fake_urlopen)
+
+        result = smoke.run_connector_readonly_smoke(
+            provider="jira",
+            allow_live_readonly_apis=True,
+            acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+            environ=_configured_jira_env(),
+        )
+
+        jira_result = result["providers"]["jira"]
+        assert result["status"] == "fail"
+        assert jira_result["provider_reason_code"] == expected_class
+        assert jira_result["live_failure_class"] == expected_class
+        assert jira_result["transport_status_class"] == "jira_transport_http_error"
+        _assert_smoke_output_safe(result)
+
+
+def test_jira_live_readonly_timeout_and_transport_errors_are_sanitized(
+    monkeypatch: Any,
+) -> None:
+    for raised, expected_class in (
+        (TimeoutError(), "jira_timeout"),
+        (urllib.error.URLError("safe_transport_failure"), "jira_transport_error"),
+    ):
+
+        def fake_urlopen(request: object, timeout: int) -> object:
+            raise raised
+
+        monkeypatch.setattr(smoke.urllib.request, "urlopen", fake_urlopen)
+
+        result = smoke.run_connector_readonly_smoke(
+            provider="jira",
+            allow_live_readonly_apis=True,
+            acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+            environ=_configured_jira_env(),
+        )
+
+        jira_result = result["providers"]["jira"]
+        assert result["status"] == "fail"
+        assert jira_result["provider_reason_code"] == expected_class
+        assert jira_result["live_failure_class"] == expected_class
+        _assert_smoke_output_safe(result)
+
+
+def test_jira_live_readonly_malformed_response_is_sanitized(
+    monkeypatch: Any,
+) -> None:
+    class MalformedResponse:
+        def __enter__(self) -> MalformedResponse:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self, limit: int) -> bytes:
+            return b"{not-json"
+
+    monkeypatch.setattr(
+        smoke.urllib.request,
+        "urlopen",
+        lambda request, timeout: MalformedResponse(),
+    )
+
+    result = smoke.run_connector_readonly_smoke(
+        provider="jira",
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        environ=_configured_jira_env(),
+    )
+
+    jira_result = result["providers"]["jira"]
+    assert result["status"] == "fail"
+    assert jira_result["provider_reason_code"] == "jira_response_malformed"
+    assert jira_result["live_failure_class"] == "jira_response_malformed"
+    assert jira_result["response_contract_status"] == "jira_response_malformed"
+    _assert_smoke_output_safe(result)
+
+
+def test_jira_live_readonly_response_contract_mismatch_is_sanitized(
+    monkeypatch: Any,
+) -> None:
+    class ContractMismatchResponse:
+        def __enter__(self) -> ContractMismatchResponse:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self, limit: int) -> bytes:
+            return b'{"values":["not-an-object"]}'
+
+    monkeypatch.setattr(
+        smoke.urllib.request,
+        "urlopen",
+        lambda request, timeout: ContractMismatchResponse(),
+    )
+
+    result = smoke.run_connector_readonly_smoke(
+        provider="jira",
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        environ=_configured_jira_env(),
+    )
+
+    jira_result = result["providers"]["jira"]
+    assert result["status"] == "fail"
+    assert jira_result["provider_reason_code"] == "jira_response_contract_mismatch"
+    assert jira_result["live_failure_class"] == "jira_response_contract_mismatch"
+    assert jira_result["response_contract_status"] == "jira_response_contract_mismatch"
     _assert_smoke_output_safe(result)
 
 

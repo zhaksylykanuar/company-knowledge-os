@@ -7,7 +7,9 @@ import argparse
 import base64
 import json
 import os
+import socket
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Iterable, Mapping
@@ -74,6 +76,51 @@ SMOKE_OUTPUT_UNSAFE = "external_connector_readonly_smoke_output_unsafe"
 SMOKE_CONTRACT_INVALID = "external_connector_readonly_smoke_contract_invalid"
 GITHUB_LIVE_FAILED = "github_live_readonly_failed"
 JIRA_LIVE_FAILED = "jira_live_readonly_failed"
+JIRA_SITE_CONFIG_INVALID = "jira_site_config_invalid"
+JIRA_AUTH_FAILED = "jira_auth_failed"
+JIRA_PERMISSION_DENIED = "jira_permission_denied"
+JIRA_NOT_FOUND_OR_WRONG_SITE = "jira_not_found_or_wrong_site"
+JIRA_RATE_LIMITED = "jira_rate_limited"
+JIRA_SERVER_ERROR = "jira_server_error"
+JIRA_TRANSPORT_ERROR = "jira_transport_error"
+JIRA_TIMEOUT = "jira_timeout"
+JIRA_RESPONSE_MALFORMED = "jira_response_malformed"
+JIRA_RESPONSE_CONTRACT_MISMATCH = "jira_response_contract_mismatch"
+JIRA_UNKNOWN_LIVE_SMOKE_FAILURE = "jira_unknown_live_smoke_failure"
+JIRA_AUTH_ACCEPTED = "jira_auth_accepted"
+JIRA_TRANSPORT_HTTP_ERROR = "jira_transport_http_error"
+JIRA_TRANSPORT_NOT_STARTED = "jira_transport_not_started"
+JIRA_TRANSPORT_NOT_OBSERVED = "not_observed"
+JIRA_TRANSPORT_PASS = "jira_transport_pass"
+JIRA_RESPONSE_CONTRACT_PASS = "pass"
+JIRA_RESPONSE_CONTRACT_NOT_OBSERVED = "not_observed"
+PAYLOAD_VISIBILITY_SUPPRESSED = "suppressed"
+
+
+class JiraLiveReadonlySmokeError(RuntimeError):
+    def __init__(
+        self,
+        failure_class: str,
+        *,
+        auth_status_class: str = JIRA_TRANSPORT_NOT_OBSERVED,
+        transport_status_class: str = JIRA_TRANSPORT_NOT_OBSERVED,
+        response_contract_status: str = JIRA_RESPONSE_CONTRACT_NOT_OBSERVED,
+    ) -> None:
+        super().__init__(failure_class)
+        self.failure_class = failure_class
+        self.auth_status_class = auth_status_class
+        self.transport_status_class = transport_status_class
+        self.response_contract_status = response_contract_status
+
+    def safe_fields(self) -> dict[str, str]:
+        return {
+            "live_failure_class": self.failure_class,
+            "auth_status_class": self.auth_status_class,
+            "transport_status_class": self.transport_status_class,
+            "response_contract_status": self.response_contract_status,
+            "provider_payload_visibility": PAYLOAD_VISIBILITY_SUPPRESSED,
+        }
+
 
 def run_connector_readonly_smoke(
     *,
@@ -350,8 +397,8 @@ def _jira_provider_result(
         )
         return result
 
-    transport = live_transport or _jira_http_transport(environ)
     try:
+        transport = live_transport or _jira_http_transport(environ)
         events = jira.fetch_project_issue_events(
             transport=transport,
             execution_mode=jira.LIVE_EXECUTION_MODE,
@@ -365,17 +412,24 @@ def _jira_provider_result(
                 "live_readonly_status": STATUS_PASS,
                 "mapping_status": LIVE_READONLY_VERIFIED,
                 "provider_reason_code": SMOKE_PASSED,
+                "live_failure_class": None,
+                "auth_status_class": JIRA_AUTH_ACCEPTED,
+                "transport_status_class": JIRA_TRANSPORT_PASS,
+                "response_contract_status": JIRA_RESPONSE_CONTRACT_PASS,
+                "provider_payload_visibility": PAYLOAD_VISIBILITY_SUPPRESSED,
                 "project_count": project_count,
                 "project_count_class": _zero_nonzero_count_class(project_count),
             }
         )
-    except Exception:
+    except Exception as exc:
+        failure = _classify_jira_live_readonly_failure(exc)
         result.update(
             {
                 "status": STATUS_FAIL,
                 "configured_status": CONFIGURED,
                 "live_readonly_status": STATUS_FAIL,
-                "provider_reason_code": JIRA_LIVE_FAILED,
+                "provider_reason_code": failure.failure_class,
+                **failure.safe_fields(),
             }
         )
     return result
@@ -418,6 +472,11 @@ def _base_jira_result(*, selected: bool) -> dict[str, Any]:
         "gated_status": REQUIRES_ACKNOWLEDGEMENT if selected else NOT_RUN,
         "provider_reason_code": None,
         "mapping_status": PLANNED_NOT_VERIFIED,
+        "live_failure_class": None,
+        "auth_status_class": JIRA_TRANSPORT_NOT_OBSERVED,
+        "transport_status_class": JIRA_TRANSPORT_NOT_OBSERVED,
+        "response_contract_status": JIRA_RESPONSE_CONTRACT_NOT_OBSERVED,
+        "provider_payload_visibility": PAYLOAD_VISIBILITY_SUPPRESSED,
         "project_count": 0,
         "project_count_class": COUNT_NOT_OBSERVED,
         "no_send": True,
@@ -533,10 +592,11 @@ def _github_http_transport(
 
 
 def _jira_http_transport(environ: Mapping[str, str]) -> jira.JiraTransport:
+    site = _normalize_jira_site_config(environ.get("FOS_JIRA_READONLY_SITE", ""))
+    user = environ["FOS_JIRA_READONLY_USER"]
+    api_key = environ["FOS_JIRA_READONLY_TOKEN"]
+
     def transport(request: jira.JiraConnectorRequest) -> Iterable[Mapping[str, Any]]:
-        site = environ["FOS_JIRA_READONLY_SITE"].rstrip("/")
-        user = environ["FOS_JIRA_READONLY_USER"]
-        api_key = environ["FOS_JIRA_READONLY_TOKEN"]
         endpoint = site + "/rest/api/3/project/search?maxResults=50"
         auth_value = base64.b64encode(f"{user}:{api_key}".encode("utf-8")).decode(
             "ascii"
@@ -548,18 +608,172 @@ def _jira_http_transport(environ: Mapping[str, str]) -> jira.JiraTransport:
                 "Accept": "application/json",
             },
         )
-        with urllib.request.urlopen(api_request, timeout=10) as response:
-            response_data = json.loads(response.read(1_000_000).decode("utf-8"))
+        try:
+            with urllib.request.urlopen(api_request, timeout=10) as response:
+                response_bytes = response.read(1_000_000)
+        except urllib.error.HTTPError as exc:
+            raise _jira_http_error_failure(exc.code) from None
+        except urllib.error.URLError as exc:
+            raise _jira_url_error_failure(exc) from None
+        except (TimeoutError, socket.timeout):
+            raise JiraLiveReadonlySmokeError(
+                JIRA_TIMEOUT,
+                transport_status_class=JIRA_TIMEOUT,
+            ) from None
+        except Exception:
+            raise JiraLiveReadonlySmokeError(
+                JIRA_TRANSPORT_ERROR,
+                transport_status_class=JIRA_TRANSPORT_ERROR,
+            ) from None
+        try:
+            response_data = json.loads(response_bytes.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise JiraLiveReadonlySmokeError(
+                JIRA_RESPONSE_MALFORMED,
+                transport_status_class=JIRA_TRANSPORT_PASS,
+                response_contract_status=JIRA_RESPONSE_MALFORMED,
+            ) from None
         projects = (
             response_data.get("values", [])
             if isinstance(response_data, Mapping)
             else response_data
         )
         if not isinstance(projects, list):
-            return []
+            raise JiraLiveReadonlySmokeError(
+                JIRA_RESPONSE_MALFORMED,
+                transport_status_class=JIRA_TRANSPORT_PASS,
+                response_contract_status=JIRA_RESPONSE_MALFORMED,
+            )
+        if any(not isinstance(item, Mapping) for item in projects):
+            raise JiraLiveReadonlySmokeError(
+                JIRA_RESPONSE_CONTRACT_MISMATCH,
+                transport_status_class=JIRA_TRANSPORT_PASS,
+                response_contract_status=JIRA_RESPONSE_CONTRACT_MISMATCH,
+            )
         return [_safe_connector_payload() for item in projects if isinstance(item, Mapping)]
 
     return transport
+
+
+def _normalize_jira_site_config(raw_site: str) -> str:
+    value = raw_site.strip()
+    if not value or any(character.isspace() for character in value):
+        raise JiraLiveReadonlySmokeError(
+            JIRA_SITE_CONFIG_INVALID,
+            transport_status_class=JIRA_TRANSPORT_NOT_STARTED,
+        )
+    if "://" not in value:
+        value = _https_base(value)
+    parsed = urllib.parse.urlparse(value)
+    if (
+        parsed.scheme != "https"
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+        or not parsed.hostname
+        or any(character.isspace() for character in parsed.netloc)
+    ):
+        raise JiraLiveReadonlySmokeError(
+            JIRA_SITE_CONFIG_INVALID,
+            transport_status_class=JIRA_TRANSPORT_NOT_STARTED,
+        )
+    return urllib.parse.urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path.rstrip("/"),
+            "",
+            "",
+            "",
+        )
+    )
+
+
+def _jira_http_error_failure(status_code: int) -> JiraLiveReadonlySmokeError:
+    if status_code == 401:
+        return JiraLiveReadonlySmokeError(
+            JIRA_AUTH_FAILED,
+            auth_status_class=JIRA_AUTH_FAILED,
+            transport_status_class=JIRA_TRANSPORT_HTTP_ERROR,
+        )
+    if status_code == 403:
+        return JiraLiveReadonlySmokeError(
+            JIRA_PERMISSION_DENIED,
+            auth_status_class=JIRA_PERMISSION_DENIED,
+            transport_status_class=JIRA_TRANSPORT_HTTP_ERROR,
+        )
+    if status_code == 404:
+        return JiraLiveReadonlySmokeError(
+            JIRA_NOT_FOUND_OR_WRONG_SITE,
+            transport_status_class=JIRA_TRANSPORT_HTTP_ERROR,
+        )
+    if status_code == 429:
+        return JiraLiveReadonlySmokeError(
+            JIRA_RATE_LIMITED,
+            transport_status_class=JIRA_TRANSPORT_HTTP_ERROR,
+        )
+    if 500 <= status_code <= 599:
+        return JiraLiveReadonlySmokeError(
+            JIRA_SERVER_ERROR,
+            transport_status_class=JIRA_TRANSPORT_HTTP_ERROR,
+        )
+    return JiraLiveReadonlySmokeError(
+        JIRA_TRANSPORT_ERROR,
+        transport_status_class=JIRA_TRANSPORT_HTTP_ERROR,
+    )
+
+
+def _jira_url_error_failure(exc: urllib.error.URLError) -> JiraLiveReadonlySmokeError:
+    reason = getattr(exc, "reason", None)
+    if isinstance(reason, TimeoutError | socket.timeout):
+        return JiraLiveReadonlySmokeError(
+            JIRA_TIMEOUT,
+            transport_status_class=JIRA_TIMEOUT,
+        )
+    return JiraLiveReadonlySmokeError(
+        JIRA_TRANSPORT_ERROR,
+        transport_status_class=JIRA_TRANSPORT_ERROR,
+    )
+
+
+def _classify_jira_live_readonly_failure(
+    exc: Exception,
+) -> JiraLiveReadonlySmokeError:
+    if isinstance(exc, JiraLiveReadonlySmokeError):
+        return exc
+    if isinstance(exc, jira.JiraConnectorError):
+        if exc.reason_code == jira.JIRA_RAW_EVENT_CONTRACT_INVALID:
+            return JiraLiveReadonlySmokeError(
+                JIRA_RESPONSE_CONTRACT_MISMATCH,
+                transport_status_class=JIRA_TRANSPORT_PASS,
+                response_contract_status=JIRA_RESPONSE_CONTRACT_MISMATCH,
+            )
+        return JiraLiveReadonlySmokeError(
+            JIRA_UNKNOWN_LIVE_SMOKE_FAILURE,
+            response_contract_status=JIRA_RESPONSE_CONTRACT_NOT_OBSERVED,
+        )
+    if isinstance(exc, urllib.error.HTTPError):
+        return _jira_http_error_failure(exc.code)
+    if isinstance(exc, urllib.error.URLError):
+        return _jira_url_error_failure(exc)
+    if isinstance(exc, TimeoutError | socket.timeout):
+        return JiraLiveReadonlySmokeError(
+            JIRA_TIMEOUT,
+            transport_status_class=JIRA_TIMEOUT,
+        )
+    if isinstance(exc, json.JSONDecodeError | UnicodeDecodeError):
+        return JiraLiveReadonlySmokeError(
+            JIRA_RESPONSE_MALFORMED,
+            transport_status_class=JIRA_TRANSPORT_PASS,
+            response_contract_status=JIRA_RESPONSE_MALFORMED,
+        )
+    return JiraLiveReadonlySmokeError(
+        JIRA_UNKNOWN_LIVE_SMOKE_FAILURE,
+        transport_status_class=JIRA_TRANSPORT_ERROR,
+    )
 
 
 def _portfolio_compare_summary(observed_repo_keys: set[str]) -> dict[str, Any]:

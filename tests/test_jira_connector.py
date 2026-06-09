@@ -8,6 +8,7 @@ from app.connectors import jira
 from app.integrations.payload_mapper import map_connector_payload_to_ingested_event
 from app.services.operator_output_sanitizer import inspect_operator_output
 from app.services.provider_execution_guard import (
+    LIVE_PROVIDER_EXECUTION_ACK,
     PROVIDER_EXECUTION_ACK_REQUIRED,
     PROVIDER_EXECUTION_DEFAULT_DENIED,
     ProviderExecutionBlockedError,
@@ -91,6 +92,34 @@ def test_jira_synthetic_project_issue_fetch_returns_raw_event_source_envelope() 
     assert events[0]["source_system"] == "jira"
     assert events[0]["source_object_type"] == "issue"
     assert events[0]["event_type"] == "jira.issue.created"
+    assert events[0]["interpreted_truth"] is False
+
+
+def test_jira_live_readonly_fetch_calls_transport_once_with_ack() -> None:
+    transport_call_count = 0
+    request_seen: jira.JiraConnectorRequest | None = None
+
+    def live_readonly_transport(
+        request: jira.JiraConnectorRequest,
+    ) -> list[dict[str, str]]:
+        nonlocal transport_call_count, request_seen
+        transport_call_count += 1
+        request_seen = request
+        return [_payload()]
+
+    events = jira.fetch_project_issue_events(
+        transport=live_readonly_transport,
+        allow_live_provider_execution=True,
+        provider_execution_ack=LIVE_PROVIDER_EXECUTION_ACK,
+    )
+
+    assert transport_call_count == 1
+    assert request_seen is not None
+    assert request_seen.provider_key == "jira"
+    assert request_seen.operation == "fetch_project_issue_events"
+    assert request_seen.execution_mode == jira.LIVE_EXECUTION_MODE
+    assert len(events) == 1
+    assert events[0]["connector_boundary"] == "raw_event_source_only"
     assert events[0]["interpreted_truth"] is False
 
 

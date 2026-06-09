@@ -234,6 +234,11 @@
   expose counts/classes only. The report is not source of truth and does not
   persist data, update repositories, write Jira data, run scheduler work,
   execute delivery, or mutate raw storage, Obsidian, or Postgres.
+  Jira live-read-only failures are classified as sanitized operator classes
+  such as invalid configuration, auth or permission failure, wrong site,
+  rate limit, server error, transport error, timeout, malformed response, or
+  response-contract mismatch. Raw provider locations, credentials, project or
+  issue identifiers, payloads, and response bodies are never part of the report.
 - The external connector configuration doctor is operator-review metadata for
   GitHub/Jira setup readiness. It checks expected environment variable
   presence by name only, never prints values, and never calls providers. It can
