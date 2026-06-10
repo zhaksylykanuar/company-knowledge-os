@@ -4,6 +4,8 @@ Navigation map for future Codex sessions.
 
 ## Start Here
 
+- `playbook.md`: operating playbook v2 — phases, usage gates, weekly ritual,
+  eval contract. Read this first for "what to build next".
 - `../AGENTS.md`: agent operating rules.
 - `../CLAUDE.md`: AI/token/extraction rules.
 - `architecture.md`: system overview.

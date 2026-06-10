@@ -105,6 +105,8 @@ docs/           architecture, data model, features, runbooks, decisions
 
 ## Where to read more
 
+- [`docs/playbook.md`](docs/playbook.md) — operating playbook v2: phases, usage
+  gates, weekly ritual, eval contract (what to build next and in which order).
 - [`docs/index.md`](docs/index.md) — navigation map for everything below.
 - [`AGENTS.md`](AGENTS.md) — operating rules for AI agents working in this repo.
 - [`CLAUDE.md`](CLAUDE.md) — AI / token / extraction boundaries.
