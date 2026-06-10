@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from datetime import datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -159,6 +159,51 @@ def _context_prompt_payload(
     max_text_chars: int,
 ) -> dict[str, Any]:
     return _truncate_text(context.model_dump(mode="json"), max_text_chars)
+
+
+def _openai_attention_triage_response_schema() -> dict[str, Any]:
+    """Return the strict JSON schema subset accepted by OpenAI structured output."""
+
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "attention_class": {
+                "type": "string",
+                "enum": list(get_args(AttentionClass)),
+            },
+            "priority": {
+                "type": "string",
+                "enum": list(get_args(Priority)),
+            },
+            "show_in_digest": {"type": "boolean"},
+            "confidence": {"type": "number"},
+            "reason": {"type": "string"},
+            "recommended_action": {"type": "string"},
+            "owner": {"type": ["string", "null"]},
+            "deadline": {"type": ["string", "null"]},
+            "evidence": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {},
+                    "required": [],
+                },
+            },
+        },
+        "required": [
+            "attention_class",
+            "priority",
+            "show_in_digest",
+            "confidence",
+            "reason",
+            "recommended_action",
+            "owner",
+            "deadline",
+            "evidence",
+        ],
+    }
 
 
 def _response_output_text(response: Any) -> str | bytes | Mapping[str, Any]:
@@ -414,7 +459,7 @@ class OpenAIAttentionTriageProvider:
                     "type": "json_schema",
                     "name": "attention_triage_result",
                     "strict": True,
-                    "schema": AttentionTriageResult.model_json_schema(),
+                    "schema": _openai_attention_triage_response_schema(),
                 }
             },
         }

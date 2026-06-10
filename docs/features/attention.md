@@ -38,6 +38,7 @@
 - Local/dev-only stored source event normalization command: implemented
 - Read-only normalized activity triage readiness preview: implemented
 - Local/dev-only provider-free normalized activity triage command: implemented
+- Read-only LLM-vs-deterministic attention triage comparison: implemented
 - Read-only persisted attention window reconciliation report: implemented
 - Read-only no-marker persisted attention candidate report: implemented
 - Local/dev-only no-marker persisted attention delivery draft preparation:
@@ -244,6 +245,15 @@
   default-denied guard. Synthetic injected providers and local normalized-data
   transforms remain usable for tests and review without live-provider
   acknowledgement.
+- `scripts/compare_attention_triage_llm_vs_deterministic.py` can run one
+  local read-only comparison between guarded OpenAI attention triage and the
+  deterministic fallback over the latest normalized activity window. It
+  requires local `ATTENTION_TRIAGE_ENABLED=true`, `ENABLE_LLM=true`, an
+  available OpenAI key, `--confirm-compare 'COMPARE ATTENTION TRIAGE'`, and
+  `--acknowledge-live-provider-risk 'ALLOW LIVE PROVIDER EXECUTION'`. The
+  command does not persist triage results, does not mutate source-of-truth
+  data, and reports only aggregate total, LLM counts, deterministic counts,
+  divergence type counts, and safety classes.
 - Production-affecting operations are default-denied outside explicit operator
   gates. Delivery execution and Obsidian vault export require a separate
   production-operation acknowledgement; read-only attention review, digest

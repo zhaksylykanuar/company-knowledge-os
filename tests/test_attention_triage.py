@@ -469,6 +469,35 @@ def test_openai_provider_enabled_with_fake_valid_json_returns_result() -> None:
     assert fake_client.calls[0]["text"]["format"]["strict"] is True
 
 
+def test_openai_provider_uses_openai_compatible_strict_response_schema() -> None:
+    fake_client = _FakeOpenAICompatibleClient(
+        [
+            json.dumps(
+                _result(
+                    attention_class="requires_my_attention",
+                    priority="high",
+                    owner="me",
+                )
+            )
+        ]
+    )
+    provider = OpenAIAttentionTriageProvider(client=fake_client, enabled=True)
+
+    provider.classify_activity(_activity("fake-openai-schema"), _context())
+
+    schema = fake_client.calls[0]["text"]["format"]["schema"]
+    assert schema["additionalProperties"] is False
+    assert "minimum" not in schema["properties"]["confidence"]
+    assert "maximum" not in schema["properties"]["confidence"]
+    evidence_items_schema = schema["properties"]["evidence"]["items"]
+    assert evidence_items_schema == {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {},
+        "required": [],
+    }
+
+
 def test_openai_provider_prompt_includes_recent_feedback_context() -> None:
     fake_client = _FakeOpenAICompatibleClient(
         [

@@ -1,4 +1,4 @@
-from pydantic import SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     api_auth_key: SecretStr | str | None = None
     api_auth_header_name: str = "X-FounderOS-API-Key"
 
-    openai_api_key: str | None = None
+    openai_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("OPENAI_API_KEY", "FOS_OPENAI_API_KEY"),
+    )
 
     google_client_secrets_file: str = "./secrets/google_oauth_client.json"
     google_token_file: str = "./secrets/google_token.json"
@@ -68,7 +71,11 @@ class Settings(BaseSettings):
 
     obsidian_vault_path: str = "./obsidian_vault"
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
 
 settings = Settings()

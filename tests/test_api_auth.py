@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
+import pytest
 from pydantic import SecretStr
 
 from app.api.auth import API_AUTH_FAILURE_DETAIL, build_require_api_key
@@ -30,6 +31,27 @@ def test_api_auth_config_defaults_are_non_breaking() -> None:
     assert Settings.model_fields["api_auth_enabled"].default is False
     assert Settings.model_fields["api_auth_key"].default is None
     assert Settings.model_fields["api_auth_header_name"].default == "X-FounderOS-API-Key"
+    assert Settings.model_fields["openai_api_key"].default is None
+
+
+def test_settings_accepts_fos_openai_api_key_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("FOS_OPENAI_API_KEY", "test-fos-openai-key")
+
+    config = Settings(_env_file=None)
+
+    assert config.openai_api_key == "test-fos-openai-key"
+
+
+def test_settings_prefers_standard_openai_api_key_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("FOS_OPENAI_API_KEY", "test-fos-openai-key")
+
+    config = Settings(_env_file=None)
+
+    assert config.openai_api_key == "test-openai-key"
 
 
 def test_dependency_allows_when_auth_disabled() -> None:
