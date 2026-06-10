@@ -26,6 +26,7 @@ from app.services.github_org_inventory import (  # noqa: E402
     STATUS_PASS,
     TARGET_ORG_KEY,
     GITHUB_RESPONSE_MALFORMED,
+    GITHUB_RESPONSE_CONTRACT_MISMATCH,
     GITHUB_TIMEOUT,
     GITHUB_TRANSPORT_ERROR,
     GitHubOrgInventoryLiveError,
@@ -39,6 +40,8 @@ from app.services.guarded_execution_contracts import (  # noqa: E402
 from app.services.local_connector_env import (  # noqa: E402
     add_connector_env_file_arguments,
     connector_env_cli_kwargs,
+    is_configured_environment_value,
+    load_local_connector_environment,
 )
 from app.services.operator_output_sanitizer import inspect_operator_output  # noqa: E402
 
@@ -60,7 +63,12 @@ def run_github_org_readonly_inventory(
     connector_env_file: str | Path | None = None,
     use_connector_env_file: bool = False,
 ) -> dict[str, Any]:
-    environment = environ if environ is not None else os.environ
+    env_result = load_local_connector_environment(
+        environ=environ if environ is not None else os.environ,
+        connector_env_file=connector_env_file,
+        use_connector_env_file=use_connector_env_file,
+    )
+    environment = env_result.environment
     live_transport = github_live_transport
     if allow_live_readonly_apis and live_transport is None:
         normalized_target_org = normalize_github_target_org(
@@ -81,9 +89,10 @@ def run_github_org_readonly_inventory(
         max_results=max_results,
         github_live_transport=live_transport,
         environ=environment,
-        connector_env_file=connector_env_file,
-        use_connector_env_file=use_connector_env_file,
+        connector_env_file=None,
+        use_connector_env_file=False,
     )
+    result["diagnostics"]["connector_env_file"] = dict(env_result.diagnostics)
     return _finalize_result(result)
 
 
@@ -96,7 +105,9 @@ def _github_org_http_transport(
     def transport(
         request: github.GitHubConnectorRequest,
     ) -> Iterable[Mapping[str, Any]]:
-        token = environ["FOS_GITHUB_READONLY_TOKEN"]
+        token = environ.get("FOS_GITHUB_READONLY_TOKEN")
+        if not is_configured_environment_value(token):
+            raise GitHubOrgInventoryLiveError("github_org_config_invalid")
         bounded_max = max(1, min(max_results, 100))
         endpoint = (
             _https_base("api.github.com")
@@ -110,24 +121,20 @@ def _github_org_http_transport(
             endpoint,
             headers={
                 "Authorization": "Bearer " + token,
-                "Accept": "application/json",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "company-knowledge-os-readonly-inventory",
             },
         )
         with urllib.request.urlopen(api_request, timeout=10) as response:
             try:
                 response_data = json.loads(response.read(1_000_000).decode("utf-8"))
-            except json.JSONDecodeError as exc:
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                 raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_MALFORMED) from exc
-        if not isinstance(response_data, list):
-            raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_MALFORMED)
-        payloads: list[dict[str, str]] = []
-        for item in response_data:
-            if not isinstance(item, Mapping):
-                raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_MALFORMED)
-            repo_key = item.get("name")
-            if isinstance(repo_key, str) and repo_key:
-                payloads.append({"repo_key": repo_key})
-        return payloads
+        return _repo_payloads_from_org_repos_response(
+            response_data,
+            max_results=bounded_max,
+        )
     def guarded_transport(
         request: github.GitHubConnectorRequest,
     ) -> Iterable[Mapping[str, Any]]:
@@ -148,6 +155,28 @@ def _github_org_http_transport(
             raise GitHubOrgInventoryLiveError(GITHUB_TRANSPORT_ERROR) from exc
 
     return guarded_transport
+
+
+def _repo_payloads_from_org_repos_response(
+    response_data: Any,
+    *,
+    max_results: int,
+) -> list[dict[str, str]]:
+    if not isinstance(response_data, list):
+        raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_MALFORMED)
+
+    payloads: list[dict[str, str]] = []
+    bounded_max = max(0, min(max_results, 100))
+    for index, item in enumerate(response_data, start=1):
+        if index > bounded_max:
+            break
+        if not isinstance(item, Mapping):
+            raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_MALFORMED)
+        repo_key = item.get("name")
+        if not isinstance(repo_key, str) or not repo_key.strip():
+            raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_CONTRACT_MISMATCH)
+        payloads.append({"repo_key": repo_key.strip()})
+    return payloads
 
 
 def _finalize_result(result: dict[str, Any]) -> dict[str, Any]:

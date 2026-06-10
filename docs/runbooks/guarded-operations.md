@@ -80,6 +80,10 @@ response-contract mismatch, and empty organization inventory. Fixing live
 organization access remains a manual credential or permission task; the
 inventory path stays read-only and target migration remains manual.
 
+The live adapter uses the read-only organization repository list contract and
+normalizes the response into counts/classes before public output. A successful
+empty list is reported as an empty-inventory class, not an unknown failure.
+
 ## Connector Smoke CLI
 
 `scripts/check_external_connectors_readonly.py` is a read-only, no-send,

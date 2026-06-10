@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 import urllib.error
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,20 @@ def _assert_cli_output_safe(value: dict[str, Any]) -> None:
     assert inspect_operator_output(value).safe is True
     assert value["contract_validation"]["validation_status"] == "pass"
     assert validate_github_org_readonly_inventory_contract(value).passed is True
+
+
+class _MockGitHubResponse:
+    def __init__(self, payload: Any) -> None:
+        self._body = json.dumps(payload).encode("utf-8")
+
+    def __enter__(self) -> "_MockGitHubResponse":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self, limit: int = -1) -> bytes:
+        return BytesIO(self._body).read(limit)
 
 
 def test_github_org_inventory_cli_default_no_live_outputs_strict_json() -> None:
@@ -145,6 +160,118 @@ def test_github_org_inventory_cli_live_mode_uses_mocked_transport_once() -> None
     assert result["github"]["live_readonly_status"] == "pass"
     assert result["github"]["org_repo_count_class"] == "nonzero_count"
     assert result["github"]["provider_payload_visibility"] == "suppressed"
+    _assert_cli_output_safe(result)
+
+
+def test_github_org_inventory_cli_http_adapter_uses_loaded_connector_env_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    env_file = tmp_path / "connectors.env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "FOS_GITHUB_READONLY_ACCOUNT=configured_value",
+                "FOS_GITHUB_READONLY_TOKEN=configured_value",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    call_count = 0
+
+    def successful_urlopen(*args: Any, **kwargs: Any) -> _MockGitHubResponse:
+        nonlocal call_count
+        call_count += 1
+        return _MockGitHubResponse([{"name": "synthetic-visible-repository"}])
+
+    monkeypatch.setattr(inventory_cli.urllib.request, "urlopen", successful_urlopen)
+
+    result = inventory_cli.run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        compare_portfolio=True,
+        environ={},
+        connector_env_file=env_file,
+        use_connector_env_file=True,
+    )
+
+    assert result["status"] == "pass"
+    assert result["provider_calls"] == "live_readonly_attempted"
+    assert result["github"]["org_inventory_status"] == "live_readonly_verified"
+    assert result["github"]["org_repo_count_class"] == "nonzero_count"
+    assert result["github"]["live_readonly_status"] == "pass"
+    assert result["diagnostics"]["connector_env_file"]["env_file_status"] == "loaded"
+    assert call_count == 1
+    assert "synthetic-visible-repository" not in json.dumps(result, sort_keys=True)
+    _assert_cli_output_safe(result)
+
+
+def test_github_org_inventory_cli_http_adapter_empty_list_is_specific_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def empty_urlopen(*args: Any, **kwargs: Any) -> _MockGitHubResponse:
+        return _MockGitHubResponse([])
+
+    monkeypatch.setattr(inventory_cli.urllib.request, "urlopen", empty_urlopen)
+
+    result = inventory_cli.run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        compare_portfolio=True,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["reason_code"] == "github_empty_org_inventory"
+    assert result["github"]["org_repo_count_class"] == "zero_count"
+    assert result["github"]["failure_class"] == "github_empty_org_inventory"
+    assert result["github"]["live_failure_class"] == "github_empty_org_inventory"
+    _assert_cli_output_safe(result)
+
+
+def test_github_org_inventory_cli_http_adapter_rejects_non_list_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def malformed_urlopen(*args: Any, **kwargs: Any) -> _MockGitHubResponse:
+        return _MockGitHubResponse({"safe_shape_class": "not_a_repo_list"})
+
+    monkeypatch.setattr(inventory_cli.urllib.request, "urlopen", malformed_urlopen)
+
+    result = inventory_cli.run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        compare_portfolio=True,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["reason_code"] == "github_response_malformed"
+    assert result["github"]["failure_class"] == "github_response_malformed"
+    assert result["github"]["response_contract_status"] == "github_response_malformed"
+    _assert_cli_output_safe(result)
+
+
+def test_github_org_inventory_cli_http_adapter_rejects_missing_repo_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mismatched_urlopen(*args: Any, **kwargs: Any) -> _MockGitHubResponse:
+        return _MockGitHubResponse([{"safe_shape_class": "missing_repo_name"}])
+
+    monkeypatch.setattr(inventory_cli.urllib.request, "urlopen", mismatched_urlopen)
+
+    result = inventory_cli.run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        compare_portfolio=True,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["reason_code"] == "github_response_contract_mismatch"
+    assert result["github"]["failure_class"] == "github_response_contract_mismatch"
+    assert result["github"]["response_contract_status"] == (
+        "github_response_contract_mismatch"
+    )
     _assert_cli_output_safe(result)
 
 
