@@ -22,6 +22,10 @@ GITHUB_CONNECTOR_TRANSPORT_MISSING = "github_connector_transport_missing"
 GITHUB_CONNECTOR_MODE_UNSUPPORTED = "github_connector_mode_unsupported"
 GITHUB_RAW_EVENT_CONTRACT_INVALID = "github_raw_event_contract_invalid"
 GITHUB_ORG_INVENTORY_CONTRACT_INVALID = "github_org_inventory_contract_invalid"
+GITHUB_ORG_INVENTORY_RESPONSE_MALFORMED = "github_response_malformed"
+GITHUB_ORG_INVENTORY_RESPONSE_CONTRACT_MISMATCH = (
+    "github_response_contract_mismatch"
+)
 
 COUNT_ZERO = "zero_count"
 COUNT_NONZERO = "nonzero_count"
@@ -262,14 +266,26 @@ def _repo_keys_from_payloads(
     payloads: Iterable[Mapping[str, Any]],
     max_results: int,
 ) -> set[str]:
+    if isinstance(payloads, Mapping | str | bytes):
+        raise GitHubConnectorError(GITHUB_ORG_INVENTORY_RESPONSE_MALFORMED)
     repo_keys: set[str] = set()
     bounded_max = max(0, min(max_results, 100))
     for index, payload in enumerate(payloads, start=1):
         if index > bounded_max:
             break
+        if not isinstance(payload, Mapping):
+            raise GitHubConnectorError(GITHUB_ORG_INVENTORY_RESPONSE_MALFORMED)
         repo_key = payload.get("repo_key")
-        if isinstance(repo_key, str) and repo_key:
-            repo_keys.add(repo_key)
+        if not isinstance(repo_key, str):
+            raise GitHubConnectorError(
+                GITHUB_ORG_INVENTORY_RESPONSE_CONTRACT_MISMATCH
+            )
+        repo_key = repo_key.strip()
+        if not repo_key:
+            raise GitHubConnectorError(
+                GITHUB_ORG_INVENTORY_RESPONSE_CONTRACT_MISMATCH
+            )
+        repo_keys.add(repo_key)
     return repo_keys
 
 

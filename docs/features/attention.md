@@ -1254,9 +1254,10 @@
 - The GitHub organization inventory CLI prepares target organization migration
   readiness as strict sanitized JSON. It is no-live by default, synthetic when
   requested, and live-read-only only after explicit manual provider
-  acknowledgement. It reports counts/classes only and does not ingest GitHub
-  events, transfer repositories, edit repository metadata, write source-of-truth
-  stores, run scheduler work, or affect attention scoring.
+  acknowledgement. It reports counts/classes and sanitized failure classes only
+  and does not ingest GitHub events, transfer repositories, edit repository
+  metadata, write source-of-truth stores, run scheduler work, or affect
+  attention scoring.
 - The Jira read-only inventory CLI prepares Jira inventory and portfolio
   mapping as strict sanitized JSON. Default mode is no-live, synthetic mode is
   provider-free, and live read-only mode requires explicit manual provider

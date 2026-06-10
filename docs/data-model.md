@@ -246,10 +246,11 @@
   read-only mode requires separate explicit provider acknowledgement. It
   exposes target-owner class, target organization key, seed counts, observed
   count classes, matched/missing/extra count classes, migration-readiness
-  classes, and disabled write/transfer/edit classes only. It does not persist
-  inventory, ingest GitHub events, print repository identities, call live APIs
-  by default, create or transfer repositories, edit repository metadata, rotate
-  secrets, run scheduler work, or mutate raw storage, Obsidian, or Postgres.
+  classes, sanitized live failure classes, and disabled write/transfer/edit
+  classes only. It does not persist inventory, ingest GitHub events, print
+  repository identities, call live APIs by default, create or transfer
+  repositories, edit repository metadata, perform credential rotation, run
+  scheduler work, or mutate raw storage, Obsidian, or Postgres.
 - The external connector read-only smoke report is operator-review metadata for
   GitHub/Jira onboarding. Default mode makes no live calls, synthetic mode uses
   synthetic transports, and live read-only mode requires a separate explicit

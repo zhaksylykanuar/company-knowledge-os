@@ -168,6 +168,28 @@ def test_github_org_inventory_synthetic_summary_uses_counts_only() -> None:
     assert inspect_operator_output(summary).safe is True
 
 
+def test_github_org_inventory_rejects_malformed_payload_shape() -> None:
+    with pytest.raises(github.GitHubConnectorError) as exc_info:
+        github.fetch_org_repository_inventory_summary(
+            transport=lambda request: ["not-a-repository-payload"],
+            execution_mode=github.SYNTHETIC_EXECUTION_MODE,
+            seed_repository_keys=("seed_repo",),
+        )
+
+    assert exc_info.value.reason_code == "github_response_malformed"
+
+
+def test_github_org_inventory_rejects_response_contract_mismatch() -> None:
+    with pytest.raises(github.GitHubConnectorError) as exc_info:
+        github.fetch_org_repository_inventory_summary(
+            transport=lambda request: [{"repo_key": ""}],
+            execution_mode=github.SYNTHETIC_EXECUTION_MODE,
+            seed_repository_keys=("seed_repo",),
+        )
+
+    assert exc_info.value.reason_code == "github_response_contract_mismatch"
+
+
 def test_github_org_inventory_mocked_live_readonly_calls_transport_once() -> None:
     call_count = 0
     request_seen: github.GitHubConnectorRequest | None = None

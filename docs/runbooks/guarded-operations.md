@@ -72,6 +72,14 @@ repositories, create repositories, edit metadata, update topics or READMEs,
 archive repositories, perform credential rotation, write raw storage, write
 Postgres, run scheduler work, or execute delivery.
 
+Live read-only organization inventory diagnostics expose only sanitized
+failure classes. Common classes include invalid organization configuration,
+authentication failure, permission denial, organization not found or no access,
+rate limiting, server error, transport error, timeout, malformed response,
+response-contract mismatch, and empty organization inventory. Fixing live
+organization access remains a manual credential or permission task; the
+inventory path stays read-only and target migration remains manual.
+
 ## Connector Smoke CLI
 
 `scripts/check_external_connectors_readonly.py` is a read-only, no-send,

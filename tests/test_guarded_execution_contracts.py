@@ -176,6 +176,9 @@ def test_valid_github_org_readonly_inventory_contract_passes() -> None:
     assert result["github"]["target_org_key"] == "qtwin-io"
     assert result["github"]["target_owner_class"] == "github_organization"
     assert result["github"]["org_inventory_status"] == "synthetic_verified"
+    assert result["github"]["live_readonly_status"] == "not_run"
+    assert result["github"]["auth_status_class"] == "synthetic_not_checked"
+    assert result["github"]["response_contract_status"] == "pass"
     assert result["github"]["seed_repo_count"] == 19
     assert result["github"]["expected_migration_count"] == 19
     assert result["github"]["write_operations"] == "disabled"

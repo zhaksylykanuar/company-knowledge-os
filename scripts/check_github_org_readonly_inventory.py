@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Iterable, Mapping
@@ -23,6 +25,12 @@ from app.services.github_org_inventory import (  # noqa: E402
     STATUS_FAIL,
     STATUS_PASS,
     TARGET_ORG_KEY,
+    GITHUB_RESPONSE_MALFORMED,
+    GITHUB_TIMEOUT,
+    GITHUB_TRANSPORT_ERROR,
+    GitHubOrgInventoryLiveError,
+    github_org_inventory_error_for_http_status,
+    normalize_github_target_org,
     run_github_org_readonly_inventory as _run_github_org_readonly_inventory,
 )
 from app.services.guarded_execution_contracts import (  # noqa: E402
@@ -55,9 +63,13 @@ def run_github_org_readonly_inventory(
     environment = environ if environ is not None else os.environ
     live_transport = github_live_transport
     if allow_live_readonly_apis and live_transport is None:
+        normalized_target_org = normalize_github_target_org(
+            target_org=target_org,
+            environ=environment,
+        )
         live_transport = _github_org_http_transport(
             environment,
-            target_org=target_org or TARGET_ORG_KEY,
+            target_org=normalized_target_org.value,
             max_results=max_results,
         )
     result = _run_github_org_readonly_inventory(
@@ -102,19 +114,40 @@ def _github_org_http_transport(
             },
         )
         with urllib.request.urlopen(api_request, timeout=10) as response:
-            response_data = json.loads(response.read(1_000_000).decode("utf-8"))
+            try:
+                response_data = json.loads(response.read(1_000_000).decode("utf-8"))
+            except json.JSONDecodeError as exc:
+                raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_MALFORMED) from exc
         if not isinstance(response_data, list):
-            return []
+            raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_MALFORMED)
         payloads: list[dict[str, str]] = []
         for item in response_data:
             if not isinstance(item, Mapping):
-                continue
+                raise GitHubOrgInventoryLiveError(GITHUB_RESPONSE_MALFORMED)
             repo_key = item.get("name")
             if isinstance(repo_key, str) and repo_key:
                 payloads.append({"repo_key": repo_key})
         return payloads
+    def guarded_transport(
+        request: github.GitHubConnectorRequest,
+    ) -> Iterable[Mapping[str, Any]]:
+        try:
+            return transport(request)
+        except urllib.error.HTTPError as exc:
+            raise github_org_inventory_error_for_http_status(exc.code) from exc
+        except TimeoutError as exc:
+            raise GitHubOrgInventoryLiveError(GITHUB_TIMEOUT) from exc
+        except socket.timeout as exc:
+            raise GitHubOrgInventoryLiveError(GITHUB_TIMEOUT) from exc
+        except urllib.error.URLError as exc:
+            reason = exc.reason
+            if isinstance(reason, TimeoutError | socket.timeout):
+                raise GitHubOrgInventoryLiveError(GITHUB_TIMEOUT) from exc
+            raise GitHubOrgInventoryLiveError(GITHUB_TRANSPORT_ERROR) from exc
+        except OSError as exc:
+            raise GitHubOrgInventoryLiveError(GITHUB_TRANSPORT_ERROR) from exc
 
-    return transport
+    return guarded_transport
 
 
 def _finalize_result(result: dict[str, Any]) -> dict[str, Any]:

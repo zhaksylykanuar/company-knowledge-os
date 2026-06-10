@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
+
 from app.connectors import github
 from app.services.external_connector_config import GITHUB_ENV_KEYS
 from app.services.github_org_inventory import (
+    GitHubOrgInventoryLiveError,
     github_org_inventory_readiness_summary,
     run_github_org_readonly_inventory,
 )
@@ -174,6 +177,15 @@ def test_github_org_inventory_mocked_live_readonly_calls_transport_once() -> Non
     assert request_seen.operation == "fetch_org_repository_inventory_summary"
     assert request_seen.source_object_type == "repository"
     assert result["github"]["org_inventory_status"] == "live_readonly_verified"
+    assert result["github"]["live_readonly_status"] == "pass"
+    assert result["github"]["live_failure_class"] is None
+    assert result["github"]["auth_status_class"] == "pass"
+    assert result["github"]["permission_status_class"] == "pass"
+    assert result["github"]["transport_status_class"] == "pass"
+    assert result["github"]["response_contract_status"] == "pass"
+    assert result["github"]["org_visibility_status_class"] == (
+        "github_org_inventory_visible"
+    )
     assert result["github"]["org_repo_count_class"] == "nonzero_count"
     assert result["github"]["matched_count_class"] == "nonzero_count"
     assert result["github"]["missing_count_class"] == "nonzero_count"
@@ -181,6 +193,162 @@ def test_github_org_inventory_mocked_live_readonly_calls_transport_once() -> Non
     assert result["migration_readiness"]["live_inventory_status_class"] == (
         "live_readonly_verified"
     )
+    _assert_inventory_output_safe(result)
+
+
+@pytest.mark.parametrize(
+    ("failure_class", "expected_auth", "expected_permission"),
+    [
+        ("github_auth_failed", "github_auth_failed", "not_checked"),
+        ("github_permission_denied", "pass", "github_permission_denied"),
+        (
+            "github_org_not_found_or_no_access",
+            "pass",
+            "github_org_not_found_or_no_access",
+        ),
+        ("github_rate_limited", "pass", "pass"),
+        ("github_server_error", "pass", "pass"),
+    ],
+)
+def test_github_org_inventory_live_failure_maps_to_safe_class(
+    failure_class: str,
+    expected_auth: str,
+    expected_permission: str,
+) -> None:
+    def failing_transport(
+        request: github.GitHubConnectorRequest,
+    ) -> list[dict[str, str]]:
+        raise GitHubOrgInventoryLiveError(failure_class)
+
+    result = run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        github_live_transport=failing_transport,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["reason_code"] == failure_class
+    assert result["provider_calls"] == "live_readonly_attempted"
+    assert result["github"]["live_readonly_status"] == "fail"
+    assert result["github"]["failure_class"] == failure_class
+    assert result["github"]["live_failure_class"] == failure_class
+    assert result["github"]["auth_status_class"] == expected_auth
+    assert result["github"]["permission_status_class"] == expected_permission
+    assert result["github"]["provider_payload_visibility"] == "suppressed"
+    _assert_inventory_output_safe(result)
+
+
+@pytest.mark.parametrize(
+    ("exception", "failure_class", "transport_status"),
+    [
+        (TimeoutError(), "github_timeout", "github_timeout"),
+        (OSError(), "github_transport_error", "github_transport_error"),
+    ],
+)
+def test_github_org_inventory_transport_exceptions_are_sanitized(
+    exception: Exception,
+    failure_class: str,
+    transport_status: str,
+) -> None:
+    def failing_transport(
+        request: github.GitHubConnectorRequest,
+    ) -> list[dict[str, str]]:
+        raise exception
+
+    result = run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        github_live_transport=failing_transport,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["github"]["failure_class"] == failure_class
+    assert result["github"]["transport_status_class"] == transport_status
+    assert result["github"]["live_readonly_status"] == "fail"
+    _assert_inventory_output_safe(result)
+
+
+def test_github_org_inventory_empty_live_response_is_specific_safe_class() -> None:
+    result = run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        github_live_transport=lambda request: [],
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["reason_code"] == "github_empty_org_inventory"
+    assert result["github"]["org_repo_count_class"] == "zero_count"
+    assert result["github"]["failure_class"] == "github_empty_org_inventory"
+    assert result["github"]["org_visibility_status_class"] == (
+        "github_empty_org_inventory"
+    )
+    _assert_inventory_output_safe(result)
+
+
+def test_github_org_inventory_malformed_response_is_specific_safe_class() -> None:
+    def malformed_transport(request: github.GitHubConnectorRequest) -> list[Any]:
+        return ["not-a-repository-payload"]
+
+    result = run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        github_live_transport=malformed_transport,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["github"]["failure_class"] == "github_response_malformed"
+    assert result["github"]["response_contract_status"] == "github_response_malformed"
+    _assert_inventory_output_safe(result)
+
+
+def test_github_org_inventory_contract_mismatch_is_specific_safe_class() -> None:
+    def mismatched_transport(
+        request: github.GitHubConnectorRequest,
+    ) -> list[dict[str, str]]:
+        return [{"repo_key": ""}]
+
+    result = run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        github_live_transport=mismatched_transport,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["github"]["failure_class"] == "github_response_contract_mismatch"
+    assert result["github"]["response_contract_status"] == (
+        "github_response_contract_mismatch"
+    )
+    _assert_inventory_output_safe(result)
+
+
+def test_github_org_inventory_invalid_target_org_config_blocks_before_transport() -> None:
+    transport_called = False
+
+    def forbidden_transport(
+        request: github.GitHubConnectorRequest,
+    ) -> list[dict[str, str]]:
+        nonlocal transport_called
+        transport_called = True
+        return [{"repo_key": "synthetic_repo"}]
+
+    result = run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        target_org="invalid org shape",
+        github_live_transport=forbidden_transport,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["reason_code"] == "github_org_config_invalid"
+    assert result["github"]["target_org_key"] == "qtwin-io"
+    assert result["github"]["failure_class"] == "github_org_config_invalid"
+    assert transport_called is False
     _assert_inventory_output_safe(result)
 
 

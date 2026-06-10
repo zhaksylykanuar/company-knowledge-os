@@ -48,7 +48,8 @@ migrated organization repositories or services after the operator migration is
 complete. The GitHub organization inventory CLI is the separate gated
 read-only path for checking target organization counts/classes; one frontend
 repository is reported by the operator, but no Jira runbook step transfers or
-edits repositories. The mapping flow does not update Jira, transfer
+edits repositories. The inventory path reports only sanitized failure classes
+for live read-only access diagnostics. The mapping flow does not update Jira, transfer
 repositories, write repository metadata, or persist provider inventory.
 
 ## Creation Dry-Run

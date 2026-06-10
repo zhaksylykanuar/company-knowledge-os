@@ -268,6 +268,13 @@ def test_operator_output_sanitizer_allows_github_org_migration_safe_fields() -> 
             "github_repo_edit_operations": "disabled",
             "provider_payload_visibility": "suppressed",
             "next_action_class": "review_manual_org_migration_status",
+            "live_readonly_status": "fail",
+            "live_failure_class": "github_permission_denied",
+            "auth_status_class": "pass",
+            "permission_status_class": "github_permission_denied",
+            "transport_status_class": "pass",
+            "response_contract_status": "not_checked",
+            "org_visibility_status_class": "not_observed",
         }
     ).as_dict()
 

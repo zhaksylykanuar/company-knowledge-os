@@ -3,8 +3,11 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import urllib.error
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from app.connectors import github
 from app.services.external_connector_config import GITHUB_ENV_KEYS
@@ -139,6 +142,48 @@ def test_github_org_inventory_cli_live_mode_uses_mocked_transport_once() -> None
     assert result["no_provider_calls"] is False
     assert call_count == 1
     assert result["github"]["org_inventory_status"] == "live_readonly_verified"
+    assert result["github"]["live_readonly_status"] == "pass"
     assert result["github"]["org_repo_count_class"] == "nonzero_count"
+    assert result["github"]["provider_payload_visibility"] == "suppressed"
+    _assert_cli_output_safe(result)
+
+
+@pytest.mark.parametrize(
+    ("status_code", "failure_class"),
+    [
+        (401, "github_auth_failed"),
+        (403, "github_permission_denied"),
+        (404, "github_org_not_found_or_no_access"),
+        (429, "github_rate_limited"),
+        (500, "github_server_error"),
+    ],
+)
+def test_github_org_inventory_cli_http_status_maps_to_safe_failure_class(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+    failure_class: str,
+) -> None:
+    def failing_urlopen(*args: Any, **kwargs: Any) -> Any:
+        raise urllib.error.HTTPError(
+            url="provider_location",
+            code=status_code,
+            msg="provider_status",
+            hdrs=None,
+            fp=None,
+        )
+
+    monkeypatch.setattr(inventory_cli.urllib.request, "urlopen", failing_urlopen)
+
+    result = inventory_cli.run_github_org_readonly_inventory(
+        allow_live_readonly_apis=True,
+        acknowledge_live_readonly_risk=LIVE_PROVIDER_EXECUTION_ACK,
+        compare_portfolio=True,
+        environ=_configured_github_env(),
+    )
+
+    assert result["status"] == "fail"
+    assert result["reason_code"] == failure_class
+    assert result["github"]["failure_class"] == failure_class
+    assert result["github"]["live_failure_class"] == failure_class
     assert result["github"]["provider_payload_visibility"] == "suppressed"
     _assert_cli_output_safe(result)

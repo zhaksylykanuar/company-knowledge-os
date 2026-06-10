@@ -99,7 +99,10 @@ GitHub/Jira checks do not require this variable. The legacy repository overview
 remains seed metadata only. The GitHub organization inventory CLI supports
 default no-live, synthetic, and later manually acknowledged live-read-only
 checks for counts/classes only; repository transfers or edits are not performed
-by these scripts.
+by these scripts. Live organization inventory failures are reported as safe
+operator classes such as authentication, permission, not-found/no-access,
+rate-limit, server, transport, timeout, malformed-response, contract-mismatch,
+or empty-inventory classes.
 
 Atlassian/Jira credentials are separated by profile. The Jira read-only data
 API profile uses the site REST API with a basic email/API-token auth class for
