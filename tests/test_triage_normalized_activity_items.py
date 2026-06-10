@@ -19,6 +19,7 @@ from app.db.base import AsyncSessionLocal, engine
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.models import AuditLog, IngestedEvent
 from app.services.attention_results import AttentionResultValidationError
+from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
 from scripts import preview_stored_source_event_normalization as preview_script
 from scripts import triage_normalized_activity_items as triage_script
 
@@ -44,6 +45,36 @@ def _local_settings() -> SimpleNamespace:
     return SimpleNamespace(app_env="local")
 
 
+def _local_openai_settings(**overrides: object) -> SimpleNamespace:
+    values: dict[str, object] = {
+        "app_env": "local",
+        "attention_triage_enabled": True,
+        "enable_llm": True,
+        "openai_api_key": "configured",
+        "attention_triage_model": "test-model",
+        "attention_triage_max_text_chars": 1000,
+        "attention_triage_min_confidence_to_hide": 0.80,
+        "attention_triage_review_threshold": 0.55,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+class _FakeResponses:
+    def __init__(self, output_text: str) -> None:
+        self.output_text = output_text
+        self.calls: list[dict] = []
+
+    def create(self, **kwargs: object) -> SimpleNamespace:
+        self.calls.append(dict(kwargs))
+        return SimpleNamespace(output_text=self.output_text)
+
+
+class _FakeOpenAIClient:
+    def __init__(self, output: dict[str, object]) -> None:
+        self.responses = _FakeResponses(json.dumps(output))
+
+
 def _serialized(value: object) -> str:
     return json.dumps(value, sort_keys=True)
 
@@ -54,6 +85,9 @@ def _query(
     end_at: datetime,
     max_items: int = 100,
     include_synthetic: bool = False,
+    sources: tuple[str, ...] = (),
+    provider: str = triage_script.DEFAULT_PROVIDER,
+    acknowledge_live_provider_risk: str | None = None,
     confirm_triage: str = triage_script.CONFIRM_TRIAGE_PHRASE,
 ) -> triage_script.NormalizedActivityTriageQuery:
     return triage_script.NormalizedActivityTriageQuery(
@@ -62,6 +96,9 @@ def _query(
         confirm_triage=confirm_triage,
         max_items=max_items,
         include_synthetic=include_synthetic,
+        sources=sources,
+        provider=provider,
+        acknowledge_live_provider_risk=acknowledge_live_provider_risk,
         output_format="json",
     )
 
@@ -210,6 +247,10 @@ async def _insert_normalized_activity(
         source = "internal"
         source_object_id = f"{preview_script.SYNTHETIC_SOURCE_OBJECT_PREFIX}{unique}:safe"
         activity_type = "synthetic.persisted_attention_digest.seed"
+    elif kind == "drive":
+        source = "drive"
+        source_object_id = f"PRIVATE_SOURCE_OBJECT_DO_NOT_EXPOSE_{unique}"
+        activity_type = "document.changed"
     else:
         source = "github"
         source_object_id = f"PRIVATE_SOURCE_OBJECT_DO_NOT_EXPOSE_{unique}"
@@ -382,6 +423,7 @@ def test_invalid_inputs_fail_before_execution(monkeypatch: pytest.MonkeyPatch) -
         )
         == 2
     )
+    assert triage_script.main([*base, "--provider", "openai"]) == 2
 
 
 def test_cli_rejects_credential_send_and_mutation_arguments() -> None:
@@ -502,6 +544,131 @@ async def test_eligible_no_marker_activity_creates_provider_free_attention_resul
         _assert_safe_output(triage_script.format_text_report(report))
     finally:
         await _cleanup(unique)
+
+
+async def test_source_filter_excludes_unselected_activity_from_triage_write() -> None:
+    await _ensure_tables()
+    drive_unique = f"source_drive_{uuid4().hex}"
+    github_unique = f"source_github_{uuid4().hex}"
+    for unique in (drive_unique, github_unique):
+        await _cleanup(unique)
+    try:
+        await _insert_normalized_activity(
+            drive_unique,
+            created_at=_utc(2149, 1, 3, 9),
+            kind="drive",
+        )
+        await _insert_normalized_activity(
+            github_unique,
+            created_at=_utc(2149, 1, 3, 10),
+        )
+
+        report = await triage_script.triage_normalized_activity_items(
+            _query(
+                start_at=_utc(2149, 1, 3),
+                end_at=_utc(2149, 1, 4),
+                sources=("drive",),
+            ),
+            settings_override=_local_settings(),
+            environ={},
+        )
+
+        assert report["sources"] == ["drive"]
+        assert report["normalized_activity"]["total"] == 1
+        assert report["normalized_activity"]["by_source"] == {"drive": 1}
+        assert report["triage"]["created_count"] == 1
+        assert report["triage"]["already_triaged_count"] == 0
+        assert await _attention_result_count_for_unique(drive_unique) == 1
+        assert await _attention_result_count_for_unique(github_unique) == 0
+        _assert_safe_output(_serialized(report))
+    finally:
+        for unique in (drive_unique, github_unique):
+            await _cleanup(unique)
+
+
+async def test_openai_provider_mode_creates_attention_result_with_guarded_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _ensure_tables()
+    unique = f"openai_{uuid4().hex}"
+    await _cleanup(unique)
+    fake_client = _FakeOpenAIClient(
+        {
+            "attention_class": "requires_my_attention",
+            "priority": "high",
+            "show_in_digest": True,
+            "confidence": 0.95,
+            "reason": "synthetic test reason",
+            "recommended_action": "review",
+            "owner": "me",
+            "deadline": None,
+            "evidence": [],
+        }
+    )
+
+    def fake_get_openai_client(
+        *,
+        allow_live_provider_execution: bool = False,
+        provider_execution_ack: str | None = None,
+    ) -> _FakeOpenAIClient:
+        assert allow_live_provider_execution is True
+        assert provider_execution_ack == LIVE_PROVIDER_EXECUTION_ACK
+        return fake_client
+
+    monkeypatch.setattr(triage_script, "get_openai_client", fake_get_openai_client)
+
+    try:
+        await _insert_normalized_activity(unique, created_at=_utc(2149, 1, 3, 11))
+
+        report = await triage_script.triage_normalized_activity_items(
+            _query(
+                start_at=_utc(2149, 1, 3),
+                end_at=_utc(2149, 1, 4),
+                provider="openai",
+                acknowledge_live_provider_risk=LIVE_PROVIDER_EXECUTION_ACK,
+            ),
+            settings_override=_local_openai_settings(),
+            environ={},
+        )
+
+        assert report["provider"]["provider"] == "openai"
+        assert report["provider"]["openai_call_count"] == 1
+        assert report["provider"]["provider_fallback_count"] == 0
+        assert report["triage"]["created_count"] == 1
+        assert report["triage"]["openai_call_count"] == 1
+        assert report["triage"]["provider_fallback_count"] == 0
+        assert report["triage"]["by_attention_class"] == {
+            "requires_my_attention": 1
+        }
+        assert report["triage"]["by_priority"] == {"high": 1}
+        assert report["safety"]["provider_free"] is False
+        assert report["safety"]["provider_guard_used"] is True
+        assert report["safety"]["openai_invoked"] is True
+        assert report["safety"]["live_api_calls"] is True
+        assert report["safety"]["db_write_scope"] == "attention_triage_results_only"
+        assert await _attention_result_count_for_unique(unique) == 1
+        assert len(fake_client.responses.calls) == 1
+        _assert_safe_output(_serialized(report))
+        _assert_safe_output(triage_script.format_text_report(report))
+    finally:
+        await _cleanup(unique)
+
+
+async def test_openai_provider_mode_requires_enabled_llm_settings() -> None:
+    with pytest.raises(
+        triage_script.NormalizedActivityTriageBlockedError,
+        match="llm_disabled",
+    ):
+        await triage_script.triage_normalized_activity_items(
+            _query(
+                start_at=_utc(2149, 1, 3),
+                end_at=_utc(2149, 1, 4),
+                provider="openai",
+                acknowledge_live_provider_risk=LIVE_PROVIDER_EXECUTION_ACK,
+            ),
+            settings_override=_local_openai_settings(enable_llm=False),
+            environ={},
+        )
 
 
 async def test_rerun_is_idempotent_and_counts_already_triaged() -> None:

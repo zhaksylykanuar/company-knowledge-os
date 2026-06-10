@@ -12,10 +12,12 @@ from app.services.attention_triage import (
 )
 from app.services.source_activity import (
     DriveDocumentActivityInput,
+    GmailMessageActivityInput,
     GitHubPullRequestActivityInput,
     JiraIssueActivityInput,
     SourceActivityMappingError,
     drive_document_event_to_activity_item,
+    gmail_message_event_to_activity_item,
     github_pr_event_to_activity_item,
     jira_issue_event_to_activity_item,
     source_event_to_activity_item,
@@ -132,6 +134,41 @@ def test_jira_assigned_issue_maps_to_activity_item() -> None:
     assert activity.related_jira_keys == ["QAZ-204"]
     assert activity.related_people == ["fake-reporter", "fake-user"]
     assert activity.project == "QAZ"
+
+
+def test_gmail_message_maps_to_activity_item() -> None:
+    activity = gmail_message_event_to_activity_item(
+        GmailMessageActivityInput(
+            source_object_id="gmail:test-message",
+            event_type="gmail.message.ingested",
+            subject="FOS-123 Review launch update",
+            summary="Safe Gmail message summary.",
+            actor="fake-sender",
+            created_at=NOW,
+            source_event_id="sevt_gmail_message",
+            raw_payload_ref="raw://gmail/messages/test-message.json",
+        )
+    )
+
+    assert activity.source == "gmail"
+    assert activity.activity_type == "email.received"
+    assert activity.source_object_id == "gmail:test-message"
+    assert activity.title == "FOS-123 Review launch update"
+    assert activity.safe_summary == "Safe Gmail message summary."
+    assert activity.related_people == ["fake-sender"]
+    assert activity.related_jira_keys == ["FOS-123"]
+    assert activity.related_prs == []
+    assert activity.related_files == []
+    assert activity.evidence_refs == [
+        {
+            "kind": "source_activity",
+            "source": "gmail",
+            "source_object_id": "gmail:test-message",
+            "event_type": "gmail.message.ingested",
+            "source_event_id": "sevt_gmail_message",
+            "raw_payload_ref": "raw://gmail/messages/test-message.json",
+        }
+    ]
 
 
 def test_jira_blocked_issue_maps_blocker_summary() -> None:

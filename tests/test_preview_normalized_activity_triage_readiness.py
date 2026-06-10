@@ -51,12 +51,14 @@ def _query(
     end_at: datetime,
     max_items: int = 100,
     include_synthetic: bool = False,
+    sources: tuple[str, ...] = (),
 ) -> readiness_script.TriageReadinessQuery:
     return readiness_script.TriageReadinessQuery(
         start_at=start_at,
         end_at=end_at,
         max_items=max_items,
         include_synthetic=include_synthetic,
+        sources=sources,
         output_format="json",
     )
 
@@ -165,6 +167,10 @@ async def _insert_normalized_activity(
         source = "internal"
         source_object_id = f"{preview_script.SYNTHETIC_SOURCE_OBJECT_PREFIX}{unique}:safe"
         activity_type = "synthetic.persisted_attention_digest.seed"
+    elif kind == "drive":
+        source = "drive"
+        source_object_id = f"PRIVATE_SOURCE_OBJECT_DO_NOT_EXPOSE_{unique}"
+        activity_type = "document.changed"
     else:
         source = "github"
         source_object_id = f"PRIVATE_SOURCE_OBJECT_DO_NOT_EXPOSE_{unique}"
@@ -451,6 +457,50 @@ async def test_untriaged_no_marker_activity_is_eligible_for_provider_free_triage
         _assert_safe_output(_serialized(report))
     finally:
         await _cleanup(unique)
+
+
+async def test_source_filter_excludes_unselected_activity_from_readiness_preview() -> None:
+    await _ensure_seed_tables()
+    drive_unique = f"source_drive_{uuid4().hex}"
+    github_unique = f"source_github_{uuid4().hex}"
+    for unique in (drive_unique, github_unique):
+        await _cleanup(unique)
+    try:
+        await _insert_normalized_activity(
+            drive_unique,
+            created_at=_utc(2149, 1, 3, 9),
+            kind="drive",
+        )
+        await _insert_normalized_activity(
+            github_unique,
+            created_at=_utc(2149, 1, 3, 10),
+        )
+
+        report = await readiness_script.build_normalized_activity_triage_readiness_preview(
+            _query(
+                start_at=_utc(2149, 1, 3),
+                end_at=_utc(2149, 1, 4),
+                sources=("drive",),
+            ),
+            settings_override=_local_settings(),
+            environ={},
+        )
+
+        assert report["sources"] == ["drive"]
+        assert report["normalized_activity"]["total"] == 1
+        assert report["normalized_activity"]["by_source"] == {"drive": 1}
+        assert report["triage_readiness"]["untriaged_count"] == 1
+        assert (
+            report["triage_readiness"]["eligible_for_provider_free_triage_count"]
+            == 1
+        )
+        assert report["projected_provider_free_triage"]["by_attention_class"] == {
+            "review_optional": 1
+        }
+        _assert_safe_output(_serialized(report))
+    finally:
+        for unique in (drive_unique, github_unique):
+            await _cleanup(unique)
 
 
 async def test_already_triaged_activity_is_counted_and_not_eligible_again() -> None:

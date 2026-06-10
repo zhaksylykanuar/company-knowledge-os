@@ -88,12 +88,14 @@ def _query(
     end_at: datetime,
     max_events: int = 100,
     include_synthetic: bool = False,
+    sources: tuple[str, ...] = (),
 ) -> preview_script.NormalizationPreviewQuery:
     return preview_script.NormalizationPreviewQuery(
         start_at=start_at,
         end_at=end_at,
         max_events=max_events,
         include_synthetic=include_synthetic,
+        sources=sources,
         output_format="json",
     )
 
@@ -194,10 +196,17 @@ def _source_values(unique: str, *, kind: str) -> dict[str, str]:
         }
     if kind == "unsupported":
         return {
-            "source_system": "gmail",
-            "source_object_type": "message",
+            "source_system": "calendar",
+            "source_object_type": "event",
             "source_object_id": f"PRIVATE_SOURCE_OBJECT_DO_NOT_EXPOSE_{unique}",
-            "event_type": "gmail.message.received",
+            "event_type": "calendar.event.updated",
+        }
+    if kind == "drive":
+        return {
+            "source_system": "drive",
+            "source_object_type": "file",
+            "source_object_id": f"PRIVATE_SOURCE_OBJECT_DO_NOT_EXPOSE_{unique}",
+            "event_type": "drive.file.ingested",
         }
     return {
         "source_system": "github",
@@ -466,6 +475,49 @@ async def test_supported_no_marker_github_source_event_is_eligible() -> None:
         _assert_safe_output(_serialized(report))
     finally:
         await _cleanup(unique)
+
+
+async def test_source_filter_excludes_unselected_events_from_preview() -> None:
+    await _ensure_seed_tables()
+    drive_unique = f"source_drive_{uuid4().hex}"
+    github_unique = f"source_github_{uuid4().hex}"
+    for unique in (drive_unique, github_unique):
+        await _cleanup(unique)
+    try:
+        await _insert_source_event(
+            drive_unique,
+            created_at=_utc(2149, 1, 3, 9),
+            kind="drive",
+        )
+        await _insert_source_event(
+            github_unique,
+            created_at=_utc(2149, 1, 3, 10),
+        )
+
+        report = await preview_script.build_stored_source_event_normalization_preview(
+            _query(
+                start_at=_utc(2149, 1, 3),
+                end_at=_utc(2149, 1, 4),
+                sources=("drive",),
+            ),
+            settings_override=_local_settings(),
+            environ={},
+        )
+
+        assert report["sources"] == ["drive"]
+        assert report["source_events"]["total"] == 1
+        assert report["source_events"]["by_source_system"] == {"drive": 1}
+        assert report["normalization_preview"]["eligible_for_projection_count"] == 1
+        assert report["normalization_preview"]["projected_activity"]["by_source"] == {
+            "drive": 1
+        }
+        assert report["normalization_preview"]["projected_activity"][
+            "by_activity_type"
+        ] == {"document.changed": 1}
+        _assert_safe_output(_serialized(report))
+    finally:
+        for unique in (drive_unique, github_unique):
+            await _cleanup(unique)
 
 
 async def test_unsupported_source_event_is_counted_without_raw_detail() -> None:

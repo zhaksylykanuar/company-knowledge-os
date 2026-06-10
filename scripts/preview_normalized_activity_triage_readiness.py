@@ -51,6 +51,7 @@ class TriageReadinessQuery:
     end_at: datetime
     max_items: int = DEFAULT_MAX_ITEMS
     include_synthetic: bool = False
+    sources: tuple[str, ...] = ()
     output_format: str = "json"
 
 
@@ -98,6 +99,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Include clearly synthetic local/dev normalized activity rows.",
     )
     parser.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        help="Limit preview to a normalized activity source; may be provided more than once.",
+    )
+    parser.add_argument(
         "--format",
         choices=("text", "json"),
         default="json",
@@ -116,6 +123,7 @@ def _query_from_args(args: argparse.Namespace) -> TriageReadinessQuery:
         end_at=end_at,
         max_items=_clean_max_items(args.max_items),
         include_synthetic=bool(args.include_synthetic),
+        sources=preview_script._clean_sources(args.source),
         output_format=args.format,
     )
 
@@ -163,6 +171,7 @@ async def _normalized_activity_count_for_window(
     *,
     start_at: datetime,
     end_at: datetime,
+    sources: tuple[str, ...] = (),
 ) -> int:
     from app.db.event_models import NormalizedActivityItemRecord
 
@@ -170,12 +179,15 @@ async def _normalized_activity_count_for_window(
         NormalizedActivityItemRecord.activity_created_at,
         NormalizedActivityItemRecord.created_at,
     )
+    statement = (
+        select(func.count())
+        .select_from(NormalizedActivityItemRecord)
+        .where(activity_time >= start_at, activity_time < end_at)
+    )
+    if sources:
+        statement = statement.where(NormalizedActivityItemRecord.source.in_(sources))
     return int(
-        await session.scalar(
-            select(func.count())
-            .select_from(NormalizedActivityItemRecord)
-            .where(activity_time >= start_at, activity_time < end_at)
-        )
+        await session.scalar(statement)
         or 0
     )
 
@@ -185,6 +197,7 @@ async def _normalized_activity_for_window(
     *,
     start_at: datetime,
     end_at: datetime,
+    sources: tuple[str, ...] = (),
 ) -> list[Any]:
     from app.db.event_models import NormalizedActivityItemRecord
 
@@ -192,12 +205,15 @@ async def _normalized_activity_for_window(
         NormalizedActivityItemRecord.activity_created_at,
         NormalizedActivityItemRecord.created_at,
     )
+    statement = (
+        select(NormalizedActivityItemRecord)
+        .where(activity_time >= start_at, activity_time < end_at)
+        .order_by(NormalizedActivityItemRecord.id)
+    )
+    if sources:
+        statement = statement.where(NormalizedActivityItemRecord.source.in_(sources))
     return (
-        await session.scalars(
-            select(NormalizedActivityItemRecord)
-            .where(activity_time >= start_at, activity_time < end_at)
-            .order_by(NormalizedActivityItemRecord.id)
-        )
+        await session.scalars(statement)
     ).all()
 
 
@@ -437,6 +453,7 @@ async def build_normalized_activity_triage_readiness_preview(
                 session,
                 start_at=query.start_at,
                 end_at=query.end_at,
+                sources=query.sources,
             )
             if normalized_activity_count > query.max_items:
                 raise TriageReadinessInputError(
@@ -447,6 +464,7 @@ async def build_normalized_activity_triage_readiness_preview(
                 session,
                 start_at=query.start_at,
                 end_at=query.end_at,
+                sources=query.sources,
             )
             normalized_activity = _summarize_normalized_activity(records)
             activity_item_ids = {
@@ -518,6 +536,7 @@ async def build_normalized_activity_triage_readiness_preview(
         "end_at": query.end_at.isoformat(),
         "max_items": query.max_items,
         "include_synthetic": query.include_synthetic,
+        "sources": list(query.sources),
         "scanned_normalized_activity_count": normalized_activity["total"],
         "normalized_activity": normalized_activity,
         "triage_readiness": triage_readiness,

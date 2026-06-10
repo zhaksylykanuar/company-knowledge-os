@@ -52,6 +52,7 @@ class StoredSourceEventNormalizationQuery:
     confirm_normalize: str
     max_events: int = DEFAULT_MAX_EVENTS
     include_synthetic: bool = False
+    sources: tuple[str, ...] = ()
     output_format: str = "json"
 
 
@@ -112,6 +113,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Include clearly synthetic local/dev source events in normalization.",
     )
     parser.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        help="Limit normalization to a source_system value; may be provided more than once.",
+    )
+    parser.add_argument(
         "--format",
         choices=("text", "json"),
         default="json",
@@ -131,6 +138,7 @@ def _query_from_args(args: argparse.Namespace) -> StoredSourceEventNormalization
         confirm_normalize=_clean_confirm_normalize(args.confirm_normalize),
         max_events=_clean_max_events(args.max_events),
         include_synthetic=bool(args.include_synthetic),
+        sources=preview_script._clean_sources(args.source),
         output_format=args.format,
     )
 
@@ -166,16 +174,20 @@ async def _source_event_count_for_window(
     *,
     start_at: datetime,
     end_at: datetime,
+    sources: tuple[str, ...] = (),
 ) -> int:
     from app.db.event_models import SourceEvent
 
     activity_time = func.coalesce(SourceEvent.source_event_ts, SourceEvent.created_at)
+    statement = (
+        select(func.count())
+        .select_from(SourceEvent)
+        .where(activity_time >= start_at, activity_time < end_at)
+    )
+    if sources:
+        statement = statement.where(SourceEvent.source_system.in_(sources))
     return int(
-        await session.scalar(
-            select(func.count())
-            .select_from(SourceEvent)
-            .where(activity_time >= start_at, activity_time < end_at)
-        )
+        await session.scalar(statement)
         or 0
     )
 
@@ -338,6 +350,7 @@ async def normalize_stored_source_events(
                 session,
                 start_at=query.start_at,
                 end_at=query.end_at,
+                sources=query.sources,
             )
             if source_event_count > query.max_events:
                 raise StoredSourceEventNormalizationInputError(
@@ -348,6 +361,7 @@ async def normalize_stored_source_events(
                 session,
                 start_at=query.start_at,
                 end_at=query.end_at,
+                sources=query.sources,
             )
             source_events_summary = _summarize_source_events(source_events)
 
@@ -421,6 +435,7 @@ async def normalize_stored_source_events(
         "end_at": query.end_at.isoformat(),
         "max_events": query.max_events,
         "include_synthetic": query.include_synthetic,
+        "sources": list(query.sources),
         "scanned_source_event_count": source_events_summary["total"],
         "source_events": source_events_summary,
         "normalization": normalization,

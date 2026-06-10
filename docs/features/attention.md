@@ -684,7 +684,9 @@
   `source_events` for an explicit window and reports count-only eligibility for
   future provider-free projection into `normalized_activity_items`, including
   already-normalized, eligible, unsupported, invalid/unpreviewable, synthetic
-  skipped, and safe projected source/activity-type counts.
+  skipped, and safe projected source/activity-type counts. Operators can pass
+  repeated `--source` flags to preview only selected source systems inside a
+  wider time window.
 - FOS-081 does not create source events, normalized activity rows, attention
   results, seeds, drafts, approvals, delivery intentions, Telegram plans,
   preflight/gate records, delivery results, scheduler jobs, worker/outbox
@@ -699,7 +701,9 @@
   timezone-aware window, bounded `--max-events`, and the exact
   `NORMALIZE STORED SOURCE EVENTS` confirmation phrase before projecting
   supported stored `source_events` into `normalized_activity_items` through the
-  existing provider-free projection service.
+  existing provider-free projection service. Repeated `--source` flags limit
+  the write scope to selected source systems while preserving the same
+  time-window contract.
 - FOS-082 writes only normalized activity rows, remains idempotent by
   `source_event_id`, skips already-normalized rows, counts unsupported or
   invalid rows safely, excludes synthetic/local/dev rows by default, and
@@ -717,7 +721,8 @@
   scans stored `normalized_activity_items` for an explicit window and reports
   count-only already-triaged, untriaged, synthetic/no-marker, provider-free
   eligibility, and projected conservative fallback attention class, priority,
-  visible, and hidden counts.
+  visible, and hidden counts. Repeated `--source` flags limit the preview to
+  selected normalized activity sources.
 - FOS-083 does not create source events, normalized activity rows, attention
   results, seeds, drafts, approvals, delivery intentions, Telegram plans,
   preflight/gate records, delivery results, scheduler jobs, worker/outbox
@@ -729,23 +734,28 @@
   details. No-marker rows are not production truth, and any attention triage
   write remains a separate explicit local/dev step.
 - FOS-084 adds `scripts/triage_normalized_activity_items.py`, a local/dev-only
-  provider-free normalized activity triage command. It requires an explicit
-  timezone-aware window, bounded `--max-items`, and the exact
-  `TRIAGE NORMALIZED ACTIVITY` confirmation phrase before writing
-  `attention_triage_results` through the existing strict schema-validated
-  provider-free triage service.
+  normalized activity triage command. It requires an explicit timezone-aware
+  window, bounded `--max-items`, and the exact `TRIAGE NORMALIZED ACTIVITY`
+  confirmation phrase before writing `attention_triage_results` through the
+  existing strict schema-validated triage service. The default provider remains
+  provider-free fallback; `--provider openai` is opt-in only and requires local
+  `ATTENTION_TRIAGE_ENABLED=true`, `ENABLE_LLM=true`, a configured OpenAI key,
+  and the live provider acknowledgement phrase. Repeated `--source` flags limit
+  the write scope to selected normalized activity sources.
 - FOS-084 writes only attention result rows, remains idempotent by
   `activity_item_id`, skips already-triaged rows, counts unsupported or invalid
   rows safely, excludes synthetic/local/dev rows by default, and refuses
   production-like environments. It does not create source events, normalized
   activity rows, seeds, drafts, approvals, delivery intentions, Telegram plans,
   preflight/gate records, delivery results, scheduler jobs, worker/outbox
-  records, migrations, or tables. It does not call live APIs, providers/OpenAI,
-  connectors, Telegram/Slack, or delivery code, and it does not expose raw
-  source bodies, provider payloads, item titles, summaries, actions, source
-  object identifiers, evidence refs, secrets, credentials, rendered text,
-  chunk text, or hidden low-priority details. No-marker rows are not production
-  truth; real-data readiness and window discovery remain separate checks.
+  records, migrations, or tables. Default provider-free mode does not call live
+  APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery code. OpenAI
+  mode calls only the guarded OpenAI attention triage provider and reports
+  aggregate OpenAI call/fallback counts. The command does not expose raw source
+  bodies, provider payloads, item titles, summaries, actions, source object
+  identifiers, evidence refs, secrets, credentials, rendered text, chunk text,
+  or hidden low-priority details. No-marker rows are not production truth;
+  real-data readiness and window discovery remain separate checks.
 - FOS-085 adds `scripts/report_persisted_attention_window_reconciliation.py`,
   a local read-only persisted attention window reconciliation report. It
   explains count-only mismatches between attention-result write-time windows
@@ -1220,10 +1230,12 @@
   provider-free fallback counts, but persisted attention triage and real-data
   manual send rollout remain separate human-gated steps.
 - Normalized activity items can now be triaged into persisted attention results
-  through a separate explicit local/dev-only provider-free write command. The
-  command writes only `attention_triage_results`; real-data readiness, window
-  discovery, draft preparation, approval, and manual send rollout remain
-  separate human-gated steps.
+  through a separate explicit local/dev-only write command. The default mode is
+  provider-free fallback; guarded OpenAI mode is opt-in and reports only
+  aggregate provider counts/classes. The command writes only
+  `attention_triage_results`; real-data readiness, window discovery, draft
+  preparation, approval, and manual send rollout remain separate human-gated
+  steps.
 - Persisted attention windows can now be reconciled read-only by write-time
   attention window, optional linked activity/source window, mixed marker
   counts, and current digest hash versus existing delivery draft hashes.

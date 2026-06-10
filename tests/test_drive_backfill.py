@@ -185,6 +185,46 @@ def test_drive_backfill_contract(monkeypatch):
     assert "demo.txt" not in response.text
 
 
+def test_drive_backfill_connector_failure_returns_redacted_response(monkeypatch) -> None:
+    _enable_drive_backfill(monkeypatch)
+    private_error = (
+        "https://www.googleapis.com/drive/v3/files?q='PRIVATE_FOLDER_ID' "
+        "PRIVATE_PROVIDER_ERROR_DETAIL"
+    )
+
+    def fail_list_ai_inbox_files(*, max_results: int) -> list[dict]:
+        raise RuntimeError(private_error)
+
+    monkeypatch.setattr(drive_api, "list_ai_inbox_files", fail_list_ai_inbox_files)
+
+    with TestClient(app) as client:
+        response = client.post("/v1/drive/backfill?persist=false&max_results=1")
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["provider"] == "drive"
+    assert body["discovered"] == 0
+    assert body["saved"] == 0
+    assert body["duplicates"] == 0
+    assert body["failed"] == 1
+    assert body["status"] == drive_api.DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED
+    assert body["events"] == [
+        {
+            "accepted": False,
+            "persisted": False,
+            "redacted": True,
+            "source_system": "drive",
+            "source_object_type": "file",
+            "event_type": "drive.file.ingested",
+            "status": drive_api.DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED,
+            "error_code": drive_api.DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED,
+        }
+    ]
+    assert "PRIVATE_FOLDER_ID" not in response.text
+    assert "PRIVATE_PROVIDER_ERROR_DETAIL" not in response.text
+    assert "googleapis" not in response.text
+
+
 def test_drive_backfill_persist_normalizes_new_ingested_event(monkeypatch, tmp_path):
     added: list[object] = []
     normalized: list[IngestedEvent] = []

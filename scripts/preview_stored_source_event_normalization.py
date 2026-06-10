@@ -61,6 +61,7 @@ class NormalizationPreviewQuery:
     end_at: datetime
     max_events: int = DEFAULT_MAX_EVENTS
     include_synthetic: bool = False
+    sources: tuple[str, ...] = ()
     output_format: str = "json"
 
 
@@ -108,12 +109,34 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Include clearly synthetic local/dev source events in the preview.",
     )
     parser.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        help="Limit preview to a source_system value; may be provided more than once.",
+    )
+    parser.add_argument(
         "--format",
         choices=("text", "json"),
         default="json",
         help="Output format.",
     )
     return parser.parse_args(argv)
+
+
+def _clean_sources(values: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+    cleaned_sources: list[str] = []
+    for value in values or []:
+        cleaned = value.strip() if isinstance(value, str) else ""
+        if not cleaned:
+            raise NormalizationPreviewInputError("source must be a non-empty string")
+        folded = cleaned.casefold()
+        if any(marker in folded for marker in UNSAFE_COUNT_KEY_MARKERS):
+            raise NormalizationPreviewInputError("source contains an unsafe marker")
+        if not SAFE_COUNT_KEY_PATTERN.fullmatch(cleaned):
+            raise NormalizationPreviewInputError("source contains unsupported characters")
+        if cleaned not in cleaned_sources:
+            cleaned_sources.append(cleaned)
+    return tuple(cleaned_sources)
 
 
 def _query_from_args(args: argparse.Namespace) -> NormalizationPreviewQuery:
@@ -126,6 +149,7 @@ def _query_from_args(args: argparse.Namespace) -> NormalizationPreviewQuery:
         end_at=end_at,
         max_events=_clean_max_events(args.max_events),
         include_synthetic=bool(args.include_synthetic),
+        sources=_clean_sources(args.source),
         output_format=args.format,
     )
 
@@ -193,16 +217,20 @@ async def _source_events_for_window(
     *,
     start_at: datetime,
     end_at: datetime,
+    sources: tuple[str, ...] = (),
 ) -> list[Any]:
     from app.db.event_models import SourceEvent
 
     activity_time = func.coalesce(SourceEvent.source_event_ts, SourceEvent.created_at)
+    statement = (
+        select(SourceEvent)
+        .where(activity_time >= start_at, activity_time < end_at)
+        .order_by(SourceEvent.id)
+    )
+    if sources:
+        statement = statement.where(SourceEvent.source_system.in_(sources))
     return (
-        await session.scalars(
-            select(SourceEvent)
-            .where(activity_time >= start_at, activity_time < end_at)
-            .order_by(SourceEvent.id)
-        )
+        await session.scalars(statement)
     ).all()
 
 
@@ -431,6 +459,7 @@ async def build_stored_source_event_normalization_preview(
                 session,
                 start_at=query.start_at,
                 end_at=query.end_at,
+                sources=query.sources,
             )
             if len(source_events) > query.max_events:
                 raise NormalizationPreviewInputError(
@@ -541,6 +570,7 @@ async def build_stored_source_event_normalization_preview(
         "end_at": query.end_at.isoformat(),
         "max_events": query.max_events,
         "include_synthetic": query.include_synthetic,
+        "sources": list(query.sources),
         "scanned_source_event_count": source_events_summary["total"],
         "returned_preview_count": returned_preview_count,
         "source_events": source_events_summary,

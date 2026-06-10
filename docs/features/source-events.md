@@ -27,6 +27,9 @@
   data-quality note.
 - Drive/Gmail emitted ingestion event names are registry-compatible.
 - New non-duplicate Drive/Gmail backfill events are normalized into SourceEvent rows when they satisfy registry contracts.
+- Gmail message source events can be projected into `NormalizedActivityItem`
+  rows as `source="gmail"` and `activity_type="email.received"` for explicit
+  local attention triage windows.
 - SourceEvent persistence from external inputs requires future API auth and webhook signature validation boundaries.
 
 ## Activity Normalization

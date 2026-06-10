@@ -76,6 +76,21 @@ class DriveDocumentActivityInput:
     raw_payload_ref: str | None = None
 
 
+@dataclass(frozen=True)
+class GmailMessageActivityInput:
+    source_object_id: str
+    event_type: str
+    title: str | None = None
+    subject: str | None = None
+    summary: str | None = None
+    source_url: str | None = None
+    actor: str | None = None
+    from_address: str | None = None
+    created_at: datetime | None = None
+    source_event_id: str | None = None
+    raw_payload_ref: str | None = None
+
+
 def github_pr_event_to_activity_item(
     event: GitHubPullRequestActivityInput | Mapping[str, Any] | Any,
 ) -> NormalizedActivityItem:
@@ -213,6 +228,41 @@ def drive_document_event_to_activity_item(
     )
 
 
+def gmail_message_event_to_activity_item(
+    event: GmailMessageActivityInput | Mapping[str, Any] | Any,
+) -> NormalizedActivityItem:
+    data = _event_data(event)
+    source_object_id = _required_string(data, "source_object_id")
+    event_type = _clean_string(data.get("event_type")) or "gmail.message.ingested"
+    title = _safe_text(_first(data, "title", "subject"), max_chars=500)
+    summary = _safe_text(data.get("summary"))
+    source_url = _clean_string(data.get("source_url"))
+    actor = _clean_string(_first(data, "actor", "actor_external_id", "from_address"))
+
+    return NormalizedActivityItem(
+        source="gmail",
+        source_object_id=source_object_id,
+        activity_type="email.received",
+        title=title,
+        actor=actor,
+        created_at=_first(data, "created_at", "event_time"),
+        project=None,
+        safe_summary=summary,
+        related_people=_unique_strings([actor]),
+        related_jira_keys=_extract_jira_keys(title, summary),
+        related_prs=[],
+        related_files=[],
+        evidence_refs=_evidence_refs(
+            source="gmail",
+            source_object_id=source_object_id,
+            event_type=event_type,
+            source_event_id=_clean_string(data.get("source_event_id")),
+            raw_payload_ref=_clean_string(_first(data, "raw_payload_ref", "raw_object_ref")),
+            source_url=source_url,
+        ),
+    )
+
+
 def source_event_to_activity_item(event: Mapping[str, Any] | Any) -> NormalizedActivityItem:
     data = _event_data(event)
     source = _clean_string(_first(data, "source", "source_system"))
@@ -224,6 +274,8 @@ def source_event_to_activity_item(event: Mapping[str, Any] | Any) -> NormalizedA
         return jira_issue_event_to_activity_item(event)
     if source == "drive" and source_object_type in {"file", "document"}:
         return drive_document_event_to_activity_item(event)
+    if source == "gmail" and source_object_type == "message":
+        return gmail_message_event_to_activity_item(event)
 
     raise SourceActivityMappingError(
         f"unsupported source activity mapping: {source or 'unknown'}.{source_object_type or 'unknown'}"
@@ -263,6 +315,7 @@ _KNOWN_INPUT_FIELDS = {
     "drive_file_id",
     "event_time",
     "event_type",
+    "from_address",
     "issue_key",
     "labels",
     "metadata_json",
@@ -288,6 +341,7 @@ _KNOWN_INPUT_FIELDS = {
     "source_system",
     "source_url",
     "status",
+    "subject",
     "summary",
     "title",
     "topic",

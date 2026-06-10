@@ -3,6 +3,7 @@ import base64
 from fastapi.testclient import TestClient
 
 import app.api.gmail as gmail_api
+from app.db.gmail_models import GmailAttachment
 from app.db.models import IngestedEvent
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.integrations.source_registry import validate_source_event_contract
@@ -645,6 +646,76 @@ def test_gmail_backfill_persist_skips_source_event_without_subject(monkeypatch, 
     assert source_document.source_system == "gmail"
     assert source_document.source_object_id == "m2"
     assert source_document.title is None
+
+
+def test_gmail_backfill_bounds_long_attachment_id_for_index_column(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    added: list[object] = []
+    readable_text = "Readable body with an attachment."
+    long_attachment_id = "LONG_ATTACHMENT_ID_DO_NOT_RETURN_" + ("x" * 400)
+    _enable_gmail_backfill(monkeypatch)
+
+    monkeypatch.setattr(
+        gmail_api,
+        "list_messages",
+        lambda query=SAFE_GMAIL_QUERY, max_results=10: [{"id": "m-long-attachment"}],
+    )
+    monkeypatch.setattr(
+        gmail_api,
+        "get_message",
+        lambda mid: {
+            "id": mid,
+            "threadId": "t-long-attachment",
+            "historyId": "h-long-attachment",
+            "labelIds": ["INBOX"],
+            "snippet": "ignored snippet",
+            "payload": {
+                "mimeType": "multipart/mixed",
+                "headers": [
+                    {"name": "Subject", "value": "FounderOS attachment update"},
+                ],
+                "body": {"data": _gmail_body_data(readable_text)},
+                "parts": [
+                    {
+                        "filename": "private-file.pdf",
+                        "mimeType": "application/pdf",
+                        "body": {
+                            "attachmentId": long_attachment_id,
+                            "size": 123,
+                        },
+                    }
+                ],
+            },
+        },
+    )
+    monkeypatch.setattr(gmail_api, "raw_storage_root", lambda: tmp_path)
+    monkeypatch.setattr(gmail_api, "AsyncSessionLocal", _fake_session_factory(added))
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/gmail/backfill",
+            params={
+                "max_results": 1,
+                "persist": "true",
+                "query": SAFE_GMAIL_QUERY,
+                **PROD_OPERATION_PARAMS,
+            },
+        )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["saved"] == 1
+    assert body["failed"] == 0
+    assert body["status"] == gmail_api.GMAIL_BACKFILL_STATUS_COMPLETED
+
+    attachment = next(item for item in added if isinstance(item, GmailAttachment))
+    assert len(attachment.attachment_id) <= gmail_api.GMAIL_ATTACHMENT_ID_MAX_LENGTH
+    assert ":sha256:" in attachment.attachment_id
+    assert attachment.attachment_id != long_attachment_id
+    assert attachment.metadata_json["attachment_id"] == long_attachment_id
+    assert long_attachment_id not in response.text
 
 
 def test_gmail_backfill_persist_reports_per_item_failure_safely(monkeypatch, tmp_path):

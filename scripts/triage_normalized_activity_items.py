@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Triage normalized activity rows locally with the provider-free fallback."""
+"""Triage normalized activity rows locally with fallback or guarded OpenAI."""
 
 from __future__ import annotations
 
@@ -18,11 +18,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from app.agents.llm_runner import get_openai_client  # noqa: E402
 from app.services import attention_results as attention_results_service  # noqa: E402
 from app.services.attention_results import AttentionResultValidationError  # noqa: E402
 from app.services.attention_triage import (  # noqa: E402
+    AttentionTriageProvider,
+    AttentionTriageResult,
     ConservativeFallbackAttentionTriageProvider,
+    OpenAIAttentionTriageProvider,
 )
+from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK  # noqa: E402
 from scripts import prepare_manual_pilot_delivery_draft as prepare_script  # noqa: E402
 from scripts import preview_normalized_activity_triage_readiness as readiness_script  # noqa: E402
 from scripts import preview_stored_source_event_normalization as preview_script  # noqa: E402
@@ -30,6 +35,8 @@ from scripts import preview_stored_source_event_normalization as preview_script 
 CONFIRM_TRIAGE_PHRASE = "TRIAGE NORMALIZED ACTIVITY"
 DEFAULT_MAX_ITEMS = readiness_script.DEFAULT_MAX_ITEMS
 MAX_TRIAGE_ITEMS = readiness_script.MAX_TRIAGE_READINESS_ITEMS
+DEFAULT_PROVIDER = "fallback"
+PROVIDER_CHOICES = ("fallback", "openai")
 
 
 class NormalizedActivityTriageInputError(ValueError):
@@ -51,7 +58,34 @@ class NormalizedActivityTriageQuery:
     confirm_triage: str
     max_items: int = DEFAULT_MAX_ITEMS
     include_synthetic: bool = False
+    sources: tuple[str, ...] = ()
+    provider: str = DEFAULT_PROVIDER
+    acknowledge_live_provider_risk: str | None = None
     output_format: str = "json"
+
+
+class _CountingClient:
+    def __init__(self, client: Any) -> None:
+        self.client = client
+        self.call_count = 0
+
+    def __call__(self, payload: Mapping[str, Any]) -> Any:
+        self.call_count += 1
+        responses = getattr(self.client, "responses", None)
+        create = getattr(responses, "create", None)
+        if not callable(create):
+            raise RuntimeError("openai_client_missing_responses_create")
+        return create(**dict(payload))
+
+
+class _CountingFallbackAttentionTriageProvider:
+    def __init__(self) -> None:
+        self.provider = ConservativeFallbackAttentionTriageProvider()
+        self.call_count = 0
+
+    def classify_activity(self, activity: Any, context: Any) -> AttentionTriageResult:
+        self.call_count += 1
+        return self.provider.classify_activity(activity, context)
 
 
 def _parse_datetime(value: str, *, field_name: str) -> datetime:
@@ -74,6 +108,25 @@ def _clean_max_items(value: int) -> int:
 def _clean_confirm_triage(value: str) -> str:
     if not isinstance(value, str) or value != CONFIRM_TRIAGE_PHRASE:
         raise NormalizedActivityTriageInputError("confirm_triage phrase did not match")
+    return value
+
+
+def _clean_provider(value: str) -> str:
+    cleaned = str(value).strip().casefold()
+    if cleaned not in PROVIDER_CHOICES:
+        raise NormalizedActivityTriageInputError(
+            f"provider must be one of: {', '.join(PROVIDER_CHOICES)}"
+        )
+    return cleaned
+
+
+def _clean_acknowledgement(*, provider: str, value: str | None) -> str | None:
+    if provider != "openai":
+        return None
+    if value != LIVE_PROVIDER_EXECUTION_ACK:
+        raise NormalizedActivityTriageInputError(
+            "live provider acknowledgement phrase did not match"
+        )
     return value
 
 
@@ -109,6 +162,22 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Include clearly synthetic local/dev normalized activity rows.",
     )
     parser.add_argument(
+        "--source",
+        action="append",
+        default=[],
+        help="Limit triage to a normalized activity source; may be provided more than once.",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=PROVIDER_CHOICES,
+        default=DEFAULT_PROVIDER,
+        help="Triage provider to use. OpenAI requires the live provider acknowledgement.",
+    )
+    parser.add_argument(
+        "--acknowledge-live-provider-risk",
+        help=f'Exact phrase required with --provider openai: "{LIVE_PROVIDER_EXECUTION_ACK}".',
+    )
+    parser.add_argument(
         "--format",
         choices=("text", "json"),
         default="json",
@@ -122,12 +191,19 @@ def _query_from_args(args: argparse.Namespace) -> NormalizedActivityTriageQuery:
     end_at = _parse_datetime(args.end_at, field_name="end_at")
     if end_at <= start_at:
         raise NormalizedActivityTriageInputError("end_at must be after start_at")
+    provider = _clean_provider(args.provider)
     return NormalizedActivityTriageQuery(
         start_at=start_at,
         end_at=end_at,
         confirm_triage=_clean_confirm_triage(args.confirm_triage),
         max_items=_clean_max_items(args.max_items),
         include_synthetic=bool(args.include_synthetic),
+        sources=preview_script._clean_sources(args.source),
+        provider=provider,
+        acknowledge_live_provider_risk=_clean_acknowledgement(
+            provider=provider,
+            value=args.acknowledge_live_provider_risk,
+        ),
         output_format=args.format,
     )
 
@@ -152,6 +228,8 @@ def _empty_triage_summary() -> dict[str, Any]:
         "synthetic_skipped_count": 0,
         "no_marker_created_count": 0,
         "synthetic_created_count": 0,
+        "provider_fallback_count": 0,
+        "openai_call_count": 0,
         "by_attention_class": {},
         "by_priority": {},
         "visible_candidate_count": 0,
@@ -181,10 +259,16 @@ def _recommended_next_action(
     return "no_supported_normalized_activity_for_provider_free_triage"
 
 
-def _safety_metadata(*, created_count: int) -> dict[str, Any]:
+def _safety_metadata(
+    *,
+    created_count: int,
+    provider: str = DEFAULT_PROVIDER,
+    openai_call_count: int = 0,
+) -> dict[str, Any]:
     created = created_count > 0
+    openai_invoked = openai_call_count > 0
     return {
-        "provider_free": True,
+        "provider_free": provider == "fallback",
         "read_only": False,
         "local_operator_command": True,
         "local_dev_only": True,
@@ -209,10 +293,11 @@ def _safety_metadata(*, created_count: int) -> dict[str, Any]:
         "scheduler_invoked": False,
         "delivery_worker_invoked": False,
         "outbox_record_created": False,
-        "api_clients_invoked": False,
+        "api_clients_invoked": openai_invoked,
         "connectors_invoked": False,
-        "live_api_calls": False,
-        "openai_invoked": False,
+        "live_api_calls": openai_invoked,
+        "openai_invoked": openai_invoked,
+        "provider_guard_used": provider == "openai",
         "credential_values_exposed": False,
         "stored_digest_text_included": False,
         "chunk_text_included": False,
@@ -230,7 +315,7 @@ def _safety_metadata(*, created_count: int) -> dict[str, Any]:
 def _limitations(*, include_synthetic: bool) -> list[str]:
     notes = [
         "triage_reports_counts_only_not_company_facts",
-        "triage_uses_existing_provider_free_fallback_service",
+        "triage_uses_configured_local_provider_with_strict_validation",
         "attention_results_are_strict_schema_validated",
         "row_identifiers_are_not_returned",
         "row_details_are_omitted_count_only_report",
@@ -242,6 +327,91 @@ def _limitations(*, include_synthetic: bool) -> list[str]:
     else:
         notes.append("synthetic_local_dev_rows_excluded_by_default")
     return notes
+
+
+def _safe_settings_status(settings: Any) -> dict[str, str]:
+    return {
+        "attention_triage_enabled": "enabled"
+        if getattr(settings, "attention_triage_enabled", False) is True
+        else "disabled",
+        "llm_enabled": "enabled"
+        if getattr(settings, "enable_llm", False) is True
+        else "disabled",
+        "openai_key_presence": "present"
+        if bool(getattr(settings, "openai_api_key", None))
+        else "missing",
+    }
+
+
+def _provider_metadata(
+    *,
+    provider: str,
+    settings: Any,
+    openai_call_count: int,
+    provider_fallback_count: int,
+) -> dict[str, Any]:
+    if provider == "openai":
+        return {
+            "provider": "openai",
+            "provider_class": "openai_attention_triage",
+            "provider_execution_guard": "provider_execution_allowed",
+            "openai_call_count": openai_call_count,
+            "provider_fallback_count": provider_fallback_count,
+            "settings_status": _safe_settings_status(settings),
+        }
+    return {
+        "provider": "fallback",
+        "provider_class": "conservative_fallback_attention_triage",
+        "provider_execution_guard": "not_applicable",
+        "openai_call_count": 0,
+        "provider_fallback_count": 0,
+        "settings_status": {},
+    }
+
+
+def _build_provider(
+    *,
+    query: NormalizedActivityTriageQuery,
+    settings: Any,
+) -> tuple[
+    AttentionTriageProvider,
+    _CountingClient | None,
+    _CountingFallbackAttentionTriageProvider | None,
+]:
+    if query.provider == "fallback":
+        return ConservativeFallbackAttentionTriageProvider(), None, None
+
+    if getattr(settings, "attention_triage_enabled", False) is not True:
+        raise NormalizedActivityTriageBlockedError("attention_triage_disabled")
+    if getattr(settings, "enable_llm", False) is not True:
+        raise NormalizedActivityTriageBlockedError("llm_disabled")
+    if not getattr(settings, "openai_api_key", None):
+        raise NormalizedActivityTriageBlockedError("openai_key_missing")
+
+    client = get_openai_client(
+        allow_live_provider_execution=True,
+        provider_execution_ack=query.acknowledge_live_provider_risk,
+    )
+    counting_client = _CountingClient(client)
+    fallback_provider = _CountingFallbackAttentionTriageProvider()
+    provider = OpenAIAttentionTriageProvider(
+        client=counting_client,
+        enabled=True,
+        model=getattr(settings, "attention_triage_model", None),
+        max_text_chars=getattr(settings, "attention_triage_max_text_chars", 6000),
+        min_confidence_to_hide=getattr(
+            settings,
+            "attention_triage_min_confidence_to_hide",
+            0.80,
+        ),
+        review_threshold=getattr(
+            settings,
+            "attention_triage_review_threshold",
+            0.55,
+        ),
+        fallback_provider=fallback_provider,
+    )
+    return provider, counting_client, fallback_provider
 
 
 def _blocked_result(*, error_code: str, message: str) -> dict[str, Any]:
@@ -279,7 +449,11 @@ async def triage_normalized_activity_items(
     session_factory = session_factory or AsyncSessionLocal
     normalized_activity = _empty_normalized_activity_summary()
     triage = _empty_triage_summary()
-    provider = ConservativeFallbackAttentionTriageProvider()
+    active_settings = settings_override or settings
+    provider, counting_client, fallback_counter = _build_provider(
+        query=query,
+        settings=active_settings,
+    )
 
     try:
         async with session_factory() as session:
@@ -288,6 +462,7 @@ async def triage_normalized_activity_items(
                     session,
                     start_at=query.start_at,
                     end_at=query.end_at,
+                    sources=query.sources,
                 )
             )
             if normalized_activity_count > query.max_items:
@@ -299,6 +474,7 @@ async def triage_normalized_activity_items(
                 session,
                 start_at=query.start_at,
                 end_at=query.end_at,
+                sources=query.sources,
             )
             normalized_activity = readiness_script._summarize_normalized_activity(records)
             activity_item_ids = {
@@ -370,13 +546,30 @@ async def triage_normalized_activity_items(
 
     triage["by_attention_class"] = dict(sorted(triage["by_attention_class"].items()))
     triage["by_priority"] = dict(sorted(triage["by_priority"].items()))
+    triage["openai_call_count"] = (
+        counting_client.call_count if counting_client is not None else 0
+    )
+    triage["provider_fallback_count"] = (
+        fallback_counter.call_count if fallback_counter is not None else 0
+    )
     created_count = preview_script._safe_int(triage.get("created_count"))
+    openai_call_count = preview_script._safe_int(triage.get("openai_call_count"))
+    provider_fallback_count = preview_script._safe_int(
+        triage.get("provider_fallback_count")
+    )
     return {
-        "status": "normalized_activity_provider_free_triage",
+        "status": "normalized_activity_triage",
         "start_at": query.start_at.isoformat(),
         "end_at": query.end_at.isoformat(),
         "max_items": query.max_items,
         "include_synthetic": query.include_synthetic,
+        "sources": list(query.sources),
+        "provider": _provider_metadata(
+            provider=query.provider,
+            settings=active_settings,
+            openai_call_count=openai_call_count,
+            provider_fallback_count=provider_fallback_count,
+        ),
         "scanned_normalized_activity_count": normalized_activity["total"],
         "normalized_activity": normalized_activity,
         "triage": triage,
@@ -385,7 +578,11 @@ async def triage_normalized_activity_items(
             triage=triage,
         ),
         "limitations": _limitations(include_synthetic=query.include_synthetic),
-        "safety": _safety_metadata(created_count=created_count),
+        "safety": _safety_metadata(
+            created_count=created_count,
+            provider=query.provider,
+            openai_call_count=openai_call_count,
+        ),
     }
 
 
@@ -402,11 +599,12 @@ def format_text_report(report: Mapping[str, Any]) -> str:
     triage = report.get("triage") if isinstance(report.get("triage"), Mapping) else {}
     safety = report.get("safety") if isinstance(report.get("safety"), Mapping) else {}
     lines = [
-        "Normalized activity provider-free triage (local/dev write command)",
+        "Normalized activity triage (local/dev write command)",
         f"Window start: {report.get('start_at')}",
         f"Window end: {report.get('end_at')}",
         f"Max items: {report.get('max_items')}",
         f"Include synthetic: {report.get('include_synthetic')}",
+        f"Provider: {report.get('provider')}",
         f"Scanned normalized activity: {report.get('scanned_normalized_activity_count')}",
         f"Synthetic status: {normalized.get('synthetic_status')}",
         f"Synthetic marker count: {normalized.get('synthetic_marker_count')}",
@@ -418,6 +616,8 @@ def format_text_report(report: Mapping[str, Any]) -> str:
         f"Synthetic skipped: {triage.get('synthetic_skipped_count')}",
         f"No-marker created: {triage.get('no_marker_created_count')}",
         f"Synthetic created: {triage.get('synthetic_created_count')}",
+        f"OpenAI call count: {triage.get('openai_call_count')}",
+        f"Provider fallback count: {triage.get('provider_fallback_count')}",
         f"Attention classes: {triage.get('by_attention_class')}",
         f"Priorities: {triage.get('by_priority')}",
         f"Visible candidates: {triage.get('visible_candidate_count')}",

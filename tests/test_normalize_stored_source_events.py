@@ -51,6 +51,7 @@ def _query(
     end_at: datetime,
     max_events: int = 100,
     include_synthetic: bool = False,
+    sources: tuple[str, ...] = (),
     confirm_normalize: str = normalize_script.CONFIRM_NORMALIZE_PHRASE,
 ) -> normalize_script.StoredSourceEventNormalizationQuery:
     return normalize_script.StoredSourceEventNormalizationQuery(
@@ -59,6 +60,7 @@ def _query(
         confirm_normalize=confirm_normalize,
         max_events=max_events,
         include_synthetic=include_synthetic,
+        sources=sources,
         output_format="json",
     )
 
@@ -188,10 +190,17 @@ def _source_values(unique: str, *, kind: str) -> dict[str, str]:
         }
     if kind == "unsupported":
         return {
-            "source_system": "gmail",
-            "source_object_type": "message",
+            "source_system": "calendar",
+            "source_object_type": "event",
             "source_object_id": f"PRIVATE_SOURCE_OBJECT_DO_NOT_EXPOSE_{unique}",
-            "event_type": "gmail.message.received",
+            "event_type": "calendar.event.updated",
+        }
+    if kind == "drive":
+        return {
+            "source_system": "drive",
+            "source_object_type": "file",
+            "source_object_id": f"PRIVATE_SOURCE_OBJECT_DO_NOT_EXPOSE_{unique}",
+            "event_type": "drive.file.ingested",
         }
     return {
         "source_system": "github",
@@ -518,6 +527,49 @@ async def test_supported_no_marker_github_source_event_creates_normalized_activi
         _assert_safe_output(normalize_script.format_text_report(report))
     finally:
         await _cleanup(unique)
+
+
+async def test_source_filter_excludes_unselected_events_from_normalization_write() -> None:
+    await _ensure_seed_tables()
+    drive_unique = f"source_drive_{uuid4().hex}"
+    github_unique = f"source_github_{uuid4().hex}"
+    for unique in (drive_unique, github_unique):
+        await _cleanup(unique)
+    try:
+        drive_source_event_id = await _insert_source_event(
+            drive_unique,
+            created_at=_utc(2149, 1, 3, 9),
+            kind="drive",
+        )
+        github_source_event_id = await _insert_source_event(
+            github_unique,
+            created_at=_utc(2149, 1, 3, 10),
+        )
+
+        report = await normalize_script.normalize_stored_source_events(
+            _query(
+                start_at=_utc(2149, 1, 3),
+                end_at=_utc(2149, 1, 4),
+                sources=("drive",),
+            ),
+            settings_override=_local_settings(),
+            environ={},
+        )
+
+        assert report["sources"] == ["drive"]
+        assert report["source_events"]["total"] == 1
+        assert report["source_events"]["by_source_system"] == {"drive": 1}
+        assert report["normalization"]["created_count"] == 1
+        assert report["normalization"]["by_projected_source"] == {"drive": 1}
+        assert report["normalization"]["by_projected_activity_type"] == {
+            "document.changed": 1
+        }
+        assert await _normalized_count_for_source_event(drive_source_event_id) == 1
+        assert await _normalized_count_for_source_event(github_source_event_id) == 0
+        _assert_safe_output(_serialized(report))
+    finally:
+        for unique in (drive_unique, github_unique):
+            await _cleanup(unique)
 
 
 async def test_rerun_is_idempotent_and_counts_already_normalized() -> None:

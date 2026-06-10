@@ -164,16 +164,16 @@ async def _insert_unsupported_source_event(unique: str) -> str:
         session.add(
             IngestedEvent(
                 event_id=event_id,
-                event_type="gmail.message.ingested",
-                source_system="gmail",
-                source_object_id=f"gmail:test:activity:{unique}",
+                event_type="calendar.event.updated",
+                source_system="calendar",
+                source_object_id=f"calendar:test:activity:{unique}",
                 idempotency_key=f"idem_activity_{unique}_unsupported",
                 correlation_id=f"corr_activity_{unique}_unsupported",
                 trace_id=f"trace_activity_{unique}_unsupported",
-                raw_object_ref=f"raw://gmail/events/activity-{unique}.json",
+                raw_object_ref=f"raw://calendar/events/activity-{unique}.json",
                 payload={
-                    "source_object_type": "message",
-                    "title": "Unsupported message projection",
+                    "source_object_type": "event",
+                    "title": "Unsupported calendar projection",
                     "raw_body": "PRIVATE_RAW_PAYLOAD_DO_NOT_STORE",
                 },
             )
@@ -182,20 +182,20 @@ async def _insert_unsupported_source_event(unique: str) -> str:
         session.add(
             SourceEvent(
                 source_event_id=source_event_id,
-                source_event_key=f"gmail:message:{unique}",
+                source_event_key=f"calendar:event:{unique}",
                 ingested_event_id=event_id,
-                event_type="gmail.message.ingested",
-                source_system="gmail",
-                source_object_type="message",
-                source_object_id=f"gmail:test:activity:{unique}",
-                title="Unsupported message projection",
-                raw_object_ref=f"raw://gmail/events/activity-{unique}.json",
+                event_type="calendar.event.updated",
+                source_system="calendar",
+                source_object_type="event",
+                source_object_id=f"calendar:test:activity:{unique}",
+                title="Unsupported calendar projection",
+                raw_object_ref=f"raw://calendar/events/activity-{unique}.json",
                 evidence_refs=[
                     {
                         "kind": "ingested_event",
                         "event_id": event_id,
-                        "source_system": "gmail",
-                        "source_object_id": f"gmail:test:activity:{unique}",
+                        "source_system": "calendar",
+                        "source_object_id": f"calendar:test:activity:{unique}",
                     }
                 ],
                 metadata_json={

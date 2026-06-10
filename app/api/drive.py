@@ -12,6 +12,7 @@ from app.services.production_operation_guard import (
     ProductionOperationBlockedError,
     require_production_operation_ack,
 )
+from app.services.provider_execution_guard import ProviderExecutionBlockedError
 from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json, write_text
 from app.services.source_events import normalize_ingested_event_to_source_event
 
@@ -19,6 +20,8 @@ router = APIRouter(prefix="/v1/drive", tags=["drive"])
 
 DRIVE_BACKFILL_DEFAULT_MAX_RESULTS = 10
 DRIVE_BACKFILL_MAX_RESULTS = 50
+DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED = "connector_failed"
+DRIVE_BACKFILL_STATUS_FETCH_FAILED = "fetch_failed"
 
 
 def _require_drive_backfill_enabled() -> str:
@@ -39,16 +42,49 @@ def _require_drive_backfill_enabled() -> str:
     return cleaned_folder_id
 
 
-def list_ai_inbox_files(*, max_results: int) -> list[dict]:
+def _live_provider_kwargs(
+    *,
+    allow_live_provider_execution: bool,
+    provider_execution_ack: str | None,
+) -> dict[str, object]:
+    if allow_live_provider_execution is not True and provider_execution_ack is None:
+        return {}
+    return {
+        "allow_live_provider_execution": allow_live_provider_execution,
+        "provider_execution_ack": provider_execution_ack,
+    }
+
+
+def list_ai_inbox_files(
+    *,
+    max_results: int,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
+) -> list[dict]:
     from app.connectors.google_drive import list_ai_inbox_files as _list_ai_inbox_files
 
-    return _list_ai_inbox_files(page_size=max_results)
+    return _list_ai_inbox_files(
+        page_size=max_results,
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
 
 
-def download_file_text(file_id: str, mime_type: str | None = None) -> str:
+def download_file_text(
+    file_id: str,
+    mime_type: str | None = None,
+    *,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
+) -> str:
     from app.connectors.google_drive import download_file_text as _download_file_text
 
-    return _download_file_text(file_id, mime_type)
+    return _download_file_text(
+        file_id,
+        mime_type,
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
 
 
 def build_drive_event(file_metadata: dict) -> EventEnvelope:
@@ -101,11 +137,14 @@ def save_drive_raw_snapshot(
 def _redacted_drive_backfill_item(
     *,
     persisted: bool,
+    accepted: bool = True,
     duplicate: bool | None = None,
     event_id: str | None = None,
+    status_value: str | None = None,
+    error_code: str | None = None,
 ) -> dict:
     item = {
-        "accepted": True,
+        "accepted": accepted,
         "persisted": persisted,
         "redacted": True,
         "source_system": "drive",
@@ -116,6 +155,10 @@ def _redacted_drive_backfill_item(
         item["duplicate"] = duplicate
     if event_id is not None:
         item["event_id"] = event_id
+    if status_value is not None:
+        item["status"] = status_value
+    if error_code is not None:
+        item["error_code"] = error_code
     return item
 
 
@@ -127,6 +170,8 @@ def _redacted_drive_backfill_response(
     max_results: int,
     persist: bool,
     events: list[dict],
+    failed: int = 0,
+    status_value: str | None = None,
 ) -> dict:
     return {
         "provider": "drive",
@@ -136,6 +181,13 @@ def _redacted_drive_backfill_response(
         "discovered": discovered,
         "saved": saved,
         "duplicates": duplicates,
+        "failed": failed,
+        "status": status_value
+        or (
+            "completed_with_failures"
+            if failed
+            else "completed"
+        ),
         "events": events,
     }
 
@@ -150,6 +202,8 @@ async def drive_backfill(
     ),
     allow_production_operation: bool = Query(False),
     confirm_production_operation: str | None = Query(None),
+    allow_live_provider_execution: bool = Query(False),
+    confirm_live_provider_execution: str | None = Query(None),
 ) -> dict:
     _require_drive_backfill_enabled()
     if persist:
@@ -166,10 +220,39 @@ async def drive_backfill(
                 detail=exc.reason_code,
             ) from exc
 
-    files = list_ai_inbox_files(max_results=max_results)
+    live_provider_kwargs = _live_provider_kwargs(
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=confirm_live_provider_execution,
+    )
+    try:
+        files = list_ai_inbox_files(max_results=max_results, **live_provider_kwargs)
+    except ProviderExecutionBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc.reason_code,
+        ) from exc
+    except Exception:
+        return _redacted_drive_backfill_response(
+            discovered=0,
+            saved=0,
+            duplicates=0,
+            failed=1,
+            max_results=max_results,
+            persist=persist,
+            events=[
+                _redacted_drive_backfill_item(
+                    accepted=False,
+                    persisted=False,
+                    status_value=DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED,
+                    error_code=DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED,
+                )
+            ],
+            status_value=DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED,
+        )
     events = []
     saved = 0
     duplicates = 0
+    failed = 0
 
     if not persist:
         for _file_metadata in files:
@@ -178,6 +261,7 @@ async def drive_backfill(
             discovered=len(files),
             saved=0,
             duplicates=0,
+            failed=0,
             max_results=max_results,
             persist=persist,
             events=events,
@@ -210,7 +294,28 @@ async def drive_backfill(
                 )
                 continue
 
-            text = download_file_text(file_metadata["id"], file_metadata.get("mimeType"))
+            try:
+                text = download_file_text(
+                    file_metadata["id"],
+                    file_metadata.get("mimeType"),
+                    **live_provider_kwargs,
+                )
+            except ProviderExecutionBlockedError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=exc.reason_code,
+                ) from exc
+            except Exception:
+                failed += 1
+                events.append(
+                    _redacted_drive_backfill_item(
+                        accepted=False,
+                        persisted=False,
+                        status_value=DRIVE_BACKFILL_STATUS_FETCH_FAILED,
+                        error_code=DRIVE_BACKFILL_STATUS_FETCH_FAILED,
+                    )
+                )
+                continue
             metadata_ref, content_ref = save_drive_raw_snapshot(
                 file_metadata,
                 text,
@@ -308,6 +413,7 @@ async def drive_backfill(
         discovered=len(files),
         saved=saved,
         duplicates=duplicates,
+        failed=failed,
         max_results=max_results,
         persist=persist,
         events=events,

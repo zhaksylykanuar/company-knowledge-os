@@ -18,6 +18,7 @@ from app.services.production_operation_guard import (
     ProductionOperationBlockedError,
     require_production_operation_ack,
 )
+from app.services.provider_execution_guard import ProviderExecutionBlockedError
 from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json
 from app.services.source_events import normalize_ingested_event_to_source_event
 
@@ -31,10 +32,18 @@ GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES = "completed_with_failures"
 GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED = "connector_failed"
 GMAIL_BACKFILL_STATUS_FETCH_FAILED = "fetch_failed"
 GMAIL_BACKFILL_STATUS_PERSIST_FAILED = "persist_failed"
+GMAIL_ATTACHMENT_ID_MAX_LENGTH = 255
 
 
 def _normalize_gmail_query(query: str) -> str:
     return " ".join(query.casefold().split())
+
+
+def _bounded_gmail_attachment_id(value: str) -> str:
+    if len(value) <= GMAIL_ATTACHMENT_ID_MAX_LENGTH:
+        return value
+    suffix = f":sha256:{sha256_text(value)}"
+    return f"{value[: GMAIL_ATTACHMENT_ID_MAX_LENGTH - len(suffix)]}{suffix}"
 
 
 def _safe_gmail_backfill_query(query: str | None) -> str:
@@ -70,6 +79,19 @@ def _gmail_dependency_unavailable() -> HTTPException:
     )
 
 
+def _live_provider_kwargs(
+    *,
+    allow_live_provider_execution: bool,
+    provider_execution_ack: str | None,
+) -> dict[str, object]:
+    if allow_live_provider_execution is not True and provider_execution_ack is None:
+        return {}
+    return {
+        "allow_live_provider_execution": allow_live_provider_execution,
+        "provider_execution_ack": provider_execution_ack,
+    }
+
+
 class _ReadableHtmlParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -94,16 +116,36 @@ class _ReadableHtmlParser(HTMLParser):
         return "\n".join(line for line in lines if line).strip()
 
 
-def list_messages(*, query: str, max_results: int) -> list[dict]:
+def list_messages(
+    *,
+    query: str,
+    max_results: int,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
+) -> list[dict]:
     from app.connectors.gmail import list_messages as _list_messages
 
-    return _list_messages(query=query, max_results=max_results)
+    return _list_messages(
+        query=query,
+        max_results=max_results,
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
 
 
-def get_message(message_id: str) -> dict:
+def get_message(
+    message_id: str,
+    *,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
+) -> dict:
     from app.connectors.gmail import get_message as _get_message
 
-    return _get_message(message_id)
+    return _get_message(
+        message_id,
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
 
 
 def extract_subject(msg: dict) -> str | None:
@@ -413,6 +455,8 @@ async def gmail_backfill(
     persist: bool = Query(True),
     allow_production_operation: bool = Query(False),
     confirm_production_operation: str | None = Query(None),
+    allow_live_provider_execution: bool = Query(False),
+    confirm_live_provider_execution: str | None = Query(None),
 ) -> dict:
     safe_query = _safe_gmail_backfill_query(query)
     if persist:
@@ -429,8 +473,21 @@ async def gmail_backfill(
                 detail=exc.reason_code,
             ) from exc
 
+    live_provider_kwargs = _live_provider_kwargs(
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=confirm_live_provider_execution,
+    )
     try:
-        refs = list_messages(query=safe_query, max_results=max_results)
+        refs = list_messages(
+            query=safe_query,
+            max_results=max_results,
+            **live_provider_kwargs,
+        )
+    except ProviderExecutionBlockedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=exc.reason_code,
+        ) from exc
     except Exception:
         return _redacted_gmail_backfill_response(
             discovered=0,
@@ -457,8 +514,13 @@ async def gmail_backfill(
 
     for ref in refs:
         try:
-            msg = get_message(ref["id"])
+            msg = get_message(ref["id"], **live_provider_kwargs)
             event = build_gmail_event(msg)
+        except ProviderExecutionBlockedError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=exc.reason_code,
+            ) from exc
         except Exception:
             failed += 1
             events.append(
@@ -563,10 +625,11 @@ async def gmail_backfill(
                             session.add(chunk)
 
                 for attachment in iter_attachment_metadata(msg):
+                    attachment_id = _bounded_gmail_attachment_id(attachment["attachment_id"])
                     existing_attachment = await session.scalar(
                         select(GmailAttachment).where(
                             GmailAttachment.message_id == attachment["message_id"],
-                            GmailAttachment.attachment_id == attachment["attachment_id"],
+                            GmailAttachment.attachment_id == attachment_id,
                         )
                     )
                     if existing_attachment:
@@ -574,7 +637,7 @@ async def gmail_backfill(
                     session.add(
                         GmailAttachment(
                             message_id=attachment["message_id"],
-                            attachment_id=attachment["attachment_id"],
+                            attachment_id=attachment_id,
                             filename=attachment.get("filename"),
                             mime_type=attachment.get("mime_type"),
                             size=attachment.get("size"),
