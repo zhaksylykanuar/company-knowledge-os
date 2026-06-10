@@ -54,6 +54,32 @@ def test_settings_prefers_standard_openai_api_key_alias(
     assert config.openai_api_key == "test-openai-key"
 
 
+def test_settings_accepts_fos_telegram_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.setenv("FOS_TELEGRAM_BOT_TOKEN", "test-fos-telegram-token")
+    monkeypatch.setenv("FOS_TELEGRAM_CHAT_ID", "test-fos-telegram-chat")
+
+    config = Settings(_env_file=None)
+
+    assert config.telegram_bot_token == "test-fos-telegram-token"
+    assert config.telegram_chat_id == "test-fos-telegram-chat"
+
+
+def test_settings_prefers_standard_telegram_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-telegram-token")
+    monkeypatch.setenv("FOS_TELEGRAM_BOT_TOKEN", "test-fos-telegram-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "test-telegram-chat")
+    monkeypatch.setenv("FOS_TELEGRAM_CHAT_ID", "test-fos-telegram-chat")
+
+    config = Settings(_env_file=None)
+
+    assert config.telegram_bot_token == "test-telegram-token"
+    assert config.telegram_chat_id == "test-telegram-chat"
+
+
 def test_dependency_allows_when_auth_disabled() -> None:
     config = AuthConfig(api_auth_enabled=False, api_auth_key=None)
 

@@ -65,8 +65,14 @@ class Settings(BaseSettings):
     gitlab_webhook_secret: str | None = None
     bitbucket_webhook_secret: str | None = None
 
-    telegram_bot_token: str | None = None
-    telegram_chat_id: str | None = None
+    telegram_bot_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("TELEGRAM_BOT_TOKEN", "FOS_TELEGRAM_BOT_TOKEN"),
+    )
+    telegram_chat_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("TELEGRAM_CHAT_ID", "FOS_TELEGRAM_CHAT_ID"),
+    )
     telegram_webhook_secret_token: str | None = None
 
     obsidian_vault_path: str = "./obsidian_vault"
