@@ -15,6 +15,26 @@ Operational rules for Codex and other AI agents working in FounderOS.
 - Inspect at most 8 implementation files before planning unless the task clearly requires more.
 - If more files are needed, explain why before expanding scope.
 
+## Task Prompts
+
+- Task prompts must be short: `Goal / Context / Constraints / Done when`.
+- Durable rules live in this file and `CLAUDE.md`; do not re-paste them into
+  task prompts. A task prompt references AGENTS.md instead of copying it.
+- Task-specific constraints belong in the prompt only when they are not already
+  covered here.
+- `Done when` must include verifiable checks, normally
+  `uv run ruff check .` and `uv run pytest -q` green.
+
+## Sanitization Scope
+
+- Never print, stage, or commit secrets: tokens, API keys, credential values,
+  webhook values, chat IDs, `.env` contents, raw private source bodies, or
+  provider payloads containing private data.
+- Git metadata of this repository is NOT secret: commit hashes, branch names,
+  file paths, diffs of tracked source files, and the repo name may be printed
+  and inspected freely. Hiding them reduces auditability; do not redirect or
+  suppress normal git output.
+
 ## Default Git Workflow
 
 - Default to solo trunk-based work for small focused tickets.
