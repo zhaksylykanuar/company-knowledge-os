@@ -196,9 +196,11 @@ async def build_status_reply_text(
         if recognized:
             # Project question -> project-focused Jira view, not the inbox digest.
             try:
+                from app.services.github_graph_mapping import repos_for_project
                 from app.services.jira_graph_mapping import jira_keys_for_project
                 from app.services.project_status_view import (
                     load_project_issue_snapshots,
+                    load_repo_activity,
                     render_project_status_text,
                 )
 
@@ -206,10 +208,15 @@ async def build_status_reply_text(
                 keys = await jira_keys_for_project(session, project.entity_id)
                 if keys:
                     snapshots = await load_project_issue_snapshots(session, keys)
+                    repos = await repos_for_project(session, project.entity_id)
+                    repo_activity = await load_repo_activity(
+                        session, repos, now=safe_now
+                    )
                     return render_project_status_text(
                         project_name=project.canonical_name,
                         jira_keys=keys,
                         snapshots=snapshots,
+                        repo_activity=repo_activity,
                         now=safe_now,
                     )
             except Exception:

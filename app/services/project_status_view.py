@@ -20,6 +20,7 @@ from app.db.event_models import SourceEvent
 STALE_DAYS = 14
 FRESH_DAYS = 7
 MAX_LIST_ITEMS = 4
+PR_REVIEW_STALE_DAYS = 2
 _DONE_STATUSES = {
     "done",
     "готово",
@@ -43,6 +44,28 @@ class JiraIssueSnapshot:
     @property
     def is_done(self) -> bool:
         return self.status.casefold() in _DONE_STATUSES
+
+
+@dataclass(frozen=True)
+class PullRequestSnapshot:
+    pr_id: str
+    title: str
+    state: str
+    merged: bool
+    author: str
+    updated_at: datetime | None
+    jira_keys: tuple[str, ...]
+    review_requested: bool
+
+
+@dataclass(frozen=True)
+class RepoActivity:
+    repo_names: tuple[str, ...]
+    open_prs: tuple[PullRequestSnapshot, ...]
+    merged_prs: tuple[PullRequestSnapshot, ...]
+    commit_count_7d: int
+    commit_jira_keys_7d: frozenset[str]
+    pr_jira_keys: frozenset[str]
 
 
 def _parse_jira_datetime(value: Any) -> datetime | None:
@@ -116,6 +139,98 @@ async def load_project_issue_snapshots(
     return list(latest.values())
 
 
+async def load_repo_activity(
+    session: AsyncSession,
+    repos: list[dict[str, str]],
+    *,
+    now: datetime | None = None,
+) -> RepoActivity | None:
+    """Latest PR snapshots + recent commit signal for mapped repos."""
+
+    if not repos:
+        return None
+    from app.db.models import IngestedEvent
+
+    safe_now = now or datetime.now(timezone.utc)
+    prefixes = [f"{r['org']}/{r['repo']}" for r in repos]
+    rows = (
+        await session.execute(
+            select(
+                SourceEvent.source_object_id,
+                SourceEvent.source_object_type,
+                IngestedEvent.payload,
+            )
+            .join(
+                IngestedEvent,
+                IngestedEvent.event_id == SourceEvent.ingested_event_id,
+            )
+            .where(SourceEvent.source_system == "github")
+            .where(
+                or_(
+                    *[
+                        SourceEvent.source_object_id.like(f"{prefix}%")
+                        for prefix in prefixes
+                    ]
+                )
+            )
+            .order_by(SourceEvent.id)
+        )
+    ).all()
+
+    latest_prs: dict[str, PullRequestSnapshot] = {}
+    commit_count_7d = 0
+    commit_keys_7d: set[str] = set()
+    for object_id, object_type, payload in rows:
+        data = payload if isinstance(payload, dict) else {}
+        if object_type == "commit":
+            authored = _parse_jira_datetime(data.get("authored_at"))
+            if authored and (safe_now - authored).days <= FRESH_DAYS:
+                commit_count_7d += 1
+                for key in data.get("jira_keys") or []:
+                    if isinstance(key, str):
+                        commit_keys_7d.add(key)
+            continue
+        if object_type != "pull_request":
+            continue
+        snap = PullRequestSnapshot(
+            pr_id=str(object_id),
+            title=str(data.get("title") or object_id),
+            state=str(data.get("state") or "open"),
+            merged=data.get("merged") is True,
+            author=str(data.get("actor_external_id") or "unknown"),
+            updated_at=_parse_jira_datetime(data.get("updated")),
+            jira_keys=tuple(
+                key for key in (data.get("jira_keys") or []) if isinstance(key, str)
+            ),
+            review_requested=data.get("review_requested") is True,
+        )
+        current = latest_prs.get(snap.pr_id)
+        if current is None or (
+            (snap.updated_at or datetime.min.replace(tzinfo=timezone.utc))
+            >= (current.updated_at or datetime.min.replace(tzinfo=timezone.utc))
+        ):
+            latest_prs[snap.pr_id] = snap
+
+    open_prs = tuple(
+        sorted(
+            (p for p in latest_prs.values() if p.state == "open"),
+            key=lambda p: p.updated_at or datetime.min.replace(tzinfo=timezone.utc),
+        )
+    )
+    merged_prs = tuple(p for p in latest_prs.values() if p.merged)
+    pr_keys = frozenset(
+        key for p in latest_prs.values() for key in p.jira_keys
+    )
+    return RepoActivity(
+        repo_names=tuple(sorted(r["repo"] for r in repos)),
+        open_prs=open_prs,
+        merged_prs=merged_prs,
+        commit_count_7d=commit_count_7d,
+        commit_jira_keys_7d=frozenset(commit_keys_7d),
+        pr_jira_keys=pr_keys,
+    )
+
+
 def _age_days(snapshot: JiraIssueSnapshot, now: datetime) -> int | None:
     if snapshot.updated_at is None:
         return None
@@ -132,6 +247,7 @@ def render_project_status_text(
     project_name: str,
     jira_keys: list[str],
     snapshots: list[JiraIssueSnapshot],
+    repo_activity: RepoActivity | None = None,
     now: datetime | None = None,
 ) -> str:
     """Founder-readable per-project Jira status, one phone screen."""
@@ -214,11 +330,71 @@ def render_project_status_text(
             " · ".join(f"{name}: {count}" for name, count in load.most_common(5))
         )
 
-    lines.extend(
-        [
-            "",
-            "Second opinion (Jira↔GitHub) появится после синка GitHub.",
-            "[Показать всё] [Скрыть похожее]",
+    if repo_activity is not None:
+        lines.extend(["", f"⚙️ Код ({', '.join(repo_activity.repo_names)})"])
+        lines.append(
+            f"Коммитов за {FRESH_DAYS} дн: {repo_activity.commit_count_7d} · "
+            f"открытых PR: {len(repo_activity.open_prs)} · "
+            f"merged: {len(repo_activity.merged_prs)}"
+        )
+        waiting_prs = [
+            p
+            for p in repo_activity.open_prs
+            if (
+                p.updated_at is not None
+                and (safe_now - p.updated_at).days >= PR_REVIEW_STALE_DAYS
+            )
         ]
-    )
+        for p in waiting_prs[:3]:
+            age = (safe_now - p.updated_at).days if p.updated_at else 0
+            lines.append(f"• {_short(p.title)} — {p.author}, без движения {age} дн")
+
+        active_keys = set(repo_activity.commit_jira_keys_7d)
+        for p in repo_activity.open_prs + repo_activity.merged_prs:
+            if p.updated_at and (safe_now - p.updated_at).days <= FRESH_DAYS:
+                active_keys.update(p.jira_keys)
+
+        findings: list[str] = []
+        in_progress = [
+            s for s in open_items if "progress" in s.status.casefold()
+        ]
+        if in_progress:
+            covered = [s for s in in_progress if s.issue_key in active_keys]
+            line = (
+                f"• Jira In Progress: {len(in_progress)} задач, "
+                f"код за {FRESH_DAYS} дн виден по {len(covered)}"
+            )
+            silent = [s.issue_key for s in in_progress if s.issue_key not in active_keys]
+            if silent:
+                line += f" (молчат: {', '.join(silent[:3])}"
+                line += f" и ещё {len(silent) - 3})" if len(silent) > 3 else ")"
+            findings.append(line)
+        prs_without_jira = [p for p in repo_activity.open_prs if not p.jira_keys]
+        if prs_without_jira:
+            findings.append(
+                f"• Открытых PR без Jira-задачи: {len(prs_without_jira)}"
+            )
+        done_keys = {s.issue_key for s in snapshots if s.is_done}
+        merged_not_done = sorted(
+            {
+                key
+                for p in repo_activity.merged_prs
+                for key in p.jira_keys
+                if key in {s.issue_key for s in open_items}
+            }
+        )
+        del done_keys
+        if merged_not_done:
+            findings.append(
+                "• PR merged, но задача не закрыта: "
+                + ", ".join(merged_not_done[:3])
+            )
+
+        lines.extend(["", "🔍 Second opinion"])
+        if findings:
+            lines.extend(findings)
+        else:
+            lines.append("Расхождений Jira↔GitHub не найдено.")
+
+    lines.extend(["", "[Показать всё] [Скрыть похожее]"])
     return "\n".join(lines) + "\n"

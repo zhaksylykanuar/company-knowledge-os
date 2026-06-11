@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from app.services.project_status_view import (
+    PullRequestSnapshot,
+    RepoActivity,
     JiraIssueSnapshot,
     render_project_status_text,
     snapshot_from_payload,
@@ -91,3 +93,68 @@ def test_render_empty_suggests_sync() -> None:
         now=NOW,
     )
     assert "Задачи ещё не синхронизированы" in text
+
+
+def _activity(**kw) -> RepoActivity:
+    base = dict(
+        repo_names=("repo-alpha-api",),
+        open_prs=(),
+        merged_prs=(),
+        commit_count_7d=0,
+        commit_jira_keys_7d=frozenset(),
+        pr_jira_keys=frozenset(),
+    )
+    base.update(kw)
+    return RepoActivity(**base)
+
+
+def _pr(pr_id: str, *, state: str = "open", merged: bool = False,
+        days_ago: int = 0, jira_keys: tuple = (), title: str = "PR work") -> PullRequestSnapshot:
+    import datetime as _dt
+    return PullRequestSnapshot(
+        pr_id=pr_id, title=title, state=state, merged=merged, author="person-a",
+        updated_at=NOW - _dt.timedelta(days=days_ago),
+        jira_keys=jira_keys, review_requested=True,
+    )
+
+
+def test_engineering_and_second_opinion_sections() -> None:
+    snapshots = [
+        _snap("QS-1", days_ago=1),                       # in progress, код есть
+        _snap("QS-2", days_ago=2, title="Молчит"),       # in progress, кода нет
+        _snap("QS-3", status="To Do", days_ago=3),
+    ]
+    activity = _activity(
+        open_prs=(
+            _pr("o/r/pull/1", days_ago=3, jira_keys=("QS-1",), title="QS-1 auth"),
+            _pr("o/r/pull/2", days_ago=0, jira_keys=()),
+        ),
+        merged_prs=(_pr("o/r/pull/3", state="merged", merged=True,
+                        days_ago=1, jira_keys=("QS-3",)),),
+        commit_count_7d=5,
+        commit_jira_keys_7d=frozenset({"QS-1"}),
+    )
+
+    text = render_project_status_text(
+        project_name="qTwin", jira_keys=["QS"], snapshots=snapshots,
+        repo_activity=activity, now=NOW,
+    )
+
+    assert "⚙️ Код (repo-alpha-api)" in text
+    assert "Коммитов за 7 дн: 5 · открытых PR: 2 · merged: 1" in text
+    assert "без движения 3 дн" in text          # stale review PR
+    assert "🔍 Second opinion" in text
+    assert "Jira In Progress: 2 задач, код за 7 дн виден по 1" in text
+    assert "молчат: QS-2" in text
+    assert "Открытых PR без Jira-задачи: 1" in text
+    assert "PR merged, но задача не закрыта: QS-3" in text
+
+
+def test_no_findings_renders_clean_second_opinion() -> None:
+    text = render_project_status_text(
+        project_name="qTwin", jira_keys=["QS"],
+        snapshots=[_snap("QS-9", status="To Do", days_ago=1)],
+        repo_activity=_activity(commit_count_7d=2),
+        now=NOW,
+    )
+    assert "Расхождений Jira↔GitHub не найдено." in text
