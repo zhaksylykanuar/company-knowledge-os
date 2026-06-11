@@ -41,6 +41,9 @@ def test_parse_founder_command_variants() -> None:
     assert bot.parse_founder_command("/status") == bot.COMMAND_STATUS
     assert bot.parse_founder_command("/status@founder_bot") == bot.COMMAND_STATUS
     assert bot.parse_founder_command("Что у нас с SSAP?") == bot.COMMAND_STATUS
+    assert bot.parse_founder_command("что с ssap") == bot.COMMAND_STATUS
+    assert bot.parse_founder_command("что по разработке") == bot.COMMAND_STATUS
+    assert bot.parse_founder_command("как дела?") == bot.COMMAND_STATUS
     assert bot.parse_founder_command("какой статус?") == bot.COMMAND_STATUS
     assert bot.parse_founder_command("/help") == bot.COMMAND_HELP
     assert bot.parse_founder_command("/start") == bot.COMMAND_HELP
