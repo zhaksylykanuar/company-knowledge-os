@@ -151,15 +151,35 @@ async def build_status_reply_text(
     window_hours: int = DEFAULT_STATUS_WINDOW_HOURS,
     limit: int = DEFAULT_DIGEST_ENTRY_LIMIT,
     now: datetime | None = None,
+    question_text: str | None = None,
 ) -> str:
-    """Render founder digest v2 for the trailing window from stored data."""
+    """Render founder digest v2 for the trailing window from stored data.
+
+    When the question mentions a known project alias, the reply names the
+    recognized project explicitly (entity resolution, Phase A2). Per-project
+    status content arrives with the Jira/GitHub sync slices.
+    """
 
     from app.db.base import AsyncSessionLocal
     from app.services.digest import build_persisted_attention_digest_read_model
+    from app.services.entity_resolution import (
+        ENTITY_TYPE_PROJECT,
+        resolve_entities_in_text,
+    )
 
     safe_now = now or datetime.now(timezone.utc)
     start_at = safe_now - timedelta(hours=max(1, int(window_hours)))
+    recognized = []
     async with AsyncSessionLocal() as session:
+        if question_text:
+            try:
+                recognized = await resolve_entities_in_text(
+                    session,
+                    question_text,
+                    entity_type=ENTITY_TYPE_PROJECT,
+                )
+            except Exception:
+                recognized = []
         digest = await build_persisted_attention_digest_read_model(
             session,
             start_at=start_at,
@@ -167,7 +187,18 @@ async def build_status_reply_text(
             limit_per_section=limit,
             marker_filter=PERSISTED_ATTENTION_MARKER_FILTER_NO_MARKER_ONLY,
         )
-    return render_founder_attention_digest_text(digest, generated_at=safe_now)
+
+    text = render_founder_attention_digest_text(digest, generated_at=safe_now)
+    if recognized:
+        project = recognized[0]
+        prefix = (
+            f"📂 Проект: {project.canonical_name} "
+            f"(распознал «{project.matched_alias}»)\n"
+            "Статус по проекту появится после подключения Jira/GitHub. "
+            "Пока общий дайджест:\n\n"
+        )
+        return prefix + text
+    return text
 
 
 def _update_chat_id(update: Mapping[str, Any]) -> str | None:
@@ -205,12 +236,14 @@ async def build_reply_for_update(
     if chat_id is None or chat_id != str(allowed_chat_id):
         return IGNORED_UPDATE_REPLY
 
-    command = parse_founder_command(_update_text(update))
+    text = _update_text(update)
+    command = parse_founder_command(text)
     if command == COMMAND_STATUS:
         return await build_status_reply_text(
             window_hours=window_hours,
             limit=limit,
             now=now,
+            question_text=text,
         )
     return HELP_REPLY
 
