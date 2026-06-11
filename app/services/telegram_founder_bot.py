@@ -193,6 +193,25 @@ async def build_status_reply_text(
                 recognized = []
         if require_recognized_project and not recognized:
             return None
+        jira_summary = ""
+        if recognized:
+            try:
+                from app.services.jira_graph_mapping import (
+                    jira_issue_count_for_keys,
+                    jira_keys_for_project,
+                )
+
+                keys = await jira_keys_for_project(
+                    session, recognized[0].entity_id
+                )
+                if keys:
+                    issue_count = await jira_issue_count_for_keys(session, keys)
+                    jira_summary = (
+                        f"Jira: {issue_count} задач в графе "
+                        f"({', '.join(keys)})\n"
+                    )
+            except Exception:
+                jira_summary = ""
         digest = await build_persisted_attention_digest_read_model(
             session,
             start_at=start_at,
@@ -204,11 +223,16 @@ async def build_status_reply_text(
     text = render_founder_attention_digest_text(digest, generated_at=safe_now)
     if recognized:
         project = recognized[0]
+        if jira_summary:
+            tail = jira_summary + "Пока общий дайджест; статусы задач — в A5:\n\n"
+        else:
+            tail = (
+                "Статус по проекту появится после подключения Jira/GitHub. "
+                "Пока общий дайджест:\n\n"
+            )
         prefix = (
             f"📂 Проект: {project.canonical_name} "
-            f"(распознал «{project.matched_alias}»)\n"
-            "Статус по проекту появится после подключения Jira/GitHub. "
-            "Пока общий дайджест:\n\n"
+            f"(распознал «{project.matched_alias}»)\n" + tail
         )
         return prefix + text
     return text
