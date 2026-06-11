@@ -4,6 +4,8 @@ Navigation map for future Codex sessions.
 
 ## Start Here
 
+- `vision.md`: FounderOS North Star — target product, knowledge graph, status
+  engine, second-opinion detectors, phases with usage gates.
 - `playbook.md`: operating playbook v2 — phases, usage gates, weekly ritual,
   eval contract. Read this first for "what to build next".
 - `../AGENTS.md`: agent operating rules.
