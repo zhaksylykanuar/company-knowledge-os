@@ -1,5 +1,9 @@
 # FounderOS Vision (North Star)
 
+> Полная версия продукта и архитектуры — в
+> [`playbook-digital-twin.md`](playbook-digital-twin.md) (v3). Этот файл —
+> краткая карта; правила исполнения — в [`playbook.md`](playbook.md).
+
 Операционная память компании и AI second opinion фаундера. Этот документ —
 карта направления. Закон исполнения — [`playbook.md`](playbook.md):
 вертикальные срезы, usage gates, WIP=1. Фазы ниже открываются только

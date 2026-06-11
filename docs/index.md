@@ -4,10 +4,12 @@ Navigation map for future Codex sessions.
 
 ## Start Here
 
-- `vision.md`: FounderOS North Star — target product, knowledge graph, status
-  engine, second-opinion detectors, phases with usage gates.
+- `playbook-digital-twin.md`: FounderOS Digital Twin playbook v3 — full product
+  and architecture source of truth (graph, state engine, second opinion, UI).
+- `vision.md`: condensed north star; superseded in detail by
+  `playbook-digital-twin.md`, kept as the short map.
 - `playbook.md`: operating playbook v2 — phases, usage gates, weekly ritual,
-  eval contract. Read this first for "what to build next".
+  eval contract. Execution law: vertical slices, WIP=1.
 - `../AGENTS.md`: agent operating rules.
 - `../CLAUDE.md`: AI/token/extraction rules.
 - `architecture.md`: system overview.
