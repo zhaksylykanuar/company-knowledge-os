@@ -35,6 +35,73 @@ Later, the founder should be able to ask questions in Telegram. Telegram should
 only be an interface for submitting questions, receiving digests, and optionally
 submitting founder notes for ingestion. Telegram is not the source of truth.
 
+## Founder Digest Format v2 (product contract, from day-1 pilot feedback)
+
+Goal: save the founder's attention, not enumerate events.
+
+Rendering rules:
+
+1. Start with a one-line status: urgent / calm / action required.
+2. Show at most 3 main items.
+3. Group and hide low-priority events.
+4. Never show technical fields: evidence refs, visible/hidden counts as raw
+   fields, window timestamps, "Summary unavailable" placeholders.
+5. Every important item must include: what happened, why it matters, what to
+   do, and the source.
+6. If no actions are needed, say it explicitly: "Действий не требуется".
+7. If a security code/OTP is involved, never show the code itself — only warn
+   that one arrived.
+8. Short, clear, in Russian.
+9. The whole digest must fit one phone screen.
+10. Footer actions: [Открыть главное], [Показать всё], [Скрыть похожее].
+
+Output template (digest body language is Russian by contract):
+
+```text
+🧠 Дайджест внимания • {дата/время}
+
+{главный статус одной строкой}
+
+🔥 Срочно
+{если нет — "Нет"}
+
+🟡 Стоит посмотреть
+{1–3 пункта}
+
+📭 Ждут моего ответа
+{список или "Нет"}
+
+📌 Проекты
+{важные изменения или "Нет важных обновлений"}
+
+🗂 Скрыто как шум
+{количество и краткие категории}
+
+{кнопки}
+```
+
+Section mapping to the existing `AttentionTriageResult` contract:
+
+- 🔥 Срочно — `requires_my_attention` / `manual_action` with high priority.
+- 🟡 Стоит посмотреть — `important_info` and high-confidence `review_optional`.
+- 📭 Ждут моего ответа — `waiting_on_external` and reply-required items.
+- 📌 Проекты — project-linked `important_info`.
+- 🗂 Скрыто как шум — hidden/low-priority, grouped count by category only.
+- [Скрыть похожее] maps to the existing feedback action `always_hide_similar`.
+
+Delivery modes (target, staged):
+
+1. Instant alert — only for genuinely urgent items.
+2. Short digest — 2–4 times per day (morning/midday/evening).
+3. Full log — available on demand via "Показать всё", never pushed.
+
+Staging notes: the v2 renderer is a pure function over the persisted attention
+read model and can ship within the current manual send loop. Meaningful section
+placement requires LLM triage (deterministic fallback puts everything in
+review_optional by design). Footer buttons and "Показать всё" require an inbound
+Telegram bot slice; instant alerts and scheduled cadence require the scheduler
+phase and stay behind the existing guards.
+
 ## Source Of Truth
 
 - Raw storage and Postgres are authoritative.
