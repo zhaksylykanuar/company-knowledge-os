@@ -80,6 +80,8 @@ def _github_get(
     *,
     fetcher: Fetcher | None = None,
 ) -> Any:
+    import urllib.error
+
     token = environ.get("FOS_GITHUB_READONLY_TOKEN", "")
     if not token.strip():
         raise ValueError("FOS_GITHUB_READONLY_TOKEN is not configured")
@@ -89,7 +91,21 @@ def _github_get(
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "company-knowledge-os-readonly-sync",
     }
-    body = (fetcher or _default_fetcher)("https://api.github.com" + path, headers)
+    try:
+        body = (fetcher or _default_fetcher)(
+            "https://api.github.com" + path, headers
+        )
+    except urllib.error.HTTPError as exc:
+        hints = {
+            401: "token invalid or expired",
+            403: "token lacks permission or rate limited",
+            404: "repo not found or token lacks repo access (fine-grained scopes)",
+            409: "repository is empty",
+        }
+        hint = hints.get(exc.code, "unexpected status")
+        raise RuntimeError(
+            f"HTTP {exc.code} on {path.split('?')[0]} ({hint})"
+        ) from None
     return json.loads(body.decode("utf-8"))
 
 
@@ -290,7 +306,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     except Exception as exc:
-        print(f"Error: github sync failed: {type(exc).__name__}", file=sys.stderr)
+        detail = str(exc) or type(exc).__name__
+        print(f"Error: github sync failed: {detail}", file=sys.stderr)
         return 1
 
 
