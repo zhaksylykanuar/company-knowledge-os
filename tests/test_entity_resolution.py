@@ -110,6 +110,33 @@ async def test_status_reply_names_recognized_project() -> None:
         await _cleanup_seed()
 
 
+async def test_free_text_with_alias_only_returns_project_status() -> None:
+    from app.services.telegram_founder_bot import build_reply_for_update
+
+    await _ensure_graph_tables()
+    await _cleanup_seed()
+    try:
+        async with AsyncSessionLocal() as session:
+            await seed_project_entities(session)
+            await session.commit()
+
+        update = {
+            "update_id": 1,
+            "message": {"chat": {"id": "777"}, "text": "ssap когда релиз?"},
+        }
+        reply = await build_reply_for_update(
+            update,
+            allowed_chat_id="777",
+            window_hours=1,
+            now=datetime(2199, 7, 2, tzinfo=timezone.utc),
+        )
+
+        assert reply is not None
+        assert "📂 Проект: SSAP" in reply
+    finally:
+        await _cleanup_seed()
+
+
 async def test_status_reply_without_project_has_no_prefix() -> None:
     await _ensure_graph_tables()
     text = await build_status_reply_text(

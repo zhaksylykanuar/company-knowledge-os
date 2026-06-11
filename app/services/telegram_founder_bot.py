@@ -40,7 +40,15 @@ COMMAND_STATUS = "status"
 COMMAND_HELP = "help"
 COMMAND_UNKNOWN = "unknown"
 
-_STATUS_TEXT_HINTS = ("статус", "status", "что у нас", "что происходит")
+_STATUS_TEXT_HINTS = (
+    "статус",
+    "status",
+    "что у нас",
+    "что происходит",
+    "что с ",
+    "что по ",
+    "как дела",
+)
 
 HELP_REPLY = (
     "Я — FounderOS. Сейчас умею:\n"
@@ -152,12 +160,15 @@ async def build_status_reply_text(
     limit: int = DEFAULT_DIGEST_ENTRY_LIMIT,
     now: datetime | None = None,
     question_text: str | None = None,
-) -> str:
+    require_recognized_project: bool = False,
+) -> str | None:
     """Render founder digest v2 for the trailing window from stored data.
 
     When the question mentions a known project alias, the reply names the
     recognized project explicitly (entity resolution, Phase A2). Per-project
-    status content arrives with the Jira/GitHub sync slices.
+    status content arrives with the Jira/GitHub sync slices. With
+    ``require_recognized_project=True`` the function returns None when no
+    known project is mentioned, so callers can fall back to help.
     """
 
     from app.db.base import AsyncSessionLocal
@@ -180,6 +191,8 @@ async def build_status_reply_text(
                 )
             except Exception:
                 recognized = []
+        if require_recognized_project and not recognized:
+            return None
         digest = await build_persisted_attention_digest_read_model(
             session,
             start_at=start_at,
@@ -245,6 +258,17 @@ async def build_reply_for_update(
             now=now,
             question_text=text,
         )
+    if command == COMMAND_UNKNOWN and text:
+        # Free text mentioning a known project counts as a status question.
+        recognized_reply = await build_status_reply_text(
+            window_hours=window_hours,
+            limit=limit,
+            now=now,
+            question_text=text,
+            require_recognized_project=True,
+        )
+        if recognized_reply is not None:
+            return recognized_reply
     return HELP_REPLY
 
 
