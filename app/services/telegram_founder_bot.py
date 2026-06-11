@@ -193,25 +193,27 @@ async def build_status_reply_text(
                 recognized = []
         if require_recognized_project and not recognized:
             return None
-        jira_summary = ""
         if recognized:
+            # Project question -> project-focused Jira view, not the inbox digest.
             try:
-                from app.services.jira_graph_mapping import (
-                    jira_issue_count_for_keys,
-                    jira_keys_for_project,
+                from app.services.jira_graph_mapping import jira_keys_for_project
+                from app.services.project_status_view import (
+                    load_project_issue_snapshots,
+                    render_project_status_text,
                 )
 
-                keys = await jira_keys_for_project(
-                    session, recognized[0].entity_id
-                )
+                project = recognized[0]
+                keys = await jira_keys_for_project(session, project.entity_id)
                 if keys:
-                    issue_count = await jira_issue_count_for_keys(session, keys)
-                    jira_summary = (
-                        f"Jira: {issue_count} задач в графе "
-                        f"({', '.join(keys)})\n"
+                    snapshots = await load_project_issue_snapshots(session, keys)
+                    return render_project_status_text(
+                        project_name=project.canonical_name,
+                        jira_keys=keys,
+                        snapshots=snapshots,
+                        now=safe_now,
                     )
             except Exception:
-                jira_summary = ""
+                pass
         digest = await build_persisted_attention_digest_read_model(
             session,
             start_at=start_at,
@@ -223,16 +225,11 @@ async def build_status_reply_text(
     text = render_founder_attention_digest_text(digest, generated_at=safe_now)
     if recognized:
         project = recognized[0]
-        if jira_summary:
-            tail = jira_summary + "Пока общий дайджест; статусы задач — в A5:\n\n"
-        else:
-            tail = (
-                "Статус по проекту появится после подключения Jira/GitHub. "
-                "Пока общий дайджест:\n\n"
-            )
         prefix = (
             f"📂 Проект: {project.canonical_name} "
-            f"(распознал «{project.matched_alias}»)\n" + tail
+            f"(распознал «{project.matched_alias}»)\n"
+            "Jira-проекты ещё не замаплены (map_jira_projects.py). "
+            "Пока общий дайджест:\n\n"
         )
         return prefix + text
     return text
