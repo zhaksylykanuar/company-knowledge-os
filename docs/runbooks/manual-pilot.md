@@ -55,6 +55,35 @@ writes, no KB/Obsidian writes, and synthetic data only.
 7. End each day by checking the git tree is clean and no generated KB/Obsidian
    files were manually edited as source data.
 
+## Daily Founder Digest v2 Loop (current pilot shape)
+
+Run by a human, in order, with a fresh window each day. Guard phrases are typed
+by the human on purpose; agents must not supply them.
+
+1. Backfill the fresh Gmail/Drive window (see
+   `google-local-backfill.md`).
+2. Normalize stored source events
+   (`scripts/normalize_stored_source_events.py`, preview first).
+3. Triage with the LLM provider (this is the step that makes the digest
+   meaningful; the fallback provider puts everything in review_optional):
+   `ENABLE_LLM=true uv run python scripts/triage_normalized_activity_items.py
+   --provider openai --acknowledge-live-provider-risk
+   "ALLOW LIVE PROVIDER EXECUTION" ...window args...`
+4. Preview the founder digest before drafting:
+   `uv run python scripts/preview_founder_digest.py --start-at ... --end-at ...`
+5. Prepare the delivery draft in the founder v2 style:
+   `uv run python scripts/prepare_no_marker_persisted_attention_delivery_draft.py
+   --digest-style founder_v2 --confirm-prepare "PREPARE NO-MARKER DIGEST DRAFT"
+   ...window args...`
+6. Approve, create the intention, and send through the existing gated chain.
+7. Read the digest in Telegram, mark noise/important items, and convert every
+   miss into an eval case in `tests/evals/`.
+
+Pick the digest style per window before the first send of that window: the
+style changes `text_sha256`, and the duplicate-success guard is hash-based, so
+re-sending the same window in a different style would not be auto-blocked
+(see the presentation-variant analysis in `docs/features/attention.md`).
+
 ## Human Approval Boundary
 
 AI-generated or deterministic draft artifacts are not actions. A human must

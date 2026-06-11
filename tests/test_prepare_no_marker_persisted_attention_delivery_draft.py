@@ -56,6 +56,7 @@ def _query(
     activity_start_at=None,
     activity_end_at=None,
     limit: int = 20,
+    digest_style: str = prepare_script.DIGEST_STYLE_STANDARD,
 ) -> prepare_script.NoMarkerDraftPrepareQuery:
     return prepare_script.NoMarkerDraftPrepareQuery(
         start_at=start_at,
@@ -64,6 +65,7 @@ def _query(
         activity_end_at=activity_end_at,
         limit=limit,
         debug_evidence=False,
+        digest_style=digest_style,
         confirm_prepare=prepare_script.CONFIRM_PREPARE_PHRASE,
         output_format="json",
     )
@@ -590,3 +592,61 @@ async def test_matching_hash_success_does_not_create_new_draft() -> None:
         _assert_safe_output(_serialized(result))
     finally:
         await no_marker_fixtures._cleanup(unique)
+
+
+async def test_founder_v2_style_prepares_draft_with_v2_body() -> None:
+    await no_marker_fixtures._ensure_tables()
+    unique = f"founderv2_{uuid4().hex}"
+    await no_marker_fixtures._cleanup(unique)
+    delivery_draft_id: str | None = None
+    try:
+        source_event_id = await no_marker_fixtures._insert_source_event(
+            unique,
+            created_at=no_marker_fixtures._utc(2149, 4, 1, 9),
+        )
+        activity_item_id = await no_marker_fixtures._insert_normalized_activity(
+            unique,
+            created_at=no_marker_fixtures._utc(2149, 4, 1, 9),
+            source_event_id=source_event_id,
+        )
+        await no_marker_fixtures._insert_attention_result(
+            unique,
+            created_at=no_marker_fixtures._utc(2149, 4, 2, 9),
+            activity_item_id=activity_item_id,
+        )
+
+        result = await prepare_script.prepare_no_marker_persisted_attention_delivery_draft(
+            _query(
+                start_at=no_marker_fixtures._utc(2149, 4, 2),
+                end_at=no_marker_fixtures._utc(2149, 4, 3),
+                digest_style=prepare_script.DIGEST_STYLE_FOUNDER_V2,
+            ),
+            settings_override=_local_settings(),
+            environ={},
+        )
+
+        assert result["prepared"] is True
+        delivery_draft_id = str(result["delivery_draft_id"])
+        # v2-хэш отличается от канонического standard-хэша кандидата
+        assert result["text_sha256"] != result["candidate"]["text_sha256"]
+
+        async with AsyncSessionLocal() as session:
+            stored = await get_persisted_digest_delivery_draft(
+                session,
+                delivery_draft_id=delivery_draft_id,
+            )
+        assert stored is not None
+        body = str(stored.get("rendered_text") or "")
+        assert body.startswith("🧠 Дайджест внимания")
+        assert "[Открыть главное]" in body
+        assert "evidence" not in body
+        metadata = stored.get("digest", {}).get("metadata", {})
+        assert metadata.get("digest_style") == prepare_script.DIGEST_STYLE_FOUNDER_V2
+    finally:
+        await no_marker_fixtures._cleanup(unique)
+        if delivery_draft_id:
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    delete(AuditLog).where(AuditLog.after_ref == delivery_draft_id)
+                )
+                await session.commit()

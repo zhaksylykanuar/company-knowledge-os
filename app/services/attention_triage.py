@@ -120,6 +120,7 @@ OPENAI_ATTENTION_TRIAGE_SYSTEM_PROMPT = (
     "Do not invent facts.\n"
     "If uncertain, classify as review_optional.\n"
     "Never hide something that could reasonably require a work action.\n"
+    "Write the reason and recommended_action fields in Russian.\n"
     "Return strict JSON only."
 )
 

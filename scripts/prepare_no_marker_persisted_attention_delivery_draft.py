@@ -10,7 +10,7 @@ import os
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +42,11 @@ class NoMarkerDraftPrepareRuntimeError(RuntimeError):
     pass
 
 
+DIGEST_STYLE_STANDARD = "standard"
+DIGEST_STYLE_FOUNDER_V2 = "founder_v2"
+DIGEST_STYLE_CHOICES = (DIGEST_STYLE_STANDARD, DIGEST_STYLE_FOUNDER_V2)
+
+
 @dataclass(frozen=True)
 class NoMarkerDraftPrepareQuery:
     start_at: datetime
@@ -51,6 +56,7 @@ class NoMarkerDraftPrepareQuery:
     activity_end_at: datetime | None = None
     limit: int = DEFAULT_DIGEST_ENTRY_LIMIT
     debug_evidence: bool = False
+    digest_style: str = DIGEST_STYLE_STANDARD
     output_format: str = "json"
 
 
@@ -117,6 +123,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Use existing persisted digest debug-evidence semantics for storage.",
     )
     parser.add_argument(
+        "--digest-style",
+        choices=DIGEST_STYLE_CHOICES,
+        default=DIGEST_STYLE_STANDARD,
+        help="Draft body style: standard renderer or founder digest v2.",
+    )
+    parser.add_argument(
         "--format",
         choices=("text", "json"),
         default="json",
@@ -159,6 +171,7 @@ def _query_from_args(args: argparse.Namespace) -> NoMarkerDraftPrepareQuery:
         activity_end_at=activity_end_at,
         limit=_clean_limit(args.limit),
         debug_evidence=bool(args.debug_evidence),
+        digest_style=str(args.digest_style),
         output_format=args.format,
     )
 
@@ -365,6 +378,7 @@ def _enrich_no_marker_draft(
             "filtered_digest": True,
             "filter_scope": "no_marker_persisted_attention_candidate",
             "no_marker_not_production_truth": True,
+            "digest_style": query.digest_style,
             "activity_window": _activity_window_metadata(query),
             "candidate_text_sha256": candidate.get("text_sha256"),
             "excluded_markers": dict(excluded_markers),
@@ -591,6 +605,9 @@ async def prepare_no_marker_persisted_attention_delivery_draft(
         sanitize_persisted_attention_digest_for_delivery_draft,
     )
     from app.services.digest_rendering import render_persisted_attention_digest_text
+    from app.services.founder_digest_rendering import (
+        render_founder_attention_digest_text,
+    )
 
     try:
         prepare_script._assert_local_environment(
@@ -681,10 +698,16 @@ async def prepare_no_marker_persisted_attention_delivery_draft(
                 digest,
                 debug_evidence=query.debug_evidence,
             )
-            rendered_text = render_persisted_attention_digest_text(
-                safe_digest,
-                debug_evidence=query.debug_evidence,
-            )
+            if query.digest_style == DIGEST_STYLE_FOUNDER_V2:
+                rendered_text = render_founder_attention_digest_text(
+                    safe_digest,
+                    generated_at=datetime.now(timezone.utc),
+                )
+            else:
+                rendered_text = render_persisted_attention_digest_text(
+                    safe_digest,
+                    debug_evidence=query.debug_evidence,
+                )
             draft = build_persisted_attention_digest_delivery_draft(
                 digest=safe_digest,
                 rendered_text=rendered_text,
@@ -693,7 +716,10 @@ async def prepare_no_marker_persisted_attention_delivery_draft(
                 limit=query.limit,
                 debug_evidence=query.debug_evidence,
             )
-            if draft.get("text_sha256") != candidate.get("text_sha256"):
+            if (
+                query.digest_style == DIGEST_STYLE_STANDARD
+                and draft.get("text_sha256") != candidate.get("text_sha256")
+            ):
                 raise NoMarkerDraftPrepareRuntimeError(
                     "no-marker candidate hash changed before draft persistence"
                 )
