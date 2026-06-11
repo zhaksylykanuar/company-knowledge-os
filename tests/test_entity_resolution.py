@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import delete
+from sqlalchemy import func, select
 
 from app.db.base import AsyncSessionLocal, engine
 from app.db.graph_models import EntityAliasRecord, EntityLinkRecord, EntityRecord
@@ -15,6 +15,12 @@ from app.services.entity_resolution import (
 )
 from app.services.telegram_founder_bot import build_status_reply_text
 
+# Уникальные нормализованные алиасы из seed-словаря (дубликаты схлопываются).
+EXPECTED_SEED_ALIAS_COUNT = sum(
+    len({normalize_alias(a) for a in aliases if normalize_alias(a)})
+    for _name, aliases in SEED_PROJECT_ALIASES.values()
+)
+
 
 async def _ensure_graph_tables() -> None:
     async with engine.begin() as conn:
@@ -23,18 +29,16 @@ async def _ensure_graph_tables() -> None:
         await conn.run_sync(EntityLinkRecord.__table__.create, checkfirst=True)
 
 
-async def _cleanup_seed() -> None:
+async def _seed() -> None:
+    """Idempotent seed; intentionally NOT cleaned up.
+
+    Tests share the local dev database with the operator seed command, so
+    deleting seed rows here would silently break the live founder bot.
+    """
+
+    await _ensure_graph_tables()
     async with AsyncSessionLocal() as session:
-        await session.execute(
-            delete(EntityAliasRecord).where(
-                EntityAliasRecord.entity_id.in_(list(SEED_PROJECT_ALIASES))
-            )
-        )
-        await session.execute(
-            delete(EntityRecord).where(
-                EntityRecord.entity_id.in_(list(SEED_PROJECT_ALIASES))
-            )
-        )
+        await seed_project_entities(session)
         await session.commit()
 
 
@@ -47,94 +51,91 @@ def test_normalize_alias_variants() -> None:
     assert normalize_alias("!!!") == ""
 
 
-async def test_seed_is_idempotent_and_resolution_matches_variants() -> None:
-    await _ensure_graph_tables()
-    await _cleanup_seed()
-    try:
-        async with AsyncSessionLocal() as session:
-            first = await seed_project_entities(session)
-            await session.commit()
-        async with AsyncSessionLocal() as session:
-            second = await seed_project_entities(session)
-            await session.commit()
+async def test_seed_is_idempotent_and_complete() -> None:
+    await _seed()
 
-        assert first["entities_created"] == 3
-        assert first["aliases_created"] > 0
-        assert second == {"entities_created": 0, "aliases_created": 0}
+    async with AsyncSessionLocal() as session:
+        second = await seed_project_entities(session)
+        await session.commit()
 
-        async with AsyncSessionLocal() as session:
-            for question, expected_entity in (
-                ("что у нас с SSAP?", "project:ssap"),
-                ("Что по S-SAP сегодня", "project:ssap"),
-                ("что у нас с ссап", "project:ssap"),
-                ("статус q twin", "project:qtwin"),
-                ("что по qaztwin", "project:qtwin"),
-                ("Что у нас по Интегра Сити Солюшнс?", "project:integra"),
-                ("integra city status", "project:integra"),
-            ):
-                resolved = await resolve_entities_in_text(
-                    session,
-                    question,
-                    entity_type=ENTITY_TYPE_PROJECT,
-                )
-                assert resolved, question
-                assert resolved[0].entity_id == expected_entity, question
+        seed_ids = list(SEED_PROJECT_ALIASES)
+        entities = await session.scalar(
+            select(func.count())
+            .select_from(EntityRecord)
+            .where(EntityRecord.entity_id.in_(seed_ids))
+        )
+        aliases = await session.scalar(
+            select(func.count())
+            .select_from(EntityAliasRecord)
+            .where(EntityAliasRecord.entity_id.in_(seed_ids))
+        )
 
-            none_resolved = await resolve_entities_in_text(
+    assert second == {"entities_created": 0, "aliases_created": 0}
+    assert entities == len(SEED_PROJECT_ALIASES)
+    assert aliases == EXPECTED_SEED_ALIAS_COUNT
+
+
+async def test_resolution_matches_ru_en_variants() -> None:
+    await _seed()
+
+    async with AsyncSessionLocal() as session:
+        for question, expected_entity in (
+            ("что у нас с SSAP?", "project:ssap"),
+            ("Что по S-SAP сегодня", "project:ssap"),
+            ("что с ссап", "project:ssap"),
+            ("статус q twin", "project:qtwin"),
+            ("что по qaztwin", "project:qtwin"),
+            ("Что у нас по Интегра Сити Солюшнс?", "project:integra"),
+            ("integra city status", "project:integra"),
+        ):
+            resolved = await resolve_entities_in_text(
                 session,
-                "просто привет без проектов",
+                question,
                 entity_type=ENTITY_TYPE_PROJECT,
             )
-            assert none_resolved == []
-    finally:
-        await _cleanup_seed()
+            assert resolved, question
+            assert resolved[0].entity_id == expected_entity, question
+
+        none_resolved = await resolve_entities_in_text(
+            session,
+            "просто привет без проектов",
+            entity_type=ENTITY_TYPE_PROJECT,
+        )
+        assert none_resolved == []
 
 
 async def test_status_reply_names_recognized_project() -> None:
-    await _ensure_graph_tables()
-    await _cleanup_seed()
-    try:
-        async with AsyncSessionLocal() as session:
-            await seed_project_entities(session)
-            await session.commit()
+    await _seed()
 
-        text = await build_status_reply_text(
-            window_hours=1,
-            now=datetime(2199, 7, 1, tzinfo=timezone.utc),
-            question_text="что у нас с SSAP?",
-        )
+    text = await build_status_reply_text(
+        window_hours=1,
+        now=datetime(2199, 7, 1, tzinfo=timezone.utc),
+        question_text="что у нас с SSAP?",
+    )
 
-        assert "📂 Проект: SSAP" in text
-        assert "🧠 Дайджест внимания" in text
-    finally:
-        await _cleanup_seed()
+    assert text is not None
+    assert "📂 Проект: SSAP" in text
+    assert "🧠 Дайджест внимания" in text
 
 
 async def test_free_text_with_alias_only_returns_project_status() -> None:
     from app.services.telegram_founder_bot import build_reply_for_update
 
-    await _ensure_graph_tables()
-    await _cleanup_seed()
-    try:
-        async with AsyncSessionLocal() as session:
-            await seed_project_entities(session)
-            await session.commit()
+    await _seed()
 
-        update = {
-            "update_id": 1,
-            "message": {"chat": {"id": "777"}, "text": "ssap когда релиз?"},
-        }
-        reply = await build_reply_for_update(
-            update,
-            allowed_chat_id="777",
-            window_hours=1,
-            now=datetime(2199, 7, 2, tzinfo=timezone.utc),
-        )
+    update = {
+        "update_id": 1,
+        "message": {"chat": {"id": "777"}, "text": "ssap когда релиз?"},
+    }
+    reply = await build_reply_for_update(
+        update,
+        allowed_chat_id="777",
+        window_hours=1,
+        now=datetime(2199, 7, 2, tzinfo=timezone.utc),
+    )
 
-        assert reply is not None
-        assert "📂 Проект: SSAP" in reply
-    finally:
-        await _cleanup_seed()
+    assert reply is not None
+    assert "📂 Проект: SSAP" in reply
 
 
 async def test_status_reply_without_project_has_no_prefix() -> None:
@@ -145,5 +146,6 @@ async def test_status_reply_without_project_has_no_prefix() -> None:
         question_text="/status",
     )
 
+    assert text is not None
     assert "📂 Проект:" not in text
     assert text.startswith("🧠 Дайджест внимания")
