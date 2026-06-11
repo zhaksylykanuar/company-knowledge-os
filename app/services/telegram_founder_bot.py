@@ -1,9 +1,8 @@
 """Founder Telegram bot: inbound Q&A loop (vision Phase A1).
 
-Operator-launched long-polling loop. Read-only intelligence: it answers
-allowlisted founder messages with the founder digest v2 built from stored
-persisted attention data. It never writes to the database, never creates
-drafts/intentions/results, and replies only to the configured chat.
+Operator-launched long-polling loop. It answers allowlisted founder messages
+with stored read models, including persisted project status snapshots. It never
+creates drafts/intentions/results and replies only to the configured chat.
 
 Live Telegram calls (getUpdates/sendMessage) go through the existing
 provider execution guard; transports are injectable for tests.
@@ -32,6 +31,7 @@ from app.services.telegram_delivery import (
     TelegramSendMessageTransport,
     send_telegram_plain_text,
 )
+from app.services.status_engine import DEFAULT_ORGANIZATION_ID
 
 DEFAULT_STATUS_WINDOW_HOURS = 24
 DEFAULT_POLL_TIMEOUT_SECONDS = 25
@@ -58,6 +58,19 @@ HELP_REPLY = (
 )
 
 IGNORED_UPDATE_REPLY = None
+
+_STATUS_COLOR_EMOJI = {
+    "green": "🟢",
+    "yellow": "🟡",
+    "red": "🔴",
+    "unknown": "⚪",
+}
+
+
+@dataclass(frozen=True)
+class _ProjectEntity:
+    entity_id: str
+    canonical_name: str
 
 
 @dataclass(frozen=True)
@@ -161,6 +174,7 @@ async def build_status_reply_text(
     now: datetime | None = None,
     question_text: str | None = None,
     require_recognized_project: bool = False,
+    organization_id: str = DEFAULT_ORGANIZATION_ID,
 ) -> str | None:
     """Render founder digest v2 for the trailing window from stored data.
 
@@ -181,6 +195,7 @@ async def build_status_reply_text(
     safe_now = now or datetime.now(timezone.utc)
     start_at = safe_now - timedelta(hours=max(1, int(window_hours)))
     recognized = []
+    recognized_snapshot_block: str | None = None
     async with AsyncSessionLocal() as session:
         if question_text:
             try:
@@ -196,29 +211,32 @@ async def build_status_reply_text(
         if recognized:
             # Project question -> project-focused Jira view, not the inbox digest.
             try:
-                from app.services.github_graph_mapping import repos_for_project
-                from app.services.jira_graph_mapping import jira_keys_for_project
-                from app.services.project_status_view import (
-                    load_project_issue_snapshots,
-                    load_repo_activity,
-                    render_project_status_text,
+                snapshot, detailed_text = await _build_and_save_project_snapshot(
+                    session,
+                    project_entity_id=recognized[0].entity_id,
+                    project_name=recognized[0].canonical_name,
+                    now=safe_now,
+                    organization_id=organization_id,
                 )
-
-                project = recognized[0]
-                keys = await jira_keys_for_project(session, project.entity_id)
-                if keys:
-                    snapshots = await load_project_issue_snapshots(session, keys)
-                    repos = await repos_for_project(session, project.entity_id)
-                    repo_activity = await load_repo_activity(
-                        session, repos, now=safe_now
-                    )
-                    return render_project_status_text(
-                        project_name=project.canonical_name,
-                        jira_keys=keys,
-                        snapshots=snapshots,
-                        repo_activity=repo_activity,
-                        now=safe_now,
-                    )
+                await session.commit()
+                recognized_snapshot_block = _render_project_snapshot_block(
+                    project_name=recognized[0].canonical_name,
+                    snapshot=snapshot,
+                )
+                if detailed_text is not None:
+                    return recognized_snapshot_block + "\n\n" + detailed_text
+            except Exception:
+                pass
+        elif question_text:
+            try:
+                project_snapshots = await _build_all_project_snapshots(
+                    session,
+                    now=safe_now,
+                    organization_id=organization_id,
+                )
+                if project_snapshots:
+                    await session.commit()
+                    return _render_all_project_snapshots(project_snapshots)
             except Exception:
                 pass
         digest = await build_persisted_attention_digest_read_model(
@@ -238,8 +256,160 @@ async def build_status_reply_text(
             "Jira-проекты ещё не замаплены (map_jira_projects.py). "
             "Пока общий дайджест:\n\n"
         )
+        if recognized_snapshot_block is not None:
+            prefix = recognized_snapshot_block + "\n\n" + prefix
         return prefix + text
     return text
+
+
+async def _build_all_project_snapshots(
+    session: Any,
+    *,
+    now: datetime,
+    organization_id: str,
+) -> list[tuple[_ProjectEntity, Any]]:
+    projects = await _load_project_entities(session)
+    snapshots: list[tuple[_ProjectEntity, Any]] = []
+    for project in projects:
+        snapshot, _detailed_text = await _build_and_save_project_snapshot(
+            session,
+            project_entity_id=project.entity_id,
+            project_name=project.canonical_name,
+            now=now,
+            organization_id=organization_id,
+        )
+        snapshots.append((project, snapshot))
+    return snapshots
+
+
+async def _load_project_entities(session: Any) -> list[_ProjectEntity]:
+    from sqlalchemy import select
+
+    from app.db.graph_models import EntityRecord
+    from app.services.entity_resolution import ENTITY_TYPE_PROJECT
+
+    rows = (
+        await session.execute(
+            select(EntityRecord.entity_id, EntityRecord.canonical_name)
+            .where(EntityRecord.entity_type == ENTITY_TYPE_PROJECT)
+            .order_by(EntityRecord.canonical_name, EntityRecord.entity_id)
+        )
+    ).all()
+    return [
+        _ProjectEntity(entity_id=str(entity_id), canonical_name=str(canonical_name))
+        for entity_id, canonical_name in rows
+    ]
+
+
+async def _build_and_save_project_snapshot(
+    session: Any,
+    *,
+    project_entity_id: str,
+    project_name: str,
+    now: datetime,
+    organization_id: str,
+) -> tuple[Any, str | None]:
+    from app.services.github_graph_mapping import repos_for_project
+    from app.services.jira_graph_mapping import jira_keys_for_project
+    from app.services.project_status_view import (
+        load_project_issue_snapshots,
+        load_repo_activity,
+        render_project_status_text,
+    )
+    from app.services.status_engine import (
+        ENTITY_TYPE_PROJECT,
+        build_project_status_snapshot,
+    )
+    from app.services.status_snapshot_repository import (
+        get_latest_status_snapshot,
+        save_status_snapshot,
+    )
+
+    keys = await jira_keys_for_project(session, project_entity_id)
+    issue_snapshots = await load_project_issue_snapshots(session, keys)
+    repos = await repos_for_project(session, project_entity_id)
+    repo_activity = await load_repo_activity(session, repos, now=now)
+    previous = await get_latest_status_snapshot(
+        session,
+        organization_id=organization_id,
+        entity_type=ENTITY_TYPE_PROJECT,
+        entity_id=project_entity_id,
+    )
+    snapshot = build_project_status_snapshot(
+        project_entity_id=project_entity_id,
+        project_name=project_name,
+        jira_keys=keys,
+        snapshots=issue_snapshots,
+        repo_activity=repo_activity,
+        previous_snapshot=previous,
+        organization_id=organization_id,
+        now=now,
+    )
+    await save_status_snapshot(session, snapshot)
+    detailed_text = None
+    if keys:
+        detailed_text = render_project_status_text(
+            project_name=project_name,
+            jira_keys=keys,
+            snapshots=issue_snapshots,
+            repo_activity=repo_activity,
+            now=now,
+        )
+    return snapshot, detailed_text
+
+
+def _render_project_snapshot_block(*, project_name: str, snapshot: Any) -> str:
+    emoji = _STATUS_COLOR_EMOJI.get(str(snapshot.status_color), "⚪")
+    return "\n".join(
+        [
+            f"{emoji} Snapshot: {project_name}",
+            f"confidence: {float(snapshot.confidence):.2f}",
+            "what_changed: " + _format_changes(snapshot.what_changed, limit=5),
+            f"summary: {snapshot.summary}",
+        ]
+    )
+
+
+def _render_all_project_snapshots(
+    project_snapshots: list[tuple[_ProjectEntity, Any]],
+) -> str:
+    lines = ["📊 Project snapshots", ""]
+    for project, snapshot in project_snapshots:
+        emoji = _STATUS_COLOR_EMOJI.get(str(snapshot.status_color), "⚪")
+        lines.append(
+            f"{emoji} {project.canonical_name} — "
+            f"confidence: {float(snapshot.confidence):.2f} — "
+            f"changed: {_format_changes(snapshot.what_changed, limit=1)}"
+        )
+        lines.append(f"  {snapshot.summary}")
+    return "\n".join(lines) + "\n"
+
+
+def _format_changes(changes: Any, *, limit: int = 3) -> str:
+    items = [item for item in changes if isinstance(item, Mapping)]
+    if not items:
+        return "no changes"
+    rendered = [_format_change(item) for item in items[:limit]]
+    if len(items) > limit:
+        rendered.append(f"+{len(items) - limit} more")
+    return "; ".join(rendered)
+
+
+def _format_change(change: Mapping[str, Any]) -> str:
+    field = str(change.get("field") or "snapshot")
+    kind = str(change.get("change") or "changed")
+    if field == "snapshot" and kind == "created":
+        return "first snapshot"
+    if kind == "changed":
+        before = change.get("from")
+        after = change.get("to")
+        if before is not None or after is not None:
+            return f"{field}: {before} -> {after}"
+        return f"{field} changed"
+    ids = change.get("ids")
+    if isinstance(ids, list) and ids:
+        return f"{field} {kind}: {', '.join(str(item) for item in ids[:3])}"
+    return f"{field} {kind}"
 
 
 def _update_chat_id(update: Mapping[str, Any]) -> str | None:

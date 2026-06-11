@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.db.base import AsyncSessionLocal, engine
 from app.db.graph_models import EntityAliasRecord, EntityLinkRecord, EntityRecord
+from app.db.status_models import StatusSnapshotRecord
 from app.services.entity_resolution import (
     ENTITY_TYPE_PROJECT,
     SEED_PROJECT_ALIASES,
@@ -27,6 +29,7 @@ async def _ensure_graph_tables() -> None:
         await conn.run_sync(EntityRecord.__table__.create, checkfirst=True)
         await conn.run_sync(EntityAliasRecord.__table__.create, checkfirst=True)
         await conn.run_sync(EntityLinkRecord.__table__.create, checkfirst=True)
+        await conn.run_sync(StatusSnapshotRecord.__table__.create, checkfirst=True)
 
 
 async def _seed() -> None:
@@ -139,13 +142,26 @@ async def test_free_text_with_alias_only_returns_project_status() -> None:
 
 
 async def test_status_reply_without_project_has_no_prefix() -> None:
-    await _ensure_graph_tables()
-    text = await build_status_reply_text(
-        window_hours=1,
-        now=datetime(2199, 7, 1, tzinfo=timezone.utc),
-        question_text="/status",
-    )
+    await _seed()
+    organization_id = f"test-org-{uuid4().hex}"
+    text: str | None = None
+    try:
+        text = await build_status_reply_text(
+            window_hours=1,
+            now=datetime(2199, 7, 1, tzinfo=timezone.utc),
+            question_text="/status",
+            organization_id=organization_id,
+        )
+    finally:
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                delete(StatusSnapshotRecord).where(
+                    StatusSnapshotRecord.organization_id == organization_id
+                )
+            )
+            await session.commit()
 
     assert text is not None
     assert "📂 Проект:" not in text
-    assert text.startswith("🧠 Дайджест внимания")
+    assert text.startswith("📊 Project snapshots")
+    assert "confidence:" in text

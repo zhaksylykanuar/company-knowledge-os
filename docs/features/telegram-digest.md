@@ -6,6 +6,9 @@
 - Daily digest generation: planned
 - Telegram delivery: planned
 - Telegram Q&A: planned
+- Implemented status slices: founder bot command parsing, `/status` digest
+  fallback, project alias detection, Jira/GitHub project status rendering, and
+  Status Engine snapshot rendering/persistence for project answers.
 - Telegram outbound delivery adapter for already-rendered text: implemented
   (used only by the bounded, test-only send path)
 - Default-disabled scheduler/outbox execution guard baseline: implemented
@@ -108,6 +111,9 @@ phase and stay behind the existing guards.
 - Obsidian is export-only.
 - External APIs are raw event or interface boundaries, not interpreted truth.
 - Telegram messages can become source events only when intentionally ingested.
+- Telegram `/status` may persist derived `status_snapshots` for status history;
+  those snapshots are read-model history derived from stored evidence, not new
+  source-of-truth facts or action execution.
 - ChatGPT or the OpenAI API may help extract, summarize, or answer, but must not
   be treated as the database or source of truth.
 - Generated digest prose is derived output, not authoritative source data.
