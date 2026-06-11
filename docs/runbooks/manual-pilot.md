@@ -84,6 +84,22 @@ style changes `text_sha256`, and the duplicate-success guard is hash-based, so
 re-sending the same window in a different style would not be auto-blocked
 (see the presentation-variant analysis in `docs/features/attention.md`).
 
+## Founder Bot (pull Q&A, vision Phase A1)
+
+Operator-launched long-polling bot. Read-only: answers only the allowlisted
+founder chat with the founder digest v2 over a trailing window. The human
+types the guard phrase on purpose:
+
+```bash
+uv run python scripts/run_telegram_founder_bot.py \
+  --acknowledge-live-provider-risk "ALLOW LIVE PROVIDER EXECUTION" \
+  --window-hours 24
+```
+
+Commands: `/status` (also plain text mentioning "статус"/"что у нас"),
+`/help`. Messages from any other chat are ignored. Stop with Ctrl+C. The bot
+performs no DB writes and creates no drafts/intentions/results.
+
 ## Human Approval Boundary
 
 AI-generated or deterministic draft artifacts are not actions. A human must
