@@ -97,6 +97,9 @@ async def _run(args: argparse.Namespace) -> int:
         if result.blocked_reason is not None:
             print(f"Error: blocked by provider guard: {result.blocked_reason}", file=sys.stderr)
             return 1
+        if result.transient_error is not None:
+            print(f"founder bot: transient error ({result.transient_error}), retrying")
+            await asyncio.sleep(2)
         if result.updates_seen:
             print(
                 "founder bot: "

@@ -133,6 +133,30 @@ async def test_iteration_answers_status_and_advances_offset(
     assert "Дайджест внимания" in send_payload["text"]
 
 
+def test_long_poll_read_timeout_exceeds_poll_hold() -> None:
+    assert bot._long_poll_read_timeout_seconds(25) > 25
+    assert bot._long_poll_read_timeout_seconds(0) > 0
+
+
+async def test_iteration_survives_transient_network_error() -> None:
+    async def failing_transport(
+        _url: str, _payload: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        raise TimeoutError("simulated read timeout")
+
+    result = await bot.run_founder_bot_iteration(
+        bot_token="test-token",
+        allowed_chat_id=ALLOWED_CHAT,
+        offset=55,
+        get_updates_transport=failing_transport,
+    )
+
+    assert result.transient_error == "get_updates_request_failed"
+    assert result.blocked_reason is None
+    assert result.next_offset == 55
+    assert result.replies_sent == 0
+
+
 async def test_iteration_reports_guard_block_without_transports() -> None:
     result = await bot.run_founder_bot_iteration(
         bot_token="test-token",

@@ -59,10 +59,47 @@ class FounderBotIterationResult:
     replies_sent: int
     next_offset: int | None
     blocked_reason: str | None = None
+    transient_error: str | None = None
 
 
 def _get_updates_url(bot_token: str) -> str:
     return f"{TELEGRAM_API_BASE_URL}/bot{bot_token}/getUpdates"
+
+
+def _long_poll_read_timeout_seconds(poll_timeout_seconds: int) -> float:
+    """HTTP read timeout must exceed the Telegram long-poll hold time."""
+
+    return float(max(1, int(poll_timeout_seconds)) + 15)
+
+
+def _build_long_poll_transport(
+    poll_timeout_seconds: int,
+) -> TelegramSendMessageTransport:
+    import httpx
+
+    timeout = httpx.Timeout(
+        connect=10.0,
+        read=_long_poll_read_timeout_seconds(poll_timeout_seconds),
+        write=10.0,
+        pool=10.0,
+    )
+
+    async def _post_json(url: str, payload: Mapping[str, Any]) -> Mapping[str, Any]:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(url, json=dict(payload))
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+        if not isinstance(body, Mapping):
+            return {"ok": False, "error_code": response.status_code}
+        result: dict[str, Any] = {str(key): value for key, value in body.items()}
+        if response.status_code >= 400:
+            result["ok"] = False
+            result.setdefault("error_code", response.status_code)
+        return result
+
+    return _post_json
 
 
 async def fetch_telegram_updates(
@@ -83,9 +120,7 @@ async def fetch_telegram_updates(
             allow_live_provider_execution=allow_live_provider_execution,
             provider_execution_ack=provider_execution_ack,
         )
-        from app.services.telegram_delivery import _httpx_post_json
-
-        transport = _httpx_post_json
+        transport = _build_long_poll_transport(poll_timeout_seconds)
 
     payload: dict[str, Any] = {
         "timeout": int(poll_timeout_seconds),
@@ -223,6 +258,16 @@ async def run_founder_bot_iteration(
             replies_sent=0,
             next_offset=offset,
             blocked_reason=exc.reason_code,
+        )
+    except Exception:
+        # Long polling routinely hits transient network errors; the loop
+        # must survive them and retry with the same offset.
+        return FounderBotIterationResult(
+            updates_seen=0,
+            updates_from_allowed_chat=0,
+            replies_sent=0,
+            next_offset=offset,
+            transient_error="get_updates_request_failed",
         )
 
     raw_updates = response.get("result")
