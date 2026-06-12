@@ -40,22 +40,45 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 async def _run(args: argparse.Namespace) -> int:
     from app.db.base import AsyncSessionLocal
+    from app.services.data_availability import refresh_data_availability
+    from app.services.entity_identity import (
+        apply_decided_merges,
+        suggest_person_merges,
+    )
     from app.services.graph_lift import run_graph_lift
     from app.services.metric_collector import collect_metrics
+    from app.services.second_opinion import scan_second_opinion
 
     async with AsyncSessionLocal() as session:
         lift_counts = await run_graph_lift(session)
+        merge_suggestions = await suggest_person_merges(session)
+        merge_counts = await apply_decided_merges(session)
+        finding_counts = await scan_second_opinion(session)
         metric_counts = (
             {} if args.skip_metrics else await collect_metrics(session)
         )
+        availability = await refresh_data_availability(session)
         await session.commit()
 
     print(
         "graph lift: "
         f"people_created={lift_counts['people_created']} "
         f"nodes_created={lift_counts['nodes_created']} "
-        f"links_created={lift_counts['links_created']} "
-        f"merge_proposals={lift_counts['merge_proposals']}"
+        f"links_created={lift_counts['links_created']}"
+    )
+    print(
+        "identity: "
+        f"merge_suggestions={merge_suggestions} "
+        f"merges_applied={merge_counts['applied']} "
+        f"merges_rejected={merge_counts['rejected']} "
+        f"links_repointed={merge_counts['links_repointed']}"
+    )
+    print(
+        "second opinion: "
+        f"created={finding_counts['created']} "
+        f"updated={finding_counts['updated']} "
+        f"unchanged={finding_counts['unchanged']} "
+        f"skipped={finding_counts['skipped']}"
     )
     if metric_counts:
         print(
@@ -64,6 +87,7 @@ async def _run(args: argparse.Namespace) -> int:
             f"updated={metric_counts['updated']} "
             f"unchanged={metric_counts['unchanged']}"
         )
+    print(f"data availability rows: {availability['rows']}")
     print("(idempotent re-run safe; uncertain facts went to agent_proposals)")
     return 0
 

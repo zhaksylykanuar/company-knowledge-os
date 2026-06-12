@@ -34,24 +34,40 @@ async def create_proposal(
     payload: dict[str, Any],
     evidence_refs: list[dict[str, Any]] | None = None,
     confidence: float,
+    confidence_factors: dict[str, Any] | None = None,
+    dedupe_key: str | None = None,
+    source_snapshot: dict[str, Any] | None = None,
+    expires_at: datetime | None = None,
+    reversible: bool = True,
 ) -> bool:
-    """File a proposal once; re-runs with the same id are no-ops."""
+    """File a proposal once; re-runs with the same id/dedupe_key are no-ops."""
 
     existing = await session.scalar(
         select(AgentProposal).where(AgentProposal.proposal_id == proposal_id)
     )
+    if existing is None and dedupe_key:
+        existing = await session.scalar(
+            select(AgentProposal).where(AgentProposal.dedupe_key == dedupe_key)
+        )
     if existing is not None:
         return False
     session.add(
         AgentProposal(
             proposal_id=proposal_id,
+            dedupe_key=dedupe_key or proposal_id,
             agent=agent,
             kind=kind,
             title=title,
             payload=dict(payload),
+            source_snapshot=dict(source_snapshot) if source_snapshot else None,
             evidence_refs=list(evidence_refs or []),
             confidence=confidence,
+            confidence_factors=dict(confidence_factors)
+            if confidence_factors
+            else None,
             status=STATUS_PENDING,
+            expires_at=expires_at,
+            reversible=reversible,
         )
     )
     await session.flush()
@@ -75,13 +91,18 @@ async def list_proposals(
     return [
         {
             "proposal_id": row.proposal_id,
+            "dedupe_key": row.dedupe_key,
             "agent": row.agent,
             "kind": row.kind,
             "title": row.title,
             "payload": row.payload,
+            "source_snapshot": row.source_snapshot,
             "evidence_refs": row.evidence_refs,
             "confidence": row.confidence,
+            "confidence_factors": row.confidence_factors,
             "status": row.status,
+            "reversible": row.reversible,
+            "expires_at": row.expires_at.isoformat() if row.expires_at else None,
             "created_at": row.created_at.isoformat() if row.created_at else None,
         }
         for row in rows
@@ -94,6 +115,7 @@ async def decide_proposal(
     proposal_id: str,
     decision: str,
     decided_by: str,
+    decision_reason: str | None = None,
 ) -> dict[str, Any] | None:
     """Accept or reject a pending proposal. Returns None when not found."""
 
@@ -110,6 +132,7 @@ async def decide_proposal(
 
     row.status = decision
     row.decided_by = decided_by
+    row.decision_reason = decision_reason
     row.decided_at = datetime.now(timezone.utc)
     await session.flush()
     return {"proposal_id": row.proposal_id, "status": row.status}
@@ -135,4 +158,5 @@ async def accepted_proposals(
 
 async def mark_applied(session: AsyncSession, proposal: AgentProposal) -> None:
     proposal.status = STATUS_APPLIED
+    proposal.applied_at = datetime.now(timezone.utc)
     await session.flush()

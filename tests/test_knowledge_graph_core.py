@@ -15,7 +15,7 @@ from app.services.agent_proposals import (
     decide_proposal,
     list_proposals,
 )
-from app.services.graph_lift import _name_tokens, _propose_person_merges
+from app.services.entity_identity import merge_match, name_tokens
 from app.services.knowledge_graph import (
     ENTITY_PERSON,
     REL_WORKS_ON,
@@ -65,8 +65,8 @@ def test_slugify_and_ids() -> None:
 
 
 def test_name_tokens_overlap() -> None:
-    assert _name_tokens("person:amir-bikchentaev") == {"amir", "bikchentaev"}
-    assert _name_tokens("person:ab") == set()
+    assert name_tokens("person:amir-bikchentaev") == {"amir", "bikchentaev"}
+    assert name_tokens("person:ab") == set()
 
 
 async def test_upsert_entity_and_link_idempotent() -> None:
@@ -191,32 +191,15 @@ async def test_proposals_lifecycle() -> None:
             await session.commit()
 
 
-async def test_merge_proposals_only_for_overlapping_names() -> None:
-    await _ensure_tables()
-    # Distinct suffixes per name: a shared suffix would itself count as a
-    # shared token and create false merge pairs.
-    sfx = [uuid4().hex[:8] for _ in range(3)]
-    try:
-        async with AsyncSessionLocal() as session:
-            count = await _propose_person_merges(
-                session,
-                jira_people={f"person:j{sfx[0]}-amir-bikchentaev"},
-                github_people={
-                    f"person:g{sfx[1]}-amir",
-                    f"person:g{sfx[2]}-unrelated-zzz",
-                },
-            )
-            await session.commit()
-        assert count == 1
-    finally:
-        async with AsyncSessionLocal() as session:
-            for marker in sfx:
-                await session.execute(
-                    delete(AgentProposal).where(
-                        AgentProposal.proposal_id.like(f"%{marker}%")
-                    )
-                )
-            await session.commit()
+def test_merge_match_token_overlap_and_translit() -> None:
+    # Direct latin token overlap.
+    assert merge_match("person:xa-amir-bikchentaev", "person:xb-amir")
+    # Cross-script: Cyrillic tokens vs concatenated GitHub login.
+    assert merge_match("person:амир-бикчентаев", "person:amirbikchentaev")
+    # Unrelated names must not match.
+    assert not merge_match("person:xa-amir-bikchentaev", "person:xb-unrelated-zzz")
+    # Single short shared fragment is not enough for containment match.
+    assert not merge_match("person:ли", "person:unrelated")
 
 
 async def test_metric_record_upsert_and_series() -> None:
