@@ -16,7 +16,11 @@ from app.services.jira_graph_mapping import (
     RELATION_BELONGS_TO,
     jira_entity_id,
 )
-from app.services.telegram_founder_bot import build_status_reply_text
+from app.services.telegram_founder_bot import (
+    _ProjectEntity,
+    _render_all_project_snapshots,
+    build_status_reply_text,
+)
 from scripts.sync_jira_issues import build_issue_connector_payload, ingest_issue_payloads
 
 NOW = datetime(2026, 6, 12, 12, 0, tzinfo=timezone.utc)
@@ -270,5 +274,95 @@ async def test_status_without_project_builds_all_project_snapshots() -> None:
         assert "Project Beta: red; Jira BETA;" in text
         assert await _latest_snapshot_count(organization_id, PROJECT_ALPHA_ID) == 1
         assert await _latest_snapshot_count(organization_id, PROJECT_BETA_ID) == 1
+    finally:
+        await _cleanup(organization_id)
+
+
+async def test_status_without_project_suppresses_no_evidence_unknown_noise() -> None:
+    organization_id = f"test-org-{uuid4().hex}"
+    await _ensure_tables()
+    await _cleanup(organization_id)
+    try:
+        await _seed_project(
+            project_entity_id=PROJECT_ALPHA_ID,
+            project_name="Project Alpha",
+            jira_key="ALPHA",
+        )
+        await _seed_project(
+            project_entity_id=PROJECT_BETA_ID,
+            project_name="Project Beta",
+            jira_key="BETA",
+        )
+        await _ingest_issue("ALPHA-101", summary="Project Alpha task")
+
+        text = await build_status_reply_text(
+            now=NOW,
+            question_text="/status",
+            organization_id=organization_id,
+        )
+
+        assert text is not None
+        assert text.startswith("📊 Project snapshots")
+        assert "🟢 Project Alpha — confidence: 0.90" in text
+        assert "Project Alpha: green; Jira ALPHA;" in text
+        assert "Project Beta" not in text
+        assert "⚪" not in text
+        assert await _latest_snapshot_count(organization_id, PROJECT_ALPHA_ID) == 1
+        assert await _latest_snapshot_count(organization_id, PROJECT_BETA_ID) == 1
+    finally:
+        await _cleanup(organization_id)
+
+
+def test_status_without_project_empty_state_has_no_gray_unknown_icon() -> None:
+    text = _render_all_project_snapshots(
+        [
+            (
+                _ProjectEntity("project:alpha", "Project Alpha"),
+                type(
+                    "Snapshot",
+                    (),
+                    {
+                        "status_color": "unknown",
+                        "confidence": 0.20,
+                        "what_changed": ({"field": "snapshot", "change": "created"},),
+                        "summary": "Project Alpha: unknown; Jira no Jira keys; 0 issues.",
+                        "evidence_source_ids": (),
+                    },
+                )(),
+            )
+        ]
+    )
+
+    assert text.startswith("📊 Project snapshots")
+    assert "No project snapshots with evidence yet." in text
+    assert "⚪" not in text
+    assert "unknown" not in text
+    assert "Project Alpha:" not in text
+
+
+async def test_project_specific_no_evidence_keeps_honest_unknown_snapshot() -> None:
+    organization_id = f"test-org-{uuid4().hex}"
+    await _ensure_tables()
+    await _cleanup(organization_id)
+    try:
+        await _seed_project(
+            project_entity_id=PROJECT_BETA_ID,
+            project_name="Project Beta",
+            jira_key="BETA",
+        )
+
+        text = await build_status_reply_text(
+            now=NOW,
+            question_text="status Project Beta",
+            organization_id=organization_id,
+        )
+
+        assert text is not None
+        assert text.startswith("⚪ Snapshot: Project Beta")
+        assert "confidence: 0.20" in text
+        assert "what_changed: first snapshot" in text
+        assert "Project Beta: unknown; Jira BETA; 0 issues" in text
+        assert "📂 Project Beta — статус по Jira (BETA)" in text
+        assert "Задачи ещё не синхронизированы" in text
     finally:
         await _cleanup(organization_id)

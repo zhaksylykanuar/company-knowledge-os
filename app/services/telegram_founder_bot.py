@@ -373,8 +373,20 @@ def _render_project_snapshot_block(*, project_name: str, snapshot: Any) -> str:
 def _render_all_project_snapshots(
     project_snapshots: list[tuple[_ProjectEntity, Any]],
 ) -> str:
+    visible_snapshots = [
+        (project, snapshot)
+        for project, snapshot in project_snapshots
+        if _should_render_in_all_project_status(snapshot)
+    ]
+    if not visible_snapshots:
+        return (
+            "📊 Project snapshots\n\n"
+            "No project snapshots with evidence yet.\n"
+            "Ask about a specific project for the low-confidence status.\n"
+        )
+
     lines = ["📊 Project snapshots", ""]
-    for project, snapshot in project_snapshots:
+    for project, snapshot in visible_snapshots:
         emoji = _STATUS_COLOR_EMOJI.get(str(snapshot.status_color), "⚪")
         lines.append(
             f"{emoji} {project.canonical_name} — "
@@ -383,6 +395,15 @@ def _render_all_project_snapshots(
         )
         lines.append(f"  {snapshot.summary}")
     return "\n".join(lines) + "\n"
+
+
+def _should_render_in_all_project_status(snapshot: Any) -> bool:
+    if str(snapshot.status_color) == "unknown":
+        return False
+    evidence_source_ids = getattr(snapshot, "evidence_source_ids", None)
+    if evidence_source_ids is None:
+        evidence_source_ids = getattr(snapshot, "evidence_source_ids_json", None)
+    return bool(evidence_source_ids)
 
 
 def _format_changes(changes: Any, *, limit: int = 3) -> str:

@@ -9,6 +9,9 @@
 - Implemented status slices: founder bot command parsing, `/status` digest
   fallback, project alias detection, Jira/GitHub project status rendering, and
   Status Engine snapshot rendering/persistence for project answers.
+- The all-project `/status` snapshot list suppresses no-evidence `unknown`
+  project rows as noise; direct project questions may still show an honest
+  low-confidence unknown snapshot.
 - Telegram outbound delivery adapter for already-rendered text: implemented
   (used only by the bounded, test-only send path)
 - Default-disabled scheduler/outbox execution guard baseline: implemented
