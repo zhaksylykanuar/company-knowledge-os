@@ -32,6 +32,10 @@ class SecondOpinionFinding(Base):
     source_refs: Mapped[list] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(20), default="open", index=True)
     visibility_scope: Mapped[str] = mapped_column(String(20), default="founder")
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    snoozed_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )

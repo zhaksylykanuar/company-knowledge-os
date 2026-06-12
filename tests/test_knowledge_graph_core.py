@@ -165,13 +165,17 @@ async def test_proposals_lifecycle() -> None:
                 session,
                 proposal_id=proposal_id,
                 decision=STATUS_ACCEPTED,
-                decided_by="test",
+                reviewer_id="test",
             )
             await session.commit()
 
         assert created is True and duplicate is False
         assert any(item["proposal_id"] == proposal_id for item in pending)
-        assert decided == {"proposal_id": proposal_id, "status": STATUS_ACCEPTED}
+        assert decided == {
+            "proposal_id": proposal_id,
+            "status": STATUS_ACCEPTED,
+            "reviewer_id": "test",
+        }
 
         async with AsyncSessionLocal() as session:
             with pytest.raises(ValueError):
@@ -179,7 +183,7 @@ async def test_proposals_lifecycle() -> None:
                     session,
                     proposal_id=proposal_id,
                     decision=STATUS_ACCEPTED,
-                    decided_by="test",
+                    reviewer_id="test",
                 )
     finally:
         async with AsyncSessionLocal() as session:

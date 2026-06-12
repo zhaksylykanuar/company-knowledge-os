@@ -100,6 +100,25 @@ pre.digest{white-space:pre-wrap;font:12.5px/1.6 ui-monospace,Menlo,monospace;mar
 .alert.warn{background:var(--amber-soft);color:var(--amber-text)}
 .alert.danger{background:var(--red-soft);color:var(--red-text)}
 .stack>*+*{margin-top:14px}
+.navbadge{margin-left:auto;background:var(--red-soft);color:var(--red-text);border-radius:99px;font-size:10.5px;padding:1px 7px;font-weight:700}
+.navbadge:empty{display:none}
+.chip{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:99px;padding:5px 12px;font-size:12.5px;cursor:pointer}
+.chip.on{background:var(--accent-soft);color:var(--accent-text);border-color:transparent;font-weight:600}
+.finding{border-left:4px solid var(--amber);border-radius:0 var(--radius) var(--radius) 0}
+.finding.sev-high{border-left-color:var(--red)}
+.finding.sev-low{border-left-color:var(--border)}
+.dvo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0}
+.dvo>div{background:var(--surface2);border-radius:var(--radius-sm);padding:9px 11px;font-size:13px}
+.dvo .lbl{font-size:10.5px;font-weight:700;letter-spacing:.05em;margin-bottom:3px}
+details.ev{margin-top:8px}
+details.ev summary{font-size:12px;color:var(--muted);cursor:pointer}
+details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--surface2);border-radius:var(--radius-sm);padding:8px;overflow-x:auto;white-space:pre-wrap}
+.actbtn{font-size:12px;padding:5px 11px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer}
+.actbtn:hover{border-color:var(--accent)}
+.actbtn.primary{background:var(--green-soft);color:var(--green-text);border-color:transparent;font-weight:600}
+.actbtn.danger{background:var(--red-soft);color:var(--red-text);border-color:transparent;font-weight:600}
+#kt-canvas{cursor:crosshair}
+@media (max-width:880px){.dvo{grid-template-columns:1fr}}
 @media (max-width:880px){
   body{flex-direction:column}
   aside{width:100%;height:auto;position:static;display:flex;overflow-x:auto;padding:8px;border-right:none;border-bottom:1px solid var(--border)}
@@ -114,6 +133,9 @@ pre.digest{white-space:pre-wrap;font:12.5px/1.6 ui-monospace,Menlo,monospace;mar
 <aside id="nav">
   <div class="logo"><span class="mark">F</span> FounderOS</div>
   <div class="nav on" data-nav="cc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Command center</div>
+  <div class="nav" data-nav="so"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 109 9"/><path d="M12 8v4l3 2"/><path d="M19 3l2 2-2 2-2-2 2-2z"/></svg>Second opinion<span class="navbadge" id="nav-so-n"></span></div>
+  <div class="nav" data-nav="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v6H3v-6l2-7z"/></svg>Inbox<span class="navbadge" id="nav-ib-n"></span></div>
+  <div class="nav" data-nav="kt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="13" r="3"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="18" r="2.5"/><path d="M8 7.5l2.5 3M14.8 11.5L16.5 6.5M9.5 14.8L6.5 17.5M14.6 14.6l3 2.4"/></svg>Knowledge tree</div>
   <div class="nav" data-nav="st"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4l-6 3v13l6-3 6 3 6-3V4l-6 3-6-3z"/><path d="M9 4v13M15 7v13"/></svg>Strategy</div>
   <div class="nav" data-nav="pr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Product</div>
   <div class="nav" data-nav="gr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Growth</div>
@@ -153,6 +175,27 @@ pre.digest{white-space:pre-wrap;font:12.5px/1.6 ui-monospace,Menlo,monospace;mar
         <p class="h" style="margin-bottom:10px">Карта бизнеса</p>
         <div class="mapgrid" id="cc-map"></div>
       </div>
+    </div>
+  </section>
+
+  <section class="sec" data-sec="so">
+    <div class="row" id="so-filters" style="flex-wrap:wrap;gap:8px;margin-bottom:6px"></div>
+    <div class="statusline" id="so-msg"></div>
+    <div class="stack" id="so-body"></div>
+  </section>
+
+  <section class="sec" data-sec="ib">
+    <div class="statusline" id="ib-msg"></div>
+    <div class="stack" id="ib-body"></div>
+  </section>
+
+  <section class="sec" data-sec="kt">
+    <div class="row" id="kt-filters" style="flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
+    <div class="card" style="padding:4px"><canvas id="kt-canvas" height="600"></canvas></div>
+    <div class="statusline" id="kt-msg"></div>
+    <div class="grid2" style="margin-top:6px">
+      <div class="card" id="kt-detail"><p class="h">Нода</p><div class="mut">Кликни по ноде в созвездии — здесь появятся детали, связи и evidence.</div></div>
+      <div class="card" id="kt-stats"></div>
     </div>
   </section>
 
@@ -230,7 +273,9 @@ async function api(path,opts){
 var COLOR_BADGE={green:["b-green","зелёный"],yellow:["b-amber","жёлтый"],red:["b-red","красный"],unknown:["b-mut","нет данных"]};
 function colorBadge(c,label){var m=COLOR_BADGE[c]||COLOR_BADGE.unknown;return '<span class="badge '+m[0]+'"><span class="dot" style="background:currentColor"></span>'+esc(label||m[1])+'</span>';}
 
-var SECTION_TITLES={cc:"Command center",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",inv:"Investor view"};
+var SECTION_TITLES={cc:"Command center",so:"Second opinion",ib:"Inbox",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",inv:"Investor view"};
+var LAZY_LOADERS={so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);}};
+var LAZY_LOADED={};
 function show(id){
   var secs=document.querySelectorAll(".sec");
   for(var i=0;i<secs.length;i++)secs[i].classList.toggle("on",secs[i].getAttribute("data-sec")===id);
@@ -238,6 +283,7 @@ function show(id){
   for(var j=0;j<navs.length;j++)navs[j].classList.toggle("on",navs[j].getAttribute("data-nav")===id);
   $("sec-title").textContent=SECTION_TITLES[id]||"FounderOS";
   if(location.hash!=="#/"+id)history.replaceState(null,"","#/"+id);
+  if(LAZY_LOADERS[id]&&!LAZY_LOADED[id]){LAZY_LOADED[id]=true;LAZY_LOADERS[id]();}
 }
 document.addEventListener("click",function(e){
   var n=e.target.closest("[data-nav]");if(n){show(n.getAttribute("data-nav"));return;}
@@ -748,6 +794,313 @@ function renderAll(){
   ccRender();stRender();prRender();grRender();saRender();fiRender();teRender();taRender();meRender();invRender();
 }
 
+var TYPE_LABEL={execution_mismatch:"исполнение",focus_drift:"дрейф фокуса",stale_claim:"устарело",evidence_contradiction:"противоречие",ownership_gap:"нет владельца",communication_silence:"тишина",delivery_risk:"риск срыва",validation_gap:"не проверено"};
+var SO_STATE={status:"open",type:""};
+
+function findingCard(f){
+  var sev=f.severity==="high"?"sev-high":f.severity==="low"?"sev-low":"";
+  var sevBadge=f.severity==="high"?"b-red":f.severity==="low"?"b-mut":"b-amber";
+  var key=esc(f.finding_key);
+  return '<div class="card finding '+sev+'">'
+    +'<div class="row" style="flex-wrap:wrap;gap:6px">'
+    +'<span class="badge '+sevBadge+'">'+esc(f.severity)+'</span>'
+    +'<span class="badge b-accent">'+esc(TYPE_LABEL[f.finding_type]||f.finding_type)+'</span>'
+    +(f.entity_id?'<span class="badge b-mut">'+esc(f.entity_id.replace("project:",""))+'</span>':'')
+    +'<span class="mut" style="margin-left:auto" title="'+esc(f.confidence_hint||"")+'">conf '+Number(f.confidence).toFixed(2)+' ⓘ</span>'
+    +'</div>'
+    +'<div style="font-weight:600;margin:8px 0 2px">'+esc(f.summary)+'</div>'
+    +'<div class="dvo">'
+    +'<div><div class="lbl" style="color:var(--blue)">ЗАЯВЛЕНО</div>'+esc(f.declared_state)+'</div>'
+    +'<div><div class="lbl" style="color:var(--amber)">НАБЛЮДАЮ</div>'+esc(f.observed_state)+'</div>'
+    +'</div>'
+    +(f.suggested_action?'<div class="mut" style="margin-bottom:8px">→ '+esc(f.suggested_action)+'</div>':'')
+    +(f.note?'<div class="mut" style="margin-bottom:8px">Заметка: '+esc(f.note)+'</div>':'')
+    +'<details class="ev"><summary>evidence и источники</summary><pre>'+esc(JSON.stringify({evidence:f.evidence_refs,sources:f.source_refs},null,1))+'</pre></details>'
+    +(f.status==="open"
+      ?'<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:6px">'
+        +'<button class="actbtn primary" data-soact="accepted" data-fk="'+key+'">Подтверждаю</button>'
+        +'<button class="actbtn" data-soact="resolved" data-fk="'+key+'">Решено</button>'
+        +'<button class="actbtn" data-soact="snooze" data-fk="'+key+'">Отложить 7д</button>'
+        +'<button class="actbtn" data-soact="note" data-fk="'+key+'">Заметка</button>'
+        +'<button class="actbtn danger" data-soact="dismissed" data-fk="'+key+'">Не проблема</button>'
+        +'</div>'
+      :'<div class="mut" style="margin-top:8px">статус: '+esc(f.status)+'</div>')
+    +'</div>';
+}
+
+async function loadFeed(){
+  setMsgEl("so-msg","загружаю…",false);
+  var chips='<span class="mut">Статус:</span>';
+  [["open","открытые"],["accepted","принятые"],["resolved","решённые"],["dismissed","отклонённые"]].forEach(function(s){
+    chips+='<button class="chip'+(SO_STATE.status===s[0]?" on":"")+'" data-sostatus="'+s[0]+'">'+s[1]+'</button>';
+  });
+  chips+='<span class="mut" style="margin-left:10px">Тип:</span><button class="chip'+(SO_STATE.type===""?" on":"")+'" data-sotype="">все</button>';
+  Object.keys(TYPE_LABEL).forEach(function(t){
+    chips+='<button class="chip'+(SO_STATE.type===t?" on":"")+'" data-sotype="'+t+'">'+TYPE_LABEL[t]+'</button>';
+  });
+  $("so-filters").innerHTML=chips;
+  try{
+    var url="/v1/founder/second-opinion?status="+SO_STATE.status+(SO_STATE.type?"&finding_type="+SO_STATE.type:"")+"&limit=100";
+    var d=await (await api(url)).json();
+    var h="";
+    for(var i=0;i<d.findings.length;i++)h+=findingCard(d.findings[i]);
+    var bt=d.counts.by_type,parts=[];
+    Object.keys(bt).forEach(function(k){parts.push((TYPE_LABEL[k]||k)+": "+bt[k]);});
+    $("so-body").innerHTML=h||'<div class="empty">Конфликтов в этом фильтре нет. AI согласен с заявленной картиной.</div>';
+    setMsgEl("so-msg","всего: "+d.counts.total+(parts.length?" · "+parts.join(" · "):""),false);
+    $("nav-so-n").textContent=SO_STATE.status==="open"&&!SO_STATE.type?String(d.counts.total||""):$("nav-so-n").textContent;
+  }catch(e){setMsgEl("so-msg",String(e.message||e),true);}
+}
+
+function setMsgEl(id,text,err){var el=$(id);el.textContent=text||"";el.classList.toggle("err",!!err);}
+
+async function soAction(action,key){
+  try{
+    if(action==="snooze"){
+      await api("/v1/founder/second-opinion/"+key+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});
+    } else if(action==="note"){
+      var note=prompt("Заметка к конфликту:");
+      if(!note)return;
+      await api("/v1/founder/second-opinion/"+key+"/note",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({note:note})});
+    } else {
+      await api("/v1/founder/second-opinion/"+key+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:action})});
+    }
+    loadFeed();loadInboxCounts();
+    if(LAZY_LOADED.ib)loadInbox();
+  }catch(e){setMsgEl("so-msg",String(e.message||e),true);}
+}
+
+function proposalCard(p){
+  var why=[];
+  if(p.source_snapshot&&p.source_snapshot.shared_tokens)why.push("совпадение имени: "+p.source_snapshot.shared_tokens.join(", "));
+  if(p.source_snapshot&&p.source_snapshot.sources)why.push("источники: "+p.source_snapshot.sources.join(" + "));
+  return '<div class="card" style="border-left:4px solid var(--accent);border-radius:0 var(--radius) var(--radius) 0">'
+    +'<div class="row" style="flex-wrap:wrap;gap:6px">'
+    +'<span class="badge b-accent">'+esc(p.proposal_type)+'</span>'
+    +'<span class="badge b-mut">агент: '+esc(p.agent)+'</span>'
+    +'<span class="mut" style="margin-left:auto" title="'+esc(p.confidence_hint||"")+'">conf '+Number(p.confidence).toFixed(2)+' ⓘ</span>'
+    +'</div>'
+    +'<div style="font-weight:600;margin:8px 0 4px">'+esc(p.title)+'</div>'
+    +(why.length?'<div class="mut">Почему: '+esc(why.join(" · "))+'</div>':'')
+    +(p.consequences?'<div class="mut" style="margin-top:4px">Последствия: '+esc(p.consequences)+'</div>':'')
+    +'<details class="ev"><summary>что видел агент</summary><pre>'+esc(JSON.stringify({payload:p.payload,snapshot:p.source_snapshot,evidence:p.evidence_refs},null,1))+'</pre></details>'
+    +'<div class="row" style="margin-top:10px;gap:6px">'
+    +'<button class="actbtn primary" data-pact="accepted" data-pid="'+esc(p.proposal_id)+'">Accept</button>'
+    +'<button class="actbtn danger" data-pact="rejected" data-pid="'+esc(p.proposal_id)+'">Reject</button>'
+    +'</div></div>';
+}
+
+async function loadInbox(){
+  setMsgEl("ib-msg","загружаю…",false);
+  try{
+    var d=await (await api("/v1/inbox")).json();
+    var h="";
+    h+='<p class="h">Предложения агентов <span class="mut">'+d.counts.proposals+'</span></p>';
+    if(d.proposals.length){for(var i=0;i<d.proposals.length;i++)h+=proposalCard(d.proposals[i]);}
+    else h+='<div class="empty">Агенты ничего не предлагают — граф чистый.</div>';
+    h+='<p class="h" style="margin-top:18px">Спорные связи в графе <span class="mut">'+d.counts.disputed_links+'</span></p>';
+    if(d.disputed_links.length){
+      for(var j=0;j<d.disputed_links.length;j++){
+        var l=d.disputed_links[j];
+        h+='<div class="card"><div class="row" style="flex-wrap:wrap;gap:6px">'
+          +'<span class="badge b-amber">conf '+Number(l.confidence).toFixed(2)+'</span>'
+          +'<span style="font-size:13px">'+esc(l["from"])+' <span class="mut">—'+esc(l.relation)+'→</span> '+esc(l.to)+'</span></div>'
+          +'<div class="mut" style="margin:6px 0">'+esc(l.confidence_hint||"")+'</div>'
+          +'<div class="row" style="gap:6px">'
+          +'<button class="actbtn primary" data-lact="confirm" data-lid="'+esc(l.link_id)+'">Подтвердить связь</button>'
+          +'<button class="actbtn danger" data-lact="remove" data-lid="'+esc(l.link_id)+'">Удалить связь</button>'
+          +'</div></div>';
+      }
+    } else h+='<div class="empty">Все связи графа с высокой уверенностью.</div>';
+    h+='<p class="h" style="margin-top:18px">Открытые конфликты <span class="mut">'+d.counts.findings_open+'</span> <span class="edit" data-go="so">все в ленте →</span></p>';
+    for(var k=0;k<Math.min(5,d.findings.length);k++)h+=findingCard(d.findings[k]);
+    $("ib-body").innerHTML=h;
+    $("nav-ib-n").textContent=d.counts.total?String(d.counts.total):"";
+    setMsgEl("ib-msg","к решению: "+d.counts.total,false);
+  }catch(e){setMsgEl("ib-msg",String(e.message||e),true);}
+}
+
+async function loadInboxCounts(){
+  try{
+    var d=await (await api("/v1/inbox")).json();
+    $("nav-ib-n").textContent=d.counts.total?String(d.counts.total):"";
+    $("nav-so-n").textContent=d.counts.findings_open?String(d.counts.findings_open):"";
+  }catch(e){}
+}
+
+document.addEventListener("click",async function(e){
+  var so=e.target.closest("[data-soact]");
+  if(so){soAction(so.getAttribute("data-soact"),so.getAttribute("data-fk"));return;}
+  var pa=e.target.closest("[data-pact]");
+  if(pa){
+    var reason=pa.getAttribute("data-pact")==="rejected"?(prompt("Причина отклонения (необязательно):")||null):null;
+    try{
+      await api("/v1/inbox/proposals/"+pa.getAttribute("data-pid")+"/decision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:pa.getAttribute("data-pact"),reviewer_id:"founder",decision_reason:reason})});
+      loadInbox();loadInboxCounts();LAZY_LOADED.kt=false;
+    }catch(err){setMsgEl("ib-msg",String(err.message||err),true);}
+    return;
+  }
+  var la=e.target.closest("[data-lact]");
+  if(la){
+    try{
+      await api("/v1/graph/links/"+la.getAttribute("data-lid")+"/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:la.getAttribute("data-lact"),reviewer_id:"founder"})});
+      loadInbox();loadInboxCounts();LAZY_LOADED.kt=false;
+    }catch(err){setMsgEl("ib-msg",String(err.message||err),true);}
+  }
+});
+document.addEventListener("click",function(e){
+  var ss=e.target.closest("[data-sostatus]");
+  if(ss){SO_STATE.status=ss.getAttribute("data-sostatus");loadFeed();return;}
+  var st2=e.target.closest("[data-sotype]");
+  if(st2){SO_STATE.type=st2.getAttribute("data-sotype");loadFeed();}
+});
+
+var KT={nodes:[],links:[],hidden:{},selected:null};
+var KT_COLORS={project:"#7c6ff0",person:"#2fb088",task:"#4a93dd",risk:"#e05b5b",decision:"#b06fd0",jira_project:"#8a93a6",repository:"#8a93a6",client:"#dba03a",meeting:"#5bbcd6",hypothesis:"#d77fb0"};
+var KT_LABEL={project:"проекты",person:"люди",task:"задачи",risk:"риски",decision:"решения",jira_project:"jira",repository:"репо",client:"клиенты",meeting:"встречи",hypothesis:"гипотезы"};
+
+async function loadTree(force){
+  setMsgEl("kt-msg","строю созвездие…",false);
+  try{
+    var d=await (await api("/v1/graph/tree")).json();
+    KT.nodes=d.nodes.map(function(n){return Object.assign({x:0,y:0,vx:0,vy:0,degree:0},n);});
+    KT.links=d.links;
+    var byId={};
+    KT.nodes.forEach(function(n){byId[n.entity_id]=n;});
+    KT.links.forEach(function(l){if(byId[l["from"]])byId[l["from"]].degree++;if(byId[l.to])byId[l.to].degree++;});
+    KT.byId=byId;
+    var chips="";
+    Object.keys(d.counts.by_type).forEach(function(t){
+      chips+='<button class="chip'+(KT.hidden[t]?"":" on")+'" data-kttype="'+t+'">'+(KT_LABEL[t]||t)+' '+d.counts.by_type[t]+'</button>';
+    });
+    chips+='<button class="chip" id="kt-relayout">перестроить</button>';
+    $("kt-filters").innerHTML=chips;
+    $("kt-stats").innerHTML='<p class="h">Граф</p><div class="mut">Нод: '+d.counts.nodes+' · связей: '+d.counts.links
+      +' · спорных: '+d.counts.disputed_links+'</div>'
+      +'<div class="mut" style="margin-top:6px">Свечение ноды — свежесть данных. Толщина связи — confidence, пунктир — спорная связь (решается в Inbox).</div>';
+    ktLayout();
+    ktDraw();
+    setMsgEl("kt-msg","обновлено "+new Date().toLocaleTimeString("ru-RU"),false);
+  }catch(e){setMsgEl("kt-msg",String(e.message||e),true);}
+}
+
+function ktLayout(){
+  var canvas=$("kt-canvas");
+  var W=canvas.clientWidth||900,H=560;
+  var n=KT.nodes.length;
+  KT.nodes.forEach(function(node,i){
+    var angle=2*Math.PI*i/Math.max(1,n);
+    node.x=W/2+Math.cos(angle)*W/3*(0.5+0.5*Math.random());
+    node.y=H/2+Math.sin(angle)*H/3*(0.5+0.5*Math.random());
+  });
+  for(var iter=0;iter<260;iter++){
+    for(var i2=0;i2<n;i2++){
+      var a=KT.nodes[i2];
+      for(var j2=i2+1;j2<n;j2++){
+        var b=KT.nodes[j2];
+        var dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy+0.01,d=Math.sqrt(d2);
+        var rep=2600/d2;
+        a.vx+=dx/d*rep;a.vy+=dy/d*rep;b.vx-=dx/d*rep;b.vy-=dy/d*rep;
+      }
+      a.vx+=(W/2-a.x)*0.012;a.vy+=(H/2-a.y)*0.012;
+    }
+    KT.links.forEach(function(l){
+      var s=KT.byId[l["from"]],t=KT.byId[l.to];
+      if(!s||!t)return;
+      var dx=t.x-s.x,dy=t.y-s.y,d=Math.sqrt(dx*dx+dy*dy)+0.01;
+      var force=(d-95)*0.02;
+      s.vx+=dx/d*force;s.vy+=dy/d*force;t.vx-=dx/d*force;t.vy-=dy/d*force;
+    });
+    KT.nodes.forEach(function(node){
+      node.x+=Math.max(-8,Math.min(8,node.vx));node.y+=Math.max(-8,Math.min(8,node.vy));
+      node.vx*=0.5;node.vy*=0.5;
+      node.x=Math.max(20,Math.min(W-20,node.x));node.y=Math.max(20,Math.min(H-20,node.y));
+    });
+  }
+}
+
+function ktDraw(){
+  var canvas=$("kt-canvas");
+  var W=canvas.clientWidth||900,H=560;
+  var dpr=window.devicePixelRatio||1;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  var ctx=canvas.getContext("2d");
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  var muted=getComputedStyle(document.body).getPropertyValue("--muted").trim()||"#888";
+  KT.links.forEach(function(l){
+    var s=KT.byId[l["from"]],t=KT.byId[l.to];
+    if(!s||!t||KT.hidden[s.entity_type]||KT.hidden[t.entity_type])return;
+    ctx.beginPath();
+    ctx.moveTo(s.x,s.y);ctx.lineTo(t.x,t.y);
+    ctx.strokeStyle=l.disputed?"#dba03a":muted;
+    ctx.globalAlpha=0.12+0.45*l.confidence;
+    ctx.lineWidth=0.5+1.8*l.confidence;
+    ctx.setLineDash(l.disputed?[4,4]:[]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+  ctx.globalAlpha=1;
+  KT.nodes.forEach(function(node){
+    if(KT.hidden[node.entity_type])return;
+    var r=4+Math.min(9,node.degree*1.4);
+    var color=KT_COLORS[node.entity_type]||"#8a93a6";
+    ctx.shadowColor=color;
+    ctx.shadowBlur=14*node.freshness;
+    ctx.globalAlpha=0.45+0.55*node.freshness;
+    ctx.beginPath();ctx.arc(node.x,node.y,r,0,2*Math.PI);
+    ctx.fillStyle=color;ctx.fill();
+    ctx.shadowBlur=0;ctx.globalAlpha=1;
+    if(KT.selected===node.entity_id){
+      ctx.beginPath();ctx.arc(node.x,node.y,r+4,0,2*Math.PI);
+      ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
+    }
+    if(node.entity_type==="project"||node.entity_type==="person"){
+      ctx.fillStyle=muted;ctx.font="10px sans-serif";ctx.textAlign="center";
+      ctx.fillText(String(node.name).slice(0,18),node.x,node.y+r+11);
+    }
+  });
+}
+
+$("kt-canvas").addEventListener("click",function(e){
+  var rect=e.target.getBoundingClientRect();
+  var x=e.clientX-rect.left,y=e.clientY-rect.top;
+  var best=null,bestD=18;
+  KT.nodes.forEach(function(node){
+    if(KT.hidden[node.entity_type])return;
+    var d=Math.hypot(node.x-x,node.y-y);
+    if(d<bestD){bestD=d;best=node;}
+  });
+  if(!best)return;
+  KT.selected=best.entity_id;
+  ktDraw();
+  var rel=[];
+  KT.links.forEach(function(l){
+    if(l["from"]===best.entity_id)rel.push({other:l.to,relation:l.relation,confidence:l.confidence,disputed:l.disputed});
+    else if(l.to===best.entity_id)rel.push({other:l["from"],relation:l.relation,confidence:l.confidence,disputed:l.disputed});
+  });
+  var h='<p class="h">'+esc(best.name)+' <span class="badge b-mut">'+esc(KT_LABEL[best.entity_type]||best.entity_type)+'</span></p>'
+    +'<div class="mut">свежесть: '+Math.round(best.freshness*100)+'%'
+    +(best.merge_status&&best.merge_status!=="none"?' · merge: '+esc(best.merge_status):'')+'</div>';
+  if(best.source_accounts&&best.source_accounts.length){
+    h+='<div class="mut" style="margin-top:4px">аккаунты: '+best.source_accounts.map(function(a){return esc(a.source_system+":"+a.account_id);}).join(", ")+'</div>';
+  }
+  if(rel.length){
+    h+='<div style="margin-top:8px">';
+    rel.slice(0,12).forEach(function(r){
+      h+='<div class="item"><span class="badge '+(r.disputed?"b-amber":"b-mut")+'">'+esc(r.relation)+'</span><div class="t">'+esc(r.other)+'</div><span class="mut">'+Number(r.confidence).toFixed(2)+'</span></div>';
+    });
+    h+='</div>';
+    if(rel.some(function(r){return r.disputed;}))h+='<div class="mut" style="margin-top:6px">Есть спорные связи — <span class="edit" data-go="ib">решить в Inbox →</span></div>';
+  }
+  $("kt-detail").innerHTML=h;
+});
+document.addEventListener("click",function(e){
+  var kt=e.target.closest("[data-kttype]");
+  if(kt){var t=kt.getAttribute("data-kttype");KT.hidden[t]=!KT.hidden[t];kt.classList.toggle("on",!KT.hidden[t]);ktDraw();return;}
+  if(e.target.id==="kt-relayout"){ktLayout();ktDraw();}
+});
+
 var CACHE_KEY="fos_overview_cache";
 async function loadOverview(){
   $("topmsg").textContent="Обновляю данные…";$("topmsg").classList.remove("err");
@@ -809,6 +1162,7 @@ if(SECTION_TITLES[initial])show(initial);
 try{var cached=localStorage.getItem(CACHE_KEY);if(cached){OV=JSON.parse(cached);}}catch(e){}
 renderAll();
 loadOverview();
+loadInboxCounts();
 </script>
 </body>
 </html>

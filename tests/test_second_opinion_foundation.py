@@ -313,7 +313,7 @@ async def test_merge_cycle_applies_canonical_and_repoints_links() -> None:
                 session,
                 proposal_id=proposal.proposal_id,
                 decision=STATUS_ACCEPTED,
-                decided_by="test",
+                reviewer_id="test",
                 decision_reason="один человек",
             )
             counts = await apply_decided_merges(session)

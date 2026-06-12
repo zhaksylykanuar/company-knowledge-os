@@ -68,9 +68,30 @@ run. This is the human-approval boundary required by CLAUDE.md.
 - Visibility scopes (`visibility.py`): founder / team / investor
   hierarchy plus declared source permissions and redaction rules.
 
+## Stage 2: decision center UI
+
+- Inbox (`/v1/inbox`, UI section): pending proposals with
+  product-facing fields (`proposal_type`, `reviewer_id`), confidence
+  hint, "why" (source_snapshot) and consequences of accepting;
+  Accept/Reject applies merges immediately. Disputed graph links
+  (confidence < 0.7) are reviewed here too (confirm/remove).
+- Second opinion feed (`/v1/founder/second-opinion`): central conflict
+  feed with declared vs observed, severity, explainable confidence,
+  evidence, suggested action and lifecycle buttons
+  (accept/dismiss/resolve/snooze/note). Severity ordering in SQL;
+  snoozed findings are hidden until due.
+- Knowledge tree (`/v1/graph/tree`): constellation canvas — node glow =
+  freshness, link width/alpha = confidence, dashed = disputed; merged
+  nodes fold into their canonical survivor; node click shows details,
+  links and source accounts.
+- Scanner hardening: `scan_second_opinion` rebuilds project snapshots
+  itself with a real clock (persisted snapshots may carry a synthetic
+  test clock) and auto-resolves findings it no longer observes
+  (reconciliation), so the feed never accumulates orphans.
+
 ## Planned next
 
-UI: inbox for proposals, knowledge tree (constellation view), second
-opinion feed. Agents: meeting agent (transcripts), email-thread agent
+Agents: meeting agent (transcripts), email-thread agent
 (communication_silence findings), deal agent, hypothesis agent
-(validation_gap), graph gardener.
+(validation_gap), graph gardener. UI: evidence drill-down to source
+documents, data-availability chips on every metric widget.
