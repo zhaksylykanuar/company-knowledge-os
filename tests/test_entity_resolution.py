@@ -118,8 +118,14 @@ async def test_status_reply_names_recognized_project() -> None:
     )
 
     assert text is not None
-    assert "📂 Проект: SSAP" in text
-    assert "🧠 Дайджест внимания" in text
+    # Two legitimate branches depending on whether the shared local dev DB
+    # has Jira projects mapped to SSAP: a project snapshot, or the digest
+    # fallback with an explicit project prefix.
+    if "Snapshot: SSAP" in text:
+        assert "статус по Jira" in text
+    else:
+        assert "📂 Проект: SSAP" in text
+        assert "🧠 Дайджест внимания" in text
 
 
 async def test_free_text_with_alias_only_returns_project_status() -> None:
@@ -139,7 +145,8 @@ async def test_free_text_with_alias_only_returns_project_status() -> None:
     )
 
     assert reply is not None
-    assert "📂 Проект: SSAP" in reply
+    # Same two-branch contract as test_status_reply_names_recognized_project.
+    assert "Snapshot: SSAP" in reply or "📂 Проект: SSAP" in reply
 
 
 async def test_status_reply_without_project_has_no_prefix(
