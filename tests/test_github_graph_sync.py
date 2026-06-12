@@ -16,6 +16,7 @@ from app.services.github_graph_mapping import (
     repos_for_project,
 )
 from scripts.sync_github_activity import (
+    _read_response_body,
     build_commit_connector_payload,
     build_pr_connector_payload,
     extract_jira_keys,
@@ -48,6 +49,34 @@ async def _cleanup_repo(repo: str) -> None:
             delete(EntityRecord).where(EntityRecord.entity_id == source_id)
         )
         await session.commit()
+
+
+class _ChunkedResponse:
+    """Fake HTTP response whose read(amt) returns less than requested."""
+
+    def __init__(self, body: bytes, *, chunk_size: int) -> None:
+        self._body = body
+        self._chunk_size = chunk_size
+        self._offset = 0
+
+    def read(self, amt: int) -> bytes:
+        size = min(amt, self._chunk_size)
+        chunk = self._body[self._offset : self._offset + size]
+        self._offset += len(chunk)
+        return chunk
+
+
+def test_read_response_body_reassembles_chunked_reads() -> None:
+    body = b'{"items": "' + b"x" * 200_000 + b'"}'
+
+    assert _read_response_body(_ChunkedResponse(body, chunk_size=1024)) == body
+
+
+def test_read_response_body_rejects_oversized_response() -> None:
+    response = _ChunkedResponse(b"y" * 300, chunk_size=100)
+
+    with pytest.raises(RuntimeError, match="exceeds 250 bytes"):
+        _read_response_body(response, max_bytes=250)
 
 
 def test_extract_jira_keys() -> None:
