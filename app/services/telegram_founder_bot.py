@@ -26,6 +26,7 @@ from app.services.provider_execution_guard import (
     ProviderExecutionBlockedError,
     require_live_provider_execution_ack,
 )
+from app.services.project_status_view import FRESH_DAYS, STALE_DAYS
 from app.services.telegram_delivery import (
     TELEGRAM_API_BASE_URL,
     TelegramSendMessageTransport,
@@ -37,6 +38,7 @@ DEFAULT_STATUS_WINDOW_HOURS = 24
 DEFAULT_POLL_TIMEOUT_SECONDS = 25
 
 COMMAND_STATUS = "status"
+COMMAND_DEV = "dev"
 COMMAND_HELP = "help"
 COMMAND_UNKNOWN = "unknown"
 
@@ -53,8 +55,9 @@ _STATUS_TEXT_HINTS = (
 HELP_REPLY = (
     "Я — FounderOS. Сейчас умею:\n"
     "/status — дайджест внимания за последние 24 часа\n"
+    "/dev — инженерный обзор Jira↔GitHub по проектам\n"
     "/help — эта справка\n\n"
-    "Скоро: /dev, /risks, /followups, вопросы свободным текстом."
+    "Скоро: /risks, /followups, вопросы свободным текстом."
 )
 
 IGNORED_UPDATE_REPLY = None
@@ -71,6 +74,15 @@ _STATUS_COLOR_EMOJI = {
 class _ProjectEntity:
     entity_id: str
     canonical_name: str
+
+
+@dataclass(frozen=True)
+class _ProjectDevOverview:
+    project: _ProjectEntity
+    snapshot: Any
+    jira_keys: tuple[str, ...]
+    issue_snapshots: tuple[Any, ...]
+    repo_activity: Any | None
 
 
 @dataclass(frozen=True)
@@ -160,6 +172,8 @@ def parse_founder_command(text: str | None) -> str:
     first_token = cleaned.split()[0].split("@")[0]
     if first_token in ("/status",):
         return COMMAND_STATUS
+    if first_token in ("/dev",):
+        return COMMAND_DEV
     if first_token in ("/help", "/start"):
         return COMMAND_HELP
     if any(hint in cleaned for hint in _STATUS_TEXT_HINTS):
@@ -262,6 +276,26 @@ async def build_status_reply_text(
     return text
 
 
+async def build_dev_reply_text(
+    *,
+    now: datetime | None = None,
+    organization_id: str = DEFAULT_ORGANIZATION_ID,
+) -> str:
+    """Render a compact engineering reality overview across project entities."""
+
+    from app.db.base import AsyncSessionLocal
+
+    safe_now = now or datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as session:
+        overviews = await _build_all_project_dev_overviews(
+            session,
+            now=safe_now,
+            organization_id=organization_id,
+        )
+        await session.commit()
+    return _render_dev_overview(overviews, now=safe_now)
+
+
 async def _build_all_project_snapshots(
     session: Any,
     *,
@@ -280,6 +314,64 @@ async def _build_all_project_snapshots(
         )
         snapshots.append((project, snapshot))
     return snapshots
+
+
+async def _build_all_project_dev_overviews(
+    session: Any,
+    *,
+    now: datetime,
+    organization_id: str,
+) -> list[_ProjectDevOverview]:
+    from app.services.github_graph_mapping import repos_for_project
+    from app.services.jira_graph_mapping import jira_keys_for_project
+    from app.services.project_status_view import (
+        load_project_issue_snapshots,
+        load_repo_activity,
+    )
+    from app.services.status_engine import (
+        ENTITY_TYPE_PROJECT,
+        build_project_status_snapshot,
+    )
+    from app.services.status_snapshot_repository import (
+        get_latest_status_snapshot,
+        save_status_snapshot,
+    )
+
+    projects = await _load_project_entities(session)
+    overviews: list[_ProjectDevOverview] = []
+    for project in projects:
+        jira_keys = await jira_keys_for_project(session, project.entity_id)
+        issue_snapshots = await load_project_issue_snapshots(session, jira_keys)
+        repos = await repos_for_project(session, project.entity_id)
+        repo_activity = await load_repo_activity(session, repos, now=now)
+        previous = await get_latest_status_snapshot(
+            session,
+            organization_id=organization_id,
+            entity_type=ENTITY_TYPE_PROJECT,
+            entity_id=project.entity_id,
+        )
+        snapshot = build_project_status_snapshot(
+            project_entity_id=project.entity_id,
+            project_name=project.canonical_name,
+            jira_keys=jira_keys,
+            snapshots=issue_snapshots,
+            repo_activity=repo_activity,
+            previous_snapshot=previous,
+            organization_id=organization_id,
+            now=now,
+        )
+        await save_status_snapshot(session, snapshot)
+        if _should_render_in_dev_overview(snapshot):
+            overviews.append(
+                _ProjectDevOverview(
+                    project=project,
+                    snapshot=snapshot,
+                    jira_keys=tuple(jira_keys),
+                    issue_snapshots=tuple(issue_snapshots),
+                    repo_activity=repo_activity,
+                )
+            )
+    return overviews
 
 
 async def _load_project_entities(session: Any) -> list[_ProjectEntity]:
@@ -397,13 +489,156 @@ def _render_all_project_snapshots(
     return "\n".join(lines) + "\n"
 
 
+def _render_dev_overview(
+    overviews: list[_ProjectDevOverview],
+    *,
+    now: datetime,
+) -> str:
+    if not overviews:
+        return (
+            "🛠 Engineering overview\n\n"
+            "No project engineering evidence yet.\n"
+            "Ask about a specific project after Jira/GitHub sync has evidence.\n"
+        )
+
+    lines = ["🛠 Engineering overview", ""]
+    for overview in overviews:
+        blockers = _snapshot_collection(overview.snapshot, "blockers")
+        risks = _snapshot_collection(overview.snapshot, "risks")
+        conflicts = _snapshot_collection(overview.snapshot, "conflicts")
+        lines.append(
+            f"• {overview.project.canonical_name} — "
+            f"code: {_format_dev_code_activity(overview.repo_activity)}"
+        )
+        lines.append(f"  Jira: {_format_dev_jira_summary(overview, now=now)}")
+        lines.append(
+            f"  Signals: blockers {len(blockers)}, "
+            f"risks {len(risks)}, conflicts {len(conflicts)}"
+        )
+        lines.append(
+            "  Second opinion: "
+            + _format_top_second_opinion_signal(
+                blockers=blockers,
+                risks=risks,
+                conflicts=conflicts,
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _should_render_in_all_project_status(snapshot: Any) -> bool:
     if str(snapshot.status_color) == "unknown":
         return False
+    return _has_snapshot_evidence(snapshot)
+
+
+def _should_render_in_dev_overview(snapshot: Any) -> bool:
+    return _has_snapshot_evidence(snapshot)
+
+
+def _has_snapshot_evidence(snapshot: Any) -> bool:
     evidence_source_ids = getattr(snapshot, "evidence_source_ids", None)
     if evidence_source_ids is None:
         evidence_source_ids = getattr(snapshot, "evidence_source_ids_json", None)
     return bool(evidence_source_ids)
+
+
+def _snapshot_collection(snapshot: Any, field: str) -> list[dict[str, Any]]:
+    value = getattr(snapshot, field, None)
+    if value is None:
+        value = getattr(snapshot, f"{field}_json", None)
+    if value is None:
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _format_dev_code_activity(repo_activity: Any | None) -> str:
+    if repo_activity is None:
+        return "no mapped repos"
+    return (
+        f"{int(repo_activity.commit_count_7d)} commits/{FRESH_DAYS}d, "
+        f"{len(repo_activity.open_prs)} open PR, "
+        f"{len(repo_activity.merged_prs)} merged"
+    )
+
+
+def _format_dev_jira_summary(
+    overview: _ProjectDevOverview,
+    *,
+    now: datetime,
+) -> str:
+    snapshots = list(overview.issue_snapshots)
+    if not snapshots:
+        keys = ", ".join(overview.jira_keys) if overview.jira_keys else "no Jira keys"
+        return f"{keys}; no synced issues"
+
+    open_items = [item for item in snapshots if not item.is_done]
+    stale = [
+        item
+        for item in open_items
+        if (_age_days(item.updated_at, now) or 0) > STALE_DAYS
+    ]
+    today = now.date().isoformat()
+    overdue = [item for item in open_items if item.duedate and item.duedate < today]
+    return (
+        f"{len(snapshots)} issues, {len(open_items)} open, "
+        f"stale {len(stale)}, overdue {len(overdue)}"
+    )
+
+
+def _format_top_second_opinion_signal(
+    *,
+    blockers: list[dict[str, Any]],
+    risks: list[dict[str, Any]],
+    conflicts: list[dict[str, Any]],
+) -> str:
+    if conflicts:
+        suffix = _format_more_count(len(conflicts) - 1, "conflict")
+        return _format_signal(conflicts[0]) + suffix
+    if blockers:
+        suffix = _format_more_count(len(blockers) - 1, "blocker")
+        return _format_signal(blockers[0]) + suffix
+    if risks:
+        suffix = _format_more_count(len(risks) - 1, "risk")
+        return _format_signal(risks[0]) + suffix
+    return "No Jira↔GitHub conflicts in current evidence."
+
+
+def _format_more_count(count: int, label: str) -> str:
+    if count <= 0:
+        return ""
+    plural = label + ("s" if count != 1 else "")
+    return f" (+{count} more {plural})"
+
+
+def _format_signal(signal: Mapping[str, Any]) -> str:
+    signal_type = str(signal.get("type") or "signal")
+    label = {
+        "jira_in_progress_without_code": "Jira In Progress without code",
+        "github_pr_without_jira": "Open PR without Jira task",
+        "merged_pr_open_jira": "PR merged but Jira still open",
+        "overdue": "Overdue Jira issue",
+        "critical_marker": "Critical Jira marker",
+        "stale_issue": "Stale Jira issue",
+        "missing_owner": "Missing owner",
+        "stale_review_pr": "Stale PR/review",
+    }.get(signal_type, signal_type.replace("_", " "))
+    source_id = str(signal.get("source_id") or signal.get("pr_id") or signal.get("id") or "")
+    if not source_id:
+        return label
+    extra = ""
+    pr_id = signal.get("pr_id")
+    if pr_id and str(pr_id) != source_id:
+        extra = f" ({pr_id})"
+    return f"{label}: {source_id}{extra}"
+
+
+def _age_days(value: datetime | None, now: datetime) -> int | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return max(0, int((now - value.astimezone(timezone.utc)).total_seconds() // 86_400))
 
 
 def _format_changes(changes: Any, *, limit: int = 3) -> str:
@@ -477,6 +712,8 @@ async def build_reply_for_update(
             now=now,
             question_text=text,
         )
+    if command == COMMAND_DEV:
+        return await build_dev_reply_text(now=now)
     if command == COMMAND_UNKNOWN and text:
         # Free text mentioning a known project counts as a status question.
         recognized_reply = await build_status_reply_text(
