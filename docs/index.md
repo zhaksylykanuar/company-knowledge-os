@@ -34,6 +34,7 @@ Navigation map for future Codex sessions.
 - `features/attention.md`: scoring and attention dashboard.
 - `features/telegram-digest.md`: future Telegram interface and daily digest contract.
 - `features/obsidian-export.md`: read-only Obsidian export.
+- `features/local-ui.md`: local founder command center at `/ui`.
 - `features/gmail.md`: Gmail connector status.
 - `features/drive.md`: Drive connector status.
 

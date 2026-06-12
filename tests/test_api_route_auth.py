@@ -25,6 +25,9 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/extraction/process-document", "POST"),
     ("/v1/digest/source-activity", "GET"),
     ("/v1/digest/source-activity/text", "GET"),
+    ("/v1/founder/overview", "GET"),
+    ("/v1/founder/status", "GET"),
+    ("/v1/founder/dev", "GET"),
 }
 
 
@@ -276,3 +279,7 @@ def test_current_protected_routes_use_existing_api_key_dependency() -> None:
 
 def test_health_route_does_not_use_api_key_dependency() -> None:
     assert require_api_key not in _route_dependency_calls("/health", "GET")
+
+
+def test_ui_page_route_does_not_use_api_key_dependency() -> None:
+    assert require_api_key not in _route_dependency_calls("/ui", "GET")

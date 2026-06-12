@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FounderOS</title>
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --surface2:#eef0f4; --text:#15171c; --muted:#6b7280;
+  --border:rgba(20,25,40,.10); --accent:#5b4fd6; --accent-soft:#edebfc; --accent-text:#3c3489;
+  --green:#1d9e75; --green-soft:#e1f5ee; --green-text:#085041;
+  --amber:#c07b13; --amber-soft:#faeeda; --amber-text:#633806;
+  --red:#d64545; --red-soft:#fcebeb; --red-text:#791f1f;
+  --blue:#2f7fd0; --blue-soft:#e6f1fb; --blue-text:#0c447c;
+  --radius:12px; --radius-sm:8px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0f1115; --surface:#171a21; --surface2:#1f2430; --text:#e8eaf0; --muted:#98a1b3;
+    --border:rgba(255,255,255,.09); --accent:#8d82ec; --accent-soft:#2c2752; --accent-text:#cecbf6;
+    --green:#3fc394; --green-soft:#0c3a2d; --green-text:#9fe1cb;
+    --amber:#e3a93c; --amber-soft:#3d2c10; --amber-text:#fac775;
+    --red:#e36c6c; --red-soft:#3d1717; --red-text:#f7c1c1;
+    --blue:#6aa9e9; --blue-soft:#13283d; --blue-text:#b5d4f4;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,"Segoe UI",Inter,Roboto,sans-serif;display:flex;min-height:100vh}
+aside{width:216px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:16px 10px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.logo{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;padding:2px 10px 16px}
+.logo .mark{width:24px;height:24px;border-radius:7px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.nav{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--muted);cursor:pointer;font-size:13.5px;margin-bottom:1px;user-select:none}
+.nav:hover{background:var(--surface2);color:var(--text)}
+.nav.on{background:var(--accent-soft);color:var(--accent-text);font-weight:600}
+.nav svg{width:16px;height:16px;flex-shrink:0}
+.navsep{border-top:1px solid var(--border);margin:10px 8px}
+main{flex:1;min-width:0;padding:0 28px 60px}
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 0;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid transparent}
+.topbar h1{font-size:17px;font-weight:600;margin:0;flex:1}
+.iconbtn{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);padding:7px 10px;cursor:pointer;font:inherit;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.iconbtn:hover{color:var(--text)}
+.btn{background:var(--accent);border:none;color:#fff;padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer;font:inherit;font-size:13px;font-weight:500}
+.btn.ghost{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn:disabled{opacity:.5}
+.wrap{max-width:1160px}
+.sec{display:none;padding-top:18px}
+.sec.on{display:block}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px}
+.kpi .l{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:22px;font-weight:600;margin-top:2px;letter-spacing:-.02em}
+.kpi .d{font-size:12px;margin-top:2px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.h{font-size:14px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.h .edit{font-size:12px;color:var(--muted);cursor:pointer;font-weight:400}
+.h .edit:hover{color:var(--accent)}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.b-green{background:var(--green-soft);color:var(--green-text)}
+.b-amber{background:var(--amber-soft);color:var(--amber-text)}
+.b-red{background:var(--red-soft);color:var(--red-text)}
+.b-accent{background:var(--accent-soft);color:var(--accent-text)}
+.b-blue{background:var(--blue-soft);color:var(--blue-text)}
+.b-mut{background:var(--surface2);color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.track{height:6px;background:var(--surface2);border-radius:99px;overflow:hidden;flex:1}
+.fill{height:100%;border-radius:99px;background:var(--accent)}
+.row{display:flex;align-items:center;gap:10px}
+.mut{color:var(--muted);font-size:12.5px}
+.item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-top:1px solid var(--border)}
+.item:first-of-type{border-top:none;padding-top:2px}
+.item .t{flex:1;min-width:0}
+.item .t .s{font-size:12px;color:var(--muted);margin-top:1px}
+.focus{border-left:4px solid var(--accent);border-radius:0 var(--radius) var(--radius) 0}
+.mapgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.maptile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 14px;cursor:pointer}
+.maptile:hover{border-color:var(--accent)}
+.empty{border:1px dashed var(--border);border-radius:var(--radius);padding:26px;text-align:center;color:var(--muted);background:transparent}
+.empty .btn{margin-top:10px}
+.bars{display:flex;align-items:flex-end;gap:4px;height:80px;margin-top:8px}
+.bars>div{flex:1;background:var(--accent);opacity:.75;border-radius:3px 3px 0 0;min-height:2px}
+textarea,input[type=text],input[type=password],input[type=number],select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);padding:8px 10px;font:inherit;font-size:13px}
+textarea{min-height:90px;resize:vertical;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.6}
+label.f{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.col{border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.col .chip{font-size:11px;font-weight:700;letter-spacing:.04em}
+.chain{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.chain .step{border-radius:var(--radius-sm);padding:10px;font-size:12.5px}
+.overlay{position:fixed;inset:0;background:rgba(10,12,18,.5);display:none;align-items:flex-start;justify-content:center;padding-top:10vh;z-index:50}
+.overlay.on{display:flex}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:min(640px,92vw);max-height:72vh;overflow:auto;padding:16px 18px}
+.statusline{font-size:12.5px;color:var(--muted);min-height:16px;margin-top:8px}
+.statusline.err{color:var(--red)}
+.avatar{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent-text);display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex-shrink:0}
+pre.digest{white-space:pre-wrap;font:12.5px/1.6 ui-monospace,Menlo,monospace;margin:0}
+.alert{border-radius:var(--radius-sm);padding:11px 14px;font-size:13px;margin-bottom:14px}
+.alert.warn{background:var(--amber-soft);color:var(--amber-text)}
+.alert.danger{background:var(--red-soft);color:var(--red-text)}
+.stack>*+*{margin-top:14px}
+@media (max-width:880px){
+  body{flex-direction:column}
+  aside{width:100%;height:auto;position:static;display:flex;overflow-x:auto;padding:8px;border-right:none;border-bottom:1px solid var(--border)}
+  aside .logo{display:none}.navsep{display:none}
+  .nav{flex-shrink:0;margin:0 2px}
+  main{padding:0 14px 40px}
+  .grid2,.grid3,.cols,.chain{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<aside id="nav">
+  <div class="logo"><span class="mark">F</span> FounderOS</div>
+  <div class="nav on" data-nav="cc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Command center</div>
+  <div class="nav" data-nav="st"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4l-6 3v13l6-3 6 3 6-3V4l-6 3-6-3z"/><path d="M9 4v13M15 7v13"/></svg>Strategy</div>
+  <div class="nav" data-nav="pr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Product</div>
+  <div class="nav" data-nav="gr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Growth</div>
+  <div class="nav" data-nav="sa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1 1-1.8 2.5-1.8s2.5.8 2.5 1.8-1 1.5-2.5 1.8-2.5.8-2.5 1.8 1 1.8 2.5 1.8 2.5-.8 2.5-1.8"/></svg>Sales</div>
+  <div class="nav" data-nav="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></svg>Finance</div>
+  <div class="nav" data-nav="te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3 3.4-5 6.5-5s5.7 2 6.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5c2.6.3 4.7 1.9 5.5 4.5"/></svg>Team</div>
+  <div class="nav" data-nav="ta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l2 2 3.5-3.5M4 12l2 2 3.5-3.5M4 18l2 2 3.5-3.5M13 6h8M13 12h8M13 18h8"/></svg>Tasks</div>
+  <div class="nav" data-nav="me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Metrics</div>
+  <div class="navsep"></div>
+  <div class="nav" data-nav="inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M8 12l3-3 2 2 3-4"/></svg>Investor view</div>
+</aside>
+<main>
+  <div class="topbar">
+    <h1 id="sec-title">Command center</h1>
+    <span id="global-status"></span>
+    <button class="iconbtn" id="search-open" title="Поиск по знаниям (Cmd+K)">⌘K Поиск</button>
+    <button class="iconbtn" id="digest-open">Дайджест</button>
+    <button class="iconbtn" id="refresh">Обновить</button>
+    <button class="iconbtn" id="key-open" title="API key">ключ</button>
+  </div>
+  <div class="statusline" id="topmsg"></div>
+  <div class="wrap">
+
+  <section class="sec on" data-sec="cc">
+    <div class="stack">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap">
+        <div><div style="font-size:18px;font-weight:600" id="cc-hello">Привет</div><div class="mut" id="cc-date"></div></div>
+        <span id="cc-status"></span>
+      </div>
+      <div class="kpis" id="cc-kpis"></div>
+      <div class="card focus" id="cc-focus"></div>
+      <div class="grid2">
+        <div class="card"><p class="h">Следующие действия <span class="mut" id="cc-actions-n"></span></p><div id="cc-actions"></div></div>
+        <div class="card"><p class="h">Риски и блокеры <span class="mut" id="cc-risks-n"></span></p><div id="cc-risks"></div></div>
+      </div>
+      <div>
+        <p class="h" style="margin-bottom:10px">Карта бизнеса</p>
+        <div class="mapgrid" id="cc-map"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" data-sec="st"><div class="stack" id="st-body"></div></section>
+  <section class="sec" data-sec="pr"><div class="stack" id="pr-body"></div></section>
+  <section class="sec" data-sec="gr"><div class="stack" id="gr-body"></div></section>
+  <section class="sec" data-sec="sa"><div class="stack" id="sa-body"></div></section>
+  <section class="sec" data-sec="fi"><div class="stack" id="fi-body"></div></section>
+  <section class="sec" data-sec="te"><div class="stack" id="te-body"></div></section>
+  <section class="sec" data-sec="ta"><div class="stack" id="ta-body"></div></section>
+  <section class="sec" data-sec="me"><div class="stack" id="me-body"></div></section>
+  <section class="sec" data-sec="inv"><div class="stack" id="inv-body"></div></section>
+
+  </div>
+</main>
+
+<div class="overlay" id="ov-search"><div class="panel">
+  <input type="text" id="search-q" placeholder="Поиск по задачам, рискам, решениям, документам…">
+  <div class="statusline" id="search-msg"></div>
+  <div id="search-res"></div>
+</div></div>
+
+<div class="overlay" id="ov-digest"><div class="panel">
+  <p class="h">Дайджест внимания (как в Telegram)</p>
+  <div class="row" style="margin-bottom:10px"><select id="digest-window" style="width:auto"><option value="24">24 часа</option><option value="72" selected>3 дня</option><option value="168">неделя</option></select><button class="btn ghost" id="digest-load">Показать</button></div>
+  <pre class="digest" id="digest-text"></pre>
+</div></div>
+
+<div class="overlay" id="ov-key"><div class="panel">
+  <p class="h">Доступ к API</p>
+  <label class="f">Имя auth-заголовка (из настроек сервера)</label>
+  <input type="text" id="key-header" readonly>
+  <label class="f">API key (хранится только в этом браузере)</label>
+  <input type="password" id="key-value" placeholder="вставьте API_AUTH_KEY">
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" id="key-save">Сохранить и обновить</button></div>
+</div></div>
+
+<div class="overlay" id="ov-edit"><div class="panel">
+  <p class="h" id="edit-title">Изменить</p>
+  <div id="edit-fields"></div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end;gap:8px">
+    <button class="btn ghost" id="edit-cancel">Отмена</button>
+    <button class="btn" id="edit-save">Сохранить</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+var HEADER_NAME = "__FOS_API_HEADER_NAME__";
+var OV = null;
+var MANUAL_KEY = "fos_manual_v2";
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function $(id){return document.getElementById(id);}
+function num(v){var n=Number(v);return isFinite(n)?n.toLocaleString("ru-RU"):esc(v);}
+
+function manual(){
+  try{return JSON.parse(localStorage.getItem(MANUAL_KEY))||{};}catch(e){return {};}
+}
+function saveManual(m){localStorage.setItem(MANUAL_KEY,JSON.stringify(m));}
+
+async function api(path,opts){
+  var headers=Object.assign({},(opts&&opts.headers)||{});
+  var key=(localStorage.getItem("fos_api_key")||"").trim();
+  if(key)headers[HEADER_NAME]=key;
+  var r=await fetch(path,Object.assign({},opts,{headers:headers}));
+  if(!r.ok){
+    var d="";try{d=(await r.json()).detail||"";}catch(e){}
+    if(r.status===401)d=d||"нужен API key — кнопка «ключ» справа сверху";
+    throw new Error("HTTP "+r.status+(d?": "+d:""));
+  }
+  return r;
+}
+
+var COLOR_BADGE={green:["b-green","зелёный"],yellow:["b-amber","жёлтый"],red:["b-red","красный"],unknown:["b-mut","нет данных"]};
+function colorBadge(c,label){var m=COLOR_BADGE[c]||COLOR_BADGE.unknown;return '<span class="badge '+m[0]+'"><span class="dot" style="background:currentColor"></span>'+esc(label||m[1])+'</span>';}
+
+var SECTION_TITLES={cc:"Command center",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",inv:"Investor view"};
+function show(id){
+  var secs=document.querySelectorAll(".sec");
+  for(var i=0;i<secs.length;i++)secs[i].classList.toggle("on",secs[i].getAttribute("data-sec")===id);
+  var navs=document.querySelectorAll(".nav");
+  for(var j=0;j<navs.length;j++)navs[j].classList.toggle("on",navs[j].getAttribute("data-nav")===id);
+  $("sec-title").textContent=SECTION_TITLES[id]||"FounderOS";
+  if(location.hash!=="#/"+id)history.replaceState(null,"","#/"+id);
+}
+document.addEventListener("click",function(e){
+  var n=e.target.closest("[data-nav]");if(n){show(n.getAttribute("data-nav"));return;}
+  var g=e.target.closest("[data-go]");if(g){show(g.getAttribute("data-go"));}
+});
+
+function overlay(id,on){$(id).classList.toggle("on",on);}
+document.addEventListener("click",function(e){if(e.target.classList&&e.target.classList.contains("overlay"))e.target.classList.remove("on");});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"){var ovs=document.querySelectorAll(".overlay.on");for(var i=0;i<ovs.length;i++)ovs[i].classList.remove("on");}
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();overlay("ov-search",true);$("search-q").focus();}
+});
+
+var EDIT_SPEC=null;
+function openEditor(title,fields,onSave){
+  $("edit-title").textContent=title;
+  var html="";
+  for(var i=0;i<fields.length;i++){
+    var f=fields[i];
+    html+='<label class="f">'+esc(f.label)+(f.hint?' <span style="font-weight:400">— '+esc(f.hint)+'</span>':'')+'</label>';
+    if(f.kind==="area")html+='<textarea data-f="'+f.key+'">'+esc(f.value||"")+'</textarea>';
+    else html+='<input type="text" data-f="'+f.key+'" value="'+esc(f.value||"")+'">';
+  }
+  $("edit-fields").innerHTML=html;
+  EDIT_SPEC=onSave;
+  overlay("ov-edit",true);
+}
+$("edit-cancel").addEventListener("click",function(){overlay("ov-edit",false);});
+$("edit-save").addEventListener("click",function(){
+  var out={};var els=$("edit-fields").querySelectorAll("[data-f]");
+  for(var i=0;i<els.length;i++)out[els[i].getAttribute("data-f")]=els[i].value;
+  if(EDIT_SPEC)EDIT_SPEC(out);
+  overlay("ov-edit",false);
+  renderAll();
+});
+function lines(text){
+  return String(text||"").split("\n").map(function(s){return s.trim();}).filter(Boolean)
+    .map(function(s){return s.split("|").map(function(p){return p.trim();});});
+}
+function joinLines(rows){return (rows||[]).map(function(r){return r.join(" | ");}).join("\n");}
+
+function emptyState(text,btnLabel,onclickAttr){
+  return '<div class="empty">'+esc(text)+'<br><button class="btn ghost" '+onclickAttr+'>'+esc(btnLabel)+'</button></div>';
+}
+
+function ccRender(){
+  var m=manual();
+  var hour=new Date().getHours();
+  var hello=hour<5?"Доброй ночи":hour<12?"Доброе утро":hour<18?"Добрый день":"Добрый вечер";
+  $("cc-hello").textContent=hello+(m.name?", "+m.name:"");
+  $("cc-date").textContent=new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
+  if(OV){
+    var lv=OV.status.level;
+    $("cc-status").innerHTML=colorBadge(lv,OV.status.headline);
+    $("global-status").innerHTML=colorBadge(lv,"");
+  }
+  var kpis=(m.kpis&&m.kpis.length?m.kpis:null);
+  var html="";
+  if(kpis){
+    for(var i=0;i<kpis.length;i++){
+      var k=kpis[i];
+      html+='<div class="kpi"><div class="l">'+esc(k[0]||"")+'</div><div class="v">'+esc(k[1]||"—")+'</div><div class="d">'+esc(k[2]||"")+'</div></div>';
+    }
+  } else if(OV){
+    var me=OV.metrics;
+    html+='<div class="kpi"><div class="l">Открытые задачи</div><div class="v">'+num(me.jira_open)+'</div><div class="d">в Jira по всем проектам</div></div>';
+    html+='<div class="kpi"><div class="l">Без движения &gt;14д</div><div class="v">'+num(me.jira_stale)+'</div><div class="d">застойные задачи</div></div>';
+    html+='<div class="kpi"><div class="l">PR merged</div><div class="v">'+num(me.prs_merged)+'</div><div class="d">всего по репо</div></div>';
+    html+='<div class="kpi"><div class="l">Требуют внимания</div><div class="v">'+num(me.attention_items)+'</div><div class="d">скоринг знаний</div></div>';
+  }
+  html+='<div class="kpi" style="display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted)" id="kpi-edit">настроить KPI</div>';
+  $("cc-kpis").innerHTML=html;
+  $("kpi-edit").addEventListener("click",function(){
+    var mm=manual();
+    openEditor("KPI на главном экране",[
+      {key:"name",label:"Как к вам обращаться",value:mm.name||""},
+      {key:"kpis",kind:"area",label:"KPI, по одному в строке",hint:"метка | значение | подпись",value:joinLines(mm.kpis)}
+    ],function(out){var s=manual();s.name=out.name.trim();s.kpis=lines(out.kpis);saveManual(s);});
+  });
+  var f=m.focus||{};
+  if(f.title){
+    var pct=Math.max(0,Math.min(100,Number(f.pct)||0));
+    $("cc-focus").innerHTML='<div class="row" style="justify-content:space-between"><span class="badge b-accent">Фокус недели</span><span class="mut">'+pct+'%</span></div>'
+      +'<div style="font-size:15.5px;font-weight:600;margin:8px 0 8px">'+esc(f.title)+'</div>'
+      +'<div class="row"><div class="track"><div class="fill" style="width:'+pct+'%"></div></div></div>'
+      +(f.note?'<div class="mut" style="margin-top:6px">'+esc(f.note)+'</div>':'')
+      +'<div class="row" style="margin-top:10px"><span class="h"><span class="edit" id="focus-edit">изменить</span></span></div>';
+  } else {
+    $("cc-focus").innerHTML='<span class="badge b-accent">Фокус недели</span><div class="mut" style="margin:8px 0">Один фокус на неделю. Что сейчас важнее всего?</div><button class="btn ghost" id="focus-edit">Задать фокус</button>';
+  }
+  $("focus-edit").addEventListener("click",function(){
+    var mm=manual();var ff=mm.focus||{};
+    openEditor("Фокус недели",[
+      {key:"title",label:"Формулировка фокуса",value:ff.title||""},
+      {key:"pct",label:"Прогресс, %",value:ff.pct||"0"},
+      {key:"note",label:"Заметка",value:ff.note||""}
+    ],function(out){var s=manual();s.focus={title:out.title.trim(),pct:out.pct.trim(),note:out.note.trim()};saveManual(s);});
+  });
+  if(OV){
+    var acts=OV.actions.slice(0,5),ah="";
+    for(var a=0;a<acts.length;a++){
+      var it=acts[a];
+      var b=it.impact==="high"?"b-red":it.impact==="medium"?"b-amber":"b-mut";
+      ah+='<div class="item"><span class="badge '+b+'">'+esc(it.impact)+'</span><div class="t">'+esc(it.title)+'<div class="s">'+esc(it.source_title||"")+(it.reasons&&it.reasons[0]?" · "+esc(it.reasons[0]):"")+'</div></div>'+(it.urgent?'<span class="badge b-red">срочно</span>':'')+'</div>';
+    }
+    $("cc-actions").innerHTML=ah||'<div class="mut">Действий по скорингу нет — добавьте заметку или прогоните извлечение.</div>';
+    $("cc-actions-n").textContent=OV.actions.length?OV.actions.length+" всего":"";
+    var rh="";
+    var blockers=[];
+    for(var p=0;p<OV.projects.length;p++){
+      var pj=OV.projects[p];
+      for(var bb=0;bb<pj.blockers.length;bb++)blockers.push({proj:pj.name,text:pj.blockers[bb].summary||pj.blockers[bb].issue_key||"блокер"});
+    }
+    for(var b2=0;b2<Math.min(3,blockers.length);b2++)
+      rh+='<div class="item"><span class="dot" style="background:var(--red);margin-top:6px"></span><div class="t">'+esc(blockers[b2].text)+'<div class="s">блокер · '+esc(blockers[b2].proj)+'</div></div></div>';
+    var rsk=OV.risks.slice(0,4-Math.min(3,blockers.length));
+    for(var r=0;r<rsk.length;r++)
+      rh+='<div class="item"><span class="dot" style="background:var(--amber);margin-top:6px"></span><div class="t">'+esc(rsk[r].title)+'<div class="s">'+esc(rsk[r].source_title||"риск")+'</div></div></div>';
+    $("cc-risks").innerHTML=rh||'<div class="mut">Открытых рисков нет.</div>';
+    $("cc-risks-n").textContent=(OV.risks.length+blockers.length)?(OV.risks.length+blockers.length)+" всего":"";
+    var mh="";
+    for(var p2=0;p2<OV.projects.length;p2++){
+      var prj=OV.projects[p2];
+      var done=prj.jira.total?Math.round(prj.jira.done/prj.jira.total*100):0;
+      mh+='<div class="maptile" data-go="pr"><div class="row" style="justify-content:space-between"><span style="font-weight:600">'+esc(prj.name)+'</span>'+colorBadge(prj.color,"")+'</div>'
+        +'<div class="mut" style="margin:4px 0 8px">'+num(prj.jira.open)+' открыто'+(prj.code?' · '+num(prj.code.merged_prs)+' PR merged':'')+'</div>'
+        +'<div class="row"><div class="track"><div class="fill" style="width:'+done+'%;background:var(--green)"></div></div><span class="mut">'+done+'%</span></div>'
+        +(prj.top_signal?'<div class="mut" style="margin-top:7px;color:var(--amber-text)">'+esc(String(prj.top_signal).slice(0,70))+'</div>':'')
+        +'</div>';
+    }
+    $("cc-map").innerHTML=mh||emptyState("Проекты появятся после маппинга Jira/GitHub","Как замапить","data-go=\"pr\"");
+  }
+}
+
+function stRender(){
+  var m=manual().strategy||{};
+  var hyp=m.hyp||[];
+  var hb="";
+  var HM={validated:["b-green","validated"],testing:["b-amber","testing"],risk:["b-red","at risk"]};
+  for(var i=0;i<hyp.length;i++){
+    var st=HM[hyp[i][0]]||HM.testing;
+    hb+='<div class="item"><span class="badge '+st[0]+'">'+st[1]+'</span><div class="t">'+esc(hyp[i][1]||"")+'</div></div>';
+  }
+  var ns=m.ns||[];
+  $("st-body").innerHTML=
+    (m.vision
+      ?'<div class="card" style="background:var(--accent-soft);border:none;text-align:center"><div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--accent-text)">VISION</div><div style="font-weight:600;color:var(--accent-text);font-size:15px;margin-top:4px">'+esc(m.vision)+'</div></div>'
+      :emptyState("Стратегия пока не заполнена. Начните с одного предложения: для кого и какую боль вы решаете.","Заполнить стратегию",'id="st-edit-btn"'))
+    +'<div class="grid3">'
+    +'<div class="card"><p class="h">Market</p><div>'+(esc(m.market)||'<span class="mut">не задано</span>')+'</div></div>'
+    +'<div class="card"><p class="h">ICP</p><div>'+(esc(m.icp)||'<span class="mut">не задано</span>')+'</div></div>'
+    +'<div class="card"><p class="h">Positioning</p><div>'+(esc(m.pos)||'<span class="mut">не задано</span>')+'</div></div>'
+    +'</div>'
+    +'<div class="grid2">'
+    +'<div class="card"><p class="h">Ключевые гипотезы <span class="edit" data-stedit>изменить</span></p>'+(hb||'<div class="mut">Добавьте 2–3 гипотезы, на которых держится бизнес.</div>')+'</div>'
+    +'<div class="card" style="border:2px solid var(--blue)"><p class="h">North star metric</p>'
+      +(ns.length?'<div style="font-size:24px;font-weight:600">'+esc(ns[0][1]||"")+' <span class="mut" style="font-size:13px">'+esc(ns[0][0]||"")+'</span></div>'
+        +(ns[0][2]?'<div class="row" style="margin-top:8px"><div class="track"><div class="fill" style="width:'+Math.min(100,Math.round((Number(String(ns[0][1]).replace(/[^\d.]/g,""))||0)/(Number(String(ns[0][2]).replace(/[^\d.]/g,""))||1)*100))+'%;background:var(--blue)"></div></div></div><div class="mut" style="margin-top:4px">цель: '+esc(ns[0][2])+'</div>':'')
+        :'<div class="mut">Одна метрика, которая лучше всего отражает ценность для клиента.</div>')
+    +'</div></div>'
+    +'<div class="row"><button class="btn ghost" data-stedit>Изменить стратегию</button></div>';
+  var btns=$("st-body").querySelectorAll("[data-stedit],#st-edit-btn");
+  for(var b=0;b<btns.length;b++)btns[b].addEventListener("click",function(){
+    var s=manual().strategy||{};
+    openEditor("Strategy map",[
+      {key:"vision",label:"Vision",value:s.vision||""},
+      {key:"market",label:"Market",value:s.market||""},
+      {key:"icp",label:"ICP",value:s.icp||""},
+      {key:"pos",label:"Positioning",value:s.pos||""},
+      {key:"hyp",kind:"area",label:"Гипотезы",hint:"validated|testing|risk | текст",value:joinLines(s.hyp)},
+      {key:"ns",kind:"area",label:"North star",hint:"метка | значение | цель",value:joinLines(s.ns)}
+    ],function(out){var mm=manual();mm.strategy={vision:out.vision.trim(),market:out.market.trim(),icp:out.icp.trim(),pos:out.pos.trim(),hyp:lines(out.hyp),ns:lines(out.ns)};saveManual(mm);});
+  });
+}
+
+function prRender(){
+  var html="";
+  if(OV&&OV.projects.length){
+    for(var i=0;i<OV.projects.length;i++){
+      var p=OV.projects[i];
+      var stat=p.jira.top_statuses.map(function(s){return esc(s.status)+": "+s.count;}).join(" · ");
+      var recs="";
+      for(var r=0;r<p.recommendations.length;r++){
+        var rec=p.recommendations[r];
+        recs+='<div class="item"><span class="dot" style="background:var(--blue);margin-top:6px"></span><div class="t">'+esc(rec.message||rec.summary||JSON.stringify(rec).slice(0,80))+'</div></div>';
+      }
+      html+='<div class="card"><p class="h">'+esc(p.name)+' '+colorBadge(p.color,"")+'</p>'
+        +'<div class="mut">'+esc(p.summary)+'</div>'
+        +'<div class="row" style="margin:10px 0;flex-wrap:wrap;gap:8px">'
+        +'<span class="badge b-mut">Jira: '+esc(p.jira_keys.join(", ")||"не замаплено")+'</span>'
+        +'<span class="badge b-mut">открыто '+num(p.jira.open)+'</span>'
+        +(p.jira.stale?'<span class="badge b-amber">застой '+num(p.jira.stale)+'</span>':'')
+        +(p.jira.overdue?'<span class="badge b-red">просрочено '+num(p.jira.overdue)+'</span>':'')
+        +(p.code?'<span class="badge b-mut">commits 7д: '+num(p.code.commits_7d)+'</span>':'<span class="badge b-mut">репо не замаплено</span>')
+        +'</div>'
+        +(stat?'<div class="mut" style="margin-bottom:8px">'+stat+'</div>':'')
+        +(recs?'<p class="h" style="margin-top:8px">Рекомендации системы</p>'+recs:'')
+        +'</div>';
+    }
+  } else {
+    html+=emptyState("Подключите Jira и GitHub, чтобы видеть состояние продукта.","Открыть инструкцию",'onclick="window.open(\'/docs\',\'_blank\')"');
+  }
+  var m=manual().product||{};
+  var cols=["now","next","later"],labels={now:["NOW","var(--green-text)","var(--green-soft)"],next:["NEXT","var(--amber-text)","var(--amber-soft)"],later:["LATER","var(--muted)","var(--surface2)"]};
+  var ch='<div class="cols">';
+  for(var c=0;c<3;c++){
+    var key=cols[c],lab=labels[key],items=m[key]||[];
+    ch+='<div class="col"><span class="badge" style="background:'+lab[2]+';color:'+lab[1]+'">'+lab[0]+'</span>';
+    for(var it=0;it<items.length;it++)ch+='<div class="item"><div class="t">'+esc(items[it][0]||"")+(items[it][1]?'<div class="s">'+esc(items[it][1])+'</div>':'')+'</div></div>';
+    if(!items.length)ch+='<div class="mut" style="margin-top:8px">пусто</div>';
+    ch+='</div>';
+  }
+  ch+='</div>';
+  var chain=m.chain||[];
+  var CH=[["ПРОБЛЕМА","var(--red-soft)","var(--red-text)"],["ГИПОТЕЗА","var(--amber-soft)","var(--amber-text)"],["РЕШЕНИЕ","var(--blue-soft)","var(--blue-text)"],["РЕЗУЛЬТАТ","var(--green-soft)","var(--green-text)"]];
+  var cb='<div class="chain">';
+  for(var s=0;s<4;s++)cb+='<div class="step" style="background:'+CH[s][1]+'"><div style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:'+CH[s][2]+'">'+CH[s][0]+'</div><div style="color:'+CH[s][2]+';margin-top:3px">'+esc((chain[s]&&chain[s][0])||"—")+'</div></div>';
+  cb+='</div>';
+  html+='<div class="card"><p class="h">Roadmap: Now / Next / Later <span class="edit" id="pr-edit">изменить</span></p>'+ch+'</div>';
+  html+='<div class="card"><p class="h">Цепочка валидации <span class="edit" id="pr-edit2">изменить</span></p>'+cb+'</div>';
+  $("pr-body").innerHTML=html;
+  function prEdit(){
+    var mm=manual().product||{};
+    openEditor("Product system",[
+      {key:"now",kind:"area",label:"NOW",hint:"фича | заметка",value:joinLines(mm.now)},
+      {key:"next",kind:"area",label:"NEXT",value:joinLines(mm.next)},
+      {key:"later",kind:"area",label:"LATER",value:joinLines(mm.later)},
+      {key:"chain",kind:"area",label:"Цепочка: 4 строки",hint:"проблема, гипотеза, решение, результат",value:joinLines(mm.chain)}
+    ],function(out){var s2=manual();s2.product={now:lines(out.now),next:lines(out.next),later:lines(out.later),chain:lines(out.chain)};saveManual(s2);});
+  }
+  var e1=$("pr-edit"),e2=$("pr-edit2");
+  if(e1)e1.addEventListener("click",prEdit);
+  if(e2)e2.addEventListener("click",prEdit);
+}
+
+function grRender(){
+  var m=manual().growth||{};
+  var fun=m.funnel||[],ch=m.channels||[],ex=m.exp||[];
+  var html="";
+  if(!fun.length&&!ch.length&&!ex.length){
+    html+=emptyState("Воронка, каналы и эксперименты. Заполните то, что уже делаете — даже 2 строки дадут картину.","Заполнить growth-карту",'data-gredit');
+  } else {
+    var max=0;for(var f0=0;f0<fun.length;f0++)max=Math.max(max,Number(fun[f0][1])||0);
+    var fb="";
+    for(var f=0;f<fun.length;f++){
+      var v=Number(fun[f][1])||0,w=max?Math.max(3,Math.round(v/max*100)):0;
+      fb+='<div class="row" style="margin-bottom:7px"><span class="mut" style="width:110px">'+esc(fun[f][0]||"")+'</span><div class="track"><div class="fill" style="width:'+w+'%;background:var(--blue)"></div></div><span style="width:50px;text-align:right;font-weight:600">'+num(v)+'</span></div>';
+    }
+    var CB={green:"работает",yellow:"рано судить",red:"не работает"};
+    var cb="";
+    for(var c=0;c<ch.length;c++){
+      var col=ch[c][0]||"yellow";
+      cb+='<div class="item"><span class="dot" style="background:var(--'+(col==="green"?"green":col==="red"?"red":"amber")+');margin-top:6px"></span><div class="t">'+esc(ch[c][1]||"")+'</div><span class="badge '+(col==="green"?"b-green":col==="red"?"b-red":"b-amber")+'">'+esc(ch[c][2]||CB[col]||"")+'</span></div>';
+    }
+    var eb="";
+    var EB={running:"b-amber",won:"b-green",lost:"b-red"};
+    for(var e=0;e<ex.length;e++)
+      eb+='<div class="item"><span class="badge '+(EB[ex[e][0]]||"b-mut")+'">'+esc(ex[e][0]||"")+'</span><div class="t">'+esc(ex[e][1]||"")+'</div><span class="mut">'+esc(ex[e][2]||"")+'</span></div>';
+    html+='<div class="grid2"><div class="card"><p class="h">Воронка <span class="edit" data-gredit>изменить</span></p>'+(fb||'<div class="mut">не задана</div>')+'</div>'
+      +'<div class="card"><p class="h">Каналы</p>'+(cb||'<div class="mut">не заданы</div>')+'</div></div>'
+      +'<div class="card"><p class="h">Эксперименты</p>'+(eb||'<div class="mut">Создайте первый эксперимент: гипотеза, метрика успеха, дедлайн.</div>')+'</div>';
+  }
+  $("gr-body").innerHTML=html;
+  var btns=$("gr-body").querySelectorAll("[data-gredit]");
+  for(var b=0;b<btns.length;b++)btns[b].addEventListener("click",function(){
+    var mm=manual().growth||{};
+    openEditor("Growth",[
+      {key:"funnel",kind:"area",label:"Воронка",hint:"этап | число",value:joinLines(mm.funnel)},
+      {key:"channels",kind:"area",label:"Каналы",hint:"green|yellow|red | канал | вердикт",value:joinLines(mm.channels)},
+      {key:"exp",kind:"area",label:"Эксперименты",hint:"running|won|lost | название | срок",value:joinLines(mm.exp)}
+    ],function(out){var s=manual();s.growth={funnel:lines(out.funnel),channels:lines(out.channels),exp:lines(out.exp)};saveManual(s);});
+  });
+}
+
+function saRender(){
+  var m=manual().sales||{};
+  var deals=m.deals||[],reasons=m.reasons||[];
+  var html="";
+  if(!deals.length&&!reasons.length){
+    html+=emptyState("Pipeline пуст. Добавьте сделки: компания, сумма, стадия и следующий шаг — система подсветит зависшие.","Добавить сделки",'data-saedit');
+  } else {
+    var stages={};
+    for(var d0=0;d0<deals.length;d0++){var st=deals[d0][2]||"лид";stages[st]=(stages[st]||0)+1;}
+    var sk=Object.keys(stages);
+    var kp='<div class="kpis">';
+    for(var s=0;s<sk.length;s++)kp+='<div class="kpi"><div class="l">'+esc(sk[s])+'</div><div class="v">'+stages[sk[s]]+'</div></div>';
+    kp+='</div>';
+    var db="";
+    for(var d=0;d<deals.length;d++){
+      var deal=deals[d];var nostep=!(deal[3]||"").trim();
+      db+='<div class="card" style="margin-bottom:10px;'+(nostep?'border-color:var(--amber)':'')+'">'
+        +'<div class="row" style="justify-content:space-between"><div class="row"><span class="avatar">'+esc((deal[0]||"?").slice(0,2).toUpperCase())+'</span><span style="font-weight:600">'+esc(deal[0]||"")+'</span></div><span class="badge b-blue">'+esc(deal[2]||"")+'</span></div>'
+        +'<div class="mut" style="margin:6px 0">'+esc(deal[1]||"")+'</div>'
+        +(nostep?'<span class="badge b-amber">нет следующего шага — сделка зависнет</span>':'<span class="badge b-mut">next: '+esc(deal[3])+'</span>')
+        +'</div>';
+    }
+    var rb="";var rmax=0;
+    for(var r0=0;r0<reasons.length;r0++)rmax=Math.max(rmax,Number(reasons[r0][1])||0);
+    for(var r=0;r<reasons.length;r++){
+      var rv=Number(reasons[r][1])||0;
+      rb+='<div class="row" style="margin-bottom:7px"><span class="mut" style="width:200px">'+esc(reasons[r][0]||"")+'</span><div class="track"><div class="fill" style="width:'+(rmax?Math.round(rv/rmax*100):0)+'%;background:var(--red)"></div></div><span style="width:30px;text-align:right">'+rv+'</span></div>';
+    }
+    html+=kp+'<div style="margin-top:14px">'+db+'</div>'
+      +(rb?'<div class="card"><p class="h">Причины отказов <span class="edit" data-saedit>изменить</span></p>'+rb+'</div>'
+          :'<div class="row"><button class="btn ghost" data-saedit>Изменить pipeline</button></div>');
+  }
+  $("sa-body").innerHTML=html;
+  var btns=$("sa-body").querySelectorAll("[data-saedit]");
+  for(var b=0;b<btns.length;b++)btns[b].addEventListener("click",function(){
+    var mm=manual().sales||{};
+    openEditor("Sales",[
+      {key:"deals",kind:"area",label:"Сделки",hint:"компания | сумма/условия | стадия | следующий шаг",value:joinLines(mm.deals)},
+      {key:"reasons",kind:"area",label:"Причины отказов",hint:"причина | число",value:joinLines(mm.reasons)}
+    ],function(out){var s=manual();s.sales={deals:lines(out.deals),reasons:lines(out.reasons)};saveManual(s);});
+  });
+}
+
+function fiRender(){
+  var m=manual().finance||{};
+  var html="";
+  if(!m.cash&&!m.burn&&!m.income){
+    html+=emptyState("Три числа, чтобы понимать ситуацию: деньги на счету, burn в месяц, доход в месяц.","Заполнить финансы",'data-fiedit');
+  } else {
+    var cash=Number(String(m.cash||"").replace(/[^\d.]/g,""))||0;
+    var burn=Number(String(m.burn||"").replace(/[^\d.]/g,""))||0;
+    var income=Number(String(m.income||"").replace(/[^\d.]/g,""))||0;
+    var net=burn-income;
+    var runway=net>0?Math.floor(cash/net):null;
+    if(m.note)html+='<div class="alert warn">'+esc(m.note)+'</div>';
+    if(runway!==null&&runway<6)html+='<div class="alert danger">Runway меньше 6 месяцев — пора действовать: резать расходы или поднимать деньги.</div>';
+    html+='<div class="kpis">'
+      +'<div class="kpi"><div class="l">Runway</div><div class="v">'+(runway===null?"∞":runway+" мес")+'</div><div class="d">'+esc(m.cash||"")+' на счету</div></div>'
+      +'<div class="kpi"><div class="l">Burn, net</div><div class="v">'+esc(m.burn||"—")+'</div><div class="d">в месяц</div></div>'
+      +'<div class="kpi"><div class="l">Доход</div><div class="v">'+esc(m.income||"—")+'</div><div class="d">'+(burn?("покрывает "+Math.round(income/burn*100)+"% расходов"):"")+'</div></div>'
+      +'</div>';
+    var months=m.months||[];
+    if(months.length){
+      var mx=0;
+      for(var i0=0;i0<months.length;i0++)mx=Math.max(mx,Number(months[i0][1])||0,Number(months[i0][2])||0);
+      var mb='<div style="display:flex;align-items:flex-end;gap:10px;height:100px;margin-top:8px">';
+      for(var i=0;i<months.length;i++){
+        var ex=Number(months[i][1])||0,inc=Number(months[i][2])||0;
+        mb+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2px">'
+          +'<div style="height:'+(mx?Math.round(ex/mx*70):0)+'px;background:var(--red);opacity:.65;border-radius:3px"></div>'
+          +'<div style="height:'+(mx?Math.round(inc/mx*70):0)+'px;background:var(--green);border-radius:3px"></div>'
+          +'<div class="mut" style="text-align:center">'+esc(months[i][0]||"")+'</div></div>';
+      }
+      mb+='</div><div class="row" style="gap:14px;margin-top:8px"><span class="row mut"><span class="dot" style="background:var(--red);opacity:.65"></span>расходы</span><span class="row mut"><span class="dot" style="background:var(--green)"></span>доход</span></div>';
+      html+='<div class="card"><p class="h">Burn vs доход <span class="edit" data-fiedit>изменить</span></p>'+mb+'</div>';
+    } else {
+      html+='<div class="row"><button class="btn ghost" data-fiedit>Изменить финансы</button></div>';
+    }
+  }
+  $("fi-body").innerHTML=html;
+  var btns=$("fi-body").querySelectorAll("[data-fiedit]");
+  for(var b=0;b<btns.length;b++)btns[b].addEventListener("click",function(){
+    var mm=manual().finance||{};
+    openEditor("Finance",[
+      {key:"cash",label:"На счету (например $67k)",value:mm.cash||""},
+      {key:"burn",label:"Расходы в месяц",value:mm.burn||""},
+      {key:"income",label:"Доход в месяц",value:mm.income||""},
+      {key:"note",label:"Предупреждение (видно сверху)",value:mm.note||""},
+      {key:"months",kind:"area",label:"Помесячно",hint:"мес | расходы | доход (числа)",value:joinLines(mm.months)}
+    ],function(out){var s=manual();s.finance={cash:out.cash.trim(),burn:out.burn.trim(),income:out.income.trim(),note:out.note.trim(),months:lines(out.months)};saveManual(s);});
+  });
+}
+
+function teRender(){
+  var m=manual().team||{};
+  var people=m.people||[],rhythm=m.rhythm||[];
+  var pb="";
+  for(var i=0;i<people.length;i++){
+    var load=Math.max(0,Math.min(100,Number(people[i][2])||0));
+    pb+='<div class="item"><span class="avatar">'+esc((people[i][0]||"?").slice(0,2).toUpperCase())+'</span>'
+      +'<div class="t">'+esc(people[i][0]||"")+' <span class="mut">· '+esc(people[i][1]||"")+'</span><div class="s">'+esc(people[i][3]||"")+'</div></div>'
+      +'<div class="track" style="max-width:140px"><div class="fill" style="width:'+load+'%;background:var(--'+(load>=90?"red":load>=70?"amber":"green")+')"></div></div>'
+      +(load>=90?'<span class="badge b-red">перегружен</span>':'')
+      +'</div>';
+  }
+  var rb="";
+  for(var r=0;r<rhythm.length;r++)rb+='<div class="item"><span class="badge b-mut" style="width:36px;justify-content:center">'+esc(rhythm[r][0]||"")+'</span><div class="t">'+esc(rhythm[r][1]||"")+'</div></div>';
+  var db="";
+  if(OV&&OV.decisions.length){
+    for(var d=0;d<OV.decisions.length;d++){
+      var dec=OV.decisions[d];
+      var dt=dec.created_at?new Date(dec.created_at).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"}):"";
+      db+='<div class="item"><span class="badge b-accent">'+dt+'</span><div class="t">'+esc(dec.decision||dec.title)+'<div class="s">'+esc(dec.source_document_id||"")+'</div></div></div>';
+    }
+  } else db='<div class="mut">Решения появляются автоматически из заметок и писем (экстрактор решений).</div>';
+  $("te-body").innerHTML=
+    '<div class="card"><p class="h">Роли и загрузка <span class="edit" id="te-edit">изменить</span></p>'+(pb||'<div class="mut">Добавьте людей: кто за что отвечает и насколько загружен.</div>')+'</div>'
+    +'<div class="grid2"><div class="card"><p class="h">Weekly rhythm</p>'+(rb||'<div class="mut">Задайте 2–3 ритуала недели: планёрка, демо, ретро.</div>')+'</div>'
+    +'<div class="card"><p class="h">Решения (из знаний)</p>'+db+'</div></div>';
+  $("te-edit").addEventListener("click",function(){
+    var mm=manual().team||{};
+    openEditor("Team & operations",[
+      {key:"people",kind:"area",label:"Люди",hint:"имя | роль | загрузка % | фокус",value:joinLines(mm.people)},
+      {key:"rhythm",kind:"area",label:"Ритуалы",hint:"день | ритуал",value:joinLines(mm.rhythm)}
+    ],function(out){var s=manual();s.team={people:lines(out.people),rhythm:lines(out.rhythm)};saveManual(s);});
+  });
+}
+
+function taRender(){
+  if(!OV){$("ta-body").innerHTML='<div class="mut">Загружаю…</div>';return;}
+  var acts=OV.actions;
+  var hi=[],qw=[],bl=[];
+  for(var i=0;i<acts.length;i++){
+    if(acts[i].impact==="high")hi.push(acts[i]);
+    else if(acts[i].impact==="medium")qw.push(acts[i]);
+    else bl.push(acts[i]);
+  }
+  function group(items,badge){
+    var h="";
+    for(var j=0;j<items.length;j++){
+      var it=items[j];
+      h+='<div class="item"><span class="badge '+badge+'">'+esc(it.item_type)+'</span><div class="t">'+esc(it.title)
+        +'<div class="s">'+esc(it.source_title||"")+(it.reasons&&it.reasons[0]?" · "+esc(it.reasons[0]):"")+'</div></div>'
+        +(it.urgent?'<span class="badge b-red">срочно</span>':'')
+        +'<span class="mut">'+(it.attention_score!=null?Number(it.attention_score).toFixed(2):"")+'</span></div>';
+    }
+    return h;
+  }
+  var html='<p class="h" style="color:var(--red)">High impact · сделать сначала</p><div class="card">'+(group(hi,"b-red")||'<div class="mut">Пусто — отлично.</div>')+'</div>'
+    +'<p class="h" style="color:var(--amber)">Quick wins · между делом</p><div class="card">'+(group(qw,"b-amber")||'<div class="mut">Пусто.</div>')+'</div>';
+  if(bl.length){
+    html+='<p class="h" style="color:var(--muted)">Backlog · не сейчас</p>'
+      +'<div class="card"><div class="row" style="justify-content:space-between;cursor:pointer" id="ta-blg-toggle"><span class="mut">'+bl.length+' задач скрыто</span><span class="mut">показать</span></div><div id="ta-blg" style="display:none">'+group(bl,"b-mut")+'</div></div>';
+  }
+  html+='<div class="mut" style="margin-top:6px">Приоритеты считаются из скоринга знаний (importance × urgency), а не задаются вручную. Новые задачи появляются из заметок, писем и документов.</div>';
+  $("ta-body").innerHTML=html;
+  var t=$("ta-blg-toggle");
+  if(t)t.addEventListener("click",function(){var el=$("ta-blg");el.style.display=el.style.display==="none"?"block":"none";});
+}
+
+function meRender(){
+  if(!OV){$("me-body").innerHTML='<div class="mut">Загружаю…</div>';return;}
+  var m=OV.metrics;
+  var ns=(manual().strategy&&manual().strategy.ns)||[];
+  var html="";
+  if(ns.length){
+    var val=Number(String(ns[0][1]).replace(/[^\d.]/g,""))||0,tgt=Number(String(ns[0][2]||"").replace(/[^\d.]/g,""))||0;
+    html+='<div class="card" style="border:2px solid var(--blue)"><div class="row" style="justify-content:space-between"><span class="mut">North star · '+esc(ns[0][0]||"")+'</span></div>'
+      +'<div style="font-size:26px;font-weight:600;margin:4px 0">'+esc(ns[0][1]||"")+(tgt?' <span class="mut" style="font-size:13px">/ цель '+esc(ns[0][2])+'</span>':'')+'</div>'
+      +(tgt?'<div class="track"><div class="fill" style="width:'+Math.min(100,Math.round(val/tgt*100))+'%;background:var(--blue)"></div></div>':'')+'</div>';
+  } else {
+    html+=emptyState("Задайте north star метрику в разделе Strategy — она появится здесь.","Открыть Strategy",'data-go="st"');
+  }
+  if(m.jira_stale>10)html+='<div class="alert danger">Застойных задач: '+num(m.jira_stale)+' — больше 14 дней без движения. Разберите или закройте их.</div>';
+  else if(m.jira_overdue)html+='<div class="alert warn">Просроченных задач: '+num(m.jira_overdue)+'.</div>';
+  html+='<div class="kpis">'
+    +'<div class="kpi"><div class="l">Открытые задачи</div><div class="v">'+num(m.jira_open)+'</div></div>'
+    +'<div class="kpi"><div class="l">Застой &gt;14д</div><div class="v" style="color:'+(m.jira_stale>10?"var(--red)":"inherit")+'">'+num(m.jira_stale)+'</div></div>'
+    +'<div class="kpi"><div class="l">Просрочено</div><div class="v">'+num(m.jira_overdue)+'</div></div>'
+    +'<div class="kpi"><div class="l">PR merged</div><div class="v">'+num(m.prs_merged)+'</div></div>'
+    +'<div class="kpi"><div class="l">Commits 7д</div><div class="v">'+num(m.commits_7d)+'</div></div>'
+    +'<div class="kpi"><div class="l">Документы</div><div class="v">'+num(m.documents)+'</div></div>'
+    +'<div class="kpi"><div class="l">Задачи / риски / решения</div><div class="v">'+num(m.tasks)+' / '+num(m.risks)+' / '+num(m.decisions)+'</div></div>'
+    +'</div>';
+  var days=OV.activity.by_day||[];
+  if(days.length){
+    var mx=0;for(var i=0;i<days.length;i++)mx=Math.max(mx,days[i].count);
+    var bars='<div class="bars">';
+    for(var j=0;j<days.length;j++)bars+='<div style="height:'+(mx?Math.max(3,Math.round(days[j].count/mx*76)):3)+'px" title="'+esc(days[j].date)+': '+days[j].count+'"></div>';
+    bars+='</div>';
+    var src=OV.activity.by_source;
+    var srcs=Object.keys(src).map(function(k){return esc(k)+": "+num(src[k]);}).join(" · ");
+    html+='<div class="card"><p class="h">Активность за '+OV.activity.window_days+' дней</p>'+bars+'<div class="mut" style="margin-top:8px">'+srcs+'</div></div>';
+  }
+  $("me-body").innerHTML=html;
+}
+
+function invRender(){
+  var m=manual().investor||{};
+  var traction=m.traction||[],model=m.model||[];
+  var html='<div class="row" style="justify-content:space-between"><span class="badge b-accent">read-only · '+new Date().toLocaleDateString("ru-RU",{month:"long",year:"numeric"})+'</span><span class="h"><span class="edit" id="inv-edit">изменить</span></span></div>';
+  html+='<div class="card">'+(m.oneliner?'<div style="font-size:15px;font-weight:600">'+esc(m.oneliner)+'</div>':'<div class="mut">Одно предложение: что вы делаете и для кого.</div>')
+    +(m.sub?'<div class="mut" style="margin-top:4px">'+esc(m.sub)+'</div>':'')+'</div>';
+  var tk='<div class="kpis">';
+  if(traction.length){for(var i=0;i<traction.length;i++)tk+='<div class="kpi"><div class="l">'+esc(traction[i][0]||"")+'</div><div class="v">'+esc(traction[i][1]||"")+'</div></div>';}
+  else if(OV){
+    tk+='<div class="kpi"><div class="l">Проекты</div><div class="v">'+OV.projects.length+'</div></div>'
+      +'<div class="kpi"><div class="l">PR merged</div><div class="v">'+num(OV.metrics.prs_merged)+'</div></div>'
+      +'<div class="kpi"><div class="l">Открытые задачи</div><div class="v">'+num(OV.metrics.jira_open)+'</div></div>'
+      +'<div class="kpi"><div class="l">Документов в базе</div><div class="v">'+num(OV.metrics.documents)+'</div></div>';
+  }
+  tk+='</div>';
+  html+=tk;
+  var mb="";
+  for(var j=0;j<model.length;j++)mb+='<div class="item"><div class="t">'+esc(model[j][0]||"")+'</div></div>';
+  html+='<div class="grid2"><div class="card"><p class="h">Business model</p>'+(mb||'<div class="mut">Как вы зарабатываете: 2–3 строки.</div>')+'</div>'
+    +'<div class="card" style="border:2px solid var(--blue)"><p class="h">Ask</p>'+(m.ask?'<div style="font-size:18px;font-weight:600">'+esc(m.ask)+'</div>':'<div class="mut">Сколько поднимаете и на что.</div>')+(m.asknote?'<div class="mut" style="margin-top:4px">'+esc(m.asknote)+'</div>':'')+'</div></div>';
+  html+='<div class="mut">Этот режим показывает только то, что вы заполнили + публичные счётчики. Внутренние риски и задачи сюда не попадают.</div>';
+  $("inv-body").innerHTML=html;
+  $("inv-edit").addEventListener("click",function(){
+    var mm=manual().investor||{};
+    openEditor("Investor view",[
+      {key:"oneliner",label:"Одно предложение о компании",value:mm.oneliner||""},
+      {key:"sub",label:"Подзаголовок",value:mm.sub||""},
+      {key:"traction",kind:"area",label:"Traction",hint:"метка | значение",value:joinLines(mm.traction)},
+      {key:"model",kind:"area",label:"Business model, по строке",value:joinLines(mm.model)},
+      {key:"ask",label:"Ask (например $350k pre-seed)",value:mm.ask||""},
+      {key:"asknote",label:"На что",value:mm.asknote||""}
+    ],function(out){var s=manual();s.investor={oneliner:out.oneliner.trim(),sub:out.sub.trim(),traction:lines(out.traction),model:lines(out.model),ask:out.ask.trim(),asknote:out.asknote.trim()};saveManual(s);});
+  });
+}
+
+function renderAll(){
+  ccRender();stRender();prRender();grRender();saRender();fiRender();teRender();taRender();meRender();invRender();
+}
+
+var CACHE_KEY="fos_overview_cache";
+async function loadOverview(){
+  $("topmsg").textContent="Обновляю данные…";$("topmsg").classList.remove("err");
+  try{
+    var r=await api("/v1/founder/overview");
+    OV=await r.json();
+    localStorage.setItem(CACHE_KEY,JSON.stringify(OV));
+    $("topmsg").textContent="Обновлено "+new Date().toLocaleTimeString("ru-RU");
+    renderAll();
+  }catch(e){
+    $("topmsg").textContent=String(e.message||e);
+    $("topmsg").classList.add("err");
+  }
+}
+
+$("refresh").addEventListener("click",loadOverview);
+$("key-open").addEventListener("click",function(){
+  $("key-header").value=HEADER_NAME;
+  $("key-value").value=localStorage.getItem("fos_api_key")||"";
+  overlay("ov-key",true);
+});
+$("key-save").addEventListener("click",function(){
+  localStorage.setItem("fos_api_key",$("key-value").value.trim());
+  overlay("ov-key",false);
+  loadOverview();
+});
+$("digest-open").addEventListener("click",function(){overlay("ov-digest",true);});
+$("digest-load").addEventListener("click",async function(){
+  $("digest-text").textContent="Загружаю…";
+  try{
+    var r=await api("/v1/founder/status?window_hours="+$("digest-window").value);
+    $("digest-text").textContent=await r.text();
+  }catch(e){$("digest-text").textContent=String(e.message||e);}
+});
+$("search-open").addEventListener("click",function(){overlay("ov-search",true);$("search-q").focus();});
+var searchTimer=null;
+$("search-q").addEventListener("input",function(){
+  clearTimeout(searchTimer);
+  var q=$("search-q").value.trim();
+  if(q.length<2){$("search-res").innerHTML="";return;}
+  searchTimer=setTimeout(async function(){
+    $("search-msg").textContent="ищу…";
+    try{
+      var r=await api("/v1/knowledge/search?q="+encodeURIComponent(q)+"&limit=10");
+      var d=await r.json();
+      var res=d.results||[];
+      var h="";
+      for(var i=0;i<res.length;i++){
+        h+='<div class="item"><span class="badge b-mut">'+esc(res[i].result_type)+'</span><div class="t">'+esc(res[i].title||res[i].preview||"")+'<div class="s">'+esc((res[i].preview||"").slice(0,140))+'</div></div></div>';
+      }
+      $("search-res").innerHTML=h||'<div class="mut" style="padding:10px 0">Ничего не нашлось.</div>';
+      $("search-msg").textContent=(d.counts&&d.counts.total!=null)?("найдено: "+d.counts.total):"";
+    }catch(e){$("search-msg").textContent=String(e.message||e);}
+  },300);
+});
+
+var initial=(location.hash||"").replace("#/","");
+if(SECTION_TITLES[initial])show(initial);
+try{var cached=localStorage.getItem(CACHE_KEY);if(cached){OV=JSON.parse(cached);}}catch(e){}
+renderAll();
+loadOverview();
+</script>
+</body>
+</html>
