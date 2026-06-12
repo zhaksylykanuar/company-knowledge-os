@@ -15,6 +15,7 @@ from app.services.entity_resolution import (
     resolve_entities_in_text,
     seed_project_entities,
 )
+from app.services import telegram_founder_bot as bot
 from app.services.telegram_founder_bot import build_status_reply_text
 
 # Уникальные нормализованные алиасы из seed-словаря (дубликаты схлопываются).
@@ -141,9 +142,27 @@ async def test_free_text_with_alias_only_returns_project_status() -> None:
     assert "📂 Проект: SSAP" in reply
 
 
-async def test_status_reply_without_project_has_no_prefix() -> None:
-    await _seed()
+async def test_status_reply_without_project_has_no_prefix(
+    monkeypatch,
+) -> None:
     organization_id = f"test-org-{uuid4().hex}"
+    snapshot = type(
+        "Snapshot",
+        (),
+        {
+            "status_color": "unknown",
+            "confidence": 0.20,
+            "what_changed": ({"field": "snapshot", "change": "created"},),
+            "summary": "Project Alpha: unknown; Jira no Jira keys; 0 issues.",
+            "evidence_source_ids": (),
+        },
+    )()
+
+    async def fake_project_snapshots(*_args, **_kwargs):
+        return [(bot._ProjectEntity("project:alpha", "Project Alpha"), snapshot)]
+
+    monkeypatch.setattr(bot, "_build_all_project_snapshots", fake_project_snapshots)
+
     text: str | None = None
     try:
         text = await build_status_reply_text(
@@ -164,4 +183,6 @@ async def test_status_reply_without_project_has_no_prefix() -> None:
     assert text is not None
     assert "📂 Проект:" not in text
     assert text.startswith("📊 Project snapshots")
-    assert "confidence:" in text
+    assert "No project snapshots with evidence yet." in text
+    assert "⚪" not in text
+    assert "unknown; Jira no Jira keys; 0 issues" not in text
