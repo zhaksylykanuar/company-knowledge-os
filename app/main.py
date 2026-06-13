@@ -9,6 +9,7 @@ from app.api.gmail import router as gmail_router
 from app.api.google import router as google_router
 from app.api.health import router as health_router
 from app.api.inbox import router as inbox_router
+from app.api.dev import router as dev_router
 from app.api.knowledge import router as knowledge_router
 from app.api.share_packs import router as share_packs_router
 from app.api.ui import page_router as ui_page_router
@@ -34,5 +35,8 @@ app.include_router(digest_router, dependencies=protected_api_dependencies)
 app.include_router(founder_views_router, dependencies=protected_api_dependencies)
 app.include_router(inbox_router, dependencies=protected_api_dependencies)
 app.include_router(share_packs_router, dependencies=protected_api_dependencies)
+# Local-dev-only browser bootstrap; intentionally public (hands the browser
+# its local dev key) and gated to APP_ENV=local inside the route.
+app.include_router(dev_router)
 # Static page only; all data it shows comes from the protected API above.
 app.include_router(ui_page_router)

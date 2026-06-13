@@ -7,6 +7,29 @@ class Settings(BaseSettings):
     app_name: str = "company-knowledge-os"
     api_base_url: str = "http://localhost:8000"
 
+    # --- Local dev bootstrap (safe to surface to the browser in local) ---
+    # The base URL the browser should call, the dev API key handed to the
+    # browser, and whether the browser dev-config endpoint is enabled. None
+    # of these are external/third-party secrets.
+    founderos_api_base_url: str = Field(
+        default="http://127.0.0.1:8765",
+        validation_alias=AliasChoices("FOUNDEROS_API_BASE_URL"),
+    )
+    dev_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_DEV_API_KEY"),
+    )
+    enable_browser_dev_config: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("FOUNDEROS_ENABLE_BROWSER_DEV_CONFIG"),
+    )
+    # Comma-separated list of API keys the backend accepts (in addition to
+    # api_auth_key). Lets a local dev key authenticate the local backend.
+    api_keys: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_API_KEYS"),
+    )
+
     database_url: str = "postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos"
     redis_url: str = "redis://localhost:6379/0"
 
@@ -78,7 +101,10 @@ class Settings(BaseSettings):
     obsidian_vault_path: str = "./obsidian_vault"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Priority (highest first): real env vars > .env.local > .env > defaults.
+        # pydantic-settings loads listed files in order, later overriding
+        # earlier; a missing file is skipped. .env.local stays out of git.
+        env_file=(".env", ".env.local"),
         extra="ignore",
         populate_by_name=True,
     )

@@ -195,6 +195,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="topbar">
     <h1 id="sec-title">Command center</h1>
     <span id="global-status"></span>
+    <span id="dev-badge" class="row" style="gap:5px;display:none"></span>
     <select id="role-switch" class="iconbtn" title="Роль / аудитория — backend отдаёт разный read-model и redaction">
       <option value="founder">Founder</option>
       <option value="team">Team</option>
@@ -354,6 +355,12 @@ var MANUAL_KEY = "fos_manual_v2";
 // per view, so the role is threaded into every request — not a frontend
 // filter. Founder may preview team/investor; team/investor are sandboxed.
 var VIEW = (function(){var v=localStorage.getItem("fos_view");return v==="team"||v==="investor"?v:"founder";})();
+// Local-dev auto-auth: a runtime (session-only) API key picked up from the
+// backend's /v1/dev/browser-config, never persisted to localStorage. A
+// manual localStorage key always overrides it.
+var RUNTIME_API_KEY = "";
+var DEV_CONFIG = null;
+function effectiveApiKey(){return (localStorage.getItem("fos_api_key")||"").trim()||RUNTIME_API_KEY;}
 
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 function $(id){return document.getElementById(id);}
@@ -366,7 +373,7 @@ function saveManual(m){localStorage.setItem(MANUAL_KEY,JSON.stringify(m));}
 
 async function api(path,opts){
   var headers=Object.assign({},(opts&&opts.headers)||{});
-  var key=(localStorage.getItem("fos_api_key")||"").trim();
+  var key=effectiveApiKey();
   if(key)headers[HEADER_NAME]=key;
   // Thread the active audience into every API call. The backend decides
   // what each view may see; unknown query params are ignored server-side.
@@ -1451,6 +1458,36 @@ async function loadNotifications(){
 }
 async function loadNotifCounts(){try{var d=await (await api("/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
 
+// --- local dev auto-bootstrap -------------------------------------------
+function applyDevConfig(cfg){
+  if(!cfg)return;
+  DEV_CONFIG=cfg;
+  // Set the runtime key only if the user hasn't set a manual override.
+  if(cfg.dev_api_key&&!(localStorage.getItem("fos_api_key")||"").trim()){
+    RUNTIME_API_KEY=String(cfg.dev_api_key);
+  }
+  renderDevBadge();
+}
+async function devBootstrap(){
+  // 1. server-injected config, if a deployment chooses to inline it.
+  if(window.__FOUNDEROS_CONFIG__){applyDevConfig(window.__FOUNDEROS_CONFIG__);return;}
+  // 2. a manual localStorage key always wins — don't fetch dev config.
+  if((localStorage.getItem("fos_api_key")||"").trim())return;
+  // 3. local dev: ask the backend for the safe browser config (404 elsewhere).
+  try{var r=await fetch("/v1/dev/browser-config");if(r.ok)applyDevConfig(await r.json());}catch(e){}
+}
+function renderDevBadge(){
+  var el=$("dev-badge");if(!el)return;
+  if(DEV_CONFIG&&DEV_CONFIG.app_env==="local"){
+    var connected=!!effectiveApiKey();
+    el.innerHTML='<span class="badge b-amber">LOCAL DEV</span>'
+      +'<span class="badge b-mut">API: '+(connected?"connected":"—")+'</span>'
+      +'<span class="badge b-mut">Auth: env</span>'
+      +'<span class="badge b-mut">View: '+esc(VIEW)+'</span>';
+    el.style.display="";
+  } else { el.style.display="none"; }
+}
+
 // --- role switching -----------------------------------------------------
 var ROLE_SECTIONS={
   founder:["cc","so","ib","ac","tw","kt","st","pr","gr","sa","fi","te","ta","me","orh","upd","spk","ntf","inv"],
@@ -1476,6 +1513,7 @@ function applyRole(role){
   var allowed=ROLE_SECTIONS[VIEW];
   show(allowed[0]);
   bootstrap();
+  renderDevBadge();
 }
 
 function renderAll(){
@@ -2068,12 +2106,17 @@ $("role-switch").value=VIEW;
 applyNavVisibility();
 try{var cached=localStorage.getItem(CACHE_KEY);if(cached){OV=JSON.parse(cached);}}catch(e){}
 $("rolemsg").textContent=VIEW==="founder"?"":"Режим «"+VIEW+"»: backend отдаёт только разрешённый этой роли read-model с redaction на сервере.";
-var allowedInit=ROLE_SECTIONS[VIEW]||ROLE_SECTIONS.founder;
-var initial=(location.hash||"").replace("#/","");
-if(VIEW==="founder")renderAll();
-if(SECTION_TITLES[initial]&&allowedInit.indexOf(initial)>=0)show(initial);
-else show(allowedInit[0]);
-bootstrap();
+(async function boot(){
+  // Pick up the local dev key (if any) BEFORE the first authenticated load.
+  await devBootstrap();
+  renderDevBadge();
+  var allowedInit=ROLE_SECTIONS[VIEW]||ROLE_SECTIONS.founder;
+  var initial=(location.hash||"").replace("#/","");
+  if(VIEW==="founder")renderAll();
+  if(SECTION_TITLES[initial]&&allowedInit.indexOf(initial)>=0)show(initial);
+  else show(allowedInit[0]);
+  bootstrap();
+})();
 </script>
 </body>
 </html>
