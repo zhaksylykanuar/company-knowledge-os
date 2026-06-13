@@ -229,7 +229,40 @@ async def build_finding_trail(
         "evidence_chain": evidence_chain,
         "evidence_timeline": timeline,
         "related_nodes": await _related_nodes(session, finding),
+        "produced_by_run": await _run_provenance(
+            session, finding.get("last_run_id")
+        ),
         "decision_history": await list_inbox_actions(
             session, target_id=finding_key
         ),
+    }
+
+
+async def _run_provenance(
+    session: AsyncSession, run_id: str | None
+) -> dict[str, Any] | None:
+    """Which agent run last created/updated this finding — closes the
+    chain from finding back to the run that produced it."""
+
+    if not run_id:
+        return None
+    from app.db.agent_models import AgentRunLog
+
+    row = await session.scalar(
+        select(AgentRunLog)
+        .where(AgentRunLog.run_id == run_id)
+        .where(AgentRunLog.agent == "second_opinion")
+        .order_by(AgentRunLog.id.desc())
+        .limit(1)
+    )
+    if row is None:
+        return {"run_id": run_id}
+    return {
+        "run_id": run_id,
+        "agent": row.agent,
+        "agent_version": row.agent_version,
+        "run_started_at": (
+            row.run_started_at.isoformat() if row.run_started_at else None
+        ),
+        "input_watermark": row.input_watermark,
     }

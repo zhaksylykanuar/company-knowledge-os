@@ -65,7 +65,15 @@ async def _second_opinion_summary(session: AsyncSession) -> dict[str, Any]:
     }
 
 
+_UNASSIGNED_NAMES = {"unassigned", "none", "unknown", ""}
+
+
 async def _team_load(session: AsyncSession, *, now: datetime) -> dict[str, Any]:
+    from datetime import timedelta
+
+    from app.services.founder_overview import _is_overdue
+    from app.services.project_status_view import STALE_DAYS
+
     projects = (
         await session.execute(
             select(EntityRecord).where(
@@ -74,15 +82,22 @@ async def _team_load(session: AsyncSession, *, now: datetime) -> dict[str, Any]:
         )
     ).scalars()
     open_by_person: Counter[str] = Counter()
+    stale_cutoff = now - timedelta(days=STALE_DAYS)
+    # Unassigned work is an operational bucket, NOT a team member.
+    unassigned = {"open": 0, "stale": 0, "high_priority": 0}
     for project in projects:
         jira_keys = await jira_keys_for_project(session, project.entity_id)
         for snap in await load_project_issue_snapshots(session, jira_keys):
+            if snap.is_done:
+                continue
             assignee = (snap.assignee or "").strip()
-            if (
-                not snap.is_done
-                and assignee
-                and assignee.casefold() not in {"unassigned", "none", "unknown"}
-            ):
+            if assignee.casefold() in _UNASSIGNED_NAMES:
+                unassigned["open"] += 1
+                if snap.updated_at is not None and snap.updated_at < stale_cutoff:
+                    unassigned["stale"] += 1
+                if _is_overdue(snap, now):
+                    unassigned["high_priority"] += 1
+            else:
                 open_by_person[assignee] += 1
     people = [
         {"name": name, "open_issues": count, "overloaded": count >= TEAM_OVERLOAD_OPEN_ISSUES}
@@ -92,6 +107,16 @@ async def _team_load(session: AsyncSession, *, now: datetime) -> dict[str, Any]:
         "people": people,
         "overloaded_count": sum(1 for p in people if p["overloaded"]),
         "tracked_people": len(open_by_person),
+        "unassigned": {
+            "unassigned_work_count": unassigned["open"],
+            "stale_unassigned_work": unassigned["stale"],
+            "high_priority_unassigned": unassigned["high_priority"],
+            "suggested_action": (
+                "Назначить ответственных за бесхозную работу"
+                if unassigned["open"]
+                else None
+            ),
+        },
     }
 
 

@@ -33,6 +33,9 @@ class AgentProposal(Base):
     dedupe_key: Mapped[str | None] = mapped_column(
         String(255), nullable=True, index=True
     )
+    run_id: Mapped[str | None] = mapped_column(
+        String(120), nullable=True, index=True
+    )
     agent: Mapped[str] = mapped_column(String(80), index=True)
     kind: Mapped[str] = mapped_column(String(80), index=True)
     title: Mapped[str] = mapped_column(String(500))

@@ -32,7 +32,55 @@ _CONSEQUENCES = {
         "Ноды будут объединены: связи и алиасы дубликата перейдут к "
         "основной ноде, активность сольётся в один профиль. Обратимо."
     ),
+    "graph_orphan_node": (
+        "Нода помечается как проверенная. Удаление не выполняется "
+        "автоматически — только пометка для последующей чистки."
+    ),
+    "graph_node_without_evidence": (
+        "Нода без источника помечается на ревью. Молчаливого удаления нет."
+    ),
+    "graph_edge_without_evidence": (
+        "Связь без evidence помечается на ревью; удаление — отдельным шагом."
+    ),
+    "graph_duplicate_account": (
+        "Аккаунты помечаются как кандидаты на объединение. Слияние "
+        "произойдёт только после отдельного подтверждения."
+    ),
+    "finding_lost_evidence": (
+        "Finding без evidence будет закрыт как недоказуемый."
+    ),
+    "finding_suggestion": (
+        "Слабый сигнал станет полноценным finding в ленте Second Opinion."
+    ),
 }
+
+# Why each gardener problem matters — shown on the card.
+_GARDENER_WHY = {
+    "graph_orphan_node": (
+        "Изолированная нода ни с чем не связана — она либо мусор, либо "
+        "у неё потеряны связи. Искажает граф и second opinion."
+    ),
+    "graph_node_without_evidence": (
+        "У ноды нет источника (аккаунта/алиаса) — невозможно доказать, "
+        "что сущность реальна."
+    ),
+    "graph_edge_without_evidence": (
+        "Связь без evidence — это утверждение без доказательства."
+    ),
+    "graph_duplicate_account": (
+        "Один аккаунт как две ноды искажает warmth и histor."
+    ),
+    "finding_lost_evidence": (
+        "Открытый finding без evidence нарушает правило «нет evidence — "
+        "нет вывода»."
+    ),
+}
+
+GARDENER_KINDS = frozenset(_GARDENER_WHY) | {"graph_duplicate_account"}
+
+
+def _is_gardener(proposal_type: str) -> bool:
+    return proposal_type.startswith("graph_") or proposal_type == "finding_lost_evidence"
 
 
 async def _merge_consequences(
@@ -56,20 +104,32 @@ async def _merge_consequences(
     )
 
 
-async def build_inbox(session: AsyncSession) -> dict[str, Any]:
-    proposals = await list_proposals(session, status=STATUS_PENDING, limit=50)
+async def build_inbox(session: AsyncSession, *, limit: int = 100) -> dict[str, Any]:
+    proposals = await list_proposals(session, status=STATUS_PENDING, limit=limit)
+    identity_proposals: list[dict[str, Any]] = []
+    gardener_proposals: list[dict[str, Any]] = []
     for proposal in proposals:
         proposal["confidence_hint"] = explain_confidence(
             proposal["confidence"], proposal.get("confidence_factors") or {}
         )
-        if proposal["proposal_type"] == KIND_ENTITY_MERGE:
+        ptype = proposal["proposal_type"]
+        if ptype == KIND_ENTITY_MERGE:
             proposal["consequences"] = await _merge_consequences(
                 session, proposal.get("payload") or {}
             )
         else:
             proposal["consequences"] = _CONSEQUENCES.get(
-                proposal["proposal_type"], "Изменение графа знаний."
+                ptype, "Изменение графа знаний."
             )
+        proposal["why"] = _GARDENER_WHY.get(ptype, "")
+        proposal["reject_note"] = (
+            "Reject фиксирует решение по стабильному ключу — то же "
+            "предложение не всплывёт снова без нового evidence."
+        )
+        if _is_gardener(ptype):
+            gardener_proposals.append(proposal)
+        else:
+            identity_proposals.append(proposal)
 
     findings = await list_findings(session, status=FINDING_OPEN, limit=50)
     disputed = await list_disputed_links(session)
@@ -84,10 +144,14 @@ async def build_inbox(session: AsyncSession) -> dict[str, Any]:
 
     return {
         "proposals": proposals,
+        "identity_proposals": identity_proposals,
+        "gardener_proposals": gardener_proposals,
         "findings": findings,
         "disputed_links": disputed,
         "counts": {
             "proposals": len(proposals),
+            "identity_proposals": len(identity_proposals),
+            "gardener_proposals": len(gardener_proposals),
             "findings_open": int(open_findings_total),
             "disputed_links": len(disputed),
             "total": len(proposals) + int(open_findings_total) + len(disputed),

@@ -23,6 +23,7 @@ from app.services.evidence_explorer import (
 from app.services.evidence_trail import build_finding_trail
 from app.services.graph_tree import build_graph_tree, review_link
 from app.services.inbox import build_inbox, decide_inbox_proposal
+from app.services.sales_view import build_sales_signals
 from app.services.second_opinion import (
     FINDING_STATUSES,
     FINDING_TYPES,
@@ -398,6 +399,14 @@ async def get_command_center(view: str = Query(default=SCOPE_FOUNDER)) -> dict[s
     _require_founder(view)
     async with AsyncSessionLocal() as session:
         return await build_command_center(session)
+
+
+@router.get("/v1/founder/sales-signals")
+async def get_sales_signals(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
+    # Account/relationship signals are founder-scoped (communications).
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_sales_signals(session)
 
 
 @router.get("/v1/founder/agent-runs")

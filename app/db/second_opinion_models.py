@@ -35,6 +35,9 @@ class SecondOpinionFinding(Base):
     last_update_reason: Mapped[str | None] = mapped_column(
         String(40), nullable=True
     )
+    last_run_id: Mapped[str | None] = mapped_column(
+        String(120), nullable=True, index=True
+    )
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     snoozed_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

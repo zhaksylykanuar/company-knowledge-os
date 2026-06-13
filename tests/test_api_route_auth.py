@@ -44,6 +44,7 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/source-events/{source_event_id}", "GET"),
     ("/v1/founder/command-center", "GET"),
     ("/v1/founder/agent-runs", "GET"),
+    ("/v1/founder/sales-signals", "GET"),
 }
 
 

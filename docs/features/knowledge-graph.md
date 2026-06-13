@@ -176,7 +176,41 @@ a new discovery. `GET /v1/founder/agent-runs` exposes the log.
   freshness, data-availability summary and next actions. Read model
   only — the final Command Center UI comes later.
 
+## Stage 5: Command Center UI, Sales Signals UI, gardener inbox
+
+Traceability hardening: a per-run `run_id` (contextvar set by the
+pipeline) stamps `second_opinion_findings.last_run_id` and
+`agent_proposals.run_id`, so the evidence trail now answers not just
+"what evidence" but "which agent run produced this" (`produced_by_run`
+resolves the matching `agent_run_logs` row with agent_version and
+watermark). Unassigned work is an operational bucket in the command
+center team block (`unassigned_work_count` / `stale_unassigned_work` /
+`high_priority_unassigned` + suggested action), never a fake person.
+
+- Command Center UI (`/v1/founder/command-center`): premium founder
+  dashboard — health ring, operational substates (second-opinion
+  pressure, high severity, stale work, team load, unassigned, data
+  readiness), focus week with focus-vs-activity drift callout, top
+  conflicts ("what AI sees differently") with trail buttons, threat
+  board, team stamina bars + unassigned bucket, knowledge freshness,
+  data-availability summary, business map. No finance.
+- Sales Signals UI (`/v1/founder/sales-signals`, `sales_view.py`):
+  account cards with warmth, contacts, and relationship signals as
+  "what AI sees differently" blocks — no amounts, no revenue, no money
+  pipeline. Signals open to the evidence trail / source explorer.
+- Graph gardener inbox group: `build_inbox` splits `identity_proposals`
+  from `gardener_proposals`; each gardener card shows what is wrong,
+  why it matters, evidence, consequences of Accept and the note that a
+  Reject will not resurface without new evidence.
+- "What AI sees differently" blocks reused across Command Center,
+  Product, Team, Tasks, Metrics and Sales — fed by the open findings
+  index, shown only where relevant findings exist (no data, no block).
+- Game-like infographic: health rings, threat board, stamina bars,
+  quest log, graph constellation, evidence/confidence chips, data
+  availability chips — all backed by real series.
+
 ## Planned next
 
-Final Command Center UI, deal-agent enrichment from meetings/tasks,
-cron-driven agent runs, gardener apply-step for accepted cleanups.
+Deal-agent enrichment from meetings/tasks, cron-driven agent runs,
+gardener apply-step for accepted cleanups, multi-view (team/investor)
+UI surfaces.

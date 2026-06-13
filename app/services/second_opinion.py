@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.second_opinion_models import SecondOpinionFinding
 from app.services.confidence import build_confidence, explain_confidence
 from app.services.entity_resolution import ENTITY_TYPE_PROJECT
+from app.services.run_context import get_run_id
 from app.services.status_engine import DEFAULT_ORGANIZATION_ID
 from app.services.status_snapshot_repository import get_latest_status_snapshot
 
@@ -166,6 +167,7 @@ async def upsert_finding(
             SecondOpinionFinding.finding_key == finding_key
         )
     )
+    run_id = get_run_id()
     new_evidence = list(evidence_refs or [])
     if row is None:
         session.add(
@@ -185,6 +187,7 @@ async def upsert_finding(
                 status=STATUS_OPEN,
                 visibility_scope=visibility_scope,
                 last_update_reason=None,
+                last_run_id=run_id,
             )
         )
         await session.flush()
@@ -209,6 +212,7 @@ async def upsert_finding(
         row.confidence_factors = confidence_factors
         row.evidence_refs = new_evidence
         row.last_update_reason = REASON_NEW_EVIDENCE
+        row.last_run_id = run_id
         row.note = "reopened: появилось новое evidence"
         await session.flush()
         return OUTCOME_REOPENED
@@ -230,6 +234,7 @@ async def upsert_finding(
     row.confidence = confidence
     row.confidence_factors = confidence_factors
     row.evidence_refs = new_evidence
+    row.last_run_id = run_id
     if scope_changed and not content_changed and not evidence_changed:
         row.visibility_scope = visibility_scope
         row.last_update_reason = REASON_VISIBILITY_RESCOPE
@@ -306,6 +311,7 @@ def _finding_read_model(row: SecondOpinionFinding) -> dict[str, Any]:
         "status": row.status,
         "visibility_scope": row.visibility_scope,
         "last_update_reason": row.last_update_reason,
+        "last_run_id": row.last_run_id,
         "note": row.note,
         "snoozed_until": row.snoozed_until.isoformat()
         if row.snoozed_until

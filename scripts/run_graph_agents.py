@@ -65,7 +65,10 @@ async def _run(args: argparse.Namespace) -> int:
     from app.services.sales_signal_agent import scan_sales_signals
     from app.services.second_opinion import scan_second_opinion
 
+    from app.services.run_context import set_run_id
+
     run_id = f"run-{uuid4().hex[:16]}"
+    set_run_id(run_id)  # stamps findings/proposals created or updated this run
     logged: list[tuple[str, dict, datetime, datetime]] = []
 
     await rebuild_email_thread_states_from_stored_gmail()

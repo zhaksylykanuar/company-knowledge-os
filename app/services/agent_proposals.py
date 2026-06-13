@@ -51,10 +51,13 @@ async def create_proposal(
         )
     if existing is not None:
         return False
+    from app.services.run_context import get_run_id
+
     session.add(
         AgentProposal(
             proposal_id=proposal_id,
             dedupe_key=dedupe_key or proposal_id,
+            run_id=get_run_id(),
             agent=agent,
             kind=kind,
             title=title,
@@ -98,6 +101,7 @@ def _proposal_read_model(row: AgentProposal) -> dict[str, Any]:
     return {
         "proposal_id": row.proposal_id,
         "dedupe_key": row.dedupe_key,
+        "run_id": row.run_id,
         "agent": row.agent,
         "proposal_type": row.kind,
         "title": row.title,
