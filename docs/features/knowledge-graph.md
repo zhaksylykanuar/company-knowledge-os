@@ -134,8 +134,49 @@ finding; confidence below 0.45 → inbox proposal instead of a finding;
 all generators idempotent; a resolved finding only reopens on genuinely
 new evidence (different observed state or evidence refs).
 
+## Stage 4: sales signals, gardener, availability UI, explorer, command center
+
+Run-summary hardening (`agent_run_logs` + `last_update_reason`):
+`upsert_finding` now distinguishes `updated_from_new_evidence` from
+`updated_from_clock_recalculation` (same evidence, only the observed age
+moved). Each finding/metric stores a `last_update_reason`
+(`new_evidence` / `stale_window_recalculation` / `visibility_rescope` /
+`auto_resolved_no_longer_observed` / `manual_decision` /
+`source_backfill`). The pipeline writes one `agent_run_logs` row per
+agent per run with the standardized buckets, run timestamps,
+`agent_version` and `input_watermark` — so a day-rollover never reads as
+a new discovery. `GET /v1/founder/agent-runs` exposes the log.
+
+- Sales signal agent (`sales_signal_agent.py`): builds the sales graph
+  from email threads — companies become `client` nodes, external
+  participants `person` contacts `employed_by` them, each account a
+  `deal` *signal* entity `belongs_to` the company. No finance ever:
+  `deal` carries warmth, never an amount. Free-mail domains are skipped.
+  A previously two-way-active account gone silent past a threshold is a
+  founder-scoped `communication_silence` finding (weak → inbox proposal).
+- Graph gardener (`graph_gardener.py`): hygiene checks (orphan nodes,
+  people without source evidence, edges without evidence, duplicate
+  accounts, findings that lost evidence) that file inbox proposals only
+  — it never deletes or merges on its own. Stable dedupe keys mean a
+  rejected cleanup will not resurface.
+- Data-availability chips (UI): every metric/feed widget (Second
+  Opinion, Inbox, Knowledge Tree, Team, Tasks, Metrics, Activity) shows
+  its `data_availability` state (ready / collecting / insufficient /
+  stale / no_data) — no number is painted without a backing series.
+- Source / evidence explorer (`evidence_explorer.py`,
+  `/v1/source-events`): browse the sanitized source events behind the
+  graph (never raw bodies) with normalized events, linked nodes and the
+  findings generated from each. Founder sees `raw_object_ref`; team sees
+  working fields only; investor is blocked. The trail timeline links
+  into it.
+- Command center read model (`command_center.py`,
+  `/v1/founder/command-center`): startup health (no finance),
+  second-opinion summary + top conflicts, focus vs activity, risks,
+  stale work, real team load (open Jira issues per assignee), knowledge
+  freshness, data-availability summary and next actions. Read model
+  only — the final Command Center UI comes later.
+
 ## Planned next
 
-Deal agent (sales signals from email + meetings), graph gardener
-(dedup/cleanup proposals), data-availability chips on every metric
-widget, cron-driven agent runs.
+Final Command Center UI, deal-agent enrichment from meetings/tasks,
+cron-driven agent runs, gardener apply-step for accepted cleanups.

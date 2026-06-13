@@ -11,8 +11,15 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.base import AsyncSessionLocal
+from app.services.agent_run_log import latest_runs
+from app.services.command_center import build_command_center
 from app.services.data_availability import get_availability
 from app.services.declarations import KNOWN_KEYS, get_declaration, set_declaration
+from app.services.evidence_explorer import (
+    build_source_event_view,
+    investor_blocked,
+    list_source_events,
+)
 from app.services.evidence_trail import build_finding_trail
 from app.services.graph_tree import build_graph_tree, review_link
 from app.services.inbox import build_inbox, decide_inbox_proposal
@@ -339,3 +346,66 @@ async def get_data_availability(
     async with AsyncSessionLocal() as session:
         rows = await get_availability(session, scope=scope)
     return {"availability": rows}
+
+
+@router.get("/v1/source-events")
+async def get_source_events(
+    source_object_id: str | None = Query(default=None),
+    source_system: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    viewer = _validated_view(view)
+    if investor_blocked(viewer):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="raw evidence is not available in investor view",
+        )
+    async with AsyncSessionLocal() as session:
+        events = await list_source_events(
+            session,
+            source_object_id=source_object_id,
+            source_system=source_system,
+            limit=limit,
+        )
+    return {"events": events}
+
+
+@router.get("/v1/source-events/{source_event_id}")
+async def get_source_event_detail(
+    source_event_id: str,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    viewer = _validated_view(view)
+    if investor_blocked(viewer):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="raw evidence is not available in investor view",
+        )
+    async with AsyncSessionLocal() as session:
+        detail = await build_source_event_view(
+            session, source_event_id=source_event_id, viewer_scope=viewer
+        )
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="source event not found"
+        )
+    return detail
+
+
+@router.get("/v1/founder/command-center")
+async def get_command_center(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_command_center(session)
+
+
+@router.get("/v1/founder/agent-runs")
+async def get_agent_runs(
+    limit: int = Query(default=20, ge=1, le=100),
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        runs = await latest_runs(session, limit=limit)
+    return {"runs": runs}

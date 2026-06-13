@@ -40,6 +40,10 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/founder/data-availability", "GET"),
     ("/v1/founder/declarations/{key}", "GET"),
     ("/v1/founder/declarations/{key}", "PUT"),
+    ("/v1/source-events", "GET"),
+    ("/v1/source-events/{source_event_id}", "GET"),
+    ("/v1/founder/command-center", "GET"),
+    ("/v1/founder/agent-runs", "GET"),
 }
 
 

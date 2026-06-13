@@ -21,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 CONFIRM_RUN_PHRASE = "RUN GRAPH AGENTS"
+AGENT_VERSION = "stage4.1"
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -39,7 +40,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 async def _run(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from sqlalchemy import func, select
+
     from app.db.base import AsyncSessionLocal
+    from app.db.event_models import SourceEvent
+    from app.services.agent_run_log import record_agent_run
     from app.services.data_availability import refresh_data_availability
     from app.services.declaration_agents import scan_focus_drift, scan_hypotheses
     from app.services.email_thread_agent import scan_email_silence
@@ -50,28 +58,76 @@ async def _run(args: argparse.Namespace) -> int:
         apply_decided_merges,
         suggest_person_merges,
     )
+    from app.services.graph_gardener import run_graph_gardener
     from app.services.graph_lift import run_graph_lift
     from app.services.meeting_agent import scan_meetings
     from app.services.metric_collector import collect_metrics
+    from app.services.sales_signal_agent import scan_sales_signals
     from app.services.second_opinion import scan_second_opinion
+
+    run_id = f"run-{uuid4().hex[:16]}"
+    logged: list[tuple[str, dict, datetime, datetime]] = []
 
     await rebuild_email_thread_states_from_stored_gmail()
 
     async with AsyncSessionLocal() as session:
-        lift_counts = await run_graph_lift(session)
-        meeting_counts = await scan_meetings(session)
+        watermark = str(
+            (await session.execute(select(func.max(SourceEvent.id)))).scalar() or 0
+        )
+
+        async def step(agent: str, coro):
+            started = datetime.now(timezone.utc)
+            counts = await coro
+            finished = datetime.now(timezone.utc)
+            logged.append((agent, counts or {}, started, finished))
+            return counts
+
+        lift_counts = await step("graph_lift", run_graph_lift(session))
+        meeting_counts = await step("meeting_agent", scan_meetings(session))
+        sales_counts = await step("sales_signal_agent", scan_sales_signals(session))
         merge_suggestions = await suggest_person_merges(session)
         merge_counts = await apply_decided_merges(session)
-        finding_counts = await scan_second_opinion(session)
-        email_counts = await scan_email_silence(session)
-        hypothesis_counts = await scan_hypotheses(session)
-        focus_counts = await scan_focus_drift(session)
+        await step(
+            "entity_identity",
+            _identity_counts(merge_suggestions, merge_counts),
+        )
+        finding_counts = await step(
+            "second_opinion", scan_second_opinion(session)
+        )
+        email_counts = await step(
+            "email_thread_agent", scan_email_silence(session)
+        )
+        hypothesis_counts = await step("hypothesis_agent", scan_hypotheses(session))
+        focus_counts = await step("focus_drift_agent", scan_focus_drift(session))
+        gardener_counts = await step("graph_gardener", run_graph_gardener(session))
         metric_counts = (
             {} if args.skip_metrics else await collect_metrics(session)
         )
+        if metric_counts:
+            logged.append(
+                (
+                    "metric_collector",
+                    metric_counts,
+                    datetime.now(timezone.utc),
+                    datetime.now(timezone.utc),
+                )
+            )
         availability = await refresh_data_availability(session)
+
+        for agent, counts, started, finished in logged:
+            await record_agent_run(
+                session,
+                run_id=run_id,
+                agent=agent,
+                agent_version=AGENT_VERSION,
+                run_started_at=started,
+                run_finished_at=finished,
+                counts=counts,
+                input_watermark=watermark,
+            )
         await session.commit()
 
+    print(f"run_id={run_id} agent_version={AGENT_VERSION} watermark={watermark}")
     print(
         "graph lift: "
         f"people_created={lift_counts['people_created']} "
@@ -93,12 +149,24 @@ async def _run(args: argparse.Namespace) -> int:
         f"risks={meeting_counts['risks']}"
     )
     print(
+        "sales signals: "
+        f"accounts={sales_counts['accounts']} "
+        f"contacts={sales_counts['contacts']} "
+        f"signals={sales_counts['signals']} "
+        f"findings={sales_counts['findings']} "
+        f"proposals={sales_counts['proposals']}"
+    )
+    # The hardening: new evidence vs a clock-based recalculation are
+    # reported as separate buckets so day-rollover never looks like a find.
+    print(
         "second opinion: "
         f"created={finding_counts['created']} "
-        f"updated={finding_counts['updated']} "
+        f"new_evidence={finding_counts['updated_from_new_evidence']} "
+        f"clock_recalc={finding_counts['updated_from_clock_recalculation']} "
         f"unchanged={finding_counts['unchanged']} "
         f"reopened={finding_counts['reopened']} "
-        f"auto_resolved={finding_counts['auto_resolved']}"
+        f"auto_resolved={finding_counts['auto_resolved']} "
+        f"errors={finding_counts['errors']}"
     )
     print(
         "email silence: "
@@ -112,6 +180,11 @@ async def _run(args: argparse.Namespace) -> int:
         f"hyp_findings={hypothesis_counts['findings']} "
         f"focus_findings={focus_counts['findings']}"
     )
+    print(
+        "graph gardener: "
+        f"proposals={gardener_counts['proposals']} "
+        f"checked={gardener_counts['checked']}"
+    )
     if metric_counts:
         print(
             "metrics: "
@@ -122,6 +195,15 @@ async def _run(args: argparse.Namespace) -> int:
     print(f"data availability rows: {availability['rows']}")
     print("(idempotent re-run safe; uncertain facts went to agent_proposals)")
     return 0
+
+
+async def _identity_counts(merge_suggestions: int, merge_counts: dict) -> dict:
+    return {
+        "merge_suggestions": merge_suggestions,
+        "merges_applied": merge_counts["applied"],
+        "merges_rejected": merge_counts["rejected"],
+        "links_repointed": merge_counts["links_repointed"],
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

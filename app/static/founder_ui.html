@@ -100,6 +100,13 @@ pre.digest{white-space:pre-wrap;font:12.5px/1.6 ui-monospace,Menlo,monospace;mar
 .alert.warn{background:var(--amber-soft);color:var(--amber-text)}
 .alert.danger{background:var(--red-soft);color:var(--red-text)}
 .stack>*+*{margin-top:14px}
+.dachip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.dachip .dot{width:6px;height:6px}
+.da-ready{background:var(--green-soft);color:var(--green-text)}
+.da-collecting{background:var(--blue-soft);color:var(--blue-text)}
+.da-insufficient{background:var(--amber-soft);color:var(--amber-text)}
+.da-stale{background:var(--amber-soft);color:var(--amber-text)}
+.da-no_data{background:var(--surface2);color:var(--muted)}
 .navbadge{margin-left:auto;background:var(--red-soft);color:var(--red-text);border-radius:99px;font-size:10.5px;padding:1px 7px;font-weight:700}
 .navbadge:empty{display:none}
 .chip{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:99px;padding:5px 12px;font-size:12.5px;cursor:pointer}
@@ -235,6 +242,10 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
 
 <div class="overlay" id="ov-trail"><div class="panel" style="width:min(760px,94vw);max-height:80vh">
   <div id="trail-body"><div class="mut">Загружаю цепочку…</div></div>
+</div></div>
+
+<div class="overlay" id="ov-src"><div class="panel" style="width:min(640px,94vw);max-height:80vh">
+  <div id="src-body"><div class="mut">Загружаю источник…</div></div>
 </div></div>
 
 <div class="overlay" id="ov-edit"><div class="panel">
@@ -690,7 +701,7 @@ function teRender(){
     }
   } else db='<div class="mut">Решения появляются автоматически из заметок и писем (экстрактор решений).</div>';
   $("te-body").innerHTML=
-    '<div class="card"><p class="h">Роли и загрузка <span class="edit" id="te-edit">изменить</span></p>'+(pb||'<div class="mut">Добавьте людей: кто за что отвечает и насколько загружен.</div>')+'</div>'
+    '<div class="card"><p class="h">Роли и загрузка '+daChipAnyScope("jira.open")+'<span class="edit" id="te-edit" style="margin-left:auto">изменить</span></p>'+(pb||'<div class="mut">Добавьте людей: кто за что отвечает и насколько загружен.</div>')+'</div>'
     +'<div class="grid2"><div class="card"><p class="h">Weekly rhythm</p>'+(rb||'<div class="mut">Задайте 2–3 ритуала недели: планёрка, демо, ретро.</div>')+'</div>'
     +'<div class="card"><p class="h">Решения (из знаний)</p>'+db+'</div></div>';
   $("te-edit").addEventListener("click",function(){
@@ -722,7 +733,8 @@ function taRender(){
     }
     return h;
   }
-  var html='<p class="h" style="color:var(--red)">High impact · сделать сначала</p><div class="card">'+(group(hi,"b-red")||'<div class="mut">Пусто — отлично.</div>')+'</div>'
+  var html='<div class="row" style="justify-content:space-between;margin-bottom:4px"><span class="mut">Quest log — приоритеты из скоринга знаний</span>'+daChipAnyScope("knowledge.tasks")+'</div>'
+    +'<p class="h" style="color:var(--red)">High impact · сделать сначала</p><div class="card">'+(group(hi,"b-red")||'<div class="mut">Пусто — отлично.</div>')+'</div>'
     +'<p class="h" style="color:var(--amber)">Quick wins · между делом</p><div class="card">'+(group(qw,"b-amber")||'<div class="mut">Пусто.</div>')+'</div>';
   if(bl.length){
     html+='<p class="h" style="color:var(--muted)">Backlog · не сейчас</p>'
@@ -749,6 +761,7 @@ function meRender(){
   }
   if(m.jira_stale>10)html+='<div class="alert danger">Застойных задач: '+num(m.jira_stale)+' — больше 14 дней без движения. Разберите или закройте их.</div>';
   else if(m.jira_overdue)html+='<div class="alert warn">Просроченных задач: '+num(m.jira_overdue)+'.</div>';
+  html+='<div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="mut">Снимок метрик</span>'+daChipAnyScope("jira.open")+'</div>';
   html+='<div class="kpis">'
     +'<div class="kpi"><div class="l">Открытые задачи</div><div class="v">'+num(m.jira_open)+'</div></div>'
     +'<div class="kpi"><div class="l">Застой &gt;14д</div><div class="v" style="color:'+(m.jira_stale>10?"var(--red)":"inherit")+'">'+num(m.jira_stale)+'</div></div>'
@@ -766,7 +779,7 @@ function meRender(){
     bars+='</div>';
     var src=OV.activity.by_source;
     var srcs=Object.keys(src).map(function(k){return esc(k)+": "+num(src[k]);}).join(" · ");
-    html+='<div class="card"><p class="h">Активность за '+OV.activity.window_days+' дней</p>'+bars+'<div class="mut" style="margin-top:8px">'+srcs+'</div></div>';
+    html+='<div class="card"><p class="h">Активность за '+OV.activity.window_days+' дней '+daChipAnyScope("activity.events")+'</p>'+bars+'<div class="mut" style="margin-top:8px">'+srcs+'</div></div>';
   }
   $("me-body").innerHTML=html;
 }
@@ -864,7 +877,9 @@ async function loadFeed(){
     var bt=d.counts.by_type,parts=[];
     Object.keys(bt).forEach(function(k){parts.push((TYPE_LABEL[k]||k)+": "+bt[k]);});
     $("so-body").innerHTML=h||'<div class="empty">Конфликтов в этом фильтре нет. AI согласен с заявленной картиной.</div>';
-    setMsgEl("so-msg","всего: "+d.counts.total+(parts.length?" · "+parts.join(" · "):""),false);
+    var soChip=daChipAnyScope("jira.open");
+    $("so-msg").innerHTML='<span class="mut">всего: '+d.counts.total+(parts.length?" · "+esc(parts.join(" · ")):"")+'</span> '+soChip;
+    $("so-msg").classList.remove("err");
     $("nav-so-n").textContent=SO_STATE.status==="open"&&!SO_STATE.type?String(d.counts.total||""):$("nav-so-n").textContent;
   }catch(e){setMsgEl("so-msg",String(e.message||e),true);}
 }
@@ -893,7 +908,8 @@ async function openTrail(key){
         var ev=t.evidence_timeline[i];
         h+='<div class="item"><span class="badge b-mut">'+esc(ev.source_system)+'</span><div class="t">'+esc(ev.title||ev.event_type)
           +'<div class="s">'+esc(ev.event_type)+' · получено '+esc((ev.received_at||"").slice(0,16).replace("T"," "))
-          +'<br><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">'+esc(ev.raw_object_ref||"")+'</span></div></div></div>';
+          +'<br><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">'+esc(ev.raw_object_ref||"")+'</span></div></div>'
+          +(ev.source_event_id?'<button class="actbtn" data-srcevt="'+esc(ev.source_event_id)+'">источник</button>':'')+'</div>';
       }
     } else h+='<div class="mut">События источников для этого evidence не найдены (внутренний сигнал).</div>';
     h+='<details class="ev"><summary>полная цепочка evidence (refs → события → normalized)</summary><pre>'+esc(JSON.stringify(t.evidence_chain,null,1))+'</pre></details>';
@@ -913,6 +929,38 @@ async function openTrail(key){
     } else h+='<div class="mut">Решений по этому конфликту ещё не было.</div>';
     $("trail-body").innerHTML=h;
   }catch(e){$("trail-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+
+async function openSourceEvent(eventId){
+  overlay("ov-src",true);
+  $("src-body").innerHTML='<div class="mut">Загружаю источник…</div>';
+  try{
+    var s=await (await api("/v1/source-events/"+encodeURIComponent(eventId))).json();
+    var e=s.event;
+    var h='<p class="h">Источник <span class="badge b-mut">'+esc(e.source_system)+'</span></p>';
+    h+='<div class="mut" style="margin-bottom:8px">'+esc(e.event_type)+' · '+esc(e.source_object_id||"")+'</div>';
+    if(e.title)h+='<div style="font-weight:600;margin-bottom:4px">'+esc(e.title)+'</div>';
+    if(e.summary)h+='<div class="mut" style="margin-bottom:8px">'+esc(e.summary)+'</div>';
+    h+='<div class="dvo">'
+      +'<div><div class="lbl">ПОЛУЧЕНО</div>'+esc((e.received_at||"").slice(0,16).replace("T"," "))+'</div>'
+      +'<div><div class="lbl">СОБЫТИЕ</div>'+esc((e.source_event_ts||"").slice(0,16).replace("T"," ")||"—")+'</div></div>';
+    if(e.raw_object_ref)h+='<div class="mut" style="font-family:ui-monospace,Menlo,monospace;font-size:11px;margin-bottom:8px">'+esc(e.raw_object_ref)+'</div>';
+    if(e.source_url)h+='<div style="margin-bottom:8px"><a href="'+esc(e.source_url)+'">открыть в источнике ↗</a></div>';
+    if(s.normalized_events&&s.normalized_events.length){
+      h+='<p class="h" style="margin-top:12px">Нормализованные события</p>';
+      s.normalized_events.forEach(function(n){h+='<div class="item"><span class="badge b-mut">'+esc(n.activity_type)+'</span><div class="t">'+esc(n.title||"")+'<div class="s">'+esc((n.normalized_at||"").slice(0,16).replace("T"," "))+'</div></div></div>';});
+    }
+    if(s.linked_graph_nodes&&s.linked_graph_nodes.length){
+      h+='<p class="h" style="margin-top:12px">Связанные ноды</p><div class="row" style="flex-wrap:wrap;gap:6px">';
+      s.linked_graph_nodes.forEach(function(n){h+='<span class="badge b-accent">'+esc(n.name)+' · '+esc(n.entity_type)+'</span>';});
+      h+='</div>';
+    }
+    if(s.findings_generated&&s.findings_generated.length){
+      h+='<p class="h" style="margin-top:12px">Findings из этого evidence</p>';
+      s.findings_generated.forEach(function(f){h+='<div class="item"><span class="badge '+(f.severity==="high"?"b-red":f.severity==="low"?"b-mut":"b-amber")+'">'+esc(f.severity)+'</span><div class="t">'+esc(f.summary)+'</div></div>';});
+    }
+    $("src-body").innerHTML=h;
+  }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 
 async function soAction(action,key){
@@ -978,7 +1026,8 @@ async function loadInbox(){
     for(var k=0;k<Math.min(5,d.findings.length);k++)h+=findingCard(d.findings[k]);
     $("ib-body").innerHTML=h;
     $("nav-ib-n").textContent=d.counts.total?String(d.counts.total):"";
-    setMsgEl("ib-msg","к решению: "+d.counts.total,false);
+    $("ib-msg").innerHTML='<span class="mut">к решению: '+d.counts.total+'</span> '+daChipAnyScope("activity.events");
+    $("ib-msg").classList.remove("err");
   }catch(e){setMsgEl("ib-msg",String(e.message||e),true);}
 }
 
@@ -991,6 +1040,8 @@ async function loadInboxCounts(){
 }
 
 document.addEventListener("click",async function(e){
+  var srcevt=e.target.closest("[data-srcevt]");
+  if(srcevt){openSourceEvent(srcevt.getAttribute("data-srcevt"));return;}
   var so=e.target.closest("[data-soact]");
   if(so){soAction(so.getAttribute("data-soact"),so.getAttribute("data-fk"));return;}
   var pa=e.target.closest("[data-pact]");
@@ -1037,7 +1088,7 @@ async function loadTree(force){
     });
     chips+='<button class="chip" id="kt-relayout">перестроить</button>';
     $("kt-filters").innerHTML=chips;
-    $("kt-stats").innerHTML='<p class="h">Граф</p><div class="mut">Нод: '+d.counts.nodes+' · связей: '+d.counts.links
+    $("kt-stats").innerHTML='<p class="h">Граф '+daChipAnyScope("activity.events")+'</p><div class="mut">Нод: '+d.counts.nodes+' · связей: '+d.counts.links
       +' · спорных: '+d.counts.disputed_links+'</div>'
       +'<div class="mut" style="margin-top:6px">Свечение ноды — свежесть данных. Толщина связи — confidence, пунктир — спорная связь (решается в Inbox).</div>';
     ktLayout();
@@ -1180,6 +1231,49 @@ async function saveDeclaration(key,payload){
   renderAll();
 }
 
+// Data availability: never paint a number without checking its state.
+var DA={};
+var DA_LABEL={ready:"готово",collecting:"копим данные",insufficient:"мало истории",stale:"устарело",no_data:"нет данных"};
+async function loadAvailability(){
+  try{
+    var d=await (await api("/v1/founder/data-availability")).json();
+    DA={};
+    (d.availability||[]).forEach(function(r){DA[r.metric_key+"|"+r.scope]=r;});
+    renderAll();
+    // Refresh lazy sections that may have rendered before DA arrived.
+    if(LAZY_LOADED.so)loadFeed();
+    if(LAZY_LOADED.ib)loadInbox();
+    if(LAZY_LOADED.kt)loadTree(false);
+  }catch(e){}
+}
+function daRow(metricKey,scope){
+  return DA[metricKey+"|"+(scope||"global")]||null;
+}
+// Summary chip across a set of metric keys (worst state wins).
+function daChipFor(metricKeys,scope){
+  var order={no_data:0,stale:1,insufficient:2,collecting:3,ready:4};
+  var worst=null;
+  metricKeys.forEach(function(k){
+    var r=daRow(k,scope);
+    if(r&&(worst===null||order[r.status]<order[worst.status]))worst=r;
+  });
+  if(!worst)return"";
+  return'<span class="dachip da-'+esc(worst.status)+'" title="'+esc(worst.message)+'"><span class="dot" style="background:currentColor"></span>'+esc(DA_LABEL[worst.status]||worst.status)+'</span>';
+}
+// Worst availability chip across every series matching a metric key (any scope).
+function daChipAnyScope(metricKey){
+  var order={no_data:0,stale:1,insufficient:2,collecting:3,ready:4};
+  var worst=null;
+  Object.keys(DA).forEach(function(k){
+    if(k.indexOf(metricKey+"|")===0){
+      var r=DA[k];
+      if(worst===null||order[r.status]<order[worst.status])worst=r;
+    }
+  });
+  if(!worst)return"";
+  return'<span class="dachip da-'+esc(worst.status)+'" title="'+esc(worst.message)+'"><span class="dot" style="background:currentColor"></span>'+esc(DA_LABEL[worst.status]||worst.status)+'</span>';
+}
+
 var CACHE_KEY="fos_overview_cache";
 async function loadOverview(){
   $("topmsg").textContent="Обновляю данные…";$("topmsg").classList.remove("err");
@@ -1243,6 +1337,7 @@ renderAll();
 loadOverview();
 loadInboxCounts();
 loadDeclarations();
+loadAvailability();
 </script>
 </body>
 </html>

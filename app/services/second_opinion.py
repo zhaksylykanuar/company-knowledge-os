@@ -53,9 +53,70 @@ FINDING_STATUSES = frozenset(
 
 SEVERITIES = ("low", "medium", "high")
 
+# Why a finding row changed — never conflate new evidence with a clock tick.
+REASON_NEW_EVIDENCE = "new_evidence"
+REASON_STALE_WINDOW = "stale_window_recalculation"
+REASON_VISIBILITY_RESCOPE = "visibility_rescope"
+REASON_AUTO_RESOLVED = "auto_resolved_no_longer_observed"
+REASON_MANUAL_DECISION = "manual_decision"
+REASON_SOURCE_BACKFILL = "source_backfill"
+
+# upsert_finding outcomes, mapped to run-log buckets.
+OUTCOME_CREATED = "created"
+OUTCOME_UPDATED_NEW_EVIDENCE = "updated_new_evidence"
+OUTCOME_UPDATED_CLOCK = "updated_clock"
+OUTCOME_UNCHANGED = "unchanged"
+OUTCOME_REOPENED = "reopened"
+OUTCOME_SKIPPED = "skipped"
+
 VISIBILITY_FOUNDER = "founder"
 VISIBILITY_TEAM = "team"
 VISIBILITY_INVESTOR = "investor"
+
+# Standardized run-summary buckets shared by every finding generator.
+_RUN_COUNT_KEYS = (
+    "created",
+    "updated_from_new_evidence",
+    "updated_from_clock_recalculation",
+    "unchanged",
+    "reopened",
+    "auto_resolved",
+    "skipped",
+    "errors",
+)
+
+_OUTCOME_TO_BUCKET = {
+    OUTCOME_CREATED: "created",
+    OUTCOME_UPDATED_NEW_EVIDENCE: "updated_from_new_evidence",
+    OUTCOME_UPDATED_CLOCK: "updated_from_clock_recalculation",
+    OUTCOME_UNCHANGED: "unchanged",
+    OUTCOME_REOPENED: "reopened",
+    OUTCOME_SKIPPED: "skipped",
+}
+
+
+def new_run_counts() -> dict[str, int]:
+    return dict.fromkeys(_RUN_COUNT_KEYS, 0)
+
+
+def tally_outcome(counts: dict[str, int], outcome: str) -> None:
+    bucket = _OUTCOME_TO_BUCKET.get(outcome)
+    if bucket is None:
+        counts["errors"] += 1
+    else:
+        counts[bucket] += 1
+
+
+def outcome_emitted_finding(outcome: str) -> bool:
+    """True when a real finding now exists or changed (not a proposal /
+    skip / no-op)."""
+
+    return outcome in {
+        OUTCOME_CREATED,
+        OUTCOME_UPDATED_NEW_EVIDENCE,
+        OUTCOME_UPDATED_CLOCK,
+        OUTCOME_REOPENED,
+    }
 
 # What the founder should do about each conflict type — shown in the feed.
 SUGGESTED_ACTIONS = {
@@ -105,6 +166,7 @@ async def upsert_finding(
             SecondOpinionFinding.finding_key == finding_key
         )
     )
+    new_evidence = list(evidence_refs or [])
     if row is None:
         session.add(
             SecondOpinionFinding(
@@ -118,25 +180,25 @@ async def upsert_finding(
                 severity=severity,
                 confidence=confidence,
                 confidence_factors=confidence_factors,
-                evidence_refs=list(evidence_refs or []),
+                evidence_refs=new_evidence,
                 source_refs=list(source_refs or []),
                 status=STATUS_OPEN,
                 visibility_scope=visibility_scope,
+                last_update_reason=None,
             )
         )
         await session.flush()
-        return "created"
+        return OUTCOME_CREATED
 
     if row.status == STATUS_DISMISSED:
-        return "skipped"
+        return OUTCOME_SKIPPED
+
+    evidence_changed = row.evidence_refs != new_evidence
 
     if row.status == STATUS_RESOLVED:
         # A resolved finding may only resurface on genuinely new evidence.
-        if (
-            row.observed_state == observed_state
-            and row.evidence_refs == list(evidence_refs or [])
-        ):
-            return "skipped"
+        if row.observed_state == observed_state and not evidence_changed:
+            return OUTCOME_SKIPPED
         row.status = STATUS_OPEN
         row.resolved_at = None
         row.declared_state = declared_state
@@ -145,28 +207,44 @@ async def upsert_finding(
         row.severity = severity
         row.confidence = confidence
         row.confidence_factors = confidence_factors
-        row.evidence_refs = list(evidence_refs or [])
+        row.evidence_refs = new_evidence
+        row.last_update_reason = REASON_NEW_EVIDENCE
         row.note = "reopened: появилось новое evidence"
         await session.flush()
-        return "reopened"
+        return OUTCOME_REOPENED
 
-    changed = (
+    content_changed = (
         row.declared_state != declared_state
         or row.observed_state != observed_state
         or row.summary != summary
         or row.severity != severity
     )
-    if not changed:
-        return "unchanged"
+    scope_changed = row.visibility_scope != visibility_scope
+    if not content_changed and not evidence_changed and not scope_changed:
+        return OUTCOME_UNCHANGED
+
     row.declared_state = declared_state
     row.observed_state = observed_state
     row.summary = summary
     row.severity = severity
     row.confidence = confidence
     row.confidence_factors = confidence_factors
-    row.evidence_refs = list(evidence_refs or [])
+    row.evidence_refs = new_evidence
+    if scope_changed and not content_changed and not evidence_changed:
+        row.visibility_scope = visibility_scope
+        row.last_update_reason = REASON_VISIBILITY_RESCOPE
+        await session.flush()
+        return OUTCOME_UPDATED_CLOCK
+    row.visibility_scope = visibility_scope
+    # New evidence vs a clock tick: same evidence + only the observed age
+    # moved is a recalculation, not a fresh discovery.
+    if evidence_changed:
+        row.last_update_reason = REASON_NEW_EVIDENCE
+        await session.flush()
+        return OUTCOME_UPDATED_NEW_EVIDENCE
+    row.last_update_reason = REASON_STALE_WINDOW
     await session.flush()
-    return "updated"
+    return OUTCOME_UPDATED_CLOCK
 
 
 def _severity_order_expression():
@@ -227,6 +305,7 @@ def _finding_read_model(row: SecondOpinionFinding) -> dict[str, Any]:
         "source_refs": row.source_refs,
         "status": row.status,
         "visibility_scope": row.visibility_scope,
+        "last_update_reason": row.last_update_reason,
         "note": row.note,
         "snoozed_until": row.snoozed_until.isoformat()
         if row.snoozed_until
@@ -259,6 +338,7 @@ async def set_finding_status(
         return None
     previous_status = row.status
     row.status = status
+    row.last_update_reason = REASON_MANUAL_DECISION
     if note is not None:
         row.note = note[:500]
     row.resolved_at = (
@@ -459,14 +539,7 @@ async def scan_second_opinion(
     from app.services.status_snapshot_repository import save_status_snapshot
 
     safe_now = now or datetime.now(timezone.utc)
-    counts = {
-        "created": 0,
-        "updated": 0,
-        "unchanged": 0,
-        "skipped": 0,
-        "reopened": 0,
-        "auto_resolved": 0,
-    }
+    counts = new_run_counts()
     emitted_keys: set[str] = set()
     scanned_projects: list[str] = []
 
@@ -482,7 +555,7 @@ async def scan_second_opinion(
         # Jira/GitHub execution conflicts are work items — team-visible.
         kwargs.setdefault("visibility_scope", VISIBILITY_TEAM)
         emitted_keys.add(kwargs["finding_key"])
-        counts[await upsert_finding(session, **kwargs)] += 1
+        tally_outcome(counts, await upsert_finding(session, **kwargs))
 
     for project in projects:
         scanned_projects.append(project.entity_id)
@@ -618,6 +691,7 @@ async def scan_second_opinion(
                 continue
             row.status = STATUS_RESOLVED
             row.resolved_at = safe_now
+            row.last_update_reason = REASON_AUTO_RESOLVED
             if not row.note:
                 row.note = "auto: конфликт исчез при повторном скане"
             counts["auto_resolved"] += 1

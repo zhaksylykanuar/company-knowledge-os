@@ -53,6 +53,9 @@ async def _record(
         if existing.value != value:
             existing.value = value
             existing.details = dict(details or {})
+            # Same-day value moved because the underlying source counts
+            # changed — a data update, not a clock recalculation.
+            existing.last_update_reason = "source_backfill"
             await session.flush()
             return "updated"
         return "unchanged"

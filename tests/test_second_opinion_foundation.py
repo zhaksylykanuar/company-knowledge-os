@@ -150,7 +150,12 @@ async def test_finding_lifecycle_and_dedupe() -> None:
             )
             await session.commit()
 
-        assert (created, unchanged, updated) == ("created", "unchanged", "updated")
+        # Observed age moved but evidence did not -> clock recalculation.
+        assert (created, unchanged, updated) == (
+            "created",
+            "unchanged",
+            "updated_clock",
+        )
         assert dismissed == {"finding_key": key, "status": STATUS_DISMISSED}
         assert skipped == "skipped"
     finally:

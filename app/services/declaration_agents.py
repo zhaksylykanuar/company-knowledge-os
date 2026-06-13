@@ -40,6 +40,7 @@ from app.services.second_opinion import (
     FINDING_FOCUS_DRIFT,
     FINDING_VALIDATION_GAP,
     emit_finding_or_proposal,
+    outcome_emitted_finding,
 )
 
 AGENT_NAME = "declaration_agents"
@@ -147,9 +148,10 @@ async def scan_hypotheses(session: AsyncSession) -> dict[str, int]:
                     "source_refs": [{"kind": "declaration", "key": KEY_HYPOTHESES}],
                 },
             )
-            counts["findings" if outcome in {"created", "updated", "reopened"} else "proposals"] += (
-                1 if outcome not in {"unchanged", "skipped", "proposal_exists"} else 0
-            )
+            if outcome == "proposed":
+                counts["proposals"] += 1
+            elif outcome_emitted_finding(outcome):
+                counts["findings"] += 1
 
         if contradicting:
             for risk in contradicting:
@@ -202,9 +204,10 @@ async def scan_hypotheses(session: AsyncSession) -> dict[str, int]:
                     "source_refs": [{"kind": "declaration", "key": KEY_HYPOTHESES}],
                 },
             )
-            counts["findings" if outcome in {"created", "updated", "reopened"} else "proposals"] += (
-                1 if outcome not in {"unchanged", "skipped", "proposal_exists"} else 0
-            )
+            if outcome == "proposed":
+                counts["proposals"] += 1
+            elif outcome_emitted_finding(outcome):
+                counts["findings"] += 1
 
     return counts
 
@@ -306,7 +309,7 @@ async def scan_focus_drift(
             "source_refs": [{"kind": "declaration", "key": KEY_FOCUS}],
         },
     )
-    if outcome in {"created", "updated", "reopened"}:
+    if outcome_emitted_finding(outcome):
         counts["findings"] += 1
     elif outcome == "proposed":
         counts["proposals"] += 1

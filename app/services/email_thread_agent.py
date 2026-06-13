@@ -14,6 +14,7 @@ investor views.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -48,16 +49,11 @@ async def scan_email_silence(
     now: datetime | None = None,
 ) -> dict[str, int]:
     safe_now = now or datetime.now(timezone.utc)
-    counts = {
-        "created": 0,
-        "updated": 0,
-        "unchanged": 0,
-        "skipped": 0,
-        "reopened": 0,
-        "proposed": 0,
-        "proposal_exists": 0,
-        "no_evidence": 0,
-    }
+    # defaultdict so the full set of upsert/emit outcomes
+    # (created / updated_new_evidence / updated_clock / unchanged /
+    # reopened / skipped / proposed / proposal_exists / no_evidence)
+    # never KeyErrors as the taxonomy grows.
+    counts: dict[str, int] = defaultdict(int)
 
     threads = (
         await session.execute(
