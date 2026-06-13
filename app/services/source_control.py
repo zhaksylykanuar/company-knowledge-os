@@ -26,6 +26,7 @@ from app.db.second_opinion_models import SecondOpinionFinding
 from app.db.share_pack_models import SharePack
 from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.db.source_models import SourceDocument
+from app.services.browser_config import sanitize_for_logs
 
 ACTION_BACKFILL = "backfill"
 ACTION_PAUSE = "pause"
@@ -191,6 +192,13 @@ def _setup_for(definition: SourceDefinition) -> list[dict[str, Any]]:
     return items
 
 
+def connector_setup_for_source(source_type: str) -> list[dict[str, Any]]:
+    definition = SOURCE_BY_TYPE.get(source_type)
+    if definition is None:
+        raise ValueError(f"unknown source: {source_type}")
+    return _setup_for(definition)
+
+
 def _setup_status(items: list[dict[str, Any]]) -> str:
     if not items:
         return "not_required"
@@ -199,6 +207,10 @@ def _setup_status(items: list[dict[str, Any]]) -> str:
     if any(item["status"] in {"configured", "masked"} for item in items):
         return "partial"
     return "missing"
+
+
+def connector_setup_status(source_type: str) -> str:
+    return _setup_status(connector_setup_for_source(source_type))
 
 
 def _visibility_policy() -> dict[str, Any]:
@@ -471,16 +483,31 @@ async def build_source_health(
         )
     ).all()
     pending_by_source = {str(source): int(count or 0) for source, count in pending_rows}
+    recent_requests = (
+        await session.execute(
+            select(SourceRunRequest)
+            .order_by(SourceRunRequest.created_at.desc(), SourceRunRequest.id.desc())
+            .limit(80)
+        )
+    ).scalars().all()
+    requests_by_source: dict[str, list[SourceRunRequest]] = {}
+    for request in recent_requests:
+        requests_by_source.setdefault(request.source_type, []).append(request)
 
     sources: list[dict[str, Any]] = []
     status_counts: Counter[str] = Counter()
+    readiness_counts: Counter[str] = Counter()
     degraded: list[str] = []
     total_events = 0
     pending_total = 0
+    failed_recent_runs = 0
+    paused_sources = 0
+    last_successful_sync: str | None = None
 
     for definition in SOURCE_DEFINITIONS:
         setup = _setup_for(definition)
         setup_status = _setup_status(setup)
+        readiness_counts[setup_status] += 1
         ev_count = sum(events.get(source, {}).get("count", 0) for source in definition.event_systems)
         norm_count = sum(
             normalized.get(source, {}).get("count", 0)
@@ -507,7 +534,7 @@ async def build_source_health(
         last_sync = str(v.get("last_sync_at") or last_sync or "") or None
         last_success = str(v.get("last_success_at") or last_success or "") or None
         related_runs = _runs_for_source(runs, definition)
-        latest_run = related_runs[0] if related_runs else None
+        latest_agent_run = related_runs[0] if related_runs else None
         failed_run_count = sum(1 for run in related_runs if run.errors)
         failed_event_count = sum(failed_events.get(source, 0) for source in definition.event_systems)
         availability = _availability_for_source(availability_rows, definition)
@@ -517,6 +544,18 @@ async def build_source_health(
         findings_count += int(v.get("findings_generated") or 0)
         evidence_count = ev_count + norm_count + findings_count + proposals_count
         state = states.get(definition.source_type)
+        source_requests = requests_by_source.get(definition.source_type, [])
+        latest_request = source_requests[0] if source_requests else None
+        latest_source_run = next(
+            (request for request in source_requests if request.started_at or request.run_id),
+            latest_request,
+        )
+        failed_recent_runs += sum(1 for request in source_requests if request.status == "failed")
+        if state and state.paused:
+            paused_sources += 1
+        state_success = _iso(state.last_success_at) if state and state.last_success_at else None
+        if state_success and (last_successful_sync is None or state_success > last_successful_sync):
+            last_successful_sync = state_success
         status = _source_status(
             state=state,
             setup_status=setup_status,
@@ -541,11 +580,21 @@ async def build_source_health(
                     "last_action": state.last_action if state else None,
                     "last_action_at": _iso(state.last_action_at) if state else None,
                     "last_action_by": state.last_action_by if state else None,
+                    "last_sync_at": _iso(state.last_sync_at) if state else None,
+                    "last_success_at": _iso(state.last_success_at) if state else None,
+                    "last_error_at": _iso(state.last_error_at) if state else None,
+                    "latest_run_id": state.latest_run_id if state else None,
                 },
-                "last_sync_at": last_sync,
-                "last_success_at": last_success,
-                "last_error_at": _iso(latest_run.run_finished_at) if latest_run and latest_run.errors else None,
-                "input_watermark": latest_run.input_watermark if latest_run else None,
+                "last_sync_at": _iso(state.last_sync_at) if state and state.last_sync_at else last_sync,
+                "last_success_at": _iso(state.last_success_at)
+                if state and state.last_success_at
+                else last_success,
+                "last_error_at": _iso(state.last_error_at)
+                if state and state.last_error_at
+                else (_iso(latest_agent_run.run_finished_at) if latest_agent_run and latest_agent_run.errors else None),
+                "input_watermark": state.input_watermark
+                if state and state.input_watermark
+                else (latest_agent_run.input_watermark if latest_agent_run else None),
                 "events_ingested": ev_count,
                 "normalized_events": norm_count,
                 "graph_updates": 0,
@@ -554,6 +603,16 @@ async def build_source_health(
                 "failed_runs": failed_run_count,
                 "failed_events": failed_event_count,
                 "pending_requests": pending,
+                "queue_status": {
+                    "pending": pending,
+                    "running": sum(1 for request in source_requests if request.status == "running"),
+                    "failed": sum(1 for request in source_requests if request.status == "failed"),
+                    "succeeded": sum(1 for request in source_requests if request.status == "succeeded"),
+                    "skipped": sum(1 for request in source_requests if request.status == "skipped"),
+                    "blocked": sum(1 for request in source_requests if request.status == "blocked"),
+                },
+                "latest_request": _request_model(latest_request) if latest_request else None,
+                "latest_run": _request_model(latest_source_run) if latest_source_run else None,
                 "data_availability": availability,
                 "visibility_policy": _visibility_policy(),
                 "redaction_policy": _redaction_policy(),
@@ -587,11 +646,27 @@ async def build_source_health(
         "summary": {
             "total_sources": len(sources),
             "by_status": dict(status_counts),
+            "by_readiness": dict(readiness_counts),
             "events_ingested": total_events,
             "pending_requests": pending_total,
+            "failed_recent_runs": failed_recent_runs,
+            "paused_sources": paused_sources,
+            "missing_config_sources": readiness_counts.get("missing", 0)
+            + readiness_counts.get("partial", 0),
+            "last_successful_sync": last_successful_sync,
             "degraded_sources": degraded,
             "sources_needing_attention": len(degraded),
         },
+        "pending_requests": [
+            _request_model(row)
+            for row in recent_requests
+            if row.status in _PENDING_REQUEST_STATUSES
+        ][:20],
+        "recent_runs": [
+            _request_model(row)
+            for row in recent_requests
+            if row.started_at or row.finished_at or row.run_id
+        ][:20],
         "setup_checklist": [
             {
                 "source_type": item["source_type"],
@@ -607,14 +682,23 @@ async def build_source_health(
 def _request_model(row: SourceRunRequest, *, idempotent: bool = False) -> dict[str, Any]:
     return {
         "request_id": row.request_id,
+        "run_id": row.run_id,
+        "correlation_id": row.correlation_id,
         "source_type": row.source_type,
         "action_type": row.action_type,
         "status": row.status,
         "request_key": row.request_key,
         "requested_by": row.requested_by,
+        "approved_by": row.approved_by,
         "requested_at": _iso(row.requested_at),
+        "started_at": _iso(row.started_at),
+        "finished_at": _iso(row.finished_at),
         "input_snapshot": row.input_snapshot,
         "result_summary": row.result_summary,
+        "error_summary": row.error_summary,
+        "external_side_effect": row.external_side_effect,
+        "retry_count": row.retry_count,
+        "idempotency_key": row.idempotency_key,
         "audit_log_id": row.audit_log_id,
         "idempotent": idempotent,
     }
@@ -679,7 +763,7 @@ async def request_source_action(
         "action_type": action_type,
         "connector_readiness": setup_status,
         "external_side_effect": False,
-        "input": dict(input_payload or {}),
+        "input": sanitize_for_logs(dict(input_payload or {})),
     }
     result_summary = {
         "mode": "request_only",
@@ -711,10 +795,14 @@ async def request_source_action(
         action_type=action_type,
         status=status,
         request_key=clean_request_key,
+        correlation_id=request_id,
+        idempotency_key=f"{source_type}:{action_type}:{clean_request_key}",
         requested_by=requested_by,
         requested_at=now,
         input_snapshot=snapshot,
         result_summary=result_summary,
+        error_summary={},
+        external_side_effect=False,
         audit_log_id=audit.id,
     )
     session.add(row)
@@ -725,3 +813,21 @@ async def request_source_action(
     state.config_status = {"status": setup_status, "setup": setup}
     await session.flush()
     return _request_model(row)
+
+
+async def list_source_run_requests(
+    session: AsyncSession,
+    *,
+    source_type: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    query = select(SourceRunRequest).order_by(
+        SourceRunRequest.created_at.desc(), SourceRunRequest.id.desc()
+    )
+    if source_type is not None:
+        query = query.where(SourceRunRequest.source_type == source_type)
+    if status is not None:
+        query = query.where(SourceRunRequest.status == status)
+    rows = (await session.execute(query.limit(limit))).scalars()
+    return [_request_model(row) for row in rows]

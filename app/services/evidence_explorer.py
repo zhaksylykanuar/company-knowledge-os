@@ -44,6 +44,7 @@ async def list_source_events(
     source_object_id: str | None = None,
     source_system: str | None = None,
     status: str | None = None,
+    run_id: str | None = None,
     limit: int = 50,
     viewer_scope: str = SCOPE_FOUNDER,
 ) -> list[dict[str, Any]]:
@@ -63,6 +64,8 @@ async def list_source_events(
         query = query.where(SourceEvent.source_system == source_system)
     if status is not None:
         query = query.where(IngestedEvent.status == status)
+    if run_id is not None:
+        query = query.where(SourceEvent.created_by_run_id == run_id)
     rows = (await session.execute(query.limit(limit))).all()
     out: list[dict[str, Any]] = []
     for row, event_status in rows:

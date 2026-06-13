@@ -643,11 +643,20 @@ function ccRender(){
 
     // Source health + data-quality integration (read-model backed).
     var shc=CC.source_health||{},ss=shc.summary||{};
+    var byReady=ss.by_readiness||{};
     var srcH='<p class="h">Source health <span class="edit" data-go="src">open →</span></p>'
       +'<div class="row" style="gap:16px;flex-wrap:wrap"><span>sources: <b>'+num(ss.total_sources||0)+'</b></span>'
       +'<span>events: <b>'+num(ss.events_ingested||0)+'</b></span>'
-      +'<span>pending: <b style="color:'+(ss.pending_requests?"var(--amber)":"inherit")+'">'+num(ss.pending_requests||0)+'</b></span></div>';
+      +'<span>pending: <b style="color:'+(ss.pending_requests?"var(--amber)":"inherit")+'">'+num(ss.pending_requests||0)+'</b></span>'
+      +'<span>failed runs: <b style="color:'+(ss.failed_recent_runs?"var(--red)":"inherit")+'">'+num(ss.failed_recent_runs||0)+'</b></span></div>'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">'
+      +'<span class="badge b-green">ready '+num(byReady.ready||0)+'</span>'
+      +'<span class="badge b-amber">missing config '+num(ss.missing_config_sources||0)+'</span>'
+      +'<span class="badge b-mut">paused '+num(ss.paused_sources||0)+'</span>'
+      +(ss.last_successful_sync?'<span class="badge b-blue">last success '+esc(ss.last_successful_sync.slice(0,16).replace("T"," "))+'</span>':'')
+      +'</div>';
     if((ss.degraded_sources||[]).length)srcH+='<div class="alert warn" style="margin-top:8px">Needs attention: '+esc(ss.degraded_sources.join(", "))+'</div>';
+    else if(ss.pending_requests)srcH+='<div class="mut" style="margin-top:8px">Requests are queued; use the safe source runner before reading them as completed syncs.</div>';
     else srcH+='<div class="mut" style="margin-top:8px">No degraded sources in the current read-model.</div>';
     $("cc-source").innerHTML=srcH;
 
@@ -1521,6 +1530,23 @@ function sourceSetupChips(items){
     return '<span class="badge '+cls+'">'+esc(it.name)+': '+esc(it.status)+'</span>';
   }).join(" ");
 }
+function sourceRunBadge(status){
+  var cls=status==="succeeded"?"b-green":status==="failed"?"b-red":status==="running"?"b-blue":(status==="skipped"||status==="blocked")?"b-amber":"b-mut";
+  return '<span class="badge '+cls+'">'+esc(status||"none")+'</span>';
+}
+function sourceRunLine(label,run){
+  if(!run)return'<div class="mut">'+esc(label)+': none</div>';
+  var rs=run.result_summary||{};
+  var at=run.finished_at||run.started_at||run.requested_at||"";
+  return '<div class="item"><div class="t"><div>'+esc(label)+' '+sourceRunBadge(run.status)+' <span class="badge b-mut">'+esc(run.action_type||"")+'</span></div>'
+    +'<div class="s">'+esc((at||"").slice(0,16).replace("T"," "))+(run.run_id?' · run '+esc(String(run.run_id).slice(0,18)):'')+(rs.status?' · connector '+esc(rs.status):'')+'</div></div>'
+    +(run.run_id?'<button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">run events</button>':'')+'</div>';
+}
+function sourceQueueChips(q){
+  q=q||{};
+  var items=[["pending",q.pending,"b-amber"],["running",q.running,"b-blue"],["succeeded",q.succeeded,"b-green"],["failed",q.failed,"b-red"],["skipped",q.skipped,"b-amber"],["blocked",q.blocked,"b-amber"]];
+  return items.map(function(x){return x[1]?'<span class="badge '+x[2]+'">'+x[0]+' '+num(x[1])+'</span>':'';}).join(" ")||'<span class="badge b-mut">queue empty</span>';
+}
 function sourceCard(s){
   var setup=s.connector_readiness||{};
   var da=s.data_availability||{};
@@ -1533,24 +1559,47 @@ function sourceCard(s){
     +'<div class="substate"><div class="l">normalized</div><div class="v">'+num(s.normalized_events||0)+'</div></div>'
     +'<div class="substate"><div class="l">findings / proposals</div><div class="v">'+num(s.findings_generated||0)+' / '+num(s.proposals_generated||0)+'</div></div>'
     +'</div>'
-    +'<div class="mut">availability: '+esc(da.status||"no_data")+(da.message?' · '+esc(da.message):'')+'</div>';
+    +'<div class="mut">availability: '+esc(da.status||"no_data")+(da.message?' · '+esc(da.message):'')+'</div>'
+    +'<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">'+sourceQueueChips(s.queue_status)+'</div>'
+    +sourceRunLine("latest request",s.latest_request)
+    +sourceRunLine("latest run",s.latest_run);
   if(s.warnings&&s.warnings.length)html+='<div class="alert warn" style="margin-top:8px">'+esc(s.warnings.join(" · "))+'</div>';
+  if(setup.status==="missing"||setup.status==="partial")html+='<div class="alert warn" style="margin-top:8px">Connector setup is '+esc(setup.status)+'. Configure env vars on the backend, then restart it before testing.</div>';
+  if(s.latest_run&&s.latest_run.result_summary&&s.latest_run.result_summary.warnings&&s.latest_run.result_summary.warnings.length){
+    html+='<div class="mut" style="margin-top:8px">run warnings: '+esc(s.latest_run.result_summary.warnings.join(" · "))+'</div>';
+  }
   html+='<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">';
   actions.forEach(function(a){html+='<button class="actbtn" data-srcact="'+a+'" data-source="'+esc(s.source_type)+'">'+esc(a)+'</button>';});
   html+='<button class="actbtn" data-srcact="events" data-source="'+esc(s.source_type)+'">events</button>'
     +'<button class="actbtn" data-srcact="errors" data-source="'+esc(s.source_type)+'">errors</button>'
+    +'<button class="actbtn" data-srcact="runs" data-source="'+esc(s.source_type)+'">runs</button>'
     +'</div>'
     +'<details class="ev"><summary>Visibility / redaction policy</summary><pre>'+esc(JSON.stringify({visibility:s.visibility_policy,redaction:s.redaction_policy,masked_connection:s.masked_connection},null,1))+'</pre></details>'
     +'</div>';
   return html;
+}
+function sourceRunSummaryList(title,items,empty){
+  var html='<div class="card"><p class="h">'+esc(title)+'</p>';
+  if(!(items||[]).length)return html+'<div class="mut">'+esc(empty)+'</div></div>';
+  (items||[]).slice(0,8).forEach(function(run){
+    html+='<div class="item"><span class="badge b-mut">'+esc(run.source_type)+'</span><div class="t">'+sourceRunBadge(run.status)+' '+esc(run.action_type||"")+'<div class="s">'+esc((run.finished_at||run.started_at||run.requested_at||"").slice(0,16).replace("T"," "))+(run.run_id?' · '+esc(String(run.run_id).slice(0,22)):'')+'</div></div></div>';
+  });
+  return html+'</div>';
 }
 function sourcesRender(){
   if(!SOURCES){$("sources-body").innerHTML='<div class="mut">Loading sources…</div>';return;}
   var sum=SOURCES.summary||{};
   $("sources-summary").innerHTML='<div class="kpi"><div class="l">sources</div><div class="v">'+num(sum.total_sources||0)+'</div><div class="d">tracked source surfaces</div></div>'
     +'<div class="kpi"><div class="l">events ingested</div><div class="v">'+num(sum.events_ingested||0)+'</div><div class="d">from source_events + virtual sources</div></div>'
-    +'<div class="kpi"><div class="l">needs attention</div><div class="v" style="color:'+(sum.sources_needing_attention?"var(--amber)":"inherit")+'">'+num(sum.sources_needing_attention||0)+'</div><div class="d">degraded / error / paused</div></div>';
-  $("sources-body").innerHTML=(SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty">No sources configured yet.</div>';
+    +'<div class="kpi"><div class="l">needs attention</div><div class="v" style="color:'+(sum.sources_needing_attention?"var(--amber)":"inherit")+'">'+num(sum.sources_needing_attention||0)+'</div><div class="d">degraded / error / paused</div></div>'
+    +'<div class="kpi"><div class="l">pending requests</div><div class="v" style="color:'+(sum.pending_requests?"var(--amber)":"inherit")+'">'+num(sum.pending_requests||0)+'</div><div class="d">queued for safe runner</div></div>'
+    +'<div class="kpi"><div class="l">failed runs</div><div class="v" style="color:'+(sum.failed_recent_runs?"var(--red)":"inherit")+'">'+num(sum.failed_recent_runs||0)+'</div><div class="d">recent source requests</div></div>'
+    +'<div class="kpi"><div class="l">missing config</div><div class="v" style="color:'+(sum.missing_config_sources?"var(--amber)":"inherit")+'">'+num(sum.missing_config_sources||0)+'</div><div class="d">backend env setup only</div></div>';
+  var ops='<div class="grid2" style="margin-bottom:14px">'
+    +sourceRunSummaryList("Pending source requests",SOURCES.pending_requests,"No source requests are queued.")
+    +sourceRunSummaryList("Recent source runs",SOURCES.recent_runs,"No source runs have executed yet.")
+    +'</div>';
+  $("sources-body").innerHTML=ops+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty">No sources configured yet.</div>');
   $("nav-src-n").textContent=sum.sources_needing_attention?String(sum.sources_needing_attention):"";
 }
 async function loadSources(){
@@ -1569,17 +1618,33 @@ async function sourceAction(source,action){
     loadSources();loadDataQuality();loadCommandCenter();
   }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
 }
-async function openSourceEventList(source,status){
+async function openSourceEventList(source,status,runId){
   overlay("ov-src",true);
   $("src-body").innerHTML='<div class="mut">Loading source events…</div>';
   try{
     var url="/v1/source-events?source_type="+encodeURIComponent(source)+"&limit=50";
     if(status)url+="&status="+encodeURIComponent(status);
+    if(runId)url+="&run_id="+encodeURIComponent(runId);
     var d=await (await api(url)).json();
-    var h='<p class="h">Source events <span class="badge b-mut">'+esc(source)+'</span></p>';
+    var h='<p class="h">Source events <span class="badge b-mut">'+esc(source)+'</span>'+(runId?'<span class="badge b-blue">run '+esc(String(runId).slice(0,18))+'</span>':'')+'</p>';
     if(!(d.events||[]).length)h+='<div class="empty">No matching source events.</div>';
     (d.events||[]).forEach(function(e){
       h+='<div class="item"><span class="badge b-mut">'+esc(e.status||"received")+'</span><div class="t">'+esc(e.title||e.event_type)+'<div class="s">'+esc(e.source_system)+' · '+esc(e.source_object_id||"")+' · received '+esc((e.received_at||"").slice(0,16).replace("T"," "))+(e.normalized_at?' · normalized '+esc((e.normalized_at||"").slice(0,16).replace("T"," ")):'')+'</div></div><button class="actbtn" data-srcevt="'+esc(e.source_event_id)+'">open</button></div>';
+    });
+    $("src-body").innerHTML=h;
+  }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+async function openSourceRunList(source){
+  overlay("ov-src",true);
+  $("src-body").innerHTML='<div class="mut">Loading source runs…</div>';
+  try{
+    var d=await (await api("/v1/founder/source-runs?source_type="+encodeURIComponent(source)+"&limit=50")).json();
+    var h='<p class="h">Source runs <span class="badge b-mut">'+esc(source)+'</span></p>';
+    if(!(d.runs||[]).length)h+='<div class="empty">No source runs or requests yet.</div>';
+    (d.runs||[]).forEach(function(run){
+      var rs=run.result_summary||{};
+      h+='<div class="item"><span class="badge b-mut">'+esc(run.action_type||"")+'</span><div class="t">'+sourceRunBadge(run.status)+'<div class="s">'+esc((run.finished_at||run.started_at||run.requested_at||"").slice(0,16).replace("T"," "))+(run.run_id?' · run '+esc(String(run.run_id).slice(0,24)):'')+(rs.status?' · connector '+esc(rs.status):'')+'</div></div>'
+        +(run.run_id?'<button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">events</button>':'')+'</div>';
     });
     $("src-body").innerHTML=h;
   }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
@@ -1613,8 +1678,10 @@ document.addEventListener("click",function(e){
   var act=e.target.closest("[data-srcact]");
   if(act){
     var source=act.getAttribute("data-source"),action=act.getAttribute("data-srcact");
-    if(action==="events"){openSourceEventList(source,null);return;}
-    if(action==="errors"){openSourceEventList(source,"failed");return;}
+    var runId=act.getAttribute("data-runid");
+    if(action==="events"){openSourceEventList(source,null,runId);return;}
+    if(action==="errors"){openSourceEventList(source,"failed",runId);return;}
+    if(action==="runs"){openSourceRunList(source);return;}
     sourceAction(source,action);return;
   }
 });

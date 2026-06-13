@@ -14,12 +14,14 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.agent_models import AgentRunLog, DataAvailability
+from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.graph_models import EntityLinkRecord, EntityRecord, EntitySourceAccount
 from app.db.second_opinion_models import SecondOpinionFinding
 from app.db.source_control_models import SourceControlState, SourceRunRequest
+from app.services.source_control import SOURCE_DEFINITIONS, connector_setup_status
 
 _AVAILABILITY_GAP_STATUSES = {"no_data", "insufficient", "stale"}
-_OPEN_REQUEST_STATUSES = {"requested", "accepted"}
+_OPEN_REQUEST_STATUSES = {"requested", "accepted", "running"}
 
 
 def _now() -> datetime:
@@ -37,6 +39,8 @@ def _issue(
     confidence: float | None = None,
     suggested_action: str,
     cta: dict[str, Any],
+    related_run_id: str | None = None,
+    related_request_id: str | None = None,
 ) -> dict[str, Any]:
     return {
         "category": category,
@@ -48,6 +52,8 @@ def _issue(
         "confidence": confidence,
         "suggested_action": suggested_action,
         "cta": cta,
+        "related_run_id": related_run_id,
+        "related_request_id": related_request_id,
     }
 
 
@@ -288,8 +294,184 @@ async def build_data_quality_center(
                     "action": row.action_type,
                     "request_id": row.request_id,
                 },
+                related_run_id=row.run_id,
+                related_request_id=row.request_id,
             )
         )
+
+    states = {
+        row.source_type: row
+        for row in (await session.execute(select(SourceControlState))).scalars()
+    }
+    recent_requests = (
+        await session.execute(
+            select(SourceRunRequest)
+            .order_by(SourceRunRequest.created_at.desc(), SourceRunRequest.id.desc())
+            .limit(200)
+        )
+    ).scalars().all()
+    by_source: dict[str, list[SourceRunRequest]] = {}
+    for row in recent_requests:
+        by_source.setdefault(row.source_type, []).append(row)
+
+    for definition in SOURCE_DEFINITIONS:
+        state = states.get(definition.source_type)
+        source_runs = by_source.get(definition.source_type, [])
+        latest = source_runs[0] if source_runs else None
+        setup_status = connector_setup_status(definition.source_type)
+        if setup_status in {"missing", "partial"}:
+            issues.append(
+                _issue(
+                    category="source_missing_config",
+                    severity="medium",
+                    why_it_matters="Источник не может быть выполнен безопасно: часть обязательной конфигурации отсутствует.",
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action="Заполнить backend env vars и перезапустить backend.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "open_setup",
+                    },
+                )
+            )
+        has_success = bool(
+            state and state.last_success_at
+            or any(run.status == "succeeded" for run in source_runs)
+        )
+        if not has_success:
+            issues.append(
+                _issue(
+                    category="source_never_synced",
+                    severity="low",
+                    why_it_matters="Нет ни одного успешного source run для этого источника.",
+                    affected_source=definition.source_type,
+                    evidence_count=len(source_runs),
+                    suggested_action="Запросить test/sync и выполнить approved operator flow.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "sync",
+                    },
+                    related_run_id=latest.run_id if latest else None,
+                    related_request_id=latest.request_id if latest else None,
+                )
+            )
+        if latest and latest.status == "failed":
+            issues.append(
+                _issue(
+                    category="source_failed_last_run",
+                    severity="high",
+                    why_it_matters="Последний source run завершился ошибкой.",
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action="Открыть run summary и повторить через новый request_key после fix.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "review_run",
+                        "request_id": latest.request_id,
+                    },
+                    related_run_id=latest.run_id,
+                    related_request_id=latest.request_id,
+                )
+            )
+        failed_count = sum(1 for run in source_runs if run.status == "failed")
+        if failed_count >= 2:
+            issues.append(
+                _issue(
+                    category="source_repeated_failures",
+                    severity="high",
+                    why_it_matters="Источник несколько раз подряд падал в recent source runs.",
+                    affected_source=definition.source_type,
+                    evidence_count=failed_count,
+                    suggested_action="Остановить повторные runs и исправить connector/config.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "review_failures",
+                    },
+                    related_run_id=latest.run_id if latest else None,
+                    related_request_id=latest.request_id if latest else None,
+                )
+            )
+        if state and state.paused and not state.last_success_at:
+            issues.append(
+                _issue(
+                    category="source_paused_with_stale_data",
+                    severity="medium",
+                    why_it_matters="Источник paused, а успешного sync ещё не было или он устарел.",
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action="Resume source и запустить approved sync, если данные нужны.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "resume",
+                    },
+                    related_run_id=state.latest_run_id,
+                )
+            )
+        open_backfills = [
+            run
+            for run in source_runs
+            if run.action_type == "backfill" and run.status in _OPEN_REQUEST_STATUSES
+        ]
+        for run in open_backfills[:3]:
+            issues.append(
+                _issue(
+                    category="backfill_requested_not_completed",
+                    severity="low",
+                    why_it_matters="Backfill requested, но ещё не завершён approved operator flow.",
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action="Запустить source request orchestrator или отменить request.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "run_requests",
+                        "request_id": run.request_id,
+                    },
+                    related_run_id=run.run_id,
+                    related_request_id=run.request_id,
+                )
+            )
+
+    event_rows = (
+        await session.execute(
+            select(SourceEvent.source_system, func.count(SourceEvent.id)).group_by(
+                SourceEvent.source_system
+            )
+        )
+    ).all()
+    normalized_rows = (
+        await session.execute(
+            select(
+                NormalizedActivityItemRecord.source,
+                func.count(NormalizedActivityItemRecord.id),
+            ).group_by(NormalizedActivityItemRecord.source)
+        )
+    ).all()
+    normalized_by_source = {str(source): int(count or 0) for source, count in normalized_rows}
+    for source, count in event_rows:
+        normalized_count = normalized_by_source.get(str(source), 0)
+        gap = int(count or 0) - normalized_count
+        if gap > 0:
+            issues.append(
+                _issue(
+                    category="source_events_not_normalized",
+                    severity="medium",
+                    why_it_matters="Есть source_events, которые ещё не представлены normalized activity items.",
+                    affected_source=str(source),
+                    evidence_count=gap,
+                    suggested_action="Запустить normalization/recheck approved flow.",
+                    cta={
+                        "target": "evidence_explorer",
+                        "source_type": str(source),
+                        "action": "view_events",
+                    },
+                )
+            )
 
     counts = Counter(issue["category"] for issue in issues)
     severity = Counter(issue["severity"] for issue in issues)

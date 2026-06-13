@@ -59,9 +59,14 @@ def test_ui_contains_sources_and_data_quality_surfaces(monkeypatch) -> None:
         "Data Quality",
         "/v1/founder/sources",
         "/v1/founder/data-quality",
+        "/v1/founder/source-runs",
         "loadSources",
         "loadDataQuality",
         "masked_connection",
+        "Pending source requests",
+        "Recent source runs",
+        "sourceRunBadge",
+        "run events",
     ):
         assert marker in response.text, marker
     assert "test-api-key" not in response.text

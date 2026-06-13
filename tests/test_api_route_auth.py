@@ -41,6 +41,7 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/founder/sources", "GET"),
     ("/v1/founder/sources/{source_type}/{action_type}", "POST"),
     ("/v1/founder/data-quality", "GET"),
+    ("/v1/founder/source-runs", "GET"),
     ("/v1/founder/declarations/{key}", "GET"),
     ("/v1/founder/declarations/{key}", "PUT"),
     ("/v1/source-events", "GET"),

@@ -61,6 +61,7 @@ from app.services.second_opinion import (
 from app.services.source_control import (
     SOURCE_ACTIONS,
     build_source_health,
+    list_source_run_requests,
     known_source_types,
     request_source_action,
 )
@@ -472,12 +473,35 @@ async def get_founder_data_quality(
         return await build_data_quality_center(session)
 
 
+@router.get("/v1/founder/source-runs")
+async def get_founder_source_runs(
+    source_type: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=200),
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    if source_type is not None and source_type not in known_source_types():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="unknown source"
+        )
+    async with AsyncSessionLocal() as session:
+        runs = await list_source_run_requests(
+            session,
+            source_type=source_type,
+            status=status_filter,
+            limit=limit,
+        )
+    return {"runs": runs}
+
+
 @router.get("/v1/source-events")
 async def get_source_events(
     source_object_id: str | None = Query(default=None),
     source_system: str | None = Query(default=None),
     source_type: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    run_id: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -493,6 +517,7 @@ async def get_source_events(
             source_object_id=source_object_id,
             source_system=source_system or source_type,
             status=status_filter,
+            run_id=run_id,
             limit=limit,
             viewer_scope=viewer,
         )

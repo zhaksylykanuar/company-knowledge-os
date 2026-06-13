@@ -290,6 +290,79 @@ async def test_source_controls_are_founder_only(monkeypatch) -> None:
     assert response.status_code == 403
 
 
+async def test_source_control_request_input_is_log_safe(monkeypatch) -> None:
+    await _ensure_tables()
+    marker = uuid4().hex[:8]
+    secret_value = "LEAKED-SOURCE-ACTION-INPUT"
+    _set_auth(monkeypatch, enabled=False)
+    try:
+        async with _client() as client:
+            response = await client.post(
+                "/v1/founder/sources/manual_inputs/test",
+                json={
+                    "request_key": f"safe-input-{marker}",
+                    "input": {"api_token": secret_value, "limit": 10},
+                },
+            )
+        assert response.status_code == 200
+        assert secret_value not in response.text
+        body = response.json()
+        assert body["input_snapshot"]["input"]["api_token"] == "***redacted***"
+        assert body["input_snapshot"]["input"]["limit"] == 10
+
+        async with AsyncSessionLocal() as session:
+            row = await session.scalar(
+                select(SourceRunRequest).where(
+                    SourceRunRequest.request_key == f"safe-input-{marker}"
+                )
+            )
+        assert row is not None
+        assert secret_value not in json.dumps(row.input_snapshot)
+    finally:
+        await _cleanup(marker)
+
+
+async def test_source_controls_reject_unknown_source_and_action_without_rows(
+    monkeypatch,
+) -> None:
+    await _ensure_tables()
+    marker = uuid4().hex[:8]
+    _set_auth(monkeypatch, enabled=False)
+    try:
+        async with _client() as client:
+            unknown_source = await client.post(
+                "/v1/founder/sources/not-a-source/sync",
+                json={"request_key": f"invalid-source-{marker}"},
+            )
+            traversal_like = await client.post(
+                "/v1/founder/sources/..jira/sync",
+                json={"request_key": f"invalid-traversal-{marker}"},
+            )
+            unknown_action = await client.post(
+                "/v1/founder/sources/jira/not-an-action",
+                json={"request_key": f"invalid-action-{marker}"},
+            )
+        assert unknown_source.status_code == 404
+        assert traversal_like.status_code == 404
+        assert unknown_action.status_code == 404
+
+        async with AsyncSessionLocal() as session:
+            requests = await session.scalar(
+                select(func.count(SourceRunRequest.id)).where(
+                    SourceRunRequest.request_key.like(f"%{marker}%")
+                )
+            )
+            audits = await session.scalar(
+                select(func.count(AuditLog.id)).where(
+                    AuditLog.payload["request_key"].as_string().like(f"%{marker}%")
+                )
+            )
+        assert requests == 0
+        assert audits == 0
+    finally:
+        await _cleanup(marker)
+
+
 async def test_source_events_filters_and_redacts_by_role(monkeypatch) -> None:
     await _ensure_tables()
     marker = uuid4().hex[:8]
