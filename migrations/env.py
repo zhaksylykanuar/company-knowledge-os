@@ -21,6 +21,7 @@ import app.db.event_models  # noqa: F401,E402
 import app.db.score_models  # noqa: F401,E402
 import app.db.task_models  # noqa: F401,E402
 import app.db.status_models  # noqa: F401,E402
+import app.db.share_pack_models  # noqa: F401,E402
 
 target_metadata = Base.metadata
 

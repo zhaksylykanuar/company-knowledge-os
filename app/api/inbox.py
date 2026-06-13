@@ -40,6 +40,7 @@ from app.services.inbox_audit import (
     ACTION_OWNER_ASSIGNMENT,
     record_inbox_action,
 )
+from app.services.notification_center import build_notification_center
 from app.services.operating_rhythm import (
     build_daily_check,
     build_decision_review,
@@ -57,44 +58,20 @@ from app.services.second_opinion import (
     snooze_finding,
 )
 from app.services.team_view import build_team_view
+from app.api.view_guard import require_founder, require_scope, validated_view
 from app.services.visibility import (
     SCOPE_FOUNDER,
     SCOPE_INVESTOR,
     SCOPE_TEAM,
-    SCOPES,
     redact_finding,
 )
 
 router = APIRouter(tags=["inbox"])
 
-
-def _validated_view(view: str) -> str:
-    if view not in SCOPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"unknown view: {view}",
-        )
-    return view
-
-
-def _require_founder(view: str) -> None:
-    if _validated_view(view) != SCOPE_FOUNDER:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="founder view required",
-        )
-
-
-def _require_scope(view: str, allowed: set[str]) -> str:
-    """Validate the view and confirm it is one of the allowed audiences."""
-
-    viewer = _validated_view(view)
-    if viewer not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"view '{viewer}' is not allowed for this resource",
-        )
-    return viewer
+# Shared audience gating (single source of truth in app.api.view_guard).
+_validated_view = validated_view
+_require_founder = require_founder
+_require_scope = require_scope
 
 
 class ProposalDecisionRequest(BaseModel):
@@ -557,6 +534,16 @@ async def get_agent_runs(
     async with AsyncSessionLocal() as session:
         runs = await latest_runs(session, limit=limit)
     return {"runs": runs}
+
+
+@router.get("/v1/founder/notification-center")
+async def get_notification_center(
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    # The founder's internal review surface — no external delivery.
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_notification_center(session)
 
 
 # --- Stage 7: role dashboards (backend-redacted per audience) -----------

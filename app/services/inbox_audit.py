@@ -21,6 +21,18 @@ ACTION_ACTION_REVIEWED = "action_reviewed"
 ACTION_UPDATE_APPROVED = "update_approved"
 ACTION_OWNER_ASSIGNMENT = "owner_assignment_proposed"
 
+# Stage 8 share-pack lifecycle actions — every mutation is one audit row.
+ACTION_PACK_GENERATED = "pack_generated"
+ACTION_PACK_REGENERATED = "pack_regenerated"
+ACTION_PACK_SECTION_EDITED = "pack_section_edited"
+ACTION_PACK_SECTION_TOGGLED = "pack_section_toggled"
+ACTION_PACK_FINDING_TOGGLED = "pack_finding_toggled"
+ACTION_PACK_NOTE_ADDED = "pack_note_added"
+ACTION_PACK_APPROVED = "pack_approved"
+ACTION_PACK_REJECTED = "pack_rejected"
+ACTION_PACK_EXPORTED = "pack_exported"
+ACTION_PACK_REVOKED = "pack_revoked"
+
 INBOX_AUDIT_PREFIX = "inbox."
 
 ACTION_PROPOSAL_DECISION = "proposal_decision"

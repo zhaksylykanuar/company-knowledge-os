@@ -171,6 +171,99 @@ async def _availability_summary(session: AsyncSession) -> dict[str, Any]:
     }
 
 
+def _suggest_next_update(
+    *, last_investor: dict[str, Any] | None, stale_count: int, new_evidence: int
+) -> dict[str, Any] | None:
+    if last_investor is None:
+        return {
+            "pack_type": "investor_update",
+            "reason": "Ещё не было ни одного investor update — стоит подготовить первый.",
+        }
+    if new_evidence >= 10:
+        return {
+            "pack_type": "investor_update",
+            "reason": f"С последнего апдейта накопилось {new_evidence} новых сигналов.",
+        }
+    if stale_count:
+        return {
+            "pack_type": "founder_weekly_review",
+            "reason": "Есть одобренные, но не экспортированные апдейты — закрыть цикл.",
+        }
+    return {
+        "pack_type": "founder_weekly_review",
+        "reason": "Регулярный недельный обзор.",
+    }
+
+
+async def _share_packs_block(
+    session: AsyncSession, *, now: datetime
+) -> dict[str, Any]:
+    from datetime import timedelta
+
+    from app.services.agent_run_log import latest_runs
+    from app.services.share_packs import (
+        last_approved_pack,
+        list_packs,
+        packs_awaiting_approval,
+        stale_approved_packs,
+    )
+
+    pending = await packs_awaiting_approval(session, limit=20)
+    stale = await stale_approved_packs(session, now=now, limit=20)
+    last_investor = await last_approved_pack(session, audience="investor")
+    active = await list_packs(session, limit=100)
+    critical = [
+        {"pack_id": p["pack_id"], "warnings": p["warnings"]}
+        for p in active
+        if any(w.get("severity") == "critical" for w in p.get("warnings", []))
+    ]
+
+    since = now - timedelta(days=7)
+    if last_investor and last_investor.get("approved_at"):
+        try:
+            since = datetime.fromisoformat(last_investor["approved_at"])
+        except ValueError:
+            pass
+    runs = await latest_runs(session, limit=40)
+    new_evidence = sum(
+        int(r.get("created") or 0) + int(r.get("updated_from_new_evidence") or 0)
+        for r in runs
+        if (r.get("run_finished_at") or "") >= since.isoformat()
+    )
+
+    return {
+        "pending_count": len(pending),
+        "pending": [
+            {
+                "pack_id": p["pack_id"],
+                "title": p["title"],
+                "audience": p["audience"],
+                "status": p["status"],
+            }
+            for p in pending[:5]
+        ],
+        "updates_awaiting_approval": len(pending),
+        "stale_approved_count": len(stale),
+        "critical_redaction_warnings": critical,
+        "last_approved_investor_update": (
+            {
+                "pack_id": last_investor["pack_id"],
+                "title": last_investor["title"],
+                "status": last_investor["status"],
+                "approved_at": last_investor["approved_at"],
+            }
+            if last_investor
+            else None
+        ),
+        "new_evidence_since_last_update": new_evidence,
+        "suggested_next_update": _suggest_next_update(
+            last_investor=last_investor,
+            stale_count=len(stale),
+            new_evidence=new_evidence,
+        ),
+    }
+
+
 async def build_command_center(
     session: AsyncSession,
     *,
@@ -185,6 +278,7 @@ async def build_command_center(
     freshness = await _knowledge_freshness(session)
     focus = await _focus_vs_activity(session, overview)
     availability = await _availability_summary(session)
+    share_packs = await _share_packs_block(session, now=safe_now)
 
     next_actions = [
         {
@@ -221,4 +315,5 @@ async def build_command_center(
         "knowledge_freshness": freshness,
         "data_availability": availability,
         "next_actions": next_actions,
+        "share_packs": share_packs,
     }

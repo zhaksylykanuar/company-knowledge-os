@@ -186,6 +186,8 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="nav" data-nav="me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Metrics</div>
   <div class="nav" data-nav="orh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Operating rhythm</div>
   <div class="nav" data-nav="upd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14H7l-3 3V4z"/><path d="M8 9h8M8 13h5"/></svg>Curated updates</div>
+  <div class="nav" data-nav="spk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 012-2h8l6 6v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5z"/><path d="M14 3v6h6M9 14l2 2 4-4"/></svg>Share packs<span class="navbadge" id="nav-spk-n"></span></div>
+  <div class="nav" data-nav="ntf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>Notifications<span class="navbadge" id="nav-ntf-n"></span></div>
   <div class="navsep"></div>
   <div class="nav" data-nav="inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M8 12l3-3 2 2 3-4"/></svg>Investor view</div>
 </aside>
@@ -224,6 +226,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
         <div class="card" id="cc-fresh"></div>
         <div class="card" id="cc-avail"></div>
       </div>
+      <div class="card" id="cc-packs" style="display:none"></div>
       <div>
         <p class="h" style="margin-bottom:10px">Карта бизнеса</p>
         <div class="mapgrid" id="cc-map"></div>
@@ -282,6 +285,15 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
     <div class="statusline" id="upd-msg"></div>
     <div class="stack" id="upd-body"></div>
   </section>
+  <section class="sec" data-sec="spk">
+    <div class="row" id="spk-gen" style="flex-wrap:wrap;gap:8px;margin-bottom:6px"></div>
+    <div class="statusline" id="spk-msg"></div>
+    <div class="stack" id="spk-body"></div>
+  </section>
+  <section class="sec" data-sec="ntf">
+    <div class="statusline" id="ntf-msg"></div>
+    <div class="stack" id="ntf-body"></div>
+  </section>
   <section class="sec" data-sec="inv"><div class="stack" id="inv-body"></div></section>
 
   </div>
@@ -318,6 +330,10 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
 
 <div class="overlay" id="ov-task"><div class="panel" style="width:min(680px,94vw);max-height:82vh">
   <div id="task-body"><div class="mut">Загружаю задачу…</div></div>
+</div></div>
+
+<div class="overlay" id="ov-pack"><div class="panel" style="width:min(720px,94vw);max-height:84vh">
+  <div id="pack-body"><div class="mut">Загружаю preview…</div></div>
 </div></div>
 
 <div class="overlay" id="ov-edit"><div class="panel">
@@ -369,8 +385,8 @@ async function api(path,opts){
 var COLOR_BADGE={green:["b-green","зелёный"],yellow:["b-amber","жёлтый"],red:["b-red","красный"],unknown:["b-mut","нет данных"]};
 function colorBadge(c,label){var m=COLOR_BADGE[c]||COLOR_BADGE.unknown;return '<span class="badge '+m[0]+'"><span class="dot" style="background:currentColor"></span>'+esc(label||m[1])+'</span>';}
 
-var SECTION_TITLES={cc:"Command center",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",tw:"Team workspace",orh:"Operating rhythm",upd:"Curated updates",inv:"Investor view"};
-var LAZY_LOADERS={so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},inv:function(){loadInvestor();}};
+var SECTION_TITLES={cc:"Command center",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",tw:"Team workspace",orh:"Operating rhythm",upd:"Curated updates",spk:"Share packs",ntf:"Notifications",inv:"Investor view"};
+var LAZY_LOADERS={so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},spk:function(){loadSharePacks();},ntf:function(){loadNotifications();},inv:function(){loadInvestor();}};
 var LAZY_LOADED={};
 function show(id){
   var secs=document.querySelectorAll(".sec");
@@ -585,6 +601,21 @@ function ccRender(){
     });
     ah2+='<div class="mut" style="margin-top:6px">Правило: нет данных — не рисуем цифру, показываем состояние.</div>';
     $("cc-avail").innerHTML=ah2;
+
+    // Share packs / approval status (Stage 8).
+    var sp2=CC.share_packs;
+    if(sp2){
+      var crit=(sp2.critical_redaction_warnings||[]).length;
+      var sh='<p class="h">Share packs <span class="edit" data-go="spk">открыть →</span></p>'
+        +'<div class="row" style="gap:16px;flex-wrap:wrap"><span>Ждут approve: <b>'+num(sp2.updates_awaiting_approval||0)+'</b></span>'
+        +'<span>Stale approved: <b style="color:'+(sp2.stale_approved_count?"var(--amber)":"inherit")+'">'+num(sp2.stale_approved_count||0)+'</b></span>'
+        +'<span>Critical leak warnings: <b style="color:'+(crit?"var(--red)":"inherit")+'">'+crit+'</b></span></div>';
+      if(sp2.last_approved_investor_update)sh+='<div class="mut" style="margin-top:6px">Последний investor update: '+esc(sp2.last_approved_investor_update.title)+' · '+esc(sp2.last_approved_investor_update.status)+'</div>';
+      if(sp2.new_evidence_since_last_update)sh+='<div class="mut" style="margin-top:2px">Новых сигналов с последнего апдейта: '+num(sp2.new_evidence_since_last_update)+'</div>';
+      if(sp2.suggested_next_update)sh+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text);margin-top:8px">Рекомендую подготовить: <b>'+esc(sp2.suggested_next_update.pack_type)+'</b> — '+esc(sp2.suggested_next_update.reason)+'</div>';
+      $("cc-packs").innerHTML=sh;
+      $("cc-packs").style.display="block";
+    }
   }
 
   // Business map (from overview).
@@ -1298,9 +1329,131 @@ document.addEventListener("click",function(e){
   var ut=e.target.closest("[data-updkind]");if(ut){loadUpdateDraft(ut.getAttribute("data-updkind"));}
 });
 
+// --- Share packs (review center) ----------------------------------------
+var PACK_TYPE_LABELS={founder_weekly_review:"Founder weekly",team_weekly_brief:"Team brief",investor_update:"Investor update",decision_summary:"Decision summary",product_progress_update:"Product progress",risk_review:"Risk review"};
+var PACK_STATUS_BADGE={draft:"b-mut",pending_approval:"b-amber",approved:"b-green",exported:"b-blue",revoked:"b-red"};
+var PACK_AUD_BADGE={founder:"b-accent",team:"b-blue",investor:"b-green"};
+var SHARE_PACKS=null;
+function manifestPanel(m){
+  if(!m)return"";
+  var flags=[["raw_refs_visible","raw refs"],["internal_notes_visible","internal notes"],["personal_team_details_visible","personal team"],["finance_visible","finance"]];
+  var chips=flags.map(function(f){var on=m[f[0]];return '<span class="badge '+(on?"b-amber":"b-green")+'">'+f[1]+': '+(on?"visible":"hidden")+'</span>';}).join(" ");
+  return '<details class="ev"><summary>Redaction manifest ('+esc(m.redaction_level)+')</summary>'
+    +'<div class="row" style="flex-wrap:wrap;gap:5px;margin:6px 0">'+chips+'</div>'
+    +'<div class="mut">hidden fields: '+esc((m.hidden_fields||[]).join(", ")||"—")+'</div>'
+    +'<div class="mut">hidden sources: '+esc((m.hidden_source_types||[]).join(", ")||"—")+'</div>'
+    +'<div class="mut">evidence policy: '+esc(m.evidence_policy)+'</div></details>';
+}
+function packCard(p){
+  var sb=PACK_STATUS_BADGE[p.status]||"b-mut",ab=PACK_AUD_BADGE[p.audience]||"b-mut";
+  var crit=(p.warnings||[]).filter(function(w){return w.severity==="critical";});
+  var html='<div class="card" style="margin-bottom:10px">'
+    +'<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><div class="row" style="gap:6px;flex-wrap:wrap"><span style="font-weight:600">'+esc(p.title)+'</span><span class="badge '+sb+'">'+esc(p.status)+'</span><span class="badge '+ab+'">'+esc(p.audience)+'</span></div>'
+    +'<span class="mut">coverage '+esc(p.evidence_coverage)+' · conf '+(p.confidence!=null?Number(p.confidence).toFixed(2):"—")+'</span></div>';
+  if(crit.length)html+='<div class="alert danger" style="margin-top:8px">⚠ critical leak: '+crit.map(function(w){return esc(w.message);}).join("; ")+'</div>';
+  if(p.section_diff&&p.section_diff.has_diff)html+='<div class="alert warn" style="margin-top:8px">Изменён с момента approve — изменены: '+esc((p.section_diff.changed||[]).join(", ")||"—")+((p.section_diff.added||[]).length?'; добавлены: '+esc(p.section_diff.added.join(", ")):'')+((p.section_diff.removed||[]).length?'; убраны: '+esc(p.section_diff.removed.join(", ")):'')+'</div>';
+  (p.sections||[]).forEach(function(s){
+    var inc=s.included!==false;
+    html+='<div class="item"><span class="badge '+(inc?"b-green":"b-mut")+'">'+(inc?"вкл":"искл")+'</span><div class="t"><b>'+esc(s.title)+'</b> '+basisChip(s.basis)+'<div class="s">'+esc(String(s.text||"").slice(0,160))+'</div></div>'
+      +'<button class="actbtn" data-spksectoggle="'+esc(p.pack_id)+'" data-seckey="'+esc(s.key)+'" data-inc="'+(inc?"0":"1")+'">'+(inc?"исключить":"включить")+'</button></div>';
+  });
+  html+=manifestPanel(p.redaction_manifest);
+  var acts='<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">';
+  if(p.status==="draft"||p.status==="pending_approval")acts+='<button class="actbtn primary" data-spkact="approve" data-spkid="'+esc(p.pack_id)+'" data-hash="'+esc(p.content_hash)+'">Approve</button>';
+  acts+='<button class="actbtn'+(p.is_exportable?" primary":"")+'" data-spkact="export" data-spkid="'+esc(p.pack_id)+'"'+(p.is_exportable?"":' disabled title="нужно approve + неизменный hash + manifest ok"')+'>Export</button>';
+  acts+='<button class="actbtn" data-spkact="preview" data-spkid="'+esc(p.pack_id)+'">Preview</button>';
+  acts+='<button class="actbtn" data-spkact="regenerate" data-spkid="'+esc(p.pack_id)+'">Regenerate</button>';
+  if(p.status!=="revoked")acts+='<button class="actbtn danger" data-spkact="revoke" data-spkid="'+esc(p.pack_id)+'">Revoke</button>';
+  return html+acts+'</div></div>';
+}
+function spkRender(){
+  if(!SHARE_PACKS){$("spk-body").innerHTML='<div class="mut">Загружаю…</div>';return;}
+  var packs=SHARE_PACKS.packs||[];
+  var html='<div class="mut" style="margin-bottom:6px">Review-центр: AI готовит draft, человек approve/export/revoke. Export недоступен, пока pack не approved, hash изменился после approve или есть critical leak warning. Investor/team export — без raw refs, internal notes и финансов.</div>';
+  if(!packs.length)html+='<div class="empty">Packs нет. Сгенерируй выше.</div>';
+  packs.forEach(function(p){html+=packCard(p);});
+  $("spk-body").innerHTML=html;
+}
+async function loadSharePacks(){
+  setMsgEl("spk-msg","загружаю share packs…",false);
+  var gb='<span class="mut" style="align-self:center">Сгенерировать:</span>';
+  Object.keys(PACK_TYPE_LABELS).forEach(function(t){gb+='<button class="chip" data-spkgen="'+t+'">'+PACK_TYPE_LABELS[t]+'</button>';});
+  $("spk-gen").innerHTML=gb;
+  try{
+    SHARE_PACKS=await (await api("/v1/share-packs")).json();
+    spkRender();
+    setMsgEl("spk-msg","packs: "+SHARE_PACKS.counts.total,false);
+    var pend=(SHARE_PACKS.packs||[]).filter(function(p){return p.status==="draft"||p.status==="pending_approval";}).length;
+    $("nav-spk-n").textContent=pend?String(pend):"";
+  }catch(e){setMsgEl("spk-msg",String(e.message||e),true);}
+}
+function showPackPreview(pv){
+  var h='<p class="h">Export preview · '+esc(pv.pack_type)+' <span class="badge '+(PACK_AUD_BADGE[pv.audience]||"b-mut")+'">'+esc(pv.audience)+'</span></p>';
+  if((pv.warnings||[]).filter(function(w){return w.severity==="critical";}).length)h+='<div class="alert danger">Critical leak warnings — export заблокирован.</div>';
+  h+='<p class="h" style="margin-top:8px">Что будет в апдейте</p>';
+  (pv.what_will_be_shared||[]).forEach(function(s){h+='<div class="item"><div class="t"><b>'+esc(s.title)+'</b><div class="s">'+esc(s.text)+'</div></div></div>';});
+  if((pv.what_is_excluded||[]).length){h+='<p class="h" style="margin-top:8px">Исключено</p><div class="row" style="flex-wrap:wrap;gap:5px">';pv.what_is_excluded.forEach(function(s){h+='<span class="badge b-mut">'+esc(s.title)+'</span>';});h+='</div>';}
+  h+='<p class="h" style="margin-top:8px">Claims</p>';
+  (pv.claims||[]).forEach(function(c){var cs=c.status==="observed"?"b-green":c.status==="contradicted"?"b-red":"b-amber";h+='<div class="item"><span class="badge '+cs+'">'+esc(c.status)+'</span><div class="t">'+esc(c.claim)+'</div></div>';});
+  h+=manifestPanel(pv.redaction_manifest);
+  h+='<details class="ev" style="margin-top:8px"><summary>export text</summary><pre class="digest">'+esc(pv.export_text||"")+'</pre></details>';
+  $("pack-body").innerHTML=h;overlay("ov-pack",true);
+}
+document.addEventListener("click",async function(e){
+  var gen=e.target.closest("[data-spkgen]");
+  if(gen){try{await api("/v1/share-packs/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pack_type:gen.getAttribute("data-spkgen")})});loadSharePacks();loadNotifCounts();}catch(err){setMsgEl("spk-msg",String(err.message||err),true);}return;}
+  var tog=e.target.closest("[data-spksectoggle]");
+  if(tog){try{await api("/v1/share-packs/"+encodeURIComponent(tog.getAttribute("data-spksectoggle"))+"/section/include",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section_key:tog.getAttribute("data-seckey"),included:tog.getAttribute("data-inc")==="1"})});loadSharePacks();}catch(err){setMsgEl("spk-msg",String(err.message||err),true);}return;}
+  var act=e.target.closest("[data-spkact]");
+  if(act){
+    var a=act.getAttribute("data-spkact"),pid=act.getAttribute("data-spkid");
+    try{
+      if(a==="preview"){var pv=await (await api("/v1/share-packs/"+encodeURIComponent(pid)+"/preview")).json();showPackPreview(pv);return;}
+      var body={};
+      if(a==="approve")body={content_hash:act.getAttribute("data-hash")};
+      if(a==="revoke")body={reason:prompt("Причина revoke (необязательно):")||null};
+      await api("/v1/share-packs/"+encodeURIComponent(pid)+"/"+a,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      loadSharePacks();loadNotifCounts();
+    }catch(err){setMsgEl("spk-msg",String(err.message||err),true);}
+  }
+});
+
+// --- Notification center -------------------------------------------------
+var NOTIFS=null;
+var NOTIF_SRC={second_opinion:"second opinion",inbox:"inbox",share_pack:"share pack",agent_run:"агенты",data_availability:"данные"};
+function ntfRender(){
+  if(!NOTIFS){$("ntf-body").innerHTML='<div class="mut">Загружаю…</div>';return;}
+  var items=NOTIFS.notifications||[];
+  var html='<div class="mut" style="margin-bottom:6px">Внутренний центр уведомлений (без внешней отправки). Каждое — источник, severity, CTA и trail.</div>';
+  if(!items.length)html+='<div class="empty">Уведомлений нет — всё под контролем.</div>';
+  items.forEach(function(n){
+    var sb=n.severity==="high"?"b-red":n.severity==="low"?"b-mut":"b-amber";
+    var ref=n.cta_ref||{},cta="";
+    if(ref.kind==="finding")cta='<button class="actbtn" data-soact="trail" data-fk="'+esc(ref.finding_key)+'">trail</button><button class="actbtn" data-acresolve="'+esc(ref.finding_key)+'">решено</button><button class="actbtn" data-acsnooze="'+esc(ref.finding_key)+'">отложить</button>';
+    else if(ref.kind==="proposal")cta='<button class="actbtn" data-go="ib">в Inbox</button>';
+    else if(ref.kind==="share_pack")cta='<button class="actbtn" data-go="spk">открыть pack</button>';
+    else if(ref.kind==="metric")cta='<span class="mut">прогнать агентов</span>';
+    html+='<div class="actcard '+(n.severity==="high"?"sev-high":n.severity==="low"?"sev-low":"")+'"><div class="row" style="flex-wrap:wrap;gap:6px"><span class="badge '+sb+'">'+esc(n.severity)+'</span><span class="src-badge">'+esc(NOTIF_SRC[n.source]||n.source)+'</span><span class="badge b-mut">'+esc(n.type)+'</span><span class="mut">'+esc(n.status)+'</span></div>'
+      +'<div style="font-weight:500;margin:6px 0 2px">'+esc(n.title)+'</div>'
+      +(n.related_entity?'<div class="mut">'+esc(n.related_entity)+'</div>':'')
+      +'<div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">'+cta+'</div></div>';
+  });
+  $("ntf-body").innerHTML=html;
+}
+async function loadNotifications(){
+  setMsgEl("ntf-msg","загружаю…",false);
+  try{
+    NOTIFS=await (await api("/v1/founder/notification-center")).json();
+    ntfRender();
+    $("nav-ntf-n").textContent=NOTIFS.counts.total?String(NOTIFS.counts.total):"";
+    setMsgEl("ntf-msg","уведомлений: "+NOTIFS.counts.total,false);
+  }catch(e){setMsgEl("ntf-msg",String(e.message||e),true);}
+}
+async function loadNotifCounts(){try{var d=await (await api("/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
+
 // --- role switching -----------------------------------------------------
 var ROLE_SECTIONS={
-  founder:["cc","so","ib","ac","tw","kt","st","pr","gr","sa","fi","te","ta","me","orh","upd","inv"],
+  founder:["cc","so","ib","ac","tw","kt","st","pr","gr","sa","fi","te","ta","me","orh","upd","spk","ntf","inv"],
   team:["tw","orh"],
   investor:["inv"]
 };
@@ -1310,7 +1463,7 @@ function applyNavVisibility(){
   for(var i=0;i<navs.length;i++){var id=navs[i].getAttribute("data-nav");navs[i].style.display=allowed.indexOf(id)>=0?"":"none";}
 }
 function bootstrap(){
-  if(VIEW==="founder"){loadOverview();loadInboxCounts();loadDeclarations();loadAvailability();loadCommandCenter();loadFindingsIndex();}
+  if(VIEW==="founder"){loadOverview();loadInboxCounts();loadDeclarations();loadAvailability();loadCommandCenter();loadFindingsIndex();loadNotifCounts();}
 }
 function applyRole(role){
   VIEW=(role==="team"||role==="investor")?role:"founder";
