@@ -2091,7 +2091,7 @@ function renderObsidianBridge(){
   var h='<div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px"><div><div style="font-size:16px;font-weight:600">Obsidian Bridge</div><div class="mut">FounderOS generates a real local Obsidian-compatible vault. Use Obsidian for Graph View, Local Graph, Backlinks, Markdown notes, tags and search.</div></div>'
     +'<div class="row" style="gap:8px;flex-wrap:wrap"><span class="badge '+cls+'">'+esc(d.status||"unknown")+'</span><button class="btn ghost" data-obsact="dry">Dry Run</button><button class="btn" data-obsact="sync">Sync Now</button><button class="btn ghost" data-obsact="open-vault">Open Vault in Obsidian</button><button class="btn ghost" data-obsact="open-index">Open Index Note</button></div></div>';
   if(!configured){
-    h+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Configure the bridge with FOUNDEROS_ENABLE_OBSIDIAN_BRIDGE=true and an absolute FOUNDEROS_OBSIDIAN_VAULT_PATH, then restart the backend. No files are written while the bridge is disabled or missing a path.</div>';
+    h+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Run <code>uv run python scripts/bootstrap_local_workspace.py --apply</code>, then restart the backend. Recommended path: <code>'+esc(d.recommended_relative_path||".local/obsidian/FounderOS Knowledge Vault")+'</code>. No files are written while the bridge is disabled or missing a path.</div>';
   }
   h+='<div class="grid3" style="margin-bottom:12px">'
     +'<div class="kpi"><div class="l">notes</div><div class="v">'+num(d.notes_seen||0)+'</div><div class="d">generated from graph</div></div>'

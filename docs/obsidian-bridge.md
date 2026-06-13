@@ -11,23 +11,32 @@ configured local vault path.
 ## Setup
 
 1. Install the Obsidian desktop app.
-2. Create a local folder for the vault, or let FounderOS create it on first
-   sync.
-3. Add local settings to your untracked local env file:
+2. Bootstrap the project-local workspace:
 
-```env
-FOUNDEROS_ENABLE_OBSIDIAN_BRIDGE=true
-FOUNDEROS_OBSIDIAN_VAULT_NAME=FounderOS Knowledge Vault
-FOUNDEROS_OBSIDIAN_VAULT_PATH=/Users/<you>/Documents/FounderOS Knowledge Vault
-FOUNDEROS_OBSIDIAN_SYNC_MODE=manual
+```bash
+cd /Users/anuarzh/Projects/company-knowledge-os
+uv run python scripts/bootstrap_local_workspace.py --apply
+uv run python scripts/start_local.py
 ```
 
-4. Restart the backend after changing env.
-5. Open `/ui` and go to Knowledge Tree.
-6. Click Dry Run.
-7. Click Sync Now.
-8. Click Open Vault in Obsidian.
-9. In Obsidian, use Graph View, Local Graph, Backlinks, Tags, and Search.
+3. Open `http://127.0.0.1:8765/ui`.
+4. Go to Knowledge Tree.
+5. Click Dry Run.
+6. Click Sync Now.
+7. Click Open Vault in Obsidian.
+8. In Obsidian, use Graph View, Local Graph, Backlinks, Tags, and Search.
+
+Manual local env editing is no longer required for the local happy path.
+The bootstrap script preserves existing local secrets, writes only a managed
+FounderOS block, and points the bridge to:
+
+```text
+.local/obsidian/FounderOS Knowledge Vault
+```
+
+If an older Obsidian vault path is already present in the local env override, bootstrap
+copies its files into `.local/obsidian/FounderOS Knowledge Vault` and leaves the
+old vault untouched. Migration details are written to `.local/migration-log.json`.
 
 ## Operator Commands
 
@@ -87,10 +96,19 @@ FounderOS Knowledge Vault/
 Each graph node becomes a markdown note with YAML frontmatter and real Obsidian
 wikilinks. Obsidian builds the graph from those links, not from custom JSON.
 
+The generated local vault lives under:
+
+```text
+/Users/anuarzh/Projects/company-knowledge-os/.local/obsidian/FounderOS Knowledge Vault
+```
+
+`.local/` and the local env override are gitignored.
+
 ## Safety
 
 - The bridge must be enabled explicitly.
 - `FOUNDEROS_OBSIDIAN_VAULT_PATH` must be an absolute local path.
+- Bootstrap sets that path to the project-local `.local/` workspace.
 - Dry run never writes files.
 - Real sync writes by atomic temp-file replace.
 - Path traversal is rejected.
@@ -98,6 +116,8 @@ wikilinks. Obsidian builds the graph from those links, not from custom JSON.
   raw object refs are not written to markdown.
 - Team/investor views cannot access the bridge endpoints.
 - Open endpoints return `obsidian://` URIs and do not open applications server-side.
+- External secrets remain backend-only. The browser receives only local dev
+  config from the allowlisted browser-config endpoint.
 
 ## Open Links
 

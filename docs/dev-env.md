@@ -6,21 +6,30 @@ key entry, no manual endpoint configuration.
 ## Setup
 
 ```bash
-# 1. Create your local override (gitignored). Start from the template:
-cp .env.example .env.local
+# 1. Bootstrap project-local runtime files. This creates .local/ and updates
+#    .env.local without deleting existing local secrets.
+uv run python scripts/bootstrap_local_workspace.py --apply
 
-# 2. In .env.local set the local dev bootstrap values:
-#    APP_ENV=local
-#    FOUNDEROS_API_BASE_URL=http://127.0.0.1:8765
-#    FOUNDEROS_DEV_API_KEY=local-dev-key
-#    FOUNDEROS_ENABLE_BROWSER_DEV_CONFIG=true
-#    FOUNDEROS_API_KEYS=local-dev-key
+# 2. Start the local backend. This also checks bootstrap state and runs
+#    alembic upgrade head before uvicorn.
+uv run python scripts/start_local.py
 
-# 3. Start the backend:
-uv run uvicorn app.main:app --port 8765
-
-# 4. Open the UI:
+# 3. Open the UI:
 open http://127.0.0.1:8765/ui
+```
+
+The local workspace lives inside the repository and is gitignored:
+
+```text
+.local/
+  obsidian/FounderOS Knowledge Vault/
+  data/
+  logs/
+  tmp/
+  exports/
+  cache/
+  backups/
+  migration-log.json
 ```
 
 FounderOS calls `GET /v1/dev/browser-config` (local-only), picks up the
@@ -34,6 +43,10 @@ Highest wins: **real environment variables > `.env.local` > `.env` >
 built-in defaults.** A missing file is skipped. `.env.local` and
 `.env.*.local` are gitignored; `.env.example` is the committed template.
 
+`scripts/bootstrap_local_workspace.py` writes a managed block in `.env.local`
+for local browser bootstrap and Obsidian bridge paths. Existing custom lines
+and backend-only secrets are preserved.
+
 ## Safety model
 
 - `GET /v1/dev/browser-config` exists **only** when `APP_ENV=local` **and**
@@ -45,6 +58,8 @@ built-in defaults.** A missing file is skipped. `.env.local` and
   credentials — stay **backend-only** and are never sent to the browser.
 - The `dev_api_key` authenticates the **local backend only**.
 - A manual key in `localStorage` always overrides the dev key.
+- `.local/`, `.env.local`, generated vault files, logs, cache, backups and
+  exports are local runtime artifacts and must not be committed.
 
 ## Production
 

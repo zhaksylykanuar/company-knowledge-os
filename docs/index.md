@@ -44,6 +44,8 @@ Navigation map for future Codex sessions.
 ## Runbooks
 
 - `operator_runtime_setup.md`: project-local `.env`, health checks, and Codex launcher setup.
+- `dev-env.md`: automatic local workspace bootstrap, local env override, and local UI startup.
+- `obsidian-bridge.md`: local Obsidian vault bridge, sync, and open-link flow.
 - `runbooks/guarded-operations.md`: guarded execution boundaries, GitHub
   target-org migration metadata, and safe diagnostics.
 - `runbooks/jira-operating-model.md`: safe Jira inventory diagnostics,
@@ -52,6 +54,10 @@ Navigation map for future Codex sessions.
 
 ## Doctor Scripts
 
+- `../scripts/bootstrap_local_workspace.py`: creates the gitignored `.local/` workspace,
+  preserves local env override secrets, and safely copies an existing Obsidian vault.
+- `../scripts/start_local.py`: bootstraps local runtime files, runs migrations, and
+  starts the local backend on `127.0.0.1:8765`.
 - `../scripts/doctor_guarded_execution.py`: read-only guarded-execution safety preflight.
 - `../scripts/doctor_external_connector_config.py`: read-only GitHub/Jira configuration doctor.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.

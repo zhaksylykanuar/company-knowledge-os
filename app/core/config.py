@@ -1,5 +1,11 @@
+from pathlib import Path
+
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_local_workspace_path() -> str:
+    return str(Path(__file__).resolve().parents[2] / ".local")
 
 
 class Settings(BaseSettings):
@@ -28,6 +34,10 @@ class Settings(BaseSettings):
     api_keys: str | None = Field(
         default=None,
         validation_alias=AliasChoices("FOUNDEROS_API_KEYS"),
+    )
+    founderos_local_workspace_path: str = Field(
+        default_factory=_default_local_workspace_path,
+        validation_alias=AliasChoices("FOUNDEROS_LOCAL_WORKSPACE_PATH"),
     )
 
     database_url: str = "postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos"

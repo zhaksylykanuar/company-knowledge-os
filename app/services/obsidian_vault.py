@@ -104,6 +104,7 @@ class ObsidianBridgeConfig:
     enabled: bool
     vault_name: str
     vault_path: Path | None
+    recommended_vault_path: Path
     sync_mode: str
     status: str
     warnings: list[str] = field(default_factory=list)
@@ -165,6 +166,13 @@ def obsidian_bridge_config(config: Any = settings) -> ObsidianBridgeConfig:
     vault_name = str(
         getattr(config, "obsidian_bridge_vault_name", None) or DEFAULT_VAULT_NAME
     ).strip() or DEFAULT_VAULT_NAME
+    workspace_path = Path(
+        str(
+            getattr(config, "founderos_local_workspace_path", None)
+            or (Path.cwd() / ".local")
+        )
+    ).expanduser()
+    recommended_vault_path = workspace_path / "obsidian" / vault_name
     sync_mode = str(getattr(config, "obsidian_bridge_sync_mode", "manual") or "manual")
     raw_path = getattr(config, "obsidian_bridge_vault_path", None)
     warnings: list[str] = []
@@ -173,7 +181,10 @@ def obsidian_bridge_config(config: Any = settings) -> ObsidianBridgeConfig:
     if enabled:
         if not raw_path:
             status = "missing_path"
-            warnings.append("FOUNDEROS_OBSIDIAN_VAULT_PATH is not configured.")
+            warnings.append(
+                "FOUNDEROS_OBSIDIAN_VAULT_PATH is not configured. "
+                f"Recommended path: {recommended_vault_path}"
+            )
         else:
             candidate = Path(str(raw_path)).expanduser()
             if not candidate.is_absolute():
@@ -186,6 +197,7 @@ def obsidian_bridge_config(config: Any = settings) -> ObsidianBridgeConfig:
         enabled=enabled,
         vault_name=vault_name,
         vault_path=vault_path,
+        recommended_vault_path=recommended_vault_path,
         sync_mode=sync_mode,
         status=status,
         warnings=warnings,
@@ -722,6 +734,8 @@ async def build_obsidian_status(session: AsyncSession) -> dict[str, Any]:
         "configured": cfg.status == "configured",
         "vault_path_configured": cfg.vault_path is not None,
         "vault_path": str(cfg.vault_path) if cfg.vault_path else None,
+        "recommended_vault_path": str(cfg.recommended_vault_path),
+        "recommended_relative_path": ".local/obsidian/FounderOS Knowledge Vault",
         "open_vault_uri": obsidian_open_uri(cfg.vault_name),
         "open_index_uri": obsidian_open_uri(cfg.vault_name, "00 Index.md"),
         "notes_seen": len(plan.notes),

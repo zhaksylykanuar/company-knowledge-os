@@ -77,6 +77,11 @@ async def test_obsidian_bridge_status_disabled_missing_and_configured(
         missing = await client.get("/v1/knowledge/obsidian/status")
     assert missing.status_code == 200
     assert missing.json()["status"] == "missing_path"
+    assert (
+        missing.json()["recommended_relative_path"]
+        == ".local/obsidian/FounderOS Knowledge Vault"
+    )
+    assert "FounderOS Knowledge Vault" in missing.json()["recommended_vault_path"]
 
     _enable_bridge(monkeypatch, tmp_path)
     async with _client() as client:
