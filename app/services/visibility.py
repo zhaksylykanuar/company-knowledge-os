@@ -42,3 +42,43 @@ def can_view(viewer_scope: str, item_scope: str) -> bool:
     if viewer_scope not in _SCOPE_RANK or item_scope not in _SCOPE_RANK:
         return False
     return _SCOPE_RANK[viewer_scope] >= _SCOPE_RANK[item_scope]
+
+
+# Fields stripped from finding read models per viewer scope. Investor
+# additionally only ever sees items explicitly scoped to investor.
+_TEAM_REDACTED_FIELDS = ("note", "source_refs")
+_INVESTOR_ALLOWED_FIELDS = (
+    "finding_key",
+    "finding_type",
+    "summary",
+    "severity",
+    "status",
+    "created_at",
+)
+
+
+def redact_finding(finding: dict, viewer_scope: str) -> dict | None:
+    """Apply scope filtering and field redaction to a finding read model.
+
+    Audience-based, not hierarchical: a finding's ``visibility_scope`` is
+    the audience it belongs to. The founder sees everything; team sees
+    only team-scoped working items (with notes/source refs stripped);
+    investor sees only investor-curated items reduced to safe fields.
+    Returns None when the viewer must not see the item at all.
+    """
+
+    item_scope = str(finding.get("visibility_scope") or SCOPE_FOUNDER)
+    if viewer_scope == SCOPE_FOUNDER:
+        return finding
+    if viewer_scope == SCOPE_TEAM:
+        if item_scope != SCOPE_TEAM:
+            return None
+        redacted = dict(finding)
+        for field in _TEAM_REDACTED_FIELDS:
+            redacted.pop(field, None)
+        return redacted
+    if viewer_scope == SCOPE_INVESTOR:
+        if item_scope != SCOPE_INVESTOR:
+            return None
+        return {key: finding.get(key) for key in _INVESTOR_ALLOWED_FIELDS}
+    return None

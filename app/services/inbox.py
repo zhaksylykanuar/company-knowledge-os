@@ -103,7 +103,12 @@ async def decide_inbox_proposal(
     reviewer_id: str,
     decision_reason: str | None = None,
 ) -> dict[str, Any] | None:
-    """Decide and immediately apply (merges repoint links right away)."""
+    """Decide, immediately apply (merges repoint links) and audit."""
+
+    from app.services.inbox_audit import (
+        ACTION_PROPOSAL_DECISION,
+        record_inbox_action,
+    )
 
     if decision not in {STATUS_ACCEPTED, STATUS_REJECTED}:
         raise ValueError("decision must be accepted or rejected")
@@ -117,4 +122,14 @@ async def decide_inbox_proposal(
     if decided is None:
         return None
     applied = await apply_decided_merges(session)
+    await record_inbox_action(
+        session,
+        action=ACTION_PROPOSAL_DECISION,
+        actor=reviewer_id,
+        target_id=proposal_id,
+        previous_state={"status": "pending"},
+        next_state={"status": decision, "applied": applied},
+        reversible=True,
+        details={"decision_reason": decision_reason},
+    )
     return {**decided, "applied": applied}

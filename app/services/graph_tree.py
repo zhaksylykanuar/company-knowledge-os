@@ -147,7 +147,9 @@ async def review_link(
     decision: str,
     reviewer_id: str,
 ) -> dict[str, Any] | None:
-    """Founder decision on a disputed link: confirm or remove."""
+    """Founder decision on a disputed link: confirm or remove. Audited."""
+
+    from app.services.inbox_audit import ACTION_LINK_REVIEW, record_inbox_action
 
     if decision not in {"confirm", "remove"}:
         raise ValueError("decision must be confirm or remove")
@@ -156,13 +158,38 @@ async def review_link(
     )
     if row is None:
         return None
+    previous_state = {
+        "status": "disputed",
+        "from": row.from_entity_id,
+        "relation": row.relation,
+        "to": row.to_entity_id,
+        "confidence": row.confidence,
+        "evidence_refs": list(row.evidence_refs or []),
+    }
     if decision == "confirm":
         row.confidence = 0.95
         factors = dict(row.confidence_factors or {})
         factors["confirmed_by"] = reviewer_id
         row.confidence_factors = factors
         await session.flush()
-        return {"link_id": link_id, "decision": "confirmed"}
-    await session.delete(row)
-    await session.flush()
-    return {"link_id": link_id, "decision": "removed"}
+        next_state = {"status": "confirmed", "confidence": 0.95}
+        reversible = True
+    else:
+        await session.delete(row)
+        await session.flush()
+        # previous_state keeps everything needed to recreate the link.
+        next_state = {"status": "removed"}
+        reversible = True
+    await record_inbox_action(
+        session,
+        action=ACTION_LINK_REVIEW,
+        actor=reviewer_id,
+        target_id=link_id,
+        previous_state=previous_state,
+        next_state=next_state,
+        reversible=reversible,
+    )
+    return {
+        "link_id": link_id,
+        "decision": "confirmed" if decision == "confirm" else "removed",
+    }

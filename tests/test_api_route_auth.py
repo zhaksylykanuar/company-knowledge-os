@@ -31,12 +31,15 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/inbox", "GET"),
     ("/v1/inbox/proposals/{proposal_id}/decision", "POST"),
     ("/v1/founder/second-opinion", "GET"),
+    ("/v1/founder/second-opinion/{finding_key:path}/trail", "GET"),
     ("/v1/founder/second-opinion/{finding_key:path}/status", "POST"),
     ("/v1/founder/second-opinion/{finding_key:path}/snooze", "POST"),
     ("/v1/founder/second-opinion/{finding_key:path}/note", "POST"),
     ("/v1/graph/tree", "GET"),
     ("/v1/graph/links/{link_id:path}/review", "POST"),
     ("/v1/founder/data-availability", "GET"),
+    ("/v1/founder/declarations/{key}", "GET"),
+    ("/v1/founder/declarations/{key}", "PUT"),
 }
 
 

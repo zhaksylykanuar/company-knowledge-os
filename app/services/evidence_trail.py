@@ -1,0 +1,235 @@
+"""Evidence drill-down: the verifiable chain behind every finding.
+
+source event -> normalized event -> graph node/edge -> finding ->
+inbox decision. Each evidence item is resolved back to the stored
+events (with raw snapshot refs) so the founder can audit why the AI
+concluded what it concluded.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
+from app.db.graph_models import EntityLinkRecord, EntityRecord
+from app.db.second_opinion_models import SecondOpinionFinding
+from app.services.confidence import explain_confidence
+from app.services.inbox_audit import list_inbox_actions
+from app.services.second_opinion import SUGGESTED_ACTIONS, _finding_read_model
+
+# Why each conflict type means what it means — shown verbatim in the UI.
+REASONING = {
+    "execution_mismatch": (
+        "Правило: задача In Progress без коммитов и PR за 7 дней, либо код "
+        "без Jira-связи — заявленное состояние работы расходится с "
+        "наблюдаемой активностью в коде."
+    ),
+    "stale_claim": (
+        "Правило: открытая задача без движения больше 14 дней, либо Jira "
+        "открыта при уже смерженном PR — заявление устарело относительно "
+        "наблюдаемых событий."
+    ),
+    "ownership_gap": "Правило: открытая работа без назначенного ответственного.",
+    "delivery_risk": (
+        "Правило: просроченный срок или застрявшее ревью — наблюдаемые "
+        "даты противоречат заявленным обязательствам."
+    ),
+    "communication_silence": (
+        "Правило: входящий тред ждёт ответа дольше порога, либо контакт "
+        "молчит после нашего сообщения — диалог фактически остановлен."
+    ),
+    "validation_gap": (
+        "Правило: гипотеза заявлена проверенной, но в базе знаний нет "
+        "подтверждающего evidence."
+    ),
+    "evidence_contradiction": (
+        "Правило: заявлению противоречит сохранённое evidence "
+        "(риски или факты из источников)."
+    ),
+    "focus_drift": (
+        "Правило: заявленный фокус недели не совпадает с фактическим "
+        "распределением активности команды за 7 дней."
+    ),
+}
+
+
+def _source_ids_from_evidence(evidence_refs: list[Any]) -> list[str]:
+    ids: list[str] = []
+    for ref in evidence_refs or []:
+        if not isinstance(ref, dict):
+            continue
+        for key in ("source_id", "issue_key", "pr_id", "thread_key", "source_object_id"):
+            value = ref.get(key)
+            if isinstance(value, str) and value and value not in ids:
+                ids.append(value)
+    return ids
+
+
+async def _events_for_source_id(
+    session: AsyncSession, source_id: str, *, limit: int = 5
+) -> list[dict[str, Any]]:
+    rows = (
+        await session.execute(
+            select(SourceEvent)
+            .where(SourceEvent.source_object_id.like(f"%{source_id}%"))
+            .order_by(SourceEvent.id.desc())
+            .limit(limit)
+        )
+    ).scalars()
+    return [
+        {
+            "source_event_id": row.source_event_id,
+            "source_system": row.source_system,
+            "event_type": row.event_type,
+            "title": row.title,
+            "received_at": row.created_at.isoformat() if row.created_at else None,
+            "raw_object_ref": row.raw_object_ref,
+        }
+        for row in rows
+    ]
+
+
+async def _normalized_for_source_id(
+    session: AsyncSession, source_id: str, *, limit: int = 5
+) -> list[dict[str, Any]]:
+    rows = (
+        await session.execute(
+            select(NormalizedActivityItemRecord)
+            .where(
+                NormalizedActivityItemRecord.source_object_id.like(f"%{source_id}%")
+            )
+            .order_by(NormalizedActivityItemRecord.id.desc())
+            .limit(limit)
+        )
+    ).scalars()
+    return [
+        {
+            "activity_item_id": row.activity_item_id,
+            "source": row.source,
+            "activity_type": row.activity_type,
+            "title": row.title,
+            "occurred_at": (
+                row.activity_created_at.isoformat()
+                if row.activity_created_at
+                else (row.created_at.isoformat() if row.created_at else None)
+            ),
+        }
+        for row in rows
+    ]
+
+
+async def _related_nodes(
+    session: AsyncSession, finding: dict[str, Any]
+) -> list[dict[str, Any]]:
+    nodes: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    async def add(entity_id: str | None, via: str) -> None:
+        if not entity_id or entity_id in seen:
+            return
+        row = await session.scalar(
+            select(EntityRecord).where(EntityRecord.entity_id == entity_id)
+        )
+        if row is None:
+            return
+        seen.add(entity_id)
+        nodes.append(
+            {
+                "entity_id": row.entity_id,
+                "entity_type": row.entity_type,
+                "name": row.canonical_name,
+                "via": via,
+            }
+        )
+
+    await add(finding.get("entity_id"), "затронутая сущность")
+
+    project_id = finding.get("entity_id")
+    if project_id:
+        links = (
+            await session.execute(
+                select(EntityLinkRecord)
+                .where(
+                    (EntityLinkRecord.to_entity_id == project_id)
+                    | (EntityLinkRecord.from_entity_id == project_id)
+                )
+                .limit(60)
+            )
+        ).scalars()
+        source_ids = _source_ids_from_evidence(finding.get("evidence_refs") or [])
+        jira_prefixes = {sid.split("-")[0] for sid in source_ids if "-" in sid}
+        for link in links:
+            other = (
+                link.from_entity_id
+                if link.to_entity_id == project_id
+                else link.to_entity_id
+            )
+            if other.startswith("jira:") and other.split(":", 1)[1] in jira_prefixes:
+                await add(other, f"{link.relation}")
+    return nodes
+
+
+async def build_finding_trail(
+    session: AsyncSession, *, finding_key: str
+) -> dict[str, Any] | None:
+    row = await session.scalar(
+        select(SecondOpinionFinding).where(
+            SecondOpinionFinding.finding_key == finding_key
+        )
+    )
+    if row is None:
+        return None
+    finding = _finding_read_model(row)
+
+    evidence_chain: list[dict[str, Any]] = []
+    for ref in finding.get("evidence_refs") or []:
+        if not isinstance(ref, dict):
+            continue
+        source_ids = _source_ids_from_evidence([ref])
+        events: list[dict[str, Any]] = []
+        normalized: list[dict[str, Any]] = []
+        for source_id in source_ids:
+            events.extend(await _events_for_source_id(session, source_id))
+            normalized.extend(await _normalized_for_source_id(session, source_id))
+        evidence_chain.append(
+            {
+                "ref": ref,
+                "source_ids": source_ids,
+                "source_events": events,
+                "normalized_events": normalized,
+                "confidence": finding.get("confidence"),
+            }
+        )
+
+    timeline = sorted(
+        (
+            event
+            for item in evidence_chain
+            for event in item["source_events"]
+            if event.get("received_at")
+        ),
+        key=lambda event: str(event.get("received_at")),
+    )
+
+    return {
+        "finding": finding,
+        "reasoning": REASONING.get(finding["finding_type"], ""),
+        "suggested_action": SUGGESTED_ACTIONS.get(finding["finding_type"], ""),
+        "confidence_explanation": {
+            "score": finding.get("confidence"),
+            "factors": finding.get("confidence_factors") or {},
+            "hint": explain_confidence(
+                float(finding.get("confidence") or 0.0),
+                finding.get("confidence_factors") or {},
+            ),
+        },
+        "evidence_chain": evidence_chain,
+        "evidence_timeline": timeline,
+        "related_nodes": await _related_nodes(session, finding),
+        "decision_history": await list_inbox_actions(
+            session, target_id=finding_key
+        ),
+    }

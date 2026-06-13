@@ -127,8 +127,28 @@ async def upsert_finding(
         await session.flush()
         return "created"
 
-    if row.status in {STATUS_DISMISSED, STATUS_RESOLVED}:
+    if row.status == STATUS_DISMISSED:
         return "skipped"
+
+    if row.status == STATUS_RESOLVED:
+        # A resolved finding may only resurface on genuinely new evidence.
+        if (
+            row.observed_state == observed_state
+            and row.evidence_refs == list(evidence_refs or [])
+        ):
+            return "skipped"
+        row.status = STATUS_OPEN
+        row.resolved_at = None
+        row.declared_state = declared_state
+        row.observed_state = observed_state
+        row.summary = summary
+        row.severity = severity
+        row.confidence = confidence
+        row.confidence_factors = confidence_factors
+        row.evidence_refs = list(evidence_refs or [])
+        row.note = "reopened: появилось новое evidence"
+        await session.flush()
+        return "reopened"
 
     changed = (
         row.declared_state != declared_state
@@ -221,7 +241,13 @@ async def set_finding_status(
     finding_key: str,
     status: str,
     note: str | None = None,
+    reviewer_id: str = "founder",
 ) -> dict[str, Any] | None:
+    from app.services.inbox_audit import (
+        ACTION_FINDING_STATUS,
+        record_inbox_action,
+    )
+
     if status not in FINDING_STATUSES:
         raise ValueError(f"unknown finding status: {status}")
     row = await session.scalar(
@@ -231,6 +257,7 @@ async def set_finding_status(
     )
     if row is None:
         return None
+    previous_status = row.status
     row.status = status
     if note is not None:
         row.note = note[:500]
@@ -238,7 +265,55 @@ async def set_finding_status(
         datetime.now(timezone.utc) if status == STATUS_RESOLVED else None
     )
     await session.flush()
+    await record_inbox_action(
+        session,
+        action=ACTION_FINDING_STATUS,
+        actor=reviewer_id,
+        target_id=finding_key,
+        previous_state={"status": previous_status},
+        next_state={"status": status, "note": note},
+        reversible=True,
+    )
     return {"finding_key": row.finding_key, "status": row.status}
+
+
+LOW_CONFIDENCE_THRESHOLD = 0.45
+
+
+async def emit_finding_or_proposal(
+    session: AsyncSession,
+    *,
+    agent: str,
+    finding_kwargs: dict[str, Any],
+) -> str:
+    """Single-weak-signal rule: a low-confidence conclusion is not a
+    finding — it goes to the inbox as a proposal for the founder.
+
+    Findings are never created without evidence either way.
+    """
+
+    from app.services.agent_proposals import create_proposal
+
+    if not finding_kwargs.get("evidence_refs"):
+        return "no_evidence"
+
+    confidence = float(finding_kwargs.get("confidence") or 0.0)
+    if confidence >= LOW_CONFIDENCE_THRESHOLD:
+        return await upsert_finding(session, **finding_kwargs)
+
+    created = await create_proposal(
+        session,
+        proposal_id=f"finding:{finding_kwargs['finding_key']}",
+        dedupe_key=f"finding:{finding_kwargs['finding_key']}",
+        agent=agent,
+        kind="finding_suggestion",
+        title=str(finding_kwargs.get("summary") or "")[:490],
+        payload=dict(finding_kwargs),
+        evidence_refs=list(finding_kwargs.get("evidence_refs") or []),
+        confidence=confidence,
+        confidence_factors=finding_kwargs.get("confidence_factors"),
+    )
+    return "proposed" if created else "proposal_exists"
 
 
 async def snooze_finding(
@@ -246,8 +321,14 @@ async def snooze_finding(
     *,
     finding_key: str,
     days: int = 7,
+    reviewer_id: str = "founder",
 ) -> dict[str, Any] | None:
     """Hide an open finding from the feed for N days without deciding."""
+
+    from app.services.inbox_audit import (
+        ACTION_FINDING_SNOOZE,
+        record_inbox_action,
+    )
 
     row = await session.scalar(
         select(SecondOpinionFinding).where(
@@ -256,10 +337,23 @@ async def snooze_finding(
     )
     if row is None:
         return None
+    previous = row.snoozed_until.isoformat() if row.snoozed_until else None
     row.snoozed_until = datetime.now(timezone.utc) + timedelta(
         days=max(1, min(int(days), 90))
     )
     await session.flush()
+    await record_inbox_action(
+        session,
+        action=ACTION_FINDING_SNOOZE,
+        actor=reviewer_id,
+        target_id=finding_key,
+        previous_state={"status": row.status, "snoozed_until": previous},
+        next_state={
+            "status": row.status,
+            "snoozed_until": row.snoozed_until.isoformat(),
+        },
+        reversible=True,
+    )
     return {
         "finding_key": row.finding_key,
         "snoozed_until": row.snoozed_until.isoformat(),
@@ -271,7 +365,13 @@ async def set_finding_note(
     *,
     finding_key: str,
     note: str,
+    reviewer_id: str = "founder",
 ) -> dict[str, Any] | None:
+    from app.services.inbox_audit import (
+        ACTION_FINDING_NOTE,
+        record_inbox_action,
+    )
+
     row = await session.scalar(
         select(SecondOpinionFinding).where(
             SecondOpinionFinding.finding_key == finding_key
@@ -279,8 +379,18 @@ async def set_finding_note(
     )
     if row is None:
         return None
+    previous_note = row.note
     row.note = note[:500]
     await session.flush()
+    await record_inbox_action(
+        session,
+        action=ACTION_FINDING_NOTE,
+        actor=reviewer_id,
+        target_id=finding_key,
+        previous_state={"status": row.status, "note": previous_note},
+        next_state={"status": row.status, "note": row.note},
+        reversible=True,
+    )
     return {"finding_key": row.finding_key, "note": row.note}
 
 
@@ -354,6 +464,7 @@ async def scan_second_opinion(
         "updated": 0,
         "unchanged": 0,
         "skipped": 0,
+        "reopened": 0,
         "auto_resolved": 0,
     }
     emitted_keys: set[str] = set()
@@ -368,6 +479,8 @@ async def scan_second_opinion(
     ).scalars()
 
     async def record(**kwargs: Any) -> None:
+        # Jira/GitHub execution conflicts are work items — team-visible.
+        kwargs.setdefault("visibility_scope", VISIBILITY_TEAM)
         emitted_keys.add(kwargs["finding_key"])
         counts[await upsert_finding(session, **kwargs)] += 1
 

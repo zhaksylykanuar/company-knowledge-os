@@ -233,6 +233,10 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" id="key-save">Сохранить и обновить</button></div>
 </div></div>
 
+<div class="overlay" id="ov-trail"><div class="panel" style="width:min(760px,94vw);max-height:80vh">
+  <div id="trail-body"><div class="mut">Загружаю цепочку…</div></div>
+</div></div>
+
 <div class="overlay" id="ov-edit"><div class="panel">
   <p class="h" id="edit-title">Изменить</p>
   <div id="edit-fields"></div>
@@ -363,7 +367,7 @@ function ccRender(){
       {key:"kpis",kind:"area",label:"KPI, по одному в строке",hint:"метка | значение | подпись",value:joinLines(mm.kpis)}
     ],function(out){var s=manual();s.name=out.name.trim();s.kpis=lines(out.kpis);saveManual(s);});
   });
-  var f=m.focus||{};
+  var f=DECL.focus||{};
   if(f.title){
     var pct=Math.max(0,Math.min(100,Number(f.pct)||0));
     $("cc-focus").innerHTML='<div class="row" style="justify-content:space-between"><span class="badge b-accent">Фокус недели</span><span class="mut">'+pct+'%</span></div>'
@@ -375,12 +379,15 @@ function ccRender(){
     $("cc-focus").innerHTML='<span class="badge b-accent">Фокус недели</span><div class="mut" style="margin:8px 0">Один фокус на неделю. Что сейчас важнее всего?</div><button class="btn ghost" id="focus-edit">Задать фокус</button>';
   }
   $("focus-edit").addEventListener("click",function(){
-    var mm=manual();var ff=mm.focus||{};
-    openEditor("Фокус недели",[
+    var ff=DECL.focus||{};
+    openEditor("Фокус недели (хранится на сервере, агенты сверяют с реальностью)",[
       {key:"title",label:"Формулировка фокуса",value:ff.title||""},
       {key:"pct",label:"Прогресс, %",value:ff.pct||"0"},
       {key:"note",label:"Заметка",value:ff.note||""}
-    ],function(out){var s=manual();s.focus={title:out.title.trim(),pct:out.pct.trim(),note:out.note.trim()};saveManual(s);});
+    ],function(out){
+      DECL.focus={title:out.title.trim(),pct:out.pct.trim(),note:out.note.trim()};
+      saveDeclaration("focus",DECL.focus);
+    });
   });
   if(OV){
     var acts=OV.actions.slice(0,5),ah="";
@@ -420,7 +427,9 @@ function ccRender(){
 
 function stRender(){
   var m=manual().strategy||{};
-  var hyp=m.hyp||[];
+  var hyp=(DECL.hypotheses&&DECL.hypotheses.items
+    ? DECL.hypotheses.items.map(function(it){return [it.status||"testing",it.text||""];})
+    : (m.hyp||[]));
   var hb="";
   var HM={validated:["b-green","validated"],testing:["b-amber","testing"],risk:["b-red","at risk"]};
   for(var i=0;i<hyp.length;i++){
@@ -448,14 +457,21 @@ function stRender(){
   var btns=$("st-body").querySelectorAll("[data-stedit],#st-edit-btn");
   for(var b=0;b<btns.length;b++)btns[b].addEventListener("click",function(){
     var s=manual().strategy||{};
-    openEditor("Strategy map",[
+    openEditor("Strategy map (гипотезы хранятся на сервере — их проверяет hypothesis-агент)",[
       {key:"vision",label:"Vision",value:s.vision||""},
       {key:"market",label:"Market",value:s.market||""},
       {key:"icp",label:"ICP",value:s.icp||""},
       {key:"pos",label:"Positioning",value:s.pos||""},
-      {key:"hyp",kind:"area",label:"Гипотезы",hint:"validated|testing|risk | текст",value:joinLines(s.hyp)},
+      {key:"hyp",kind:"area",label:"Гипотезы",hint:"validated|testing|risk | текст",value:joinLines(hyp)},
       {key:"ns",kind:"area",label:"North star",hint:"метка | значение | цель",value:joinLines(s.ns)}
-    ],function(out){var mm=manual();mm.strategy={vision:out.vision.trim(),market:out.market.trim(),icp:out.icp.trim(),pos:out.pos.trim(),hyp:lines(out.hyp),ns:lines(out.ns)};saveManual(mm);});
+    ],function(out){
+      var mm=manual();
+      mm.strategy={vision:out.vision.trim(),market:out.market.trim(),icp:out.icp.trim(),pos:out.pos.trim(),ns:lines(out.ns)};
+      saveManual(mm);
+      var items=lines(out.hyp).map(function(r){return {status:(r[0]||"testing").trim(),text:(r[1]||"").trim()};}).filter(function(it){return it.text;});
+      DECL.hypotheses={items:items};
+      saveDeclaration("hypotheses",DECL.hypotheses);
+    });
   });
 }
 
@@ -818,13 +834,14 @@ function findingCard(f){
     +'<details class="ev"><summary>evidence и источники</summary><pre>'+esc(JSON.stringify({evidence:f.evidence_refs,sources:f.source_refs},null,1))+'</pre></details>'
     +(f.status==="open"
       ?'<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:6px">'
+        +'<button class="actbtn" data-soact="trail" data-fk="'+key+'">Цепочка доказательств</button>'
         +'<button class="actbtn primary" data-soact="accepted" data-fk="'+key+'">Подтверждаю</button>'
         +'<button class="actbtn" data-soact="resolved" data-fk="'+key+'">Решено</button>'
         +'<button class="actbtn" data-soact="snooze" data-fk="'+key+'">Отложить 7д</button>'
         +'<button class="actbtn" data-soact="note" data-fk="'+key+'">Заметка</button>'
         +'<button class="actbtn danger" data-soact="dismissed" data-fk="'+key+'">Не проблема</button>'
         +'</div>'
-      :'<div class="mut" style="margin-top:8px">статус: '+esc(f.status)+'</div>')
+      :'<div class="row" style="margin-top:8px;gap:8px"><span class="mut">статус: '+esc(f.status)+'</span><button class="actbtn" data-soact="trail" data-fk="'+key+'">Цепочка</button></div>')
     +'</div>';
 }
 
@@ -854,7 +871,52 @@ async function loadFeed(){
 
 function setMsgEl(id,text,err){var el=$(id);el.textContent=text||"";el.classList.toggle("err",!!err);}
 
+async function openTrail(key){
+  overlay("ov-trail",true);
+  $("trail-body").innerHTML='<div class="mut">Загружаю цепочку…</div>';
+  try{
+    var t=await (await api("/v1/founder/second-opinion/"+key+"/trail")).json();
+    var f=t.finding;
+    var h='<p class="h">'+esc(f.summary)+' <span class="badge '+(f.severity==="high"?"b-red":f.severity==="low"?"b-mut":"b-amber")+'">'+esc(f.severity)+'</span></p>';
+    h+='<div class="dvo"><div><div class="lbl" style="color:var(--blue)">ЗАЯВЛЕНО</div>'+esc(f.declared_state)+'</div>'
+      +'<div><div class="lbl" style="color:var(--amber)">НАБЛЮДАЮ</div>'+esc(f.observed_state)+'</div></div>';
+    if(t.reasoning)h+='<div class="mut" style="margin-bottom:10px"><b>Почему такой вывод:</b> '+esc(t.reasoning)+'</div>';
+    var ce=t.confidence_explanation;
+    h+='<p class="h" style="margin-top:14px">Confidence: '+Number(ce.score).toFixed(2)+'</p><div class="mut">'+esc(ce.hint)+'</div>';
+    var fx=ce.factors||{};
+    h+='<div class="row" style="flex-wrap:wrap;gap:6px;margin:6px 0 4px">';
+    Object.keys(fx).forEach(function(k){h+='<span class="badge b-mut">'+esc(k)+': '+esc(String(fx[k]))+'</span>';});
+    h+='</div>';
+    h+='<p class="h" style="margin-top:14px">Evidence timeline <span class="mut">'+t.evidence_timeline.length+' событий</span></p>';
+    if(t.evidence_timeline.length){
+      for(var i=0;i<t.evidence_timeline.length;i++){
+        var ev=t.evidence_timeline[i];
+        h+='<div class="item"><span class="badge b-mut">'+esc(ev.source_system)+'</span><div class="t">'+esc(ev.title||ev.event_type)
+          +'<div class="s">'+esc(ev.event_type)+' · получено '+esc((ev.received_at||"").slice(0,16).replace("T"," "))
+          +'<br><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">'+esc(ev.raw_object_ref||"")+'</span></div></div></div>';
+      }
+    } else h+='<div class="mut">События источников для этого evidence не найдены (внутренний сигнал).</div>';
+    h+='<details class="ev"><summary>полная цепочка evidence (refs → события → normalized)</summary><pre>'+esc(JSON.stringify(t.evidence_chain,null,1))+'</pre></details>';
+    if(t.related_nodes&&t.related_nodes.length){
+      h+='<p class="h" style="margin-top:14px">Связанные ноды графа</p><div class="row" style="flex-wrap:wrap;gap:6px">';
+      t.related_nodes.forEach(function(n){h+='<span class="badge b-accent" style="cursor:pointer" data-go="kt">'+esc(n.name)+' · '+esc(n.entity_type)+'</span>';});
+      h+='</div>';
+    }
+    if(t.suggested_action)h+='<div class="mut" style="margin-top:12px">→ '+esc(t.suggested_action)+'</div>';
+    h+='<p class="h" style="margin-top:14px">История решений</p>';
+    if(t.decision_history.length){
+      t.decision_history.forEach(function(d){
+        h+='<div class="item"><span class="badge b-mut">'+esc((d.created_at||"").slice(0,16).replace("T"," "))+'</span><div class="t">'+esc(d.action)+': '
+          +esc(JSON.stringify(d.previous_state&&d.previous_state.status))+' → '+esc(JSON.stringify(d.next_state&&d.next_state.status))
+          +'<div class="s">'+esc(d.actor||"")+(d.reversible?" · обратимо":"")+'</div></div></div>';
+      });
+    } else h+='<div class="mut">Решений по этому конфликту ещё не было.</div>';
+    $("trail-body").innerHTML=h;
+  }catch(e){$("trail-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+
 async function soAction(action,key){
+  if(action==="trail"){openTrail(key);return;}
   try{
     if(action==="snooze"){
       await api("/v1/founder/second-opinion/"+key+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});
@@ -1101,6 +1163,23 @@ document.addEventListener("click",function(e){
   if(e.target.id==="kt-relayout"){ktLayout();ktDraw();}
 });
 
+var DECL={focus:null,hypotheses:null};
+async function loadDeclarations(){
+  try{
+    var fr=await (await api("/v1/founder/declarations/focus")).json();
+    DECL.focus=fr.payload&&fr.payload.title?fr.payload:null;
+    var hr=await (await api("/v1/founder/declarations/hypotheses")).json();
+    DECL.hypotheses=hr.payload&&hr.payload.items?hr.payload:null;
+    ccRender();stRender();
+  }catch(e){}
+}
+async function saveDeclaration(key,payload){
+  try{
+    await api("/v1/founder/declarations/"+key,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({payload:payload})});
+  }catch(e){setMsgEl("topmsg",String(e.message||e),true);}
+  renderAll();
+}
+
 var CACHE_KEY="fos_overview_cache";
 async function loadOverview(){
   $("topmsg").textContent="Обновляю данные…";$("topmsg").classList.remove("err");
@@ -1163,6 +1242,7 @@ try{var cached=localStorage.getItem(CACHE_KEY);if(cached){OV=JSON.parse(cached);
 renderAll();
 loadOverview();
 loadInboxCounts();
+loadDeclarations();
 </script>
 </body>
 </html>

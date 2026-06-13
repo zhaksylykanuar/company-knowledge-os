@@ -89,9 +89,53 @@ run. This is the human-approval boundary required by CLAUDE.md.
   test clock) and auto-resolves findings it no longer observes
   (reconciliation), so the feed never accumulates orphans.
 
+## Stage 3: trust layer + source agents
+
+Trust layer (built before new UI so second opinion is provable):
+
+- Evidence drill-down (`evidence_trail.py`, `GET …/{finding_key}/trail`):
+  resolves a finding's evidence refs back through the verifiable chain
+  source event → normalized event → graph node → finding → inbox
+  decision. Returns reasoning (the rule), confidence explanation with
+  factors, evidence timeline (with raw_object_ref), related graph nodes,
+  suggested action and decision history. UI renders it as a panel.
+- Audit trail (`inbox_audit.py`): every human decision (proposal
+  accept/reject, link confirm/remove, finding status/snooze/note) writes
+  an `audit_logs` row with actor, previous_state/next_state and
+  reversibility. `decision_history` in the trail is sourced from it.
+- Visibility enforcement (`visibility.py` `redact_finding` + API `view`
+  param): audience-based, not hierarchical. Founder sees all; team sees
+  only team-scoped working findings (notes + source_refs stripped);
+  investor sees only investor-curated findings reduced to safe fields.
+  Trail, inbox and graph tree are founder-only / non-investor by API
+  guard. Execution/stale/ownership findings are team-scoped; email
+  communication-silence is founder-scoped.
+
+Source agents (deterministic, idempotent, evidence-strict):
+
+- Meeting agent (`meeting_agent.py`): documents with marker lines
+  (Decision:/Action:/Risk:/…) become `meeting` nodes via the existing
+  meeting extractor, with decisions (`decided_in`), action items (tasks
+  with owners/deadlines, `next_step_of`) and risks (`affects` project).
+  Short hashed ids keep link ids under the 120-char column limit.
+- Email-thread agent (`email_thread_agent.py`): reads persisted
+  `email_thread_states` (rebuilt from stored gmail, no provider calls)
+  and emits `communication_silence` findings — inbound waiting for my
+  reply ≥3d (strong), or external silence ≥7d (weak → inbox proposal).
+- Declaration agents (`declaration_agents.py` + `founder_declarations`):
+  the founder declares focus and hypotheses (server-stored, UI-edited).
+  Hypothesis agent emits `validation_gap` (declared validated, no
+  supporting evidence) and `evidence_contradiction` (stored risks
+  contradict, with `refutes` links). Focus-drift agent emits
+  `focus_drift` when 7-day activity diverges from the declared focus.
+
+Generator trust rules (`emit_finding_or_proposal`): no evidence → no
+finding; confidence below 0.45 → inbox proposal instead of a finding;
+all generators idempotent; a resolved finding only reopens on genuinely
+new evidence (different observed state or evidence refs).
+
 ## Planned next
 
-Agents: meeting agent (transcripts), email-thread agent
-(communication_silence findings), deal agent, hypothesis agent
-(validation_gap), graph gardener. UI: evidence drill-down to source
-documents, data-availability chips on every metric widget.
+Deal agent (sales signals from email + meetings), graph gardener
+(dedup/cleanup proposals), data-availability chips on every metric
+widget, cron-driven agent runs.

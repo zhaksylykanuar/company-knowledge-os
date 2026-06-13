@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.base import AsyncSessionLocal
 from app.services.data_availability import get_availability
+from app.services.declarations import KNOWN_KEYS, get_declaration, set_declaration
+from app.services.evidence_trail import build_finding_trail
 from app.services.graph_tree import build_graph_tree, review_link
 from app.services.inbox import build_inbox, decide_inbox_proposal
 from app.services.second_opinion import (
@@ -22,8 +24,31 @@ from app.services.second_opinion import (
     set_finding_status,
     snooze_finding,
 )
+from app.services.visibility import (
+    SCOPE_FOUNDER,
+    SCOPE_INVESTOR,
+    SCOPES,
+    redact_finding,
+)
 
 router = APIRouter(tags=["inbox"])
+
+
+def _validated_view(view: str) -> str:
+    if view not in SCOPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"unknown view: {view}",
+        )
+    return view
+
+
+def _require_founder(view: str) -> None:
+    if _validated_view(view) != SCOPE_FOUNDER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="founder view required",
+        )
 
 
 class ProposalDecisionRequest(BaseModel):
@@ -39,18 +64,28 @@ class FindingStatusRequest(BaseModel):
 
     status: str
     note: str | None = Field(default=None, max_length=500)
+    reviewer_id: str = Field(default="founder", max_length=120)
 
 
 class FindingSnoozeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     days: int = Field(default=7, ge=1, le=90)
+    reviewer_id: str = Field(default="founder", max_length=120)
 
 
 class FindingNoteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     note: str = Field(min_length=1, max_length=500)
+    reviewer_id: str = Field(default="founder", max_length=120)
+
+
+class DeclarationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    payload: dict
+    declared_by: str = Field(default="founder", max_length=120)
 
 
 class LinkReviewRequest(BaseModel):
@@ -61,7 +96,8 @@ class LinkReviewRequest(BaseModel):
 
 
 @router.get("/v1/inbox")
-async def get_inbox() -> dict[str, Any]:
+async def get_inbox(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
+    _require_founder(view)
     async with AsyncSessionLocal() as session:
         return await build_inbox(session)
 
@@ -98,7 +134,9 @@ async def get_second_opinion_feed(
     finding_type: str | None = Query(default=None),
     include_snoozed: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=200),
+    view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
+    viewer = _validated_view(view)
     if finding_type is not None and finding_type not in FINDING_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -110,13 +148,18 @@ async def get_second_opinion_feed(
             detail=f"unknown status: {status_filter}",
         )
     async with AsyncSessionLocal() as session:
-        findings = await list_findings(
+        raw_findings = await list_findings(
             session,
             status=status_filter,
             finding_type=finding_type,
             include_snoozed=include_snoozed,
             limit=limit,
         )
+    findings = [
+        redacted
+        for item in raw_findings
+        if (redacted := redact_finding(item, viewer)) is not None
+    ]
     by_type: dict[str, int] = {}
     by_severity: dict[str, int] = {}
     for finding in findings:
@@ -132,6 +175,22 @@ async def get_second_opinion_feed(
     }
 
 
+@router.get("/v1/founder/second-opinion/{finding_key:path}/trail")
+async def get_finding_trail(
+    finding_key: str,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    # Raw evidence and source refs are founder-only by contract.
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        trail = await build_finding_trail(session, finding_key=finding_key)
+    if trail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="finding not found"
+        )
+    return trail
+
+
 @router.post("/v1/founder/second-opinion/{finding_key:path}/status")
 async def post_finding_status(
     finding_key: str,
@@ -144,6 +203,7 @@ async def post_finding_status(
                 finding_key=finding_key,
                 status=request.status,
                 note=request.note,
+                reviewer_id=request.reviewer_id,
             )
             await session.commit()
         except ValueError as exc:
@@ -164,7 +224,10 @@ async def post_finding_snooze(
 ) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         result = await snooze_finding(
-            session, finding_key=finding_key, days=request.days
+            session,
+            finding_key=finding_key,
+            days=request.days,
+            reviewer_id=request.reviewer_id,
         )
         await session.commit()
     if result is None:
@@ -181,7 +244,10 @@ async def post_finding_note(
 ) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         result = await set_finding_note(
-            session, finding_key=finding_key, note=request.note
+            session,
+            finding_key=finding_key,
+            note=request.note,
+            reviewer_id=request.reviewer_id,
         )
         await session.commit()
     if result is None:
@@ -192,9 +258,53 @@ async def post_finding_note(
 
 
 @router.get("/v1/graph/tree")
-async def get_graph_tree() -> dict[str, Any]:
+async def get_graph_tree(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
+    if _validated_view(view) == SCOPE_INVESTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="graph is not available in investor view",
+        )
     async with AsyncSessionLocal() as session:
         return await build_graph_tree(session)
+
+
+@router.get("/v1/founder/declarations/{key}")
+async def get_founder_declaration(
+    key: str,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    if key not in KNOWN_KEYS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"unknown declaration key: {key}",
+        )
+    async with AsyncSessionLocal() as session:
+        declaration = await get_declaration(session, key=key)
+    return declaration or {"key": key, "payload": {}}
+
+
+@router.put("/v1/founder/declarations/{key}")
+async def put_founder_declaration(
+    key: str,
+    request: DeclarationRequest,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await set_declaration(
+                session,
+                key=key,
+                payload=request.payload,
+                declared_by=request.declared_by,
+            )
+            await session.commit()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            ) from exc
+    return result
 
 
 @router.post("/v1/graph/links/{link_id:path}/review")
