@@ -174,6 +174,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="nav" data-nav="so"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 109 9"/><path d="M12 8v4l3 2"/><path d="M19 3l2 2-2 2-2-2 2-2z"/></svg>Second opinion<span class="navbadge" id="nav-so-n"></span></div>
   <div class="nav" data-nav="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v6H3v-6l2-7z"/></svg>Inbox<span class="navbadge" id="nav-ib-n"></span></div>
   <div class="nav" data-nav="ac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Action center<span class="navbadge" id="nav-ac-n"></span></div>
+  <div class="nav" data-nav="tw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l2 2 3.5-3.5M4 12l2 2 3.5-3.5M13 6h8M13 12h8M4 18h17"/></svg>Workspace</div>
   <div class="nav" data-nav="kt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="13" r="3"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="18" r="2.5"/><path d="M8 7.5l2.5 3M14.8 11.5L16.5 6.5M9.5 14.8L6.5 17.5M14.6 14.6l3 2.4"/></svg>Knowledge tree</div>
   <div class="nav" data-nav="st"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4l-6 3v13l6-3 6 3 6-3V4l-6 3-6-3z"/><path d="M9 4v13M15 7v13"/></svg>Strategy</div>
   <div class="nav" data-nav="pr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Product</div>
@@ -183,6 +184,8 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="nav" data-nav="te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3 3.4-5 6.5-5s5.7 2 6.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5c2.6.3 4.7 1.9 5.5 4.5"/></svg>Team</div>
   <div class="nav" data-nav="ta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l2 2 3.5-3.5M4 12l2 2 3.5-3.5M4 18l2 2 3.5-3.5M13 6h8M13 12h8M13 18h8"/></svg>Tasks</div>
   <div class="nav" data-nav="me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Metrics</div>
+  <div class="nav" data-nav="orh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Operating rhythm</div>
+  <div class="nav" data-nav="upd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14H7l-3 3V4z"/><path d="M8 9h8M8 13h5"/></svg>Curated updates</div>
   <div class="navsep"></div>
   <div class="nav" data-nav="inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M8 12l3-3 2 2 3-4"/></svg>Investor view</div>
 </aside>
@@ -190,11 +193,17 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="topbar">
     <h1 id="sec-title">Command center</h1>
     <span id="global-status"></span>
+    <select id="role-switch" class="iconbtn" title="Роль / аудитория — backend отдаёт разный read-model и redaction">
+      <option value="founder">Founder</option>
+      <option value="team">Team</option>
+      <option value="investor">Investor</option>
+    </select>
     <button class="iconbtn" id="search-open" title="Поиск по знаниям (Cmd+K)">⌘K Поиск</button>
     <button class="iconbtn" id="digest-open">Дайджест</button>
     <button class="iconbtn" id="refresh">Обновить</button>
     <button class="iconbtn" id="key-open" title="API key">ключ</button>
   </div>
+  <div class="statusline" id="rolemsg"></div>
   <div class="statusline" id="topmsg"></div>
   <div class="wrap">
 
@@ -259,6 +268,20 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <section class="sec" data-sec="te"><div class="stack" id="te-body"></div></section>
   <section class="sec" data-sec="ta"><div class="stack" id="ta-body"></div></section>
   <section class="sec" data-sec="me"><div class="stack" id="me-body"></div></section>
+  <section class="sec" data-sec="tw">
+    <div class="statusline" id="tw-msg"></div>
+    <div class="stack" id="tw-body"></div>
+  </section>
+  <section class="sec" data-sec="orh">
+    <div class="row" id="orh-tabs" style="flex-wrap:wrap;gap:8px;margin-bottom:6px"></div>
+    <div class="statusline" id="orh-msg"></div>
+    <div class="stack" id="orh-body"></div>
+  </section>
+  <section class="sec" data-sec="upd">
+    <div class="row" id="upd-tabs" style="flex-wrap:wrap;gap:8px;margin-bottom:6px"></div>
+    <div class="statusline" id="upd-msg"></div>
+    <div class="stack" id="upd-body"></div>
+  </section>
   <section class="sec" data-sec="inv"><div class="stack" id="inv-body"></div></section>
 
   </div>
@@ -311,6 +334,10 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
 var HEADER_NAME = "__FOS_API_HEADER_NAME__";
 var OV = null;
 var MANUAL_KEY = "fos_manual_v2";
+// Active audience. The backend serves a different read-model / redaction
+// per view, so the role is threaded into every request — not a frontend
+// filter. Founder may preview team/investor; team/investor are sandboxed.
+var VIEW = (function(){var v=localStorage.getItem("fos_view");return v==="team"||v==="investor"?v:"founder";})();
 
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 function $(id){return document.getElementById(id);}
@@ -325,6 +352,11 @@ async function api(path,opts){
   var headers=Object.assign({},(opts&&opts.headers)||{});
   var key=(localStorage.getItem("fos_api_key")||"").trim();
   if(key)headers[HEADER_NAME]=key;
+  // Thread the active audience into every API call. The backend decides
+  // what each view may see; unknown query params are ignored server-side.
+  if(path.charAt(0)==="/"&&path.indexOf("view=")<0){
+    path+=(path.indexOf("?")>=0?"&":"?")+"view="+encodeURIComponent(VIEW);
+  }
   var r=await fetch(path,Object.assign({},opts,{headers:headers}));
   if(!r.ok){
     var d="";try{d=(await r.json()).detail||"";}catch(e){}
@@ -337,8 +369,8 @@ async function api(path,opts){
 var COLOR_BADGE={green:["b-green","зелёный"],yellow:["b-amber","жёлтый"],red:["b-red","красный"],unknown:["b-mut","нет данных"]};
 function colorBadge(c,label){var m=COLOR_BADGE[c]||COLOR_BADGE.unknown;return '<span class="badge '+m[0]+'"><span class="dot" style="background:currentColor"></span>'+esc(label||m[1])+'</span>';}
 
-var SECTION_TITLES={cc:"Command center",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",inv:"Investor view"};
-var LAZY_LOADERS={so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();}};
+var SECTION_TITLES={cc:"Command center",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",tw:"Team workspace",orh:"Operating rhythm",upd:"Curated updates",inv:"Investor view"};
+var LAZY_LOADERS={so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},inv:function(){loadInvestor();}};
 var LAZY_LOADED={};
 function show(id){
   var secs=document.querySelectorAll(".sec");
@@ -873,18 +905,20 @@ function smallRing(done,total){
     +'<circle cx="29" cy="29" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="6" stroke-linecap="round" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'" transform="rotate(-90 29 29)"/>'
     +'<text x="29" y="33" text-anchor="middle" font-size="13" font-weight="700" fill="'+col+'">'+Math.round(pct*100)+'</text></svg>';
 }
-function questCard(q){
+function questCard(q,clickable){
   var flags=(q.flags||[]).map(function(f){return '<span class="qflag qf-'+esc(f)+'">'+esc(f)+'</span>';}).join(" ");
   var ib=q.impact==="high"?"b-red":q.impact==="medium"?"b-amber":"b-mut";
-  return '<div class="quest" data-task="'+esc(q.issue_key)+'"><div class="row" style="flex-wrap:wrap;gap:6px">'
+  // clickable===false renders a read-only card (team view: the task drawer
+  // exposes founder-only raw source refs, so it is not linked there).
+  return '<div class="quest"'+(clickable===false?' style="cursor:default"':' data-task="'+esc(q.issue_key)+'"')+'><div class="row" style="flex-wrap:wrap;gap:6px">'
     +'<span class="badge '+ib+'">'+esc(q.impact)+'</span>'
     +'<span class="qt">['+esc(q.issue_key)+'] '+esc(q.title)+'</span>'+flags+'</div>'
     +'<div class="mut" style="margin-top:4px">'+esc(q.project)+(q.owner?' · '+esc(q.owner):' · без владельца')+(q.evidence_count?' · evidence '+q.evidence_count:'')+'</div></div>';
 }
-function questGroup(title,items,color){
+function questGroup(title,items,color,clickable){
   if(!items||!items.length)return"";
   var h='<p class="h" style="color:'+(color||"var(--text)")+'">'+esc(title)+' <span class="mut">'+items.length+'</span></p>';
-  for(var i=0;i<items.length;i++)h+=questCard(items[i]);
+  for(var i=0;i<items.length;i++)h+=questCard(items[i],clickable);
   return h;
 }
 function taRender(){
@@ -946,29 +980,41 @@ document.addEventListener("click",function(e){
 });
 
 var ACT_SRC_LABEL={second_opinion:"second opinion",graph_gardener:"gardener",execution:"задача",sales:"продажи",data_availability:"данные",product:"продукт"};
+var GROUP_BADGE={critical_now:"b-red",needs_decision:"b-accent",waiting_for_evidence:"b-amber",cleanup:"b-mut",later:"b-mut"};
+function actionCard(a){
+  var sev=a.severity==="high"?"sev-high":a.severity==="low"?"sev-low":"";
+  var ref=a.action_ref||{};
+  var cta="";
+  if(ref.kind==="finding")cta+='<button class="actbtn" data-soact="trail" data-fk="'+esc(ref.finding_key)+'">trail</button><button class="actbtn primary" data-acresolve="'+esc(ref.finding_key)+'">решено</button><button class="actbtn" data-acsnooze="'+esc(ref.finding_key)+'">отложить</button>';
+  else if(ref.kind==="proposal")cta+='<button class="actbtn" data-go="ib">принять/отклонить в Inbox</button>';
+  else if(ref.kind==="task")cta+='<button class="actbtn" data-task="'+esc(ref.issue_key)+'">открыть</button><button class="actbtn" data-acowner="'+esc(ref.issue_key)+'">владелец → proposal</button>';
+  else if(ref.kind==="metric")cta+='<span class="mut">прогнать агентов / синк</span>';
+  cta+='<button class="actbtn" data-acreview="'+esc(JSON.stringify(ref))+'">отметить просмотренным</button>';
+  return '<div class="actcard '+sev+'"><div class="row" style="flex-wrap:wrap;gap:6px">'
+    +'<span class="badge '+(a.severity==="high"?"b-red":a.severity==="low"?"b-mut":"b-amber")+'">'+esc(a.severity)+'</span>'
+    +'<span class="src-badge">'+esc(ACT_SRC_LABEL[a.source]||a.source)+'</span>'
+    +(a.confidence!=null?'<span class="mut">conf '+Number(a.confidence).toFixed(2)+'</span>':'')
+    +(a.evidence_count?'<span class="mut">evidence '+a.evidence_count+'</span>':'')
+    +(a.visibility?'<span class="badge b-mut" title="visibility">'+esc(a.visibility)+'</span>':'')
+    +'</div>'
+    +'<div style="font-weight:500;margin:6px 0 2px">'+esc(a.title)+'</div>'
+    +'<div class="mut">почему сейчас: '+esc(a.why_now||"")+(a.affected_entity?' · '+esc(a.affected_entity):'')+'</div>'
+    +'<div class="mut" style="margin-top:2px"><b>почему в группе:</b> '+esc(a.group_reason||"")+'</div>'
+    +'<div class="mut" style="margin-top:2px">→ '+esc(a.cta||"")+'</div>'
+    +'<div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">'+cta+'</div></div>';
+}
 function acRender(){
   if(!ACTIONS){$("ac-body").innerHTML='<div class="mut">Собираю действия…</div>';return;}
-  var acts=ACTIONS.actions||[];
-  if(!acts.length){$("ac-body").innerHTML='<div class="empty">Действий нет — всё под контролем.</div>';return;}
-  var html='<div class="mut" style="margin-bottom:8px">Единая лента «что делать дальше» из всех источников. AI предлагает — решение за тобой.</div>';
-  acts.forEach(function(a){
-    var sev=a.severity==="high"?"sev-high":a.severity==="low"?"sev-low":"";
-    var ref=a.action_ref||{};
-    var cta="";
-    if(ref.kind==="finding")cta='<button class="actbtn" data-soact="trail" data-fk="'+esc(ref.finding_key)+'">trail</button><button class="actbtn" data-acresolve="'+esc(ref.finding_key)+'">решено</button><button class="actbtn" data-acsnooze="'+esc(ref.finding_key)+'">отложить</button>';
-    else if(ref.kind==="proposal")cta='<button class="actbtn" data-go="ib">в Inbox</button>';
-    else if(ref.kind==="task")cta='<button class="actbtn" data-task="'+esc(ref.issue_key)+'">открыть</button>';
-    else if(ref.kind==="metric")cta='<span class="mut">прогнать агентов</span>';
-    html+='<div class="actcard '+sev+'"><div class="row" style="flex-wrap:wrap;gap:6px">'
-      +'<span class="badge '+(a.severity==="high"?"b-red":a.severity==="low"?"b-mut":"b-amber")+'">'+esc(a.severity)+'</span>'
-      +'<span class="src-badge">'+esc(ACT_SRC_LABEL[a.source]||a.source)+'</span>'
-      +(a.confidence!=null?'<span class="mut">conf '+Number(a.confidence).toFixed(2)+'</span>':'')
-      +(a.evidence_count?'<span class="mut">evidence '+a.evidence_count+'</span>':'')
-      +'</div>'
-      +'<div style="font-weight:500;margin:6px 0 2px">'+esc(a.title)+'</div>'
-      +'<div class="mut">почему сейчас: '+esc(a.why_now||"")+(a.affected_entity?' · '+esc(a.affected_entity):'')+'</div>'
-      +'<div class="mut" style="margin-top:2px">→ '+esc(a.cta||"")+'</div>'
-      +'<div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">'+cta+'</div></div>';
+  var groups=ACTIONS.groups||[];
+  var total=(ACTIONS.counts&&ACTIONS.counts.total)||0;
+  if(!total){$("ac-body").innerHTML='<div class="empty">Действий нет — всё под контролем.</div>';return;}
+  var html='<div class="mut" style="margin-bottom:8px">Лента «что делать дальше», сгруппированная по объяснимым признакам — severity, evidence, confidence, blocked/overdue/ownerless, тип действия. Без скрытого AI-score: у каждого действия есть причина попадания в группу. AI предлагает — решение за тобой.</div>';
+  groups.forEach(function(g){
+    if(!g.count)return;
+    html+='<div class="card" style="margin-bottom:12px"><p class="h"><span class="badge '+(GROUP_BADGE[g.key]||"b-mut")+'">'+esc(g.label)+'</span><span class="mut">'+g.count+'</span></p>'
+      +'<div class="mut" style="margin:-4px 0 8px">'+esc(g.rule)+'</div>';
+    g.actions.forEach(function(a){html+=actionCard(a);});
+    html+='</div>';
   });
   $("ac-body").innerHTML=html;
 }
@@ -976,7 +1022,11 @@ document.addEventListener("click",async function(e){
   var r=e.target.closest("[data-acresolve]");
   if(r){try{await api("/v1/founder/second-opinion/"+r.getAttribute("data-acresolve")+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"resolved"})});loadActions();loadInboxCounts();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
   var sn=e.target.closest("[data-acsnooze]");
-  if(sn){try{await api("/v1/founder/second-opinion/"+sn.getAttribute("data-acsnooze")+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});loadActions();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}}
+  if(sn){try{await api("/v1/founder/second-opinion/"+sn.getAttribute("data-acsnooze")+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});loadActions();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
+  var rv=e.target.closest("[data-acreview]");
+  if(rv){try{var ref=JSON.parse(rv.getAttribute("data-acreview"));await api("/v1/founder/action-center/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action_ref:ref})});rv.textContent="отмечено ✓";rv.disabled=true;}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
+  var ow=e.target.closest("[data-acowner]");
+  if(ow){try{var res=await (await api("/v1/founder/action-center/assign-owner-proposal",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_key:ow.getAttribute("data-acowner")})})).json();ow.textContent=res.idempotent?"proposal уже есть ✓":"proposal создан ✓";ow.disabled=true;loadInboxCounts();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
 });
 
 function meRender(){
@@ -1017,43 +1067,268 @@ function meRender(){
   $("me-body").innerHTML=html;
 }
 
-function invRender(){
-  var m=manual().investor||{};
-  var traction=m.traction||[],model=m.model||[];
-  var html='<div class="row" style="justify-content:space-between"><span class="badge b-accent">read-only · '+new Date().toLocaleDateString("ru-RU",{month:"long",year:"numeric"})+'</span><span class="h"><span class="edit" id="inv-edit">изменить</span></span></div>';
-  html+='<div class="card">'+(m.oneliner?'<div style="font-size:15px;font-weight:600">'+esc(m.oneliner)+'</div>':'<div class="mut">Одно предложение: что вы делаете и для кого.</div>')
-    +(m.sub?'<div class="mut" style="margin-top:4px">'+esc(m.sub)+'</div>':'')+'</div>';
-  var tk='<div class="kpis">';
-  if(traction.length){for(var i=0;i<traction.length;i++)tk+='<div class="kpi"><div class="l">'+esc(traction[i][0]||"")+'</div><div class="v">'+esc(traction[i][1]||"")+'</div></div>';}
-  else if(OV){
-    tk+='<div class="kpi"><div class="l">Проекты</div><div class="v">'+OV.projects.length+'</div></div>'
-      +'<div class="kpi"><div class="l">PR merged</div><div class="v">'+num(OV.metrics.prs_merged)+'</div></div>'
-      +'<div class="kpi"><div class="l">Открытые задачи</div><div class="v">'+num(OV.metrics.jira_open)+'</div></div>'
-      +'<div class="kpi"><div class="l">Документов в базе</div><div class="v">'+num(OV.metrics.documents)+'</div></div>';
-  }
-  tk+='</div>';
-  html+=tk;
-  var mb="";
-  for(var j=0;j<model.length;j++)mb+='<div class="item"><div class="t">'+esc(model[j][0]||"")+'</div></div>';
-  html+='<div class="grid2"><div class="card"><p class="h">Business model</p>'+(mb||'<div class="mut">Как вы зарабатываете: 2–3 строки.</div>')+'</div>'
-    +'<div class="card" style="border:2px solid var(--blue)"><p class="h">Ask</p>'+(m.ask?'<div style="font-size:18px;font-weight:600">'+esc(m.ask)+'</div>':'<div class="mut">Сколько поднимаете и на что.</div>')+(m.asknote?'<div class="mut" style="margin-top:4px">'+esc(m.asknote)+'</div>':'')+'</div></div>';
-  html+='<div class="mut">Этот режим показывает только то, что вы заполнили + публичные счётчики. Внутренние риски и задачи сюда не попадают.</div>';
+// --- Investor view: server-backed, curated, no finance / no raw refs ----
+var INVDATA=null;
+function basisChip(basis){
+  if(basis==="observed")return '<span class="dachip da-ready"><span class="dot" style="background:currentColor"></span>наблюдаемо</span>';
+  if(basis==="mixed")return '<span class="dachip da-collecting"><span class="dot" style="background:currentColor"></span>частично наблюдаемо</span>';
+  return '<span class="dachip da-insufficient"><span class="dot" style="background:currentColor"></span>заявлено, evidence собирается</span>';
+}
+async function loadInvestor(){
+  $("inv-body").innerHTML='<div class="mut">Загружаю investor view…</div>';
+  try{INVDATA=await (await api("/v1/investor/view")).json();renderInvestor();}
+  catch(e){$("inv-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+function renderInvestor(){
+  if(!INVDATA){$("inv-body").innerHTML='<div class="mut">Нет данных.</div>';return;}
+  var d=INVDATA,snap=d.company_snapshot||{},pp=d.product_progress||{},canEdit=VIEW==="founder";
+  var html='<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><span class="badge b-accent">Investor view · curated · '+esc(snap.as_of||"")+'</span>'
+    +(canEdit?'<span class="h" style="margin:0"><span class="edit" id="inv-edit">изменить декларации</span></span>':'<span class="mut">read-only</span>')+'</div>';
+  html+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Без финансов (MRR / runway / revenue), без сырых evidence/source refs, без внутренних заметок и персональных оценок команды. Каждое утверждение помечено: наблюдаемо или заявлено.</div>';
+  html+='<div class="card"><p class="h">Снимок компании '+colorBadge(snap.health,snap.health_headline)+'</p>'
+    +(snap.headline?'<div style="font-size:16px;font-weight:600">'+esc(snap.headline)+'</div>':'<div class="mut">One-liner не задан — заполни в декларациях.</div>')
+    +(snap.subline?'<div class="mut" style="margin-top:4px">'+esc(snap.subline)+'</div>':'')
+    +'<div class="mut" style="margin-top:6px">Активных областей: '+num(snap.active_areas||0)+'</div>'
+    +((snap.business_model&&snap.business_model.length)?'<div class="row" style="flex-wrap:wrap;gap:5px;margin-top:8px">'+snap.business_model.map(function(x){return '<span class="badge b-mut">'+esc(x)+'</span>';}).join("")+'</div>':'')+'</div>';
+  var areas=pp.areas||[];
+  html+='<div class="card"><p class="h">Прогресс продукта'+(pp.overall_progress_pct!=null?' <span class="mut">'+pp.overall_progress_pct+'% закрыто</span>':'')+'</p>';
+  if(areas.length){areas.forEach(function(a){html+='<div class="stamina"><span class="nm">'+esc(a.area||"")+'</span><div class="track"><div class="fill" style="width:'+(a.progress_pct||0)+'%;background:var(--green)"></div></div><span class="mut" style="width:46px;text-align:right">'+(a.progress_pct||0)+'%</span>'+basisChip(a.basis)+'</div>';});}
+  else html+='<div class="mut">Прогресс собирается — данных пока недостаточно.</div>';
+  html+='</div>';
+  var tr=d.traction||[];
+  html+='<div class="card"><p class="h">Traction <span class="mut">без финансов</span></p><div class="kpis">';
+  tr.forEach(function(t){html+='<div class="kpi"><div class="l">'+esc(t.label)+'</div><div class="v">'+(t.value!=null?num(t.value):'—')+'</div><div class="d">'+basisChip(t.basis)+'</div></div>';});
+  html+='</div></div>';
+  var rm=d.roadmap||[];
+  html+='<div class="card"><p class="h">Roadmap 30 / 60 / 90</p><div class="cols">';
+  rm.forEach(function(h){html+='<div class="col"><span class="chip on">'+esc(h.horizon)+' дней</span>';if(h.items&&h.items.length)h.items.forEach(function(it){html+='<div class="item"><div class="t">'+esc(it)+'</div></div>';});else html+='<div class="mut" style="margin-top:8px">—</div>';html+='</div>';});
+  html+='</div><div class="mut" style="margin-top:6px">Roadmap — декларация (заявлено, evidence собирается).</div></div>';
+  var kr=d.key_risks||[];
+  html+='<div class="card"><p class="h">Ключевые риски <span class="mut">высокий уровень</span></p>';
+  if(kr.length){kr.forEach(function(r){var b=r.severity==="high"?"b-red":r.severity==="low"?"b-mut":"b-amber";html+='<div class="item"><span class="badge '+b+'">'+esc(r.severity)+'</span><div class="t">'+esc(r.category)+'</div><span class="mut">'+r.count+'</span></div>';});}
+  else html+='<div class="mut">Существенных рисков не выявлено.</div>';
+  html+='<div class="mut" style="margin-top:6px">Только категории и количество — без сырых формулировок и имён.</div></div>';
+  var wc=d.what_changed||[];
+  html+='<div class="card"><p class="h">Что изменилось</p>';
+  if(wc.length){wc.forEach(function(c){html+='<div class="item"><span class="badge '+(c.direction==="up"?"b-green":"b-amber")+'">'+(c.delta>0?'+':'')+Number(c.delta).toLocaleString("ru-RU")+'</span><div class="t">'+esc(c.label)+'</div></div>';});}
+  else html+='<div class="mut">Существенных изменений за период не зафиксировано (или данные собираются).</div>';
+  html+='</div>';
+  var claims=d.evidence_backed_claims||[];
+  if(claims.length){html+='<div class="card"><p class="h">Evidence-backed claims</p>';claims.forEach(function(c){html+='<div class="item">'+basisChip(c.basis)+'<div class="t">'+esc(c.claim)+'</div></div>';});html+='</div>';}
+  var oq=d.open_questions||[];
+  if(oq.length){html+='<div class="card"><p class="h">Открытые вопросы</p>';oq.forEach(function(q){html+='<div class="item"><span class="dot" style="background:var(--amber);margin-top:6px"></span><div class="t">'+esc(q)+'</div></div>';});html+='</div>';}
+  if(d.ask){html+='<div class="card" style="border:2px solid var(--blue)"><p class="h">Ask / следующий milestone</p>'
+    +(d.ask.ask?'<div style="font-size:18px;font-weight:600">'+esc(d.ask.ask)+'</div>':'')
+    +(d.ask.milestone?'<div class="mut" style="margin-top:4px">Milestone: '+esc(d.ask.milestone)+'</div>':'')
+    +(d.ask.note?'<div class="mut" style="margin-top:4px">'+esc(d.ask.note)+'</div>':'')
+    +'<div class="mut" style="margin-top:6px">'+basisChip("declared")+'</div></div>';}
   $("inv-body").innerHTML=html;
-  $("inv-edit").addEventListener("click",function(){
-    var mm=manual().investor||{};
-    openEditor("Investor view",[
-      {key:"oneliner",label:"Одно предложение о компании",value:mm.oneliner||""},
-      {key:"sub",label:"Подзаголовок",value:mm.sub||""},
-      {key:"traction",kind:"area",label:"Traction",hint:"метка | значение",value:joinLines(mm.traction)},
-      {key:"model",kind:"area",label:"Business model, по строке",value:joinLines(mm.model)},
-      {key:"ask",label:"Ask (например $350k pre-seed)",value:mm.ask||""},
-      {key:"asknote",label:"На что",value:mm.asknote||""}
-    ],function(out){var s=manual();s.investor={oneliner:out.oneliner.trim(),sub:out.sub.trim(),traction:lines(out.traction),model:lines(out.model),ask:out.ask.trim(),asknote:out.asknote.trim()};saveManual(s);});
+  if(canEdit){var ib=$("inv-edit");if(ib)ib.addEventListener("click",investorEditor);}
+}
+function investorEditor(){
+  Promise.all([
+    api("/v1/founder/declarations/company").then(function(r){return r.json();}).catch(function(){return {payload:{}};}),
+    api("/v1/founder/declarations/roadmap").then(function(r){return r.json();}).catch(function(){return {payload:{}};}),
+    api("/v1/founder/declarations/ask").then(function(r){return r.json();}).catch(function(){return {payload:{}};})
+  ]).then(function(res){
+    var co=(res[0]&&res[0].payload)||{},rd=(res[1]&&res[1].payload)||{},ak=(res[2]&&res[2].payload)||{};
+    var rmLines=((rd.items)||[]).map(function(it){return [it.horizon||"30",it.text||""];});
+    openEditor("Investor декларации (хранятся на сервере; investor view — read-only, redaction на бэке)",[
+      {key:"oneliner",label:"Компания одним предложением",value:co.oneliner||""},
+      {key:"sub",label:"Подзаголовок",value:co.sub||""},
+      {key:"model",kind:"area",label:"Business model, по строке",value:joinLines((co.model||[]).map(function(x){return [x];}))},
+      {key:"roadmap",kind:"area",label:"Roadmap",hint:"30|60|90 | пункт",value:joinLines(rmLines)},
+      {key:"ask",label:"Ask (например $350k pre-seed)",value:ak.ask||""},
+      {key:"milestone",label:"Следующий milestone",value:ak.milestone||""},
+      {key:"asknote",label:"На что",value:ak.note||""}
+    ],function(out){
+      saveDeclaration("company",{oneliner:out.oneliner.trim(),sub:out.sub.trim(),model:lines(out.model).map(function(r){return r[0];}).filter(Boolean)});
+      var items=lines(out.roadmap).map(function(r){return {horizon:(r[0]||"30").trim(),text:(r[1]||"").trim()};}).filter(function(it){return it.text;});
+      saveDeclaration("roadmap",{items:items});
+      saveDeclaration("ask",{ask:out.ask.trim(),milestone:out.milestone.trim(),note:out.asknote.trim()});
+      setTimeout(loadInvestor,400);
+    });
   });
 }
 
+// --- Team workspace (server-redacted working view) ----------------------
+var WORKSPACE=null;
+async function loadWorkspace(){
+  $("tw-body").innerHTML='<div class="mut">Загружаю workspace…</div>';
+  try{WORKSPACE=await (await api("/v1/team/workspace")).json();twRender();}
+  catch(e){$("tw-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+function twRender(){
+  if(!WORKSPACE){$("tw-body").innerHTML='<div class="mut">Нет данных.</div>';return;}
+  var w=WORKSPACE,q=w.quests||{},c=w.counts||{},mq=w.main_quest||{};
+  var html='<div class="mut" style="margin-bottom:6px">Рабочий режим команды: что сделать / прояснить / разблокировать. Без executive/raw-слоя, без рейтингов продуктивности.</div>';
+  html+='<div class="card focus"><span class="badge b-accent">Фокус недели</span>'+(mq.focus?'<div style="font-size:15px;font-weight:600;margin-top:8px">'+esc(mq.focus)+'</div>':'<div class="mut" style="margin-top:8px">Фокус недели не задан.</div>')+'</div>';
+  var ph=w.project_health||[];
+  if(ph.length){html+='<div class="healthgrid">';ph.forEach(function(h){html+='<div class="healthcard">'+smallRing(h.done,h.total)+'<div style="font-weight:600;margin-top:4px">'+esc(h.project)+(h.is_focus?' ★':'')+'</div><div class="mut">'+h.done+' / '+h.total+'</div></div>';});html+='</div>';}
+  html+=questGroup("Заблокировано",q.blocked,"var(--red)",false);
+  html+=questGroup("Просрочено",q.overdue,"var(--red)",false);
+  html+=questGroup("Без владельца",q.ownerless,"var(--muted)",false);
+  html+=questGroup("Без движения",q.stale,"var(--amber)",false);
+  html+=questGroup("Важное",q.side,"var(--text)",false);
+  var dn=w.decisions_needed||[];
+  if(dn.length){html+='<div class="card"><p class="h">Что прояснить / решить <span class="mut">'+dn.length+'</span></p>';dn.forEach(function(f){html+='<div class="item"><span class="badge '+sevB(f.severity)+'">'+esc(f.severity)+'</span><div class="t">'+esc(f.summary)+'<div class="s">заявлено: '+esc(String(f.declared_state||"").slice(0,50))+' · наблюдаю: '+esc(String(f.observed_state||"").slice(0,50))+'</div></div></div>';});html+='</div>';}
+  var tl=w.team_load||{},ppl=tl.people||[];
+  html+='<div class="card"><p class="h">Operational load <span class="mut">без рейтинга продуктивности</span></p>';
+  if(ppl.length){var maxOpen=1;ppl.forEach(function(p){maxOpen=Math.max(maxOpen,p.open);});ppl.forEach(function(p){var wd=Math.round(p.open/maxOpen*100);var col=p.overloaded?"var(--red)":wd>60?"var(--amber)":"var(--green)";html+='<div class="stamina"><span class="avatar">'+esc((p.name||"?").slice(0,2).toUpperCase())+'</span><span class="nm">'+esc(p.name)+'</span><div class="track"><div class="fill" style="width:'+wd+'%;background:'+col+'"></div></div><span class="mut" style="width:auto">'+p.open+' откр'+(p.overdue?' · '+p.overdue+' просроч':'')+'</span>'+(p.overloaded?'<span class="badge b-red">перегруз</span>':'')+'</div>';});}
+  else html+='<div class="mut">Нет данных о загрузке.</div>';
+  var un=tl.unassigned||{};
+  if(un.unassigned_work_count)html+='<div class="item" style="border-top:1px solid var(--border);margin-top:6px"><span class="badge b-amber">unassigned</span><div class="t">Бесхозная работа: '+num(un.unassigned_work_count)+' открыто<div class="s">→ '+esc(un.suggested_action||"")+'</div></div></div>';
+  html+='</div>';
+  var og=w.ownership_gaps||[];
+  if(og.length){html+='<div class="card"><p class="h">Ownership gaps <span class="mut">'+og.length+'</span></p>';og.slice(0,8).forEach(function(g){html+='<div class="item"><span class="badge b-mut">ownership</span><div class="t">'+esc(g.summary)+'</div></div>';});html+='</div>';}
+  $("tw-body").innerHTML=html;
+  setMsgEl("tw-msg","блокеров: "+(c.blocked||0)+" · просрочено: "+(c.overdue||0)+" · без владельца: "+(c.ownerless||0)+" · решений: "+(c.decisions_needed||0),false);
+}
+
+// --- Operating rhythm ---------------------------------------------------
+function sevB(s){return s==="high"?"b-red":s==="low"?"b-mut":"b-amber";}
+var RHYTHM={},ORH_TAB="weekly";
+function renderRhythmTabs(){
+  var tabs=[["weekly","Weekly review"],["daily","Daily check"]];
+  if(VIEW==="founder")tabs.push(["decision","Decision review"]);
+  var h="";tabs.forEach(function(t){h+='<button class="chip'+(ORH_TAB===t[0]?" on":"")+'" data-orhtab="'+t[0]+'">'+t[1]+'</button>';});
+  $("orh-tabs").innerHTML=h;
+}
+async function loadRhythm(){renderRhythmTabs();await loadRhythmTab(ORH_TAB);}
+async function loadRhythmTab(tab){
+  ORH_TAB=tab;renderRhythmTabs();
+  $("orh-body").innerHTML='<div class="mut">Загружаю…</div>';
+  try{RHYTHM[tab]=await (await api("/v1/operating-rhythm/"+tab)).json();orhRender();}
+  catch(e){$("orh-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+function orhCardList(title,items){var h='<div class="card"><p class="h">'+title+' <span class="mut">'+items.length+'</span></p>';if(items.length)items.forEach(function(f){h+='<div class="item"><span class="badge '+sevB(f.severity)+'">'+esc(f.severity||"")+'</span><div class="t">'+esc(f.summary||"")+'</div></div>';});else h+='<div class="mut">—</div>';return h+'</div>';}
+function orhRender(){
+  var d=RHYTHM[ORH_TAB];if(!d){return;}
+  var html="";
+  if(ORH_TAB==="weekly"){
+    var wc=d.what_changed||{};
+    html+='<div class="card"><p class="h">Что изменилось за неделю</p>';
+    (wc.metric_deltas||[]).forEach(function(c){html+='<div class="item"><span class="badge '+(c.direction==="up"?"b-green":"b-amber")+'">'+(c.delta>0?'+':'')+Number(c.delta).toLocaleString("ru-RU")+'</span><div class="t">'+esc(c.label)+'</div></div>';});
+    html+='<div class="mut" style="margin-top:6px">Новых сигналов обработано: '+num(wc.new_evidence_processed||0)+'</div></div>';
+    var st=d.stuck||{};
+    html+='<div class="card"><p class="h">Что застряло</p><div class="row" style="gap:14px;flex-wrap:wrap"><span>Заблокировано: <b>'+(st.blocked_count||0)+'</b></span><span>Застряло: <b>'+(st.stale_count||0)+'</b></span><span>Просрочено: <b>'+(st.overdue_count||0)+'</b></span></div>';
+    (st.blocked||[]).forEach(function(q){html+='<div class="item"><span class="qflag qf-blocked">blocked</span><div class="t">['+esc(q.issue_key)+'] '+esc(q.title)+'</div></div>';});
+    html+='</div>';
+    html+=orhCardList("Где AI видит иначе",d.ai_sees_differently||[]);
+    html+=orhCardList("Какие решения нужны",(d.decisions_needed&&d.decisions_needed.findings)||[]);
+    html+=orhCardList("Что стало риском",d.new_risks||[]);
+    html+=orhCardList("Отложено",d.deferred||[]);
+    var cl=d.closed||{};
+    html+='<div class="card"><p class="h">Что закрыто <span class="mut">'+(cl.count||0)+'</span></p>';
+    (cl.items||[]).forEach(function(a){html+='<div class="item"><span class="badge b-mut">'+esc(a.action)+'</span><div class="t">'+esc(a.target_id||"")+'<div class="s">'+esc(a.actor||"")+' · '+esc((a.created_at||"").slice(0,10))+'</div></div></div>';});
+    if(VIEW!=="founder")html+='<div class="mut">Детали аудита видны только founder.</div>';
+    html+='</div>';
+  } else if(ORH_TAB==="daily"){
+    html+=orhCardList("Новые конфликты (24ч)",d.new_conflicts||[]);
+    var op=d.operational||{};
+    html+='<div class="card"><p class="h">Операционка</p><div class="row" style="gap:14px;flex-wrap:wrap"><span>Заблокировано: <b>'+(op.blocked||0)+'</b></span><span>Просрочено: <b>'+(op.overdue||0)+'</b></span><span>Без владельца: <b>'+(op.ownerless||0)+'</b></span></div></div>';
+    html+='<div class="card"><p class="h">Новое evidence</p><div class="mut">Обработано сигналов за сутки: '+num(d.new_evidence||0)+'</div></div>';
+    var af=d.actions_for_today||[];
+    html+='<div class="card"><p class="h">Действия на сегодня <span class="mut">'+af.length+'</span></p>';
+    af.forEach(function(a){html+='<div class="item"><span class="badge '+sevB(a.severity)+'">'+esc(a.severity)+'</span><div class="t">'+esc(a.title)+'<div class="s">'+esc(a.group_reason||"")+'</div></div></div>';});
+    if(!af.length)html+='<div class="mut">Срочных действий нет.</div>';
+    html+='</div>';
+    html+=orhCardList("Тишина в коммуникации",d.stale_communication||[]);
+    var di=d.data_issues||[];
+    if(di.length){html+='<div class="card"><p class="h">Проблемы с данными</p>';di.forEach(function(r){html+='<div class="item"><span class="dachip da-'+esc(r.status)+'"><span class="dot" style="background:currentColor"></span>'+esc(r.status)+'</span><div class="t">'+esc(r.metric_key)+' ('+esc(r.scope)+')<div class="s">'+esc(r.message)+'</div></div></div>';});html+='</div>';}
+  } else {
+    var pend=d.pending||{},co=d.counts||{};
+    html+='<div class="card"><p class="h">Ожидают решения</p><div class="row" style="gap:14px;flex-wrap:wrap"><span>Предложения: <b>'+(co.pending_proposals||0)+'</b></span><span>Спорные связи: <b>'+(co.pending_disputed_links||0)+'</b></span><span>Открытых конфликтов: <b>'+(pend.findings_open||0)+'</b></span></div><div class="row" style="margin-top:8px"><button class="actbtn" data-go="ib">открыть Inbox</button></div></div>';
+    var rd=d.recent_decisions||[];
+    html+='<div class="card"><p class="h">Недавние решения <span class="mut">'+rd.length+'</span></p>';
+    rd.forEach(function(a){var ns=a.next_state||{};html+='<div class="item"><span class="badge '+(ns.status==="accepted"?"b-green":"b-red")+'">'+esc(ns.status||a.action)+'</span><div class="t">'+esc(a.target_id||"")+'<div class="s">'+esc(a.actor||"")+' · '+esc((a.created_at||"").slice(0,16).replace("T"," "))+'</div></div></div>';});
+    if(!rd.length)html+='<div class="mut">Решений за период не было.</div>';
+    html+='</div>';
+    var cons=d.consequences||[];
+    if(cons.length){html+='<div class="card"><p class="h">Последствия</p>';cons.forEach(function(c){var ap=c.applied||{};var m=(ap.merges&&ap.merges.applied)||0;html+='<div class="item"><span class="badge b-mut">'+esc(c.decision||"")+'</span><div class="t">'+esc(c.target_id||"")+'<div class="s">merges applied: '+m+(c.reversible?' · обратимо':'')+'</div></div></div>';});html+='</div>';}
+    var at=d.audit_trail||[];
+    html+='<div class="card"><p class="h">Audit trail <span class="mut">'+at.length+'</span></p>';
+    at.slice(0,15).forEach(function(a){html+='<div class="item"><span class="badge b-mut">'+esc(a.action)+'</span><div class="t">'+esc(a.target_id||"")+'<div class="s">'+esc(a.actor||"")+' · '+esc((a.created_at||"").slice(0,16).replace("T"," "))+'</div></div></div>';});
+    html+='</div>';
+  }
+  $("orh-body").innerHTML=html;
+  setMsgEl("orh-msg","ритм: "+ORH_TAB,false);
+}
+
+// --- Curated updates (approve before export) ----------------------------
+var UPD={kind:"founder_weekly",draft:null};
+function renderUpdTabs(){
+  var kinds=[["founder_weekly","Founder weekly"],["team_brief","Team brief"],["investor_update","Investor update"]];
+  var h="";kinds.forEach(function(k){h+='<button class="chip'+(UPD.kind===k[0]?" on":"")+'" data-updkind="'+k[0]+'">'+k[1]+'</button>';});
+  $("upd-tabs").innerHTML=h;
+}
+async function loadUpdates(){renderUpdTabs();await loadUpdateDraft(UPD.kind);}
+async function loadUpdateDraft(kind){
+  UPD.kind=kind;renderUpdTabs();
+  $("upd-body").innerHTML='<div class="mut">Готовлю черновик…</div>';
+  try{UPD.draft=await (await api("/v1/updates/"+kind)).json();updRender();}
+  catch(e){$("upd-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+function updRender(){
+  var d=UPD.draft;if(!d){return;}
+  var html='<div class="mut" style="margin-bottom:6px">Черновик собран детерминированно из read-моделей (не LLM, без внешней отправки). Approve фиксируется в audit — ничего не «экспортируется» без подтверждения.</div>';
+  html+='<div class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><span class="badge b-accent">'+esc(d.kind)+'</span><span class="badge b-mut">redaction: '+esc(d.redaction_level)+'</span><span class="mut">coverage: '+esc(d.evidence_coverage)+'</span></div>';
+  html+='<div class="mut" style="margin-top:6px">Включено: '+esc((d.included_sections||[]).join(", "))+'</div>';
+  if(d.excluded_sections&&d.excluded_sections.length)html+='<div class="mut">Исключено: '+esc(d.excluded_sections.join(", "))+'</div>';
+  html+='</div>';
+  (d.sections||[]).forEach(function(s){
+    html+='<div class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><span class="h" style="margin:0">'+esc(s.title)+'</span>'+basisChip(s.basis)+'</div>'
+      +'<div style="margin:6px 0">'+esc(s.text)+'</div>'
+      +'<div class="mut">evidence: '+esc(s.evidence_coverage)+' · confidence: '+Number(s.confidence).toFixed(2)+' · '+esc(s.declared_vs_observed)+'</div></div>';
+  });
+  html+='<div class="row" style="margin-top:8px;gap:8px"><button class="btn" id="upd-approve">Approve & подготовить текст</button><span class="mut" id="upd-approve-msg"></span></div>';
+  html+='<div class="card" id="upd-export" style="display:none"><p class="h">Готовый текст (после approve)</p><pre class="digest" id="upd-export-text"></pre></div>';
+  $("upd-body").innerHTML=html;
+  $("upd-approve").addEventListener("click",async function(){
+    try{
+      var r=await (await api("/v1/updates/"+d.kind+"/approve",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content_hash:d.content_hash})})).json();
+      $("upd-export").style.display="block";
+      $("upd-export-text").textContent=r.export_text||"";
+      $("upd-approve-msg").textContent=r.idempotent?"уже подтверждено ранее ✓":"подтверждено ✓";
+    }catch(e){$("upd-approve-msg").textContent=String(e.message||e);}
+  });
+}
+document.addEventListener("click",function(e){
+  var ot=e.target.closest("[data-orhtab]");if(ot){loadRhythmTab(ot.getAttribute("data-orhtab"));return;}
+  var ut=e.target.closest("[data-updkind]");if(ut){loadUpdateDraft(ut.getAttribute("data-updkind"));}
+});
+
+// --- role switching -----------------------------------------------------
+var ROLE_SECTIONS={
+  founder:["cc","so","ib","ac","tw","kt","st","pr","gr","sa","fi","te","ta","me","orh","upd","inv"],
+  team:["tw","orh"],
+  investor:["inv"]
+};
+function applyNavVisibility(){
+  var allowed=ROLE_SECTIONS[VIEW]||ROLE_SECTIONS.founder;
+  var navs=document.querySelectorAll(".nav");
+  for(var i=0;i<navs.length;i++){var id=navs[i].getAttribute("data-nav");navs[i].style.display=allowed.indexOf(id)>=0?"":"none";}
+}
+function bootstrap(){
+  if(VIEW==="founder"){loadOverview();loadInboxCounts();loadDeclarations();loadAvailability();loadCommandCenter();loadFindingsIndex();}
+}
+function applyRole(role){
+  VIEW=(role==="team"||role==="investor")?role:"founder";
+  localStorage.setItem("fos_view",VIEW);
+  var sel=$("role-switch");if(sel)sel.value=VIEW;
+  $("rolemsg").textContent=VIEW==="founder"?"":"Режим «"+VIEW+"»: backend отдаёт только разрешённый этой роли read-model с redaction на сервере.";
+  applyNavVisibility();
+  LAZY_LOADED={};
+  if(VIEW==="founder")renderAll();
+  var allowed=ROLE_SECTIONS[VIEW];
+  show(allowed[0]);
+  bootstrap();
+}
+
 function renderAll(){
-  ccRender();stRender();prRender();grRender();saRender();fiRender();teRender();taRender();meRender();invRender();
+  // Founder-mode composite render. The team/investor sections are server
+  // -backed and load lazily, so they are not part of this pass.
+  ccRender();stRender();prRender();grRender();saRender();fiRender();teRender();taRender();meRender();
 }
 
 var TYPE_LABEL={execution_mismatch:"исполнение",focus_drift:"дрейф фокуса",stale_claim:"устарело",evidence_contradiction:"противоречие",ownership_gap:"нет владельца",communication_silence:"тишина",delivery_risk:"риск срыва",validation_gap:"не проверено"};
@@ -1588,7 +1863,14 @@ async function loadOverview(){
   }
 }
 
-$("refresh").addEventListener("click",function(){loadOverview();loadCommandCenter();loadAvailability();loadInboxCounts();});
+$("role-switch").addEventListener("change",function(){applyRole(this.value);});
+$("refresh").addEventListener("click",function(){
+  LAZY_LOADED={};
+  if(VIEW==="founder")renderAll();
+  bootstrap();
+  var cur=document.querySelector(".nav.on");var id=cur&&cur.getAttribute("data-nav");
+  if(id&&LAZY_LOADERS[id]){LAZY_LOADED[id]=true;LAZY_LOADERS[id]();}
+});
 $("key-open").addEventListener("click",function(){
   $("key-header").value=HEADER_NAME;
   $("key-value").value=localStorage.getItem("fos_api_key")||"";
@@ -1629,16 +1911,16 @@ $("search-q").addEventListener("input",function(){
   },300);
 });
 
-var initial=(location.hash||"").replace("#/","");
-if(SECTION_TITLES[initial])show(initial);
+$("role-switch").value=VIEW;
+applyNavVisibility();
 try{var cached=localStorage.getItem(CACHE_KEY);if(cached){OV=JSON.parse(cached);}}catch(e){}
-renderAll();
-loadOverview();
-loadInboxCounts();
-loadDeclarations();
-loadAvailability();
-loadCommandCenter();
-loadFindingsIndex();
+$("rolemsg").textContent=VIEW==="founder"?"":"Режим «"+VIEW+"»: backend отдаёт только разрешённый этой роли read-model с redaction на сервере.";
+var allowedInit=ROLE_SECTIONS[VIEW]||ROLE_SECTIONS.founder;
+var initial=(location.hash||"").replace("#/","");
+if(VIEW==="founder")renderAll();
+if(SECTION_TITLES[initial]&&allowedInit.indexOf(initial)>=0)show(initial);
+else show(allowedInit[0]);
+bootstrap();
 </script>
 </body>
 </html>

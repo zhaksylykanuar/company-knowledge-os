@@ -7,6 +7,16 @@ Known keys:
 - ``hypotheses``: {"items": [{"text": str, "status":
   "validated|testing|risk"}]} — the hypothesis agent checks declared
   statuses against stored evidence.
+- ``company``: {"oneliner": str, "sub": str, "model": [str, ...]} — the
+  curated one-line story shown in the investor view.
+- ``roadmap``: {"items": [{"horizon": "30|60|90", "text": str}]} — the
+  declared 30/60/90 roadmap surfaced (read-only) to investors.
+- ``ask``: {"ask": str, "note": str, "milestone": str} — the declared
+  fundraise ask / next milestone (free text, never derived numbers).
+
+These last three are *declarations*: they are the founder's stated
+intent, surfaced to the investor view marked as declared (not observed)
+unless real evidence backs them.
 """
 
 from __future__ import annotations
@@ -20,7 +30,12 @@ from app.db.declaration_models import FounderDeclaration
 
 KEY_FOCUS = "focus"
 KEY_HYPOTHESES = "hypotheses"
-KNOWN_KEYS = frozenset({KEY_FOCUS, KEY_HYPOTHESES})
+KEY_COMPANY = "company"
+KEY_ROADMAP = "roadmap"
+KEY_ASK = "ask"
+KNOWN_KEYS = frozenset(
+    {KEY_FOCUS, KEY_HYPOTHESES, KEY_COMPANY, KEY_ROADMAP, KEY_ASK}
+)
 
 
 async def get_declaration(

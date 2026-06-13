@@ -272,6 +272,9 @@ async def list_findings(
     query = select(SecondOpinionFinding).order_by(
         _severity_order_expression(),
         SecondOpinionFinding.created_at.desc(),
+        # Stable tiebreaker so equal severity/timestamp rows order
+        # deterministically (curated-update hashing relies on this).
+        SecondOpinionFinding.finding_key,
     )
     if status is not None:
         query = query.where(SecondOpinionFinding.status == status)

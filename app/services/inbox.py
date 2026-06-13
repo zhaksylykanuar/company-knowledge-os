@@ -52,7 +52,15 @@ _CONSEQUENCES = {
     "finding_suggestion": (
         "Слабый сигнал станет полноценным finding в ленте Second Opinion."
     ),
+    "ownership_assignment": (
+        "Фиксирует предложение назначить владельца задаче. Accept — это "
+        "только решение в системе; задача в Jira не меняется автоматически."
+    ),
 }
+
+# Proposal kind for the Action Center "assign owner" CTA (human-filed,
+# never auto-applied — accepting only records the decision).
+KIND_OWNERSHIP_ASSIGNMENT = "ownership_assignment"
 
 # Why each gardener problem matters — shown on the card.
 _GARDENER_WHY = {

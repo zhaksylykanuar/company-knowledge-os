@@ -45,6 +45,7 @@ async def _ownership_gap_findings(session: AsyncSession) -> list[dict[str, Any]]
             select(SecondOpinionFinding)
             .where(SecondOpinionFinding.status == "open")
             .where(SecondOpinionFinding.finding_type == "ownership_gap")
+            .order_by(SecondOpinionFinding.finding_key)
             .limit(20)
         )
     ).scalars()
