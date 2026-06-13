@@ -23,12 +23,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.models import AuditLog
 from app.services.browser_config import sanitize_for_logs
+from app.services.connector_diagnostics import build_connector_diagnostics
 from app.services.knowledge_graph_view import build_knowledge_graph
 from app.services.obsidian_exporter import sanitize_obsidian_filename
+from app.services.secret_patterns import contains_secret_value
 
 DEFAULT_VAULT_NAME = "FounderOS Knowledge Vault"
 MANIFEST_JSON_PATH = Path("_System") / "Manifest.json"
 FOUNDEROS_UI_BASE_URL = "http://127.0.0.1:8765/ui"
+
+# Display names for connector diagnostics notes under Sources/.
+CONNECTOR_NOTE_NAMES = {
+    "jira": "Jira",
+    "github": "GitHub",
+    "gmail": "Gmail",
+    "meetings": "Meetings",
+    "declarations": "Declarations",
+    "manual_inputs": "Manual Inputs",
+    "generated_evidence": "Generated Evidence",
+    "share_packs": "Share Packs",
+}
 
 VAULT_DIRECTORIES = (
     "Projects",
@@ -88,11 +102,11 @@ SENSITIVE_VALUE_RE = re.compile(
     r"FOUNDEROS_DEV_API_KEY|dev_api_key|sk-[A-Za-z0-9_-]{10,}|raw://\S+)",
     re.IGNORECASE,
 )
+# Tokens that must never appear in a vault note in any form. These are
+# dev-key NAMES (not legitimate connector env-var names) plus the raw-store
+# scheme; actual secret *values* are caught separately by
+# ``contains_secret_value`` so connector notes can still list env-var names.
 FORBIDDEN_MARKDOWN_TERMS = (
-    "OPENAI_API_KEY",
-    "GITHUB_TOKEN",
-    "JIRA_API_TOKEN",
-    "GMAIL_CLIENT_SECRET",
     "FOUNDEROS_DEV_API_KEY",
     "dev_api_key",
     "raw://",
@@ -336,6 +350,10 @@ async def generate_obsidian_vault_plan(
     nodes = list(graph.get("nodes") or [])
     edges = list(graph.get("edges") or [])
     used_paths: set[str] = set()
+    # Reserve connector-note paths first so a graph node titled "Jira" cannot
+    # claim Sources/Jira.md before the connector diagnostics note.
+    diagnostics = await build_connector_diagnostics(session)
+    connector_notes = _connector_notes(diagnostics, used_paths=used_paths)
     node_path_map = {
         str(node["node_id"]): note_relative_path_for_node(node, used_paths=used_paths).as_posix()
         for node in nodes
@@ -345,6 +363,7 @@ async def generate_obsidian_vault_plan(
         _node_note(node, edges=edges, node_path_map=node_path_map, node_lookup=_node_lookup(nodes))
         for node in nodes
     ]
+    notes.extend(connector_notes)
     notes.extend(_system_notes(vault_name=vault_name, notes=notes, graph=graph))
     stats = _note_stats(notes)
     warnings = list(graph.get("warnings") or [])
@@ -645,6 +664,199 @@ def _system_note(path: str, title: str, body: str) -> ObsidianNote:
     )
 
 
+def _connector_note(
+    *,
+    path: str,
+    title: str,
+    node_id: str,
+    connector_state: str,
+    body: str,
+    links: list[str],
+    source_type: str,
+) -> ObsidianNote:
+    frontmatter = {
+        "id": node_id,
+        "type": "connector_diagnostics",
+        "source_type": source_type,
+        "status": connector_state,
+        "tags": [
+            "#founderos/connector",
+            f"#connector/{sanitize_wikilink_target(source_type).casefold().replace(' ', '-')}",
+        ],
+        "aliases": [title],
+        "read_only": True,
+        "secrets_exposed_to_browser": False,
+        "external_writes_allowed": False,
+        "visibility_scope": "founder",
+    }
+    content_hash = _content_hash({"frontmatter": frontmatter, "body": body})
+    return ObsidianNote(
+        node_id=node_id,
+        node_type="connector_diagnostics",
+        title=title,
+        relative_path=safe_relative_path(path),
+        frontmatter=frontmatter,
+        body=body,
+        links=links,
+        content_hash=content_hash,
+    )
+
+
+_SAFE_ENV_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_ /]{0,80}$")
+
+
+def _safe_env_label(value: Any) -> str:
+    # Env-var names are controlled constants (not user input) and are safe to
+    # show by name. Guard anyway: anything unexpected or secret-shaped is
+    # redacted rather than printed.
+    text = str(value)
+    if _SAFE_ENV_NAME_RE.match(text) and not contains_secret_value(text):
+        return text
+    return "***redacted***"
+
+
+def _connector_missing_lines(missing_env_vars: list[Any]) -> list[str]:
+    names = [str(name) for name in missing_env_vars if name]
+    if not names:
+        return ["- All required environment variables are present (by name)."]
+    return [f"- `{_safe_env_label(name)}`" for name in names]
+
+
+def _connector_note_body(connector: dict[str, Any]) -> str:
+    source_type = str(connector.get("source_type"))
+    name = CONNECTOR_NOTE_NAMES.get(source_type, source_type)
+    last_error = connector.get("last_error_sanitized") or {}
+    error_line = (
+        sanitize_markdown_content(last_error.get("message"), max_chars=200)
+        if isinstance(last_error, dict) and last_error.get("message")
+        else "none"
+    )
+    # Setup steps are controlled constants; render literally so env-var names
+    # stay readable (the markdown safety guard still blocks secret values).
+    setup_steps = [f"- {step}" for step in connector.get("setup_steps") or []]
+    lines = [
+        f"# {name} connector",
+        "",
+        "> Generated by FounderOS connector diagnostics. Read-only mirror; "
+        "manage connectors in FounderOS. No secrets are written to this vault.",
+        "",
+        "## Status",
+        "",
+        f"- Connector state: `{sanitize_markdown_content(connector.get('connector_state'))}`",
+        f"- Configured: `{bool(connector.get('configured'))}`",
+        f"- Readiness: `{sanitize_markdown_content(connector.get('readiness'))}`",
+        f"- Adapter type: `{sanitize_markdown_content(connector.get('adapter_type'))}`",
+        f"- Paused: `{bool(connector.get('paused'))}`",
+        "",
+        "## Missing Required Configuration (names only)",
+        "",
+        *_connector_missing_lines(list(connector.get("missing_env_vars") or [])),
+        "",
+        "## Last Activity",
+        "",
+        f"- Last test at: `{sanitize_markdown_content(connector.get('last_test_at') or 'never')}`",
+        f"- Last success at: `{sanitize_markdown_content(connector.get('last_success_at') or 'never')}`",
+        f"- Last error at: `{sanitize_markdown_content(connector.get('last_error_at') or 'none')}`",
+        f"- Last error: {error_line}",
+        "",
+        "## Security Policy",
+        "",
+        "- Read only: `true`",
+        "- Secrets exposed to browser: `false`",
+        "- External writes allowed: `false`",
+        "",
+        "## Setup",
+        "",
+        *(setup_steps or ["- No setup required."]),
+        f"- Docs: {sanitize_markdown_content(connector.get('docs_link'))}",
+        f"- {sanitize_markdown_content(connector.get('restart_required_hint'))}",
+        "",
+        "## Links",
+        "",
+        "- [[_System/Connector Diagnostics|Connector Diagnostics]]",
+        f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _connector_overview_body(connectors: list[dict[str, Any]]) -> str:
+    lines = [
+        "# Connector Diagnostics",
+        "",
+        "> Generated by FounderOS. Read-only connector readiness. No secrets.",
+        "",
+        "## Connectors",
+        "",
+        "| Connector | State | Configured | Adapter | Missing vars |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for connector in connectors:
+        source_type = str(connector.get("source_type"))
+        name = CONNECTOR_NOTE_NAMES.get(source_type, source_type)
+        missing = len(connector.get("missing_env_vars") or [])
+        lines.append(
+            f"| [[Sources/{name}\\|{name}]] "
+            f"| {sanitize_markdown_content(connector.get('connector_state'))} "
+            f"| {bool(connector.get('configured'))} "
+            f"| {sanitize_markdown_content(connector.get('adapter_type'))} "
+            f"| {missing} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Security Policy",
+            "",
+            "- Read only: `true`",
+            "- Secrets exposed to browser: `false`",
+            "- External writes allowed: `false`",
+            "",
+            f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _connector_notes(
+    diagnostics: dict[str, Any],
+    *,
+    used_paths: set[str],
+) -> list[ObsidianNote]:
+    connectors = list(diagnostics.get("connectors") or [])
+    notes: list[ObsidianNote] = []
+    overview_links: list[str] = []
+    for connector in connectors:
+        source_type = str(connector.get("source_type"))
+        name = CONNECTOR_NOTE_NAMES.get(source_type, source_type)
+        path = f"Sources/{name}.md"
+        used_paths.add(path.casefold())
+        overview_links.append(_wikilink(path, name))
+        notes.append(
+            _connector_note(
+                path=path,
+                title=f"{name} connector",
+                node_id=f"connector:{source_type}",
+                connector_state=str(connector.get("connector_state") or "unknown"),
+                body=_connector_note_body(connector),
+                links=["[[_System/Connector Diagnostics|Connector Diagnostics]]"],
+                source_type=source_type,
+            )
+        )
+    overview_path = "_System/Connector Diagnostics.md"
+    used_paths.add(overview_path.casefold())
+    notes.append(
+        _connector_note(
+            path=overview_path,
+            title="Connector Diagnostics",
+            node_id="connector:diagnostics",
+            connector_state="overview",
+            body=_connector_overview_body(connectors),
+            links=overview_links,
+            source_type="all",
+        )
+    )
+    return notes
+
+
 def _note_stats(notes: list[ObsidianNote]) -> dict[str, int]:
     stats = {
         "notes": len(notes),
@@ -683,6 +895,8 @@ def _content_hash(value: Any) -> str:
 
 
 def _assert_markdown_safe(markdown: str) -> None:
+    if contains_secret_value(markdown):
+        raise ValueError("unsafe markdown: secret value detected")
     lowered = markdown.casefold()
     for term in FORBIDDEN_MARKDOWN_TERMS:
         if term.casefold() in lowered:

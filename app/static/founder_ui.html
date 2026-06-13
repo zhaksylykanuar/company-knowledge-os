@@ -1522,7 +1522,7 @@ async function loadNotifications(){
 async function loadNotifCounts(){try{var d=await (await api("/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
 
 // --- Source Control Center + Data Quality -------------------------------
-var SOURCES=null,DQ=null,SOURCE_RUN_CACHE={};
+var SOURCES=null,DQ=null,SOURCE_RUN_CACHE={},CONNECTOR_DIAGS={};
 var SRC_STATUS_BADGE={connected:"b-green",disconnected:"b-mut",degraded:"b-amber",syncing:"b-blue",error:"b-red",disabled:"b-mut"};
 function sourceStatusBadge(status){
   return '<span class="badge '+(SRC_STATUS_BADGE[status]||"b-mut")+'">'+esc(status||"unknown")+'</span>';
@@ -1552,6 +1552,34 @@ function sourceQueueChips(q){
   var items=[["pending",q.pending,"b-amber"],["running",q.running,"b-blue"],["succeeded",q.succeeded,"b-green"],["failed",q.failed,"b-red"],["skipped",q.skipped,"b-amber"],["blocked",q.blocked,"b-amber"]];
   return items.map(function(x){return x[1]?'<span class="badge '+x[2]+'">'+x[0]+' '+num(x[1])+'</span>':'';}).join(" ")||'<span class="badge b-mut">queue empty</span>';
 }
+function connectorDiagBlock(s){
+  var d=(CONNECTOR_DIAGS||{})[s.source_type];
+  if(!d)return'';
+  var sp=d.security_policy||{};
+  var stateCls=d.connector_state==="connected"?"b-green":d.connector_state==="missing_config"?"b-red":(d.connector_state==="never_tested"?"b-amber":"b-mut");
+  var h='<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">'
+    +'<span class="badge '+stateCls+'">'+esc(d.connector_state||"unknown")+'</span>'
+    +'<span class="badge b-mut">adapter: '+esc(d.adapter_type||"noop")+'</span>'
+    +'<span class="badge '+(d.can_test?"b-green":"b-mut")+'">test '+(d.can_test?"ok":"no")+'</span>'
+    +'<span class="badge '+(d.can_sync?"b-green":"b-mut")+'">sync '+(d.can_sync?"ok":"no")+'</span>'
+    +'<span class="badge '+(d.can_backfill?"b-green":"b-mut")+'">backfill '+(d.can_backfill?"ok":"no")+'</span>'
+    +'</div>';
+  if((d.missing_env_vars||[]).length){
+    h+='<div class="mut" style="margin-top:6px">missing env vars (names only): '+d.missing_env_vars.map(function(n){return '<code>'+esc(n)+'</code>';}).join(", ")+'</div>';
+  }
+  h+='<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:6px">'
+    +'<span class="badge b-mut">read-only: '+(sp.read_only?"yes":"no")+'</span>'
+    +'<span class="badge b-mut">no secrets to browser: '+(sp.secrets_exposed_to_browser===false?"yes":"no")+'</span>'
+    +'<span class="badge b-mut">no external writes: '+(sp.external_writes_allowed===false?"yes":"no")+'</span>'
+    +'</div>';
+  h+='<details class="ev"><summary>Setup wizard</summary>';
+  (d.setup_steps||[]).forEach(function(step){h+='<div class="mut">• '+esc(step)+'</div>';});
+  if(d.last_error_sanitized&&d.last_error_sanitized.message)h+='<div class="mut" style="margin-top:4px">last error: '+esc(d.last_error_sanitized.message)+'</div>';
+  h+='<div class="mut" style="margin-top:4px">docs: <code>'+esc(d.docs_link||"")+'</code></div>';
+  h+='<div class="mut">'+esc(d.restart_required_hint||"")+'</div>';
+  h+='</details>';
+  return h;
+}
 function sourceCard(s){
   var setup=s.connector_readiness||{};
   var da=s.data_availability||{};
@@ -1559,6 +1587,7 @@ function sourceCard(s){
   var html='<div class="card">'
     +'<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><div class="row" style="gap:6px;flex-wrap:wrap"><b>'+esc(s.label)+'</b>'+sourceStatusBadge(s.status)+'</div><span class="mut">last sync: '+esc((s.last_sync_at||"—").slice(0,16).replace("T"," "))+'</span></div>'
     +'<div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0">'+sourceSetupChips(setup.setup||[])+'</div>'
+    +connectorDiagBlock(s)
     +'<div class="grid3" style="margin:8px 0">'
     +'<div class="substate"><div class="l">ingested</div><div class="v">'+num(s.events_ingested||0)+'</div></div>'
     +'<div class="substate"><div class="l">normalized</div><div class="v">'+num(s.normalized_events||0)+'</div></div>'
@@ -1613,6 +1642,11 @@ async function loadSources(){
   setMsgEl("sources-msg","loading source health…",false);
   try{
     SOURCES=await (await api("/v1/founder/sources")).json();
+    try{
+      var diag=await (await api("/v1/founder/connectors/diagnostics")).json();
+      CONNECTOR_DIAGS={};
+      (diag.connectors||[]).forEach(function(c){CONNECTOR_DIAGS[c.source_type]=c;});
+    }catch(e){CONNECTOR_DIAGS={};}
     SOURCE_RUN_CACHE={};
     (SOURCES.pending_requests||[]).concat(SOURCES.recent_runs||[]).forEach(function(run){SOURCE_RUN_CACHE[run.request_id]=run;});
     (SOURCES.sources||[]).forEach(function(s){

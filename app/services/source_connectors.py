@@ -378,12 +378,15 @@ class NoopSourceConnector:
                     limit=(sanitized_input or {}).get("limit"),
                 )
                 output_watermark = input_watermark
-        elif self._is_internal:
+        elif self._is_internal or "local_email_records" in readiness.warnings:
+            # Internal sources and email read from already-ingested local
+            # records (no external call). This keeps local-only mode honest:
+            # a real successful run, not a fake "connected" from env presence.
             status = CONNECTOR_STATUS_SUCCEEDED
             warnings = list(readiness.warnings)
             events = [] if action_type == ACTION_TEST else await self._local_events()
             summary = {
-                "mode": "local_noop",
+                "mode": "local_noop" if self._is_internal else "local_records",
                 "source_type": self.source_type,
                 "action_type": action_type,
                 "events_generated": len(events),

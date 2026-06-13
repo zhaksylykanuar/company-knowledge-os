@@ -15,6 +15,7 @@ from app.services.action_center import build_action_center
 from app.services.agent_proposals import create_proposal
 from app.services.agent_run_log import latest_runs
 from app.services.command_center import build_command_center
+from app.services.connector_diagnostics import build_connector_diagnostics
 from app.services.curated_updates import (
     UPDATE_KINDS,
     approve_update,
@@ -608,6 +609,15 @@ async def get_founder_data_quality(
     _require_founder(view)
     async with AsyncSessionLocal() as session:
         return await build_data_quality_center(session)
+
+
+@router.get("/v1/founder/connectors/diagnostics")
+async def get_founder_connector_diagnostics(
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_connector_diagnostics(session)
 
 
 @router.get("/v1/founder/source-runs")
