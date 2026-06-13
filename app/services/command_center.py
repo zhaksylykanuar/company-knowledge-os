@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.event_models import SourceEvent
 from app.db.graph_models import EntityRecord
 from app.services.data_availability import get_availability
+from app.services.data_quality_center import build_data_quality_center
 from app.services.declarations import KEY_FOCUS, get_declaration
 from app.services.entity_resolution import ENTITY_TYPE_PROJECT
 from app.services.founder_overview import build_founder_overview
@@ -32,6 +33,7 @@ from app.services.second_opinion import (
     STATUS_OPEN,
     list_findings,
 )
+from app.services.source_control import build_source_health
 
 TEAM_OVERLOAD_OPEN_ISSUES = 8
 
@@ -279,6 +281,8 @@ async def build_command_center(
     focus = await _focus_vs_activity(session, overview)
     availability = await _availability_summary(session)
     share_packs = await _share_packs_block(session, now=safe_now)
+    source_health = await build_source_health(session, now=safe_now)
+    data_quality = await build_data_quality_center(session, now=safe_now)
 
     next_actions = [
         {
@@ -314,6 +318,15 @@ async def build_command_center(
         "team": team,
         "knowledge_freshness": freshness,
         "data_availability": availability,
+        "source_health": {
+            "summary": source_health["summary"],
+            "degraded_sources": source_health["summary"]["degraded_sources"],
+            "pending_requests": source_health["summary"]["pending_requests"],
+        },
+        "data_quality": {
+            "counts": data_quality["counts"],
+            "top_issues": data_quality["issues"][:5],
+        },
         "next_actions": next_actions,
         "share_packs": share_packs,
     }

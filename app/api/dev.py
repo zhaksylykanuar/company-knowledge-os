@@ -5,7 +5,7 @@ they are simply absent (404) in any non-local deployment.
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.core.config import settings
 from app.services.browser_config import (
@@ -17,10 +17,12 @@ router = APIRouter(prefix="/v1/dev", tags=["dev"])
 
 
 @router.get("/browser-config")
-async def get_browser_config() -> dict[str, Any]:
+async def get_browser_config(response: Response) -> dict[str, Any]:
     # Only exists in local dev with the flag on; otherwise it does not exist.
     if not browser_dev_config_enabled(settings):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="not found"
         )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     return sanitize_browser_config(settings)

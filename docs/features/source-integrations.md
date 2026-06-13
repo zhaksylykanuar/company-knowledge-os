@@ -36,6 +36,16 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
   connector or webhook endpoint yet.
 - Jira: registry contracts, fixtures, and connector payload mapping exist, but
   there is no real production Jira connector yet.
+- Source Control Center: implemented as a read-model and request-only control
+  surface. `GET /v1/founder/sources` summarizes existing stored evidence,
+  connector readiness and masked setup status. `POST
+  /v1/founder/sources/{source}/{action}` records local safe requests for
+  `test`, `sync`, `backfill`, `pause`, and `resume` with audit/idempotency,
+  but does not call external APIs.
+- Data Quality Center: implemented as `GET /v1/founder/data-quality`. It
+  groups evidence-backed issues such as stale availability, orphan graph
+  nodes, low-confidence links, findings without evidence, failed runs, paused
+  sources and pending source requests. It does not invent an aggregate score.
 - Calendar: planned for later.
 - Meeting transcripts: provider-free draft artifact pipeline implemented for
   already-supplied transcript text; upload/source ingestion remains planned for

@@ -47,6 +47,26 @@ def test_ui_page_injects_configured_auth_header_name(monkeypatch) -> None:
     assert "test-api-key" not in response.text
 
 
+def test_ui_contains_sources_and_data_quality_surfaces(monkeypatch) -> None:
+    _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
+
+    with TestClient(app) as client:
+        response = client.get("/ui")
+
+    assert response.status_code == 200
+    for marker in (
+        "Sources / Data Control",
+        "Data Quality",
+        "/v1/founder/sources",
+        "/v1/founder/data-quality",
+        "loadSources",
+        "loadDataQuality",
+        "masked_connection",
+    ):
+        assert marker in response.text, marker
+    assert "test-api-key" not in response.text
+
+
 def test_root_redirects_to_ui_page(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
 

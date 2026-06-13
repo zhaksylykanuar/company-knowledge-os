@@ -240,6 +240,7 @@ async def build_action_center(
                 (SecondOpinionFinding.snoozed_until.is_(None))
                 | (SecondOpinionFinding.snoozed_until <= safe_now)
             )
+            .order_by(SecondOpinionFinding.updated_at.desc(), SecondOpinionFinding.id.desc())
             .limit(60)
         )
     ).scalars()

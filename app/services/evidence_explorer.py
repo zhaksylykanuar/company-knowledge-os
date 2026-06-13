@@ -12,11 +12,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Text, or_, select
+from sqlalchemy import Text, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.graph_models import EntityRecord
+from app.db.models import IngestedEvent
 from app.db.second_opinion_models import SecondOpinionFinding
 from app.services.visibility import SCOPE_FOUNDER, SCOPE_INVESTOR, SCOPE_TEAM
 
@@ -42,27 +43,57 @@ async def list_source_events(
     *,
     source_object_id: str | None = None,
     source_system: str | None = None,
+    status: str | None = None,
     limit: int = 50,
+    viewer_scope: str = SCOPE_FOUNDER,
 ) -> list[dict[str, Any]]:
-    query = select(SourceEvent).order_by(SourceEvent.id.desc())
+    query = (
+        select(SourceEvent, IngestedEvent.status)
+        .outerjoin(
+            IngestedEvent,
+            IngestedEvent.event_id == SourceEvent.ingested_event_id,
+        )
+        .order_by(SourceEvent.id.desc())
+    )
     if source_object_id is not None:
         query = query.where(
             SourceEvent.source_object_id.like(f"%{source_object_id}%")
         )
     if source_system is not None:
         query = query.where(SourceEvent.source_system == source_system)
-    rows = (await session.execute(query.limit(limit))).scalars()
-    return [
-        {
+    if status is not None:
+        query = query.where(IngestedEvent.status == status)
+    rows = (await session.execute(query.limit(limit))).all()
+    out: list[dict[str, Any]] = []
+    for row, event_status in rows:
+        normalized_at = await session.scalar(
+            select(func.max(NormalizedActivityItemRecord.created_at)).where(
+                NormalizedActivityItemRecord.source_object_id.like(
+                    f"%{row.source_object_id}%"
+                )
+            )
+        )
+        item = {
             "source_event_id": row.source_event_id,
             "source_system": row.source_system,
             "event_type": row.event_type,
+            "source_object_type": row.source_object_type,
             "source_object_id": row.source_object_id,
             "title": row.title,
+            "status": event_status or "received",
             "received_at": row.created_at.isoformat() if row.created_at else None,
+            "normalized_at": normalized_at.isoformat() if normalized_at else None,
+            "redaction": {
+                "viewer_scope": viewer_scope,
+                "raw_object_ref_visible": viewer_scope == SCOPE_FOUNDER,
+                "raw_body_visible": False,
+            },
         }
-        for row in rows
-    ]
+        if viewer_scope == SCOPE_FOUNDER:
+            item["raw_object_ref"] = row.raw_object_ref
+            item["source_url"] = row.source_url
+        out.append(item)
+    return out
 
 
 def _full_event_view(row: SourceEvent) -> dict[str, Any]:

@@ -17,6 +17,7 @@ import app.db.attention_models  # noqa: F401,E402
 import app.db.gmail_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402
 import app.db.source_models  # noqa: F401,E402
+import app.db.source_control_models  # noqa: F401,E402
 import app.db.event_models  # noqa: F401,E402
 import app.db.score_models  # noqa: F401,E402
 import app.db.task_models  # noqa: F401,E402

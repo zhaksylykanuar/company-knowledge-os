@@ -21,6 +21,7 @@ from app.services.curated_updates import (
     build_update_draft,
 )
 from app.services.data_availability import get_availability
+from app.services.data_quality_center import build_data_quality_center
 from app.services.declarations import KNOWN_KEYS, get_declaration, set_declaration
 from app.services.evidence_explorer import (
     build_source_event_view,
@@ -56,6 +57,12 @@ from app.services.second_opinion import (
     set_finding_note,
     set_finding_status,
     snooze_finding,
+)
+from app.services.source_control import (
+    SOURCE_ACTIONS,
+    build_source_health,
+    known_source_types,
+    request_source_action,
 )
 from app.services.team_view import build_team_view
 from app.api.view_guard import require_founder, require_scope, validated_view
@@ -140,6 +147,14 @@ class OwnerAssignmentRequest(BaseModel):
     suggested_owner: str | None = Field(default=None, max_length=160)
     reason: str | None = Field(default=None, max_length=500)
     reviewer_id: str = Field(default="founder", max_length=120)
+
+
+class SourceActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_key: str | None = Field(default=None, min_length=1, max_length=255)
+    requested_by: str = Field(default="founder", max_length=120)
+    input: dict[str, Any] = Field(default_factory=dict)
 
 
 def _action_target_id(action_ref: dict[str, Any]) -> str:
@@ -410,10 +425,59 @@ async def get_data_availability(
     return {"availability": rows}
 
 
+@router.get("/v1/founder/sources")
+async def get_founder_sources(
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_source_health(session)
+
+
+@router.post("/v1/founder/sources/{source_type}/{action_type}")
+async def post_founder_source_action(
+    source_type: str,
+    action_type: str,
+    request: SourceActionRequest,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    if source_type not in known_source_types():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="unknown source"
+        )
+    if action_type not in SOURCE_ACTIONS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="unknown source action"
+        )
+    async with AsyncSessionLocal() as session:
+        result = await request_source_action(
+            session,
+            source_type=source_type,
+            action_type=action_type,
+            request_key=request.request_key,
+            requested_by=request.requested_by,
+            input_payload=request.input,
+        )
+        await session.commit()
+    return result
+
+
+@router.get("/v1/founder/data-quality")
+async def get_founder_data_quality(
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_data_quality_center(session)
+
+
 @router.get("/v1/source-events")
 async def get_source_events(
     source_object_id: str | None = Query(default=None),
     source_system: str | None = Query(default=None),
+    source_type: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -427,8 +491,10 @@ async def get_source_events(
         events = await list_source_events(
             session,
             source_object_id=source_object_id,
-            source_system=source_system,
+            source_system=source_system or source_type,
+            status=status_filter,
             limit=limit,
+            viewer_scope=viewer,
         )
     return {"events": events}
 

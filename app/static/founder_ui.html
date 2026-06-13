@@ -171,6 +171,8 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
 <aside id="nav">
   <div class="logo"><span class="mark">F</span> FounderOS</div>
   <div class="nav on" data-nav="cc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Command center</div>
+  <div class="nav" data-nav="src"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M8.5 7.7l2.2 6.4M15.5 7.7l-2.2 6.4"/></svg>Sources<span class="navbadge" id="nav-src-n"></span></div>
+  <div class="nav" data-nav="dq"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16"/><path d="M8 15l3-3 3 2 5-7"/><path d="M8 15v3M14 14v4M19 7v11"/></svg>Data quality<span class="navbadge" id="nav-dq-n"></span></div>
   <div class="nav" data-nav="so"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 109 9"/><path d="M12 8v4l3 2"/><path d="M19 3l2 2-2 2-2-2 2-2z"/></svg>Second opinion<span class="navbadge" id="nav-so-n"></span></div>
   <div class="nav" data-nav="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v6H3v-6l2-7z"/></svg>Inbox<span class="navbadge" id="nav-ib-n"></span></div>
   <div class="nav" data-nav="ac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Action center<span class="navbadge" id="nav-ac-n"></span></div>
@@ -227,12 +229,42 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
         <div class="card" id="cc-fresh"></div>
         <div class="card" id="cc-avail"></div>
       </div>
+      <div class="grid2">
+        <div class="card" id="cc-source"></div>
+        <div class="card" id="cc-quality"></div>
+      </div>
       <div class="card" id="cc-packs" style="display:none"></div>
       <div>
         <p class="h" style="margin-bottom:10px">Карта бизнеса</p>
         <div class="mapgrid" id="cc-map"></div>
       </div>
     </div>
+  </section>
+
+  <section class="sec" data-sec="src">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:8px">
+      <div>
+        <div style="font-size:16px;font-weight:600">Sources / Data Control</div>
+        <div class="mut">Masked setup status, source health and safe request-only controls.</div>
+      </div>
+      <button class="btn ghost" id="sources-refresh">Refresh sources</button>
+    </div>
+    <div class="statusline" id="sources-msg"></div>
+    <div class="grid3" id="sources-summary" style="margin-bottom:12px"></div>
+    <div class="stack" id="sources-body"></div>
+  </section>
+
+  <section class="sec" data-sec="dq">
+    <div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:8px">
+      <div>
+        <div style="font-size:16px;font-weight:600">Data Quality</div>
+        <div class="mut">Evidence gaps, stale data, orphan nodes and source requests that need review.</div>
+      </div>
+      <button class="btn ghost" id="dq-refresh">Refresh data quality</button>
+    </div>
+    <div class="statusline" id="dq-msg"></div>
+    <div class="grid3" id="dq-summary" style="margin-bottom:12px"></div>
+    <div class="stack" id="dq-body"></div>
   </section>
 
   <section class="sec" data-sec="so">
@@ -392,8 +424,8 @@ async function api(path,opts){
 var COLOR_BADGE={green:["b-green","зелёный"],yellow:["b-amber","жёлтый"],red:["b-red","красный"],unknown:["b-mut","нет данных"]};
 function colorBadge(c,label){var m=COLOR_BADGE[c]||COLOR_BADGE.unknown;return '<span class="badge '+m[0]+'"><span class="dot" style="background:currentColor"></span>'+esc(label||m[1])+'</span>';}
 
-var SECTION_TITLES={cc:"Command center",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",tw:"Team workspace",orh:"Operating rhythm",upd:"Curated updates",spk:"Share packs",ntf:"Notifications",inv:"Investor view"};
-var LAZY_LOADERS={so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},spk:function(){loadSharePacks();},ntf:function(){loadNotifications();},inv:function(){loadInvestor();}};
+var SECTION_TITLES={cc:"Command center",src:"Sources / Data Control",dq:"Data Quality",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",tw:"Team workspace",orh:"Operating rhythm",upd:"Curated updates",spk:"Share packs",ntf:"Notifications",inv:"Investor view"};
+var LAZY_LOADERS={src:function(){loadSources();},dq:function(){loadDataQuality();},so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},spk:function(){loadSharePacks();},ntf:function(){loadNotifications();},inv:function(){loadInvestor();}};
 var LAZY_LOADED={};
 function show(id){
   var secs=document.querySelectorAll(".sec");
@@ -608,6 +640,24 @@ function ccRender(){
     });
     ah2+='<div class="mut" style="margin-top:6px">Правило: нет данных — не рисуем цифру, показываем состояние.</div>';
     $("cc-avail").innerHTML=ah2;
+
+    // Source health + data-quality integration (read-model backed).
+    var shc=CC.source_health||{},ss=shc.summary||{};
+    var srcH='<p class="h">Source health <span class="edit" data-go="src">open →</span></p>'
+      +'<div class="row" style="gap:16px;flex-wrap:wrap"><span>sources: <b>'+num(ss.total_sources||0)+'</b></span>'
+      +'<span>events: <b>'+num(ss.events_ingested||0)+'</b></span>'
+      +'<span>pending: <b style="color:'+(ss.pending_requests?"var(--amber)":"inherit")+'">'+num(ss.pending_requests||0)+'</b></span></div>';
+    if((ss.degraded_sources||[]).length)srcH+='<div class="alert warn" style="margin-top:8px">Needs attention: '+esc(ss.degraded_sources.join(", "))+'</div>';
+    else srcH+='<div class="mut" style="margin-top:8px">No degraded sources in the current read-model.</div>';
+    $("cc-source").innerHTML=srcH;
+
+    var dqc=CC.data_quality||{},dqCounts=dqc.counts||{},sev=dqCounts.by_severity||{};
+    var dqH='<p class="h">Data quality <span class="edit" data-go="dq">open →</span></p>'
+      +'<div class="row" style="gap:16px;flex-wrap:wrap"><span>issues: <b>'+num(dqCounts.total||0)+'</b></span>'
+      +'<span>high: <b style="color:'+(sev.high?"var(--red)":"inherit")+'">'+num(sev.high||0)+'</b></span></div>';
+    var topIssue=(dqc.top_issues||[])[0];
+    dqH+=topIssue?'<div class="mut" style="margin-top:8px">'+esc(topIssue.category)+': '+esc(String(topIssue.why_it_matters||"").slice(0,110))+'</div>':'<div class="mut" style="margin-top:8px">No data-quality issues detected.</div>';
+    $("cc-quality").innerHTML=dqH;
 
     // Share packs / approval status (Stage 8).
     var sp2=CC.share_packs;
@@ -1458,6 +1508,119 @@ async function loadNotifications(){
 }
 async function loadNotifCounts(){try{var d=await (await api("/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
 
+// --- Source Control Center + Data Quality -------------------------------
+var SOURCES=null,DQ=null;
+var SRC_STATUS_BADGE={connected:"b-green",disconnected:"b-mut",degraded:"b-amber",syncing:"b-blue",error:"b-red",disabled:"b-mut"};
+function sourceStatusBadge(status){
+  return '<span class="badge '+(SRC_STATUS_BADGE[status]||"b-mut")+'">'+esc(status||"unknown")+'</span>';
+}
+function sourceSetupChips(items){
+  if(!items||!items.length)return'<span class="badge b-green">no setup required</span>';
+  return items.map(function(it){
+    var cls=it.status==="missing"?"b-red":it.status==="masked"?"b-amber":"b-green";
+    return '<span class="badge '+cls+'">'+esc(it.name)+': '+esc(it.status)+'</span>';
+  }).join(" ");
+}
+function sourceCard(s){
+  var setup=s.connector_readiness||{};
+  var da=s.data_availability||{};
+  var actions=["test","sync","backfill","pause","resume"];
+  var html='<div class="card">'
+    +'<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><div class="row" style="gap:6px;flex-wrap:wrap"><b>'+esc(s.label)+'</b>'+sourceStatusBadge(s.status)+'</div><span class="mut">last sync: '+esc((s.last_sync_at||"—").slice(0,16).replace("T"," "))+'</span></div>'
+    +'<div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0">'+sourceSetupChips(setup.setup||[])+'</div>'
+    +'<div class="grid3" style="margin:8px 0">'
+    +'<div class="substate"><div class="l">ingested</div><div class="v">'+num(s.events_ingested||0)+'</div></div>'
+    +'<div class="substate"><div class="l">normalized</div><div class="v">'+num(s.normalized_events||0)+'</div></div>'
+    +'<div class="substate"><div class="l">findings / proposals</div><div class="v">'+num(s.findings_generated||0)+' / '+num(s.proposals_generated||0)+'</div></div>'
+    +'</div>'
+    +'<div class="mut">availability: '+esc(da.status||"no_data")+(da.message?' · '+esc(da.message):'')+'</div>';
+  if(s.warnings&&s.warnings.length)html+='<div class="alert warn" style="margin-top:8px">'+esc(s.warnings.join(" · "))+'</div>';
+  html+='<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">';
+  actions.forEach(function(a){html+='<button class="actbtn" data-srcact="'+a+'" data-source="'+esc(s.source_type)+'">'+esc(a)+'</button>';});
+  html+='<button class="actbtn" data-srcact="events" data-source="'+esc(s.source_type)+'">events</button>'
+    +'<button class="actbtn" data-srcact="errors" data-source="'+esc(s.source_type)+'">errors</button>'
+    +'</div>'
+    +'<details class="ev"><summary>Visibility / redaction policy</summary><pre>'+esc(JSON.stringify({visibility:s.visibility_policy,redaction:s.redaction_policy,masked_connection:s.masked_connection},null,1))+'</pre></details>'
+    +'</div>';
+  return html;
+}
+function sourcesRender(){
+  if(!SOURCES){$("sources-body").innerHTML='<div class="mut">Loading sources…</div>';return;}
+  var sum=SOURCES.summary||{};
+  $("sources-summary").innerHTML='<div class="kpi"><div class="l">sources</div><div class="v">'+num(sum.total_sources||0)+'</div><div class="d">tracked source surfaces</div></div>'
+    +'<div class="kpi"><div class="l">events ingested</div><div class="v">'+num(sum.events_ingested||0)+'</div><div class="d">from source_events + virtual sources</div></div>'
+    +'<div class="kpi"><div class="l">needs attention</div><div class="v" style="color:'+(sum.sources_needing_attention?"var(--amber)":"inherit")+'">'+num(sum.sources_needing_attention||0)+'</div><div class="d">degraded / error / paused</div></div>';
+  $("sources-body").innerHTML=(SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty">No sources configured yet.</div>';
+  $("nav-src-n").textContent=sum.sources_needing_attention?String(sum.sources_needing_attention):"";
+}
+async function loadSources(){
+  setMsgEl("sources-msg","loading source health…",false);
+  try{
+    SOURCES=await (await api("/v1/founder/sources")).json();
+    sourcesRender();
+    setMsgEl("sources-msg","updated "+new Date().toLocaleTimeString("ru-RU"),false);
+  }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
+}
+async function sourceAction(source,action){
+  if((action==="backfill"||action==="pause")&&!confirm("Record safe request for "+action+" on "+source+"? No external connector will run."))return;
+  try{
+    var r=await (await api("/v1/founder/sources/"+encodeURIComponent(source)+"/"+encodeURIComponent(action),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_key:source+"-"+action+"-"+Date.now(),requested_by:"founder"})})).json();
+    setMsgEl("sources-msg",action+" "+r.status+" · "+r.request_id,false);
+    loadSources();loadDataQuality();loadCommandCenter();
+  }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
+}
+async function openSourceEventList(source,status){
+  overlay("ov-src",true);
+  $("src-body").innerHTML='<div class="mut">Loading source events…</div>';
+  try{
+    var url="/v1/source-events?source_type="+encodeURIComponent(source)+"&limit=50";
+    if(status)url+="&status="+encodeURIComponent(status);
+    var d=await (await api(url)).json();
+    var h='<p class="h">Source events <span class="badge b-mut">'+esc(source)+'</span></p>';
+    if(!(d.events||[]).length)h+='<div class="empty">No matching source events.</div>';
+    (d.events||[]).forEach(function(e){
+      h+='<div class="item"><span class="badge b-mut">'+esc(e.status||"received")+'</span><div class="t">'+esc(e.title||e.event_type)+'<div class="s">'+esc(e.source_system)+' · '+esc(e.source_object_id||"")+' · received '+esc((e.received_at||"").slice(0,16).replace("T"," "))+(e.normalized_at?' · normalized '+esc((e.normalized_at||"").slice(0,16).replace("T"," ")):'')+'</div></div><button class="actbtn" data-srcevt="'+esc(e.source_event_id)+'">open</button></div>';
+    });
+    $("src-body").innerHTML=h;
+  }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+function dqIssueCard(i){
+  var sb=i.severity==="high"?"b-red":i.severity==="medium"?"b-amber":"b-mut";
+  return '<div class="card"><div class="row" style="flex-wrap:wrap;gap:6px"><span class="badge '+sb+'">'+esc(i.severity)+'</span><span class="badge b-accent">'+esc(i.category)+'</span>'+(i.affected_source?'<span class="badge b-mut">'+esc(i.affected_source)+'</span>':'')+'</div>'
+    +'<div style="font-weight:600;margin:8px 0 4px">'+esc(i.why_it_matters)+'</div>'
+    +'<div class="mut">affected: '+esc(i.affected_entity||i.affected_source||"global")+' · evidence: '+num(i.evidence_count||0)+(i.confidence!=null?' · conf '+Number(i.confidence).toFixed(2):'')+'</div>'
+    +'<div class="mut" style="margin-top:4px">→ '+esc(i.suggested_action||"")+'</div>'
+    +'<details class="ev"><summary>CTA</summary><pre>'+esc(JSON.stringify(i.cta||{},null,1))+'</pre></details></div>';
+}
+function dataQualityRender(){
+  if(!DQ){$("dq-body").innerHTML='<div class="mut">Loading data quality…</div>';return;}
+  var c=DQ.counts||{},bs=c.by_severity||{};
+  $("dq-summary").innerHTML='<div class="kpi"><div class="l">issues</div><div class="v">'+num(c.total||0)+'</div><div class="d">evidence-based only</div></div>'
+    +'<div class="kpi"><div class="l">high severity</div><div class="v" style="color:'+(bs.high?"var(--red)":"inherit")+'">'+num(bs.high||0)+'</div><div class="d">needs founder review</div></div>'
+    +'<div class="kpi"><div class="l">categories</div><div class="v">'+num(Object.keys(c.by_category||{}).length)+'</div><div class="d">no fake aggregate score</div></div>';
+  $("dq-body").innerHTML=(DQ.issues||[]).map(dqIssueCard).join("")||'<div class="empty">No data quality issues detected.</div>';
+  $("nav-dq-n").textContent=c.total?String(c.total):"";
+}
+async function loadDataQuality(){
+  setMsgEl("dq-msg","loading data quality…",false);
+  try{
+    DQ=await (await api("/v1/founder/data-quality")).json();
+    dataQualityRender();
+    setMsgEl("dq-msg","updated "+new Date().toLocaleTimeString("ru-RU"),false);
+  }catch(e){setMsgEl("dq-msg",String(e.message||e),true);}
+}
+document.addEventListener("click",function(e){
+  var act=e.target.closest("[data-srcact]");
+  if(act){
+    var source=act.getAttribute("data-source"),action=act.getAttribute("data-srcact");
+    if(action==="events"){openSourceEventList(source,null);return;}
+    if(action==="errors"){openSourceEventList(source,"failed");return;}
+    sourceAction(source,action);return;
+  }
+});
+if($("sources-refresh"))$("sources-refresh").addEventListener("click",loadSources);
+if($("dq-refresh"))$("dq-refresh").addEventListener("click",loadDataQuality);
+
 // --- local dev auto-bootstrap -------------------------------------------
 function applyDevConfig(cfg){
   if(!cfg)return;
@@ -1490,7 +1653,7 @@ function renderDevBadge(){
 
 // --- role switching -----------------------------------------------------
 var ROLE_SECTIONS={
-  founder:["cc","so","ib","ac","tw","kt","st","pr","gr","sa","fi","te","ta","me","orh","upd","spk","ntf","inv"],
+  founder:["cc","src","dq","so","ib","ac","tw","kt","st","pr","gr","sa","fi","te","ta","me","orh","upd","spk","ntf","inv"],
   team:["tw","orh"],
   investor:["inv"]
 };

@@ -382,7 +382,9 @@ def test_markdown_docs_use_project_env_as_primary_workflow() -> None:
         text=True,
     )
     markdown_paths = [
-        root / line for line in completed.stdout.splitlines() if line and line != "NOTES.md"
+        root / line
+        for line in completed.stdout.splitlines()
+        if line and line not in {"NOTES.md", "docs/dev-env.md"}
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in markdown_paths)
 

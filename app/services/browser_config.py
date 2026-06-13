@@ -21,6 +21,15 @@ SAFE_FEATURES: dict[str, bool] = {
 
 # The exhaustive allowlist of keys the browser config may ever contain.
 ALLOWED_KEYS = ("api_base_url", "dev_api_key", "app_env", "features")
+_MASKED = "***redacted***"
+_SENSITIVE_KEY_PARTS = (
+    "api_key",
+    "apikey",
+    "token",
+    "secret",
+    "password",
+    "credential",
+)
 
 
 class BrowserConfigSource(Protocol):
@@ -55,3 +64,46 @@ def sanitize_browser_config(config: Any) -> dict[str, Any]:
     }
     # Defensive: guarantee the payload only ever carries allowlisted keys.
     return {key: payload[key] for key in ALLOWED_KEYS}
+
+
+def sanitize_for_logs(value: Any) -> Any:
+    """Return a log-safe copy of config-like values.
+
+    The browser config may legitimately contain ``dev_api_key`` for local
+    bootstrap, but logs must never include it. This helper is recursive so it
+    also protects future config dumps without having to enumerate every shape.
+    """
+
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key).casefold()
+            if any(part in key_text for part in _SENSITIVE_KEY_PARTS):
+                safe[str(key)] = _MASKED if item not in (None, "") else item
+            else:
+                safe[str(key)] = sanitize_for_logs(item)
+        return safe
+    if isinstance(value, list):
+        return [sanitize_for_logs(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(sanitize_for_logs(item) for item in value)
+    if hasattr(value, "model_dump"):
+        return sanitize_for_logs(value.model_dump())
+    return value
+
+
+def redact_config_for_logs(config: Any) -> dict[str, Any]:
+    """Log-safe settings/config representation with sensitive values masked."""
+
+    if isinstance(config, dict):
+        raw = config
+    elif hasattr(config, "model_dump"):
+        raw = config.model_dump()
+    else:
+        raw = {
+            key: getattr(config, key)
+            for key in dir(config)
+            if not key.startswith("_") and not callable(getattr(config, key, None))
+        }
+    safe = sanitize_for_logs(raw)
+    return safe if isinstance(safe, dict) else {}

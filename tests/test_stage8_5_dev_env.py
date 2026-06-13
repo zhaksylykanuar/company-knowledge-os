@@ -10,7 +10,9 @@ from app.main import app
 from app.services.browser_config import (
     ALLOWED_KEYS,
     browser_dev_config_enabled,
+    redact_config_for_logs,
     sanitize_browser_config,
+    sanitize_for_logs,
 )
 
 # External secrets that must NEVER reach the browser dev config. Sentinel
@@ -66,6 +68,15 @@ async def test_browser_config_local_returns_dev_key(monkeypatch) -> None:
     assert body["api_base_url"] == "http://127.0.0.1:8765"
     assert body["features"]["share_packs"] is True
     assert body["features"]["role_views"] is True
+
+
+async def test_browser_config_is_not_cacheable(monkeypatch) -> None:
+    _enable_dev(monkeypatch)
+    async with _client() as client:
+        response = await client.get("/v1/dev/browser-config")
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["Pragma"] == "no-cache"
 
 
 async def test_browser_config_disabled_is_not_found(monkeypatch) -> None:
@@ -124,6 +135,32 @@ def test_sanitize_browser_config_is_allowlist_only() -> None:
     blob = json.dumps(out)
     for bad in ("LEAKED-OPENAI", "LEAKED-JIRA", "LEAKED-GH", "LEAKED-GMAIL"):
         assert bad not in blob
+
+
+def test_dev_api_key_is_redacted_from_log_safe_config() -> None:
+    payload = sanitize_for_logs(
+        {
+            "dev_api_key": "local-dev-key",
+            "nested": {"jira_api_token": "LEAKED-JIRA-VALUE"},
+            "app_env": "local",
+        }
+    )
+    blob = json.dumps(payload)
+    assert "local-dev-key" not in blob
+    assert "LEAKED-JIRA-VALUE" not in blob
+    assert "***redacted***" in blob
+
+
+def test_settings_log_redaction_masks_dev_key() -> None:
+    class Cfg:
+        app_env = "local"
+        dev_api_key = "local-dev-key"
+        api_base_url = "http://127.0.0.1:8765"
+
+    safe = redact_config_for_logs(Cfg())
+    blob = json.dumps(safe)
+    assert safe["dev_api_key"] == "***redacted***"
+    assert "local-dev-key" not in blob
 
 
 # --- settings loader ----------------------------------------------------
