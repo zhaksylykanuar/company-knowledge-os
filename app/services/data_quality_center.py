@@ -16,12 +16,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.agent_models import AgentRunLog, DataAvailability
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.graph_models import EntityLinkRecord, EntityRecord, EntitySourceAccount
+from app.db.models import IngestedEvent
 from app.db.second_opinion_models import SecondOpinionFinding
 from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.services.source_control import SOURCE_DEFINITIONS, connector_setup_status
 
 _AVAILABILITY_GAP_STATUSES = {"no_data", "insufficient", "stale"}
 _OPEN_REQUEST_STATUSES = {"requested", "accepted", "running"}
+
+
+def _run_result(row: SourceRunRequest) -> dict[str, Any]:
+    return row.result_summary if isinstance(row.result_summary, dict) else {}
+
+
+def _run_ingestion(row: SourceRunRequest) -> dict[str, Any]:
+    result = _run_result(row)
+    summary = result.get("sanitized_summary")
+    if not isinstance(summary, dict):
+        return {}
+    ingestion = summary.get("ingestion")
+    return ingestion if isinstance(ingestion, dict) else {}
 
 
 def _now() -> datetime:
@@ -436,6 +450,138 @@ async def build_data_quality_center(
                     related_request_id=run.request_id,
                 )
             )
+
+    for run in recent_requests:
+        result = _run_result(run)
+        ingestion = _run_ingestion(run)
+        warnings = result.get("warnings") if isinstance(result.get("warnings"), list) else []
+        if warnings:
+            issues.append(
+                _issue(
+                    category="connector_sanitized_warning",
+                    severity="low",
+                    why_it_matters="Connector returned sanitized warnings that may need operator review.",
+                    affected_source=run.source_type,
+                    evidence_count=len(warnings),
+                    suggested_action="Open source run detail and inspect warnings.",
+                    cta={
+                        "target": "sources",
+                        "source_type": run.source_type,
+                        "action": "review_run",
+                        "request_id": run.request_id,
+                    },
+                    related_run_id=run.run_id,
+                    related_request_id=run.request_id,
+                )
+            )
+        normalization_errors = int(ingestion.get("normalization_errors") or 0)
+        if normalization_errors:
+            issues.append(
+                _issue(
+                    category="normalization_failed",
+                    severity="high",
+                    why_it_matters="Some ingested source events could not be normalized into activity items.",
+                    affected_source=run.source_type,
+                    evidence_count=normalization_errors,
+                    suggested_action="Open run errors and fix unsupported event mapping or malformed sanitized payload.",
+                    cta={
+                        "target": "sources",
+                        "source_type": run.source_type,
+                        "action": "review_run",
+                        "request_id": run.request_id,
+                    },
+                    related_run_id=run.run_id,
+                    related_request_id=run.request_id,
+                )
+            )
+        duplicates = int(ingestion.get("duplicates_skipped") or 0)
+        if duplicates:
+            issues.append(
+                _issue(
+                    category="duplicate_source_events_skipped",
+                    severity="low",
+                    why_it_matters="The ingestion layer skipped duplicate source events idempotently.",
+                    affected_source=run.source_type,
+                    evidence_count=duplicates,
+                    suggested_action="No action required unless duplicates are unexpectedly high.",
+                    cta={
+                        "target": "sources",
+                        "source_type": run.source_type,
+                        "action": "review_run",
+                        "request_id": run.request_id,
+                    },
+                    related_run_id=run.run_id,
+                    related_request_id=run.request_id,
+                )
+            )
+        redactions = int(ingestion.get("payload_redactions") or 0)
+        if redactions:
+            issues.append(
+                _issue(
+                    category="event_payload_redacted",
+                    severity="low",
+                    why_it_matters="Sensitive-looking connector payload fields were redacted before persistence.",
+                    affected_source=run.source_type,
+                    evidence_count=redactions,
+                    suggested_action="Review connector mapping and keep only sanitized fields.",
+                    cta={
+                        "target": "sources",
+                        "source_type": run.source_type,
+                        "action": "review_run",
+                        "request_id": run.request_id,
+                    },
+                    related_run_id=run.run_id,
+                    related_request_id=run.request_id,
+                )
+            )
+        if run.action_type == "backfill" and (
+            int(ingestion.get("failed_events") or 0) or normalization_errors
+        ):
+            issues.append(
+                _issue(
+                    category="backfill_completed_with_errors",
+                    severity="medium",
+                    why_it_matters="Backfill completed with ingestion or normalization errors.",
+                    affected_source=run.source_type,
+                    evidence_count=int(ingestion.get("failed_events") or 0)
+                    + normalization_errors,
+                    suggested_action="Review failed event summaries before retrying with a new request_key.",
+                    cta={
+                        "target": "sources",
+                        "source_type": run.source_type,
+                        "action": "review_run",
+                        "request_id": run.request_id,
+                    },
+                    related_run_id=run.run_id,
+                    related_request_id=run.request_id,
+                )
+            )
+
+    failed_normalizations = (
+        await session.execute(
+            select(IngestedEvent)
+            .where(IngestedEvent.status == "normalization_failed")
+            .order_by(IngestedEvent.created_at.desc())
+            .limit(20)
+        )
+    ).scalars()
+    for row in failed_normalizations:
+        issues.append(
+            _issue(
+                category="normalization_failed",
+                severity="high",
+                why_it_matters="An ingested event is marked normalization_failed.",
+                affected_source=row.source_system,
+                affected_entity=row.source_object_id,
+                evidence_count=1,
+                suggested_action="Open source event and fix the mapping before rerun.",
+                cta={
+                    "target": "evidence_explorer",
+                    "source_type": row.source_system,
+                    "status": "normalization_failed",
+                },
+            )
+        )
 
     event_rows = (
         await session.execute(

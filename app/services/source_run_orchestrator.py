@@ -19,12 +19,14 @@ from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.services.source_connectors import (
     CONNECTOR_STATUS_FAILED,
     CONNECTOR_STATUS_MISSING_CONFIG,
+    CONNECTOR_STATUS_PARTIAL_SUCCEEDED,
     CONNECTOR_STATUS_SKIPPED,
     CONNECTOR_STATUS_SUCCEEDED,
     ConnectorRunResult,
     SourceConnector,
     default_connector_registry,
 )
+from app.services.source_ingestion import ingest_connector_events
 from app.services.source_control import (
     ACTION_BACKFILL,
     ACTION_SYNC,
@@ -41,6 +43,7 @@ from app.services.source_control import (
 REQUEST_STATUS_ACCEPTED = "accepted"
 REQUEST_STATUS_BLOCKED = "blocked"
 REQUEST_STATUS_FAILED = "failed"
+REQUEST_STATUS_PARTIAL_SUCCEEDED = "partial_succeeded"
 REQUEST_STATUS_REQUESTED = "requested"
 REQUEST_STATUS_RUNNING = "running"
 REQUEST_STATUS_SKIPPED = "skipped"
@@ -50,6 +53,7 @@ PENDING_REQUEST_STATUSES = (REQUEST_STATUS_REQUESTED, REQUEST_STATUS_ACCEPTED)
 TERMINAL_REQUEST_STATUSES = {
     REQUEST_STATUS_BLOCKED,
     REQUEST_STATUS_FAILED,
+    REQUEST_STATUS_PARTIAL_SUCCEEDED,
     REQUEST_STATUS_SKIPPED,
     REQUEST_STATUS_SUCCEEDED,
 }
@@ -142,10 +146,20 @@ def _empty_summary() -> dict[str, Any]:
         "requested": 0,
         "started": 0,
         "succeeded": 0,
+        "partial_succeeded": 0,
         "failed": 0,
         "skipped_paused": 0,
         "skipped_missing_config": 0,
         "blocked_invalid": 0,
+        "events_seen": 0,
+        "events_ingested": 0,
+        "duplicates_skipped": 0,
+        "normalized_events": 0,
+        "normalization_errors": 0,
+        "failed_events": 0,
+        "graph_updates": 0,
+        "findings_generated": 0,
+        "proposals_generated": 0,
         "unchanged": 0,
         "errors": 0,
         "run_started_at": None,
@@ -158,6 +172,19 @@ def _empty_summary() -> dict[str, Any]:
 
 def _bump(summary: dict[str, Any], key: str) -> None:
     summary[key] = int(summary.get(key) or 0) + 1
+
+
+def _add_count(summary: dict[str, Any], key: str, value: Any) -> None:
+    summary[key] = int(summary.get(key) or 0) + int(value or 0)
+
+
+def _ingestion_from_request(request: SourceRunRequest) -> dict[str, Any]:
+    result = request.result_summary if isinstance(request.result_summary, dict) else {}
+    sanitized = result.get("sanitized_summary") if isinstance(result, dict) else {}
+    if not isinstance(sanitized, dict):
+        return {}
+    ingestion = sanitized.get("ingestion")
+    return ingestion if isinstance(ingestion, dict) else {}
 
 
 async def pending_source_requests(
@@ -186,7 +213,7 @@ async def run_source_request(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     safe_now = now or _now()
-    registry = connectors or default_connector_registry()
+    registry = connectors or default_connector_registry(session=session)
 
     if request.status in TERMINAL_REQUEST_STATUSES:
         return {"request_id": request.request_id, "status": "unchanged"}
@@ -355,6 +382,47 @@ async def run_source_request(
         return {"request_id": request.request_id, "status": REQUEST_STATUS_FAILED}
 
     finished = result.finished_at
+    ingestion_summary: dict[str, Any] = {}
+    if (
+        request.action_type in {ACTION_SYNC, ACTION_BACKFILL}
+        and result.status == CONNECTOR_STATUS_SUCCEEDED
+        and result.events
+    ):
+        ingestion_summary = await ingest_connector_events(
+            session,
+            events=list(result.events),
+            run_id=active_run_id,
+            correlation_id=request.correlation_id,
+            normalize=True,
+        )
+        result = ConnectorRunResult(
+            status=(
+                CONNECTOR_STATUS_PARTIAL_SUCCEEDED
+                if ingestion_summary.get("failed_events")
+                or ingestion_summary.get("normalization_errors")
+                else result.status
+            ),
+            source_type=result.source_type,
+            action_type=result.action_type,
+            started_at=result.started_at,
+            finished_at=result.finished_at,
+            input_watermark=result.input_watermark,
+            output_watermark=result.output_watermark,
+            events_seen=int(ingestion_summary.get("events_seen") or result.events_seen),
+            events_ingested=int(ingestion_summary.get("events_ingested") or 0),
+            normalized_events=int(ingestion_summary.get("normalized_events") or 0),
+            graph_updates=result.graph_updates,
+            findings_generated=result.findings_generated,
+            proposals_generated=result.proposals_generated,
+            errors=list(result.errors),
+            warnings=[*result.warnings, *ingestion_summary.get("warnings", [])],
+            external_side_effect=result.external_side_effect,
+            sanitized_summary={
+                **result.sanitized_summary,
+                "ingestion": ingestion_summary,
+            },
+            events=list(result.events),
+        )
     request.finished_at = finished
     request.external_side_effect = bool(result.external_side_effect)
     request.result_summary = _result_summary(result)
@@ -364,10 +432,15 @@ async def run_source_request(
         request.status = REQUEST_STATUS_SUCCEEDED
         state.status = STATUS_CONNECTED
         state.last_success_at = finished
-        if request.action_type in {ACTION_SYNC, ACTION_BACKFILL}:
+        if request.action_type == ACTION_SYNC:
             state.last_sync_at = finished
-        if result.output_watermark:
+        if request.action_type == ACTION_SYNC and result.output_watermark:
             state.input_watermark = result.output_watermark
+    elif result.status == CONNECTOR_STATUS_PARTIAL_SUCCEEDED:
+        request.status = REQUEST_STATUS_PARTIAL_SUCCEEDED
+        state.status = STATUS_DEGRADED
+        state.last_success_at = finished
+        state.last_error_at = finished
     elif result.status == CONNECTOR_STATUS_MISSING_CONFIG:
         request.status = REQUEST_STATUS_SKIPPED
         state.status = STATUS_DEGRADED
@@ -390,6 +463,7 @@ async def run_source_request(
                 "run_id": active_run_id,
                 "status": request.status,
                 "connector_status": result.status,
+                "ingestion": ingestion_summary,
                 "source_type": request.source_type,
                 "action_type": request.action_type,
                 "external_side_effect": result.external_side_effect,
@@ -439,6 +513,10 @@ async def run_source_requests(
         elif status == REQUEST_STATUS_SUCCEEDED:
             _bump(summary, "started")
             _bump(summary, "succeeded")
+        elif status == REQUEST_STATUS_PARTIAL_SUCCEEDED:
+            _bump(summary, "started")
+            _bump(summary, "partial_succeeded")
+            _bump(summary, "errors")
         elif status == REQUEST_STATUS_FAILED:
             _bump(summary, "started")
             _bump(summary, "failed")
@@ -451,6 +529,16 @@ async def run_source_requests(
                 _bump(summary, "unchanged")
         else:
             _bump(summary, "unchanged")
+        ingestion = _ingestion_from_request(request)
+        for key in (
+            "events_seen",
+            "events_ingested",
+            "duplicates_skipped",
+            "normalized_events",
+            "normalization_errors",
+            "failed_events",
+        ):
+            _add_count(summary, key, ingestion.get(key))
         summary["results"].append(result)
     summary["run_finished_at"] = _now().isoformat()
     return summary

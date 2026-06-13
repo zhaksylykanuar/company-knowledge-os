@@ -66,6 +66,8 @@ def test_ui_contains_sources_and_data_quality_surfaces(monkeypatch) -> None:
         "Pending source requests",
         "Recent source runs",
         "sourceRunBadge",
+        "openSourceRunDetail",
+        "normalized_event_count",
         "run events",
     ):
         assert marker in response.text, marker

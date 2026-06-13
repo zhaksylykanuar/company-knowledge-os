@@ -10,6 +10,7 @@ from app.services.attention_triage import NormalizedActivityItem
 
 MAX_SAFE_SUMMARY_CHARS = 1200
 _JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
+_SYNTHETIC_SOURCE_OBJECT_PREFIX = "local.synthetic.persisted_attention_seed:"
 
 
 class SourceActivityMappingError(ValueError):
@@ -89,6 +90,41 @@ class GmailMessageActivityInput:
     created_at: datetime | None = None
     source_event_id: str | None = None
     raw_payload_ref: str | None = None
+
+
+def generic_system_event_to_activity_item(event: Mapping[str, Any] | Any) -> NormalizedActivityItem:
+    data = _event_data(event)
+    source = _clean_string(_first(data, "source", "source_system")) or "internal"
+    source_object_id = _required_string(data, "source_object_id")
+    event_type = _clean_string(data.get("event_type")) or f"{source}.event.recorded"
+    title = _safe_text(_first(data, "title", "subject", "name"), max_chars=500)
+    summary = _safe_text(data.get("summary"))
+    actor = _clean_string(_first(data, "actor", "actor_external_id"))
+    metadata = data.get("source_metadata") if isinstance(data.get("source_metadata"), Mapping) else {}
+    project = _clean_string(data.get("project")) or _clean_string(metadata.get("project"))
+
+    return NormalizedActivityItem(
+        source=source,
+        source_object_id=source_object_id,
+        activity_type=event_type,
+        title=title,
+        actor=actor,
+        created_at=_first(data, "created_at", "event_time", "occurred_at"),
+        project=project,
+        safe_summary=summary,
+        related_people=_unique_strings([actor]),
+        related_jira_keys=_extract_jira_keys(title, summary),
+        related_prs=_string_sequence(data.get("related_prs")),
+        related_files=[],
+        evidence_refs=_evidence_refs(
+            source=source,
+            source_object_id=source_object_id,
+            event_type=event_type,
+            source_event_id=_clean_string(data.get("source_event_id")),
+            raw_payload_ref=_clean_string(_first(data, "raw_payload_ref", "raw_object_ref")),
+            source_url=_clean_string(data.get("source_url")),
+        ),
+    )
 
 
 def github_pr_event_to_activity_item(
@@ -276,6 +312,16 @@ def source_event_to_activity_item(event: Mapping[str, Any] | Any) -> NormalizedA
         return drive_document_event_to_activity_item(event)
     if source == "gmail" and source_object_type == "message":
         return gmail_message_event_to_activity_item(event)
+    if (
+        source == "internal"
+        and source_object_type == "system_event"
+        and not (
+            _clean_string(data.get("source_object_id")) or ""
+        ).startswith(_SYNTHETIC_SOURCE_OBJECT_PREFIX)
+    ):
+        return generic_system_event_to_activity_item(event)
+    if source in {"manual", "meeting", "meetings"}:
+        return generic_system_event_to_activity_item(event)
 
     raise SourceActivityMappingError(
         f"unsupported source activity mapping: {source or 'unknown'}.{source_object_type or 'unknown'}"

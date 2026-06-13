@@ -502,6 +502,8 @@ async def get_source_events(
     source_type: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
     run_id: str | None = Query(default=None),
+    object_type: str | None = Query(default=None),
+    since: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -518,6 +520,8 @@ async def get_source_events(
             source_system=source_system or source_type,
             status=status_filter,
             run_id=run_id,
+            object_type=object_type,
+            since=since,
             limit=limit,
             viewer_scope=viewer,
         )

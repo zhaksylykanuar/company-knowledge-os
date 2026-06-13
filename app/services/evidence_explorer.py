@@ -10,15 +10,17 @@ working details; investor cannot see raw evidence at all.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Text, func, or_, select
+from sqlalchemy import Text, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.graph_models import EntityRecord
 from app.db.models import IngestedEvent
 from app.db.second_opinion_models import SecondOpinionFinding
+from app.services.source_control import SOURCE_BY_TYPE
 from app.services.visibility import SCOPE_FOUNDER, SCOPE_INVESTOR, SCOPE_TEAM
 
 # Already-sanitized fields safe for the working (team) view.
@@ -45,6 +47,8 @@ async def list_source_events(
     source_system: str | None = None,
     status: str | None = None,
     run_id: str | None = None,
+    object_type: str | None = None,
+    since: str | None = None,
     limit: int = 50,
     viewer_scope: str = SCOPE_FOUNDER,
 ) -> list[dict[str, Any]]:
@@ -61,19 +65,47 @@ async def list_source_events(
             SourceEvent.source_object_id.like(f"%{source_object_id}%")
         )
     if source_system is not None:
-        query = query.where(SourceEvent.source_system == source_system)
+        definition = SOURCE_BY_TYPE.get(source_system)
+        systems = set(definition.event_systems if definition else ())
+        systems.add(source_system)
+        query = query.where(
+            or_(
+                SourceEvent.source_system.in_(systems),
+                cast(SourceEvent.metadata_json, Text).like(f'%"{source_system}"%'),
+            )
+        )
     if status is not None:
         query = query.where(IngestedEvent.status == status)
     if run_id is not None:
         query = query.where(SourceEvent.created_by_run_id == run_id)
+    if object_type is not None:
+        query = query.where(SourceEvent.source_object_type == object_type)
+    if since is not None:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+        except ValueError:
+            since_dt = None
+        if since_dt is not None:
+            query = query.where(
+                or_(
+                    SourceEvent.source_event_ts >= since_dt,
+                    and_(
+                        SourceEvent.source_event_ts.is_(None),
+                        SourceEvent.created_at >= since_dt,
+                    ),
+                )
+            )
     rows = (await session.execute(query.limit(limit))).all()
     out: list[dict[str, Any]] = []
     for row, event_status in rows:
         normalized_at = await session.scalar(
             select(func.max(NormalizedActivityItemRecord.created_at)).where(
-                NormalizedActivityItemRecord.source_object_id.like(
-                    f"%{row.source_object_id}%"
-                )
+                NormalizedActivityItemRecord.source_event_id == row.source_event_id
+            )
+        )
+        normalized_count = await session.scalar(
+            select(func.count(NormalizedActivityItemRecord.id)).where(
+                NormalizedActivityItemRecord.source_event_id == row.source_event_id
             )
         )
         item = {
@@ -83,9 +115,13 @@ async def list_source_events(
             "source_object_type": row.source_object_type,
             "source_object_id": row.source_object_id,
             "title": row.title,
+            "summary": row.summary,
             "status": event_status or "received",
             "received_at": row.created_at.isoformat() if row.created_at else None,
+            "occurred_at": row.source_event_ts.isoformat() if row.source_event_ts else None,
             "normalized_at": normalized_at.isoformat() if normalized_at else None,
+            "normalized_event_count": int(normalized_count or 0),
+            "run_id": row.created_by_run_id,
             "redaction": {
                 "viewer_scope": viewer_scope,
                 "raw_object_ref_visible": viewer_scope == SCOPE_FOUNDER,
@@ -113,6 +149,7 @@ def _full_event_view(row: SourceEvent) -> dict[str, Any]:
         "source_event_ts": (
             row.source_event_ts.isoformat() if row.source_event_ts else None
         ),
+        "created_by_run_id": row.created_by_run_id,
         "raw_object_ref": row.raw_object_ref,
         "schema_version": row.schema_version,
     }
@@ -145,7 +182,7 @@ async def build_source_event_view(
         await session.execute(
             select(NormalizedActivityItemRecord)
             .where(
-                NormalizedActivityItemRecord.source_object_id.like(f"%{object_id}%")
+                NormalizedActivityItemRecord.source_event_id == row.source_event_id
             )
             .order_by(NormalizedActivityItemRecord.id.desc())
             .limit(5)

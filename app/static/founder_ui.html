@@ -1518,7 +1518,7 @@ async function loadNotifications(){
 async function loadNotifCounts(){try{var d=await (await api("/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
 
 // --- Source Control Center + Data Quality -------------------------------
-var SOURCES=null,DQ=null;
+var SOURCES=null,DQ=null,SOURCE_RUN_CACHE={};
 var SRC_STATUS_BADGE={connected:"b-green",disconnected:"b-mut",degraded:"b-amber",syncing:"b-blue",error:"b-red",disabled:"b-mut"};
 function sourceStatusBadge(status){
   return '<span class="badge '+(SRC_STATUS_BADGE[status]||"b-mut")+'">'+esc(status||"unknown")+'</span>';
@@ -1540,6 +1540,7 @@ function sourceRunLine(label,run){
   var at=run.finished_at||run.started_at||run.requested_at||"";
   return '<div class="item"><div class="t"><div>'+esc(label)+' '+sourceRunBadge(run.status)+' <span class="badge b-mut">'+esc(run.action_type||"")+'</span></div>'
     +'<div class="s">'+esc((at||"").slice(0,16).replace("T"," "))+(run.run_id?' · run '+esc(String(run.run_id).slice(0,18)):'')+(rs.status?' · connector '+esc(rs.status):'')+'</div></div>'
+    +'<button class="actbtn" data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">detail</button>'
     +(run.run_id?'<button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">run events</button>':'')+'</div>';
 }
 function sourceQueueChips(q){
@@ -1582,7 +1583,8 @@ function sourceRunSummaryList(title,items,empty){
   var html='<div class="card"><p class="h">'+esc(title)+'</p>';
   if(!(items||[]).length)return html+'<div class="mut">'+esc(empty)+'</div></div>';
   (items||[]).slice(0,8).forEach(function(run){
-    html+='<div class="item"><span class="badge b-mut">'+esc(run.source_type)+'</span><div class="t">'+sourceRunBadge(run.status)+' '+esc(run.action_type||"")+'<div class="s">'+esc((run.finished_at||run.started_at||run.requested_at||"").slice(0,16).replace("T"," "))+(run.run_id?' · '+esc(String(run.run_id).slice(0,22)):'')+'</div></div></div>';
+    SOURCE_RUN_CACHE[run.request_id]=run;
+    html+='<div class="item"><span class="badge b-mut">'+esc(run.source_type)+'</span><div class="t">'+sourceRunBadge(run.status)+' '+esc(run.action_type||"")+'<div class="s">'+esc((run.finished_at||run.started_at||run.requested_at||"").slice(0,16).replace("T"," "))+(run.run_id?' · '+esc(String(run.run_id).slice(0,22)):'')+'</div></div><button class="actbtn" data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">detail</button></div>';
   });
   return html+'</div>';
 }
@@ -1606,6 +1608,12 @@ async function loadSources(){
   setMsgEl("sources-msg","loading source health…",false);
   try{
     SOURCES=await (await api("/v1/founder/sources")).json();
+    SOURCE_RUN_CACHE={};
+    (SOURCES.pending_requests||[]).concat(SOURCES.recent_runs||[]).forEach(function(run){SOURCE_RUN_CACHE[run.request_id]=run;});
+    (SOURCES.sources||[]).forEach(function(s){
+      if(s.latest_request)SOURCE_RUN_CACHE[s.latest_request.request_id]=s.latest_request;
+      if(s.latest_run)SOURCE_RUN_CACHE[s.latest_run.request_id]=s.latest_run;
+    });
     sourcesRender();
     setMsgEl("sources-msg","updated "+new Date().toLocaleTimeString("ru-RU"),false);
   }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
@@ -1629,8 +1637,39 @@ async function openSourceEventList(source,status,runId){
     var h='<p class="h">Source events <span class="badge b-mut">'+esc(source)+'</span>'+(runId?'<span class="badge b-blue">run '+esc(String(runId).slice(0,18))+'</span>':'')+'</p>';
     if(!(d.events||[]).length)h+='<div class="empty">No matching source events.</div>';
     (d.events||[]).forEach(function(e){
-      h+='<div class="item"><span class="badge b-mut">'+esc(e.status||"received")+'</span><div class="t">'+esc(e.title||e.event_type)+'<div class="s">'+esc(e.source_system)+' · '+esc(e.source_object_id||"")+' · received '+esc((e.received_at||"").slice(0,16).replace("T"," "))+(e.normalized_at?' · normalized '+esc((e.normalized_at||"").slice(0,16).replace("T"," ")):'')+'</div></div><button class="actbtn" data-srcevt="'+esc(e.source_event_id)+'">open</button></div>';
+      h+='<div class="item"><span class="badge b-mut">'+esc(e.status||"received")+'</span><div class="t">'+esc(e.title||e.event_type)+'<div class="s">'+esc(e.source_system)+' · '+esc(e.source_object_type||"event")+' · '+esc(e.source_object_id||"")+' · received '+esc((e.received_at||"").slice(0,16).replace("T"," "))+(e.occurred_at?' · occurred '+esc((e.occurred_at||"").slice(0,16).replace("T"," ")):'')+(e.normalized_at?' · normalized '+esc((e.normalized_at||"").slice(0,16).replace("T"," ")):'')+(e.run_id?' · run '+esc(String(e.run_id).slice(0,18)):'')+'</div>'
+        +(e.summary?'<div class="s">'+esc(String(e.summary).slice(0,160))+'</div>':'')
+        +'<div class="row" style="gap:5px;flex-wrap:wrap;margin-top:4px"><span class="badge b-mut">normalized '+num(e.normalized_event_count||0)+'</span></div></div><button class="actbtn" data-srcevt="'+esc(e.source_event_id)+'">open</button></div>';
     });
+    $("src-body").innerHTML=h;
+  }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+async function openSourceRunDetail(requestId,source){
+  overlay("ov-src",true);
+  $("src-body").innerHTML='<div class="mut">Loading source run detail…</div>';
+  try{
+    var run=SOURCE_RUN_CACHE[requestId];
+    if(!run){
+      var d=await (await api("/v1/founder/source-runs?source_type="+encodeURIComponent(source)+"&limit=100")).json();
+      (d.runs||[]).forEach(function(r){SOURCE_RUN_CACHE[r.request_id]=r;});
+      run=SOURCE_RUN_CACHE[requestId];
+    }
+    if(!run){$("src-body").innerHTML='<div class="empty">Run not found.</div>';return;}
+    var rs=run.result_summary||{},safe=rs.sanitized_summary||{},ing=safe.ingestion||{};
+    var h='<p class="h">Source run detail <span class="badge b-mut">'+esc(run.source_type)+'</span></p>'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">'+sourceRunBadge(run.status)+'<span class="badge b-mut">'+esc(run.action_type||"")+'</span>'+(rs.status?'<span class="badge b-blue">connector '+esc(rs.status)+'</span>':'')+(run.external_side_effect?'<span class="badge b-red">external side effect</span>':'<span class="badge b-green">no external side effect</span>')+'</div>'
+      +'<div class="grid3">'
+      +'<div class="substate"><div class="l">events seen / ingested</div><div class="v">'+num(ing.events_seen||rs.events_seen||0)+' / '+num(ing.events_ingested||rs.events_ingested||0)+'</div></div>'
+      +'<div class="substate"><div class="l">duplicates</div><div class="v">'+num(ing.duplicates_skipped||0)+'</div></div>'
+      +'<div class="substate"><div class="l">normalized / errors</div><div class="v">'+num(ing.normalized_events||rs.normalized_events||0)+' / '+num(ing.normalization_errors||0)+'</div></div>'
+      +'</div>'
+      +'<div class="mut" style="margin-top:8px">requested '+esc((run.requested_at||"").slice(0,16).replace("T"," "))+(run.started_at?' · started '+esc((run.started_at||"").slice(0,16).replace("T"," ")):'')+(run.finished_at?' · finished '+esc((run.finished_at||"").slice(0,16).replace("T"," ")):'')+'</div>'
+      +(run.run_id?'<div class="mut">run_id: '+esc(run.run_id)+' · correlation: '+esc(run.correlation_id||"")+'</div>':'');
+    if((rs.warnings||[]).length)h+='<div class="alert warn" style="margin-top:10px">'+esc(rs.warnings.join(" · "))+'</div>';
+    if((ing.errors||[]).length)h+='<details class="ev" open><summary>Errors</summary><pre>'+esc(JSON.stringify(ing.errors,null,1))+'</pre></details>';
+    if(run.run_id)h+='<div class="row" style="margin-top:10px;gap:6px"><button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">open events</button><button class="actbtn" data-srcact="runs" data-source="'+esc(run.source_type)+'">all runs</button></div>';
+    h+='<details class="ev"><summary>State before / after</summary><pre>'+esc(JSON.stringify({before:run.source_state_before,after:run.source_state_after},null,1))+'</pre></details>'
+      +'<details class="ev"><summary>Sanitized result summary</summary><pre>'+esc(JSON.stringify(rs,null,1))+'</pre></details>';
     $("src-body").innerHTML=h;
   }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
@@ -1642,8 +1681,10 @@ async function openSourceRunList(source){
     var h='<p class="h">Source runs <span class="badge b-mut">'+esc(source)+'</span></p>';
     if(!(d.runs||[]).length)h+='<div class="empty">No source runs or requests yet.</div>';
     (d.runs||[]).forEach(function(run){
+      SOURCE_RUN_CACHE[run.request_id]=run;
       var rs=run.result_summary||{};
       h+='<div class="item"><span class="badge b-mut">'+esc(run.action_type||"")+'</span><div class="t">'+sourceRunBadge(run.status)+'<div class="s">'+esc((run.finished_at||run.started_at||run.requested_at||"").slice(0,16).replace("T"," "))+(run.run_id?' · run '+esc(String(run.run_id).slice(0,24)):'')+(rs.status?' · connector '+esc(rs.status):'')+'</div></div>'
+        +'<button class="actbtn" data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">detail</button>'
         +(run.run_id?'<button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">events</button>':'')+'</div>';
     });
     $("src-body").innerHTML=h;
@@ -1682,6 +1723,7 @@ document.addEventListener("click",function(e){
     if(action==="events"){openSourceEventList(source,null,runId);return;}
     if(action==="errors"){openSourceEventList(source,"failed",runId);return;}
     if(action==="runs"){openSourceRunList(source);return;}
+    if(action==="run-detail"){openSourceRunDetail(act.getAttribute("data-requestid"),source);return;}
     sourceAction(source,action);return;
   }
 });

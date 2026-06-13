@@ -29,6 +29,7 @@ Navigation map for future Codex sessions.
 - `features/ingestion.md`: raw/document/event ingestion.
 - `features/source-events.md`: normalized source event foundation.
 - `features/source-integrations.md`: external source identity, credentials, and activation contract.
+- `source-connectors.md`: safe connector execution, ingestion, normalization, and secret handling.
 - `features/extraction.md`: task/risk/decision extraction.
 - `features/retrieval.md`: search and Q&A.
 - `features/attention.md`: scoring and attention dashboard.

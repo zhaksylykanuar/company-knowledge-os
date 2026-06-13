@@ -499,8 +499,10 @@ async def build_source_health(
     readiness_counts: Counter[str] = Counter()
     degraded: list[str] = []
     total_events = 0
+    total_normalized = 0
     pending_total = 0
     failed_recent_runs = 0
+    normalization_errors = 0
     paused_sources = 0
     last_successful_sync: str | None = None
 
@@ -551,6 +553,12 @@ async def build_source_health(
             latest_request,
         )
         failed_recent_runs += sum(1 for request in source_requests if request.status == "failed")
+        for request in source_requests:
+            result = request.result_summary if isinstance(request.result_summary, dict) else {}
+            sanitized = result.get("sanitized_summary") if isinstance(result, dict) else {}
+            ingestion = sanitized.get("ingestion") if isinstance(sanitized, dict) else {}
+            if isinstance(ingestion, dict):
+                normalization_errors += int(ingestion.get("normalization_errors") or 0)
         if state and state.paused:
             paused_sources += 1
         state_success = _iso(state.last_success_at) if state and state.last_success_at else None
@@ -568,6 +576,7 @@ async def build_source_health(
             degraded.append(definition.label)
         pending = pending_by_source.get(definition.source_type, 0)
         total_events += ev_count
+        total_normalized += norm_count
         pending_total += pending
         status_counts[status] += 1
         sources.append(
@@ -585,6 +594,17 @@ async def build_source_health(
                     "last_error_at": _iso(state.last_error_at) if state else None,
                     "latest_run_id": state.latest_run_id if state else None,
                 },
+                "connector_state": (
+                    "paused"
+                    if state and state.paused
+                    else "connected"
+                    if state and state.last_success_at
+                    else "never_tested"
+                    if setup_status in {"ready", "partial"}
+                    else "missing_config"
+                    if setup_status == "missing"
+                    else "no_data"
+                ),
                 "last_sync_at": _iso(state.last_sync_at) if state and state.last_sync_at else last_sync,
                 "last_success_at": _iso(state.last_success_at)
                 if state and state.last_success_at
@@ -648,8 +668,10 @@ async def build_source_health(
             "by_status": dict(status_counts),
             "by_readiness": dict(readiness_counts),
             "events_ingested": total_events,
+            "normalized_events": total_normalized,
             "pending_requests": pending_total,
             "failed_recent_runs": failed_recent_runs,
+            "normalization_errors": normalization_errors,
             "paused_sources": paused_sources,
             "missing_config_sources": readiness_counts.get("missing", 0)
             + readiness_counts.get("partial", 0),
