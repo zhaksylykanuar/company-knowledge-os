@@ -41,6 +41,11 @@ from app.services.inbox_audit import (
     ACTION_OWNER_ASSIGNMENT,
     record_inbox_action,
 )
+from app.services.knowledge_graph_view import (
+    build_knowledge_graph,
+    build_knowledge_node_note,
+    build_obsidian_preview,
+)
 from app.services.notification_center import build_notification_center
 from app.services.operating_rhythm import (
     build_daily_check,
@@ -349,6 +354,72 @@ async def get_graph_tree(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, 
         )
     async with AsyncSessionLocal() as session:
         return await build_graph_tree(session)
+
+
+@router.get("/v1/knowledge/graph")
+async def get_knowledge_graph(
+    view: str = Query(default=SCOPE_FOUNDER),
+    focus_node_id: str | None = Query(default=None),
+    depth: int = Query(default=1, ge=1, le=3),
+    node_type: str | None = Query(default=None),
+    relation_type: str | None = Query(default=None),
+    source_type: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    include_archived: bool = Query(default=False),
+    min_confidence: float | None = Query(default=None, ge=0.0, le=1.0),
+    limit: int = Query(default=120, ge=1, le=300),
+) -> dict[str, Any]:
+    viewer = _validated_view(view)
+    async with AsyncSessionLocal() as session:
+        return await build_knowledge_graph(
+            session,
+            viewer_scope=viewer,
+            focus_node_id=focus_node_id,
+            depth=depth,
+            node_type=node_type,
+            relation_type=relation_type,
+            source_type=source_type,
+            tag=tag,
+            q=q,
+            include_archived=include_archived,
+            min_confidence=min_confidence,
+            limit=limit,
+        )
+
+
+@router.get("/v1/knowledge/nodes/{node_id:path}")
+async def get_knowledge_node(
+    node_id: str,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    viewer = _validated_view(view)
+    async with AsyncSessionLocal() as session:
+        result = await build_knowledge_node_note(
+            session,
+            node_id=node_id,
+            viewer_scope=viewer,
+        )
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="knowledge node not found",
+        )
+    return result
+
+
+@router.post("/v1/knowledge/export/obsidian-preview")
+async def post_obsidian_preview(
+    view: str = Query(default=SCOPE_FOUNDER),
+    limit: int = Query(default=80, ge=1, le=200),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_obsidian_preview(
+            session,
+            viewer_scope=SCOPE_FOUNDER,
+            limit=limit,
+        )
 
 
 @router.get("/v1/founder/declarations/{key}")

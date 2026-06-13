@@ -2057,29 +2057,44 @@ document.addEventListener("click",function(e){
   if(st2){SO_STATE.type=st2.getAttribute("data-sotype");loadFeed();}
 });
 
-var KT={nodes:[],links:[],hidden:{},selected:null};
-var KT_COLORS={project:"#7c6ff0",person:"#2fb088",task:"#4a93dd",risk:"#e05b5b",decision:"#b06fd0",jira_project:"#8a93a6",repository:"#8a93a6",client:"#dba03a",meeting:"#5bbcd6",hypothesis:"#d77fb0"};
-var KT_LABEL={project:"проекты",person:"люди",task:"задачи",risk:"риски",decision:"решения",jira_project:"jira",repository:"репо",client:"клиенты",meeting:"встречи",hypothesis:"гипотезы"};
+var KT={nodes:[],links:[],hidden:{},selected:null,focus:null,depth:1,includeArchived:false,minConfidence:0,query:""};
+var KT_COLORS={project:"#7c6ff0",person:"#2fb088",task:"#4a93dd",issue:"#4a93dd",pull_request:"#4a93dd",commit:"#5bbcd6",risk:"#e05b5b",blocker:"#e05b5b",decision:"#b06fd0",action_item:"#dba03a",repo:"#8a93a6",repository:"#8a93a6",account:"#dba03a",company:"#dba03a",contact:"#2fb088",email_thread:"#5bbcd6",meeting:"#5bbcd6",hypothesis:"#d77fb0",declaration:"#d77fb0",feature:"#7c6ff0",product_area:"#7c6ff0",share_pack:"#8a93a6",source_event:"#8a93a6",normalized_event:"#8a93a6",finding:"#e05b5b",proposal:"#dba03a",knowledge_note:"#8a93a6"};
+var KT_LABEL={project:"проекты",person:"люди",task:"задачи",issue:"issues",pull_request:"PR",commit:"commits",risk:"риски",blocker:"blockers",decision:"решения",action_item:"actions",repo:"репо",repository:"репо",account:"accounts",company:"companies",contact:"contacts",email_thread:"email",meeting:"встречи",hypothesis:"гипотезы",declaration:"declarations",feature:"features",product_area:"areas",share_pack:"packs",source_event:"source",normalized_event:"evidence",finding:"findings",proposal:"proposals",knowledge_note:"notes"};
+function ktId(n){return n.node_id||n.entity_id;}
+function ktType(n){return n.node_type||n.entity_type;}
+function ktTitle(n){return n.title||n.name||ktId(n);}
+function ktEdgeFrom(l){return l.source_node_id||l["from"];}
+function ktEdgeTo(l){return l.target_node_id||l.to;}
+function ktEdgeRel(l){return l.relation_type||l.relation;}
 
 async function loadTree(force){
-  setMsgEl("kt-msg","строю созвездие…",false);
+  setMsgEl("kt-msg","строю knowledge graph…",false);
   try{
-    var d=await (await api("/v1/graph/tree")).json();
+    var params=["limit=160","depth="+encodeURIComponent(KT.depth),"include_archived="+(KT.includeArchived?"true":"false"),"min_confidence="+encodeURIComponent(KT.minConfidence||0)];
+    if(KT.focus)params.push("focus_node_id="+encodeURIComponent(KT.focus));
+    if(KT.query)params.push("q="+encodeURIComponent(KT.query));
+    var d=await (await api("/v1/knowledge/graph?"+params.join("&"))).json();
     KT.nodes=d.nodes.map(function(n){return Object.assign({x:0,y:0,vx:0,vy:0,degree:0},n);});
-    KT.links=d.links;
+    KT.links=d.edges||d.links||[];
     var byId={};
-    KT.nodes.forEach(function(n){byId[n.entity_id]=n;});
-    KT.links.forEach(function(l){if(byId[l["from"]])byId[l["from"]].degree++;if(byId[l.to])byId[l.to].degree++;});
+    KT.nodes.forEach(function(n){byId[ktId(n)]=n;});
+    KT.links.forEach(function(l){if(byId[ktEdgeFrom(l)])byId[ktEdgeFrom(l)].degree++;if(byId[ktEdgeTo(l)])byId[ktEdgeTo(l)].degree++;});
     KT.byId=byId;
-    var chips="";
-    Object.keys(d.counts.by_type).forEach(function(t){
-      chips+='<button class="chip'+(KT.hidden[t]?"":" on")+'" data-kttype="'+t+'">'+(KT_LABEL[t]||t)+' '+d.counts.by_type[t]+'</button>';
+    var stats=d.stats||d.counts||{},byType=stats.by_node_type||stats.by_type||{};
+    var chips='<input id="kt-search" placeholder="Search notes…" value="'+esc(KT.query||"")+'" style="min-width:180px">'
+      +'<button class="chip'+(!KT.focus?" on":"")+'" id="kt-global">Global graph</button>'
+      +(KT.selected?'<button class="chip'+(KT.focus?" on":"")+'" id="kt-local">Local graph</button>':'')
+      +'<button class="chip" id="kt-depth">depth '+KT.depth+'</button>'
+      +'<button class="chip'+(KT.includeArchived?" on":"")+'" id="kt-archived">archived</button>'
+      +'<button class="chip" id="kt-export">Obsidian preview</button>';
+    Object.keys(byType).forEach(function(t){
+      chips+='<button class="chip'+(KT.hidden[t]?"":" on")+'" data-kttype="'+t+'">'+(KT_LABEL[t]||t)+' '+byType[t]+'</button>';
     });
     chips+='<button class="chip" id="kt-relayout">перестроить</button>';
     $("kt-filters").innerHTML=chips;
-    $("kt-stats").innerHTML='<p class="h">Граф '+daChipAnyScope("activity.events")+'</p><div class="mut">Нод: '+d.counts.nodes+' · связей: '+d.counts.links
-      +' · спорных: '+d.counts.disputed_links+'</div>'
-      +'<div class="mut" style="margin-top:6px">Свечение ноды — свежесть данных. Толщина связи — confidence, пунктир — спорная связь (решается в Inbox).</div>';
+    $("kt-stats").innerHTML='<p class="h">Obsidian-like Knowledge Graph '+daChipAnyScope("activity.events")+'</p><div class="mut">mode: '+esc(d.mode||"global")+' · nodes: '+num(stats.nodes||0)+' · edges: '+num(stats.edges||0)+' · disputed: '+num(stats.disputed_edges||0)+' · hidden: '+num(stats.hidden_count||0)+'</div>'
+      +'<div class="mut" style="margin-top:6px">Node size = evidence, glow = freshness, edge thickness = confidence, dashed = disputed. Use search/local graph to avoid hairball.</div>'
+      +'<details class="ev"><summary>clusters / legend</summary><pre>'+esc(JSON.stringify({clusters:d.clusters||[],legend:d.legend||{},redaction:d.redaction_manifest||{}},null,1))+'</pre></details>';
     ktLayout();
     ktDraw();
     setMsgEl("kt-msg","обновлено "+new Date().toLocaleTimeString("ru-RU"),false);
@@ -2092,8 +2107,9 @@ function ktLayout(){
   var n=KT.nodes.length;
   KT.nodes.forEach(function(node,i){
     var angle=2*Math.PI*i/Math.max(1,n);
-    node.x=W/2+Math.cos(angle)*W/3*(0.5+0.5*Math.random());
-    node.y=H/2+Math.sin(angle)*H/3*(0.5+0.5*Math.random());
+    if(KT.focus&&ktId(node)===KT.focus){node.x=W/2;node.y=H/2;return;}
+    node.x=W/2+Math.cos(angle)*W/3*(0.55+0.35*Math.random());
+    node.y=H/2+Math.sin(angle)*H/3*(0.55+0.35*Math.random());
   });
   for(var iter=0;iter<260;iter++){
     for(var i2=0;i2<n;i2++){
@@ -2107,7 +2123,7 @@ function ktLayout(){
       a.vx+=(W/2-a.x)*0.012;a.vy+=(H/2-a.y)*0.012;
     }
     KT.links.forEach(function(l){
-      var s=KT.byId[l["from"]],t=KT.byId[l.to];
+      var s=KT.byId[ktEdgeFrom(l)],t=KT.byId[ktEdgeTo(l)];
       if(!s||!t)return;
       var dx=t.x-s.x,dy=t.y-s.y,d=Math.sqrt(dx*dx+dy*dy)+0.01;
       var force=(d-95)*0.02;
@@ -2131,8 +2147,8 @@ function ktDraw(){
   ctx.clearRect(0,0,W,H);
   var muted=getComputedStyle(document.body).getPropertyValue("--muted").trim()||"#888";
   KT.links.forEach(function(l){
-    var s=KT.byId[l["from"]],t=KT.byId[l.to];
-    if(!s||!t||KT.hidden[s.entity_type]||KT.hidden[t.entity_type])return;
+    var s=KT.byId[ktEdgeFrom(l)],t=KT.byId[ktEdgeTo(l)];
+    if(!s||!t||KT.hidden[ktType(s)]||KT.hidden[ktType(t)])return;
     ctx.beginPath();
     ctx.moveTo(s.x,s.y);ctx.lineTo(t.x,t.y);
     ctx.strokeStyle=l.disputed?"#dba03a":muted;
@@ -2144,24 +2160,46 @@ function ktDraw(){
   });
   ctx.globalAlpha=1;
   KT.nodes.forEach(function(node){
-    if(KT.hidden[node.entity_type])return;
-    var r=4+Math.min(9,node.degree*1.4);
-    var color=KT_COLORS[node.entity_type]||"#8a93a6";
+    if(KT.hidden[ktType(node)])return;
+    var r=4+Math.min(12,(node.degree||0)*1.2+Math.log(1+(node.evidence_count||0))*2);
+    var color=KT_COLORS[ktType(node)]||"#8a93a6";
     ctx.shadowColor=color;
     ctx.shadowBlur=14*node.freshness;
     ctx.globalAlpha=0.45+0.55*node.freshness;
     ctx.beginPath();ctx.arc(node.x,node.y,r,0,2*Math.PI);
     ctx.fillStyle=color;ctx.fill();
     ctx.shadowBlur=0;ctx.globalAlpha=1;
-    if(KT.selected===node.entity_id){
+    if(KT.selected===ktId(node)){
       ctx.beginPath();ctx.arc(node.x,node.y,r+4,0,2*Math.PI);
       ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();
     }
-    if(node.entity_type==="project"||node.entity_type==="person"){
+    if(KT.focus===ktId(node)||node.degree>=2||ktType(node)==="project"||ktType(node)==="person"){
       ctx.fillStyle=muted;ctx.font="10px sans-serif";ctx.textAlign="center";
-      ctx.fillText(String(node.name).slice(0,18),node.x,node.y+r+11);
+      ctx.fillText(String(ktTitle(node)).slice(0,18),node.x,node.y+r+11);
     }
   });
+}
+
+async function ktOpenNode(nodeId){
+  KT.selected=nodeId;
+  ktDraw();
+  $("kt-detail").innerHTML='<p class="h">Loading note…</p>';
+  try{
+    var note=await (await api("/v1/knowledge/nodes/"+encodeURIComponent(nodeId))).json();
+    var n=note.node||{};
+    var h='<p class="h">'+esc(note.title||n.title||nodeId)+' <span class="badge b-mut">'+esc(note.type||n.node_type||"note")+'</span></p>'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap"><span class="badge b-mut">fresh '+Math.round((note.freshness||0)*100)+'%</span><span class="badge b-mut">conf '+Number(n.confidence||0).toFixed(2)+'</span><span class="badge b-mut">evidence '+num((note.evidence||{}).evidence_count||0)+'</span></div>'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">'+(n.created_by_run_id?'<span class="badge b-mut">created run '+esc(String(n.created_by_run_id).slice(0,14))+'</span>':'')+(n.updated_by_run_id?'<span class="badge b-mut">updated run '+esc(String(n.updated_by_run_id).slice(0,14))+'</span>':'')+'</div>'
+      +(note.summary?'<div class="mut" style="margin-top:8px">'+esc(note.summary)+'</div>':'')
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px"><button class="actbtn" id="kt-note-local" data-nodeid="'+esc(nodeId)+'">local graph</button><button class="actbtn" data-go="src">open sources</button><button class="actbtn" data-go="ac">action center</button></div>';
+    h+='<details class="ev" open><summary>Properties</summary><pre>'+esc(JSON.stringify(note.properties||{},null,1))+'</pre></details>';
+    h+='<p class="h" style="margin-top:10px">Backlinks</p>'+((note.backlinks||[]).slice(0,8).map(function(e){return '<div class="item"><span class="badge b-mut">'+esc(e.relation_type)+'</span><div class="t">'+esc(e.source_node_id)+'</div><span class="mut">'+Number(e.confidence||0).toFixed(2)+'</span></div>';}).join("")||'<div class="mut">No backlinks yet.</div>');
+    h+='<p class="h" style="margin-top:10px">Outgoing</p>'+((note.outgoing_links||[]).slice(0,8).map(function(e){return '<div class="item"><span class="badge b-mut">'+esc(e.relation_type)+'</span><div class="t">'+esc(e.target_node_id)+'</div><span class="mut">'+Number(e.confidence||0).toFixed(2)+'</span></div>';}).join("")||'<div class="mut">No outgoing links yet.</div>');
+    if((note.related_findings||[]).length)h+='<p class="h" style="margin-top:10px">Findings</p>'+note.related_findings.slice(0,5).map(function(f){return '<div class="item"><span class="badge b-amber">'+esc(f.severity)+'</span><div class="t">'+esc(f.summary)+'</div><button class="actbtn" data-trail="'+esc(f.finding_key)+'">trail</button></div>';}).join("");
+    if((note.related_proposals||[]).length)h+='<p class="h" style="margin-top:10px">Proposals</p>'+note.related_proposals.slice(0,5).map(function(p){return '<div class="item"><span class="badge b-mut">'+esc(p.proposal_type)+'</span><div class="t">'+esc(p.title)+'</div><span class="mut">'+Number(p.confidence||0).toFixed(2)+'</span></div>';}).join("");
+    h+='<details class="ev"><summary>Evidence timeline / source lineage</summary><pre>'+esc(JSON.stringify({timeline:note.timeline||[],source_events:note.source_events||[],normalized_events:note.normalized_events||[],audit_history:note.audit_history||[]},null,1))+'</pre></details>';
+    $("kt-detail").innerHTML=h;
+  }catch(e){$("kt-detail").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 
 $("kt-canvas").addEventListener("click",function(e){
@@ -2169,48 +2207,41 @@ $("kt-canvas").addEventListener("click",function(e){
   var x=e.clientX-rect.left,y=e.clientY-rect.top;
   var best=null,bestD=18;
   KT.nodes.forEach(function(node){
-    if(KT.hidden[node.entity_type])return;
+    if(KT.hidden[ktType(node)])return;
     var d=Math.hypot(node.x-x,node.y-y);
     if(d<bestD){bestD=d;best=node;}
   });
   if(!best)return;
-  KT.selected=best.entity_id;
-  ktDraw();
-  var rel=[];
-  KT.links.forEach(function(l){
-    if(l["from"]===best.entity_id)rel.push({other:l.to,relation:l.relation,confidence:l.confidence,disputed:l.disputed,evidence_count:l.evidence_count,created_by_run_id:l.created_by_run_id,source_event_ids:l.source_event_ids});
-    else if(l.to===best.entity_id)rel.push({other:l["from"],relation:l.relation,confidence:l.confidence,disputed:l.disputed,evidence_count:l.evidence_count,created_by_run_id:l.created_by_run_id,source_event_ids:l.source_event_ids});
-  });
-  var h='<p class="h">'+esc(best.name)+' <span class="badge b-mut">'+esc(KT_LABEL[best.entity_type]||best.entity_type)+'</span></p>'
-    +'<div class="mut">свежесть: '+Math.round(best.freshness*100)+'%'
-    +(best.merge_status&&best.merge_status!=="none"?' · merge: '+esc(best.merge_status):'')+'</div>';
-  h+='<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">'
-    +'<span class="badge b-mut">evidence '+num(best.evidence_count||0)+'</span>'
-    +(best.created_by_run_id?'<span class="badge b-blue">created run '+esc(String(best.created_by_run_id).slice(0,18))+'</span>':'')
-    +(best.updated_by_run_id?'<span class="badge b-blue">updated run '+esc(String(best.updated_by_run_id).slice(0,18))+'</span>':'')
-    +(best.last_observed_at?'<span class="badge b-mut">observed '+esc(String(best.last_observed_at).slice(0,16).replace("T"," "))+'</span>':'')
-    +'</div>';
-  if(best.source_types&&best.source_types.length){
-    h+='<div class="mut" style="margin-top:4px">sources: '+best.source_types.map(esc).join(", ")+'</div>';
-  }
-  if(best.source_accounts&&best.source_accounts.length){
-    h+='<div class="mut" style="margin-top:4px">аккаунты: '+best.source_accounts.map(function(a){return esc(a.source_system+":"+a.account_id);}).join(", ")+'</div>';
-  }
-  if(rel.length){
-    h+='<div style="margin-top:8px">';
-    rel.slice(0,12).forEach(function(r){
-      h+='<div class="item"><span class="badge '+(r.disputed?"b-amber":"b-mut")+'">'+esc(r.relation)+'</span><div class="t">'+esc(r.other)+'<div class="s">evidence '+num(r.evidence_count||0)+(r.created_by_run_id?' · run '+esc(String(r.created_by_run_id).slice(0,18)):'')+'</div></div><span class="mut">'+Number(r.confidence).toFixed(2)+'</span></div>';
-    });
-    h+='</div>';
-    if(rel.some(function(r){return r.disputed;}))h+='<div class="mut" style="margin-top:6px">Есть спорные связи — <span class="edit" data-go="ib">решить в Inbox →</span></div>';
-  }
-  $("kt-detail").innerHTML=h;
+  ktOpenNode(ktId(best));
 });
 document.addEventListener("click",function(e){
   var kt=e.target.closest("[data-kttype]");
   if(kt){var t=kt.getAttribute("data-kttype");KT.hidden[t]=!KT.hidden[t];kt.classList.toggle("on",!KT.hidden[t]);ktDraw();return;}
+  if(e.target.id==="kt-global"){KT.focus=null;loadTree(false);return;}
+  if(e.target.id==="kt-local"&&KT.selected){KT.focus=KT.selected;loadTree(false);return;}
+  if(e.target.id==="kt-note-local"){KT.focus=e.target.getAttribute("data-nodeid");loadTree(false);return;}
+  if(e.target.id==="kt-depth"){KT.depth=KT.depth>=3?1:KT.depth+1;loadTree(false);return;}
+  if(e.target.id==="kt-archived"){KT.includeArchived=!KT.includeArchived;loadTree(false);return;}
+  if(e.target.id==="kt-export"){ktExportPreview();return;}
   if(e.target.id==="kt-relayout"){ktLayout();ktDraw();}
 });
+document.addEventListener("change",function(e){
+  if(e.target&&e.target.id==="kt-search"){KT.query=e.target.value||"";loadTree(false);}
+});
+
+async function ktExportPreview(){
+  $("kt-detail").innerHTML='<p class="h">Building Obsidian preview…</p>';
+  try{
+    var d=await (await api("/v1/knowledge/export/obsidian-preview?limit=60",{method:"POST"})).json();
+    var h='<p class="h">'+esc(d.vault_name||"FounderOS Knowledge Vault")+' <span class="badge b-green">preview only</span></p>'
+      +'<div class="mut">files: '+num((d.files||[]).length)+' · no filesystem write</div>';
+    (d.files||[]).slice(0,8).forEach(function(f){
+      h+='<details class="ev"><summary>'+esc(f.path)+'</summary><pre>'+esc((f.body||"").slice(0,1200))+'</pre></details>';
+    });
+    h+='<details class="ev"><summary>manifest</summary><pre>'+esc(JSON.stringify(d.manifest||{},null,1))+'</pre></details>';
+    $("kt-detail").innerHTML=h;
+  }catch(e){$("kt-detail").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
 
 var DECL={focus:null,hypotheses:null};
 async function loadDeclarations(){
