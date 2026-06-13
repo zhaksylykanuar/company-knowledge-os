@@ -86,12 +86,20 @@ _DECISION_ACTION_TYPES = {
     "assign_owner",
     "reengage_account",
     "renegotiate_deadline",
+    "approve_merge_proposal",
+    "review_low_confidence_relation",
+    "review_pipeline_finding",
+    "inspect_failed_graph_lift",
 }
 _DECISION_REASONS: dict[str, str] = {
     "resolve_conflict": "конфликт ждёт решения",
     "assign_owner": "нет владельца — назначить ответственного",
     "reengage_account": "отношения остывают — решить, что делать",
     "renegotiate_deadline": "срок под угрозой — пересмотреть",
+    "approve_merge_proposal": "кандидат на merge ждёт решения",
+    "review_low_confidence_relation": "слабая связь графа ждёт подтверждения",
+    "review_pipeline_finding": "pipeline finding требует review",
+    "inspect_failed_graph_lift": "graph lift требует диагностики",
 }
 
 
@@ -279,6 +287,37 @@ async def build_action_center(
                 action_ref={"kind": "proposal", "proposal_id": proposal["proposal_id"]},
             )
         )
+    for proposal in inbox.get("proposals", []):
+        ptype = proposal.get("proposal_type")
+        if ptype in {"entity_merge_proposal", "low_confidence_relation", "finding_suggestion"}:
+            action_type = {
+                "entity_merge_proposal": "approve_merge_proposal",
+                "low_confidence_relation": "review_low_confidence_relation",
+                "finding_suggestion": "review_pipeline_finding",
+            }[ptype]
+            actions.append(
+                _action(
+                    title=proposal["title"],
+                    why_now=proposal.get("why")
+                    or proposal.get("confidence_hint")
+                    or "Evidence pipeline filed a proposal that needs review.",
+                    affected_entity=(proposal.get("payload") or {}).get("entity_id")
+                    or (proposal.get("payload") or {}).get("from_entity_id"),
+                    evidence_count=len(proposal.get("evidence_refs") or []),
+                    severity="medium" if ptype != "finding_suggestion" else "low",
+                    confidence=proposal.get("confidence"),
+                    source="evidence_pipeline"
+                    if ptype != "entity_merge_proposal"
+                    else "entity_identity",
+                    action_type=action_type,
+                    cta="Решить в Inbox",
+                    action_ref={
+                        "kind": "proposal",
+                        "proposal_id": proposal["proposal_id"],
+                    },
+                    flags=["low_confidence"] if ptype != "entity_merge_proposal" else [],
+                )
+            )
 
     # 3. Execution: stale / ownerless / blocked / overdue tasks.
     execution = await build_execution_view(session, now=safe_now)

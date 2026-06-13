@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Text, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.graph_models import EntityLinkRecord, EntityRecord
 from app.db.second_opinion_models import SecondOpinionFinding
+from app.db.source_control_models import SourceRunRequest
 from app.services.confidence import explain_confidence
 from app.services.inbox_audit import list_inbox_actions
 from app.services.second_opinion import SUGGESTED_ACTIONS, _finding_read_model
@@ -93,6 +94,27 @@ async def _events_for_source_id(
     ]
 
 
+async def _event_by_id(session: AsyncSession, event_id: str | None) -> dict[str, Any] | None:
+    if not event_id:
+        return None
+    row = await session.scalar(
+        select(SourceEvent).where(SourceEvent.source_event_id == event_id)
+    )
+    if row is None:
+        return None
+    return {
+        "source_event_id": row.source_event_id,
+        "source_system": row.source_system,
+        "source_object_type": row.source_object_type,
+        "source_object_id": row.source_object_id,
+        "event_type": row.event_type,
+        "title": row.title,
+        "received_at": row.created_at.isoformat() if row.created_at else None,
+        "raw_object_ref": row.raw_object_ref,
+        "created_by_run_id": row.created_by_run_id,
+    }
+
+
 async def _normalized_for_source_id(
     session: AsyncSession, source_id: str, *, limit: int = 5
 ) -> list[dict[str, Any]]:
@@ -121,6 +143,108 @@ async def _normalized_for_source_id(
         }
         for row in rows
     ]
+
+
+async def _normalized_by_id(
+    session: AsyncSession, normalized_id: str | None
+) -> dict[str, Any] | None:
+    if not normalized_id:
+        return None
+    row = await session.scalar(
+        select(NormalizedActivityItemRecord).where(
+            NormalizedActivityItemRecord.activity_item_id == normalized_id
+        )
+    )
+    if row is None:
+        return None
+    return {
+        "activity_item_id": row.activity_item_id,
+        "source": row.source,
+        "source_object_id": row.source_object_id,
+        "source_event_id": row.source_event_id,
+        "activity_type": row.activity_type,
+        "title": row.title,
+        "occurred_at": (
+            row.activity_created_at.isoformat()
+            if row.activity_created_at
+            else (row.created_at.isoformat() if row.created_at else None)
+        ),
+        "run_id": row.run_id,
+    }
+
+
+async def _source_run_request(
+    session: AsyncSession, run_id: str | None
+) -> dict[str, Any] | None:
+    if not run_id:
+        return None
+    row = await session.scalar(
+        select(SourceRunRequest)
+        .where(SourceRunRequest.run_id == run_id)
+        .order_by(SourceRunRequest.id.desc())
+        .limit(1)
+    )
+    if row is None:
+        return None
+    return {
+        "request_id": row.request_id,
+        "run_id": row.run_id,
+        "correlation_id": row.correlation_id,
+        "source_type": row.source_type,
+        "action_type": row.action_type,
+        "status": row.status,
+        "connector_summary": row.result_summary,
+    }
+
+
+async def _graph_lineage_for_ref(
+    session: AsyncSession,
+    ref: dict[str, Any],
+) -> dict[str, list[dict[str, Any]]]:
+    markers = [
+        str(value)
+        for value in (ref.get("normalized_event_id"), ref.get("source_event_id"))
+        if isinstance(value, str) and value
+    ]
+    nodes: list[dict[str, Any]] = []
+    links: list[dict[str, Any]] = []
+    for marker in markers:
+        node_rows = (
+            await session.execute(
+                select(EntityRecord)
+                .where(cast(EntityRecord.attrs, Text).like(f"%{marker}%"))
+                .limit(10)
+            )
+        ).scalars()
+        for row in node_rows:
+            model = {
+                "entity_id": row.entity_id,
+                "entity_type": row.entity_type,
+                "name": row.canonical_name,
+                "created_by_run_id": row.created_by_run_id,
+                "updated_by_run_id": row.updated_by_run_id,
+            }
+            if model not in nodes:
+                nodes.append(model)
+        link_rows = (
+            await session.execute(
+                select(EntityLinkRecord)
+                .where(cast(EntityLinkRecord.evidence_refs, Text).like(f"%{marker}%"))
+                .limit(10)
+            )
+        ).scalars()
+        for row in link_rows:
+            model = {
+                "link_id": row.link_id,
+                "from": row.from_entity_id,
+                "to": row.to_entity_id,
+                "relation": row.relation,
+                "confidence": row.confidence,
+                "created_by_run_id": row.created_by_run_id,
+            }
+            if model not in links:
+                links.append(model)
+    return {"nodes": nodes, "links": links}
 
 
 async def _related_nodes(
@@ -195,15 +319,37 @@ async def build_finding_trail(
         source_ids = _source_ids_from_evidence([ref])
         events: list[dict[str, Any]] = []
         normalized: list[dict[str, Any]] = []
+        exact_event = await _event_by_id(session, ref.get("source_event_id"))
+        if exact_event:
+            events.append(exact_event)
+        exact_normalized = await _normalized_by_id(
+            session, ref.get("normalized_event_id")
+        )
+        if exact_normalized:
+            normalized.append(exact_normalized)
         for source_id in source_ids:
             events.extend(await _events_for_source_id(session, source_id))
             normalized.extend(await _normalized_for_source_id(session, source_id))
+        graph_lineage = await _graph_lineage_for_ref(session, ref)
+        source_runs: list[dict[str, Any]] = []
+        seen_runs: set[str] = set()
+        for candidate_run_id in [
+            ref.get("source_run_id"),
+            *[event.get("created_by_run_id") for event in events],
+        ]:
+            run = await _source_run_request(session, candidate_run_id)
+            if not run or str(run.get("run_id")) in seen_runs:
+                continue
+            seen_runs.add(str(run.get("run_id")))
+            source_runs.append(run)
         evidence_chain.append(
             {
                 "ref": ref,
                 "source_ids": source_ids,
                 "source_events": events,
                 "normalized_events": normalized,
+                "graph_lineage": graph_lineage,
+                "source_runs": source_runs,
                 "confidence": finding.get("confidence"),
             }
         )
@@ -233,10 +379,24 @@ async def build_finding_trail(
             _add_run(event.get("created_by_run_id"))
         for nev in item["normalized_events"]:
             _add_run(nev.get("run_id"))
+        for run in item.get("source_runs", []):
+            _add_run(run.get("run_id"))
     for node in related_nodes:
         _add_run(node.get("created_by_run_id"))
         _add_run(node.get("updated_by_run_id"))
     _add_run(finding.get("last_run_id"))
+    graph_lineage = {
+        "nodes": [
+            node
+            for item in evidence_chain
+            for node in (item.get("graph_lineage") or {}).get("nodes", [])
+        ],
+        "links": [
+            link
+            for item in evidence_chain
+            for link in (item.get("graph_lineage") or {}).get("links", [])
+        ],
+    }
 
     return {
         "finding": finding,
@@ -252,6 +412,7 @@ async def build_finding_trail(
         },
         "evidence_chain": evidence_chain,
         "evidence_timeline": timeline,
+        "graph_lineage": graph_lineage,
         "related_nodes": related_nodes,
         "produced_by_run": await _run_provenance(
             session, finding.get("last_run_id")
@@ -276,7 +437,6 @@ async def _run_provenance(
     row = await session.scalar(
         select(AgentRunLog)
         .where(AgentRunLog.run_id == run_id)
-        .where(AgentRunLog.agent == "second_opinion")
         .order_by(AgentRunLog.id.desc())
         .limit(1)
     )

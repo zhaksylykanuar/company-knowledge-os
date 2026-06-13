@@ -387,6 +387,43 @@ def _runs_for_source(
     return matched
 
 
+def _pipeline_summary_for_request(row: SourceRunRequest) -> dict[str, Any]:
+    result = row.result_summary if isinstance(row.result_summary, dict) else {}
+    pipeline = result.get("evidence_pipeline") if isinstance(result, dict) else None
+    return pipeline if isinstance(pipeline, dict) else {}
+
+
+def _pipeline_totals(rows: list[SourceRunRequest]) -> dict[str, int]:
+    totals = {
+        "graph_updates": 0,
+        "graph_nodes_created": 0,
+        "graph_nodes_updated": 0,
+        "graph_edges_created": 0,
+        "graph_edges_updated": 0,
+        "findings_generated": 0,
+        "proposals_generated": 0,
+        "data_quality_issues": 0,
+    }
+    for row in rows:
+        pipeline = _pipeline_summary_for_request(row)
+        totals["graph_nodes_created"] += int(pipeline.get("graph_nodes_created") or 0)
+        totals["graph_nodes_updated"] += int(pipeline.get("graph_nodes_updated") or 0)
+        totals["graph_edges_created"] += int(pipeline.get("graph_edges_created") or 0)
+        totals["graph_edges_updated"] += int(pipeline.get("graph_edges_updated") or 0)
+        totals["findings_generated"] += int(pipeline.get("findings_created") or 0)
+        totals["proposals_generated"] += int(pipeline.get("proposals_created") or 0)
+        totals["data_quality_issues"] += int(
+            pipeline.get("data_quality_issues_created") or 0
+        )
+    totals["graph_updates"] = (
+        totals["graph_nodes_created"]
+        + totals["graph_nodes_updated"]
+        + totals["graph_edges_created"]
+        + totals["graph_edges_updated"]
+    )
+    return totals
+
+
 def _availability_for_source(
     rows: list[DataAvailability],
     definition: SourceDefinition,
@@ -500,6 +537,7 @@ async def build_source_health(
     degraded: list[str] = []
     total_events = 0
     total_normalized = 0
+    total_graph_updates = 0
     pending_total = 0
     failed_recent_runs = 0
     normalization_errors = 0
@@ -547,6 +585,8 @@ async def build_source_health(
         evidence_count = ev_count + norm_count + findings_count + proposals_count
         state = states.get(definition.source_type)
         source_requests = requests_by_source.get(definition.source_type, [])
+        pipeline_totals = _pipeline_totals(source_requests)
+        evidence_count += pipeline_totals["graph_updates"]
         latest_request = source_requests[0] if source_requests else None
         latest_source_run = next(
             (request for request in source_requests if request.started_at or request.run_id),
@@ -577,6 +617,7 @@ async def build_source_health(
         pending = pending_by_source.get(definition.source_type, 0)
         total_events += ev_count
         total_normalized += norm_count
+        total_graph_updates += pipeline_totals["graph_updates"]
         pending_total += pending
         status_counts[status] += 1
         sources.append(
@@ -617,7 +658,12 @@ async def build_source_health(
                 else (latest_agent_run.input_watermark if latest_agent_run else None),
                 "events_ingested": ev_count,
                 "normalized_events": norm_count,
-                "graph_updates": 0,
+                "graph_updates": pipeline_totals["graph_updates"],
+                "graph_nodes_created": pipeline_totals["graph_nodes_created"],
+                "graph_nodes_updated": pipeline_totals["graph_nodes_updated"],
+                "graph_edges_created": pipeline_totals["graph_edges_created"],
+                "graph_edges_updated": pipeline_totals["graph_edges_updated"],
+                "data_quality_issues": pipeline_totals["data_quality_issues"],
                 "findings_generated": findings_count,
                 "proposals_generated": proposals_count,
                 "failed_runs": failed_run_count,
@@ -669,6 +715,7 @@ async def build_source_health(
             "by_readiness": dict(readiness_counts),
             "events_ingested": total_events,
             "normalized_events": total_normalized,
+            "graph_updates": total_graph_updates,
             "pending_requests": pending_total,
             "failed_recent_runs": failed_recent_runs,
             "normalization_errors": normalization_errors,

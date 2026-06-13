@@ -55,6 +55,7 @@ async def build_graph_tree(
             continue
         if (row.attrs or {}).get("archived"):  # gardener-archived: hidden
             continue
+        attrs = row.attrs or {}
         nodes.append(
             {
                 "entity_id": row.entity_id,
@@ -62,8 +63,14 @@ async def build_graph_tree(
                 "name": row.canonical_name,
                 "freshness": _freshness(row.updated_at or row.created_at, safe_now),
                 "merge_status": row.merge_status,
-                "attrs": row.attrs or {},
+                "attrs": attrs,
                 "source_accounts": accounts_by_entity.get(row.entity_id, []),
+                "created_by_run_id": row.created_by_run_id,
+                "updated_by_run_id": row.updated_by_run_id,
+                "source_types": attrs.get("source_types") or [],
+                "evidence_count": int(attrs.get("evidence_count") or 0),
+                "visibility_scope": attrs.get("visibility_scope"),
+                "last_observed_at": attrs.get("last_observed_at"),
             }
         )
 
@@ -80,6 +87,7 @@ async def build_graph_tree(
             continue
         seen_links.add(dedupe)
         disputed = link.confidence < DISPUTED_CONFIDENCE_THRESHOLD
+        factors = link.confidence_factors or {}
         links.append(
             {
                 "link_id": link.link_id,
@@ -88,9 +96,14 @@ async def build_graph_tree(
                 "relation": link.relation,
                 "confidence": link.confidence,
                 "confidence_hint": explain_confidence(
-                    link.confidence, link.confidence_factors or {}
+                    link.confidence, factors
                 ),
                 "disputed": disputed,
+                "created_by_run_id": link.created_by_run_id,
+                "source_event_ids": factors.get("source_event_ids") or [],
+                "normalized_event_ids": factors.get("normalized_event_ids") or [],
+                "last_observed_at": factors.get("last_observed_at"),
+                "evidence_count": len(link.evidence_refs or []),
             }
         )
 

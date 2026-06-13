@@ -74,6 +74,29 @@ whole run.
 
 `test_connection` never ingests events.
 
+## Evidence Pipeline
+
+After ingestion/normalization, the local evidence pipeline can lift normalized
+activity into the Knowledge Graph, Second Opinion findings, and Inbox
+proposals:
+
+```bash
+uv run python scripts/run_evidence_pipeline.py --confirm-run "RUN EVIDENCE PIPELINE"
+```
+
+The pipeline is local-only and provider-free. It reads
+`normalized_activity_items`, requires evidence-backed `source_event_id`
+lineage before asserting graph edges or findings, and writes sanitized
+`agent_run_logs` / `audit_logs` summaries. Low-confidence relationships become
+Inbox proposals instead of graph assertions. Re-running the pipeline is
+idempotent: existing nodes, links, findings, and proposals are updated or left
+unchanged by stable keys.
+
+Source run details, Source Control Center, Data Quality, Command Center,
+Knowledge Tree, and Evidence Trail surface the resulting graph/finding/proposal
+counts and run lineage. Browser/API payloads expose only sanitized summaries;
+raw provider bodies and external tokens never leave backend storage.
+
 ## Testing Without Providers
 
 Tests use fake connector adapters or local/noop adapters. They must not call

@@ -10,10 +10,10 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Text, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.agent_models import AgentRunLog, DataAvailability
+from app.db.agent_models import AgentProposal, AgentRunLog, DataAvailability
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.graph_models import EntityLinkRecord, EntityRecord, EntitySourceAccount
 from app.db.models import IngestedEvent
@@ -55,6 +55,11 @@ def _issue(
     cta: dict[str, Any],
     related_run_id: str | None = None,
     related_request_id: str | None = None,
+    related_source_event_id: str | None = None,
+    related_normalized_event_id: str | None = None,
+    related_graph_node: str | None = None,
+    related_graph_edge: str | None = None,
+    related_finding_id: str | None = None,
 ) -> dict[str, Any]:
     return {
         "category": category,
@@ -68,6 +73,11 @@ def _issue(
         "cta": cta,
         "related_run_id": related_run_id,
         "related_request_id": related_request_id,
+        "related_source_event_id": related_source_event_id,
+        "related_normalized_event_id": related_normalized_event_id,
+        "related_graph_node": related_graph_node,
+        "related_graph_edge": related_graph_edge,
+        "related_finding_id": related_finding_id,
     }
 
 
@@ -618,6 +628,199 @@ async def build_data_quality_center(
                     },
                 )
             )
+
+    recent_normalized = (
+        await session.execute(
+            select(NormalizedActivityItemRecord)
+            .order_by(NormalizedActivityItemRecord.created_at.desc())
+            .limit(50)
+        )
+    ).scalars()
+    for row in recent_normalized:
+        marker = f"%{row.activity_item_id}%"
+        linked_nodes = await session.scalar(
+            select(func.count(EntityRecord.id)).where(
+                cast(EntityRecord.attrs, Text).like(marker)
+            )
+        )
+        linked_edges = await session.scalar(
+            select(func.count(EntityLinkRecord.id)).where(
+                cast(EntityLinkRecord.evidence_refs, Text).like(marker)
+            )
+        )
+        if not int(linked_nodes or 0) and not int(linked_edges or 0):
+            issues.append(
+                _issue(
+                    category="normalized_event_not_lifted_to_graph",
+                    severity="medium",
+                    why_it_matters="Normalized evidence exists but has not been lifted into graph nodes or evidence-backed links.",
+                    affected_source=row.source,
+                    affected_entity=row.source_object_id,
+                    evidence_count=1 if row.source_event_id else 0,
+                    suggested_action="Run the approved evidence pipeline and review graph lift errors if it remains unlinked.",
+                    cta={
+                        "target": "sources",
+                        "source_type": row.source,
+                        "action": "run_evidence_pipeline",
+                    },
+                    related_run_id=row.run_id,
+                    related_source_event_id=row.source_event_id,
+                    related_normalized_event_id=row.activity_item_id,
+                )
+            )
+
+    pipeline_nodes = (
+        await session.execute(
+            select(EntityRecord)
+            .where(EntityRecord.created_by_run_id.like("evidence_pipeline_%"))
+            .order_by(EntityRecord.updated_at.desc())
+            .limit(30)
+        )
+    ).scalars()
+    for row in pipeline_nodes:
+        attrs = row.attrs if isinstance(row.attrs, dict) else {}
+        if not attrs.get("source_refs"):
+            issues.append(
+                _issue(
+                    category="graph_node_without_source_refs",
+                    severity="high",
+                    why_it_matters="A graph node created by evidence pipeline has no source_refs, so its provenance cannot be audited.",
+                    affected_entity=row.entity_id,
+                    evidence_count=0,
+                    suggested_action="Rebuild the node from normalized evidence or quarantine it until provenance is restored.",
+                    cta={
+                        "target": "knowledge_tree",
+                        "action": "review_node",
+                        "entity_id": row.entity_id,
+                    },
+                    related_run_id=row.created_by_run_id,
+                    related_graph_node=row.entity_id,
+                )
+            )
+
+    graph_edges_without_evidence = (
+        await session.execute(
+            select(EntityLinkRecord)
+            .where(
+                or_(
+                    EntityLinkRecord.evidence_refs.is_(None),
+                    func.json_array_length(EntityLinkRecord.evidence_refs) == 0,
+                )
+            )
+            .order_by(EntityLinkRecord.created_at.desc())
+            .limit(20)
+        )
+    ).scalars()
+    for row in graph_edges_without_evidence:
+        issues.append(
+            _issue(
+                category="graph_edge_without_evidence",
+                severity="high",
+                why_it_matters="Graph relation has no evidence_refs and should not be treated as an asserted relationship.",
+                affected_entity=f"{row.from_entity_id}->{row.to_entity_id}",
+                evidence_count=0,
+                confidence=row.confidence,
+                suggested_action="Remove or rebuild this edge through an approved evidence-backed flow.",
+                cta={
+                    "target": "knowledge_tree",
+                    "action": "review_link",
+                    "link_id": row.link_id,
+                },
+                related_run_id=row.created_by_run_id,
+                related_graph_edge=row.link_id,
+            )
+        )
+
+    pending_graph_proposals = (
+        await session.execute(
+            select(AgentProposal)
+            .where(AgentProposal.status == "pending")
+            .where(
+                AgentProposal.kind.in_(
+                    ("entity_merge_proposal", "low_confidence_relation")
+                )
+            )
+            .order_by(AgentProposal.created_at.desc())
+            .limit(30)
+        )
+    ).scalars()
+    for row in pending_graph_proposals:
+        issues.append(
+            _issue(
+                category="weak_identity_match_waiting_approval"
+                if row.kind == "entity_merge_proposal"
+                else "low_confidence_graph_relationship",
+                severity="medium",
+                why_it_matters="Evidence suggests a graph change, but confidence is too low for automatic assertion.",
+                affected_entity=str((row.payload or {}).get("entity_id") or row.proposal_id),
+                evidence_count=len(row.evidence_refs or []),
+                confidence=row.confidence,
+                suggested_action="Approve, reject, or keep waiting for stronger evidence in Inbox.",
+                cta={
+                    "target": "inbox",
+                    "action": "review_proposal",
+                    "proposal_id": row.proposal_id,
+                },
+                related_run_id=row.run_id,
+            )
+        )
+
+    pipeline_findings = (
+        await session.execute(
+            select(SecondOpinionFinding)
+            .where(SecondOpinionFinding.last_run_id.like("evidence_pipeline_%"))
+            .order_by(SecondOpinionFinding.updated_at.desc())
+            .limit(30)
+        )
+    ).scalars()
+    for row in pipeline_findings:
+        refs = [ref for ref in (row.evidence_refs or []) if isinstance(ref, dict)]
+        has_full_lineage = any(
+            ref.get("source_event_id") and ref.get("normalized_event_id")
+            for ref in refs
+        )
+        if not has_full_lineage:
+            issues.append(
+                _issue(
+                    category="finding_generated_without_full_lineage",
+                    severity="high",
+                    why_it_matters="A pipeline finding is missing source_event_id or normalized_event_id provenance.",
+                    affected_entity=row.entity_id,
+                    evidence_count=len(refs),
+                    confidence=row.confidence,
+                    suggested_action="Regenerate the finding from normalized evidence before showing it as an auditable conclusion.",
+                    cta={
+                        "target": "second_opinion",
+                        "action": "review_finding",
+                        "finding_key": row.finding_key,
+                    },
+                    related_run_id=row.last_run_id,
+                    related_finding_id=row.finding_key,
+                )
+            )
+
+    graph_lift_errors = (
+        await session.execute(
+            select(AgentRunLog)
+            .where(AgentRunLog.agent == "evidence_pipeline")
+            .where(AgentRunLog.errors > 0)
+            .order_by(AgentRunLog.created_at.desc())
+            .limit(20)
+        )
+    ).scalars()
+    for row in graph_lift_errors:
+        issues.append(
+            _issue(
+                category="graph_lift_error",
+                severity="high",
+                why_it_matters="Evidence pipeline reported graph lift errors; some normalized evidence may not reach graph/findings.",
+                affected_source="evidence_pipeline",
+                evidence_count=row.errors,
+                suggested_action="Open the pipeline run summary and fix unsupported normalized event mapping.",
+                cta={"target": "agent_runs", "action": "view_run", "run_id": row.run_id},
+                related_run_id=row.run_id,
+            )
+        )
 
     counts = Counter(issue["category"] for issue in issues)
     severity = Counter(issue["severity"] for issue in issues)
