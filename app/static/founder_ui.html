@@ -284,13 +284,17 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   </section>
 
   <section class="sec" data-sec="kt">
-    <div class="row" id="kt-filters" style="flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
-    <div class="card" style="padding:4px"><canvas id="kt-canvas" height="600"></canvas></div>
-    <div class="statusline" id="kt-msg"></div>
-    <div class="grid2" style="margin-top:6px">
-      <div class="card" id="kt-detail"><p class="h">Нода</p><div class="mut">Кликни по ноде в созвездии — здесь появятся детали, связи и evidence.</div></div>
-      <div class="card" id="kt-stats"></div>
-    </div>
+    <div id="kt-bridge"></div>
+    <details class="card" id="kt-webgraph-fallback" style="margin-top:12px">
+      <summary>Web graph preview fallback / debug</summary>
+      <div class="row" id="kt-filters" style="flex-wrap:wrap;gap:8px;margin:10px 0"></div>
+      <div class="card" style="padding:4px"><canvas id="kt-canvas" height="600"></canvas></div>
+      <div class="statusline" id="kt-msg"></div>
+      <div class="grid2" style="margin-top:6px">
+        <div class="card" id="kt-detail"><p class="h">Node preview</p><div class="mut">This web graph is a fallback. The primary knowledge surface is the generated local Obsidian vault.</div></div>
+        <div class="card" id="kt-stats"></div>
+      </div>
+    </details>
   </section>
 
   <section class="sec" data-sec="st"><div class="stack" id="st-body"></div></section>
@@ -2060,6 +2064,7 @@ document.addEventListener("click",function(e){
 var KT={nodes:[],links:[],hidden:{},selected:null,focus:null,depth:1,includeArchived:false,minConfidence:0,query:""};
 var KT_COLORS={project:"#7c6ff0",person:"#2fb088",task:"#4a93dd",issue:"#4a93dd",pull_request:"#4a93dd",commit:"#5bbcd6",risk:"#e05b5b",blocker:"#e05b5b",decision:"#b06fd0",action_item:"#dba03a",repo:"#8a93a6",repository:"#8a93a6",account:"#dba03a",company:"#dba03a",contact:"#2fb088",email_thread:"#5bbcd6",meeting:"#5bbcd6",hypothesis:"#d77fb0",declaration:"#d77fb0",feature:"#7c6ff0",product_area:"#7c6ff0",share_pack:"#8a93a6",source_event:"#8a93a6",normalized_event:"#8a93a6",finding:"#e05b5b",proposal:"#dba03a",knowledge_note:"#8a93a6"};
 var KT_LABEL={project:"проекты",person:"люди",task:"задачи",issue:"issues",pull_request:"PR",commit:"commits",risk:"риски",blocker:"blockers",decision:"решения",action_item:"actions",repo:"репо",repository:"репо",account:"accounts",company:"companies",contact:"contacts",email_thread:"email",meeting:"встречи",hypothesis:"гипотезы",declaration:"declarations",feature:"features",product_area:"areas",share_pack:"packs",source_event:"source",normalized_event:"evidence",finding:"findings",proposal:"proposals",knowledge_note:"notes"};
+var OBSIDIAN={status:null,preview:null,lastSync:null};
 function ktId(n){return n.node_id||n.entity_id;}
 function ktType(n){return n.node_type||n.entity_type;}
 function ktTitle(n){return n.title||n.name||ktId(n);}
@@ -2068,6 +2073,60 @@ function ktEdgeTo(l){return l.target_node_id||l.to;}
 function ktEdgeRel(l){return l.relation_type||l.relation;}
 
 async function loadTree(force){
+  $("kt-bridge").innerHTML='<div class="statusline">Loading Obsidian Bridge…</div>';
+  try{
+    var d=await (await api("/v1/knowledge/obsidian/status")).json();
+    OBSIDIAN.status=d;
+    renderObsidianBridge();
+    loadTreeGraphPreview(false);
+  }catch(e){
+    $("kt-bridge").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';
+  }
+}
+
+function renderObsidianBridge(){
+  var d=OBSIDIAN.status||{},stats=d.stats||{},sync=OBSIDIAN.lastSync||{};
+  var configured=d.status==="configured";
+  var cls=configured?"b-green":d.status==="disabled"?"b-mut":"b-amber";
+  var h='<div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px"><div><div style="font-size:16px;font-weight:600">Obsidian Bridge</div><div class="mut">FounderOS generates a real local Obsidian-compatible vault. Use Obsidian for Graph View, Local Graph, Backlinks, Markdown notes, tags and search.</div></div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><span class="badge '+cls+'">'+esc(d.status||"unknown")+'</span><button class="btn ghost" data-obsact="dry">Dry Run</button><button class="btn" data-obsact="sync">Sync Now</button><button class="btn ghost" data-obsact="open-vault">Open Vault in Obsidian</button><button class="btn ghost" data-obsact="open-index">Open Index Note</button></div></div>';
+  if(!configured){
+    h+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Configure the bridge with FOUNDEROS_ENABLE_OBSIDIAN_BRIDGE=true and an absolute FOUNDEROS_OBSIDIAN_VAULT_PATH, then restart the backend. No files are written while the bridge is disabled or missing a path.</div>';
+  }
+  h+='<div class="grid3" style="margin-bottom:12px">'
+    +'<div class="kpi"><div class="l">notes</div><div class="v">'+num(d.notes_seen||0)+'</div><div class="d">generated from graph</div></div>'
+    +'<div class="kpi"><div class="l">projects / people</div><div class="v">'+num(stats.projects||0)+' / '+num(stats.people||0)+'</div><div class="d">vault notes</div></div>'
+    +'<div class="kpi"><div class="l">tasks / findings</div><div class="v">'+num(stats.tasks||0)+' / '+num(stats.findings||0)+'</div><div class="d">evidence-backed</div></div>'
+    +'</div>';
+  h+='<div class="grid2"><div class="card"><p class="h">Open in Obsidian</p><div class="mut">The graph is built from real wikilinks in markdown files, not from a custom browser canvas.</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px"><span class="badge b-mut">Graph View</span><span class="badge b-mut">Local Graph</span><span class="badge b-mut">Backlinks</span><span class="badge b-mut">Markdown Notes</span><span class="badge b-mut">Tags / Properties</span><span class="badge b-mut">Search</span></div>'
+    +(sync.status?'<details class="ev" open><summary>last sync summary</summary><pre>'+esc(JSON.stringify(sync,null,1))+'</pre></details>':'')
+    +((d.warnings||[]).length?'<details class="ev" open><summary>warnings</summary><pre>'+esc(JSON.stringify(d.warnings,null,1))+'</pre></details>':'')
+    +'</div><div class="card" id="kt-note-preview"><p class="h">Recent generated notes</p>';
+  (d.recent_notes||[]).slice(0,10).forEach(function(n){
+    h+='<div class="item"><span class="badge b-mut">'+esc((n.path||"").split("/")[0])+'</span><div class="t">'+esc(n.title||n.path)+'<div class="s">'+esc(n.path||"")+'</div></div><button class="actbtn" data-obsnode="'+esc(n.node_id)+'">open</button></div>';
+  });
+  if(!(d.recent_notes||[]).length)h+='<div class="empty">No generated notes yet. Run the evidence pipeline or sync after data arrives.</div>';
+  h+='</div></div>';
+  $("kt-bridge").innerHTML=h;
+}
+
+async function obsidianSync(dryRun){
+  if(!dryRun&&!confirm("Sync local Obsidian vault now? This writes markdown files only inside the configured vault path."))return;
+  try{
+    var d=await (await api("/v1/knowledge/obsidian/sync?dry_run="+(dryRun?"true":"false"),{method:"POST"})).json();
+    OBSIDIAN.lastSync=d;
+    await loadTree(false);
+  }catch(e){$("kt-bridge").insertAdjacentHTML("afterbegin",'<div class="statusline err">'+esc(String(e.message||e))+'</div>');}
+}
+
+async function obsidianOpen(path){
+  try{
+    var d=await (await api(path)).json();
+    if(d.uri)window.location.href=d.uri;
+  }catch(e){$("kt-bridge").insertAdjacentHTML("afterbegin",'<div class="statusline err">'+esc(String(e.message||e))+'</div>');}
+}
+
+async function loadTreeGraphPreview(force){
   setMsgEl("kt-msg","строю knowledge graph…",false);
   try{
     var params=["limit=160","depth="+encodeURIComponent(KT.depth),"include_archived="+(KT.includeArchived?"true":"false"),"min_confidence="+encodeURIComponent(KT.minConfidence||0)];
@@ -2215,18 +2274,32 @@ $("kt-canvas").addEventListener("click",function(e){
   ktOpenNode(ktId(best));
 });
 document.addEventListener("click",function(e){
+  var obs=e.target.closest("[data-obsact]");
+  if(obs){
+    var action=obs.getAttribute("data-obsact");
+    if(action==="dry"){obsidianSync(true);return;}
+    if(action==="sync"){obsidianSync(false);return;}
+    if(action==="open-vault"){obsidianOpen("/v1/knowledge/obsidian/open-vault");return;}
+    if(action==="open-index"){
+      var st=OBSIDIAN.status||{};
+      if(st.open_index_uri)window.location.href=st.open_index_uri;
+      return;
+    }
+  }
+  var obsNode=e.target.closest("[data-obsnode]");
+  if(obsNode){obsidianOpen("/v1/knowledge/obsidian/open-node/"+encodeURIComponent(obsNode.getAttribute("data-obsnode")));return;}
   var kt=e.target.closest("[data-kttype]");
   if(kt){var t=kt.getAttribute("data-kttype");KT.hidden[t]=!KT.hidden[t];kt.classList.toggle("on",!KT.hidden[t]);ktDraw();return;}
-  if(e.target.id==="kt-global"){KT.focus=null;loadTree(false);return;}
-  if(e.target.id==="kt-local"&&KT.selected){KT.focus=KT.selected;loadTree(false);return;}
-  if(e.target.id==="kt-note-local"){KT.focus=e.target.getAttribute("data-nodeid");loadTree(false);return;}
-  if(e.target.id==="kt-depth"){KT.depth=KT.depth>=3?1:KT.depth+1;loadTree(false);return;}
-  if(e.target.id==="kt-archived"){KT.includeArchived=!KT.includeArchived;loadTree(false);return;}
+  if(e.target.id==="kt-global"){KT.focus=null;loadTreeGraphPreview(false);return;}
+  if(e.target.id==="kt-local"&&KT.selected){KT.focus=KT.selected;loadTreeGraphPreview(false);return;}
+  if(e.target.id==="kt-note-local"){KT.focus=e.target.getAttribute("data-nodeid");loadTreeGraphPreview(false);return;}
+  if(e.target.id==="kt-depth"){KT.depth=KT.depth>=3?1:KT.depth+1;loadTreeGraphPreview(false);return;}
+  if(e.target.id==="kt-archived"){KT.includeArchived=!KT.includeArchived;loadTreeGraphPreview(false);return;}
   if(e.target.id==="kt-export"){ktExportPreview();return;}
   if(e.target.id==="kt-relayout"){ktLayout();ktDraw();}
 });
 document.addEventListener("change",function(e){
-  if(e.target&&e.target.id==="kt-search"){KT.query=e.target.value||"";loadTree(false);}
+  if(e.target&&e.target.id==="kt-search"){KT.query=e.target.value||"";loadTreeGraphPreview(false);}
 });
 
 async function ktExportPreview(){

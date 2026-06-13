@@ -39,6 +39,22 @@ class Settings(BaseSettings):
     enable_write_actions: bool = False
     enable_obsidian_export: bool = True
     require_approval_for_writes: bool = True
+    enable_obsidian_bridge: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("FOUNDEROS_ENABLE_OBSIDIAN_BRIDGE"),
+    )
+    obsidian_bridge_vault_name: str = Field(
+        default="FounderOS Knowledge Vault",
+        validation_alias=AliasChoices("FOUNDEROS_OBSIDIAN_VAULT_NAME"),
+    )
+    obsidian_bridge_vault_path: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_OBSIDIAN_VAULT_PATH"),
+    )
+    obsidian_bridge_sync_mode: str = Field(
+        default="manual",
+        validation_alias=AliasChoices("FOUNDEROS_OBSIDIAN_SYNC_MODE"),
+    )
 
     api_auth_enabled: bool = False
     api_auth_key: SecretStr | str | None = None

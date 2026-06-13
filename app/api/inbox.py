@@ -44,9 +44,15 @@ from app.services.inbox_audit import (
 from app.services.knowledge_graph_view import (
     build_knowledge_graph,
     build_knowledge_node_note,
-    build_obsidian_preview,
 )
 from app.services.notification_center import build_notification_center
+from app.services.obsidian_vault import (
+    build_obsidian_preview,
+    build_obsidian_status,
+    obsidian_open_node_model,
+    obsidian_open_vault_model,
+    sync_obsidian_vault,
+)
 from app.services.operating_rhythm import (
     build_daily_check,
     build_decision_review,
@@ -417,9 +423,69 @@ async def post_obsidian_preview(
     async with AsyncSessionLocal() as session:
         return await build_obsidian_preview(
             session,
-            viewer_scope=SCOPE_FOUNDER,
             limit=limit,
         )
+
+
+@router.get("/v1/knowledge/obsidian/status")
+async def get_obsidian_bridge_status(
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_obsidian_status(session)
+
+
+@router.post("/v1/knowledge/obsidian/sync")
+async def post_obsidian_bridge_sync(
+    dry_run: bool = Query(default=True),
+    requested_by: str = Query(default="founder", max_length=120),
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        result = await sync_obsidian_vault(
+            session,
+            dry_run=dry_run,
+            requested_by=requested_by,
+        )
+        await session.commit()
+        return result
+
+
+@router.get("/v1/knowledge/obsidian/open-vault")
+async def get_obsidian_open_vault(
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    result = await obsidian_open_vault_model()
+    if result.get("uri") is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=result.get("status") or "obsidian bridge is not configured",
+        )
+    return result
+
+
+@router.get("/v1/knowledge/obsidian/open-node/{node_id:path}")
+async def get_obsidian_open_node(
+    node_id: str,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        result = await obsidian_open_node_model(session, node_id=node_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="obsidian note mapping not found",
+        )
+    if result.get("uri") is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=result.get("status") or "obsidian bridge is not configured",
+        )
+    return result
 
 
 @router.get("/v1/founder/declarations/{key}")
