@@ -22,8 +22,12 @@ from app.services.evidence_explorer import (
 )
 from app.services.evidence_trail import build_finding_trail
 from app.services.graph_tree import build_graph_tree, review_link
+from app.services.action_center import build_action_center
+from app.services.execution_view import build_execution_view, build_task_detail
 from app.services.inbox import build_inbox, decide_inbox_proposal
+from app.services.product_view import build_product_view
 from app.services.sales_view import build_sales_signals
+from app.services.team_view import build_team_view
 from app.services.second_opinion import (
     FINDING_STATUSES,
     FINDING_TYPES,
@@ -407,6 +411,61 @@ async def get_sales_signals(view: str = Query(default=SCOPE_FOUNDER)) -> dict[st
     _require_founder(view)
     async with AsyncSessionLocal() as session:
         return await build_sales_signals(session)
+
+
+@router.get("/v1/founder/execution")
+async def get_execution(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
+    if _validated_view(view) == SCOPE_INVESTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="execution view is not available to investors",
+        )
+    async with AsyncSessionLocal() as session:
+        return await build_execution_view(session)
+
+
+@router.get("/v1/founder/execution/tasks/{issue_key}")
+async def get_task_detail(
+    issue_key: str,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        detail = await build_task_detail(session, issue_key=issue_key)
+    if detail is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="task not found"
+        )
+    return detail
+
+
+@router.get("/v1/founder/team-load")
+async def get_team_load(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
+    if _validated_view(view) == SCOPE_INVESTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="team load is not available to investors",
+        )
+    async with AsyncSessionLocal() as session:
+        return await build_team_view(session)
+
+
+@router.get("/v1/founder/product")
+async def get_product(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
+    if _validated_view(view) == SCOPE_INVESTOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="product detail is not available to investors",
+        )
+    async with AsyncSessionLocal() as session:
+        return await build_product_view(session)
+
+
+@router.get("/v1/founder/action-center")
+async def get_action_center(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        return await build_action_center(session)
 
 
 @router.get("/v1/founder/agent-runs")

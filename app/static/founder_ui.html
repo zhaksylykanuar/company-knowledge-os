@@ -142,6 +142,20 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
 .warm-cooling{color:var(--amber-text);background:var(--amber-soft)}
 .warm-cold{color:var(--red-text);background:var(--red-soft)}
 .warm-unknown{color:var(--muted);background:var(--surface2)}
+.quest{border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 11px;margin-bottom:7px;cursor:pointer}
+.quest:hover{border-color:var(--accent)}
+.quest .qt{font-size:13px;font-weight:500;flex:1;min-width:0}
+.qflag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px}
+.qf-overdue{background:var(--red-soft);color:var(--red-text)}
+.qf-blocked{background:var(--red-soft);color:var(--red-text)}
+.qf-stale{background:var(--amber-soft);color:var(--amber-text)}
+.qf-ownerless{background:var(--surface2);color:var(--muted)}
+.healthgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.healthcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;text-align:center}
+.actcard{border-left:3px solid var(--accent);border-radius:0 var(--radius-sm) var(--radius-sm) 0;background:var(--surface);border-top:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 12px;margin-bottom:8px}
+.actcard.sev-high{border-left-color:var(--red)}
+.actcard.sev-low{border-left-color:var(--muted)}
+.src-badge{font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:99px;background:var(--surface2);color:var(--muted)}
 @media (max-width:880px){.dvo{grid-template-columns:1fr}}
 @media (max-width:880px){
   body{flex-direction:column}
@@ -159,6 +173,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="nav on" data-nav="cc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Command center</div>
   <div class="nav" data-nav="so"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 109 9"/><path d="M12 8v4l3 2"/><path d="M19 3l2 2-2 2-2-2 2-2z"/></svg>Second opinion<span class="navbadge" id="nav-so-n"></span></div>
   <div class="nav" data-nav="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v6H3v-6l2-7z"/></svg>Inbox<span class="navbadge" id="nav-ib-n"></span></div>
+  <div class="nav" data-nav="ac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Action center<span class="navbadge" id="nav-ac-n"></span></div>
   <div class="nav" data-nav="kt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="13" r="3"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="18" r="2.5"/><path d="M8 7.5l2.5 3M14.8 11.5L16.5 6.5M9.5 14.8L6.5 17.5M14.6 14.6l3 2.4"/></svg>Knowledge tree</div>
   <div class="nav" data-nav="st"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4l-6 3v13l6-3 6 3 6-3V4l-6 3-6-3z"/><path d="M9 4v13M15 7v13"/></svg>Strategy</div>
   <div class="nav" data-nav="pr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Product</div>
@@ -218,6 +233,11 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
     <div class="stack" id="ib-body"></div>
   </section>
 
+  <section class="sec" data-sec="ac">
+    <div class="statusline" id="ac-msg"></div>
+    <div class="stack" id="ac-body"></div>
+  </section>
+
   <section class="sec" data-sec="kt">
     <div class="row" id="kt-filters" style="flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
     <div class="card" style="padding:4px"><canvas id="kt-canvas" height="600"></canvas></div>
@@ -273,6 +293,10 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div id="src-body"><div class="mut">Загружаю источник…</div></div>
 </div></div>
 
+<div class="overlay" id="ov-task"><div class="panel" style="width:min(680px,94vw);max-height:82vh">
+  <div id="task-body"><div class="mut">Загружаю задачу…</div></div>
+</div></div>
+
 <div class="overlay" id="ov-edit"><div class="panel">
   <p class="h" id="edit-title">Изменить</p>
   <div id="edit-fields"></div>
@@ -313,8 +337,8 @@ async function api(path,opts){
 var COLOR_BADGE={green:["b-green","зелёный"],yellow:["b-amber","жёлтый"],red:["b-red","красный"],unknown:["b-mut","нет данных"]};
 function colorBadge(c,label){var m=COLOR_BADGE[c]||COLOR_BADGE.unknown;return '<span class="badge '+m[0]+'"><span class="dot" style="background:currentColor"></span>'+esc(label||m[1])+'</span>';}
 
-var SECTION_TITLES={cc:"Command center",so:"Second opinion",ib:"Inbox",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",inv:"Investor view"};
-var LAZY_LOADERS={so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();}};
+var SECTION_TITLES={cc:"Command center",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",inv:"Investor view"};
+var LAZY_LOADERS={so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();}};
 var LAZY_LOADED={};
 function show(id){
   var secs=document.querySelectorAll(".sec");
@@ -599,6 +623,25 @@ function stRender(){
 
 function prRender(){
   var html="";
+  // Hypothesis validation map: problem -> hypothesis -> evidence -> result.
+  if(PRODUCT){
+    var hyp=PRODUCT.hypotheses||[];
+    html+='<div class="card"><p class="h">Гипотезы: declared vs observed evidence</p>';
+    if(hyp.length){
+      var HSM={validated:["b-green","validated"],testing:["b-amber","testing"],risk:["b-red","at risk"]};
+      hyp.forEach(function(h){
+        var st=HSM[h.declared_status]||HSM.testing;
+        html+='<div class="quest" style="cursor:default"><div class="row" style="flex-wrap:wrap;gap:6px"><span class="badge '+st[0]+'">'+st[1]+'</span><span class="qt">'+esc(h.text)+'</span>'+(h.flagged?'<span class="qflag qf-blocked">расхождение</span>':'')+'</div>'
+          +'<div class="dvo" style="margin:8px 0"><div><div class="lbl" style="color:var(--green)">ЗА ('+h.supporting_evidence_count+')</div>'+(h.supporting_evidence_count?'упоминаний в знаниях: '+h.supporting_evidence_count:'нет подтверждающего evidence')+'</div>'
+          +'<div><div class="lbl" style="color:var(--red)">ПРОТИВ ('+(h.contradicting_evidence?h.contradicting_evidence.length:0)+')</div>'+((h.contradicting_evidence&&h.contradicting_evidence.length)?esc(h.contradicting_evidence[0].title.slice(0,70)):'противоречий нет')+'</div></div>'
+          +'<div class="mut">→ '+esc(h.next_validation_action||"")+'</div>';
+        if(h.findings&&h.findings.length){html+=aiSeesBlock(h.findings,"AI видит расхождение");}
+        html+='</div>';
+      });
+    } else html+='<div class="mut">Гипотезы не заданы. Добавьте их в Strategy — hypothesis-агент сверит с evidence.</div>';
+    html+='</div>';
+  }
+  html=aiSeesBlock(findingsOfTypes(["execution_mismatch","stale_claim","validation_gap","evidence_contradiction"]),"What AI sees differently — продукт")+html;
   if(OV&&OV.projects.length){
     for(var i=0;i<OV.projects.length;i++){
       var p=OV.projects[i];
@@ -642,7 +685,6 @@ function prRender(){
   cb+='</div>';
   html+='<div class="card"><p class="h">Roadmap: Now / Next / Later <span class="edit" id="pr-edit">изменить</span></p>'+ch+'</div>';
   html+='<div class="card"><p class="h">Цепочка валидации <span class="edit" id="pr-edit2">изменить</span></p>'+cb+'</div>';
-  html=aiSeesBlock(findingsOfTypes(["execution_mismatch","stale_claim"]),"What AI sees differently — продукт")+html;
   $("pr-body").innerHTML=html;
   function prEdit(){
     var mm=manual().product||{};
@@ -788,74 +830,154 @@ function fiRender(){
 }
 
 function teRender(){
-  var m=manual().team||{};
-  var people=m.people||[],rhythm=m.rhythm||[];
-  var pb="";
-  for(var i=0;i<people.length;i++){
-    var load=Math.max(0,Math.min(100,Number(people[i][2])||0));
-    pb+='<div class="item"><span class="avatar">'+esc((people[i][0]||"?").slice(0,2).toUpperCase())+'</span>'
-      +'<div class="t">'+esc(people[i][0]||"")+' <span class="mut">· '+esc(people[i][1]||"")+'</span><div class="s">'+esc(people[i][3]||"")+'</div></div>'
-      +'<div class="track" style="max-width:140px"><div class="fill" style="width:'+load+'%;background:var(--'+(load>=90?"red":load>=70?"amber":"green")+')"></div></div>'
-      +(load>=90?'<span class="badge b-red">перегружен</span>':'')
-      +'</div>';
+  if(!TEAM){if($("te-body").innerHTML.indexOf("Загружаю")<0)$("te-body").innerHTML='<div class="mut">Открой раздел для загрузки карты нагрузки…</div>';return;}
+  var html=aiSeesBlock(findingsOfTypes(["ownership_gap"]),"What AI sees differently — команда");
+  var ppl=TEAM.people||[];
+  var maxOpen=1;ppl.forEach(function(p){maxOpen=Math.max(maxOpen,p.open);});
+  html+='<div class="card"><p class="h">Operational load map '+daChipAnyScope("jira.open")+'</p>';
+  html+='<div class="mut" style="margin-bottom:8px">Операционная нагрузка и риски, не оценка продуктивности. Людей не сравниваем.</div>';
+  if(ppl.length){
+    ppl.forEach(function(p){
+      var w=Math.round(p.open/maxOpen*100);
+      var col=p.overloaded?"var(--red)":w>60?"var(--amber)":"var(--green)";
+      html+='<div class="stamina"><span class="avatar">'+esc((p.name||"?").slice(0,2).toUpperCase())+'</span><span class="nm">'+esc(p.name)+'</span>'
+        +'<div class="track"><div class="fill" style="width:'+w+'%;background:'+col+'"></div></div>'
+        +'<span class="mut" style="width:auto">'+p.open+' откр'+(p.stale?' · '+p.stale+' застой':'')+(p.overdue?' · '+p.overdue+' просроч':'')+'</span>'
+        +(p.overloaded?'<span class="badge b-red">перегруз</span>':'')+'</div>'
+        +(p.suggested_action?'<div class="mut" style="margin:0 0 6px 34px">→ '+esc(p.suggested_action)+'</div>':'');
+    });
+  } else html+='<div class="mut">Нет данных о загрузке (нужен Jira-синк).</div>';
+  html+='</div>';
+  var un=TEAM.unassigned||{};
+  if(un.unassigned_work_count){
+    html+='<div class="card" style="border-color:var(--amber)"><p class="h">Unassigned bucket</p>'
+      +'<div class="row" style="gap:14px;flex-wrap:wrap"><span>Открыто: <b>'+num(un.unassigned_work_count)+'</b></span><span>Застой: <b>'+num(un.stale_unassigned_work)+'</b></span><span>Просрочено: <b>'+num(un.overdue_unassigned)+'</b></span></div>'
+      +'<div class="mut" style="margin-top:6px">→ '+esc(un.suggested_action||"")+' (это bucket работы, не человек)</div></div>';
   }
-  var rb="";
-  for(var r=0;r<rhythm.length;r++)rb+='<div class="item"><span class="badge b-mut" style="width:36px;justify-content:center">'+esc(rhythm[r][0]||"")+'</span><div class="t">'+esc(rhythm[r][1]||"")+'</div></div>';
-  var db="";
-  if(OV&&OV.decisions.length){
-    for(var d=0;d<OV.decisions.length;d++){
-      var dec=OV.decisions[d];
-      var dt=dec.created_at?new Date(dec.created_at).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"}):"";
-      db+='<div class="item"><span class="badge b-accent">'+dt+'</span><div class="t">'+esc(dec.decision||dec.title)+'<div class="s">'+esc(dec.source_document_id||"")+'</div></div></div>';
-    }
-  } else db='<div class="mut">Решения появляются автоматически из заметок и писем (экстрактор решений).</div>';
-  $("te-body").innerHTML=
-    aiSeesBlock(findingsOfTypes(["ownership_gap"]),"What AI sees differently — команда")
-    +'<div class="card"><p class="h">Роли и загрузка '+daChipAnyScope("jira.open")+'<span class="edit" id="te-edit" style="margin-left:auto">изменить</span></p>'+(pb||'<div class="mut">Добавьте людей: кто за что отвечает и насколько загружен.</div>')+'</div>'
-    +'<div class="grid2"><div class="card"><p class="h">Weekly rhythm</p>'+(rb||'<div class="mut">Задайте 2–3 ритуала недели: планёрка, демо, ретро.</div>')+'</div>'
-    +'<div class="card"><p class="h">Решения (из знаний)</p>'+db+'</div></div>';
-  $("te-edit").addEventListener("click",function(){
-    var mm=manual().team||{};
-    openEditor("Team & operations",[
-      {key:"people",kind:"area",label:"Люди",hint:"имя | роль | загрузка % | фокус",value:joinLines(mm.people)},
-      {key:"rhythm",kind:"area",label:"Ритуалы",hint:"день | ритуал",value:joinLines(mm.rhythm)}
-    ],function(out){var s=manual();s.team={people:lines(out.people),rhythm:lines(out.rhythm)};saveManual(s);});
-  });
+  var gaps=TEAM.ownership_gaps||[];
+  if(gaps.length){
+    html+='<div class="card"><p class="h">Ownership gaps <span class="mut">'+gaps.length+'</span></p>';
+    gaps.slice(0,6).forEach(function(g){
+      html+='<div class="item"><span class="badge b-mut">ownership</span><div class="t">'+esc(g.summary)+'</div><button class="actbtn" data-soact="trail" data-fk="'+esc(g.finding_key)+'">trail</button></div>';
+    });
+    html+='</div>';
+  }
+  $("te-body").innerHTML=html;
 }
 
-function taRender(){
-  if(!OV){$("ta-body").innerHTML='<div class="mut">Загружаю…</div>';return;}
-  var acts=OV.actions;
-  var hi=[],qw=[],bl=[];
-  for(var i=0;i<acts.length;i++){
-    if(acts[i].impact==="high")hi.push(acts[i]);
-    else if(acts[i].impact==="medium")qw.push(acts[i]);
-    else bl.push(acts[i]);
-  }
-  function group(items,badge){
-    var h="";
-    for(var j=0;j<items.length;j++){
-      var it=items[j];
-      h+='<div class="item"><span class="badge '+badge+'">'+esc(it.item_type)+'</span><div class="t">'+esc(it.title)
-        +'<div class="s">'+esc(it.source_title||"")+(it.reasons&&it.reasons[0]?" · "+esc(it.reasons[0]):"")+'</div></div>'
-        +(it.urgent?'<span class="badge b-red">срочно</span>':'')
-        +'<span class="mut">'+(it.attention_score!=null?Number(it.attention_score).toFixed(2):"")+'</span></div>';
-    }
-    return h;
-  }
-  var html=aiSeesBlock(findingsOfTypes(["delivery_risk","execution_mismatch"]),"What AI sees differently — исполнение")
-    +'<div class="row" style="justify-content:space-between;margin-bottom:4px"><span class="mut">Quest log — приоритеты из скоринга знаний</span>'+daChipAnyScope("knowledge.tasks")+'</div>'
-    +'<p class="h" style="color:var(--red)">High impact · сделать сначала</p><div class="card">'+(group(hi,"b-red")||'<div class="mut">Пусто — отлично.</div>')+'</div>'
-    +'<p class="h" style="color:var(--amber)">Quick wins · между делом</p><div class="card">'+(group(qw,"b-amber")||'<div class="mut">Пусто.</div>')+'</div>';
-  if(bl.length){
-    html+='<p class="h" style="color:var(--muted)">Backlog · не сейчас</p>'
-      +'<div class="card"><div class="row" style="justify-content:space-between;cursor:pointer" id="ta-blg-toggle"><span class="mut">'+bl.length+' задач скрыто</span><span class="mut">показать</span></div><div id="ta-blg" style="display:none">'+group(bl,"b-mut")+'</div></div>';
-  }
-  html+='<div class="mut" style="margin-top:6px">Приоритеты считаются из скоринга знаний (importance × urgency), а не задаются вручную. Новые задачи появляются из заметок, писем и документов.</div>';
-  $("ta-body").innerHTML=html;
-  var t=$("ta-blg-toggle");
-  if(t)t.addEventListener("click",function(){var el=$("ta-blg");el.style.display=el.style.display==="none"?"block":"none";});
+function smallRing(done,total){
+  var pct=total?done/total:0;
+  var R=22,C=2*Math.PI*R,off=C*(1-pct);
+  var col=pct>=0.7?"#1d9e75":pct>=0.4?"#c07b13":"#d64545";
+  return'<svg width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="'+R+'" fill="none" stroke="var(--surface2)" stroke-width="6"/>'
+    +'<circle cx="29" cy="29" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="6" stroke-linecap="round" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'" transform="rotate(-90 29 29)"/>'
+    +'<text x="29" y="33" text-anchor="middle" font-size="13" font-weight="700" fill="'+col+'">'+Math.round(pct*100)+'</text></svg>';
 }
+function questCard(q){
+  var flags=(q.flags||[]).map(function(f){return '<span class="qflag qf-'+esc(f)+'">'+esc(f)+'</span>';}).join(" ");
+  var ib=q.impact==="high"?"b-red":q.impact==="medium"?"b-amber":"b-mut";
+  return '<div class="quest" data-task="'+esc(q.issue_key)+'"><div class="row" style="flex-wrap:wrap;gap:6px">'
+    +'<span class="badge '+ib+'">'+esc(q.impact)+'</span>'
+    +'<span class="qt">['+esc(q.issue_key)+'] '+esc(q.title)+'</span>'+flags+'</div>'
+    +'<div class="mut" style="margin-top:4px">'+esc(q.project)+(q.owner?' · '+esc(q.owner):' · без владельца')+(q.evidence_count?' · evidence '+q.evidence_count:'')+'</div></div>';
+}
+function questGroup(title,items,color){
+  if(!items||!items.length)return"";
+  var h='<p class="h" style="color:'+(color||"var(--text)")+'">'+esc(title)+' <span class="mut">'+items.length+'</span></p>';
+  for(var i=0;i<items.length;i++)h+=questCard(items[i]);
+  return h;
+}
+function taRender(){
+  if(!EXEC){if($("ta-body").innerHTML.indexOf("Загружаю")<0)$("ta-body").innerHTML='<div class="mut">Открой раздел для загрузки quest log…</div>';return;}
+  var html=aiSeesBlock(findingsOfTypes(["delivery_risk","execution_mismatch"]),"What AI sees differently — исполнение");
+  // Project health rings (done/total) — only where total>0.
+  var ph=EXEC.project_health||[];
+  if(ph.length){
+    html+='<div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="mut">Health по проектам (done/total)</span>'+daChipAnyScope("jira.done")+'</div><div class="healthgrid">';
+    ph.forEach(function(h){
+      html+='<div class="healthcard">'+smallRing(h.done,h.total)+'<div style="font-weight:600;margin-top:4px">'+esc(h.project)+(h.is_focus?' ★':'')+'</div><div class="mut">'+h.done+' / '+h.total+'</div></div>';
+    });
+    html+='</div>';
+  }
+  // Main quest = weekly focus.
+  var mq=EXEC.main_quest||{};
+  html+='<div class="card focus" style="margin-top:12px"><span class="badge b-accent">Main quest · фокус недели</span>'
+    +(mq.focus?'<div style="font-size:15px;font-weight:600;margin:8px 0 4px">'+esc(mq.focus)+'</div>'+(mq.project?'<div class="mut">проект: '+esc(mq.project.project)+' · '+mq.project.done+'/'+mq.project.total+'</div>':''):'<div class="mut" style="margin:8px 0">Фокус недели не задан. <span class="edit" data-go="cc">задать в Command center →</span></div>')
+    +'</div>';
+  html+=questGroup("Blocked quests · заблокированы",EXEC.blocked_quests,"var(--red)");
+  html+=questGroup("Overdue quests · просрочены",EXEC.overdue_quests,"var(--red)");
+  html+=questGroup("Ownerless quests · без владельца",EXEC.ownerless_quests,"var(--muted)");
+  html+=questGroup("Stale quests · без движения",EXEC.stale_quests,"var(--amber)");
+  html+=questGroup("Side quests · важные",EXEC.side_quests,"var(--text)");
+  html+='<div class="mut" style="margin-top:8px">Квесты — реальные Jira-задачи. Прогресс показывается только где есть done/total. Без фейковых productivity-оценок.</div>';
+  $("ta-body").innerHTML=html;
+}
+
+async function openTask(issueKey){
+  overlay("ov-task",true);
+  $("task-body").innerHTML='<div class="mut">Загружаю задачу…</div>';
+  try{
+    var t=await (await api("/v1/founder/execution/tasks/"+encodeURIComponent(issueKey))).json();
+    var h='<p class="h">'+esc(t.issue_key)+(t.owner?' · '+esc(t.owner):' · без владельца')+'</p>';
+    if(t.suggested_next_action)h+='<div class="mut" style="margin-bottom:8px">→ '+esc(t.suggested_next_action)+'</div>';
+    if(t.related_findings&&t.related_findings.length){
+      h+='<p class="h" style="margin-top:10px">Связанные конфликты</p>';
+      t.related_findings.forEach(function(f){h+='<div class="item"><span class="badge '+(f.severity==="high"?"b-red":f.severity==="low"?"b-mut":"b-amber")+'">'+esc(f.severity)+'</span><div class="t">'+esc(f.summary)+'</div><button class="actbtn" data-soact="trail" data-fk="'+esc(f.finding_key)+'">trail</button></div>';});
+    }
+    if(t.related_nodes&&t.related_nodes.length){
+      h+='<p class="h" style="margin-top:10px">Граф</p><div class="row" style="flex-wrap:wrap;gap:6px">';
+      t.related_nodes.forEach(function(n){h+='<span class="badge b-accent">'+esc(n.name)+' · '+esc(n.entity_type)+'</span>';});
+      h+='</div>';
+    }
+    h+='<p class="h" style="margin-top:10px">Status history / evidence timeline</p>';
+    if(t.status_history&&t.status_history.length){
+      t.status_history.forEach(function(s){
+        h+='<div class="item"><span class="badge b-mut">'+esc(s.source_system)+'</span><div class="t">'+esc(s.title||"")+'<div class="s">'+esc((s.received_at||"").slice(0,16).replace("T"," "))+(s.created_by_run_id?' · run '+esc(String(s.created_by_run_id).slice(0,10)):'')+'</div></div>'
+          +(s.source_event_id?'<button class="actbtn" data-srcevt="'+esc(s.source_event_id)+'">источник</button>':'')+'</div>';
+      });
+    } else h+='<div class="mut">Нет событий источника по этой задаче.</div>';
+    h+='<details class="ev" style="margin-top:10px"><summary>source refs</summary><pre>'+esc(JSON.stringify(t.source_refs,null,1))+'</pre></details>';
+    $("task-body").innerHTML=h;
+  }catch(e){$("task-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+document.addEventListener("click",function(e){
+  var q=e.target.closest("[data-task]");
+  if(q&&!e.target.closest("[data-soact]")){openTask(q.getAttribute("data-task"));}
+});
+
+var ACT_SRC_LABEL={second_opinion:"second opinion",graph_gardener:"gardener",execution:"задача",sales:"продажи",data_availability:"данные",product:"продукт"};
+function acRender(){
+  if(!ACTIONS){$("ac-body").innerHTML='<div class="mut">Собираю действия…</div>';return;}
+  var acts=ACTIONS.actions||[];
+  if(!acts.length){$("ac-body").innerHTML='<div class="empty">Действий нет — всё под контролем.</div>';return;}
+  var html='<div class="mut" style="margin-bottom:8px">Единая лента «что делать дальше» из всех источников. AI предлагает — решение за тобой.</div>';
+  acts.forEach(function(a){
+    var sev=a.severity==="high"?"sev-high":a.severity==="low"?"sev-low":"";
+    var ref=a.action_ref||{};
+    var cta="";
+    if(ref.kind==="finding")cta='<button class="actbtn" data-soact="trail" data-fk="'+esc(ref.finding_key)+'">trail</button><button class="actbtn" data-acresolve="'+esc(ref.finding_key)+'">решено</button><button class="actbtn" data-acsnooze="'+esc(ref.finding_key)+'">отложить</button>';
+    else if(ref.kind==="proposal")cta='<button class="actbtn" data-go="ib">в Inbox</button>';
+    else if(ref.kind==="task")cta='<button class="actbtn" data-task="'+esc(ref.issue_key)+'">открыть</button>';
+    else if(ref.kind==="metric")cta='<span class="mut">прогнать агентов</span>';
+    html+='<div class="actcard '+sev+'"><div class="row" style="flex-wrap:wrap;gap:6px">'
+      +'<span class="badge '+(a.severity==="high"?"b-red":a.severity==="low"?"b-mut":"b-amber")+'">'+esc(a.severity)+'</span>'
+      +'<span class="src-badge">'+esc(ACT_SRC_LABEL[a.source]||a.source)+'</span>'
+      +(a.confidence!=null?'<span class="mut">conf '+Number(a.confidence).toFixed(2)+'</span>':'')
+      +(a.evidence_count?'<span class="mut">evidence '+a.evidence_count+'</span>':'')
+      +'</div>'
+      +'<div style="font-weight:500;margin:6px 0 2px">'+esc(a.title)+'</div>'
+      +'<div class="mut">почему сейчас: '+esc(a.why_now||"")+(a.affected_entity?' · '+esc(a.affected_entity):'')+'</div>'
+      +'<div class="mut" style="margin-top:2px">→ '+esc(a.cta||"")+'</div>'
+      +'<div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">'+cta+'</div></div>';
+  });
+  $("ac-body").innerHTML=html;
+}
+document.addEventListener("click",async function(e){
+  var r=e.target.closest("[data-acresolve]");
+  if(r){try{await api("/v1/founder/second-opinion/"+r.getAttribute("data-acresolve")+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"resolved"})});loadActions();loadInboxCounts();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
+  var sn=e.target.closest("[data-acsnooze]");
+  if(sn){try{await api("/v1/founder/second-opinion/"+sn.getAttribute("data-acsnooze")+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});loadActions();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}}
+});
 
 function meRender(){
   if(!OV){$("me-body").innerHTML='<div class="mut">Загружаю…</div>';return;}
@@ -1373,6 +1495,30 @@ function findingsOfTypes(types){
   types.forEach(function(t){(FINDINGS_BY_TYPE[t]||[]).forEach(function(f){out.push(f);});});
   out.sort(function(a,b){var o={high:0,medium:1,low:2};return (o[a.severity]||3)-(o[b.severity]||3);});
   return out;
+}
+
+// Execution OS read models (Stage 6).
+var EXEC=null,TEAM=null,PRODUCT=null,ACTIONS=null;
+async function loadExecution(){
+  if(!EXEC)$("ta-body").innerHTML='<div class="mut">Загружаю quest log…</div>';
+  try{EXEC=await (await api("/v1/founder/execution")).json();taRender();}catch(e){$("ta-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+async function loadTeam(){
+  if(!TEAM)$("te-body").innerHTML='<div class="mut">Загружаю карту нагрузки…</div>';
+  try{TEAM=await (await api("/v1/founder/team-load")).json();teRender();}catch(e){$("te-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+}
+async function loadProduct(){
+  try{PRODUCT=await (await api("/v1/founder/product")).json();prRender();}catch(e){}
+}
+async function loadActions(){
+  setMsgEl("ac-msg","собираю действия…",false);
+  try{
+    ACTIONS=await (await api("/v1/founder/action-center")).json();
+    acRender();
+    var bs=ACTIONS.counts.by_source||{};
+    setMsgEl("ac-msg","действий: "+ACTIONS.counts.total+" · "+Object.keys(bs).map(function(k){return k+": "+bs[k];}).join(" · "),false);
+    $("nav-ac-n").textContent=ACTIONS.counts.total?String(ACTIONS.counts.total):"";
+  }catch(e){setMsgEl("ac-msg",String(e.message||e),true);}
 }
 
 var SALES=null;

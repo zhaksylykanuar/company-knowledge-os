@@ -45,6 +45,11 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/founder/command-center", "GET"),
     ("/v1/founder/agent-runs", "GET"),
     ("/v1/founder/sales-signals", "GET"),
+    ("/v1/founder/execution", "GET"),
+    ("/v1/founder/execution/tasks/{issue_key}", "GET"),
+    ("/v1/founder/team-load", "GET"),
+    ("/v1/founder/product", "GET"),
+    ("/v1/founder/action-center", "GET"),
 }
 
 

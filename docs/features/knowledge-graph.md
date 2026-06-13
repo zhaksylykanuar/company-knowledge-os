@@ -209,8 +209,58 @@ center team block (`unassigned_work_count` / `stale_unassigned_work` /
   quest log, graph constellation, evidence/confidence chips, data
   availability chips — all backed by real series.
 
+## Stage 6: Execution OS + lineage/gardener hardening
+
+Full run_id lineage now spans source event -> normalized event -> graph
+node/edge -> finding -> proposal -> audit decision: `created_by_run_id`
+on source_events / entities / entity_links, `run_id` on
+normalized_activity_items, `agent_run_id` on audit_logs (threaded from
+the decided-on item). The evidence trail surfaces `created_by_run_id`
+per chain element plus a `lineage_run_ids` summary.
+
+Graph gardener apply flow (`gardener_apply.py`): accepting a gardener
+proposal applies a safe action and is audited, never a silent delete —
+orphan/no-evidence node -> archived (hidden, skipped by future runs);
+edge-without-evidence -> removed with a recreatable snapshot;
+duplicate-account -> files an explicit `entity_merge_proposal`;
+finding-without-evidence -> suppressed. Reject keeps the stable dedupe
+key; the pipeline batch-applies accepted proposals.
+
+Execution OS read models (founder-scoped; investor blocked):
+
+- Execution / Quest Log (`execution_view.py`, `/v1/founder/execution`):
+  real Jira issues bucketed into main quest (the declared focus), side
+  / blocked / stale / ownerless / overdue quests, with per-project
+  done/total health rings (only when total > 0 — no fake progress) and
+  the findings attached to each issue. Task detail
+  (`/v1/founder/execution/tasks/{key}`) assembles source refs, related
+  nodes, related findings, status history (with run ids) and next
+  action.
+- Team load (`team_view.py`, `/v1/founder/team-load`): operational load
+  map — open/stale/overdue per person with a suggested operational
+  action when overloaded; never a productivity score or ranking;
+  unassigned work is a separate bucket; ownership_gap findings listed.
+- Product system (`product_view.py`, `/v1/founder/product`): hypotheses
+  with declared status vs supporting evidence (knowledge mentions) and
+  contradicting evidence (stored risks), the validation_gap /
+  evidence_contradiction findings, and a flagged state when a declared
+  "validated" lacks support. No invented roadmap dates.
+- Action Center (`action_center.py`, `/v1/founder/action-center`): one
+  ranked next-actions layer aggregating second-opinion findings,
+  gardener proposals, stale/ownerless/blocked/overdue tasks, sales
+  relationship signals and data-availability problems. Read-only — each
+  action's CTA routes to an existing decision endpoint; AI proposes,
+  the human confirms.
+
+UI: Tasks rebuilt as the quest log with health rings, quest cards and a
+task detail drawer; Team rebuilt as the stamina/load map with the
+unassigned bucket; Product gains the hypothesis validation map; a new
+Action Center section. All reuse the shared visual language (health
+rings, quest cards, stamina bars, evidence/confidence/availability
+chips, trail and source-explorer buttons) and the "what AI sees
+differently" blocks.
+
 ## Planned next
 
-Deal-agent enrichment from meetings/tasks, cron-driven agent runs,
-gardener apply-step for accepted cleanups, multi-view (team/investor)
-UI surfaces.
+Cron-driven agent runs, multi-view (team/investor) UI surfaces, deal-
+agent enrichment from meetings/tasks.
