@@ -16,14 +16,23 @@ Read-only founder command center served by the local API.
 
 ## How to open
 
+One command bootstraps the gitignored `.local/` workspace and local env
+override, runs migrations, and starts the local backend:
+
 ```bash
-uv run uvicorn app.main:app --reload
-# then open http://localhost:8000/ui
+uv run python scripts/start_local.py
+# then open http://127.0.0.1:8765/ui
 ```
 
-If `API_AUTH_ENABLED=true`, click the key button in the top bar and
-paste `API_AUTH_KEY`; the auth header NAME is injected into the page
-from `API_AUTH_HEADER_NAME`, the key is stored in `localStorage` only.
+In local dev the page auto-loads its dev API key from the local-only
+`GET /v1/dev/browser-config` endpoint, so no manual key entry is needed; a
+`LOCAL DEV` badge shows API / auth / view status. See `../dev-env.md` for the
+full local setup and safety model.
+
+If `API_AUTH_ENABLED=true` without the browser dev bootstrap, click the key
+button in the top bar and paste `API_AUTH_KEY`; the auth header NAME is
+injected into the page from `API_AUTH_HEADER_NAME`, and the key is stored in
+`localStorage` only.
 
 ## Endpoints
 

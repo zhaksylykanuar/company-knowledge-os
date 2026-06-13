@@ -44,6 +44,13 @@ async def redirect_root_to_ui() -> RedirectResponse:
     return RedirectResponse(url="/ui", status_code=307)
 
 
+@page_router.get("/static/founder_ui.html", include_in_schema=False)
+async def redirect_legacy_static_ui() -> RedirectResponse:
+    # Legacy path: the founder UI used to be served from /static/founder_ui.html.
+    # Keep old bookmarks working by redirecting to the canonical /ui route.
+    return RedirectResponse(url="/ui", status_code=307)
+
+
 @page_router.get("/ui", response_class=HTMLResponse, include_in_schema=False)
 async def get_founder_ui_page() -> HTMLResponse:
     # The auth header NAME (not the key) is injected so the page works

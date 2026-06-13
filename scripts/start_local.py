@@ -1,5 +1,17 @@
 #!/usr/bin/env python
-"""Bootstrap and start FounderOS local runtime."""
+"""Bootstrap and start the FounderOS local runtime with one command.
+
+This script makes the local happy path "run one command and it works":
+
+1. Bootstrap the gitignored ``.local/`` workspace and ``.env.local`` managed
+   block (idempotent; existing local secrets are preserved).
+2. Run ``alembic upgrade head`` against the configured local database.
+3. Start uvicorn on ``127.0.0.1:8765`` and print where to open the UI and
+   where the Obsidian vault lives.
+
+If the port is already taken the script prints a clear instruction and exits
+without killing any process.
+"""
 
 from __future__ import annotations
 
@@ -17,41 +29,69 @@ from scripts.bootstrap_local_workspace import (  # noqa: E402
     bootstrap_local_workspace,
 )
 
+HOST = "127.0.0.1"
+PORT = 8765
+UI_URL = f"http://{HOST}:{PORT}/ui"
+VAULT_RELATIVE = f".local/obsidian/{VAULT_NAME}"
 
-def port_in_use(host: str = "127.0.0.1", port: int = 8765) -> bool:
+
+def port_in_use(host: str = HOST, port: int = PORT) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.5)
         return sock.connect_ex((host, port)) == 0
 
 
+def build_alembic_command() -> list[str]:
+    return ["uv", "run", "alembic", "upgrade", "head"]
+
+
+def build_uvicorn_command(host: str = HOST, port: int = PORT) -> list[str]:
+    return [
+        "uv",
+        "run",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+
+
+def occupied_port_message(host: str = HOST, port: int = PORT) -> str:
+    return (
+        f"Port {port} is already in use. FounderOS may already be running — "
+        f"open http://{host}:{port}/ui\n"
+        f"To inspect the process: lsof -nP -iTCP:{port} -sTCP:LISTEN\n"
+        "FounderOS did not stop any process."
+    )
+
+
+def _print_ready(workspace: Path) -> None:
+    try:
+        workspace_label = str(workspace.relative_to(ROOT))
+    except ValueError:
+        workspace_label = str(workspace)
+    print("FounderOS local runtime is ready.", flush=True)
+    print(f"  Open UI:        {UI_URL}", flush=True)
+    print(f"  Obsidian vault: {VAULT_RELATIVE}", flush=True)
+    print(f"  Workspace:      {workspace_label}", flush=True)
+    print(
+        "  In the UI: Knowledge tree -> Dry Run -> Sync Now -> Open Vault in Obsidian",
+        flush=True,
+    )
+
+
 def main() -> int:
     result = bootstrap_local_workspace(repo_root=ROOT, apply=True)
-    if port_in_use("127.0.0.1", 8765):
-        print(
-            "Port 8765 is already in use. "
-            "Run: lsof -nP -iTCP:8765 -sTCP:LISTEN",
-            file=sys.stderr,
-        )
+    if port_in_use(HOST, PORT):
+        print(occupied_port_message(HOST, PORT), file=sys.stderr, flush=True)
         return 2
-    alembic = subprocess.run(["uv", "run", "alembic", "upgrade", "head"], cwd=ROOT)
+    alembic = subprocess.run(build_alembic_command(), cwd=ROOT)
     if alembic.returncode != 0:
         return alembic.returncode
-    print("Open FounderOS: http://127.0.0.1:8765/ui")
-    print(f"Obsidian vault: .local/obsidian/{VAULT_NAME}")
-    print(f"Local workspace: {Path(result['workspace_path']).relative_to(ROOT)}")
-    return subprocess.run(
-        [
-            "uv",
-            "run",
-            "uvicorn",
-            "app.main:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            "8765",
-        ],
-        cwd=ROOT,
-    ).returncode
+    _print_ready(Path(result["workspace_path"]))
+    return subprocess.run(build_uvicorn_command(HOST, PORT), cwd=ROOT).returncode
 
 
 if __name__ == "__main__":

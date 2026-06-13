@@ -2099,6 +2099,7 @@ function renderObsidianBridge(){
     +'<div class="kpi"><div class="l">tasks / findings</div><div class="v">'+num(stats.tasks||0)+' / '+num(stats.findings||0)+'</div><div class="d">evidence-backed</div></div>'
     +'</div>';
   h+='<div class="grid2"><div class="card"><p class="h">Open in Obsidian</p><div class="mut">The graph is built from real wikilinks in markdown files, not from a custom browser canvas.</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px"><span class="badge b-mut">Graph View</span><span class="badge b-mut">Local Graph</span><span class="badge b-mut">Backlinks</span><span class="badge b-mut">Markdown Notes</span><span class="badge b-mut">Tags / Properties</span><span class="badge b-mut">Search</span></div>'
+    +'<div class="mut" style="margin-top:10px">Vault files are generated locally even without Obsidian. The <code>obsidian://</code> links (Open Vault / Open Index / open note) open only if Obsidian Desktop is installed.</div>'
     +(sync.status?'<details class="ev" open><summary>last sync summary</summary><pre>'+esc(JSON.stringify(sync,null,1))+'</pre></details>':'')
     +((d.warnings||[]).length?'<details class="ev" open><summary>warnings</summary><pre>'+esc(JSON.stringify(d.warnings,null,1))+'</pre></details>':'')
     +'</div><div class="card" id="kt-note-preview"><p class="h">Recent generated notes</p>';
