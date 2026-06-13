@@ -28,8 +28,11 @@ from app.services.second_opinion import (
 )
 
 # Forbidden substrings that must never appear in an investor-facing payload.
+# NOTE: keys are checked in colon form ("evidence_refs":) so they do not
+# false-match the redaction manifest, which legitimately *lists* the names
+# of the fields it hides (e.g. hidden_fields: ["evidence_refs", ...]).
 _FINANCE_TERMS = ('"mrr"', '"runway"', '"revenue"', "выручк", "mrr ", "runway ")
-_RAW_KEYS = ('"evidence_refs"', '"source_refs"', '"note":', "raw_object_ref")
+_RAW_KEYS = ('"evidence_refs":', '"source_refs":', '"note":', "raw_object_ref")
 
 
 def _client() -> AsyncClient:
@@ -123,10 +126,88 @@ async def test_investor_view_has_no_finance_or_raw_refs() -> None:
     for term in _FINANCE_TERMS:
         assert term not in blob, f"finance leak: {term}"
     assert view["role"] == "investor"
-    assert view["redaction"]["finance"] == "excluded"
+    manifest = view["redaction_manifest"]
+    assert manifest["redaction_level"] == "investor"
+    assert manifest["finance_visible"] is False
+    assert manifest["raw_refs_visible"] is False
+    assert manifest["internal_notes_visible"] is False
+    assert manifest["personal_team_details_visible"] is False
+    # Every source type is hidden from investors (no permitted sources).
+    assert set(manifest["hidden_source_types"]) >= {"gmail", "telegram", "jira"}
     # Key risks are categories + counts only — never a raw finding summary.
     for risk in view["key_risks"]:
         assert set(risk) == {"category", "count", "severity"}
+
+
+def test_redaction_manifest_per_scope() -> None:
+    from app.services.visibility import (
+        SCOPE_FOUNDER,
+        SCOPE_INVESTOR,
+        SCOPE_TEAM,
+        redaction_manifest,
+    )
+
+    founder = redaction_manifest(SCOPE_FOUNDER)
+    assert founder["finance_visible"] is True
+    assert founder["raw_refs_visible"] is True
+    assert founder["internal_notes_visible"] is True
+    assert founder["hidden_source_types"] == []
+
+    for scope in (SCOPE_TEAM, SCOPE_INVESTOR):
+        m = redaction_manifest(
+            scope, included_sections=["a"], excluded_sections=["finance"]
+        )
+        assert m["redaction_level"] == scope
+        assert m["finance_visible"] is False
+        assert m["raw_refs_visible"] is False
+        assert m["internal_notes_visible"] is False
+        assert m["personal_team_details_visible"] is False
+        assert m["included_sections"] == ["a"]
+        assert "finance" in m["excluded_sections"]
+
+    investor = redaction_manifest(SCOPE_INVESTOR)
+    # Investors get evidence at the aggregate level and see no source type.
+    assert investor["evidence_policy"] == "aggregated_only"
+    assert set(investor["hidden_source_types"]) == {
+        "jira",
+        "github",
+        "gmail",
+        "drive",
+        "telegram",
+        "manual",
+    }
+    assert "evidence_refs" in investor["hidden_fields"]
+
+
+async def test_investor_ask_uses_use_of_funds_not_note() -> None:
+    from app.db.declaration_models import FounderDeclaration
+    from app.services.declarations import KEY_ASK, set_declaration
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await set_declaration(
+                session,
+                key=KEY_ASK,
+                payload={
+                    "ask": "$350k pre-seed",
+                    "use_of_funds": "2 инженера + go-to-market",
+                    "milestone": "100 команд",
+                },
+            )
+            await session.commit()
+            view = await build_investor_view(session)
+        ask = view["ask"]
+        assert ask["use_of_funds"] == "2 инженера + go-to-market"
+        # The ambiguous "note" field must never appear outward.
+        assert "note" not in ask
+    finally:
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                delete(FounderDeclaration).where(
+                    FounderDeclaration.declaration_key == KEY_ASK
+                )
+            )
+            await session.commit()
 
 
 async def test_investor_key_risks_hide_raw_summaries() -> None:
@@ -448,6 +529,7 @@ def test_ui_page_wires_role_views(monkeypatch) -> None:
         "data-acreview",
         "data-acowner",
         "почему в группе",
+        "use_of_funds",
     ):
         assert marker in page, marker
     assert "__FOS_API_HEADER_NAME__" not in page

@@ -45,7 +45,46 @@ from app.services.metric_collector import GLOBAL_SCOPE, metric_series
 from app.services.product_view import build_product_view
 from app.services.second_opinion import STATUS_OPEN, list_findings
 from app.services.team_view import build_team_view
-from app.services.visibility import SCOPE_INVESTOR, SCOPE_TEAM, redact_finding
+from app.services.visibility import (
+    SCOPE_INVESTOR,
+    SCOPE_TEAM,
+    redact_finding,
+    redaction_manifest,
+)
+
+_INVESTOR_SECTIONS = [
+    "company_snapshot",
+    "product_progress",
+    "traction",
+    "roadmap",
+    "key_risks",
+    "what_changed",
+    "evidence_backed_claims",
+    "open_questions",
+    "ask",
+]
+_INVESTOR_EXCLUDED = [
+    "finance",
+    "raw_evidence_refs",
+    "internal_notes",
+    "graph_hygiene",
+    "personal_stamina",
+    "founder_private_conclusions",
+]
+_TEAM_SECTIONS = [
+    "quests",
+    "team_load",
+    "decisions_needed",
+    "ownership_gaps",
+    "product_work",
+]
+_TEAM_EXCLUDED = [
+    "investor_notes",
+    "founder_private_conclusions",
+    "raw_source_refs",
+    "performance_ranking",
+    "finance",
+]
 
 # --------------------------------------------------------------------------
 # shared helpers
@@ -132,6 +171,11 @@ async def build_team_workspace(
     return {
         "role": SCOPE_TEAM,
         "generated_at": safe_now.isoformat(),
+        "redaction_manifest": redaction_manifest(
+            SCOPE_TEAM,
+            included_sections=_TEAM_SECTIONS,
+            excluded_sections=_TEAM_EXCLUDED,
+        ),
         "main_quest": execution.get("main_quest"),
         "quests": {
             "blocked": _quests("blocked_quests"),
@@ -397,7 +441,11 @@ async def build_investor_view(
     if ask_decl.get("ask") or ask_decl.get("milestone"):
         ask = {
             "ask": ask_decl.get("ask") or None,
-            "note": ask_decl.get("note") or None,
+            # Investor-facing "what the raise funds" — named unambiguously
+            # so it can never be confused with an internal/private note.
+            "use_of_funds": (
+                ask_decl.get("use_of_funds") or ask_decl.get("note") or None
+            ),
             "milestone": ask_decl.get("milestone") or None,
             "basis": "declared",
         }
@@ -405,12 +453,11 @@ async def build_investor_view(
     return {
         "role": "investor",
         "generated_at": safe_now.isoformat(),
-        "redaction": {
-            "finance": "excluded",
-            "raw_evidence": "excluded",
-            "internal_notes": "excluded",
-            "people_detail": "excluded",
-        },
+        "redaction_manifest": redaction_manifest(
+            SCOPE_INVESTOR,
+            included_sections=_INVESTOR_SECTIONS,
+            excluded_sections=_INVESTOR_EXCLUDED,
+        ),
         "company_snapshot": company_snapshot,
         "product_progress": {
             "areas": product_progress,

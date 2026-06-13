@@ -1120,7 +1120,7 @@ function renderInvestor(){
   if(d.ask){html+='<div class="card" style="border:2px solid var(--blue)"><p class="h">Ask / следующий milestone</p>'
     +(d.ask.ask?'<div style="font-size:18px;font-weight:600">'+esc(d.ask.ask)+'</div>':'')
     +(d.ask.milestone?'<div class="mut" style="margin-top:4px">Milestone: '+esc(d.ask.milestone)+'</div>':'')
-    +(d.ask.note?'<div class="mut" style="margin-top:4px">'+esc(d.ask.note)+'</div>':'')
+    +(d.ask.use_of_funds?'<div class="mut" style="margin-top:4px">На что: '+esc(d.ask.use_of_funds)+'</div>':'')
     +'<div class="mut" style="margin-top:6px">'+basisChip("declared")+'</div></div>';}
   $("inv-body").innerHTML=html;
   if(canEdit){var ib=$("inv-edit");if(ib)ib.addEventListener("click",investorEditor);}
@@ -1140,12 +1140,12 @@ function investorEditor(){
       {key:"roadmap",kind:"area",label:"Roadmap",hint:"30|60|90 | пункт",value:joinLines(rmLines)},
       {key:"ask",label:"Ask (например $350k pre-seed)",value:ak.ask||""},
       {key:"milestone",label:"Следующий milestone",value:ak.milestone||""},
-      {key:"asknote",label:"На что",value:ak.note||""}
+      {key:"use_of_funds",label:"На что (use of funds — видно инвестору)",value:ak.use_of_funds||ak.note||""}
     ],function(out){
       saveDeclaration("company",{oneliner:out.oneliner.trim(),sub:out.sub.trim(),model:lines(out.model).map(function(r){return r[0];}).filter(Boolean)});
       var items=lines(out.roadmap).map(function(r){return {horizon:(r[0]||"30").trim(),text:(r[1]||"").trim()};}).filter(function(it){return it.text;});
       saveDeclaration("roadmap",{items:items});
-      saveDeclaration("ask",{ask:out.ask.trim(),milestone:out.milestone.trim(),note:out.asknote.trim()});
+      saveDeclaration("ask",{ask:out.ask.trim(),milestone:out.milestone.trim(),use_of_funds:out.use_of_funds.trim()});
       setTimeout(loadInvestor,400);
     });
   });

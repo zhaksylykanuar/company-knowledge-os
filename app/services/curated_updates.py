@@ -25,7 +25,12 @@ from app.services.inbox_audit import (
 )
 from app.services.operating_rhythm import build_weekly_review
 from app.services.role_views import build_investor_view, build_team_workspace
-from app.services.visibility import SCOPE_FOUNDER, SCOPE_INVESTOR, SCOPE_TEAM
+from app.services.visibility import (
+    SCOPE_FOUNDER,
+    SCOPE_INVESTOR,
+    SCOPE_TEAM,
+    redaction_manifest,
+)
 
 KIND_FOUNDER_WEEKLY = "founder_weekly"
 KIND_TEAM_BRIEF = "team_brief"
@@ -203,7 +208,13 @@ async def _investor_sections(
                 key="ask",
                 title="Ask / следующий milestone",
                 text=" · ".join(
-                    p for p in (ask.get("ask"), ask.get("milestone"), ask.get("note")) if p
+                    p
+                    for p in (
+                        ask.get("ask"),
+                        ask.get("milestone"),
+                        ask.get("use_of_funds"),
+                    )
+                    if p
                 ),
                 observed=0,
                 total=1,
@@ -381,6 +392,11 @@ async def build_update_draft(
     return {
         "kind": kind,
         "redaction_level": _KIND_REDACTION[kind],
+        "redaction_manifest": redaction_manifest(
+            _KIND_REDACTION[kind],
+            included_sections=included,
+            excluded_sections=_KIND_EXCLUDED[kind],
+        ),
         "generated_at": safe_now.isoformat(),
         "requires_approval": True,
         "approved": False,
