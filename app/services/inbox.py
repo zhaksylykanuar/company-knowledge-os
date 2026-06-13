@@ -167,8 +167,15 @@ async def decide_inbox_proposal(
     reviewer_id: str,
     decision_reason: str | None = None,
 ) -> dict[str, Any] | None:
-    """Decide, immediately apply (merges repoint links) and audit."""
+    """Decide, immediately apply the safe action and audit.
 
+    Entity merges repoint links; accepted gardener proposals apply their
+    safe action (archive / remove edge / suppress finding / file merge).
+    The audit row links back to the agent run that produced the proposal.
+    """
+
+    from app.db.agent_models import AgentProposal
+    from app.services.gardener_apply import apply_gardener_proposal
     from app.services.inbox_audit import (
         ACTION_PROPOSAL_DECISION,
         record_inbox_action,
@@ -176,6 +183,13 @@ async def decide_inbox_proposal(
 
     if decision not in {STATUS_ACCEPTED, STATUS_REJECTED}:
         raise ValueError("decision must be accepted or rejected")
+
+    proposal_row = await session.scalar(
+        select(AgentProposal).where(AgentProposal.proposal_id == proposal_id)
+    )
+    proposal_run_id = proposal_row.run_id if proposal_row else None
+    proposal_kind = proposal_row.kind if proposal_row else None
+
     decided = await decide_proposal(
         session,
         proposal_id=proposal_id,
@@ -185,7 +199,23 @@ async def decide_inbox_proposal(
     )
     if decided is None:
         return None
-    applied = await apply_decided_merges(session)
+
+    applied: dict[str, Any] = {}
+    if decision == STATUS_ACCEPTED:
+        merge_applied = await apply_decided_merges(session)
+        applied = {"merges": merge_applied}
+        if proposal_kind and _is_gardener(proposal_kind):
+            # decide_proposal set status to accepted; apply its safe action.
+            refreshed = await session.scalar(
+                select(AgentProposal).where(
+                    AgentProposal.proposal_id == proposal_id
+                )
+            )
+            if refreshed is not None:
+                applied["gardener"] = await apply_gardener_proposal(
+                    session, refreshed
+                )
+
     await record_inbox_action(
         session,
         action=ACTION_PROPOSAL_DECISION,
@@ -194,6 +224,7 @@ async def decide_inbox_proposal(
         previous_state={"status": "pending"},
         next_state={"status": decision, "applied": applied},
         reversible=True,
-        details={"decision_reason": decision_reason},
+        details={"decision_reason": decision_reason, "kind": proposal_kind},
+        run_id=proposal_run_id,
     )
     return {**decided, "applied": applied}

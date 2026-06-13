@@ -53,6 +53,8 @@ async def build_graph_tree(
     for row in entities:
         if row.entity_id in merged_into:
             continue
+        if (row.attrs or {}).get("archived"):  # gardener-archived: hidden
+            continue
         nodes.append(
             {
                 "entity_id": row.entity_id,
@@ -166,6 +168,7 @@ async def review_link(
         "confidence": row.confidence,
         "evidence_refs": list(row.evidence_refs or []),
     }
+    link_run_id = row.created_by_run_id
     if decision == "confirm":
         row.confidence = 0.95
         factors = dict(row.confidence_factors or {})
@@ -188,6 +191,7 @@ async def review_link(
         previous_state=previous_state,
         next_state=next_state,
         reversible=reversible,
+        run_id=link_run_id,
     )
     return {
         "link_id": link_id,

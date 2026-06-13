@@ -58,6 +58,7 @@ async def _run(args: argparse.Namespace) -> int:
         apply_decided_merges,
         suggest_person_merges,
     )
+    from app.services.gardener_apply import apply_accepted_gardener_proposals
     from app.services.graph_gardener import run_graph_gardener
     from app.services.graph_lift import run_graph_lift
     from app.services.meeting_agent import scan_meetings
@@ -103,6 +104,9 @@ async def _run(args: argparse.Namespace) -> int:
         hypothesis_counts = await step("hypothesis_agent", scan_hypotheses(session))
         focus_counts = await step("focus_drift_agent", scan_focus_drift(session))
         gardener_counts = await step("graph_gardener", run_graph_gardener(session))
+        gardener_applied = await step(
+            "gardener_apply", apply_accepted_gardener_proposals(session)
+        )
         metric_counts = (
             {} if args.skip_metrics else await collect_metrics(session)
         )
@@ -186,7 +190,8 @@ async def _run(args: argparse.Namespace) -> int:
     print(
         "graph gardener: "
         f"proposals={gardener_counts['proposals']} "
-        f"checked={gardener_counts['checked']}"
+        f"checked={gardener_counts['checked']} "
+        f"applied={gardener_applied['applied']}"
     )
     if metric_counts:
         print(

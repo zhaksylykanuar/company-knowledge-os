@@ -505,6 +505,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = _parse_args(argv)
         query = _query_from_args(args)
+        from uuid import uuid4
+
+        from app.services.run_context import set_run_id
+
+        set_run_id(f"normalize-{uuid4().hex[:12]}")
         report = asyncio.run(normalize_stored_source_events(query))
     except StoredSourceEventNormalizationInputError as exc:
         output_format = getattr(locals().get("args", None), "format", "json")

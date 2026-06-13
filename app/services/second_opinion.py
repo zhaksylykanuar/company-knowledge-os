@@ -359,6 +359,7 @@ async def set_finding_status(
         previous_state={"status": previous_status},
         next_state={"status": status, "note": note},
         reversible=True,
+        run_id=row.last_run_id,
     )
     return {"finding_key": row.finding_key, "status": row.status}
 
@@ -439,6 +440,7 @@ async def snooze_finding(
             "snoozed_until": row.snoozed_until.isoformat(),
         },
         reversible=True,
+        run_id=row.last_run_id,
     )
     return {
         "finding_key": row.finding_key,
@@ -476,6 +478,7 @@ async def set_finding_note(
         previous_state={"status": row.status, "note": previous_note},
         next_state={"status": row.status, "note": row.note},
         reversible=True,
+        run_id=row.last_run_id,
     )
     return {"finding_key": row.finding_key, "note": row.note}
 

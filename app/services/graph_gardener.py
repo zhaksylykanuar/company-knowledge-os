@@ -108,6 +108,8 @@ async def run_graph_gardener(
     for entity in entities:
         if entity.canonical_entity_id:  # already merged away
             continue
+        if (entity.attrs or {}).get("archived"):  # gardener already handled it
+            continue
         if entity.entity_type == "client":
             client_names.append((entity.entity_id, entity.canonical_name))
 

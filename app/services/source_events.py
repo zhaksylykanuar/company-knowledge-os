@@ -228,7 +228,10 @@ async def normalize_ingested_event_to_source_event(
     if existing:
         return existing
 
+    from app.services.run_context import get_run_id
+
     source_event = SourceEvent(
+        created_by_run_id=get_run_id(),
         source_event_id=_build_source_event_id(source_event_key),
         source_event_key=source_event_key,
         ingested_event_id=ingested_event.event_id,

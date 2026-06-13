@@ -104,6 +104,9 @@ async def upsert_entity(
     if entity_type not in ENTITY_TYPES:
         raise ValueError(f"unknown entity type: {entity_type}")
 
+    from app.services.run_context import get_run_id
+
+    run_id = get_run_id()
     existing = await session.scalar(
         select(EntityRecord).where(EntityRecord.entity_id == entity_id)
     )
@@ -114,6 +117,8 @@ async def upsert_entity(
                 entity_type=entity_type,
                 canonical_name=canonical_name,
                 attrs=dict(attrs or {}),
+                created_by_run_id=run_id,
+                updated_by_run_id=run_id,
             )
         )
         await session.flush()
@@ -127,6 +132,7 @@ async def upsert_entity(
             changed = True
     if changed:
         existing.attrs = merged
+        existing.updated_by_run_id = run_id
         await session.flush()
     return False
 
@@ -151,6 +157,8 @@ async def upsert_link(
     )
     if existing is not None:
         return False
+    from app.services.run_context import get_run_id
+
     session.add(
         EntityLinkRecord(
             link_id=lid,
@@ -159,6 +167,7 @@ async def upsert_link(
             relation=relation,
             evidence_refs=list(evidence_refs or []),
             confidence=confidence,
+            created_by_run_id=get_run_id(),
         )
     )
     await session.flush()

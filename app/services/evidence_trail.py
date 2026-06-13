@@ -87,6 +87,7 @@ async def _events_for_source_id(
             "title": row.title,
             "received_at": row.created_at.isoformat() if row.created_at else None,
             "raw_object_ref": row.raw_object_ref,
+            "created_by_run_id": row.created_by_run_id,
         }
         for row in rows
     ]
@@ -116,6 +117,7 @@ async def _normalized_for_source_id(
                 if row.activity_created_at
                 else (row.created_at.isoformat() if row.created_at else None)
             ),
+            "run_id": row.run_id,
         }
         for row in rows
     ]
@@ -142,6 +144,8 @@ async def _related_nodes(
                 "entity_type": row.entity_type,
                 "name": row.canonical_name,
                 "via": via,
+                "created_by_run_id": row.created_by_run_id,
+                "updated_by_run_id": row.updated_by_run_id,
             }
         )
 
@@ -214,6 +218,26 @@ async def build_finding_trail(
         key=lambda event: str(event.get("received_at")),
     )
 
+    related_nodes = await _related_nodes(session, finding)
+
+    # Full provenance: every distinct run that touched any link of the
+    # chain source event -> normalized -> node -> finding.
+    lineage_runs: list[str] = []
+
+    def _add_run(value: Any) -> None:
+        if isinstance(value, str) and value and value not in lineage_runs:
+            lineage_runs.append(value)
+
+    for item in evidence_chain:
+        for event in item["source_events"]:
+            _add_run(event.get("created_by_run_id"))
+        for nev in item["normalized_events"]:
+            _add_run(nev.get("run_id"))
+    for node in related_nodes:
+        _add_run(node.get("created_by_run_id"))
+        _add_run(node.get("updated_by_run_id"))
+    _add_run(finding.get("last_run_id"))
+
     return {
         "finding": finding,
         "reasoning": REASONING.get(finding["finding_type"], ""),
@@ -228,10 +252,11 @@ async def build_finding_trail(
         },
         "evidence_chain": evidence_chain,
         "evidence_timeline": timeline,
-        "related_nodes": await _related_nodes(session, finding),
+        "related_nodes": related_nodes,
         "produced_by_run": await _run_provenance(
             session, finding.get("last_run_id")
         ),
+        "lineage_run_ids": lineage_runs,
         "decision_history": await list_inbox_actions(
             session, target_id=finding_key
         ),

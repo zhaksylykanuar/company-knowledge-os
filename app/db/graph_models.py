@@ -22,6 +22,12 @@ class EntityRecord(Base):
     )
     merge_status: Mapped[str] = mapped_column(String(20), default="none")
     merge_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_by_run_id: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    updated_by_run_id: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -74,6 +80,9 @@ class EntityLinkRecord(Base):
     evidence_refs: Mapped[list[dict]] = mapped_column(JSON, default=list)
     confidence: Mapped[float] = mapped_column(Float)
     confidence_factors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_by_run_id: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

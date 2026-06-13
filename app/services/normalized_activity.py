@@ -143,7 +143,10 @@ async def record_normalized_activity_item(
 
     parsed_activity = _coerce_activity(activity)
 
+    from app.services.run_context import get_run_id
+
     record = NormalizedActivityItemRecord(
+        run_id=get_run_id(),
         activity_item_id=_clean_optional_string(
             activity_item_id,
             field_name="activity_item_id",

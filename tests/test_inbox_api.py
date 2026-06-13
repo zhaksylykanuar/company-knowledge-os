@@ -157,7 +157,8 @@ async def test_merge_proposal_accept_applies_canonical(monkeypatch) -> None:
             body = response.json()
             assert body["status"] == "accepted"
             assert body["reviewer_id"] == "founder-test"
-            assert body["applied"]["applied"] == 1
+            # applied now separates merges from gardener actions.
+            assert body["applied"]["merges"]["applied"] == 1
 
             repeat = await client.post(
                 f"/v1/inbox/proposals/{proposal_id}/decision",

@@ -34,13 +34,17 @@ async def record_inbox_action(
     next_state: dict[str, Any] | None,
     reversible: bool,
     details: dict[str, Any] | None = None,
+    run_id: str | None = None,
 ) -> None:
+    # agent_run_id links the human decision back to the agent run that
+    # produced the finding/proposal being decided on.
     session.add(
         AuditLog(
             event_type=f"{INBOX_AUDIT_PREFIX}{action}",
             actor=actor,
             correlation_id=target_id[:120],
             trace_id=f"inbox-{uuid4().hex[:16]}",
+            agent_run_id=run_id,
             before_ref=str((previous_state or {}).get("status") or "")[:500] or None,
             after_ref=str((next_state or {}).get("status") or "")[:500] or None,
             payload={
@@ -78,6 +82,7 @@ async def list_inbox_actions(
             "next_state": (row.payload or {}).get("next_state"),
             "reversible": (row.payload or {}).get("reversible"),
             "details": (row.payload or {}).get("details"),
+            "run_id": row.agent_run_id,
             "created_at": row.created_at.isoformat() if row.created_at else None,
         }
         for row in rows

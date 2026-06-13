@@ -323,6 +323,11 @@ def main(argv: list[str] | None = None) -> int:
             settings=settings,
             environ=os.environ,
         )
+        from uuid import uuid4
+
+        from app.services.run_context import set_run_id
+
+        set_run_id(f"github-sync-{uuid4().hex[:12]}")
         return asyncio.run(_run(args))
     except prepare_script.PrepareBlockedError as exc:
         print(f"Error: {exc}", file=sys.stderr)
