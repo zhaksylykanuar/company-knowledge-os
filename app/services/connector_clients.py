@@ -301,13 +301,21 @@ def map_jira_issue(raw: dict[str, Any], *, base_url: str) -> ReadOnlyRecord:
     )
 
 
+def _github_pull_request_event(raw: dict[str, Any]) -> str:
+    if raw.get("merged_at") or raw.get("merged"):
+        return "github.pull_request.merged"
+    if str(raw.get("state") or "").lower() == "closed":
+        return "github.pull_request.closed"
+    return "github.pull_request.synchronized"
+
+
 def map_github_pull_request(raw: dict[str, Any], *, repo: str) -> ReadOnlyRecord:
     number = raw.get("number")
     user = (raw.get("user") or {}).get("login") if isinstance(raw.get("user"), dict) else None
     return ReadOnlyRecord(
         external_id=f"{repo}#pull/{number}",
         object_type="pull_request",
-        event_type="github.pull_request.updated",
+        event_type=_github_pull_request_event(raw),
         occurred_at=_parse_iso(raw.get("updated_at")),
         title=str(raw.get("title") or f"PR #{number}"),
         summary=f"state={raw.get('state')}" if raw.get("state") else None,
@@ -320,10 +328,15 @@ def map_github_pull_request(raw: dict[str, Any], *, repo: str) -> ReadOnlyRecord
 def map_github_issue(raw: dict[str, Any], *, repo: str) -> ReadOnlyRecord:
     number = raw.get("number")
     user = (raw.get("user") or {}).get("login") if isinstance(raw.get("user"), dict) else None
+    event_type = (
+        "github.issue.closed"
+        if str(raw.get("state") or "").lower() == "closed"
+        else "github.issue.opened"
+    )
     return ReadOnlyRecord(
         external_id=f"{repo}#issue/{number}",
         object_type="issue",
-        event_type="github.issue.updated",
+        event_type=event_type,
         occurred_at=_parse_iso(raw.get("updated_at")),
         title=str(raw.get("title") or f"Issue #{number}"),
         summary=f"state={raw.get('state')}" if raw.get("state") else None,
@@ -340,7 +353,7 @@ def map_github_commit(raw: dict[str, Any], *, repo: str) -> ReadOnlyRecord:
     return ReadOnlyRecord(
         external_id=f"{repo}@{sha}",
         object_type="commit",
-        event_type="github.commit.recorded",
+        event_type="github.commit.pushed",
         occurred_at=_parse_iso(author.get("date")),
         title=_first_line(commit.get("message") or sha),
         actor=author.get("name"),

@@ -25,6 +25,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.second_opinion_models import SecondOpinionFinding
+from app.services.connector_diagnostics import (
+    SYNC_OBSIDIAN_CMD,
+    build_connector_diagnostics,
+)
 from app.services.data_availability import get_availability
 from app.services.execution_view import build_execution_view
 from app.services.inbox import build_inbox
@@ -76,6 +80,22 @@ _GROUP_RULES: dict[str, str] = {
 }
 
 _LOW_CONFIDENCE = 0.5
+# External connectors surfaced as next-action items in the Action Center.
+_CONNECTOR_ACTION_SOURCES = {"jira", "github", "gmail"}
+# pipeline_state -> (action_type, severity, title)
+_CONNECTOR_ACTIONS: dict[str, tuple[str, str, str]] = {
+    "missing_config": ("add_env", "medium", "add missing connector env vars"),
+    "real_disabled": ("enable_real_connectors", "low", "enable real connectors"),
+    "never_tested": ("run_test", "medium", "run a test connection"),
+    "test_requested": ("run_sync", "medium", "run the operator script for the queued request"),
+    "sync_requested": ("run_sync", "medium", "run the operator script for the queued request"),
+    "test_failed": ("inspect_failed_run", "high", "inspect the failed connector run"),
+    "sync_failed": ("inspect_failed_run", "high", "inspect the failed connector run"),
+    "test_succeeded": ("run_sync", "medium", "run a connector sync"),
+    "synced_no_events": ("run_sync", "low", "check source scope or backfill"),
+    "sync_succeeded": ("run_evidence_pipeline", "low", "process new evidence into the graph"),
+    "connected": ("run_evidence_pipeline", "low", "process new evidence into the graph"),
+}
 # Sources whose actions are AI conclusions that require evidence; for
 # these, missing/low evidence means "waiting for evidence". Execution and
 # data-availability actions are concrete (a real task / a real series), so
@@ -147,6 +167,16 @@ def _classify(action: dict[str, Any]) -> tuple[str, str]:
     flags = set(action.get("flags") or [])
     source = str(action.get("source") or "")
     action_type = str(action.get("action_type") or "")
+
+    # Connector E2E next-actions classify by their pipeline meaning.
+    if source == "connector":
+        if action_type == "inspect_failed_run":
+            return GROUP_CRITICAL, "connector run failed — нужна диагностика"
+        if action_type in {"add_env", "enable_real_connectors", "run_test", "run_sync"}:
+            return GROUP_EVIDENCE, "нужен setup/pilot шаг, чтобы собрать данные коннектора"
+        if action_type in {"run_evidence_pipeline", "sync_obsidian"}:
+            return GROUP_CLEANUP, "пост-синк обработка (graph / Obsidian)"
+        return GROUP_LATER, "connector follow-up"
 
     blocked = "blocked" in flags or action_type == "unblock_task"
     overdue = "overdue" in flags or action_type == "renegotiate_deadline"
@@ -382,6 +412,57 @@ async def build_action_center(
                     action_ref={"kind": "metric", "metric_key": row["metric_key"]},
                 )
             )
+
+    # 6. Connector E2E next-actions (read-only; the CTA is a copyable command).
+    diagnostics = await build_connector_diagnostics(session)
+    evidence_pending = False
+    for connector in diagnostics.get("connectors", []):
+        source_type = connector["source_type"]
+        if source_type not in _CONNECTOR_ACTION_SOURCES:
+            continue
+        spec = _CONNECTOR_ACTIONS.get(connector.get("pipeline_state"))
+        if spec is None:
+            continue
+        action_type, severity, title = spec
+        events = int(connector.get("events_ingested") or 0)
+        if action_type == "run_evidence_pipeline":
+            if not events:
+                continue
+            evidence_pending = True
+        runbook = connector.get("runbook") or {}
+        actions.append(
+            _action(
+                title=f"{connector['label']}: {title}",
+                why_now=runbook.get("next_action") or "Connector needs attention.",
+                affected_entity=source_type,
+                evidence_count=events,
+                severity=severity,
+                confidence=None,
+                source="connector",
+                action_type=action_type,
+                cta=runbook.get("next_command") or "Open Sources / Data Control",
+                action_ref={
+                    "kind": "connector",
+                    "source_type": source_type,
+                    "pipeline_state": connector.get("pipeline_state"),
+                },
+            )
+        )
+    if evidence_pending:
+        actions.append(
+            _action(
+                title="Sync the Obsidian vault after new graph updates",
+                why_now="New evidence was lifted into the graph; refresh the vault.",
+                affected_entity=None,
+                evidence_count=0,
+                severity="low",
+                confidence=None,
+                source="connector",
+                action_type="sync_obsidian",
+                cta=SYNC_OBSIDIAN_CMD,
+                action_ref={"kind": "obsidian", "action": "sync_vault"},
+            )
+        )
 
     actions.sort(
         key=lambda a: (

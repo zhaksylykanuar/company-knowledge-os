@@ -104,6 +104,33 @@ The generated local vault lives under:
 
 `.local/` and the local env override are gitignored.
 
+## Connector Diagnostics & Local Pilot Notes
+
+The vault also mirrors connector readiness as read-only notes:
+
+```text
+_System/Connector Diagnostics.md   # all connectors: state, adapter, real exec
+_System/Local Pilot.md             # E2E pilot: pipeline stages, counts, next steps
+Sources/Jira.md
+Sources/GitHub.md
+Sources/Gmail.md
+```
+
+Each connector note shows status, configured/missing (env-var **names only**),
+adapter type, real-execution enabled/disabled, pipeline stage, events ingested /
+normalized, the next action, and the security policy. No token values and no raw
+bodies are ever written.
+
+Drive the end-to-end connector chain locally with:
+
+```bash
+uv run python scripts/run_local_connector_pilot.py \
+  --confirm-run "RUN LOCAL CONNECTOR PILOT"
+```
+
+The pilot previews the vault by default; pass `--sync-obsidian` for a real
+write. See `source-connectors.md` for the full pilot runbook.
+
 ## Safety
 
 - The bridge must be enabled explicitly.

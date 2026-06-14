@@ -1522,7 +1522,7 @@ async function loadNotifications(){
 async function loadNotifCounts(){try{var d=await (await api("/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
 
 // --- Source Control Center + Data Quality -------------------------------
-var SOURCES=null,DQ=null,SOURCE_RUN_CACHE={},CONNECTOR_DIAGS={},REAL_CONNECTORS_ENABLED=false;
+var SOURCES=null,DQ=null,SOURCE_RUN_CACHE={},CONNECTOR_DIAGS={},REAL_CONNECTORS_ENABLED=false,PILOT_INFO=null;
 var SRC_STATUS_BADGE={connected:"b-green",disconnected:"b-mut",degraded:"b-amber",syncing:"b-blue",error:"b-red",disabled:"b-mut"};
 function sourceStatusBadge(status){
   return '<span class="badge '+(SRC_STATUS_BADGE[status]||"b-mut")+'">'+esc(status||"unknown")+'</span>';
@@ -1574,6 +1574,12 @@ function connectorDiagBlock(s){
     +'<span class="badge b-mut">read-only: '+(sp.read_only?"yes":"no")+'</span>'
     +'<span class="badge b-mut">no secrets to browser: '+(sp.secrets_exposed_to_browser===false?"yes":"no")+'</span>'
     +'<span class="badge b-mut">no external writes: '+(sp.external_writes_allowed===false?"yes":"no")+'</span>'
+    +'</div>';
+  var rb=d.runbook||{};
+  h+='<div class="alert" style="margin-top:8px;background:var(--accent-soft);color:var(--accent-text)">'
+    +'<b>Stage:</b> '+esc(d.pipeline_state||"?")+' — '+esc(rb.next_action||"")
+    +(rb.next_command?'<br><code>'+esc(rb.next_command)+'</code>':'')
+    +((rb.blockers||[]).length?'<div class="mut" style="margin-top:4px">blockers: '+esc(rb.blockers.join(", "))+'</div>':'')
     +'</div>';
   h+='<details class="ev"><summary>Setup wizard</summary>';
   (d.setup_steps||[]).forEach(function(step){h+='<div class="mut">• '+esc(step)+'</div>';});
@@ -1637,11 +1643,25 @@ function sourcesRender(){
   var banner=REAL_CONNECTORS_ENABLED
     ?'<div class="alert" style="margin-bottom:12px;background:var(--green-soft);color:var(--green-text)">Real read-only connector execution is <b>enabled</b>. Jira/GitHub run read-only via explicit operator requests; no writes are performed.</div>'
     :'<div class="alert warn" style="margin-bottom:12px">Real connector execution is <b>disabled</b> (FOUNDEROS_ENABLE_REAL_CONNECTORS=false). Jira/GitHub requests are recorded but runs skip with <code>real_connectors_disabled</code>. Internal and local sources still run.</div>';
+  var runbook="";
+  if(PILOT_INFO){
+    var cmd=PILOT_INFO.commands||{};
+    runbook='<details class="ev" style="margin-bottom:12px"><summary>Connector E2E runbook (read-only)</summary>'
+      +'<div class="mut">1. Configure backend env vars (names shown per connector) and restart.</div>'
+      +'<div class="mut">2. Enable real connectors when ready: <code>FOUNDEROS_ENABLE_REAL_CONNECTORS=true</code></div>'
+      +'<div class="mut">3. Test connection (per connector), then run: <code>'+esc(cmd.operator_run||"")+'</code></div>'
+      +'<div class="mut">4. Sync now, then run the operator script again.</div>'
+      +'<div class="mut">5. Process evidence: <code>'+esc(cmd.evidence_pipeline||"")+'</code></div>'
+      +'<div class="mut">6. Sync Obsidian: <code>'+esc(cmd.sync_obsidian||"")+'</code></div>'
+      +'<div class="mut" style="margin-top:6px">Or run the full local pilot: <code>'+esc(cmd.pilot||"")+'</code></div>'
+      +((PILOT_INFO.next_steps||[]).length?'<div class="mut" style="margin-top:6px"><b>Next steps:</b></div>'+PILOT_INFO.next_steps.map(function(s){return '<div class="mut">• '+esc(s)+'</div>';}).join(""):'')
+      +'</details>';
+  }
   var ops='<div class="grid2" style="margin-bottom:14px">'
     +sourceRunSummaryList("Pending source requests",SOURCES.pending_requests,"No source requests are queued.")
     +sourceRunSummaryList("Recent source runs",SOURCES.recent_runs,"No source runs have executed yet.")
     +'</div>';
-  $("sources-body").innerHTML=banner+ops+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty">No sources configured yet.</div>');
+  $("sources-body").innerHTML=banner+runbook+ops+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty">No sources configured yet.</div>');
   $("nav-src-n").textContent=sum.sources_needing_attention?String(sum.sources_needing_attention):"";
 }
 async function loadSources(){
@@ -1652,8 +1672,9 @@ async function loadSources(){
       var diag=await (await api("/v1/founder/connectors/diagnostics")).json();
       CONNECTOR_DIAGS={};
       REAL_CONNECTORS_ENABLED=!!diag.real_execution_enabled;
+      PILOT_INFO=diag.pilot||null;
       (diag.connectors||[]).forEach(function(c){CONNECTOR_DIAGS[c.source_type]=c;});
-    }catch(e){CONNECTOR_DIAGS={};REAL_CONNECTORS_ENABLED=false;}
+    }catch(e){CONNECTOR_DIAGS={};REAL_CONNECTORS_ENABLED=false;PILOT_INFO=null;}
     SOURCE_RUN_CACHE={};
     (SOURCES.pending_requests||[]).concat(SOURCES.recent_runs||[]).forEach(function(run){SOURCE_RUN_CACHE[run.request_id]=run;});
     (SOURCES.sources||[]).forEach(function(s){
@@ -1702,8 +1723,15 @@ async function openSourceRunDetail(requestId,source){
     }
     if(!run){$("src-body").innerHTML='<div class="empty">Run not found.</div>';return;}
     var rs=run.result_summary||{},safe=rs.sanitized_summary||{},ing=safe.ingestion||{},pipe=rs.evidence_pipeline||{};
+    var diag=(CONNECTOR_DIAGS||{})[run.source_type]||{};
     var h='<p class="h">Source run detail <span class="badge b-mut">'+esc(run.source_type)+'</span></p>'
       +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">'+sourceRunBadge(run.status)+'<span class="badge b-mut">'+esc(run.action_type||"")+'</span>'+(rs.status?'<span class="badge b-blue">connector '+esc(rs.status)+'</span>':'')+(run.external_side_effect?'<span class="badge b-red">external side effect</span>':'<span class="badge b-green">no external side effect</span>')+'</div>'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">'
+      +'<span class="badge b-mut">adapter: '+esc(diag.adapter_type||"noop")+'</span>'
+      +'<span class="badge b-mut">real exec: '+esc(diag.real_execution||"n/a")+'</span>'
+      +(safe.mode?'<span class="badge b-mut">mode: '+esc(safe.mode)+'</span>':'')
+      +(diag.pipeline_state?'<span class="badge b-mut">stage: '+esc(diag.pipeline_state)+'</span>':'')
+      +'</div>'
       +'<div class="grid3">'
       +'<div class="substate"><div class="l">events seen / ingested</div><div class="v">'+num(ing.events_seen||rs.events_seen||0)+' / '+num(ing.events_ingested||rs.events_ingested||0)+'</div></div>'
       +'<div class="substate"><div class="l">duplicates</div><div class="v">'+num(ing.duplicates_skipped||0)+'</div></div>'
@@ -1717,8 +1745,12 @@ async function openSourceRunDetail(requestId,source){
     if((rs.warnings||[]).length)h+='<div class="alert warn" style="margin-top:10px">'+esc(rs.warnings.join(" · "))+'</div>';
     if((ing.errors||[]).length)h+='<details class="ev" open><summary>Errors</summary><pre>'+esc(JSON.stringify(ing.errors,null,1))+'</pre></details>';
     if(run.run_id)h+='<div class="row" style="margin-top:10px;gap:6px"><button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">open events</button><button class="actbtn" data-srcact="runs" data-source="'+esc(run.source_type)+'">all runs</button></div>';
-    h+='<details class="ev"><summary>State before / after</summary><pre>'+esc(JSON.stringify({before:run.source_state_before,after:run.source_state_after},null,1))+'</pre></details>'
-      +'<details class="ev"><summary>Sanitized result summary</summary><pre>'+esc(JSON.stringify(rs,null,1))+'</pre></details>';
+    h+='<details class="ev"><summary>Connector state before / after</summary><pre>'+esc(JSON.stringify({before:run.source_state_before,after:run.source_state_after},null,1))+'</pre></details>'
+      +'<details class="ev"><summary>Sanitized result summary</summary><pre>'+esc(JSON.stringify(rs,null,1))+'</pre></details>'
+      +'<div class="mut" style="margin-top:8px">audit refs: log #'+esc(String(run.audit_log_id||"—"))+' · correlation '+esc(run.correlation_id||"—")+'</div>';
+    if(diag.runbook&&diag.runbook.next_command){
+      h+='<div class="alert" style="margin-top:8px;background:var(--accent-soft);color:var(--accent-text)">Next: '+esc(diag.runbook.next_action||"")+'<br><code>'+esc(diag.runbook.next_command)+'</code></div>';
+    }
     $("src-body").innerHTML=h;
   }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }

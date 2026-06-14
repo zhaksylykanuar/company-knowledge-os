@@ -150,6 +150,7 @@ def _empty_summary() -> dict[str, Any]:
         "failed": 0,
         "skipped_paused": 0,
         "skipped_missing_config": 0,
+        "skipped_real_disabled": 0,
         "blocked_invalid": 0,
         "events_seen": 0,
         "events_ingested": 0,
@@ -185,6 +186,12 @@ def _ingestion_from_request(request: SourceRunRequest) -> dict[str, Any]:
         return {}
     ingestion = sanitized.get("ingestion")
     return ingestion if isinstance(ingestion, dict) else {}
+
+
+def _run_mode(request: SourceRunRequest) -> str | None:
+    result = request.result_summary if isinstance(request.result_summary, dict) else {}
+    sanitized = result.get("sanitized_summary") if isinstance(result, dict) else {}
+    return sanitized.get("mode") if isinstance(sanitized, dict) else None
 
 
 async def pending_source_requests(
@@ -525,6 +532,8 @@ async def run_source_requests(
             _bump(summary, "started")
             if result.get("connector_status") == CONNECTOR_STATUS_MISSING_CONFIG:
                 _bump(summary, "skipped_missing_config")
+            elif _run_mode(request) == "real_connectors_disabled":
+                _bump(summary, "skipped_real_disabled")
             else:
                 _bump(summary, "unchanged")
         else:

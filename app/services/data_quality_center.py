@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.agent_models import AgentProposal, AgentRunLog, DataAvailability
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.graph_models import EntityLinkRecord, EntityRecord, EntitySourceAccount
-from app.db.models import IngestedEvent
+from app.db.models import AuditLog, IngestedEvent
 from app.core.config import settings
 from app.db.second_opinion_models import SecondOpinionFinding
 from app.db.source_control_models import SourceControlState, SourceRunRequest
@@ -371,6 +371,82 @@ async def build_data_quality_center(
                     },
                 )
             )
+        real_capable = definition.source_type in REAL_CLIENT_SOURCES
+        real_enabled = bool(getattr(settings, "enable_real_connectors", False))
+        has_success = bool(state and state.last_success_at)
+        test_ok = any(
+            run.action_type == "test" and run.status == "succeeded"
+            for run in source_runs
+        )
+        sync_runs = [run for run in source_runs if run.action_type == "sync"]
+        sync_ok = bool(state and state.last_sync_at) or any(
+            run.status == "succeeded" for run in sync_runs
+        )
+        if real_capable and real_enabled and setup_status == "ready" and not has_success:
+            issues.append(
+                _issue(
+                    category="connector_real_enabled_never_tested",
+                    severity="medium",
+                    why_it_matters=(
+                        "Real connectors включены и источник настроен, но успешного "
+                        "test/sync ещё не было — данные не поступают."
+                    ),
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action="Запустить Test connection, затем operator script.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "test",
+                    },
+                )
+            )
+        if test_ok and not sync_ok:
+            issues.append(
+                _issue(
+                    category="connector_tested_not_synced",
+                    severity="low",
+                    why_it_matters=(
+                        "Test connection прошёл, но sync ещё не выполнялся — "
+                        "events не собраны."
+                    ),
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action="Запустить Sync now, затем operator script.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "sync",
+                    },
+                )
+            )
+        for run in sync_runs:
+            if run.status != "succeeded":
+                continue
+            ingestion = _run_ingestion(run)
+            if int(ingestion.get("events_ingested") or 0) == 0:
+                issues.append(
+                    _issue(
+                        category="connector_synced_without_events",
+                        severity="low",
+                        why_it_matters=(
+                            "Sync завершился успешно, но не принёс ни одного события — "
+                            "проверь scope источника или сделай backfill."
+                        ),
+                        affected_source=definition.source_type,
+                        evidence_count=1,
+                        suggested_action="Проверить source scope или запустить Backfill.",
+                        cta={
+                            "target": "sources",
+                            "source_type": definition.source_type,
+                            "action": "backfill",
+                            "request_id": run.request_id,
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
+            break
         if setup_status in {"missing", "partial"}:
             issues.append(
                 _issue(
@@ -847,6 +923,33 @@ async def build_data_quality_center(
                 suggested_action="Open the pipeline run summary and fix unsupported normalized event mapping.",
                 cta={"target": "agent_runs", "action": "view_run", "run_id": row.run_id},
                 related_run_id=row.run_id,
+            )
+        )
+
+    # Obsidian vault stale after new graph updates.
+    latest_graph_update = await session.scalar(select(func.max(EntityRecord.updated_at)))
+    latest_obsidian_sync = await session.scalar(
+        select(func.max(AuditLog.created_at)).where(
+            AuditLog.event_type == "obsidian_vault_sync"
+        )
+    )
+    if latest_graph_update and (
+        latest_obsidian_sync is None or latest_graph_update > latest_obsidian_sync
+    ):
+        issues.append(
+            _issue(
+                category="obsidian_vault_stale",
+                severity="low",
+                why_it_matters=(
+                    "Граф обновился после последнего Obsidian sync — vault может "
+                    "не отражать свежие узлы/связи."
+                ),
+                affected_source="obsidian",
+                evidence_count=1,
+                suggested_action=(
+                    "Пересинхронизировать Obsidian vault через sync_obsidian_vault.py."
+                ),
+                cta={"target": "knowledge_tree", "action": "sync_obsidian"},
             )
         )
 

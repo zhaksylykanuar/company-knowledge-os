@@ -769,6 +769,8 @@ def _request_model(row: SourceRunRequest, *, idempotent: bool = False) -> dict[s
         "retry_count": row.retry_count,
         "idempotency_key": row.idempotency_key,
         "audit_log_id": row.audit_log_id,
+        "source_state_before": row.source_state_before,
+        "source_state_after": row.source_state_after,
         "idempotent": idempotent,
     }
 

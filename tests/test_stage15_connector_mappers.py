@@ -90,6 +90,46 @@ def test_github_mappers_cover_pr_issue_commit() -> None:
     assert commit.title == "fix: thing"  # first line only
 
 
+def test_real_mappers_emit_contract_valid_events() -> None:
+    from app.integrations.source_registry import validate_source_event_contract
+    from app.services.connector_clients import _record_to_event
+
+    samples = [
+        ("jira", map_jira_issue(
+            {"key": "ALPHA-9", "fields": {"summary": "x", "updated": "2026-06-14T10:00:00Z"}},
+            base_url="https://example.atlassian.net",
+        )),
+        ("github", map_github_pull_request(
+            {"number": 1, "title": "p", "state": "open", "html_url": "https://gh/o/r/pull/1"},
+            repo="o/r",
+        )),
+        ("github", map_github_pull_request(
+            {"number": 2, "title": "p", "state": "closed", "merged_at": "2026-06-14T10:00:00Z",
+             "html_url": "https://gh/o/r/pull/2"},
+            repo="o/r",
+        )),
+        ("github", map_github_issue(
+            {"number": 3, "title": "i", "state": "closed", "html_url": "https://gh/o/r/issues/3"},
+            repo="o/r",
+        )),
+        ("github", map_github_commit(
+            {"sha": "abc", "commit": {"message": "m", "author": {"name": "d", "date": "2026-06-14T10:00:00Z"}},
+             "html_url": "https://gh/o/r/commit/abc"},
+            repo="o/r",
+        )),
+    ]
+    for source_type, record in samples:
+        event = _record_to_event(source_type, record)
+        payload = event.to_connector_payload()
+        errors = validate_source_event_contract(
+            source_system=payload["source_system"],
+            source_object_type=payload["source_object_type"],
+            event_type=payload["event_type"],
+            payload=payload["payload"],
+        )
+        assert errors == [], (source_type, record.event_type, errors)
+
+
 class _FakeJiraProvider:
     def __init__(self, marker: str) -> None:
         self.marker = marker

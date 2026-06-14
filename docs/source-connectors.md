@@ -89,6 +89,61 @@ Jira, GitHub, Gmail, or other live API. Secret values never reach the browser,
 API responses, audit payloads, source events, or the Obsidian vault — only
 environment-variable names and masked statuses are exposed.
 
+## Local Connector Pilot
+
+The local pilot drives the whole connector E2E chain with one command:
+
+  diagnostics → test → sync → evidence pipeline → Obsidian dry-run
+
+1. Configure the local env override with the backend env vars (names above).
+   Restart the backend.
+2. Keep `FOUNDEROS_ENABLE_REAL_CONNECTORS=false` for a dry, safe run first. With
+   it false, no external network call is made and the pilot just records the
+   next steps; internal/local sources still run.
+3. Run the pilot:
+
+```bash
+uv run python scripts/run_local_connector_pilot.py \
+  --confirm-run "RUN LOCAL CONNECTOR PILOT"
+```
+
+4. Enable real connectors only when ready:
+
+```bash
+FOUNDEROS_ENABLE_REAL_CONNECTORS=true
+```
+
+5. Run test/sync through the Sources UI (Test connection → Sync now) or re-run
+   the pilot. Execute queued requests with:
+
+```bash
+uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS"
+```
+
+6. Process evidence into the graph:
+
+```bash
+uv run python scripts/run_evidence_pipeline.py --confirm-run "RUN EVIDENCE PIPELINE"
+```
+
+7. Sync the Obsidian vault (the pilot only previews it unless `--sync-obsidian`
+   is passed):
+
+```bash
+uv run python scripts/sync_obsidian_vault.py --confirm-run "SYNC OBSIDIAN VAULT"
+```
+
+Guarantees:
+
+- No writes to Jira, GitHub, or Gmail; no email is sent.
+- Tests use fakes and never hit a real external API.
+- Secrets stay backend-side and never reach the browser, audit, source events,
+  or the Obsidian vault.
+- A connector is shown `connected` only after a successful test or sync — never
+  from env presence. The UI shows `requested`/`queued` versus `succeeded`
+  honestly, and disabled real connectors skip with `real_connectors_disabled`.
+- The pilot performs no real Obsidian write without `--sync-obsidian`.
+
 ## Safe Execution
 
 Source actions are requested through Source Control Center first. The operator
