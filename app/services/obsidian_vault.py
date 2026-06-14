@@ -748,6 +748,10 @@ def _connector_note_body(connector: dict[str, Any]) -> str:
         f"- Adapter type: `{sanitize_markdown_content(connector.get('adapter_type'))}`",
         f"- Real execution: `{sanitize_markdown_content(connector.get('real_execution'))}`",
         f"- Pipeline stage: `{sanitize_markdown_content(connector.get('pipeline_state'))}`",
+        f"- Blocked reason: `{sanitize_markdown_content(connector.get('blocked_reason') or 'none')}`",
+        f"- Scope required: `{bool(connector.get('scope_required'))}`",
+        f"- Scope configured: `{bool(connector.get('scope_configured'))}`",
+        f"- Scope count: `{sanitize_markdown_content((connector.get('scope_summary') or {}).get('count') or 0)}`",
         f"- Paused: `{bool(connector.get('paused'))}`",
         f"- Events ingested: `{sanitize_markdown_content(connector.get('events_ingested') or 0)}`",
         f"- Normalized events: `{sanitize_markdown_content(connector.get('normalized_events') or 0)}`",
@@ -756,6 +760,18 @@ def _connector_note_body(connector: dict[str, Any]) -> str:
         "## Missing Required Configuration (names only)",
         "",
         *_connector_missing_lines(list(connector.get("missing_env_vars") or [])),
+        "",
+        "## Scope & Limits",
+        "",
+        *(
+            _connector_missing_lines(list(connector.get("missing_scope_fields") or []))
+            if connector.get("scope_required")
+            and not connector.get("scope_configured")
+            else ["- Scope OK or not required."]
+        ),
+        f"- Limits: sync `{sanitize_markdown_content((connector.get('limits') or {}).get('sync_limit') or 0)}`, "
+        f"backfill `{sanitize_markdown_content((connector.get('limits') or {}).get('backfill_limit') or 0)}`, "
+        f"max days `{sanitize_markdown_content((connector.get('limits') or {}).get('backfill_max_days') or 0)}`",
         "",
         "## Last Activity",
         "",

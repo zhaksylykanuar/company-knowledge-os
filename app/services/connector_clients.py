@@ -399,6 +399,7 @@ class LiveJiraReadOnlyProvider(_RealProviderBase):
         base_url: str | None = None,
         email: str | None = None,
         token: str | None = None,
+        project_keys: tuple[str, ...] = (),
         enabled: bool = False,
         timeout: float = 10.0,
         sync_limit: int = DEFAULT_SYNC_LIMIT,
@@ -408,6 +409,7 @@ class LiveJiraReadOnlyProvider(_RealProviderBase):
         self._base_url = (base_url or "").strip()
         self._email = (email or "").strip()
         self._token = token or ""
+        self._project_keys = tuple(key for key in project_keys if key)
         self._sync_limit = sync_limit
         self._backfill_limit = backfill_limit
 
@@ -461,7 +463,8 @@ class LiveJiraReadOnlyProvider(_RealProviderBase):
         self, *, since: str | None = None, limit: int = DEFAULT_SYNC_LIMIT
     ) -> list[ReadOnlyRecord]:
         return await self._search(
-            jql=_jira_updated_jql(since), limit=min(limit, self._sync_limit)
+            jql=_jira_updated_jql(since, self._project_keys),
+            limit=min(limit, self._sync_limit),
         )
 
     async def list_project_issues(
@@ -471,18 +474,25 @@ class LiveJiraReadOnlyProvider(_RealProviderBase):
         since: str | None = None,
         limit: int = DEFAULT_BACKFILL_LIMIT,
     ) -> list[ReadOnlyRecord]:
+        keys = (project,) if project else self._project_keys
         return await self._search(
-            jql=_jira_updated_jql(since), limit=min(limit, self._backfill_limit)
+            jql=_jira_updated_jql(since, keys),
+            limit=min(limit, self._backfill_limit),
         )
 
 
-def _jira_updated_jql(since: str | None) -> str:
-    # Only accept an ISO-ish date prefix from our own watermark; never inject
-    # arbitrary text into JQL.
+def _jira_updated_jql(since: str | None, project_keys: tuple[str, ...] = ()) -> str:
+    # Build a scoped, bounded JQL. Project keys are sanitized to alnum/_ so no
+    # arbitrary text can be injected; the watermark is accepted only as a date.
+    clauses: list[str] = []
+    safe_keys = [re.sub(r"[^A-Za-z0-9_]", "", str(key)) for key in project_keys]
+    safe_keys = [key for key in safe_keys if key]
+    if safe_keys:
+        clauses.append(f"project in ({','.join(safe_keys)})")
     if isinstance(since, str) and re.match(r"^\d{4}-\d{2}-\d{2}", since.strip()):
-        day = since.strip()[:10]
-        return f'updated >= "{day}" ORDER BY updated DESC'
-    return "ORDER BY updated DESC"
+        clauses.append(f'updated >= "{since.strip()[:10]}"')
+    where = " AND ".join(clauses)
+    return f"{where} ORDER BY updated DESC" if where else "ORDER BY updated DESC"
 
 
 class LiveGitHubReadOnlyProvider(_RealProviderBase):
@@ -628,20 +638,21 @@ def build_real_connector_clients(
         or DEFAULT_BACKFILL_LIMIT
     )
 
+    from app.services import connector_scope
+
     jira = LiveJiraReadOnlyProvider(
         base_url=(getattr(cfg, "jira_base_url", None) or _env("JIRA_BASE_URL")),
         email=(getattr(cfg, "jira_email", None) or _env("JIRA_EMAIL")),
         token=(getattr(cfg, "jira_api_token", None) or _env("JIRA_API_TOKEN")),
+        project_keys=tuple(connector_scope.scope_values("jira", cfg)),
         enabled=enabled,
         timeout=timeout,
         sync_limit=sync_limit,
         backfill_limit=backfill_limit,
     )
-    repos = _env("GITHUB_REPOS")
-    repo_tuple = tuple(part.strip() for part in repos.split(",") if part.strip()) if repos else ()
     github = LiveGitHubReadOnlyProvider(
         token=_env("GITHUB_TOKEN", "FOS_GITHUB_READONLY_TOKEN"),
-        repos=repo_tuple,
+        repos=tuple(connector_scope.scope_values("github", cfg)),
         enabled=enabled,
         timeout=timeout,
         sync_limit=sync_limit,

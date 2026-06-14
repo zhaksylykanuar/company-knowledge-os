@@ -85,6 +85,7 @@ _CONNECTOR_ACTION_SOURCES = {"jira", "github", "gmail"}
 # pipeline_state -> (action_type, severity, title)
 _CONNECTOR_ACTIONS: dict[str, tuple[str, str, str]] = {
     "missing_config": ("add_env", "medium", "add missing connector env vars"),
+    "missing_scope": ("add_connector_scope", "medium", "add an explicit connector scope"),
     "real_disabled": ("enable_real_connectors", "low", "enable real connectors"),
     "never_tested": ("run_test", "medium", "run a test connection"),
     "test_requested": ("run_sync", "medium", "run the operator script for the queued request"),
@@ -170,10 +171,21 @@ def _classify(action: dict[str, Any]) -> tuple[str, str]:
 
     # Connector E2E next-actions classify by their pipeline meaning.
     if source == "connector":
-        if action_type == "inspect_failed_run":
-            return GROUP_CRITICAL, "connector run failed — нужна диагностика"
-        if action_type in {"add_env", "enable_real_connectors", "run_test", "run_sync"}:
-            return GROUP_EVIDENCE, "нужен setup/pilot шаг, чтобы собрать данные коннектора"
+        if action_type in {"inspect_failed_run", "inspect_blocked_run"}:
+            return GROUP_CRITICAL, "connector run failed/blocked — нужна диагностика"
+        if action_type == "narrow_connector_scope":
+            return GROUP_DECISION, "scope слишком широкий — сузить безопасно"
+        if action_type in {
+            "add_env",
+            "add_connector_scope",
+            "enable_real_connectors",
+            "run_test",
+            "run_test_connection",
+            "preview_sync",
+            "run_sync",
+            "run_sync_after_scope",
+        }:
+            return GROUP_EVIDENCE, "нужен setup/scope/pilot шаг, чтобы собрать данные"
         if action_type in {"run_evidence_pipeline", "sync_obsidian"}:
             return GROUP_CLEANUP, "пост-синк обработка (graph / Obsidian)"
         return GROUP_LATER, "connector follow-up"
@@ -420,6 +432,27 @@ async def build_action_center(
         source_type = connector["source_type"]
         if source_type not in _CONNECTOR_ACTION_SOURCES:
             continue
+        if connector.get("scope_too_broad"):
+            runbook = connector.get("runbook") or {}
+            actions.append(
+                _action(
+                    title=f"{connector['label']}: narrow the connector scope",
+                    why_now="Scope looks like a wildcard/all — narrow it to avoid a "
+                    "broad read.",
+                    affected_entity=source_type,
+                    evidence_count=int(connector.get("events_ingested") or 0),
+                    severity="medium",
+                    confidence=None,
+                    source="connector",
+                    action_type="narrow_connector_scope",
+                    cta=runbook.get("next_command") or "Open Sources / Data Control",
+                    action_ref={
+                        "kind": "connector",
+                        "source_type": source_type,
+                        "pipeline_state": connector.get("pipeline_state"),
+                    },
+                )
+            )
         spec = _CONNECTOR_ACTIONS.get(connector.get("pipeline_state"))
         if spec is None:
             continue

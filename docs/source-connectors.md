@@ -89,6 +89,54 @@ Jira, GitHub, Gmail, or other live API. Secret values never reach the browser,
 API responses, audit payloads, source events, or the Obsidian vault — only
 environment-variable names and masked statuses are exposed.
 
+## Safe Live Connector Setup (scopes & limits)
+
+Before any real Jira/GitHub read, an explicit scope is required so a whole org
+can never be read by accident. `test_connection` is exempt (it is only a
+read-only auth check); `sync`, `preview_sync`, and `backfill` require a scope.
+
+1. Keep real connectors disabled by default
+   (`FOUNDEROS_ENABLE_REAL_CONNECTORS=false`).
+2. Add credentials (backend env only).
+3. Add explicit scopes (names only — never secrets):
+
+```bash
+FOUNDEROS_JIRA_PROJECT_KEYS=QS
+FOUNDEROS_GITHUB_REPOS=owner/repo
+```
+
+4. Enable real connectors:
+
+```bash
+FOUNDEROS_ENABLE_REAL_CONNECTORS=true
+```
+
+5. Restart the backend.
+6. **Test connection** (works without a scope).
+7. **Preview sync** — counts and shows sample sanitized titles; writes no
+   source events.
+8. **Sync** — only runs when a scope is configured.
+9. Run the evidence pipeline.
+10. Sync Obsidian.
+
+Limits are always applied to live reads:
+
+```bash
+FOUNDEROS_CONNECTOR_SYNC_LIMIT=50
+FOUNDEROS_CONNECTOR_BACKFILL_LIMIT=100
+FOUNDEROS_CONNECTOR_BACKFILL_MAX_DAYS=30
+```
+
+Guarantees:
+
+- No writes to Jira/GitHub/Gmail; no email is sent.
+- No full-org scan: sync/backfill are blocked with `blocked_missing_scope` until
+  an explicit scope is set; a wildcard/`*` scope is flagged as too broad.
+- Limits bound every live read.
+- Tests use fakes and never hit a real external API.
+- Secrets stay backend-side and never reach the browser, API, audit, source
+  events, or the Obsidian vault — only scope/env-var names and statuses.
+
 ## Local Connector Pilot
 
 The local pilot drives the whole connector E2E chain with one command:

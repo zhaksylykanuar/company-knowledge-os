@@ -30,10 +30,18 @@ from app.services.browser_config import sanitize_for_logs
 
 ACTION_BACKFILL = "backfill"
 ACTION_PAUSE = "pause"
+ACTION_PREVIEW_SYNC = "preview_sync"
 ACTION_RESUME = "resume"
 ACTION_SYNC = "sync"
 ACTION_TEST = "test"
-SOURCE_ACTIONS = (ACTION_TEST, ACTION_SYNC, ACTION_BACKFILL, ACTION_PAUSE, ACTION_RESUME)
+SOURCE_ACTIONS = (
+    ACTION_TEST,
+    ACTION_PREVIEW_SYNC,
+    ACTION_SYNC,
+    ACTION_BACKFILL,
+    ACTION_PAUSE,
+    ACTION_RESUME,
+)
 
 STATUS_CONNECTED = "connected"
 STATUS_DEGRADED = "degraded"
@@ -232,6 +240,7 @@ def _redaction_policy() -> dict[str, Any]:
 def _safe_actions(definition: SourceDefinition) -> list[dict[str, Any]]:
     actions = [
         ("test", "Test connection"),
+        ("preview_sync", "Preview sync"),
         ("sync", "Sync now"),
         ("backfill", "Backfill"),
         ("pause", "Pause source"),

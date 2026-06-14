@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.source_control_models import SourceControlState, SourceRunRequest
+from app.services.connector_scope import scope_model
 from app.services.secret_patterns import assert_no_secret_values
 from app.services.source_connectors import (
     REAL_CLIENT_SOURCES,
@@ -204,6 +205,8 @@ def _pipeline_state(
     configured: bool,
     real_capable: bool,
     real_enabled: bool,
+    scope_required: bool,
+    scope_configured: bool,
     state: SourceControlState | None,
     rows: list[SourceRunRequest],
     events_ingested: int,
@@ -214,13 +217,21 @@ def _pipeline_state(
         return "missing_config"
     if real_capable and not real_enabled:
         return "real_disabled"
+    has_success = bool(state and state.last_success_at)
+    if (
+        real_capable
+        and real_enabled
+        and scope_required
+        and not scope_configured
+        and not has_success
+    ):
+        return "missing_scope"
     if _has_running(rows):
         return "running"
     if _has_pending(rows, "test"):
         return "test_requested"
     if _has_pending(rows, "sync", "backfill"):
         return "sync_requested"
-    has_success = bool(state and state.last_success_at)
     sync_status = _action_result_status(rows, "sync")
     test_status = _action_result_status(rows, "test")
     if not has_success:
@@ -243,6 +254,7 @@ def _runbook(
     *,
     missing_env_vars: list[str],
     events_ingested: int,
+    missing_scope_fields: list[str] | None = None,
 ) -> dict[str, Any]:
     if pipeline_state == "missing_config":
         return {
@@ -252,6 +264,16 @@ def _runbook(
             "next_command": RESTART_CMD,
             "blockers": ["missing_config"],
             "blocking_env_vars": list(missing_env_vars),
+        }
+    if pipeline_state == "missing_scope":
+        fields = list(missing_scope_fields or [])
+        return {
+            "stage": "configure_scope",
+            "next_action": "Add an explicit scope (project keys / repos) so sync "
+            "reads only what you allow, then restart and test.",
+            "next_command": RESTART_CMD,
+            "blockers": ["missing_scope"],
+            "blocking_env_vars": fields,
         }
     if pipeline_state == "real_disabled":
         return {
@@ -358,6 +380,14 @@ def _pilot_next_steps(
     missing = [c["source_type"] for c in connectors if c["pipeline_state"] == "missing_config"]
     if missing:
         steps.append("Add missing env (names only) for: " + ", ".join(missing) + ".")
+    no_scope = [
+        c["source_type"] for c in connectors if c["pipeline_state"] == "missing_scope"
+    ]
+    if no_scope:
+        steps.append(
+            "Add an explicit scope (FOUNDEROS_JIRA_PROJECT_KEYS / "
+            "FOUNDEROS_GITHUB_REPOS) for: " + ", ".join(no_scope) + "."
+        )
     queued = [
         c["source_type"]
         for c in connectors
@@ -464,6 +494,7 @@ async def build_connector_diagnostics(
             normalized_by_source.get(source, 0)
             for source in definition.normalized_sources
         )
+        scope = scope_model(source_type)
         connector_state = _connector_state(
             state=state,
             setup_status=setup_status,
@@ -473,10 +504,13 @@ async def build_connector_diagnostics(
             configured=readiness.configured,
             real_capable=source_type in REAL_CLIENT_SOURCES,
             real_enabled=real_enabled,
+            scope_required=scope["scope_required"],
+            scope_configured=scope["scope_configured"],
             state=state,
             rows=source_rows,
             events_ingested=events_ingested,
         )
+        scope_ok = (not scope["scope_required"]) or scope["scope_configured"]
         by_state[connector_state] = by_state.get(connector_state, 0) + 1
         by_pipeline[pipeline_state] = by_pipeline.get(pipeline_state, 0) + 1
         connectors.append(
@@ -492,22 +526,41 @@ async def build_connector_diagnostics(
                 ),
                 "real_execution": _real_execution(source_type, enabled=real_enabled),
                 "pipeline_state": pipeline_state,
+                "blocked_reason": pipeline_state
+                if pipeline_state
+                in {
+                    "missing_config",
+                    "real_disabled",
+                    "missing_scope",
+                    "paused",
+                    "never_tested",
+                    "test_failed",
+                    "sync_failed",
+                }
+                else None,
                 "runbook": _runbook(
                     pipeline_state,
                     missing_env_vars=list(readiness.missing_env_vars),
                     events_ingested=events_ingested,
+                    missing_scope_fields=list(scope["missing_scope_fields"]),
                 ),
                 "real_execution_enabled": real_enabled
                 if source_type in REAL_CLIENT_SOURCES
                 else None,
+                "scope_required": scope["scope_required"],
+                "scope_configured": scope["scope_configured"],
+                "scope_summary": scope["scope_summary"],
+                "missing_scope_fields": list(scope["missing_scope_fields"]),
+                "scope_too_broad": scope["scope_too_broad"],
+                "limits": dict(scope["limits"]),
                 "readiness": setup_status,
                 "configured": readiness.configured,
                 "connector_state": connector_state,
                 "missing_env_vars": list(readiness.missing_env_vars),
                 "masked_config_status": list(readiness.masked_config_status),
                 "can_test": readiness.can_test,
-                "can_sync": readiness.can_sync,
-                "can_backfill": readiness.can_backfill,
+                "can_sync": readiness.can_sync and scope_ok,
+                "can_backfill": readiness.can_backfill and scope_ok,
                 "events_ingested": events_ingested,
                 "normalized_events": normalized_events,
                 "paused": bool(state.paused) if state else False,

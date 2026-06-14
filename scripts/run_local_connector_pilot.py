@@ -41,19 +41,25 @@ def _empty_summary(real_enabled: bool, connectors_checked: int) -> dict[str, Any
         "status": "completed",
         "real_execution_enabled": real_enabled,
         "external_side_effect": False,
+        "preview_only": False,
+        "preview_available": True,
         "connectors_checked": connectors_checked,
+        "scoped_sources": 0,
+        "missing_scope_sources": 0,
         "test_requests_created": 0,
         "sync_requests_created": 0,
         "source_runs_succeeded": 0,
         "source_runs_failed": 0,
         "source_runs_skipped_missing_config": 0,
         "source_runs_skipped_real_disabled": 0,
+        "skipped_missing_scope": 0,
         "events_ingested": 0,
         "normalized_events": 0,
         "graph_nodes_updated": 0,
         "findings_created": 0,
         "obsidian_notes_would_update": 0,
         "obsidian_notes_updated": 0,
+        "limits_applied": {},
         "warnings": [],
         "next_steps": [],
     }
@@ -133,12 +139,16 @@ async def run_pilot(
     connectors: dict[str, Any] | None = None,
     sync_obsidian: bool = False,
     evidence_limit: int = 200,
+    preview_only: bool = False,
 ) -> dict[str, Any]:
     """Pilot core (testable without bootstrap/alembic).
 
-    With injected ``connectors`` (fakes), no real network is used.
+    With injected ``connectors`` (fakes), no real network is used. ``--preview-
+    only`` makes no requests, no evidence run, and no Obsidian write — it only
+    reports diagnostics and what would happen.
     """
 
+    from app.services import connector_scope
     from app.services.connector_diagnostics import build_connector_diagnostics
     from app.services.evidence_graph_lift import run_evidence_pipeline
     from app.services.obsidian_vault import sync_obsidian_vault
@@ -147,8 +157,32 @@ async def run_pilot(
     diagnostics = await build_connector_diagnostics(session)
     real_enabled = bool(diagnostics.get("real_execution_enabled"))
     summary = _empty_summary(real_enabled, len(diagnostics.get("connectors") or []))
+    summary["preview_only"] = preview_only
+    summary["limits_applied"] = connector_scope.connector_limits()
     warnings: list[str] = []
     by_type = {c["source_type"]: c for c in diagnostics.get("connectors") or []}
+
+    # Scope accounting for external real-capable sources.
+    for source_type in REAL_PILOT_SOURCES:
+        connector = by_type.get(source_type)
+        if not connector or not connector.get("configured"):
+            continue
+        if connector_scope.scope_configured(source_type):
+            summary["scoped_sources"] += 1
+        else:
+            summary["missing_scope_sources"] += 1
+
+    if preview_only:
+        # No requests, no evidence run, no Obsidian write — just a dry preview.
+        dry = await sync_obsidian_vault(session, dry_run=True, requested_by="pilot")
+        summary["obsidian_notes_would_update"] = int(
+            (dry.get("notes_created") or 0) + (dry.get("notes_updated") or 0)
+        )
+        final = await build_connector_diagnostics(session)
+        summary["warnings"] = warnings
+        summary["next_steps"] = list((final.get("pilot") or {}).get("next_steps") or [])
+        assert_no_secret_values(summary)
+        return summary
 
     # Phase 1: test requests for configured + real-enabled external connectors.
     for source_type in REAL_PILOT_SOURCES:
@@ -174,7 +208,8 @@ async def run_pilot(
         summary["test_requests_created"] += 1
         _bucket_run(summary, run, row)
 
-    # Phase 2: sync requests for connectors whose test just succeeded.
+    # Phase 2: sync requests for connectors whose test just succeeded AND have
+    # an explicit scope. Missing scope never creates a sync request.
     if summary["test_requests_created"]:
         after_test = await build_connector_diagnostics(session)
         after_by_type = {c["source_type"]: c for c in after_test.get("connectors") or []}
@@ -182,20 +217,28 @@ async def run_pilot(
             connector = after_by_type.get(source_type)
             if connector is None or not real_enabled:
                 continue
-            if connector.get("pipeline_state") in {
+            if connector.get("pipeline_state") not in {
                 "test_succeeded",
                 "sync_succeeded",
                 "connected",
             }:
-                run, row = await _run_request(
-                    session,
-                    source_type=source_type,
-                    action_type="sync",
-                    request_key=f"pilot-sync-{source_type}-{run_key}",
-                    connectors=connectors,
+                continue
+            if not connector_scope.scope_configured(source_type):
+                summary["skipped_missing_scope"] += 1
+                fields = ", ".join(connector_scope.scope_field_names(source_type))
+                warnings.append(
+                    f"{source_type}: missing scope — add {fields}; sync skipped"
                 )
-                summary["sync_requests_created"] += 1
-                _bucket_run(summary, run, row)
+                continue
+            run, row = await _run_request(
+                session,
+                source_type=source_type,
+                action_type="sync",
+                request_key=f"pilot-sync-{source_type}-{run_key}",
+                connectors=connectors,
+            )
+            summary["sync_requests_created"] += 1
+            _bucket_run(summary, run, row)
 
     # Phase 3: local evidence pipeline (no external calls).
     evidence = await run_evidence_pipeline(session, limit=evidence_limit)
@@ -231,11 +274,18 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write the local Obsidian vault (otherwise dry-run only).",
     )
+    parser.add_argument(
+        "--preview-only",
+        action="store_true",
+        help="Only show diagnostics + what would happen; no requests, no writes.",
+    )
     parser.add_argument("--evidence-limit", type=int, default=200)
     return parser
 
 
-async def _run_main(*, sync_obsidian: bool, evidence_limit: int) -> dict[str, Any]:
+async def _run_main(
+    *, sync_obsidian: bool, evidence_limit: int, preview_only: bool
+) -> dict[str, Any]:
     from app.db.base import AsyncSessionLocal
 
     run_key = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -245,6 +295,7 @@ async def _run_main(*, sync_obsidian: bool, evidence_limit: int) -> dict[str, An
             run_key=run_key,
             sync_obsidian=sync_obsidian,
             evidence_limit=evidence_limit,
+            preview_only=preview_only,
         )
         await session.commit()
         return summary
@@ -276,6 +327,7 @@ def main() -> int:
         _run_main(
             sync_obsidian=bool(args.sync_obsidian),
             evidence_limit=max(1, min(int(args.evidence_limit), 1000)),
+            preview_only=bool(args.preview_only),
         )
     )
     print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))

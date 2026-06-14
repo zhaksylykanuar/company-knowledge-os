@@ -55,6 +55,7 @@ async def test_runbook_never_tested_when_enabled_configured(monkeypatch) -> None
     monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
     monkeypatch.setenv("JIRA_EMAIL", "ops@example.com")
     monkeypatch.setenv("JIRA_API_TOKEN", "stage16-fake-token-value")
+    monkeypatch.setenv("FOUNDEROS_JIRA_PROJECT_KEYS", "QS")  # scope present
     async with AsyncSessionLocal() as session:
         # Clean slate: no prior success row.
         await session.execute(

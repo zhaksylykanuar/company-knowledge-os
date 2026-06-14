@@ -86,6 +86,26 @@ class Settings(BaseSettings):
         default=100,
         validation_alias=AliasChoices("FOUNDEROS_CONNECTOR_BACKFILL_LIMIT"),
     )
+    connector_backfill_max_days: int = Field(
+        default=30,
+        validation_alias=AliasChoices("FOUNDEROS_CONNECTOR_BACKFILL_MAX_DAYS"),
+    )
+    # Explicit live scopes/allowlists. When required (default), a real
+    # sync/backfill is blocked unless the source has an explicit scope, so a
+    # whole Jira/GitHub org can never be read by accident. Names only; never
+    # secrets.
+    require_connector_scope: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("FOUNDEROS_REQUIRE_CONNECTOR_SCOPE"),
+    )
+    jira_project_keys: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_JIRA_PROJECT_KEYS"),
+    )
+    github_repos: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_REPOS"),
+    )
 
     api_auth_enabled: bool = False
     api_auth_key: SecretStr | str | None = None

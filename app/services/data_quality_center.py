@@ -20,6 +20,7 @@ from app.db.models import AuditLog, IngestedEvent
 from app.core.config import settings
 from app.db.second_opinion_models import SecondOpinionFinding
 from app.db.source_control_models import SourceControlState, SourceRunRequest
+from app.services import connector_scope
 from app.services.source_connectors import REAL_CLIENT_SOURCES
 from app.services.source_control import SOURCE_DEFINITIONS, connector_setup_status
 
@@ -374,6 +375,126 @@ async def build_data_quality_center(
         real_capable = definition.source_type in REAL_CLIENT_SOURCES
         real_enabled = bool(getattr(settings, "enable_real_connectors", False))
         has_success = bool(state and state.last_success_at)
+        scope_required = connector_scope.scope_required(definition.source_type)
+        scope_configured = connector_scope.scope_configured(definition.source_type)
+        if (
+            real_capable
+            and real_enabled
+            and setup_status == "ready"
+            and scope_required
+            and not scope_configured
+        ):
+            issues.append(
+                _issue(
+                    category="connector_real_enabled_missing_scope",
+                    severity="medium",
+                    why_it_matters=(
+                        "Real connectors включены и источник настроен, но scope не "
+                        "задан: sync/backfill заблокированы, чтобы не прочитать весь org."
+                    ),
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action=(
+                        "Добавить " + ", ".join(
+                            connector_scope.scope_field_names(definition.source_type)
+                        )
+                        + " и перезапустить backend."
+                    ),
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "add_connector_scope",
+                    },
+                )
+            )
+        if scope_required and scope_configured and not has_success:
+            issues.append(
+                _issue(
+                    category="connector_scope_configured_never_tested",
+                    severity="low",
+                    why_it_matters=(
+                        "Scope задан, но успешного test/sync ещё не было."
+                    ),
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action="Запустить Test connection, затем sync.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "test",
+                    },
+                )
+            )
+        if scope_required and connector_scope.scope_too_broad(definition.source_type):
+            issues.append(
+                _issue(
+                    category="connector_scope_too_broad",
+                    severity="medium",
+                    why_it_matters=(
+                        "Scope выглядит как wildcard/all — есть риск прочитать "
+                        "слишком много. Сузьте до конкретных проектов/репозиториев."
+                    ),
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action="Сузить scope до явного списка.",
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "narrow_connector_scope",
+                    },
+                )
+            )
+        for run in source_runs:
+            result = run.result_summary if isinstance(run.result_summary, dict) else {}
+            if run.status == "blocked" and result.get("blocked_reason") == "missing_scope":
+                issues.append(
+                    _issue(
+                        category="connector_sync_blocked_missing_scope",
+                        severity="medium",
+                        why_it_matters=(
+                            "Последний sync/backfill заблокирован: scope отсутствует."
+                        ),
+                        affected_source=definition.source_type,
+                        evidence_count=1,
+                        suggested_action="Добавить scope, затем повторить sync.",
+                        cta={
+                            "target": "sources",
+                            "source_type": definition.source_type,
+                            "action": "add_connector_scope",
+                            "request_id": run.request_id,
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
+                break
+        for run in source_runs:
+            if run.action_type != "backfill":
+                continue
+            inp = (run.input_snapshot or {}).get("input") or {}
+            if not inp.get("since") and not inp.get("limit"):
+                issues.append(
+                    _issue(
+                        category="connector_backfill_limit_required",
+                        severity="low",
+                        why_it_matters=(
+                            "Backfill без явной даты/лимита — добавь since/limit, "
+                            "чтобы не читать слишком много истории."
+                        ),
+                        affected_source=definition.source_type,
+                        evidence_count=1,
+                        suggested_action="Указать since или limit для backfill.",
+                        cta={
+                            "target": "sources",
+                            "source_type": definition.source_type,
+                            "action": "backfill",
+                            "request_id": run.request_id,
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
+                break
         test_ok = any(
             run.action_type == "test" and run.status == "succeeded"
             for run in source_runs

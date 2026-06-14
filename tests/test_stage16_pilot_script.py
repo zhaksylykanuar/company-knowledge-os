@@ -109,7 +109,8 @@ async def test_pilot_enabled_fake_clients_create_requests(monkeypatch) -> None:
         ("JIRA_EMAIL", "ops@example.com"),
         ("JIRA_API_TOKEN", "stage16-fake-token-value"),
         ("GITHUB_TOKEN", "stage16-fake-token-value"),
-        ("GITHUB_REPOS", "owner/repo"),
+        ("FOUNDEROS_JIRA_PROJECT_KEYS", "QS"),  # explicit scopes for sync
+        ("FOUNDEROS_GITHUB_REPOS", "owner/repo"),
     ):
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(

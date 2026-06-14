@@ -26,9 +26,11 @@ from app.services.source_connectors import (
     SourceConnector,
     default_connector_registry,
 )
+from app.services.connector_scope import scope_model, sync_scope_block
 from app.services.source_ingestion import ingest_connector_events
 from app.services.source_control import (
     ACTION_BACKFILL,
+    ACTION_PREVIEW_SYNC,
     ACTION_SYNC,
     ACTION_TEST,
     SOURCE_ACTIONS,
@@ -39,6 +41,7 @@ from app.services.source_control import (
     STATUS_ERROR,
     SOURCE_BY_TYPE,
 )
+from app.services.browser_config import sanitize_for_logs
 
 REQUEST_STATUS_ACCEPTED = "accepted"
 REQUEST_STATUS_BLOCKED = "blocked"
@@ -57,7 +60,24 @@ TERMINAL_REQUEST_STATUSES = {
     REQUEST_STATUS_SKIPPED,
     REQUEST_STATUS_SUCCEEDED,
 }
-EXECUTABLE_ACTIONS = (ACTION_TEST, ACTION_SYNC, ACTION_BACKFILL)
+EXECUTABLE_ACTIONS = (
+    ACTION_TEST,
+    ACTION_PREVIEW_SYNC,
+    ACTION_SYNC,
+    ACTION_BACKFILL,
+)
+# Actions that perform a live read and therefore require an explicit scope.
+_SCOPE_GATED_ACTIONS = {ACTION_SYNC, ACTION_BACKFILL, ACTION_PREVIEW_SYNC}
+
+
+def _scope_meta(source_type: str) -> dict[str, Any]:
+    model = scope_model(source_type)
+    return {
+        "scope_required": model["scope_required"],
+        "scope_configured": model["scope_configured"],
+        "scope_summary": model["scope_summary"],
+        "limits_applied": model["limits"],
+    }
 
 
 def _now() -> datetime:
@@ -151,6 +171,7 @@ def _empty_summary() -> dict[str, Any]:
         "skipped_paused": 0,
         "skipped_missing_config": 0,
         "skipped_real_disabled": 0,
+        "skipped_missing_scope": 0,
         "blocked_invalid": 0,
         "events_seen": 0,
         "events_ingested": 0,
@@ -286,6 +307,36 @@ async def run_source_request(
         await session.flush()
         return {"request_id": request.request_id, "status": "skipped_paused"}
 
+    if (
+        request.action_type in _SCOPE_GATED_ACTIONS
+        and sync_scope_block(request.source_type) == "missing_scope"
+    ):
+        request.status = REQUEST_STATUS_BLOCKED
+        request.finished_at = safe_now
+        request.result_summary = {
+            "status": "blocked_missing_scope",
+            "blocked_reason": "missing_scope",
+            "external_side_effect": False,
+            **_scope_meta(request.source_type),
+        }
+        request.error_summary = {}
+        request.source_state_after = _state_snapshot(state)
+        session.add(
+            _audit(
+                event_type="source_run_blocked",
+                request=request,
+                payload={
+                    "status": "blocked_missing_scope",
+                    "blocked_reason": "missing_scope",
+                    "source_type": request.source_type,
+                    "action_type": request.action_type,
+                    "external_side_effect": False,
+                },
+            )
+        )
+        await session.flush()
+        return {"request_id": request.request_id, "status": "blocked_missing_scope"}
+
     connector = registry.get(request.source_type)
     if connector is None:
         request.status = REQUEST_STATUS_BLOCKED
@@ -341,7 +392,8 @@ async def run_source_request(
     try:
         if request.action_type == ACTION_TEST:
             result = await connector.test_connection()
-        elif request.action_type == ACTION_SYNC:
+        elif request.action_type in {ACTION_SYNC, ACTION_PREVIEW_SYNC}:
+            # Preview reuses the read-only sync listing but never persists.
             result = await connector.sync(watermark=state.input_watermark)
         else:
             input_data = request.input_snapshot.get("input") or {}
@@ -389,6 +441,66 @@ async def run_source_request(
         return {"request_id": request.request_id, "status": REQUEST_STATUS_FAILED}
 
     finished = result.finished_at
+
+    if request.action_type == ACTION_PREVIEW_SYNC:
+        # Preview: count + sample, NEVER persist source events and NEVER mark
+        # the source connected.
+        samples = sanitize_for_logs(
+            [str(event.title or "") for event in result.events[:5] if event.title]
+        )
+        preview_status = (
+            REQUEST_STATUS_SUCCEEDED
+            if result.status == CONNECTOR_STATUS_SUCCEEDED
+            else REQUEST_STATUS_SKIPPED
+            if result.status
+            in {CONNECTOR_STATUS_MISSING_CONFIG, CONNECTOR_STATUS_SKIPPED}
+            else REQUEST_STATUS_FAILED
+        )
+        request.status = preview_status
+        request.finished_at = finished
+        request.external_side_effect = False
+        request.result_summary = {
+            "status": result.status,
+            "source_type": request.source_type,
+            "action_type": request.action_type,
+            "preview": True,
+            "estimated_events": int(result.events_seen),
+            "sample_titles": samples,
+            "finished_at": finished.isoformat(),
+            "external_side_effect": False,
+            "blocked_reason": result.sanitized_summary.get("reason"),
+            "sanitized_summary": dict(result.sanitized_summary),
+            "warnings": list(result.warnings),
+            **_scope_meta(request.source_type),
+        }
+        request.error_summary = {}
+        state.latest_run_id = active_run_id
+        request.source_state_after = _state_snapshot(state)
+        session.add(
+            _audit(
+                event_type="source_run_finished",
+                request=request,
+                payload={
+                    "run_id": active_run_id,
+                    "status": preview_status,
+                    "connector_status": result.status,
+                    "source_type": request.source_type,
+                    "action_type": request.action_type,
+                    "preview": True,
+                    "estimated_events": int(result.events_seen),
+                    "external_side_effect": False,
+                },
+            )
+        )
+        await session.flush()
+        return {
+            "request_id": request.request_id,
+            "run_id": active_run_id,
+            "status": preview_status,
+            "connector_status": result.status,
+            "preview": True,
+        }
+
     ingestion_summary: dict[str, Any] = {}
     if (
         request.action_type in {ACTION_SYNC, ACTION_BACKFILL}
@@ -432,7 +544,11 @@ async def run_source_request(
         )
     request.finished_at = finished
     request.external_side_effect = bool(result.external_side_effect)
-    request.result_summary = _result_summary(result)
+    request.result_summary = {
+        **_result_summary(result),
+        **_scope_meta(request.source_type),
+        "blocked_reason": None,
+    }
     request.error_summary = {"errors": list(result.errors)} if result.errors else {}
 
     if result.status == CONNECTOR_STATUS_SUCCEEDED:
@@ -515,6 +631,8 @@ async def run_source_requests(
             _bump(summary, "unchanged")
         elif status == "skipped_paused":
             _bump(summary, "skipped_paused")
+        elif status == "blocked_missing_scope":
+            _bump(summary, "skipped_missing_scope")
         elif status == "blocked_invalid":
             _bump(summary, "blocked_invalid")
         elif status == REQUEST_STATUS_SUCCEEDED:
