@@ -47,6 +47,39 @@ main{flex:1;min-width:0;padding:0 28px 60px}
 .sec{display:none;padding-top:18px}
 .sec.on{display:block}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.page-header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
+.page-kicker{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text)}
+.page-title{font-size:28px;line-height:1.12;font-weight:720;margin:3px 0 6px;letter-spacing:0}
+.page-subtitle{max-width:720px;color:var(--muted);font-size:14px}
+.hero-card{background:linear-gradient(135deg,var(--surface),var(--accent-soft));border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.status-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px;min-height:132px;display:flex;flex-direction:column;gap:8px}
+.status-card.primary{border-color:rgba(91,79,214,.35);box-shadow:0 10px 26px rgba(20,25,40,.05)}
+.status-card .eyebrow{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.status-card .big{font-size:24px;font-weight:720;line-height:1.1}
+.status-card .explain{color:var(--muted);font-size:12.5px;max-width:38em}
+.status-card .next{margin-top:auto;font-size:12.5px;font-weight:650}
+.split-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,.8fr);gap:14px}
+.callout{border-radius:var(--radius);padding:14px 16px;background:var(--accent-soft);color:var(--accent-text);border:1px solid rgba(91,79,214,.18)}
+.callout.warn{background:var(--amber-soft);color:var(--amber-text);border-color:rgba(192,123,19,.2)}
+.callout.danger{background:var(--red-soft);color:var(--red-text);border-color:rgba(214,69,69,.2)}
+.stepper{display:grid;gap:7px;margin-top:10px}
+.step{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;background:var(--surface)}
+.step .num{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--surface2);color:var(--muted);font-size:11px;font-weight:700;flex-shrink:0}
+.step.done .num{background:var(--green-soft);color:var(--green-text)}
+.step.warn .num{background:var(--amber-soft);color:var(--amber-text)}
+.issue-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.issue-card,.action-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.issue-card.high,.action-card.high{border-left:4px solid var(--red)}
+.issue-card.medium,.action-card.medium{border-left:4px solid var(--amber)}
+.issue-card.low,.action-card.low{border-left:4px solid var(--border)}
+.explanation-card{background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;color:var(--muted);font-size:12.5px}
+.technical-details{margin-top:10px}
+.technical-details summary{color:var(--muted);cursor:pointer;font-size:12px}
+.command-chip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:6px 11px;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.empty-state{border:1px dashed var(--border);border-radius:var(--radius);padding:22px;text-align:center;color:var(--muted);background:transparent}
+body.explain-simple .simple-hidden{display:none!important}
+body.explain-detailed .detailed-hidden{display:none!important}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px}
 .kpi .l{font-size:12px;color:var(--muted)}
@@ -163,7 +196,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   aside .logo{display:none}.navsep{display:none}
   .nav{flex-shrink:0;margin:0 2px}
   main{padding:0 14px 40px}
-  .grid2,.grid3,.cols,.chain{grid-template-columns:1fr}
+  .grid2,.grid3,.cols,.chain,.split-layout{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -182,7 +215,6 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="nav" data-nav="pr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Product</div>
   <div class="nav" data-nav="gr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Growth</div>
   <div class="nav" data-nav="sa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>Sales signals</div>
-  <div class="nav" data-nav="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></svg>Finance</div>
   <div class="nav" data-nav="te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3 3.4-5 6.5-5s5.7 2 6.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5c2.6.3 4.7 1.9 5.5 4.5"/></svg>Team</div>
   <div class="nav" data-nav="ta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l2 2 3.5-3.5M4 12l2 2 3.5-3.5M4 18l2 2 3.5-3.5M13 6h8M13 12h8M13 18h8"/></svg>Tasks</div>
   <div class="nav" data-nav="me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Metrics</div>
@@ -198,6 +230,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
     <h1 id="sec-title">Command center</h1>
     <span id="global-status"></span>
     <span id="dev-badge" class="row" style="gap:5px;display:none"></span>
+    <button class="iconbtn" id="explain-mode" title="Explain mode: Simple hides technical details; Detailed shows receipts, ids and watermarks">Simple mode</button>
     <select id="role-switch" class="iconbtn" title="Роль / аудитория — backend отдаёт разный read-model и redaction">
       <option value="founder">Founder</option>
       <option value="team">Team</option>
@@ -242,10 +275,12 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   </section>
 
   <section class="sec" data-sec="src">
-    <div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:8px">
+    <div class="page-header">
       <div>
-        <div style="font-size:16px;font-weight:600">Sources / Data Control</div>
-        <div class="mut">Masked setup status, source health and safe request-only controls.</div>
+        <div class="page-kicker">Sources</div>
+        <div class="page-title">Connect your company data</div>
+        <!-- Legacy marker: Sources / Data Control -->
+        <div class="page-subtitle">FounderOS reads sources in read-only mode and builds evidence. It never writes to Jira, GitHub, Gmail or other external systems.</div>
       </div>
       <button class="btn ghost" id="sources-refresh">Refresh sources</button>
     </div>
@@ -255,10 +290,11 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   </section>
 
   <section class="sec" data-sec="dq">
-    <div class="row" style="justify-content:space-between;flex-wrap:wrap;margin-bottom:8px">
+    <div class="page-header">
       <div>
-        <div style="font-size:16px;font-weight:600">Data Quality</div>
-        <div class="mut">Evidence gaps, stale data, orphan nodes and source requests that need review.</div>
+        <div class="page-kicker">Data Quality</div>
+        <div class="page-title">What blocks accurate answers?</div>
+        <div class="page-subtitle">This board explains what prevents FounderOS from trusting the data: setup blockers, evidence gaps, graph hygiene, run issues and Obsidian sync.</div>
       </div>
       <button class="btn ghost" id="dq-refresh">Refresh data quality</button>
     </div>
@@ -279,11 +315,25 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   </section>
 
   <section class="sec" data-sec="ac">
+    <div class="page-header">
+      <div>
+        <div class="page-kicker">Action Center</div>
+        <div class="page-title">What should I decide next?</div>
+        <div class="page-subtitle">A short decision board from evidence, conflicts, blocked work and data-quality issues. Technical refs stay in details.</div>
+      </div>
+    </div>
     <div class="statusline" id="ac-msg"></div>
     <div class="stack" id="ac-body"></div>
   </section>
 
   <section class="sec" data-sec="kt">
+    <div class="page-header">
+      <div>
+        <div class="page-kicker">Knowledge Tree</div>
+        <div class="page-title">Obsidian Bridge first</div>
+        <div class="page-subtitle">FounderOS generates a real local Obsidian vault. Use Obsidian for Graph View, Local Graph, backlinks, Markdown notes and search.</div>
+      </div>
+    </div>
     <div id="kt-bridge"></div>
     <details class="card" id="kt-webgraph-fallback" style="margin-top:12px">
       <summary>Web graph preview fallback / debug</summary>
@@ -304,7 +354,6 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
     <div class="statusline" id="sa-msg"></div>
     <div class="stack" id="sa-body"></div>
   </section>
-  <section class="sec" data-sec="fi"><div class="stack" id="fi-body"></div></section>
   <section class="sec" data-sec="te"><div class="stack" id="te-body"></div></section>
   <section class="sec" data-sec="ta"><div class="stack" id="ta-body"></div></section>
   <section class="sec" data-sec="me"><div class="stack" id="me-body"></div></section>
@@ -428,7 +477,69 @@ async function api(path,opts){
 var COLOR_BADGE={green:["b-green","зелёный"],yellow:["b-amber","жёлтый"],red:["b-red","красный"],unknown:["b-mut","нет данных"]};
 function colorBadge(c,label){var m=COLOR_BADGE[c]||COLOR_BADGE.unknown;return '<span class="badge '+m[0]+'"><span class="dot" style="background:currentColor"></span>'+esc(label||m[1])+'</span>';}
 
-var SECTION_TITLES={cc:"Command center",src:"Sources / Data Control",dq:"Data Quality",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",fi:"Finance",te:"Team & operations",ta:"Execution",me:"Metrics",tw:"Team workspace",orh:"Operating rhythm",upd:"Curated updates",spk:"Share packs",ntf:"Notifications",inv:"Investor view"};
+var EXPLAIN_MODE=localStorage.getItem("fos_explain_mode")||"simple";
+function isDetailed(){return EXPLAIN_MODE==="detailed";}
+function applyExplainMode(){
+  document.body.classList.toggle("explain-detailed",isDetailed());
+  document.body.classList.toggle("explain-simple",!isDetailed());
+  var btn=$("explain-mode");
+  if(btn)btn.textContent=isDetailed()?"Detailed mode":"Simple mode";
+}
+function technicalDetails(summary,html,open){
+  return '<details class="technical-details simple-hidden" '+(open?'open':'')+'><summary>'+esc(summary||"Show technical details")+'</summary>'+html+'</details>';
+}
+var STATUS_HELP={
+  missing_config:"Нужно добавить backend env vars. FounderOS пока не может читать этот источник.",
+  real_disabled:"Safe mode is on. External APIs will not be called.",
+  real_connectors_disabled:"Safe mode is on. External APIs will not be called.",
+  missing_scope:"Нужно ограничить Jira projects или GitHub repos, чтобы не читать всё подряд.",
+  blocked_missing_scope:"Sync did not run because scope is missing. Add allowed Jira projects or GitHub repos first.",
+  never_tested:"Credentials могут быть настроены, но connection test ещё не был успешным.",
+  connected:"Последний безопасный test или sync прошёл успешно.",
+  degraded:"Последний run упал или вернул warnings. Откройте receipt для деталей.",
+  preview:"Preview показывает, что будет прочитано, но ничего не сохраняет.",
+  preview_sync:"Preview показывает, что будет прочитано, но ничего не сохраняет.",
+  skipped_missing_config:"Нет credentials. Можно продолжать локально, но внешний источник пока не синкается.",
+  watermark:"Watermark — точка, с которой следующий sync продолжит чтение.",
+  receipt:"Receipt — проверяемый отчёт о connector run: scope, limits, pages, events, watermarks и sanitized errors.",
+  paused:"Источник на паузе. Sync и backfill не будут выполняться.",
+  disabled:"Источник выключен.",
+  error:"Источник требует внимания: последний run вернул ошибку."
+};
+function statusMeaning(key){
+  return STATUS_HELP[key]||STATUS_HELP[String(key||"").replace(/^connector_/,"")]||"Подробности доступны в technical details.";
+}
+function humanSourceState(s){
+  var diag=(CONNECTOR_DIAGS||{})[s.source_type]||{};
+  var ready=s.connector_readiness||{};
+  if(s.paused||s.status==="disabled")return {key:"paused",label:"Paused",cls:"b-mut",next:"Resume source when you are ready to collect evidence."};
+  if(diag.scope_required&&!diag.scope_configured)return {key:"missing_scope",label:"Scope missing",cls:"b-red",next:"Add allowed Jira projects or GitHub repos, then test connection."};
+  if(diag.real_execution==="disabled")return {key:"real_disabled",label:"Safe mode",cls:"b-amber",next:"Keep using preview, or enable real read-only connectors when ready."};
+  if(ready.status==="missing"||ready.status==="partial"||diag.connector_state==="missing_config")return {key:"missing_config",label:"Needs config",cls:"b-red",next:"Add backend env vars, restart, then test connection."};
+  if(diag.connector_state==="never_tested")return {key:"never_tested",label:"Never tested",cls:"b-amber",next:"Run Test connection before sync."};
+  if(s.status==="error"||s.status==="degraded"||diag.connector_state==="degraded")return {key:"degraded",label:"Needs attention",cls:"b-amber",next:"Open the latest run receipt and retry safely if needed."};
+  if(s.status==="connected"||diag.connector_state==="connected")return {key:"connected",label:"Connected",cls:"b-green",next:"Preview sync, then run evidence pipeline and sync Obsidian."};
+  return {key:s.status||"unknown",label:"Collecting",cls:"b-blue",next:"Start with Test connection or Preview sync."};
+}
+function humanIssueTitle(i){
+  var t=String(i.category||i.issue_type||"issue").replace(/_/g," ");
+  var map={
+    connector_real_enabled_missing_scope:"Sync is blocked because no scope is configured",
+    connector_scope_too_broad:"Connector scope is too broad",
+    source_event_not_normalized:"Events are not usable evidence yet",
+    normalized_not_lifted_to_graph:"Evidence has not reached the knowledge graph",
+    source_run_no_receipt:"A source run is missing its receipt",
+    receipt_has_errors:"A connector run finished with errors",
+    receipt_rate_limited:"Connector was rate limited",
+    receipt_partial_success:"Connector completed only part of the work",
+    preview_has_not_been_synced:"Preview ran, but data has not been synced yet",
+    retry_available:"A safe retry is available",
+    watermark_not_updated_after_success:"Watermark did not advance after success"
+  };
+  return map[i.category]||map[i.issue_type]||t.charAt(0).toUpperCase()+t.slice(1);
+}
+
+var SECTION_TITLES={cc:"Command center",src:"Sources",dq:"Data Quality",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",te:"Team & operations",ta:"Execution",me:"Metrics",tw:"Team workspace",orh:"Operating rhythm",upd:"Curated updates",spk:"Share packs",ntf:"Notifications",inv:"Investor view"};
 var LAZY_LOADERS={src:function(){loadSources();},dq:function(){loadDataQuality();},so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},spk:function(){loadSharePacks();},ntf:function(){loadNotifications();},inv:function(){loadInvestor();}};
 var LAZY_LOADED={};
 function show(id){
@@ -444,6 +555,15 @@ document.addEventListener("click",function(e){
   var n=e.target.closest("[data-nav]");if(n){show(n.getAttribute("data-nav"));return;}
   var g=e.target.closest("[data-go]");if(g){show(g.getAttribute("data-go"));}
 });
+if($("explain-mode"))$("explain-mode").addEventListener("click",function(){
+  EXPLAIN_MODE=isDetailed()?"simple":"detailed";
+  localStorage.setItem("fos_explain_mode",EXPLAIN_MODE);
+  applyExplainMode();
+  if(SOURCES)sourcesRender();
+  if(DQ)dataQualityRender();
+  if(ACTIONS)acRender();
+});
+applyExplainMode();
 
 function overlay(id,on){$(id).classList.toggle("on",on);}
 document.addEventListener("click",function(e){if(e.target.classList&&e.target.classList.contains("overlay"))e.target.classList.remove("on");});
@@ -507,6 +627,46 @@ function aiSeesBlock(findings,title){
       +'<button class="actbtn" data-soact="trail" data-fk="'+key+'">trail</button></div>';
   }
   return h+'</div>';
+}
+
+function commandCenterClarityRender(){
+  if(!CC)return;
+  var hh=CC.startup_health||{},so=CC.second_opinion||{},top=(so.top_conflicts||[]);
+  var na=CC.next_actions||[];
+  var src=((CC.source_health||{}).summary)||{},dq=((CC.data_quality||{}).counts)||{};
+  var av=CC.data_availability||{},ready=av.ready||0,totalSeries=av.total_series||0;
+  var dqs=dq.by_severity||{},obs=OBSIDIAN.status||{};
+  var firstAction=na[0]||{};
+  if(!firstAction.title){
+    if(src.missing_config_sources)firstAction={title:"Connect the first external source",source_title:"Sources",impact:"medium",urgent:false};
+    else if(src.pending_requests)firstAction={title:"Run the safe source runner",source_title:"Sources",impact:"medium",urgent:false};
+    else firstAction={title:"Review the top AI conflict",source_title:"Second opinion",impact:"medium",urgent:false};
+  }
+  var pulseLabel=hh.headline||"Collecting company state";
+  var lastEvidence=src.last_successful_sync?src.last_successful_sync.slice(0,16).replace("T"," "):"No successful sync yet";
+  var setupDone=0,setupTotal=4;
+  if(src.total_sources)setupDone++;
+  if(!src.missing_config_sources)setupDone++;
+  if(totalSeries&&ready)setupDone++;
+  if(obs.status==="configured"||obs.status===undefined)setupDone++;
+  var topConflict=top[0];
+  var obsStatus=obs.status||"open Knowledge Tree";
+  var obsCls=obs.status==="configured"?"b-green":obs.status==="disabled"?"b-mut":"b-amber";
+  $("cc-hero").innerHTML=
+    '<div class="page-header"><div><div class="page-kicker">FounderOS</div><div class="page-title">AI second opinion for your company</div>'
+    +'<div class="page-subtitle">AI сравнивает заявленное состояние компании с evidence из источников и показывает, что требует решения сейчас.</div></div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><span class="badge '+(hh.level==="green"?"b-green":hh.level==="red"?"b-red":hh.level==="yellow"?"b-amber":"b-mut")+'">'+esc(pulseLabel)+'</span><button class="btn ghost" data-go="ac">Open actions</button></div></div>'
+    +'<div class="status-grid">'
+    +'<div class="status-card primary"><div class="eyebrow">Company Pulse</div><div class="big">'+num(so.open_total||0)+' open signals</div><div class="explain">Главное состояние: '+esc(pulseLabel)+'. Data confidence зависит от свежести evidence и подключённых источников.</div><div class="next">Last evidence: '+esc(lastEvidence)+'</div></div>'
+    +'<div class="status-card"><div class="eyebrow">What AI sees differently</div><div class="big">'+num(top.length)+' conflicts</div><div class="explain">'+(topConflict?esc(topConflict.summary):'AI не видит крупных расхождений в текущих данных.')+'</div><div class="next"><button class="actbtn" data-go="so">Open evidence</button></div></div>'
+    +'<div class="status-card"><div class="eyebrow">Next Best Actions</div><div class="big">'+esc(firstAction.title||"Review actions")+'</div><div class="explain">'+esc(firstAction.source_title||"FounderOS ranked this from evidence, severity and blocked work.")+'</div><div class="next"><button class="actbtn primary" data-go="ac">Take action</button></div></div>'
+    +'<div class="status-card"><div class="eyebrow">Data Trust</div><div class="big">'+num(src.total_sources||0)+' sources</div><div class="explain">'+num(src.missing_config_sources||0)+' need setup · '+num(src.failed_recent_runs||0)+' failed recent runs · '+num(ready)+'/'+num(totalSeries)+' evidence series ready.</div><div class="next"><button class="actbtn" data-go="src">Connect sources</button></div></div>'
+    +'<div class="status-card"><div class="eyebrow">Obsidian Vault</div><div class="big"><span class="badge '+obsCls+'">'+esc(obsStatus)+'</span></div><div class="explain">FounderOS generates a real local Obsidian vault for graph, backlinks and Markdown notes.</div><div class="next"><button class="actbtn" data-go="kt">Open vault tools</button></div></div>'
+    +'<div class="status-card"><div class="eyebrow">Setup Progress</div><div class="big">'+setupDone+'/'+setupTotal+' ready</div><div class="explain">Local workspace, source setup, evidence pipeline and Obsidian bridge are tracked separately.</div><div class="next">'+(dqs.high?'<span class="badge b-red">Data quality needs review</span>':'<span class="badge b-green">No critical setup blocker</span>')+'</div></div>'
+    +'</div>';
+  $("cc-focus").innerHTML='<div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap"><div><span class="badge b-accent">Main next action</span><div style="font-size:16px;font-weight:650;margin-top:8px">'+esc(firstAction.title||"Review Action Center")+'</div><div class="mut">Why now: '+esc(firstAction.source_title||firstAction.why_now||"This is the clearest next step from current evidence.")+'</div></div><button class="btn" data-go="ac">Open Action Center</button></div>';
+  $("cc-conflicts").innerHTML=technicalDetails("Show detailed company diagnostics",'<div class="grid2"><div class="card">'+($("cc-threat").innerHTML||"")+'</div><div class="card">'+($("cc-team").innerHTML||"")+'</div><div class="card">'+($("cc-fresh").innerHTML||"")+'</div><div class="card">'+($("cc-avail").innerHTML||"")+'</div><div class="card">'+($("cc-source").innerHTML||"")+'</div><div class="card">'+($("cc-quality").innerHTML||"")+'</div></div>',false);
+  ["cc-threat","cc-team","cc-fresh","cc-avail","cc-source","cc-quality"].forEach(function(id){$(id).classList.add("simple-hidden");});
 }
 
 function ccRender(){
@@ -702,6 +862,7 @@ function ccRender(){
     }
     $("cc-map").innerHTML=mh||emptyState("Проекты появятся после маппинга Jira/GitHub","Как замапить","data-go=\"pr\"");
   }
+  commandCenterClarityRender();
 }
 
 function stRender(){
@@ -878,7 +1039,7 @@ function saRender(){
   var accounts=SALES.accounts||[];
   if(!accounts.length){
     $("sa-body").innerHTML=emptyState(
-      "Аккаунтов из переписки пока нет. Подключите Gmail и прогоните агентов — accounts/contacts/deals появятся из реальных тредов (без сумм и финансов).",
+      "Аккаунтов из переписки пока нет. Подключите Gmail и прогоните агентов — accounts/contacts/deals появятся из реальных тредов без денежных показателей.",
       "Открыть Knowledge tree",'data-go="kt"');
     return;
   }
@@ -889,7 +1050,7 @@ function saRender(){
     +'<div class="kpi"><div class="l">Тёплые / остывают</div><div class="v">'+num(bw.warm||0)+' / '+num((bw.cooling||0)+(bw.cold||0))+'</div></div>'
     +'<div class="kpi"><div class="l">Сигналы отношений</div><div class="v" style="color:'+(SALES.counts.relationship_risks?"var(--amber)":"inherit")+'">'+num(SALES.counts.relationship_risks)+'</div></div>'
     +'</div>';
-  html+='<div class="mut" style="margin:10px 0">Без сумм, revenue и pipeline в деньгах. Это сигналы коммуникаций и состояние отношений.</div>';
+  html+='<div class="mut" style="margin:10px 0">Без сумм и денежных pipeline. Это сигналы коммуникаций и состояние отношений.</div>';
   for(var i=0;i<accounts.length;i++){
     var a=accounts[i];
     var wl="warm-"+(a.warmth||"unknown");
@@ -910,56 +1071,6 @@ function saRender(){
     html+='</div>';
   }
   $("sa-body").innerHTML=html;
-}
-
-function fiRender(){
-  var m=manual().finance||{};
-  var html="";
-  if(!m.cash&&!m.burn&&!m.income){
-    html+=emptyState("Три числа, чтобы понимать ситуацию: деньги на счету, burn в месяц, доход в месяц.","Заполнить финансы",'data-fiedit');
-  } else {
-    var cash=Number(String(m.cash||"").replace(/[^\d.]/g,""))||0;
-    var burn=Number(String(m.burn||"").replace(/[^\d.]/g,""))||0;
-    var income=Number(String(m.income||"").replace(/[^\d.]/g,""))||0;
-    var net=burn-income;
-    var runway=net>0?Math.floor(cash/net):null;
-    if(m.note)html+='<div class="alert warn">'+esc(m.note)+'</div>';
-    if(runway!==null&&runway<6)html+='<div class="alert danger">Runway меньше 6 месяцев — пора действовать: резать расходы или поднимать деньги.</div>';
-    html+='<div class="kpis">'
-      +'<div class="kpi"><div class="l">Runway</div><div class="v">'+(runway===null?"∞":runway+" мес")+'</div><div class="d">'+esc(m.cash||"")+' на счету</div></div>'
-      +'<div class="kpi"><div class="l">Burn, net</div><div class="v">'+esc(m.burn||"—")+'</div><div class="d">в месяц</div></div>'
-      +'<div class="kpi"><div class="l">Доход</div><div class="v">'+esc(m.income||"—")+'</div><div class="d">'+(burn?("покрывает "+Math.round(income/burn*100)+"% расходов"):"")+'</div></div>'
-      +'</div>';
-    var months=m.months||[];
-    if(months.length){
-      var mx=0;
-      for(var i0=0;i0<months.length;i0++)mx=Math.max(mx,Number(months[i0][1])||0,Number(months[i0][2])||0);
-      var mb='<div style="display:flex;align-items:flex-end;gap:10px;height:100px;margin-top:8px">';
-      for(var i=0;i<months.length;i++){
-        var ex=Number(months[i][1])||0,inc=Number(months[i][2])||0;
-        mb+='<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2px">'
-          +'<div style="height:'+(mx?Math.round(ex/mx*70):0)+'px;background:var(--red);opacity:.65;border-radius:3px"></div>'
-          +'<div style="height:'+(mx?Math.round(inc/mx*70):0)+'px;background:var(--green);border-radius:3px"></div>'
-          +'<div class="mut" style="text-align:center">'+esc(months[i][0]||"")+'</div></div>';
-      }
-      mb+='</div><div class="row" style="gap:14px;margin-top:8px"><span class="row mut"><span class="dot" style="background:var(--red);opacity:.65"></span>расходы</span><span class="row mut"><span class="dot" style="background:var(--green)"></span>доход</span></div>';
-      html+='<div class="card"><p class="h">Burn vs доход <span class="edit" data-fiedit>изменить</span></p>'+mb+'</div>';
-    } else {
-      html+='<div class="row"><button class="btn ghost" data-fiedit>Изменить финансы</button></div>';
-    }
-  }
-  $("fi-body").innerHTML=html;
-  var btns=$("fi-body").querySelectorAll("[data-fiedit]");
-  for(var b=0;b<btns.length;b++)btns[b].addEventListener("click",function(){
-    var mm=manual().finance||{};
-    openEditor("Finance",[
-      {key:"cash",label:"На счету (например $67k)",value:mm.cash||""},
-      {key:"burn",label:"Расходы в месяц",value:mm.burn||""},
-      {key:"income",label:"Доход в месяц",value:mm.income||""},
-      {key:"note",label:"Предупреждение (видно сверху)",value:mm.note||""},
-      {key:"months",kind:"area",label:"Помесячно",hint:"мес | расходы | доход (числа)",value:joinLines(mm.months)}
-    ],function(out){var s=manual();s.finance={cash:out.cash.trim(),burn:out.burn.trim(),income:out.income.trim(),note:out.note.trim(),months:lines(out.months)};saveManual(s);});
-  });
 }
 
 function teRender(){
@@ -1080,10 +1191,11 @@ document.addEventListener("click",function(e){
   if(q&&!e.target.closest("[data-soact]")){openTask(q.getAttribute("data-task"));}
 });
 
-var ACT_SRC_LABEL={second_opinion:"second opinion",graph_gardener:"gardener",execution:"задача",sales:"продажи",data_availability:"данные",product:"продукт"};
-var GROUP_BADGE={critical_now:"b-red",needs_decision:"b-accent",waiting_for_evidence:"b-amber",cleanup:"b-mut",later:"b-mut"};
+var ACT_SRC_LABEL={second_opinion:"second opinion",graph_gardener:"gardener",execution:"задача",sales:"продажи",data_availability:"данные",product:"продукт",connector:"sources"};
+var GROUP_BADGE={critical_now:"b-red",needs_decision:"b-accent",setup_required:"b-amber",waiting_for_evidence:"b-amber",cleanup:"b-mut",later:"b-mut"};
 function actionCard(a){
   var sev=a.severity==="high"?"sev-high":a.severity==="low"?"sev-low":"";
+  var sevClass=a.severity==="high"?"high":a.severity==="medium"?"medium":"low";
   var ref=a.action_ref||{};
   var cta="";
   if(ref.kind==="finding")cta+='<button class="actbtn" data-soact="trail" data-fk="'+esc(ref.finding_key)+'">trail</button><button class="actbtn primary" data-acresolve="'+esc(ref.finding_key)+'">решено</button><button class="actbtn" data-acsnooze="'+esc(ref.finding_key)+'">отложить</button>';
@@ -1091,30 +1203,32 @@ function actionCard(a){
   else if(ref.kind==="task")cta+='<button class="actbtn" data-task="'+esc(ref.issue_key)+'">открыть</button><button class="actbtn" data-acowner="'+esc(ref.issue_key)+'">владелец → proposal</button>';
   else if(ref.kind==="metric")cta+='<span class="mut">прогнать агентов / синк</span>';
   cta+='<button class="actbtn" data-acreview="'+esc(JSON.stringify(ref))+'">отметить просмотренным</button>';
-  return '<div class="actcard '+sev+'"><div class="row" style="flex-wrap:wrap;gap:6px">'
+  return '<div class="action-card '+sevClass+' '+sev+'"><div class="row" style="flex-wrap:wrap;gap:6px">'
     +'<span class="badge '+(a.severity==="high"?"b-red":a.severity==="low"?"b-mut":"b-amber")+'">'+esc(a.severity)+'</span>'
     +'<span class="src-badge">'+esc(ACT_SRC_LABEL[a.source]||a.source)+'</span>'
-    +(a.confidence!=null?'<span class="mut">conf '+Number(a.confidence).toFixed(2)+'</span>':'')
-    +(a.evidence_count?'<span class="mut">evidence '+a.evidence_count+'</span>':'')
-    +(a.visibility?'<span class="badge b-mut" title="visibility">'+esc(a.visibility)+'</span>':'')
     +'</div>'
-    +'<div style="font-weight:500;margin:6px 0 2px">'+esc(a.title)+'</div>'
-    +'<div class="mut">почему сейчас: '+esc(a.why_now||"")+(a.affected_entity?' · '+esc(a.affected_entity):'')+'</div>'
-    +'<div class="mut" style="margin-top:2px"><b>почему в группе:</b> '+esc(a.group_reason||"")+'</div>'
-    +'<div class="mut" style="margin-top:2px">→ '+esc(a.cta||"")+'</div>'
-    +'<div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">'+cta+'</div></div>';
+    +'<div style="font-weight:650;margin:7px 0 3px">'+esc(a.title)+'</div>'
+    +'<div class="mut">Why now: '+esc(a.why_now||"This is the next useful decision from current evidence.")+'</div>'
+    +'<div class="explanation-card" style="margin-top:8px"><b>What to do next:</b> '+esc(a.cta||"Open the related evidence and decide.")+'</div>'
+    +'<div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">'+cta+'</div>'
+    +technicalDetails("Show evidence and routing",'<div class="mut">почему в группе / group reason: '+esc(a.group_reason||"")+'</div><div class="mut">Affected: '+esc(a.affected_entity||"global")+'</div><div class="mut">Evidence: '+num(a.evidence_count||0)+(a.confidence!=null?' · confidence '+Number(a.confidence).toFixed(2):'')+'</div><pre>'+esc(JSON.stringify(ref,null,1))+'</pre>',false)
+    +'</div>';
 }
 function acRender(){
   if(!ACTIONS){$("ac-body").innerHTML='<div class="mut">Собираю действия…</div>';return;}
   var groups=ACTIONS.groups||[];
   var total=(ACTIONS.counts&&ACTIONS.counts.total)||0;
-  if(!total){$("ac-body").innerHTML='<div class="empty">Действий нет — всё под контролем.</div>';return;}
-  var html='<div class="mut" style="margin-bottom:8px">Лента «что делать дальше», сгруппированная по объяснимым признакам — severity, evidence, confidence, blocked/overdue/ownerless, тип действия. Без скрытого AI-score: у каждого действия есть причина попадания в группу. AI предлагает — решение за тобой.</div>';
+  if(!total){$("ac-body").innerHTML='<div class="empty-state">No actions right now. Keep collecting evidence and review Data Quality after the next sync.</div>';return;}
+  var shown=0,limit=isDetailed()?100:8;
+  var html='<div class="status-grid" style="margin-bottom:14px"><div class="status-card primary"><div class="eyebrow">Next decisions</div><div class="big">'+num(total)+'</div><div class="explain">AI proposes actions. You decide. Simple mode shows the top few; Detailed mode shows routing and evidence refs.</div></div><div class="status-card"><div class="eyebrow">Default view</div><div class="big">Top '+Math.min(limit,total)+'</div><div class="explain">Use groups to separate urgent decisions, setup blockers, evidence waits and cleanup.</div></div></div>';
   groups.forEach(function(g){
-    if(!g.count)return;
+    if(!g.count||shown>=limit)return;
+    var slice=(g.actions||[]).slice(0,Math.max(0,limit-shown));
+    shown+=slice.length;
     html+='<div class="card" style="margin-bottom:12px"><p class="h"><span class="badge '+(GROUP_BADGE[g.key]||"b-mut")+'">'+esc(g.label)+'</span><span class="mut">'+g.count+'</span></p>'
-      +'<div class="mut" style="margin:-4px 0 8px">'+esc(g.rule)+'</div>';
-    g.actions.forEach(function(a){html+=actionCard(a);});
+      +'<div class="mut" style="margin:-4px 0 8px">'+esc(g.rule||"Grouped by urgency, evidence and decision type.")+'</div>';
+    slice.forEach(function(a){html+=actionCard(a);});
+    if((g.actions||[]).length>slice.length)html+='<div class="mut">Switch to Detailed mode to see '+((g.actions||[]).length-slice.length)+' more in this group.</div>';
     html+='</div>';
   });
   $("ac-body").innerHTML=html;
@@ -1168,7 +1282,7 @@ function meRender(){
   $("me-body").innerHTML=html;
 }
 
-// --- Investor view: server-backed, curated, no finance / no raw refs ----
+// --- Investor view: server-backed, curated, no restricted metrics / no raw refs ----
 var INVDATA=null;
 function basisChip(basis){
   if(basis==="observed")return '<span class="dachip da-ready"><span class="dot" style="background:currentColor"></span>наблюдаемо</span>';
@@ -1185,7 +1299,7 @@ function renderInvestor(){
   var d=INVDATA,snap=d.company_snapshot||{},pp=d.product_progress||{},canEdit=VIEW==="founder";
   var html='<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><span class="badge b-accent">Investor view · curated · '+esc(snap.as_of||"")+'</span>'
     +(canEdit?'<span class="h" style="margin:0"><span class="edit" id="inv-edit">изменить декларации</span></span>':'<span class="mut">read-only</span>')+'</div>';
-  html+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Без финансов (MRR / runway / revenue), без сырых evidence/source refs, без внутренних заметок и персональных оценок команды. Каждое утверждение помечено: наблюдаемо или заявлено.</div>';
+  html+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Без денежных метрик, без сырых evidence/source refs, без внутренних заметок и персональных оценок команды. Каждое утверждение помечено: наблюдаемо или заявлено.</div>';
   html+='<div class="card"><p class="h">Снимок компании '+colorBadge(snap.health,snap.health_headline)+'</p>'
     +(snap.headline?'<div style="font-size:16px;font-weight:600">'+esc(snap.headline)+'</div>':'<div class="mut">One-liner не задан — заполни в декларациях.</div>')
     +(snap.subline?'<div class="mut" style="margin-top:4px">'+esc(snap.subline)+'</div>':'')
@@ -1406,7 +1520,7 @@ var PACK_AUD_BADGE={founder:"b-accent",team:"b-blue",investor:"b-green"};
 var SHARE_PACKS=null;
 function manifestPanel(m){
   if(!m)return"";
-  var flags=[["raw_refs_visible","raw refs"],["internal_notes_visible","internal notes"],["personal_team_details_visible","personal team"],["finance_visible","finance"]];
+  var flags=[["raw_refs_visible","raw refs"],["internal_notes_visible","internal notes"],["personal_team_details_visible","personal team"],["finance_visible","restricted metrics"]];
   var chips=flags.map(function(f){var on=m[f[0]];return '<span class="badge '+(on?"b-amber":"b-green")+'">'+f[1]+': '+(on?"visible":"hidden")+'</span>';}).join(" ");
   return '<details class="ev"><summary>Redaction manifest ('+esc(m.redaction_level)+')</summary>'
     +'<div class="row" style="flex-wrap:wrap;gap:5px;margin:6px 0">'+chips+'</div>'
@@ -1607,32 +1721,50 @@ function sourceCard(s){
   var setup=s.connector_readiness||{};
   var da=s.data_availability||{};
   var actions=["test","preview_sync","sync","backfill","pause","resume"];
+  var human=humanSourceState(s);
+  var diag=(CONNECTOR_DIAGS||{})[s.source_type]||{};
+  var latest=s.latest_run||s.latest_request;
+  var latestReceipt=latest&&(latest.receipt||(latest.result_summary||{}).receipt);
+  var steps=[
+    ["Add credentials",!(setup.status==="missing"||setup.status==="partial"||diag.connector_state==="missing_config")],
+    ["Add scope",!(diag.scope_required&&!diag.scope_configured)],
+    ["Enable safe real reads",diag.real_execution==="enabled"||diag.real_execution==="local_only"],
+    ["Test connection",diag.connector_state==="connected"||s.last_success_at],
+    ["Preview sync",!!(latest&&latest.action_type==="preview_sync")],
+    ["Sync and build evidence",!!(s.events_ingested||s.normalized_events)]
+  ];
   var html='<div class="card">'
-    +'<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><div class="row" style="gap:6px;flex-wrap:wrap"><b>'+esc(s.label)+'</b>'+sourceStatusBadge(s.status)+'</div><span class="mut">last sync: '+esc((s.last_sync_at||"—").slice(0,16).replace("T"," "))+'</span></div>'
-    +'<div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0">'+sourceSetupChips(setup.setup||[])+'</div>'
-    +connectorDiagBlock(s)
-    +'<div class="grid3" style="margin:8px 0">'
-    +'<div class="substate"><div class="l">ingested</div><div class="v">'+num(s.events_ingested||0)+'</div></div>'
-    +'<div class="substate"><div class="l">normalized</div><div class="v">'+num(s.normalized_events||0)+'</div></div>'
-    +'<div class="substate"><div class="l">graph updates</div><div class="v">'+num(s.graph_updates||0)+'</div></div>'
-    +'<div class="substate"><div class="l">findings / proposals</div><div class="v">'+num(s.findings_generated||0)+' / '+num(s.proposals_generated||0)+'</div></div>'
+    +'<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><div class="row" style="gap:8px;flex-wrap:wrap"><b>'+esc(s.label)+'</b><span class="badge '+human.cls+'">'+esc(human.label)+'</span></div><div class="mut" style="margin-top:4px">'+esc(statusMeaning(human.key))+'</div></div><button class="actbtn" data-srcact="runs" data-source="'+esc(s.source_type)+'">View runs</button></div>'
+    +'<div class="callout '+(human.cls==="b-red"?"danger":human.cls==="b-amber"?"warn":"")+'" style="margin-top:12px"><b>Next step:</b> '+esc(human.next)+'</div>'
+    +'<div class="stepper">';
+  steps.forEach(function(st,idx){html+='<div class="step '+(st[1]?"done":idx<3?"warn":"")+'"><span class="num">'+(idx+1)+'</span><div><b>'+esc(st[0])+'</b><div class="mut">'+(st[1]?"Ready":"Needs attention")+'</div></div></div>';});
+  html+='</div>'
+    +'<div class="status-grid" style="margin-top:12px">'
+    +'<div class="substate"><div class="l">events ingested</div><div class="v">'+num(s.events_ingested||0)+'</div></div>'
+    +'<div class="substate"><div class="l">usable evidence</div><div class="v">'+num(s.normalized_events||0)+'</div></div>'
+    +'<div class="substate"><div class="l">last sync</div><div class="v" style="font-size:14px">'+esc((s.last_sync_at||"—").slice(0,16).replace("T"," "))+'</div></div>'
     +'</div>'
-    +'<div class="mut">availability: '+esc(da.status||"no_data")+(da.message?' · '+esc(da.message):'')+'</div>'
-    +'<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">'+sourceQueueChips(s.queue_status)+'</div>'
-    +sourceRunLine("latest request",s.latest_request)
-    +sourceRunLine("latest run",s.latest_run);
-  if(s.warnings&&s.warnings.length)html+='<div class="alert warn" style="margin-top:8px">'+esc(s.warnings.join(" · "))+'</div>';
-  if(setup.status==="missing"||setup.status==="partial")html+='<div class="alert warn" style="margin-top:8px">Connector setup is '+esc(setup.status)+'. Configure env vars on the backend, then restart it before testing.</div>';
-  if(s.latest_run&&s.latest_run.result_summary&&s.latest_run.result_summary.warnings&&s.latest_run.result_summary.warnings.length){
-    html+='<div class="mut" style="margin-top:8px">run warnings: '+esc(s.latest_run.result_summary.warnings.join(" · "))+'</div>';
+    +'<div class="mut" style="margin-top:8px">'+esc(da.message||("Availability: "+(da.status||"no data yet")))+'</div>';
+  if(s.warnings&&s.warnings.length)html+='<div class="callout warn" style="margin-top:8px">'+esc(s.warnings.join(" · "))+'</div>';
+  if(latestReceipt&&latestReceipt.status){
+    html+='<div class="explanation-card" style="margin-top:10px">Latest receipt: '+esc(latestReceipt.status)+' · '+esc(latestReceipt.watermark_update_reason||"watermark unchanged")+'. '+esc(statusMeaning(latestReceipt.blocked_reason||latestReceipt.status))+'</div>';
   }
   html+='<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">';
-  actions.forEach(function(a){html+='<button class="actbtn" data-srcact="'+a+'" data-source="'+esc(s.source_type)+'">'+esc(a)+'</button>';});
+  actions.forEach(function(a){
+    var label=a==="preview_sync"?"Preview sync":a==="backfill"?"Backfill":a==="test"?"Test connection":a.charAt(0).toUpperCase()+a.slice(1);
+    html+='<button class="actbtn" data-srcact="'+a+'" data-source="'+esc(s.source_type)+'">'+esc(label)+'</button>';
+  });
   html+='<button class="actbtn" data-srcact="events" data-source="'+esc(s.source_type)+'">events</button>'
     +'<button class="actbtn" data-srcact="errors" data-source="'+esc(s.source_type)+'">errors</button>'
     +'<button class="actbtn" data-srcact="runs" data-source="'+esc(s.source_type)+'">runs</button>'
     +'</div>'
-    +'<details class="ev"><summary>Visibility / redaction policy</summary><pre>'+esc(JSON.stringify({visibility:s.visibility_policy,redaction:s.redaction_policy,masked_connection:s.masked_connection},null,1))+'</pre></details>'
+    +technicalDetails("Show technical details",connectorDiagBlock(s)
+      +'<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">'+sourceSetupChips(setup.setup||[])+'</div>'
+      +'<div class="mut" style="margin-top:8px">graph updates: '+num(s.graph_updates||0)+' · findings / proposals: '+num(s.findings_generated||0)+' / '+num(s.proposals_generated||0)+'</div>'
+      +'<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">'+sourceQueueChips(s.queue_status)+'</div>'
+      +sourceRunLine("latest request",s.latest_request)
+      +sourceRunLine("latest run",s.latest_run)
+      +'<details class="ev"><summary>Visibility / redaction policy</summary><pre>'+esc(JSON.stringify({visibility:s.visibility_policy,redaction:s.redaction_policy,masked_connection:s.masked_connection},null,1))+'</pre></details>',false)
     +'</div>';
   return html;
 }
@@ -1648,34 +1780,33 @@ function sourceRunSummaryList(title,items,empty){
 function sourcesRender(){
   if(!SOURCES){$("sources-body").innerHTML='<div class="mut">Loading sources…</div>';return;}
   var sum=SOURCES.summary||{};
-  $("sources-summary").innerHTML='<div class="kpi"><div class="l">sources</div><div class="v">'+num(sum.total_sources||0)+'</div><div class="d">tracked source surfaces</div></div>'
-    +'<div class="kpi"><div class="l">events ingested</div><div class="v">'+num(sum.events_ingested||0)+'</div><div class="d">from source_events + virtual sources</div></div>'
-    +'<div class="kpi"><div class="l">needs attention</div><div class="v" style="color:'+(sum.sources_needing_attention?"var(--amber)":"inherit")+'">'+num(sum.sources_needing_attention||0)+'</div><div class="d">degraded / error / paused</div></div>'
-    +'<div class="kpi"><div class="l">pending requests</div><div class="v" style="color:'+(sum.pending_requests?"var(--amber)":"inherit")+'">'+num(sum.pending_requests||0)+'</div><div class="d">queued for safe runner</div></div>'
-    +'<div class="kpi"><div class="l">failed runs</div><div class="v" style="color:'+(sum.failed_recent_runs?"var(--red)":"inherit")+'">'+num(sum.failed_recent_runs||0)+'</div><div class="d">recent source requests</div></div>'
-    +'<div class="kpi"><div class="l">missing config</div><div class="v" style="color:'+(sum.missing_config_sources?"var(--amber)":"inherit")+'">'+num(sum.missing_config_sources||0)+'</div><div class="d">backend env setup only</div></div>';
+  var ready=sum.total_sources?Math.max(0,(sum.total_sources||0)-(sum.sources_needing_attention||0)):0;
+  $("sources-summary").innerHTML='<div class="status-card primary"><div class="eyebrow">Source readiness</div><div class="big">'+num(ready)+' / '+num(sum.total_sources||0)+'</div><div class="explain">Ready means setup is safe enough to test or sync. Missing config and missing scope are setup blockers, not app failures.</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Safe mode</div><div class="big">'+(REAL_CONNECTORS_ENABLED?"Read-only enabled":"No external reads")+'</div><div class="explain">'+(REAL_CONNECTORS_ENABLED?"Real connectors can read only after explicit requests, scope and operator confirmation.":"FounderOS will not call external APIs. You can still use local data, previews and setup checks.")+'</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Evidence collected</div><div class="big">'+num(sum.events_ingested||0)+'</div><div class="explain">Events become useful only after normalization, graph lift and second-opinion generation.</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Needs attention</div><div class="big">'+num(sum.sources_needing_attention||0)+'</div><div class="explain">'+num(sum.missing_config_sources||0)+' missing config · '+num(sum.failed_recent_runs||0)+' failed runs · '+num(sum.pending_requests||0)+' pending requests.</div></div>';
   var banner=REAL_CONNECTORS_ENABLED
-    ?'<div class="alert" style="margin-bottom:12px;background:var(--green-soft);color:var(--green-text)">Real read-only connector execution is <b>enabled</b>. Jira/GitHub run read-only via explicit operator requests; no writes are performed.</div>'
-    :'<div class="alert warn" style="margin-bottom:12px">Real connector execution is <b>disabled</b> (FOUNDEROS_ENABLE_REAL_CONNECTORS=false). Jira/GitHub requests are recorded but runs skip with <code>real_connectors_disabled</code>. Internal and local sources still run.</div>';
+    ?'<div class="callout" style="margin-bottom:12px;background:var(--green-soft);color:var(--green-text)">Read-only connector execution is enabled. FounderOS still requires scope, request rows and operator confirmation before external reads. <span class="simple-hidden">Real connector execution is enabled.</span></div>'
+    :'<div class="callout warn" style="margin-bottom:12px">Safe mode: FounderOS will not call external APIs. Requests can be queued and previewed without writing events. <span class="simple-hidden">Real connector execution is disabled.</span></div>';
   var runbook="";
   if(PILOT_INFO){
     var cmd=PILOT_INFO.commands||{};
-    runbook='<details class="ev" style="margin-bottom:12px"><summary>Connector E2E runbook (read-only)</summary>'
-      +'<div class="mut">1. Configure backend env vars (names shown per connector) and restart.</div>'
-      +'<div class="mut">2. Enable real connectors when ready: <code>FOUNDEROS_ENABLE_REAL_CONNECTORS=true</code></div>'
-      +'<div class="mut">3. Test connection (per connector), then run: <code>'+esc(cmd.operator_run||"")+'</code></div>'
-      +'<div class="mut">4. Sync now, then run the operator script again.</div>'
-      +'<div class="mut">5. Process evidence: <code>'+esc(cmd.evidence_pipeline||"")+'</code></div>'
-      +'<div class="mut">6. Sync Obsidian: <code>'+esc(cmd.sync_obsidian||"")+'</code></div>'
-      +'<div class="mut" style="margin-top:6px">Or run the full local pilot: <code>'+esc(cmd.pilot||"")+'</code></div>'
+    runbook='<div class="card" style="margin-bottom:12px"><p class="h">Guided setup steps</p><div class="stepper">'
+      +'<div class="step done"><span class="num">1</span><div><b>Local workspace</b><div class="mut">Bootstrap creates .local and browser dev auth.</div></div></div>'
+      +'<div class="step '+(sum.missing_config_sources?"warn":"done")+'"><span class="num">2</span><div><b>Add credentials</b><div class="mut">Use backend env vars only. Token values never reach the browser.</div></div></div>'
+      +'<div class="step"><span class="num">3</span><div><b>Add scope</b><div class="mut">Limit Jira project keys and GitHub repos before real reads.</div></div></div>'
+      +'<div class="step"><span class="num">4</span><div><b>Test, preview, sync</b><div class="mut">Preview writes nothing. Sync requires the safe runner.</div></div></div>'
+      +'<div class="step"><span class="num">5</span><div><b>Build evidence</b><div class="mut"><code>'+esc(cmd.evidence_pipeline||"")+'</code></div></div></div>'
+      +'<div class="step"><span class="num">6</span><div><b>Sync Obsidian</b><div class="mut"><code>'+esc(cmd.sync_obsidian||"")+'</code></div></div></div>'
+      +'</div>'+technicalDetails("Connector E2E runbook / operator commands",'<div class="mut">Enable when ready: <code>FOUNDEROS_ENABLE_REAL_CONNECTORS=true</code></div><div class="mut">Connector runner: <code>'+esc(cmd.operator_run||"")+'</code></div><div class="mut">Full local pilot: <code>'+esc(cmd.pilot||"")+'</code></div>',false)
       +((PILOT_INFO.next_steps||[]).length?'<div class="mut" style="margin-top:6px"><b>Next steps:</b></div>'+PILOT_INFO.next_steps.map(function(s){return '<div class="mut">• '+esc(s)+'</div>';}).join(""):'')
-      +'</details>';
+      +'</div>';
   }
   var ops='<div class="grid2" style="margin-bottom:14px">'
     +sourceRunSummaryList("Pending source requests",SOURCES.pending_requests,"No source requests are queued.")
     +sourceRunSummaryList("Recent source runs",SOURCES.recent_runs,"No source runs have executed yet.")
     +'</div>';
-  $("sources-body").innerHTML=banner+runbook+ops+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty">No sources configured yet.</div>');
+  $("sources-body").innerHTML=banner+runbook+technicalDetails("Show requests and recent runs",ops,false)+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty-state">No sources configured yet.</div>');
   $("nav-src-n").textContent=sum.sources_needing_attention?String(sum.sources_needing_attention):"";
 }
 async function loadSources(){
@@ -1817,19 +1948,49 @@ async function openSourceRunList(source){
 }
 function dqIssueCard(i){
   var sb=i.severity==="high"?"b-red":i.severity==="medium"?"b-amber":"b-mut";
-  return '<div class="card"><div class="row" style="flex-wrap:wrap;gap:6px"><span class="badge '+sb+'">'+esc(i.severity)+'</span><span class="badge b-accent">'+esc(i.category)+'</span>'+(i.affected_source?'<span class="badge b-mut">'+esc(i.affected_source)+'</span>':'')+'</div>'
-    +'<div style="font-weight:600;margin:8px 0 4px">'+esc(i.why_it_matters)+'</div>'
-    +'<div class="mut">affected: '+esc(i.affected_entity||i.affected_source||"global")+' · evidence: '+num(i.evidence_count||0)+(i.confidence!=null?' · conf '+Number(i.confidence).toFixed(2):'')+'</div>'
-    +'<div class="mut" style="margin-top:4px">→ '+esc(i.suggested_action||"")+'</div>'
-    +'<details class="ev"><summary>CTA</summary><pre>'+esc(JSON.stringify(i.cta||{},null,1))+'</pre></details></div>';
+  var sev=i.severity==="high"?"high":i.severity==="medium"?"medium":"low";
+  return '<div class="issue-card '+sev+'"><div class="row" style="flex-wrap:wrap;gap:6px"><span class="badge '+sb+'">'+esc(i.severity)+'</span>'+(i.affected_source?'<span class="badge b-mut">'+esc(i.affected_source)+'</span>':'')+'</div>'
+    +'<div style="font-weight:650;margin:8px 0 4px">'+esc(humanIssueTitle(i))+'</div>'
+    +'<div class="mut">'+esc(i.why_it_matters||"This affects how much FounderOS can trust the evidence.")+'</div>'
+    +'<div class="explanation-card" style="margin-top:8px"><b>What to do next:</b> '+esc(i.suggested_action||"Open details and inspect the linked source.")+'</div>'
+    +'<div class="mut" style="margin-top:8px">Affected: '+esc(i.affected_entity||i.affected_source||"global")+' · evidence '+num(i.evidence_count||0)+(i.confidence!=null?' · confidence '+Number(i.confidence).toFixed(2):'')+'</div>'
+    +technicalDetails("Show technical issue details",'<pre>'+esc(JSON.stringify({category:i.category,issue_type:i.issue_type,cta:i.cta,related_run_id:i.related_run_id,related_source_event_id:i.related_source_event_id},null,1))+'</pre>',false)
+    +'</div>';
+}
+function dqGroupKey(i){
+  var c=String(i.category||i.issue_type||"");
+  if(c.indexOf("config")>=0||c.indexOf("scope")>=0||c.indexOf("never_tested")>=0||c.indexOf("real_enabled")>=0)return"setup";
+  if(c.indexOf("normalized")>=0||c.indexOf("evidence")>=0||c.indexOf("stale")>=0||c.indexOf("availability")>=0)return"evidence";
+  if(c.indexOf("graph")>=0||c.indexOf("orphan")>=0||c.indexOf("duplicate")>=0||c.indexOf("confidence")>=0)return"graph";
+  if(c.indexOf("receipt")>=0||c.indexOf("run")>=0||c.indexOf("watermark")>=0||c.indexOf("retry")>=0||c.indexOf("rate")>=0)return"runs";
+  if(c.indexOf("obsidian")>=0||c.indexOf("vault")>=0)return"obsidian";
+  return"evidence";
 }
 function dataQualityRender(){
   if(!DQ){$("dq-body").innerHTML='<div class="mut">Loading data quality…</div>';return;}
   var c=DQ.counts||{},bs=c.by_severity||{};
-  $("dq-summary").innerHTML='<div class="kpi"><div class="l">issues</div><div class="v">'+num(c.total||0)+'</div><div class="d">evidence-based only</div></div>'
-    +'<div class="kpi"><div class="l">high severity</div><div class="v" style="color:'+(bs.high?"var(--red)":"inherit")+'">'+num(bs.high||0)+'</div><div class="d">needs founder review</div></div>'
-    +'<div class="kpi"><div class="l">categories</div><div class="v">'+num(Object.keys(c.by_category||{}).length)+'</div><div class="d">no fake aggregate score</div></div>';
-  $("dq-body").innerHTML=(DQ.issues||[]).map(dqIssueCard).join("")||'<div class="empty">No data quality issues detected.</div>';
+  $("dq-summary").innerHTML='<div class="status-card primary"><div class="eyebrow">What blocks accuracy</div><div class="big">'+num(c.total||0)+' issues</div><div class="explain">Data Quality is not a score. It lists concrete reasons FounderOS may be less precise.</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Needs founder review</div><div class="big">'+num(bs.high||0)+'</div><div class="explain">High severity means setup, evidence or lineage is blocking trustworthy answers.</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Next move</div><div class="big">'+(bs.high?"Fix top blocker":"Keep collecting")+'</div><div class="explain">'+(bs.high?"Open the first high severity card and follow its next action.":"No critical blocker detected. Continue source sync and evidence pipeline.")+'</div></div>';
+  var groups={setup:[],evidence:[],graph:[],runs:[],obsidian:[]};
+  (DQ.issues||[]).forEach(function(i){groups[dqGroupKey(i)].push(i);});
+  var labels={
+    setup:["Setup blockers","Credentials, scopes and safe-mode settings that prevent source reads."],
+    evidence:["Evidence gaps","Events that are not yet normalized, fresh or linked enough to trust."],
+    graph:["Graph hygiene","Nodes, edges and identity matches that need cleanup or approval."],
+    runs:["Run issues","Receipts, retries, rate limits and watermark problems."],
+    obsidian:["Obsidian sync","Vault state and note sync issues."]
+  };
+  var html="";
+  Object.keys(labels).forEach(function(k){
+    var arr=groups[k]||[];
+    html+='<div class="card"><p class="h">'+labels[k][0]+' <span class="mut">'+arr.length+'</span></p><div class="mut" style="margin:-4px 0 10px">'+labels[k][1]+'</div>';
+    if(arr.length)html+='<div class="issue-board">'+arr.slice(0,isDetailed()?20:4).map(dqIssueCard).join("")+'</div>';
+    else html+='<div class="empty-state">No issues in this group.</div>';
+    if(arr.length>4&&!isDetailed())html+='<div class="mut" style="margin-top:8px">Switch to Detailed mode to see '+(arr.length-4)+' more.</div>';
+    html+='</div>';
+  });
+  $("dq-body").innerHTML=html||'<div class="empty-state">No data quality issues detected.</div>';
   $("nav-dq-n").textContent=c.total?String(c.total):"";
 }
 async function loadDataQuality(){
@@ -1888,7 +2049,7 @@ function renderDevBadge(){
 
 // --- role switching -----------------------------------------------------
 var ROLE_SECTIONS={
-  founder:["cc","src","dq","so","ib","ac","tw","kt","st","pr","gr","sa","fi","te","ta","me","orh","upd","spk","ntf","inv"],
+  founder:["cc","src","dq","so","ib","ac","tw","kt","st","pr","gr","sa","te","ta","me","orh","upd","spk","ntf","inv"],
   team:["tw","orh"],
   investor:["inv"]
 };
@@ -1917,7 +2078,7 @@ function applyRole(role){
 function renderAll(){
   // Founder-mode composite render. The team/investor sections are server
   // -backed and load lazily, so they are not part of this pass.
-  ccRender();stRender();prRender();grRender();saRender();fiRender();teRender();taRender();meRender();
+  ccRender();stRender();prRender();grRender();saRender();teRender();taRender();meRender();
 }
 
 var TYPE_LABEL={execution_mismatch:"исполнение",focus_drift:"дрейф фокуса",stale_claim:"устарело",evidence_contradiction:"противоречие",ownership_gap:"нет владельца",communication_silence:"тишина",delivery_risk:"риск срыва",validation_gap:"не проверено"};
@@ -2206,7 +2367,7 @@ function renderObsidianBridge(){
   var d=OBSIDIAN.status||{},stats=d.stats||{},sync=OBSIDIAN.lastSync||{};
   var configured=d.status==="configured";
   var cls=configured?"b-green":d.status==="disabled"?"b-mut":"b-amber";
-  var h='<div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px"><div><div style="font-size:16px;font-weight:600">Obsidian Bridge</div><div class="mut">FounderOS generates a real local Obsidian-compatible vault. Use Obsidian for Graph View, Local Graph, Backlinks, Markdown notes, tags and search.</div></div>'
+  var h='<div class="hero-card"><div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px"><div><div style="font-size:20px;font-weight:720">Obsidian Bridge</div><div class="mut">FounderOS generates a real local Obsidian-compatible vault. Use Obsidian for Graph View, Local Graph, Backlinks, Markdown notes, tags and search.</div></div>'
     +'<div class="row" style="gap:8px;flex-wrap:wrap"><span class="badge '+cls+'">'+esc(d.status||"unknown")+'</span><button class="btn ghost" data-obsact="dry">Dry Run</button><button class="btn" data-obsact="sync">Sync Now</button><button class="btn ghost" data-obsact="open-vault">Open Vault in Obsidian</button><button class="btn ghost" data-obsact="open-index">Open Index Note</button></div></div>';
   if(!configured){
     h+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Run <code>uv run python scripts/bootstrap_local_workspace.py --apply</code>, then restart the backend. Recommended path: <code>'+esc(d.recommended_relative_path||".local/obsidian/FounderOS Knowledge Vault")+'</code>. No files are written while the bridge is disabled or missing a path.</div>';
@@ -2218,14 +2379,14 @@ function renderObsidianBridge(){
     +'</div>';
   h+='<div class="grid2"><div class="card"><p class="h">Open in Obsidian</p><div class="mut">The graph is built from real wikilinks in markdown files, not from a custom browser canvas.</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px"><span class="badge b-mut">Graph View</span><span class="badge b-mut">Local Graph</span><span class="badge b-mut">Backlinks</span><span class="badge b-mut">Markdown Notes</span><span class="badge b-mut">Tags / Properties</span><span class="badge b-mut">Search</span></div>'
     +'<div class="mut" style="margin-top:10px">Vault files are generated locally even without Obsidian. The <code>obsidian://</code> links (Open Vault / Open Index / open note) open only if Obsidian Desktop is installed.</div>'
-    +(sync.status?'<details class="ev" open><summary>last sync summary</summary><pre>'+esc(JSON.stringify(sync,null,1))+'</pre></details>':'')
-    +((d.warnings||[]).length?'<details class="ev" open><summary>warnings</summary><pre>'+esc(JSON.stringify(d.warnings,null,1))+'</pre></details>':'')
+    +(sync.status?technicalDetails("Show last sync summary",'<pre>'+esc(JSON.stringify(sync,null,1))+'</pre>',false):'')
+    +((d.warnings||[]).length?'<div class="callout warn" style="margin-top:10px">'+esc((d.warnings||[])[0])+'</div>'+technicalDetails("Show all warnings",'<pre>'+esc(JSON.stringify(d.warnings,null,1))+'</pre>',false):'')
     +'</div><div class="card" id="kt-note-preview"><p class="h">Recent generated notes</p>';
   (d.recent_notes||[]).slice(0,10).forEach(function(n){
     h+='<div class="item"><span class="badge b-mut">'+esc((n.path||"").split("/")[0])+'</span><div class="t">'+esc(n.title||n.path)+'<div class="s">'+esc(n.path||"")+'</div></div><button class="actbtn" data-obsnode="'+esc(n.node_id)+'">open</button></div>';
   });
   if(!(d.recent_notes||[]).length)h+='<div class="empty">No generated notes yet. Run the evidence pipeline or sync after data arrives.</div>';
-  h+='</div></div>';
+  h+='</div></div></div>';
   $("kt-bridge").innerHTML=h;
 }
 
