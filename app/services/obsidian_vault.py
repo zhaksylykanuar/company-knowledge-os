@@ -746,7 +746,10 @@ def _connector_note_body(connector: dict[str, Any]) -> str:
         f"- Configured: `{bool(connector.get('configured'))}`",
         f"- Readiness: `{sanitize_markdown_content(connector.get('readiness'))}`",
         f"- Adapter type: `{sanitize_markdown_content(connector.get('adapter_type'))}`",
+        f"- Real execution: `{sanitize_markdown_content(connector.get('real_execution'))}`",
         f"- Paused: `{bool(connector.get('paused'))}`",
+        f"- Events ingested: `{sanitize_markdown_content(connector.get('events_ingested') or 0)}`",
+        f"- Normalized events: `{sanitize_markdown_content(connector.get('normalized_events') or 0)}`",
         "",
         "## Missing Required Configuration (names only)",
         "",
@@ -787,8 +790,8 @@ def _connector_overview_body(connectors: list[dict[str, Any]]) -> str:
         "",
         "## Connectors",
         "",
-        "| Connector | State | Configured | Adapter | Missing vars |",
-        "| --- | --- | --- | --- | --- |",
+        "| Connector | State | Configured | Adapter | Real exec | Missing vars |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for connector in connectors:
         source_type = str(connector.get("source_type"))
@@ -799,6 +802,7 @@ def _connector_overview_body(connectors: list[dict[str, Any]]) -> str:
             f"| {sanitize_markdown_content(connector.get('connector_state'))} "
             f"| {bool(connector.get('configured'))} "
             f"| {sanitize_markdown_content(connector.get('adapter_type'))} "
+            f"| {sanitize_markdown_content(connector.get('real_execution'))} "
             f"| {missing} |"
         )
     lines.extend(

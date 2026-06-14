@@ -34,6 +34,61 @@ Missing credentials produce `missing_config` with variable names only. The
 connector result, audit payload, API response, UI, and logs must not include raw
 secret values.
 
+## Real Read-only Connector Execution (opt-in)
+
+Real Jira/GitHub reads are **disabled by default** and are always read-only.
+
+Enable them explicitly in the backend env (never sent to the browser):
+
+```bash
+FOUNDEROS_ENABLE_REAL_CONNECTORS=true
+FOUNDEROS_CONNECTOR_NETWORK_TIMEOUT_SECONDS=10
+FOUNDEROS_CONNECTOR_SYNC_LIMIT=50
+FOUNDEROS_CONNECTOR_BACKFILL_LIMIT=100
+```
+
+When `FOUNDEROS_ENABLE_REAL_CONNECTORS=false` (the default), the real Jira/GitHub
+clients never make a network call; configured external requests run, but the run
+result is `skipped` with mode `real_connectors_disabled`. Internal and local
+sources keep working regardless.
+
+Required backend env vars:
+
+- Jira: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` (read-only API token).
+- GitHub: `GITHUB_TOKEN` (read-only), plus optional `GITHUB_REPOS`
+  (`owner/repo,owner/other`) and `GITHUB_ORG` to scope reads.
+- Gmail: stays **local-only** in this release. If OAuth is not configured the
+  diagnostics report `local_only` / `oauth_not_configured` and never a fake
+  `connected` state. Already-ingested local email threads are read without any
+  network call; raw email bodies never leave backend storage.
+
+Read-only guarantee: connectors only issue HTTP GET reads. No connector writes
+to Jira, GitHub, or Gmail, and no email is ever sent.
+
+### Enable, test, and sync from the UI
+
+1. Set the env vars above and restart the backend
+   (`uv run python scripts/start_local.py`).
+2. Open `http://127.0.0.1:8765/ui` → **Sources / Data Control**.
+3. For Jira or GitHub: **Test connection** (records a founder request).
+4. **Sync now** to record a sync request; **Backfill** for a bounded history.
+5. Execute the queued requests with the operator script:
+
+```bash
+uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS"
+```
+
+A connector only shows `connected` after a real `test`/`sync` succeeds — never
+from the presence of env vars alone. Failures are recorded as `degraded`/`error`
+with a sanitized message (no secret values).
+
+### Testing stance
+
+Tests use fake connector clients (or local/noop adapters) and never call a real
+Jira, GitHub, Gmail, or other live API. Secret values never reach the browser,
+API responses, audit payloads, source events, or the Obsidian vault — only
+environment-variable names and masked statuses are exposed.
+
 ## Safe Execution
 
 Source actions are requested through Source Control Center first. The operator

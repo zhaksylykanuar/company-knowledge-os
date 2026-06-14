@@ -66,6 +66,27 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("FOUNDEROS_OBSIDIAN_SYNC_MODE"),
     )
 
+    # --- Real read-only connector execution (opt-in; default OFF) ---
+    # When false, real Jira/GitHub clients never make a network call; only
+    # internal/local sources run. Even when true, connectors stay read-only
+    # and only run through an explicit operator request.
+    enable_real_connectors: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("FOUNDEROS_ENABLE_REAL_CONNECTORS"),
+    )
+    connector_network_timeout_seconds: int = Field(
+        default=10,
+        validation_alias=AliasChoices("FOUNDEROS_CONNECTOR_NETWORK_TIMEOUT_SECONDS"),
+    )
+    connector_sync_limit: int = Field(
+        default=50,
+        validation_alias=AliasChoices("FOUNDEROS_CONNECTOR_SYNC_LIMIT"),
+    )
+    connector_backfill_limit: int = Field(
+        default=100,
+        validation_alias=AliasChoices("FOUNDEROS_CONNECTOR_BACKFILL_LIMIT"),
+    )
+
     api_auth_enabled: bool = False
     api_auth_key: SecretStr | str | None = None
     api_auth_header_name: str = "X-FounderOS-API-Key"

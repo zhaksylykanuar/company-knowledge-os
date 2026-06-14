@@ -46,6 +46,10 @@ _INTERNAL_SOURCES = {
     "meetings",
 }
 
+# External sources that have a real read-only client boundary (gated behind
+# FOUNDEROS_ENABLE_REAL_CONNECTORS). Gmail stays local-only in Stage 15.
+REAL_CLIENT_SOURCES = {"jira", "github"}
+
 _CONNECTOR_SENSITIVE_KEY_PARTS = (
     "authorization",
     "body",
@@ -270,12 +274,14 @@ class NoopSourceConnector:
         *,
         session: AsyncSession | None = None,
         client: ReadOnlyConnectorClient | None = None,
+        real_disabled: bool = False,
     ) -> None:
         if source_type not in SOURCE_BY_TYPE:
             raise ValueError(f"unknown source: {source_type}")
         self.source_type = source_type
         self._session = session
         self._client = client
+        self._real_disabled = real_disabled
 
     @property
     def _is_internal(self) -> bool:
@@ -349,6 +355,20 @@ class NoopSourceConnector:
             }
             output_watermark = input_watermark
             events: list[ConnectorEvent] = []
+        elif self._real_disabled and self._client is None and not self._is_internal:
+            # Configured external source, but real connector execution is off.
+            # Skip safely (no network, no fake success).
+            status = CONNECTOR_STATUS_SKIPPED
+            warnings = ["real_connectors_disabled", *readiness.warnings]
+            summary = {
+                "mode": "real_connectors_disabled",
+                "reason": "real_connectors_disabled",
+                "real_execution": "disabled",
+                "source_type": self.source_type,
+                "action_type": action_type,
+            }
+            output_watermark = input_watermark
+            events = []
         elif self._client is not None:
             status = CONNECTOR_STATUS_SUCCEEDED
             warnings = list(readiness.warnings)
@@ -720,12 +740,41 @@ def default_connector_registry(
     *,
     session: AsyncSession | None = None,
     clients: dict[str, ReadOnlyConnectorClient] | None = None,
+    config: Any = None,
 ) -> dict[str, SourceConnector]:
-    return {
-        source_type: NoopSourceConnector(
+    """Build the connector registry.
+
+    Real Jira/GitHub clients are wired ONLY when ``enable_real_connectors`` is
+    true. When it is false, those sources get ``real_disabled=True`` so a
+    configured source is safely skipped (no network, no fake success) instead of
+    silently succeeding. Internal and local sources are unaffected. Explicit
+    ``clients`` (used by tests) always take precedence.
+    """
+
+    from app.core.config import settings as default_settings
+
+    cfg = config if config is not None else default_settings
+    overrides = clients or {}
+    enabled = bool(getattr(cfg, "enable_real_connectors", False))
+    real_clients: dict[str, ReadOnlyConnectorClient] = {}
+    if enabled:
+        from app.services.connector_clients import build_real_connector_clients
+
+        real_clients = build_real_connector_clients(cfg)
+
+    registry: dict[str, SourceConnector] = {}
+    for source_type in SOURCE_BY_TYPE:
+        client = overrides.get(source_type)
+        real_disabled = False
+        if client is None and source_type in REAL_CLIENT_SOURCES:
+            if enabled:
+                client = real_clients.get(source_type)
+            else:
+                real_disabled = True
+        registry[source_type] = NoopSourceConnector(
             source_type,
             session=session,
-            client=(clients or {}).get(source_type),
+            client=client,
+            real_disabled=real_disabled,
         )
-        for source_type in SOURCE_BY_TYPE
-    }
+    return registry

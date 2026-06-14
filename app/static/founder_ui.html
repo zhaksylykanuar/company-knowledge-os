@@ -1522,7 +1522,7 @@ async function loadNotifications(){
 async function loadNotifCounts(){try{var d=await (await api("/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
 
 // --- Source Control Center + Data Quality -------------------------------
-var SOURCES=null,DQ=null,SOURCE_RUN_CACHE={},CONNECTOR_DIAGS={};
+var SOURCES=null,DQ=null,SOURCE_RUN_CACHE={},CONNECTOR_DIAGS={},REAL_CONNECTORS_ENABLED=false;
 var SRC_STATUS_BADGE={connected:"b-green",disconnected:"b-mut",degraded:"b-amber",syncing:"b-blue",error:"b-red",disabled:"b-mut"};
 function sourceStatusBadge(status){
   return '<span class="badge '+(SRC_STATUS_BADGE[status]||"b-mut")+'">'+esc(status||"unknown")+'</span>';
@@ -1557,9 +1557,12 @@ function connectorDiagBlock(s){
   if(!d)return'';
   var sp=d.security_policy||{};
   var stateCls=d.connector_state==="connected"?"b-green":d.connector_state==="missing_config"?"b-red":(d.connector_state==="never_tested"?"b-amber":"b-mut");
+  var rx=d.real_execution||"not_applicable";
+  var rxCls=rx==="enabled"?"b-green":rx==="disabled"?"b-amber":rx==="local_only"?"b-blue":"b-mut";
   var h='<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">'
     +'<span class="badge '+stateCls+'">'+esc(d.connector_state||"unknown")+'</span>'
     +'<span class="badge b-mut">adapter: '+esc(d.adapter_type||"noop")+'</span>'
+    +'<span class="badge '+rxCls+'">real exec: '+esc(rx)+'</span>'
     +'<span class="badge '+(d.can_test?"b-green":"b-mut")+'">test '+(d.can_test?"ok":"no")+'</span>'
     +'<span class="badge '+(d.can_sync?"b-green":"b-mut")+'">sync '+(d.can_sync?"ok":"no")+'</span>'
     +'<span class="badge '+(d.can_backfill?"b-green":"b-mut")+'">backfill '+(d.can_backfill?"ok":"no")+'</span>'
@@ -1631,11 +1634,14 @@ function sourcesRender(){
     +'<div class="kpi"><div class="l">pending requests</div><div class="v" style="color:'+(sum.pending_requests?"var(--amber)":"inherit")+'">'+num(sum.pending_requests||0)+'</div><div class="d">queued for safe runner</div></div>'
     +'<div class="kpi"><div class="l">failed runs</div><div class="v" style="color:'+(sum.failed_recent_runs?"var(--red)":"inherit")+'">'+num(sum.failed_recent_runs||0)+'</div><div class="d">recent source requests</div></div>'
     +'<div class="kpi"><div class="l">missing config</div><div class="v" style="color:'+(sum.missing_config_sources?"var(--amber)":"inherit")+'">'+num(sum.missing_config_sources||0)+'</div><div class="d">backend env setup only</div></div>';
+  var banner=REAL_CONNECTORS_ENABLED
+    ?'<div class="alert" style="margin-bottom:12px;background:var(--green-soft);color:var(--green-text)">Real read-only connector execution is <b>enabled</b>. Jira/GitHub run read-only via explicit operator requests; no writes are performed.</div>'
+    :'<div class="alert warn" style="margin-bottom:12px">Real connector execution is <b>disabled</b> (FOUNDEROS_ENABLE_REAL_CONNECTORS=false). Jira/GitHub requests are recorded but runs skip with <code>real_connectors_disabled</code>. Internal and local sources still run.</div>';
   var ops='<div class="grid2" style="margin-bottom:14px">'
     +sourceRunSummaryList("Pending source requests",SOURCES.pending_requests,"No source requests are queued.")
     +sourceRunSummaryList("Recent source runs",SOURCES.recent_runs,"No source runs have executed yet.")
     +'</div>';
-  $("sources-body").innerHTML=ops+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty">No sources configured yet.</div>');
+  $("sources-body").innerHTML=banner+ops+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty">No sources configured yet.</div>');
   $("nav-src-n").textContent=sum.sources_needing_attention?String(sum.sources_needing_attention):"";
 }
 async function loadSources(){
@@ -1645,8 +1651,9 @@ async function loadSources(){
     try{
       var diag=await (await api("/v1/founder/connectors/diagnostics")).json();
       CONNECTOR_DIAGS={};
+      REAL_CONNECTORS_ENABLED=!!diag.real_execution_enabled;
       (diag.connectors||[]).forEach(function(c){CONNECTOR_DIAGS[c.source_type]=c;});
-    }catch(e){CONNECTOR_DIAGS={};}
+    }catch(e){CONNECTOR_DIAGS={};REAL_CONNECTORS_ENABLED=false;}
     SOURCE_RUN_CACHE={};
     (SOURCES.pending_requests||[]).concat(SOURCES.recent_runs||[]).forEach(function(run){SOURCE_RUN_CACHE[run.request_id]=run;});
     (SOURCES.sources||[]).forEach(function(s){

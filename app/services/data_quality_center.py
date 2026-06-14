@@ -17,8 +17,10 @@ from app.db.agent_models import AgentProposal, AgentRunLog, DataAvailability
 from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.graph_models import EntityLinkRecord, EntityRecord, EntitySourceAccount
 from app.db.models import IngestedEvent
+from app.core.config import settings
 from app.db.second_opinion_models import SecondOpinionFinding
 from app.db.source_control_models import SourceControlState, SourceRunRequest
+from app.services.source_connectors import REAL_CLIENT_SOURCES
 from app.services.source_control import SOURCE_DEFINITIONS, connector_setup_status
 
 _AVAILABILITY_GAP_STATUSES = {"no_data", "insufficient", "stale"}
@@ -343,6 +345,32 @@ async def build_data_quality_center(
         source_runs = by_source.get(definition.source_type, [])
         latest = source_runs[0] if source_runs else None
         setup_status = connector_setup_status(definition.source_type)
+        if (
+            definition.source_type in REAL_CLIENT_SOURCES
+            and setup_status == "ready"
+            and not bool(getattr(settings, "enable_real_connectors", False))
+        ):
+            issues.append(
+                _issue(
+                    category="connector_real_execution_disabled",
+                    severity="low",
+                    why_it_matters=(
+                        "Источник настроен, но real connector execution выключен: "
+                        "test/sync будут безопасно skip, новые данные не придут."
+                    ),
+                    affected_source=definition.source_type,
+                    evidence_count=1,
+                    suggested_action=(
+                        "Включить FOUNDEROS_ENABLE_REAL_CONNECTORS=true и перезапустить "
+                        "backend, если нужны реальные read-only данные."
+                    ),
+                    cta={
+                        "target": "sources",
+                        "source_type": definition.source_type,
+                        "action": "enable_real_connectors",
+                    },
+                )
+            )
         if setup_status in {"missing", "partial"}:
             issues.append(
                 _issue(

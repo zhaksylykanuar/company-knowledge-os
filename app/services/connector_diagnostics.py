@@ -18,12 +18,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.db.event_models import NormalizedActivityItemRecord, SourceEvent
 from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.services.secret_patterns import assert_no_secret_values
 from app.services.source_connectors import (
+    REAL_CLIENT_SOURCES,
     ReadOnlyConnectorClient,
     _INTERNAL_SOURCES,
     NoopSourceConnector,
@@ -84,12 +87,32 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
-def _adapter_type(source_type: str, has_client: bool) -> str:
+def _adapter_type(
+    source_type: str,
+    *,
+    enabled: bool,
+    has_injected_client: bool,
+    has_local_data: bool,
+) -> str:
     if source_type in _INTERNAL_SOURCES:
         return "internal"
-    if has_client:
-        return "read_only_client"
+    if has_injected_client:
+        return "fake"
+    if source_type in REAL_CLIENT_SOURCES:
+        return "real" if enabled else "real-disabled"
+    if source_type == "gmail":
+        return "local_only" if has_local_data else "noop"
     return "noop"
+
+
+def _real_execution(source_type: str, *, enabled: bool) -> str:
+    if source_type in REAL_CLIENT_SOURCES:
+        return "enabled" if enabled else "disabled"
+    if source_type == "gmail":
+        return "local_only"
+    if source_type in _INTERNAL_SOURCES:
+        return "internal"
+    return "not_applicable"
 
 
 def _connector_state(
@@ -167,6 +190,7 @@ async def build_connector_diagnostics(
 ) -> dict[str, Any]:
     safe_now = now or _now()
     client_map = clients or {}
+    real_enabled = bool(getattr(settings, "enable_real_connectors", False))
     states = {
         row.source_type: row
         for row in (await session.execute(select(SourceControlState))).scalars()
@@ -182,6 +206,26 @@ async def build_connector_diagnostics(
     for row in recent_requests:
         by_source.setdefault(row.source_type, []).append(row)
 
+    event_rows = (
+        await session.execute(
+            select(SourceEvent.source_system, func.count(SourceEvent.id)).group_by(
+                SourceEvent.source_system
+            )
+        )
+    ).all()
+    events_by_system = {str(system): int(count or 0) for system, count in event_rows}
+    normalized_rows = (
+        await session.execute(
+            select(
+                NormalizedActivityItemRecord.source,
+                func.count(NormalizedActivityItemRecord.id),
+            ).group_by(NormalizedActivityItemRecord.source)
+        )
+    ).all()
+    normalized_by_source = {
+        str(source): int(count or 0) for source, count in normalized_rows
+    }
+
     connectors: list[dict[str, Any]] = []
     by_state: dict[str, int] = {}
     for definition in SOURCE_DEFINITIONS:
@@ -194,6 +238,14 @@ async def build_connector_diagnostics(
         setup_status = connector_setup_status(source_type)
         state = states.get(source_type)
         source_rows = by_source.get(source_type, [])
+        has_local_data = "local_email_records" in readiness.warnings
+        events_ingested = sum(
+            events_by_system.get(system, 0) for system in definition.event_systems
+        )
+        normalized_events = sum(
+            normalized_by_source.get(source, 0)
+            for source in definition.normalized_sources
+        )
         connector_state = _connector_state(
             state=state,
             setup_status=setup_status,
@@ -205,7 +257,16 @@ async def build_connector_diagnostics(
                 "source_type": source_type,
                 "label": definition.label,
                 "internal": source_type in _INTERNAL_SOURCES,
-                "adapter_type": _adapter_type(source_type, has_client),
+                "adapter_type": _adapter_type(
+                    source_type,
+                    enabled=real_enabled,
+                    has_injected_client=has_client,
+                    has_local_data=has_local_data,
+                ),
+                "real_execution": _real_execution(source_type, enabled=real_enabled),
+                "real_execution_enabled": real_enabled
+                if source_type in REAL_CLIENT_SOURCES
+                else None,
                 "readiness": setup_status,
                 "configured": readiness.configured,
                 "connector_state": connector_state,
@@ -214,6 +275,8 @@ async def build_connector_diagnostics(
                 "can_test": readiness.can_test,
                 "can_sync": readiness.can_sync,
                 "can_backfill": readiness.can_backfill,
+                "events_ingested": events_ingested,
+                "normalized_events": normalized_events,
                 "paused": bool(state.paused) if state else False,
                 "last_test_at": _iso(state.last_action_at)
                 if state and state.last_action == "test"
@@ -233,10 +296,12 @@ async def build_connector_diagnostics(
 
     result = {
         "generated_at": safe_now.isoformat(),
+        "real_execution_enabled": real_enabled,
         "security_policy": dict(SECURITY_POLICY),
         "connectors": connectors,
         "summary": {
             "total": len(connectors),
+            "real_execution_enabled": real_enabled,
             "configured": sum(1 for c in connectors if c["configured"]),
             "missing_config": sum(
                 1 for c in connectors if c["connector_state"] == "missing_config"
