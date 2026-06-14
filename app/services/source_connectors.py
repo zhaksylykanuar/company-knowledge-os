@@ -23,6 +23,7 @@ from app.db.second_opinion_models import SecondOpinionFinding
 from app.db.share_pack_models import SharePack
 from app.db.source_models import SourceDocument
 from app.services.browser_config import sanitize_for_logs
+from app.services.connector_scope import connector_limits
 from app.services.source_control import (
     ACTION_BACKFILL,
     ACTION_SYNC,
@@ -210,6 +211,12 @@ class ConnectorRunResult:
     graph_updates: int = 0
     findings_generated: int = 0
     proposals_generated: int = 0
+    pages_read: int = 0
+    page_size: int | None = None
+    limit_applied: int | None = None
+    stopped_reason: str | None = None
+    retry_after_seconds: int | None = None
+    rate_limit_remaining: int | None = None
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     external_side_effect: bool = False
@@ -374,6 +381,7 @@ class NoopSourceConnector:
             warnings = list(readiness.warnings)
             summary = {
                 "mode": "read_only_client",
+                "real_execution": "enabled",
                 "source_type": self.source_type,
                 "action_type": action_type,
             }
@@ -429,6 +437,21 @@ class NoopSourceConnector:
                 if value is not None
             }
         finished = _now()
+        limits = connector_limits()
+        limit_applied = (
+            limits["sync_limit"]
+            if action_type == ACTION_SYNC
+            else limits["backfill_limit"]
+            if action_type == ACTION_BACKFILL
+            else None
+        )
+        stopped_reason = "no_more_results"
+        if status == CONNECTOR_STATUS_MISSING_CONFIG:
+            stopped_reason = "missing_config"
+        elif status == CONNECTOR_STATUS_SKIPPED:
+            stopped_reason = summary.get("reason") or "disabled"
+        elif limit_applied is not None and len(events) >= int(limit_applied):
+            stopped_reason = "limit_reached"
         return ConnectorRunResult(
             status=status,
             source_type=self.source_type,
@@ -438,6 +461,10 @@ class NoopSourceConnector:
             input_watermark=input_watermark,
             output_watermark=output_watermark,
             events_seen=len(events),
+            pages_read=1 if action_type in {ACTION_SYNC, ACTION_BACKFILL} and events else 0,
+            page_size=limit_applied,
+            limit_applied=limit_applied,
+            stopped_reason=stopped_reason,
             warnings=warnings,
             external_side_effect=False,
             sanitized_summary=summary,

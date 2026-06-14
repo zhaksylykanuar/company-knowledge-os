@@ -27,6 +27,7 @@ from app.services.source_connectors import (
     default_connector_registry,
 )
 from app.services.connector_scope import scope_model, sync_scope_block
+from app.services.source_run_receipts import attach_source_run_receipt
 from app.services.source_ingestion import ingest_connector_events
 from app.services.source_control import (
     ACTION_BACKFILL,
@@ -154,11 +155,22 @@ def _result_summary(result: ConnectorRunResult) -> dict[str, Any]:
         "graph_updates": result.graph_updates,
         "findings_generated": result.findings_generated,
         "proposals_generated": result.proposals_generated,
+        "pages_read": result.pages_read,
+        "page_size": result.page_size,
+        "limit_applied": result.limit_applied,
+        "stopped_reason": result.stopped_reason,
+        "retry_after_seconds": result.retry_after_seconds,
+        "rate_limit_remaining": result.rate_limit_remaining,
+        "records_seen": result.events_seen,
         "errors": list(result.errors),
         "warnings": list(result.warnings),
         "external_side_effect": result.external_side_effect,
         "sanitized_summary": dict(result.sanitized_summary),
     }
+
+
+def _mark_receipt(request: SourceRunRequest) -> None:
+    attach_source_run_receipt(request)
 
 
 def _empty_summary() -> dict[str, Any]:
@@ -173,6 +185,12 @@ def _empty_summary() -> dict[str, Any]:
         "skipped_real_disabled": 0,
         "skipped_missing_scope": 0,
         "blocked_invalid": 0,
+        "receipts_created": 0,
+        "receipts_by_status": {},
+        "watermark_updates": 0,
+        "preview_runs": 0,
+        "rate_limited": 0,
+        "retries_available": 0,
         "events_seen": 0,
         "events_ingested": 0,
         "duplicates_skipped": 0,
@@ -259,6 +277,8 @@ async def run_source_request(
             "status": "blocked_invalid",
             "reason": "unknown_source_or_action",
             "external_side_effect": False,
+            "watermark_updated": False,
+            "watermark_update_reason": "blocked_invalid",
         }
         request.error_summary = {"error": "unknown_source_or_action"}
         request.source_state_after = _state_snapshot(state)
@@ -274,6 +294,7 @@ async def run_source_request(
                 },
             )
         )
+        _mark_receipt(request)
         await session.flush()
         return {"request_id": request.request_id, "status": "blocked_invalid"}
 
@@ -289,6 +310,8 @@ async def run_source_request(
             "status": "skipped_paused",
             "reason": "source_paused",
             "external_side_effect": False,
+            "watermark_updated": False,
+            "watermark_update_reason": "source_paused",
         }
         request.error_summary = {}
         request.source_state_after = _state_snapshot(state)
@@ -304,6 +327,7 @@ async def run_source_request(
                 },
             )
         )
+        _mark_receipt(request)
         await session.flush()
         return {"request_id": request.request_id, "status": "skipped_paused"}
 
@@ -317,6 +341,8 @@ async def run_source_request(
             "status": "blocked_missing_scope",
             "blocked_reason": "missing_scope",
             "external_side_effect": False,
+            "watermark_updated": False,
+            "watermark_update_reason": "missing_scope",
             **_scope_meta(request.source_type),
         }
         request.error_summary = {}
@@ -334,6 +360,7 @@ async def run_source_request(
                 },
             )
         )
+        _mark_receipt(request)
         await session.flush()
         return {"request_id": request.request_id, "status": "blocked_missing_scope"}
 
@@ -345,6 +372,8 @@ async def run_source_request(
             "status": "blocked_invalid",
             "reason": "missing_connector_adapter",
             "external_side_effect": False,
+            "watermark_updated": False,
+            "watermark_update_reason": "missing_connector_adapter",
         }
         request.error_summary = {"error": "missing_connector_adapter"}
         request.source_state_after = _state_snapshot(state)
@@ -360,6 +389,7 @@ async def run_source_request(
                 },
             )
         )
+        _mark_receipt(request)
         await session.flush()
         return {"request_id": request.request_id, "status": "blocked_invalid"}
 
@@ -417,6 +447,9 @@ async def run_source_request(
             "action_type": request.action_type,
             "finished_at": finished.isoformat(),
             "external_side_effect": False,
+            "watermark_updated": False,
+            "watermark_update_reason": "adapter_exception",
+            "errors": ["connector adapter failed"],
             "sanitized_summary": {"mode": "adapter_exception"},
         }
         state.status = STATUS_ERROR
@@ -437,6 +470,7 @@ async def run_source_request(
                 },
             )
         )
+        _mark_receipt(request)
         await session.flush()
         return {"request_id": request.request_id, "status": REQUEST_STATUS_FAILED}
 
@@ -465,6 +499,17 @@ async def run_source_request(
             "action_type": request.action_type,
             "preview": True,
             "estimated_events": int(result.events_seen),
+            "events_seen": int(result.events_seen),
+            "pages_read": result.pages_read,
+            "page_size": result.page_size,
+            "limit_applied": result.limit_applied,
+            "stopped_reason": result.stopped_reason,
+            "retry_after_seconds": result.retry_after_seconds,
+            "rate_limit_remaining": result.rate_limit_remaining,
+            "input_watermark": result.input_watermark,
+            "output_watermark": result.output_watermark,
+            "watermark_updated": False,
+            "watermark_update_reason": "preview_no_write",
             "sample_titles": samples,
             "finished_at": finished.isoformat(),
             "external_side_effect": False,
@@ -492,6 +537,7 @@ async def run_source_request(
                 },
             )
         )
+        _mark_receipt(request)
         await session.flush()
         return {
             "request_id": request.request_id,
@@ -533,6 +579,12 @@ async def run_source_request(
             graph_updates=result.graph_updates,
             findings_generated=result.findings_generated,
             proposals_generated=result.proposals_generated,
+            pages_read=result.pages_read,
+            page_size=result.page_size,
+            limit_applied=result.limit_applied,
+            stopped_reason=result.stopped_reason,
+            retry_after_seconds=result.retry_after_seconds,
+            rate_limit_remaining=result.rate_limit_remaining,
             errors=list(result.errors),
             warnings=[*result.warnings, *ingestion_summary.get("warnings", [])],
             external_side_effect=result.external_side_effect,
@@ -544,40 +596,72 @@ async def run_source_request(
         )
     request.finished_at = finished
     request.external_side_effect = bool(result.external_side_effect)
+    previous_success_watermark = state.input_watermark
     request.result_summary = {
         **_result_summary(result),
         **_scope_meta(request.source_type),
         "blocked_reason": None,
+        "previous_success_watermark": previous_success_watermark,
+        "watermark_updated": False,
+        "watermark_update_reason": "not_evaluated",
     }
     request.error_summary = {"errors": list(result.errors)} if result.errors else {}
 
+    watermark_updated = False
+    watermark_update_reason = "not_applicable"
     if result.status == CONNECTOR_STATUS_SUCCEEDED:
         request.status = REQUEST_STATUS_SUCCEEDED
         state.status = STATUS_CONNECTED
         state.last_success_at = finished
         if request.action_type == ACTION_SYNC:
             state.last_sync_at = finished
-        if request.action_type == ACTION_SYNC and result.output_watermark:
-            state.input_watermark = result.output_watermark
+            if result.output_watermark:
+                state.input_watermark = result.output_watermark
+                watermark_updated = True
+                watermark_update_reason = "sync_success"
+            else:
+                watermark_update_reason = "sync_success_no_output_watermark"
+        elif request.action_type == ACTION_BACKFILL:
+            watermark_update_reason = "backfill_does_not_advance_sync_watermark"
+        elif request.action_type == ACTION_TEST:
+            watermark_update_reason = "test_connection_no_watermark"
     elif result.status == CONNECTOR_STATUS_PARTIAL_SUCCEEDED:
         request.status = REQUEST_STATUS_PARTIAL_SUCCEEDED
         state.status = STATUS_DEGRADED
         state.last_success_at = finished
         state.last_error_at = finished
+        if request.action_type == ACTION_SYNC and result.output_watermark:
+            state.last_sync_at = finished
+            state.input_watermark = result.output_watermark
+            watermark_updated = True
+            watermark_update_reason = "partial_sync_valid_output_watermark"
+        elif request.action_type == ACTION_SYNC:
+            watermark_update_reason = "partial_sync_no_output_watermark"
+        elif request.action_type == ACTION_BACKFILL:
+            watermark_update_reason = "partial_backfill_does_not_advance_sync_watermark"
     elif result.status == CONNECTOR_STATUS_MISSING_CONFIG:
         request.status = REQUEST_STATUS_SKIPPED
         state.status = STATUS_DEGRADED
         state.last_error_at = finished
+        watermark_update_reason = "missing_config"
     elif result.status == CONNECTOR_STATUS_SKIPPED:
         request.status = REQUEST_STATUS_SKIPPED
         state.status = STATUS_DEGRADED
+        watermark_update_reason = result.stopped_reason or "skipped"
     else:
         request.status = REQUEST_STATUS_FAILED
         state.status = STATUS_ERROR
         state.last_error_at = finished
+        watermark_update_reason = result.stopped_reason or "failed"
 
     state.latest_run_id = active_run_id
     request.source_state_after = _state_snapshot(state)
+    request.result_summary = {
+        **request.result_summary,
+        "watermark_updated": watermark_updated,
+        "watermark_update_reason": watermark_update_reason,
+    }
+    _mark_receipt(request)
     session.add(
         _audit(
             event_type="source_run_finished",
@@ -666,6 +750,21 @@ async def run_source_requests(
             "failed_events",
         ):
             _add_count(summary, key, ingestion.get(key))
+        result_summary = request.result_summary if isinstance(request.result_summary, dict) else {}
+        receipt = result_summary.get("receipt") if isinstance(result_summary, dict) else {}
+        if isinstance(receipt, dict) and receipt:
+            _bump(summary, "receipts_created")
+            receipts_by_status = summary.setdefault("receipts_by_status", {})
+            rstatus = str(receipt.get("status") or status or "unknown")
+            receipts_by_status[rstatus] = int(receipts_by_status.get(rstatus) or 0) + 1
+            if receipt.get("watermark_updated"):
+                _bump(summary, "watermark_updates")
+            if receipt.get("action_type") == ACTION_PREVIEW_SYNC:
+                _bump(summary, "preview_runs")
+            if receipt.get("stopped_reason") == "rate_limited":
+                _bump(summary, "rate_limited")
+            if rstatus in {"failed", "blocked", "skipped", "partial_succeeded"}:
+                _bump(summary, "retries_available")
         summary["results"].append(result)
     summary["run_finished_at"] = _now().isoformat()
     return summary

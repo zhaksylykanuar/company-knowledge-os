@@ -73,9 +73,11 @@ from app.services.second_opinion import (
 from app.services.source_control import (
     SOURCE_ACTIONS,
     build_source_health,
+    get_source_run_receipt,
     list_source_run_requests,
     known_source_types,
     request_source_action,
+    request_source_retry,
 )
 from app.services.team_view import build_team_view
 from app.api.view_guard import require_founder, require_scope, validated_view
@@ -640,6 +642,52 @@ async def get_founder_source_runs(
             limit=limit,
         )
     return {"runs": runs}
+
+
+@router.get("/v1/founder/source-runs/{request_id}/receipt")
+async def get_founder_source_run_receipt(
+    request_id: str,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    async with AsyncSessionLocal() as session:
+        receipt = await get_source_run_receipt(session, request_id=request_id)
+    if receipt is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="source run receipt not found",
+        )
+    return receipt
+
+
+@router.post("/v1/founder/sources/{source_type}/retry/{request_id}")
+async def post_founder_source_retry(
+    source_type: str,
+    request_id: str,
+    request: SourceActionRequest,
+    view: str = Query(default=SCOPE_FOUNDER),
+) -> dict[str, Any]:
+    _require_founder(view)
+    if source_type not in known_source_types():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="unknown source"
+        )
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await request_source_retry(
+                session,
+                source_type=source_type,
+                request_id=request_id,
+                request_key=request.request_key,
+                requested_by=request.requested_by,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        await session.commit()
+    return result
 
 
 @router.get("/v1/source-events")

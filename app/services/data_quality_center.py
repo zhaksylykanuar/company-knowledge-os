@@ -689,6 +689,165 @@ async def build_data_quality_center(
     for run in recent_requests:
         result = _run_result(run)
         ingestion = _run_ingestion(run)
+        receipt = result.get("receipt") if isinstance(result, dict) else {}
+        is_terminal = run.status not in _OPEN_REQUEST_STATUSES
+        if is_terminal and not isinstance(receipt, dict):
+            issues.append(
+                _issue(
+                    category="source_run_no_receipt",
+                    severity="medium",
+                    why_it_matters="A completed source run has no formal receipt.",
+                    affected_source=run.source_type,
+                    evidence_count=1,
+                    suggested_action="Open the source run detail and rerun through Stage 18 orchestrator if needed.",
+                    cta={
+                        "target": "sources",
+                        "source_type": run.source_type,
+                        "action": "review_run",
+                        "request_id": run.request_id,
+                    },
+                    related_run_id=run.run_id,
+                    related_request_id=run.request_id,
+                )
+            )
+            receipt = {}
+        if isinstance(receipt, dict) and receipt:
+            receipt_errors = receipt.get("errors_sanitized")
+            if isinstance(receipt_errors, list) and receipt_errors:
+                issues.append(
+                    _issue(
+                        category="receipt_has_errors",
+                        severity="high",
+                        why_it_matters="Connector run receipt contains sanitized errors.",
+                        affected_source=run.source_type,
+                        evidence_count=len(receipt_errors),
+                        suggested_action="Inspect the run receipt before retrying.",
+                        cta={
+                            "target": "sources",
+                            "source_type": run.source_type,
+                            "action": "inspect_run_receipt",
+                            "request_id": run.request_id,
+                            "receipt_id": receipt.get("receipt_id"),
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
+            if receipt.get("stopped_reason") == "rate_limited":
+                issues.append(
+                    _issue(
+                        category="receipt_rate_limited",
+                        severity="medium",
+                        why_it_matters="Connector stopped because the provider rate limit was reached.",
+                        affected_source=run.source_type,
+                        evidence_count=1,
+                        suggested_action="Retry after the provider window or lower the sync limit.",
+                        cta={
+                            "target": "sources",
+                            "source_type": run.source_type,
+                            "action": "lower_sync_limit",
+                            "request_id": run.request_id,
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
+            if run.status == "partial_succeeded":
+                issues.append(
+                    _issue(
+                        category="receipt_partial_success",
+                        severity="medium",
+                        why_it_matters="Connector run partially succeeded; inspect skipped/errors before relying on it.",
+                        affected_source=run.source_type,
+                        evidence_count=1,
+                        suggested_action="Open receipt and retry safely if needed.",
+                        cta={
+                            "target": "sources",
+                            "source_type": run.source_type,
+                            "action": "retry_failed_run",
+                            "request_id": run.request_id,
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
+            if run.action_type == "sync" and run.status in {"succeeded", "partial_succeeded"}:
+                if receipt.get("output_watermark") and not receipt.get("watermark_updated"):
+                    issues.append(
+                        _issue(
+                            category="watermark_not_updated_after_success",
+                            severity="high",
+                            why_it_matters="A successful sync produced an output watermark but did not advance the source watermark.",
+                            affected_source=run.source_type,
+                            evidence_count=1,
+                            suggested_action="Inspect watermark receipt before next sync.",
+                            cta={
+                                "target": "sources",
+                                "source_type": run.source_type,
+                                "action": "investigate_watermark_issue",
+                                "request_id": run.request_id,
+                            },
+                            related_run_id=run.run_id,
+                            related_request_id=run.request_id,
+                        )
+                    )
+            if run.status in {"failed", "blocked", "skipped"} and receipt.get("watermark_updated"):
+                issues.append(
+                    _issue(
+                        category="watermark_updated_after_failed_run",
+                        severity="high",
+                        why_it_matters="A failed/blocked/skipped run appears to have advanced the watermark.",
+                        affected_source=run.source_type,
+                        evidence_count=1,
+                        suggested_action="Investigate watermark safety before the next connector run.",
+                        cta={
+                            "target": "sources",
+                            "source_type": run.source_type,
+                            "action": "investigate_watermark_issue",
+                            "request_id": run.request_id,
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
+            if run.status in {"failed", "blocked", "skipped", "partial_succeeded"}:
+                issues.append(
+                    _issue(
+                        category="retry_available",
+                        severity="low",
+                        why_it_matters="This run can be retried safely through a new request.",
+                        affected_source=run.source_type,
+                        evidence_count=1,
+                        suggested_action="Use retry safely after fixing the receipt reason.",
+                        cta={
+                            "target": "sources",
+                            "source_type": run.source_type,
+                            "action": "retry_failed_run",
+                            "request_id": run.request_id,
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
+            if run.action_type == "preview_sync":
+                issues.append(
+                    _issue(
+                        category="preview_has_not_been_synced",
+                        severity="low",
+                        why_it_matters="Preview read did not write source_events or advance watermark.",
+                        affected_source=run.source_type,
+                        evidence_count=int(receipt.get("events_seen") or 0),
+                        suggested_action="Run sync after reviewing preview scope and limits.",
+                        cta={
+                            "target": "sources",
+                            "source_type": run.source_type,
+                            "action": "run_sync_after_preview",
+                            "request_id": run.request_id,
+                        },
+                        related_run_id=run.run_id,
+                        related_request_id=run.request_id,
+                    )
+                )
         warnings = result.get("warnings") if isinstance(result.get("warnings"), list) else []
         if warnings:
             issues.append(

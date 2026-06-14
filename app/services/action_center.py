@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.second_opinion_models import SecondOpinionFinding
+from app.db.source_control_models import SourceRunRequest
 from app.services.connector_diagnostics import (
     SYNC_OBSIDIAN_CMD,
     build_connector_diagnostics,
@@ -173,6 +174,10 @@ def _classify(action: dict[str, Any]) -> tuple[str, str]:
     if source == "connector":
         if action_type in {"inspect_failed_run", "inspect_blocked_run"}:
             return GROUP_CRITICAL, "connector run failed/blocked — нужна диагностика"
+        if action_type in {"inspect_run_receipt", "retry_failed_run"}:
+            return GROUP_CRITICAL, "receipt показывает ошибку/partial — нужна проверка"
+        if action_type in {"lower_sync_limit", "run_sync_after_preview"}:
+            return GROUP_EVIDENCE, "настроить безопасный следующий connector шаг"
         if action_type == "narrow_connector_scope":
             return GROUP_DECISION, "scope слишком широкий — сузить безопасно"
         if action_type in {
@@ -494,6 +499,66 @@ async def build_action_center(
                 action_type="sync_obsidian",
                 cta=SYNC_OBSIDIAN_CMD,
                 action_ref={"kind": "obsidian", "action": "sync_vault"},
+            )
+        )
+
+    # 7. Connector run receipt next-actions.
+    receipt_rows = (
+        await session.execute(
+            select(SourceRunRequest)
+            .where(SourceRunRequest.run_id.is_not(None))
+            .order_by(SourceRunRequest.created_at.desc(), SourceRunRequest.id.desc())
+            .limit(40)
+        )
+    ).scalars()
+    for row in receipt_rows:
+        result = row.result_summary if isinstance(row.result_summary, dict) else {}
+        receipt = result.get("receipt") if isinstance(result, dict) else {}
+        if not isinstance(receipt, dict) or not receipt:
+            continue
+        action_type = None
+        title = None
+        why = None
+        severity = "low"
+        if row.status in {"failed", "blocked"}:
+            action_type = "inspect_run_receipt"
+            title = f"{row.source_type}: inspect failed connector receipt"
+            why = str(receipt.get("blocked_reason") or "run failed")
+            severity = "high"
+        elif row.status == "partial_succeeded":
+            action_type = "retry_failed_run"
+            title = f"{row.source_type}: retry partial connector run"
+            why = "partial success in connector receipt"
+            severity = "medium"
+        elif receipt.get("stopped_reason") == "rate_limited":
+            action_type = "lower_sync_limit"
+            title = f"{row.source_type}: narrow sync after rate limit"
+            why = "provider rate limit reached"
+            severity = "medium"
+        elif row.action_type == "preview_sync":
+            action_type = "run_sync_after_preview"
+            title = f"{row.source_type}: run sync after preview"
+            why = "preview wrote no source_events and watermark stayed unchanged"
+            severity = "low"
+        if action_type is None:
+            continue
+        actions.append(
+            _action(
+                title=title or "Inspect connector receipt",
+                why_now=why or "receipt requires review",
+                affected_entity=row.source_type,
+                evidence_count=int(receipt.get("events_seen") or 0),
+                severity=severity,
+                confidence=None,
+                source="connector",
+                action_type=action_type,
+                cta="Open Sources / Data Control",
+                action_ref={
+                    "kind": "connector_receipt",
+                    "source_type": row.source_type,
+                    "request_id": row.request_id,
+                    "receipt_id": receipt.get("receipt_id"),
+                },
             )
         )
 

@@ -27,6 +27,7 @@ from app.db.share_pack_models import SharePack
 from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.db.source_models import SourceDocument
 from app.services.browser_config import sanitize_for_logs
+from app.services.source_run_receipts import build_source_run_receipt
 
 ACTION_BACKFILL = "backfill"
 ACTION_PAUSE = "pause"
@@ -780,6 +781,7 @@ def _request_model(row: SourceRunRequest, *, idempotent: bool = False) -> dict[s
         "audit_log_id": row.audit_log_id,
         "source_state_before": row.source_state_before,
         "source_state_after": row.source_state_after,
+        "receipt": build_source_run_receipt(row),
         "idempotent": idempotent,
     }
 
@@ -911,3 +913,82 @@ async def list_source_run_requests(
         query = query.where(SourceRunRequest.status == status)
     rows = (await session.execute(query.limit(limit))).scalars()
     return [_request_model(row) for row in rows]
+
+
+async def get_source_run_receipt(
+    session: AsyncSession,
+    *,
+    request_id: str,
+) -> dict[str, Any] | None:
+    row = await session.scalar(
+        select(SourceRunRequest).where(SourceRunRequest.request_id == request_id)
+    )
+    if row is None:
+        return None
+    return {
+        "run": _request_model(row),
+        "receipt": build_source_run_receipt(row),
+    }
+
+
+async def request_source_retry(
+    session: AsyncSession,
+    *,
+    source_type: str,
+    request_id: str,
+    request_key: str | None,
+    requested_by: str = "founder",
+) -> dict[str, Any]:
+    if source_type not in SOURCE_BY_TYPE:
+        raise ValueError(f"unknown source: {source_type}")
+    original = await session.scalar(
+        select(SourceRunRequest).where(SourceRunRequest.request_id == request_id)
+    )
+    if original is None or original.source_type != source_type:
+        raise ValueError("source run request not found")
+    if original.status == "succeeded":
+        raise ValueError("completed source run cannot be retried")
+    retry_number = int(original.retry_count or 0) + 1
+    retry_key = (
+        request_key
+        or f"{original.request_key}:retry:{retry_number}"
+    ).strip()
+    existing = await session.scalar(
+        select(SourceRunRequest)
+        .where(SourceRunRequest.source_type == source_type)
+        .where(SourceRunRequest.action_type == original.action_type)
+        .where(SourceRunRequest.request_key == retry_key)
+    )
+    if existing is not None:
+        return _request_model(existing, idempotent=True)
+
+    original.retry_count = retry_number
+    retry = await request_source_action(
+        session,
+        source_type=source_type,
+        action_type=original.action_type,
+        request_key=retry_key,
+        requested_by=requested_by,
+        input_payload={
+            "retry_of": original.request_id,
+            "retry_count": retry_number,
+            "original_scope_snapshot": (
+                build_source_run_receipt(original).get("scope_snapshot") or {}
+            ),
+        },
+    )
+    row = await session.scalar(
+        select(SourceRunRequest).where(SourceRunRequest.request_id == retry["request_id"])
+    )
+    if row is not None:
+        row.retry_count = retry_number
+        row.result_summary = sanitize_for_logs(
+            {
+                **(row.result_summary if isinstance(row.result_summary, dict) else {}),
+                "retry_of": original.request_id,
+                "retry_count": retry_number,
+                "external_side_effect": False,
+            }
+        )
+        return _request_model(row)
+    return retry

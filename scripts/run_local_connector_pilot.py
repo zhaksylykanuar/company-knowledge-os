@@ -53,6 +53,14 @@ def _empty_summary(real_enabled: bool, connectors_checked: int) -> dict[str, Any
         "source_runs_skipped_missing_config": 0,
         "source_runs_skipped_real_disabled": 0,
         "skipped_missing_scope": 0,
+        "receipts_created": 0,
+        "receipts_by_status": {},
+        "watermark_updates": 0,
+        "preview_runs": 0,
+        "blocked_missing_scope": 0,
+        "rate_limited": 0,
+        "partial_success": 0,
+        "retries_available": 0,
         "events_ingested": 0,
         "normalized_events": 0,
         "graph_nodes_updated": 0,
@@ -92,9 +100,28 @@ def _bucket_run(summary: dict[str, Any], run: dict[str, Any], row: Any) -> None:
             summary["source_runs_skipped_missing_config"] += 1
         elif _run_mode(row) == "real_connectors_disabled":
             summary["source_runs_skipped_real_disabled"] += 1
+    elif status == "blocked_missing_scope":
+        summary["blocked_missing_scope"] += 1
     ingestion = _ingestion(row)
     summary["events_ingested"] += int(ingestion.get("events_ingested") or 0)
     summary["normalized_events"] += int(ingestion.get("normalized_events") or 0)
+    result = row.result_summary if isinstance(row.result_summary, dict) else {}
+    receipt = result.get("receipt") if isinstance(result, dict) else {}
+    if isinstance(receipt, dict) and receipt:
+        summary["receipts_created"] += 1
+        rstatus = str(receipt.get("status") or status or "unknown")
+        by_status = summary.setdefault("receipts_by_status", {})
+        by_status[rstatus] = int(by_status.get(rstatus) or 0) + 1
+        if receipt.get("watermark_updated"):
+            summary["watermark_updates"] += 1
+        if receipt.get("action_type") == "preview_sync":
+            summary["preview_runs"] += 1
+        if receipt.get("stopped_reason") == "rate_limited":
+            summary["rate_limited"] += 1
+        if rstatus == "partial_succeeded":
+            summary["partial_success"] += 1
+        if rstatus in {"failed", "blocked", "skipped", "partial_succeeded"}:
+            summary["retries_available"] += 1
 
 
 async def _run_request(

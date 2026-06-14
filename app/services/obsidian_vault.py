@@ -18,15 +18,18 @@ from typing import Any
 from urllib.parse import quote
 from uuid import uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.models import AuditLog
+from app.db.source_control_models import SourceRunRequest
 from app.services.browser_config import sanitize_for_logs
 from app.services.connector_diagnostics import build_connector_diagnostics
 from app.services.knowledge_graph_view import build_knowledge_graph
 from app.services.obsidian_exporter import sanitize_obsidian_filename
 from app.services.secret_patterns import contains_secret_value
+from app.services.source_run_receipts import build_source_run_receipt
 
 DEFAULT_VAULT_NAME = "FounderOS Knowledge Vault"
 MANIFEST_JSON_PATH = Path("_System") / "Manifest.json"
@@ -353,7 +356,24 @@ async def generate_obsidian_vault_plan(
     # Reserve connector-note paths first so a graph node titled "Jira" cannot
     # claim Sources/Jira.md before the connector diagnostics note.
     diagnostics = await build_connector_diagnostics(session)
-    connector_notes = _connector_notes(diagnostics, used_paths=used_paths)
+    receipt_rows = (
+        await session.execute(
+            select(SourceRunRequest)
+            .where(SourceRunRequest.run_id.is_not(None))
+            .order_by(SourceRunRequest.created_at.desc(), SourceRunRequest.id.desc())
+            .limit(80)
+        )
+    ).scalars().all()
+    receipts_by_source: dict[str, list[dict[str, Any]]] = {}
+    for row in receipt_rows:
+        receipts_by_source.setdefault(row.source_type, []).append(
+            build_source_run_receipt(row)
+        )
+    connector_notes = _connector_notes(
+        diagnostics,
+        used_paths=used_paths,
+        receipts_by_source=receipts_by_source,
+    )
     node_path_map = {
         str(node["node_id"]): note_relative_path_for_node(node, used_paths=used_paths).as_posix()
         for node in nodes
@@ -722,7 +742,11 @@ def _connector_missing_lines(missing_env_vars: list[Any]) -> list[str]:
     return [f"- `{_safe_env_label(name)}`" for name in names]
 
 
-def _connector_note_body(connector: dict[str, Any]) -> str:
+def _connector_note_body(
+    connector: dict[str, Any],
+    *,
+    latest_receipt: dict[str, Any] | None = None,
+) -> str:
     source_type = str(connector.get("source_type"))
     name = CONNECTOR_NOTE_NAMES.get(source_type, source_type)
     last_error = connector.get("last_error_sanitized") or {}
@@ -780,6 +804,10 @@ def _connector_note_body(connector: dict[str, Any]) -> str:
         f"- Last error at: `{sanitize_markdown_content(connector.get('last_error_at') or 'none')}`",
         f"- Last error: {error_line}",
         "",
+        "## Latest Run Receipt",
+        "",
+        *_connector_receipt_lines(latest_receipt),
+        "",
         "## Security Policy",
         "",
         "- Read only: `true`",
@@ -797,6 +825,85 @@ def _connector_note_body(connector: dict[str, Any]) -> str:
         "- [[_System/Connector Diagnostics|Connector Diagnostics]]",
         f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
     ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _connector_receipt_lines(receipt: dict[str, Any] | None) -> list[str]:
+    if not receipt:
+        return ["- No connector run receipt yet."]
+    warnings = receipt.get("warnings_sanitized") or []
+    errors = receipt.get("errors_sanitized") or []
+    return [
+        f"- Receipt: `{sanitize_markdown_content(receipt.get('receipt_id'))}`",
+        f"- Status: `{sanitize_markdown_content(receipt.get('status'))}`",
+        f"- Action: `{sanitize_markdown_content(receipt.get('action_type'))}`",
+        f"- Scope configured: `{bool(receipt.get('scope_configured'))}`",
+        f"- Limits: `{sanitize_markdown_content(receipt.get('limits_applied') or {})}`",
+        f"- Watermark: `{sanitize_markdown_content(receipt.get('watermark_update_reason'))}`",
+        f"- Events: seen `{sanitize_markdown_content(receipt.get('events_seen') or 0)}`, "
+        f"ingested `{sanitize_markdown_content(receipt.get('events_ingested') or 0)}`, "
+        f"normalized `{sanitize_markdown_content(receipt.get('normalized_events') or 0)}`",
+        f"- Pages read: `{sanitize_markdown_content(receipt.get('pages_read') or 0)}`",
+        f"- Stopped reason: `{sanitize_markdown_content(receipt.get('stopped_reason') or 'none')}`",
+        f"- Warnings: `{sanitize_markdown_content(len(warnings))}`",
+        f"- Errors: `{sanitize_markdown_content(len(errors))}`",
+        f"- Next action: `{_receipt_next_action(receipt)}`",
+        f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
+    ]
+
+
+def _receipt_next_action(receipt: dict[str, Any]) -> str:
+    status = str(receipt.get("status") or "")
+    action = str(receipt.get("action_type") or "")
+    if action == "preview_sync":
+        return "Review preview, then run sync if scope/limits look right"
+    if status in {"failed", "blocked", "skipped", "partial_succeeded"}:
+        return "Inspect receipt and retry safely after fixing the reason"
+    if status == "succeeded" and int(receipt.get("events_ingested") or 0) > 0:
+        return "Run evidence pipeline, then sync Obsidian"
+    return "Monitor next source run"
+
+
+def _connector_receipts_body(receipts: list[dict[str, Any]]) -> str:
+    lines = [
+        "# Connector Run Receipts",
+        "",
+        "> Generated by FounderOS. Sanitized receipts only; no raw payloads or secrets.",
+        "",
+        "| Source | Action | Status | Watermark | Events | Limit | Reason |",
+        "| --- | --- | --- | --- | ---: | ---: | --- |",
+    ]
+    for receipt in receipts:
+        source = sanitize_markdown_content(receipt.get("source_type"))
+        action = sanitize_markdown_content(receipt.get("action_type"))
+        status = sanitize_markdown_content(receipt.get("status"))
+        watermark = sanitize_markdown_content(receipt.get("watermark_update_reason"))
+        events = sanitize_markdown_content(receipt.get("events_ingested") or 0)
+        limit = sanitize_markdown_content(receipt.get("limit_applied") or 0)
+        reason = sanitize_markdown_content(
+            receipt.get("blocked_reason") or receipt.get("stopped_reason") or "none"
+        )
+        lines.append(
+            f"| {source} | {action} | {status} | {watermark} | {events} | {limit} | {reason} |"
+        )
+    if not receipts:
+        lines.append("| none | none | none | none | 0 | 0 | no receipts yet |")
+    lines.extend(
+        [
+            "",
+            "## Security Policy",
+            "",
+            "- Read only: `true`",
+            "- Secrets exposed to browser: `false`",
+            "- External writes allowed: `false`",
+            "- Raw provider payloads included: `false`",
+            "",
+            "## Links",
+            "",
+            "- [[_System/Connector Diagnostics|Connector Diagnostics]]",
+            f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
+        ]
+    )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -898,6 +1005,7 @@ def _connector_notes(
     diagnostics: dict[str, Any],
     *,
     used_paths: set[str],
+    receipts_by_source: dict[str, list[dict[str, Any]]],
 ) -> list[ObsidianNote]:
     connectors = list(diagnostics.get("connectors") or [])
     notes: list[ObsidianNote] = []
@@ -914,7 +1022,10 @@ def _connector_notes(
                 title=f"{name} connector",
                 node_id=f"connector:{source_type}",
                 connector_state=str(connector.get("connector_state") or "unknown"),
-                body=_connector_note_body(connector),
+                body=_connector_note_body(
+                    connector,
+                    latest_receipt=(receipts_by_source.get(source_type) or [None])[0],
+                ),
                 links=["[[_System/Connector Diagnostics|Connector Diagnostics]]"],
                 source_type=source_type,
             )
@@ -928,6 +1039,24 @@ def _connector_notes(
             node_id="connector:diagnostics",
             connector_state="overview",
             body=_connector_overview_body(connectors),
+            links=overview_links,
+            source_type="all",
+        )
+    )
+    receipts_path = "_System/Connector Run Receipts.md"
+    used_paths.add(receipts_path.casefold())
+    all_receipts = [
+        receipt
+        for receipts in receipts_by_source.values()
+        for receipt in receipts
+    ]
+    notes.append(
+        _connector_note(
+            path=receipts_path,
+            title="Connector Run Receipts",
+            node_id="connector:run_receipts",
+            connector_state="receipts",
+            body=_connector_receipts_body(all_receipts[:50]),
             links=overview_links,
             source_type="all",
         )

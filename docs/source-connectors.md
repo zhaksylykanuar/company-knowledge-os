@@ -192,6 +192,71 @@ Guarantees:
   honestly, and disabled real connectors skip with `real_connectors_disabled`.
 - The pilot performs no real Obsidian write without `--sync-obsidian`.
 
+## Connector Run Receipts and Watermarks
+
+Every executed connector request writes a sanitized receipt in the source run
+read-model. A receipt answers exactly what happened:
+
+- request, source, action, run/correlation IDs;
+- scope snapshot and limits applied;
+- pages/records/events seen;
+- events ingested, duplicates skipped, normalized events and errors;
+- watermarks before/after and the reason the watermark did or did not move;
+- sanitized warnings/errors;
+- content hash and `secret_scan_status=passed`.
+
+Inspect one receipt through the UI Source Run Detail drawer or API:
+
+```bash
+GET /v1/founder/source-runs/{request_id}/receipt
+```
+
+`configured` is not the same as `connected`: a source is connected only after a
+successful read-only test/sync, not from env vars alone.
+
+Watermark rules:
+
+- `test_connection` never updates the sync watermark.
+- `preview_sync` writes no `source_events` and never updates the watermark.
+- failed, blocked, missing-config, missing-scope, real-disabled and skipped
+  runs never update the normal sync watermark.
+- `sync` updates the normal watermark only on success or partial success with a
+  valid output watermark.
+- `backfill` never overwrites the normal sync watermark; it records its window
+  in the receipt/result summary.
+- completed requests do not run twice.
+
+Pagination and limits:
+
+- live reads must respect `FOUNDEROS_CONNECTOR_SYNC_LIMIT`,
+  `FOUNDEROS_CONNECTOR_BACKFILL_LIMIT`, and
+  `FOUNDEROS_CONNECTOR_BACKFILL_MAX_DAYS`;
+- receipts record `pages_read`, `limit_applied`, `stopped_reason`,
+  `retry_after_seconds` and `rate_limit_remaining` when available;
+- rate-limit/timeout/partial success are sanitized reasons, not raw stack
+  traces.
+
+Retry policy:
+
+- failed/blocked/skipped/partial runs can create a safe retry request;
+- a retry does not execute externally until the operator runs the source
+  request script;
+- retry keeps scope/paused/real-disabled gates intact;
+- retry output is idempotent by request key.
+
+Operator sequence:
+
+```bash
+uv run python scripts/run_local_connector_pilot.py \
+  --confirm-run "RUN LOCAL CONNECTOR PILOT" --preview-only
+
+uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS"
+
+uv run python scripts/run_evidence_pipeline.py --confirm-run "RUN EVIDENCE PIPELINE"
+
+uv run python scripts/sync_obsidian_vault.py --confirm-run "SYNC OBSIDIAN VAULT"
+```
+
 ## Safe Execution
 
 Source actions are requested through Source Control Center first. The operator

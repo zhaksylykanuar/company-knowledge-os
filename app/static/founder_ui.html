@@ -1707,6 +1707,14 @@ async function sourceAction(source,action){
     loadSources();loadDataQuality();loadCommandCenter();
   }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
 }
+async function retrySourceRun(source,requestId){
+  if(!confirm("Create a safe retry request for this source run? It will not call the external connector until the operator runner is executed."))return;
+  try{
+    var r=await (await api("/v1/founder/sources/"+encodeURIComponent(source)+"/retry/"+encodeURIComponent(requestId),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_key:source+"-retry-"+Date.now(),requested_by:"founder"})})).json();
+    setMsgEl("sources-msg","retry "+r.status+" · "+r.request_id,false);
+    loadSources();loadDataQuality();loadCommandCenter();
+  }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
+}
 async function openSourceEventList(source,status,runId){
   overlay("ov-src",true);
   $("src-body").innerHTML='<div class="mut">Loading source events…</div>';
@@ -1737,15 +1745,24 @@ async function openSourceRunDetail(requestId,source){
     }
     if(!run){$("src-body").innerHTML='<div class="empty">Run not found.</div>';return;}
     var rs=run.result_summary||{},safe=rs.sanitized_summary||{},ing=safe.ingestion||{},pipe=rs.evidence_pipeline||{};
+    var receipt=(run.receipt||rs.receipt||null);
+    try{
+      var receiptResp=await api("/v1/founder/source-runs/"+encodeURIComponent(requestId)+"/receipt");
+      var receiptPayload=await receiptResp.json();
+      receipt=receiptPayload.receipt||receipt;
+      if(receiptPayload.run)SOURCE_RUN_CACHE[requestId]=receiptPayload.run;
+    }catch(e){}
     var diag=(CONNECTOR_DIAGS||{})[run.source_type]||{};
+    var preview=!!(rs.preview||receipt&&receipt.action_type==="preview_sync");
     var h='<p class="h">Source run detail <span class="badge b-mut">'+esc(run.source_type)+'</span></p>'
-      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">'+sourceRunBadge(run.status)+'<span class="badge b-mut">'+esc(run.action_type||"")+'</span>'+(rs.status?'<span class="badge b-blue">connector '+esc(rs.status)+'</span>':'')+(run.external_side_effect?'<span class="badge b-red">external side effect</span>':'<span class="badge b-green">no external side effect</span>')+'</div>'
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">'+sourceRunBadge(run.status)+'<span class="badge b-mut">'+esc(run.action_type||"")+'</span>'+(rs.status?'<span class="badge b-blue">connector '+esc(rs.status)+'</span>':'')+(run.external_side_effect?'<span class="badge b-red">external side effect</span>':'<span class="badge b-green">no external side effect</span>')+(preview?'<span class="badge b-amber">preview only · no writes</span>':'')+'</div>'
       +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">'
       +'<span class="badge b-mut">adapter: '+esc(diag.adapter_type||"noop")+'</span>'
       +'<span class="badge b-mut">real exec: '+esc(diag.real_execution||"n/a")+'</span>'
       +(safe.mode?'<span class="badge b-mut">mode: '+esc(safe.mode)+'</span>':'')
       +(diag.pipeline_state?'<span class="badge b-mut">stage: '+esc(diag.pipeline_state)+'</span>':'')
       +'</div>'
+      +(receipt?'<div class="alert" style="margin-bottom:10px;background:var(--accent-soft);color:var(--accent-text)"><b>Receipt</b> '+esc(receipt.receipt_id||"")+' · hash '+esc(String(receipt.content_hash||"").slice(0,16))+' · watermark '+(receipt.watermark_updated?'<b>updated</b>':'unchanged')+' ('+esc(receipt.watermark_update_reason||"") +')</div>':'')
       +'<div class="grid3">'
       +'<div class="substate"><div class="l">events seen / ingested</div><div class="v">'+num(ing.events_seen||rs.events_seen||0)+' / '+num(ing.events_ingested||rs.events_ingested||0)+'</div></div>'
       +'<div class="substate"><div class="l">duplicates</div><div class="v">'+num(ing.duplicates_skipped||0)+'</div></div>'
@@ -1754,11 +1771,24 @@ async function openSourceRunDetail(requestId,source){
       +'<div class="substate"><div class="l">graph edges</div><div class="v">'+num((pipe.graph_edges_created||0)+(pipe.graph_edges_updated||0))+'</div></div>'
       +'<div class="substate"><div class="l">findings / proposals</div><div class="v">'+num(pipe.findings_created||0)+' / '+num(pipe.proposals_created||0)+'</div></div>'
       +'</div>'
+      +(receipt?'<div class="grid3" style="margin-top:8px">'
+        +'<div class="substate"><div class="l">pages / records</div><div class="v">'+num(receipt.pages_read||0)+' / '+num(receipt.records_seen||0)+'</div></div>'
+        +'<div class="substate"><div class="l">limit</div><div class="v">'+num(receipt.limit_applied||0)+'</div></div>'
+        +'<div class="substate"><div class="l">stopped</div><div class="v" style="font-size:14px">'+esc(receipt.stopped_reason||"—")+'</div></div>'
+        +'</div>'
+        +'<div class="mut" style="margin-top:8px">watermarks: before <code>'+esc(receipt.previous_success_watermark||"none")+'</code> · input <code>'+esc(receipt.input_watermark||"none")+'</code> · output <code>'+esc(receipt.output_watermark||"none")+'</code></div>'
+        +(receipt.blocked_reason?'<div class="alert warn" style="margin-top:8px">blocked reason: <code>'+esc(receipt.blocked_reason)+'</code></div>':'')
+        :'')
       +'<div class="mut" style="margin-top:8px">requested '+esc((run.requested_at||"").slice(0,16).replace("T"," "))+(run.started_at?' · started '+esc((run.started_at||"").slice(0,16).replace("T"," ")):'')+(run.finished_at?' · finished '+esc((run.finished_at||"").slice(0,16).replace("T"," ")):'')+'</div>'
       +(run.run_id?'<div class="mut">run_id: '+esc(run.run_id)+' · correlation: '+esc(run.correlation_id||"")+'</div>':'');
     if((rs.warnings||[]).length)h+='<div class="alert warn" style="margin-top:10px">'+esc(rs.warnings.join(" · "))+'</div>';
     if((ing.errors||[]).length)h+='<details class="ev" open><summary>Errors</summary><pre>'+esc(JSON.stringify(ing.errors,null,1))+'</pre></details>';
-    if(run.run_id)h+='<div class="row" style="margin-top:10px;gap:6px"><button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">open events</button><button class="actbtn" data-srcact="runs" data-source="'+esc(run.source_type)+'">all runs</button></div>';
+    h+='<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">';
+    if(run.run_id)h+='<button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">open events</button>';
+    h+='<button class="actbtn" data-srcact="runs" data-source="'+esc(run.source_type)+'">all runs</button>';
+    if(["failed","blocked","skipped","partial_succeeded"].indexOf(run.status)>=0)h+='<button class="actbtn" data-srcact="retry-run" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">retry safely</button>';
+    h+='</div>';
+    if(receipt)h+='<details class="ev" open><summary>Full run receipt</summary><pre>'+esc(JSON.stringify(receipt,null,1))+'</pre></details>';
     h+='<details class="ev"><summary>Connector state before / after</summary><pre>'+esc(JSON.stringify({before:run.source_state_before,after:run.source_state_after},null,1))+'</pre></details>'
       +'<details class="ev"><summary>Sanitized result summary</summary><pre>'+esc(JSON.stringify(rs,null,1))+'</pre></details>'
       +'<div class="mut" style="margin-top:8px">audit refs: log #'+esc(String(run.audit_log_id||"—"))+' · correlation '+esc(run.correlation_id||"—")+'</div>';
@@ -1819,6 +1849,7 @@ document.addEventListener("click",function(e){
     if(action==="errors"){openSourceEventList(source,"failed",runId);return;}
     if(action==="runs"){openSourceRunList(source);return;}
     if(action==="run-detail"){openSourceRunDetail(act.getAttribute("data-requestid"),source);return;}
+    if(action==="retry-run"){retrySourceRun(source,act.getAttribute("data-requestid"));return;}
     sourceAction(source,action);return;
   }
 });
