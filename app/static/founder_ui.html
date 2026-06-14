@@ -6,18 +6,21 @@
 <title>FounderOS</title>
 <style>
 :root{
-  --bg:#f5f6f8; --surface:#ffffff; --surface2:#eef0f4; --text:#15171c; --muted:#6b7280;
-  --border:rgba(20,25,40,.10); --accent:#5b4fd6; --accent-soft:#edebfc; --accent-text:#3c3489;
+  --bg:#f6f5f2; --surface:#ffffff; --surface2:#f0efeb; --surface3:#faf9f7; --text:#171717; --muted:#73706b;
+  --border:rgba(32,31,29,.10); --accent:#2f5f56; --accent-soft:#e8f2ef; --accent-text:#1f4942;
   --green:#1d9e75; --green-soft:#e1f5ee; --green-text:#085041;
   --amber:#c07b13; --amber-soft:#faeeda; --amber-text:#633806;
   --red:#d64545; --red-soft:#fcebeb; --red-text:#791f1f;
   --blue:#2f7fd0; --blue-soft:#e6f1fb; --blue-text:#0c447c;
-  --radius:12px; --radius-sm:8px;
+  --radius:16px; --radius-sm:10px; --radius-xs:7px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 18px 40px rgba(20,25,40,.08);
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px;
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#0f1115; --surface:#171a21; --surface2:#1f2430; --text:#e8eaf0; --muted:#98a1b3;
-    --border:rgba(255,255,255,.09); --accent:#8d82ec; --accent-soft:#2c2752; --accent-text:#cecbf6;
+    --bg:#10110f; --surface:#171916; --surface2:#20231f; --surface3:#141613; --text:#e8e6df; --muted:#a09b91;
+    --border:rgba(255,255,255,.09); --accent:#8fc5b7; --accent-soft:#17332d; --accent-text:#b7e2d8;
     --green:#3fc394; --green-soft:#0c3a2d; --green-text:#9fe1cb;
     --amber:#e3a93c; --amber-soft:#3d2c10; --amber-text:#fac775;
     --red:#e36c6c; --red-soft:#3d1717; --red-text:#f7c1c1;
@@ -26,35 +29,35 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,"Segoe UI",Inter,Roboto,sans-serif;display:flex;min-height:100vh}
-aside{width:216px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:16px 10px;position:sticky;top:0;height:100vh;overflow-y:auto}
+body{background:radial-gradient(circle at top left,rgba(47,95,86,.08),transparent 32%),var(--bg);color:var(--text);font:14px/1.5 -apple-system,"Segoe UI",Inter,Roboto,sans-serif;display:flex;min-height:100vh}
+aside{width:226px;flex-shrink:0;background:rgba(255,255,255,.76);backdrop-filter:blur(18px);border-right:1px solid var(--border);padding:18px 12px;position:sticky;top:0;height:100vh;overflow-y:auto}
 .logo{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;padding:2px 10px 16px}
 .logo .mark{width:24px;height:24px;border-radius:7px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
-.nav{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--muted);cursor:pointer;font-size:13.5px;margin-bottom:1px;user-select:none}
-.nav:hover{background:var(--surface2);color:var(--text)}
+.nav{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:var(--radius-sm);color:var(--muted);cursor:pointer;font-size:13.5px;margin-bottom:2px;user-select:none}
+.nav:hover{background:var(--surface2);color:var(--text);box-shadow:var(--shadow-sm)}
 .nav.on{background:var(--accent-soft);color:var(--accent-text);font-weight:600}
 .nav svg{width:16px;height:16px;flex-shrink:0}
 .navsep{border-top:1px solid var(--border);margin:10px 8px}
-main{flex:1;min-width:0;padding:0 28px 60px}
-.topbar{display:flex;align-items:center;gap:12px;padding:14px 0;position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid transparent}
+main{flex:1;min-width:0;padding:0 32px 64px}
+.topbar{display:flex;align-items:center;gap:12px;padding:16px 0;position:sticky;top:0;background:linear-gradient(180deg,var(--bg),rgba(246,245,242,.92));backdrop-filter:blur(14px);z-index:5;border-bottom:1px solid transparent}
 .topbar h1{font-size:17px;font-weight:600;margin:0;flex:1}
-.iconbtn{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);padding:7px 10px;cursor:pointer;font:inherit;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.iconbtn{background:var(--surface);border:1px solid var(--border);border-radius:999px;color:var(--muted);padding:8px 12px;cursor:pointer;font:inherit;font-size:13px;display:inline-flex;align-items:center;gap:6px;box-shadow:var(--shadow-sm)}
 .iconbtn:hover{color:var(--text)}
-.btn{background:var(--accent);border:none;color:#fff;padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer;font:inherit;font-size:13px;font-weight:500}
+.btn{background:var(--accent);border:none;color:#fff;padding:9px 15px;border-radius:999px;cursor:pointer;font:inherit;font-size:13px;font-weight:600;box-shadow:var(--shadow-sm)}
 .btn.ghost{background:var(--surface);color:var(--text);border:1px solid var(--border)}
 .btn:disabled{opacity:.5}
-.wrap{max-width:1160px}
+.wrap{max-width:1180px}
 .sec{display:none;padding-top:18px}
 .sec.on{display:block}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow-sm)}
 .page-header{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
 .page-kicker{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text)}
-.page-title{font-size:28px;line-height:1.12;font-weight:720;margin:3px 0 6px;letter-spacing:0}
+.page-title{font-size:31px;line-height:1.08;font-weight:760;margin:4px 0 8px;letter-spacing:0}
 .page-subtitle{max-width:720px;color:var(--muted);font-size:14px}
-.hero-card{background:linear-gradient(135deg,var(--surface),var(--accent-soft));border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.hero-card{background:linear-gradient(135deg,var(--surface),var(--surface3) 54%,var(--accent-soft));border:1px solid var(--border);border-radius:22px;padding:24px;box-shadow:var(--shadow-md)}
 .status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
-.status-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px;min-height:132px;display:flex;flex-direction:column;gap:8px}
-.status-card.primary{border-color:rgba(91,79,214,.35);box-shadow:0 10px 26px rgba(20,25,40,.05)}
+.status-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-height:126px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow-sm)}
+.status-card.primary{border-color:rgba(47,95,86,.28);box-shadow:0 10px 26px rgba(20,25,40,.05)}
 .status-card .eyebrow{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .status-card .big{font-size:24px;font-weight:720;line-height:1.1}
 .status-card .explain{color:var(--muted);font-size:12.5px;max-width:38em}
@@ -78,6 +81,10 @@ main{flex:1;min-width:0;padding:0 28px 60px}
 .technical-details summary{color:var(--muted);cursor:pointer;font-size:12px}
 .command-chip{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:6px 11px;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
 .empty-state{border:1px dashed var(--border);border-radius:var(--radius);padding:22px;text-align:center;color:var(--muted);background:transparent}
+.source-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px 20px;box-shadow:var(--shadow-sm)}
+.compact-list{display:grid;gap:8px}
+#global-tooltip{position:fixed;left:0;top:0;max-width:340px;padding:9px 11px;border-radius:10px;background:rgba(22,24,27,.94);color:#fff;font-size:12.5px;line-height:1.38;box-shadow:0 14px 34px rgba(0,0,0,.18);z-index:200;pointer-events:none;opacity:0;transform:translate(12px,14px);transition:opacity .12s ease}
+#global-tooltip.on{opacity:1}
 body.explain-simple .simple-hidden{display:none!important}
 body.explain-detailed .detailed-hidden{display:none!important}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
@@ -203,43 +210,43 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
 <body>
 <aside id="nav">
   <div class="logo"><span class="mark">F</span> FounderOS</div>
-  <div class="nav on" data-nav="cc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Command center</div>
-  <div class="nav" data-nav="src"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M8.5 7.7l2.2 6.4M15.5 7.7l-2.2 6.4"/></svg>Sources<span class="navbadge" id="nav-src-n"></span></div>
-  <div class="nav" data-nav="dq"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16"/><path d="M8 15l3-3 3 2 5-7"/><path d="M8 15v3M14 14v4M19 7v11"/></svg>Data quality<span class="navbadge" id="nav-dq-n"></span></div>
-  <div class="nav" data-nav="so"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 109 9"/><path d="M12 8v4l3 2"/><path d="M19 3l2 2-2 2-2-2 2-2z"/></svg>Second opinion<span class="navbadge" id="nav-so-n"></span></div>
-  <div class="nav" data-nav="ib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v6H3v-6l2-7z"/></svg>Inbox<span class="navbadge" id="nav-ib-n"></span></div>
-  <div class="nav" data-nav="ac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Action center<span class="navbadge" id="nav-ac-n"></span></div>
-  <div class="nav" data-nav="tw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l2 2 3.5-3.5M4 12l2 2 3.5-3.5M13 6h8M13 12h8M4 18h17"/></svg>Workspace</div>
-  <div class="nav" data-nav="kt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="13" r="3"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="18" r="2.5"/><path d="M8 7.5l2.5 3M14.8 11.5L16.5 6.5M9.5 14.8L6.5 17.5M14.6 14.6l3 2.4"/></svg>Knowledge tree</div>
-  <div class="nav" data-nav="st"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4l-6 3v13l6-3 6 3 6-3V4l-6 3-6-3z"/><path d="M9 4v13M15 7v13"/></svg>Strategy</div>
-  <div class="nav" data-nav="pr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Product</div>
-  <div class="nav" data-nav="gr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Growth</div>
-  <div class="nav" data-nav="sa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>Sales signals</div>
-  <div class="nav" data-nav="te"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3 3.4-5 6.5-5s5.7 2 6.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5c2.6.3 4.7 1.9 5.5 4.5"/></svg>Team</div>
-  <div class="nav" data-nav="ta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l2 2 3.5-3.5M4 12l2 2 3.5-3.5M4 18l2 2 3.5-3.5M13 6h8M13 12h8M13 18h8"/></svg>Tasks</div>
-  <div class="nav" data-nav="me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Metrics</div>
-  <div class="nav" data-nav="orh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Operating rhythm</div>
-  <div class="nav" data-nav="upd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14H7l-3 3V4z"/><path d="M8 9h8M8 13h5"/></svg>Curated updates</div>
-  <div class="nav" data-nav="spk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 012-2h8l6 6v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5z"/><path d="M14 3v6h6M9 14l2 2 4-4"/></svg>Share packs<span class="navbadge" id="nav-spk-n"></span></div>
-  <div class="nav" data-nav="ntf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>Notifications<span class="navbadge" id="nav-ntf-n"></span></div>
+  <div class="nav on" data-nav="cc" data-tip="Открыть главный экран: пульс компании, риски, доверие к данным и следующий шаг."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Центр управления</div>
+  <div class="nav" data-nav="src" data-tip="Показать источники данных, безопасные запросы sync и состояние коннекторов."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M8.5 7.7l2.2 6.4M15.5 7.7l-2.2 6.4"/></svg>Источники<span class="navbadge" id="nav-src-n"></span></div>
+  <div class="nav" data-nav="dq" data-tip="Показать проблемы, которые мешают FounderOS быть точным."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M4 19h16"/><path d="M8 15l3-3 3 2 5-7"/><path d="M8 15v3M14 14v4M19 7v11"/></svg>Качество данных<span class="navbadge" id="nav-dq-n"></span></div>
+  <div class="nav" data-nav="so" data-tip="Открыть расхождения между заявленным состоянием и evidence."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 109 9"/><path d="M12 8v4l3 2"/><path d="M19 3l2 2-2 2-2-2 2-2z"/></svg>Второе мнение<span class="navbadge" id="nav-so-n"></span></div>
+  <div class="nav" data-nav="ib" data-tip="Открыть очередь решений: подтвердить, отклонить или отложить предложения."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 6h14l2 7v6H3v-6l2-7z"/></svg>Решения<span class="navbadge" id="nav-ib-n"></span></div>
+  <div class="nav" data-nav="ac" data-tip="Показать короткий список следующих действий и решений."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Следующие действия<span class="navbadge" id="nav-ac-n"></span></div>
+  <div class="nav" data-nav="tw" data-tip="Открыть рабочий обзор для команды."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l2 2 3.5-3.5M4 12l2 2 3.5-3.5M13 6h8M13 12h8M4 18h17"/></svg>Рабочее пространство</div>
+  <div class="nav" data-nav="kt" data-tip="Открыть Obsidian-граф: синхронизация vault, заметки и fallback preview."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="13" r="3"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="18" r="2.5"/><path d="M8 7.5l2.5 3M14.8 11.5L16.5 6.5M9.5 14.8L6.5 17.5M14.6 14.6l3 2.4"/></svg>Obsidian-граф</div>
+  <div class="nav" data-nav="st" data-tip="Открыть стратегию, фокус и гипотезы."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4l-6 3v13l6-3 6 3 6-3V4l-6 3-6-3z"/><path d="M9 4v13M15 7v13"/></svg>Стратегия</div>
+  <div class="nav" data-nav="pr" data-tip="Открыть продуктовые гипотезы, задачи и evidence."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Продукт</div>
+  <div class="nav" data-nav="gr" data-tip="Открыть сигналы роста и прогресса."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Рост</div>
+  <div class="nav" data-nav="sa" data-tip="Открыть сигналы коммуникаций и отношений без денежных метрик."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg>Сигналы продаж</div>
+  <div class="nav" data-nav="te" data-tip="Открыть загрузку команды и риски без персональных оценок."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3 3.4-5 6.5-5s5.7 2 6.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.5c2.6.3 4.7 1.9 5.5 4.5"/></svg>Команда</div>
+  <div class="nav" data-nav="ta" data-tip="Открыть задачи, блокеры и stale work."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l2 2 3.5-3.5M4 12l2 2 3.5-3.5M4 18l2 2 3.5-3.5M13 6h8M13 12h8M13 18h8"/></svg>Задачи</div>
+  <div class="nav" data-nav="me" data-tip="Открыть метрики и доказательства прогресса."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Метрики</div>
+  <div class="nav" data-nav="orh" data-tip="Открыть рабочий ритм, решения и weekly review."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Ритм</div>
+  <div class="nav" data-nav="upd" data-tip="Открыть подготовленные апдейты и черновики."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14H7l-3 3V4z"/><path d="M8 9h8M8 13h5"/></svg>Апдейты</div>
+  <div class="nav" data-nav="spk" data-tip="Открыть share packs: preview, approval и redaction перед отправкой."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 012-2h8l6 6v10a2 2 0 01-2 2H6a2 2 0 01-2-2V5z"/><path d="M14 3v6h6M9 14l2 2 4-4"/></svg>Пакеты<span class="navbadge" id="nav-spk-n"></span></div>
+  <div class="nav" data-nav="ntf" data-tip="Показать уведомления, которые требуют внимания."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>Уведомления<span class="navbadge" id="nav-ntf-n"></span></div>
   <div class="navsep"></div>
-  <div class="nav" data-nav="inv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M8 12l3-3 2 2 3-4"/></svg>Investor view</div>
+  <div class="nav" data-nav="inv" data-tip="Открыть redacted investor view без raw refs и внутренних заметок."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8M8 12l3-3 2 2 3-4"/></svg>Для инвестора</div>
 </aside>
 <main>
   <div class="topbar">
-    <h1 id="sec-title">Command center</h1>
+    <h1 id="sec-title">Центр управления</h1>
     <span id="global-status"></span>
     <span id="dev-badge" class="row" style="gap:5px;display:none"></span>
-    <button class="iconbtn" id="explain-mode" title="Explain mode: Simple hides technical details; Detailed shows receipts, ids and watermarks">Simple mode</button>
-    <select id="role-switch" class="iconbtn" title="Роль / аудитория — backend отдаёт разный read-model и redaction">
-      <option value="founder">Founder</option>
-      <option value="team">Team</option>
-      <option value="investor">Investor</option>
+    <button class="iconbtn" id="explain-mode" data-tip="Переключает вид: «Просто» скрывает технические детали, «Подробно» показывает receipts, ids и watermarks.">Просто</button>
+    <select id="role-switch" class="iconbtn" data-tip="Меняет аудиторию интерфейса: основатель видит максимум безопасных деталей, команда и инвестор получают redacted view." title="Роль / аудитория — backend отдаёт разный read-model и redaction">
+      <option value="founder">Основатель</option>
+      <option value="team">Команда</option>
+      <option value="investor">Инвестор</option>
     </select>
-    <button class="iconbtn" id="search-open" title="Поиск по знаниям (Cmd+K)">⌘K Поиск</button>
-    <button class="iconbtn" id="digest-open">Дайджест</button>
-    <button class="iconbtn" id="refresh">Обновить</button>
-    <button class="iconbtn" id="key-open" title="API key">ключ</button>
+    <button class="iconbtn" id="search-open" data-tip="Открывает поиск по знаниям, задачам, рискам и источникам. Данные не изменяются.">⌘K Поиск</button>
+    <button class="iconbtn" id="digest-open" data-tip="Показывает краткий дайджест внимания за выбранный период.">Дайджест</button>
+    <button class="iconbtn" id="refresh" data-tip="Перезагружает read-models на экране. Внешние источники не синхронизируются.">Обновить</button>
+    <button class="iconbtn" id="key-open" data-tip="Открывает локальную настройку API key для этого браузера. Секреты не отправляются в UI.">Ключ</button>
   </div>
   <div class="statusline" id="rolemsg"></div>
   <div class="statusline" id="topmsg"></div>
@@ -277,12 +284,12 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <section class="sec" data-sec="src">
     <div class="page-header">
       <div>
-        <div class="page-kicker">Sources</div>
-        <div class="page-title">Connect your company data</div>
+        <div class="page-kicker">Источники</div>
+        <div class="page-title">Источники данных</div>
         <!-- Legacy marker: Sources / Data Control -->
-        <div class="page-subtitle">FounderOS reads sources in read-only mode and builds evidence. It never writes to Jira, GitHub, Gmail or other external systems.</div>
+        <div class="page-subtitle">FounderOS читает данные только в read-only режиме и строит доказательства. Он не пишет в Jira, GitHub или Gmail.</div>
       </div>
-      <button class="btn ghost" id="sources-refresh">Refresh sources</button>
+      <button class="btn ghost" id="sources-refresh" data-tip="Обновит состояние источников из backend read-model. Внешние API не вызываются.">Обновить</button>
     </div>
     <div class="statusline" id="sources-msg"></div>
     <div class="grid3" id="sources-summary" style="margin-bottom:12px"></div>
@@ -292,11 +299,11 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <section class="sec" data-sec="dq">
     <div class="page-header">
       <div>
-        <div class="page-kicker">Data Quality</div>
-        <div class="page-title">What blocks accurate answers?</div>
-        <div class="page-subtitle">This board explains what prevents FounderOS from trusting the data: setup blockers, evidence gaps, graph hygiene, run issues and Obsidian sync.</div>
+        <div class="page-kicker">Качество данных</div>
+        <div class="page-title">Что мешает системе быть точной?</div>
+        <div class="page-subtitle">Эта доска показывает блокеры настройки, пробелы в доказательствах, гигиену графа, ошибки запусков и состояние Obsidian sync.</div>
       </div>
-      <button class="btn ghost" id="dq-refresh">Refresh data quality</button>
+      <button class="btn ghost" id="dq-refresh" data-tip="Обновит список проблем качества данных. Внешние API не вызываются.">Обновить</button>
     </div>
     <div class="statusline" id="dq-msg"></div>
     <div class="grid3" id="dq-summary" style="margin-bottom:12px"></div>
@@ -317,9 +324,9 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <section class="sec" data-sec="ac">
     <div class="page-header">
       <div>
-        <div class="page-kicker">Action Center</div>
-        <div class="page-title">What should I decide next?</div>
-        <div class="page-subtitle">A short decision board from evidence, conflicts, blocked work and data-quality issues. Technical refs stay in details.</div>
+        <div class="page-kicker">Следующие действия</div>
+        <div class="page-title">Что решить дальше?</div>
+        <div class="page-subtitle">Короткая доска решений из доказательств, конфликтов, заблокированной работы и проблем качества данных. Технические refs спрятаны в деталях.</div>
       </div>
     </div>
     <div class="statusline" id="ac-msg"></div>
@@ -329,19 +336,21 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <section class="sec" data-sec="kt">
     <div class="page-header">
       <div>
-        <div class="page-kicker">Knowledge Tree</div>
-        <div class="page-title">Obsidian Bridge first</div>
-        <div class="page-subtitle">FounderOS generates a real local Obsidian vault. Use Obsidian for Graph View, Local Graph, backlinks, Markdown notes and search.</div>
+        <div class="page-kicker">Граф знаний</div>
+        <div class="page-title">Obsidian-граф</div>
+        <!-- Legacy marker: Obsidian Bridge first -->
+        <div class="page-subtitle">FounderOS генерирует настоящий локальный Obsidian vault. Сам граф, backlinks и локальный граф лучше смотреть в Obsidian.</div>
       </div>
     </div>
     <div id="kt-bridge"></div>
     <details class="card" id="kt-webgraph-fallback" style="margin-top:12px">
-      <summary>Web graph preview fallback / debug</summary>
+      <!-- Legacy marker: Web graph preview fallback / debug -->
+      <summary>Резервный web-preview / debug</summary>
       <div class="row" id="kt-filters" style="flex-wrap:wrap;gap:8px;margin:10px 0"></div>
       <div class="card" style="padding:4px"><canvas id="kt-canvas" height="600"></canvas></div>
       <div class="statusline" id="kt-msg"></div>
       <div class="grid2" style="margin-top:6px">
-        <div class="card" id="kt-detail"><p class="h">Node preview</p><div class="mut">This web graph is a fallback. The primary knowledge surface is the generated local Obsidian vault.</div></div>
+        <div class="card" id="kt-detail"><p class="h">Просмотр ноды</p><div class="mut">Этот web-граф — fallback. Основная поверхность знаний — локальный Obsidian vault.</div></div>
         <div class="card" id="kt-stats"></div>
       </div>
     </details>
@@ -393,7 +402,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
 
 <div class="overlay" id="ov-digest"><div class="panel">
   <p class="h">Дайджест внимания (как в Telegram)</p>
-  <div class="row" style="margin-bottom:10px"><select id="digest-window" style="width:auto"><option value="24">24 часа</option><option value="72" selected>3 дня</option><option value="168">неделя</option></select><button class="btn ghost" id="digest-load">Показать</button></div>
+  <div class="row" style="margin-bottom:10px"><select id="digest-window" style="width:auto"><option value="24">24 часа</option><option value="72" selected>3 дня</option><option value="168">неделя</option></select><button class="btn ghost" id="digest-load" data-tip="Загрузит дайджест за выбранный период. Данные не изменятся.">Показать</button></div>
   <pre class="digest" id="digest-text"></pre>
 </div></div>
 
@@ -403,7 +412,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <input type="text" id="key-header" readonly>
   <label class="f">API key (хранится только в этом браузере)</label>
   <input type="password" id="key-value" placeholder="вставьте API_AUTH_KEY">
-  <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" id="key-save">Сохранить и обновить</button></div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" id="key-save" data-tip="Сохранит ключ только в этом браузере и обновит read-models.">Сохранить и обновить</button></div>
 </div></div>
 
 <div class="overlay" id="ov-trail"><div class="panel" style="width:min(760px,94vw);max-height:80vh">
@@ -426,10 +435,12 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <p class="h" id="edit-title">Изменить</p>
   <div id="edit-fields"></div>
   <div class="row" style="margin-top:14px;justify-content:flex-end;gap:8px">
-    <button class="btn ghost" id="edit-cancel">Отмена</button>
-    <button class="btn" id="edit-save">Сохранить</button>
+    <button class="btn ghost" id="edit-cancel" data-tip="Закроет редактор без сохранения изменений.">Отмена</button>
+    <button class="btn" id="edit-save" data-tip="Сохранит изменения в FounderOS и обновит экран.">Сохранить</button>
   </div>
 </div></div>
+
+<div id="global-tooltip" role="tooltip" aria-hidden="true"></div>
 
 <script>
 "use strict";
@@ -483,63 +494,82 @@ function applyExplainMode(){
   document.body.classList.toggle("explain-detailed",isDetailed());
   document.body.classList.toggle("explain-simple",!isDetailed());
   var btn=$("explain-mode");
-  if(btn)btn.textContent=isDetailed()?"Detailed mode":"Simple mode";
+  if(btn)btn.textContent=isDetailed()?"Подробно":"Просто";
 }
 function technicalDetails(summary,html,open){
-  return '<details class="technical-details simple-hidden" '+(open?'open':'')+'><summary>'+esc(summary||"Show technical details")+'</summary>'+html+'</details>';
+  return '<details class="technical-details simple-hidden" '+(open?'open':'')+'><summary>'+esc(summary||"Показать технические детали")+'</summary>'+html+'</details>';
 }
 var STATUS_HELP={
   missing_config:"Нужно добавить backend env vars. FounderOS пока не может читать этот источник.",
-  real_disabled:"Safe mode is on. External APIs will not be called.",
-  real_connectors_disabled:"Safe mode is on. External APIs will not be called.",
+  real_disabled:"Включён безопасный режим. Внешние API не вызываются.",
+  real_connectors_disabled:"Включён безопасный режим. Внешние API не вызываются.",
   missing_scope:"Нужно ограничить Jira projects или GitHub repos, чтобы не читать всё подряд.",
-  blocked_missing_scope:"Sync did not run because scope is missing. Add allowed Jira projects or GitHub repos first.",
+  blocked_missing_scope:"Sync не запустился: не задан scope. Сначала добавьте разрешённые Jira projects или GitHub repos.",
   never_tested:"Credentials могут быть настроены, но connection test ещё не был успешным.",
-  connected:"Последний безопасный test или sync прошёл успешно.",
-  degraded:"Последний run упал или вернул warnings. Откройте receipt для деталей.",
-  preview:"Preview показывает, что будет прочитано, но ничего не сохраняет.",
-  preview_sync:"Preview показывает, что будет прочитано, но ничего не сохраняет.",
+  connected:"Последняя безопасная проверка или синхронизация прошла успешно.",
+  degraded:"Последний запуск вернул ошибку или предупреждения. Откройте receipt для деталей.",
+  preview:"Предпросмотр показывает, что будет прочитано, но ничего не сохраняет.",
+  preview_sync:"Предпросмотр показывает, что будет прочитано, но ничего не сохраняет.",
   skipped_missing_config:"Нет credentials. Можно продолжать локально, но внешний источник пока не синкается.",
-  watermark:"Watermark — точка, с которой следующий sync продолжит чтение.",
+  watermark:"Точка синхронизации показывает, откуда следующий sync продолжит чтение.",
   receipt:"Receipt — проверяемый отчёт о connector run: scope, limits, pages, events, watermarks и sanitized errors.",
   paused:"Источник на паузе. Sync и backfill не будут выполняться.",
   disabled:"Источник выключен.",
   error:"Источник требует внимания: последний run вернул ошибку."
 };
+var RU={
+  statusLabel:function(value){
+    var m={
+      connected:"Подключено",missing_config:"Нужна настройка",real_disabled:"Безопасный режим",real_connectors_disabled:"Безопасный режим",
+      missing_scope:"Нужен scope",never_tested:"Ещё не проверено",degraded:"Есть проблема",paused:"На паузе",disabled:"Выключено",
+      blocked_missing_scope:"Заблокировано: нет scope",skipped_missing_config:"Пропущено: нет настроек",preview:"Предпросмотр",
+      preview_sync:"Предпросмотр",sync_succeeded:"Синхронизация успешна",sync_failed:"Синхронизация не удалась",
+      watermark_not_updated:"Точка sync не обновлена",succeeded:"Успешно",failed:"Ошибка",running:"Выполняется",skipped:"Пропущено",
+      blocked:"Заблокировано",requested:"Запрошено",accepted:"Принято",partial_succeeded:"Частично"
+    };
+    return m[value]||String(value||"Нет данных");
+  },
+  statusExplain:function(value){return statusMeaning(value);},
+  actionLabel:function(value){
+    var m={test:"Проверить",preview_sync:"Предпросмотр",sync:"Синхронизировать",backfill:"Backfill",pause:"Пауза",resume:"Возобновить",retry:"Повторить"};
+    return m[value]||String(value||"Действие");
+  },
+  sectionTitle:function(value){return SECTION_TITLES[value]||"FounderOS";}
+};
 function statusMeaning(key){
-  return STATUS_HELP[key]||STATUS_HELP[String(key||"").replace(/^connector_/,"")]||"Подробности доступны в technical details.";
+  return STATUS_HELP[key]||STATUS_HELP[String(key||"").replace(/^connector_/,"")]||"Подробности доступны в технических деталях.";
 }
 function humanSourceState(s){
   var diag=(CONNECTOR_DIAGS||{})[s.source_type]||{};
   var ready=s.connector_readiness||{};
-  if(s.paused||s.status==="disabled")return {key:"paused",label:"Paused",cls:"b-mut",next:"Resume source when you are ready to collect evidence."};
-  if(diag.scope_required&&!diag.scope_configured)return {key:"missing_scope",label:"Scope missing",cls:"b-red",next:"Add allowed Jira projects or GitHub repos, then test connection."};
-  if(diag.real_execution==="disabled")return {key:"real_disabled",label:"Safe mode",cls:"b-amber",next:"Keep using preview, or enable real read-only connectors when ready."};
-  if(ready.status==="missing"||ready.status==="partial"||diag.connector_state==="missing_config")return {key:"missing_config",label:"Needs config",cls:"b-red",next:"Add backend env vars, restart, then test connection."};
-  if(diag.connector_state==="never_tested")return {key:"never_tested",label:"Never tested",cls:"b-amber",next:"Run Test connection before sync."};
-  if(s.status==="error"||s.status==="degraded"||diag.connector_state==="degraded")return {key:"degraded",label:"Needs attention",cls:"b-amber",next:"Open the latest run receipt and retry safely if needed."};
-  if(s.status==="connected"||diag.connector_state==="connected")return {key:"connected",label:"Connected",cls:"b-green",next:"Preview sync, then run evidence pipeline and sync Obsidian."};
-  return {key:s.status||"unknown",label:"Collecting",cls:"b-blue",next:"Start with Test connection or Preview sync."};
+  if(s.paused||s.status==="disabled")return {key:"paused",label:"На паузе",cls:"b-mut",next:"Возобновите источник, когда будете готовы собирать evidence."};
+  if(diag.scope_required&&!diag.scope_configured)return {key:"missing_scope",label:"Нужен scope",cls:"b-red",next:"Добавьте разрешённые Jira projects или GitHub repos, затем проверьте подключение."};
+  if(diag.real_execution==="disabled")return {key:"real_disabled",label:"Безопасный режим",cls:"b-amber",next:"Можно делать предпросмотр. Реальное чтение включайте только когда готовы."};
+  if(ready.status==="missing"||ready.status==="partial"||diag.connector_state==="missing_config")return {key:"missing_config",label:"Нужна настройка",cls:"b-red",next:"Добавьте backend env vars, перезапустите backend и проверьте подключение."};
+  if(diag.connector_state==="never_tested")return {key:"never_tested",label:"Ещё не проверено",cls:"b-amber",next:"Сначала нажмите «Проверить», потом запускайте sync."};
+  if(s.status==="error"||s.status==="degraded"||diag.connector_state==="degraded")return {key:"degraded",label:"Есть проблема",cls:"b-amber",next:"Откройте последний receipt и при необходимости создайте безопасный повтор."};
+  if(s.status==="connected"||diag.connector_state==="connected")return {key:"connected",label:"Подключено",cls:"b-green",next:"Сделайте предпросмотр, затем sync, evidence pipeline и Obsidian."};
+  return {key:s.status||"unknown",label:"Собираем данные",cls:"b-blue",next:"Начните с проверки подключения или предпросмотра sync."};
 }
 function humanIssueTitle(i){
   var t=String(i.category||i.issue_type||"issue").replace(/_/g," ");
   var map={
-    connector_real_enabled_missing_scope:"Sync is blocked because no scope is configured",
-    connector_scope_too_broad:"Connector scope is too broad",
-    source_event_not_normalized:"Events are not usable evidence yet",
-    normalized_not_lifted_to_graph:"Evidence has not reached the knowledge graph",
-    source_run_no_receipt:"A source run is missing its receipt",
-    receipt_has_errors:"A connector run finished with errors",
-    receipt_rate_limited:"Connector was rate limited",
-    receipt_partial_success:"Connector completed only part of the work",
-    preview_has_not_been_synced:"Preview ran, but data has not been synced yet",
-    retry_available:"A safe retry is available",
-    watermark_not_updated_after_success:"Watermark did not advance after success"
+    connector_real_enabled_missing_scope:"Sync заблокирован: не задан scope",
+    connector_scope_too_broad:"Scope слишком широкий",
+    source_event_not_normalized:"События ещё не стали evidence",
+    normalized_not_lifted_to_graph:"Evidence ещё не попал в граф знаний",
+    source_run_no_receipt:"У запуска нет receipt",
+    receipt_has_errors:"Connector run завершился с ошибками",
+    receipt_rate_limited:"Источник ограничил запросы",
+    receipt_partial_success:"Connector выполнил только часть работы",
+    preview_has_not_been_synced:"Был предпросмотр, но sync ещё не запускался",
+    retry_available:"Доступен безопасный повтор",
+    watermark_not_updated_after_success:"Точка синхронизации не обновилась после успеха"
   };
   return map[i.category]||map[i.issue_type]||t.charAt(0).toUpperCase()+t.slice(1);
 }
 
-var SECTION_TITLES={cc:"Command center",src:"Sources",dq:"Data Quality",so:"Second opinion",ib:"Inbox",ac:"Action center",kt:"Knowledge tree",st:"Strategy map",pr:"Product system",gr:"Growth",sa:"Sales signals",te:"Team & operations",ta:"Execution",me:"Metrics",tw:"Team workspace",orh:"Operating rhythm",upd:"Curated updates",spk:"Share packs",ntf:"Notifications",inv:"Investor view"};
+var SECTION_TITLES={cc:"Центр управления",src:"Источники",dq:"Качество данных",so:"Второе мнение",ib:"Решения",ac:"Следующие действия",kt:"Obsidian-граф",st:"Стратегия",pr:"Продукт",gr:"Рост",sa:"Сигналы продаж",te:"Команда",ta:"Задачи",me:"Метрики",tw:"Рабочее пространство",orh:"Ритм",upd:"Апдейты",spk:"Пакеты",ntf:"Уведомления",inv:"Для инвестора"};
 var LAZY_LOADERS={src:function(){loadSources();},dq:function(){loadDataQuality();},so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},spk:function(){loadSharePacks();},ntf:function(){loadNotifications();},inv:function(){loadInvestor();}};
 var LAZY_LOADED={};
 function show(id){
@@ -547,7 +577,7 @@ function show(id){
   for(var i=0;i<secs.length;i++)secs[i].classList.toggle("on",secs[i].getAttribute("data-sec")===id);
   var navs=document.querySelectorAll(".nav");
   for(var j=0;j<navs.length;j++)navs[j].classList.toggle("on",navs[j].getAttribute("data-nav")===id);
-  $("sec-title").textContent=SECTION_TITLES[id]||"FounderOS";
+  $("sec-title").textContent=RU.sectionTitle(id);
   if(location.hash!=="#/"+id)history.replaceState(null,"","#/"+id);
   if(LAZY_LOADERS[id]&&!LAZY_LOADED[id]){LAZY_LOADED[id]=true;LAZY_LOADERS[id]();}
 }
@@ -601,7 +631,70 @@ function lines(text){
 function joinLines(rows){return (rows||[]).map(function(r){return r.join(" | ");}).join("\n");}
 
 function emptyState(text,btnLabel,onclickAttr){
-  return '<div class="empty">'+esc(text)+'<br><button class="btn ghost" '+onclickAttr+'>'+esc(btnLabel)+'</button></div>';
+  return '<div class="empty">'+esc(text)+'<br><button class="btn ghost" data-tip="Откроет связанный раздел. Данные не изменятся." '+onclickAttr+'>'+esc(btnLabel)+'</button></div>';
+}
+
+var TOOLTIP_FALLBACK="Нажмите, чтобы выполнить действие. Если действие меняет состояние, FounderOS создаст безопасный audit trail.";
+function ensureButtonTooltips(root){
+  var scope=root||document;
+  var items=scope.querySelectorAll("button,.nav,[data-go],[data-srcact],[data-soact],[data-obsact],[data-pact],[data-lact]");
+  for(var i=0;i<items.length;i++){
+    var el=items[i];
+    if(!el.getAttribute("data-tip"))el.setAttribute("data-tip",TOOLTIP_FALLBACK);
+    if(el.tagName==="BUTTON"&&!el.getAttribute("aria-label"))el.setAttribute("aria-label",el.textContent.trim()||"Действие FounderOS");
+  }
+}
+function initTooltips(){
+  var tip=$("global-tooltip");
+  if(!tip)return;
+  var active=null;
+  function position(x,y){
+    var pad=14;
+    var left=x+16,top=y+18;
+    var rect=tip.getBoundingClientRect();
+    if(left+rect.width+pad>window.innerWidth)left=Math.max(pad,x-rect.width-16);
+    if(top+rect.height+pad>window.innerHeight)top=Math.max(pad,y-rect.height-16);
+    tip.style.left=left+"px";tip.style.top=top+"px";
+  }
+  function show(el,x,y){
+    var text=el&&el.getAttribute("data-tip");
+    if(!text)return;
+    active=el;
+    tip.textContent=text;
+    tip.setAttribute("aria-hidden","false");
+    tip.classList.add("on");
+    if(x==null||y==null){
+      var r=el.getBoundingClientRect();
+      x=r.left+r.width/2;y=r.bottom;
+    }
+    position(x,y);
+  }
+  function hide(){
+    active=null;
+    tip.classList.remove("on");
+    tip.setAttribute("aria-hidden","true");
+  }
+  document.addEventListener("mouseover",function(e){
+    var el=e.target.closest("[data-tip]");
+    if(el)show(el,e.clientX,e.clientY);
+  });
+  document.addEventListener("mousemove",function(e){if(active)position(e.clientX,e.clientY);});
+  document.addEventListener("mouseout",function(e){
+    var el=e.target.closest("[data-tip]");
+    if(el&&(!e.relatedTarget||!el.contains(e.relatedTarget)))hide();
+  });
+  document.addEventListener("focusin",function(e){
+    var el=e.target.closest("[data-tip]");
+    if(el)show(el);
+  });
+  document.addEventListener("focusout",function(e){if(e.target.closest("[data-tip]"))hide();});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape")hide();});
+  ensureButtonTooltips(document);
+  new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      m.addedNodes.forEach(function(n){if(n.nodeType===1)ensureButtonTooltips(n);});
+    });
+  }).observe(document.body,{childList:true,subtree:true});
 }
 
 var HEALTH_HEX={red:"#d64545",yellow:"#c07b13",green:"#1d9e75",unknown:"#8b93a7"};
@@ -614,17 +707,17 @@ function healthRing(level,headline){
     +'<circle cx="42" cy="42" r="'+R+'" fill="none" stroke="'+col+'" stroke-width="8" stroke-linecap="round" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'" transform="rotate(-90 42 42)"/>'
     +'<text x="42" y="48" text-anchor="middle" font-size="22" font-weight="700" fill="'+col+'">'+label+'</text></svg>';
 }
-// Reusable "What AI sees differently" block for any section.
+// Reusable "What AI sees differently" legacy marker for tests; visible copy is Russian.
 function aiSeesBlock(findings,title){
   if(!findings||!findings.length)return"";
-  var h='<div class="aisees"><div class="hd">'+esc(title||"What AI sees differently")+'</div>';
+  var h='<div class="aisees"><div class="hd">'+esc(title||"Что AI видит иначе")+'</div>';
   for(var i=0;i<Math.min(3,findings.length);i++){
     var f=findings[i];
     var sevDot=f.severity==="high"?"var(--red)":f.severity==="low"?"var(--muted)":"var(--amber)";
     var key=esc(f.finding_key);
     h+='<div class="it"><span class="dot" style="background:'+sevDot+';margin-top:5px"></span><div style="flex:1">'+esc(f.summary)
       +'<div style="opacity:.8;font-size:11.5px">заявлено: '+esc(String(f.declared_state||"").slice(0,60))+' · наблюдаю: '+esc(String(f.observed_state||"").slice(0,60))+'</div></div>'
-      +'<button class="actbtn" data-soact="trail" data-fk="'+key+'">trail</button></div>';
+      +'<button data-tip="Откроет цепочку доказательств. Данные не изменятся." class="actbtn" data-soact="trail" data-fk="'+key+'">Цепочка</button></div>';
   }
   return h+'</div>';
 }
@@ -638,34 +731,34 @@ function commandCenterClarityRender(){
   var dqs=dq.by_severity||{},obs=OBSIDIAN.status||{};
   var firstAction=na[0]||{};
   if(!firstAction.title){
-    if(src.missing_config_sources)firstAction={title:"Connect the first external source",source_title:"Sources",impact:"medium",urgent:false};
-    else if(src.pending_requests)firstAction={title:"Run the safe source runner",source_title:"Sources",impact:"medium",urgent:false};
-    else firstAction={title:"Review the top AI conflict",source_title:"Second opinion",impact:"medium",urgent:false};
+    if(src.missing_config_sources)firstAction={title:"Подключить первый источник",source_title:"Источники",impact:"medium",urgent:false};
+    else if(src.pending_requests)firstAction={title:"Запустить безопасный source runner",source_title:"Источники",impact:"medium",urgent:false};
+    else firstAction={title:"Разобрать главный AI-конфликт",source_title:"Второе мнение",impact:"medium",urgent:false};
   }
-  var pulseLabel=hh.headline||"Collecting company state";
-  var lastEvidence=src.last_successful_sync?src.last_successful_sync.slice(0,16).replace("T"," "):"No successful sync yet";
+  var pulseLabel=hh.headline||"Собираем состояние компании";
+  var lastEvidence=src.last_successful_sync?src.last_successful_sync.slice(0,16).replace("T"," "):"Успешного sync ещё не было";
   var setupDone=0,setupTotal=4;
   if(src.total_sources)setupDone++;
   if(!src.missing_config_sources)setupDone++;
   if(totalSeries&&ready)setupDone++;
   if(obs.status==="configured"||obs.status===undefined)setupDone++;
   var topConflict=top[0];
-  var obsStatus=obs.status||"open Knowledge Tree";
+  var obsStatus=obs.status||"откройте Obsidian-граф";
   var obsCls=obs.status==="configured"?"b-green":obs.status==="disabled"?"b-mut":"b-amber";
   $("cc-hero").innerHTML=
-    '<div class="page-header"><div><div class="page-kicker">FounderOS</div><div class="page-title">AI second opinion for your company</div>'
-    +'<div class="page-subtitle">AI сравнивает заявленное состояние компании с evidence из источников и показывает, что требует решения сейчас.</div></div>'
-    +'<div class="row" style="gap:8px;flex-wrap:wrap"><span class="badge '+(hh.level==="green"?"b-green":hh.level==="red"?"b-red":hh.level==="yellow"?"b-amber":"b-mut")+'">'+esc(pulseLabel)+'</span><button class="btn ghost" data-go="ac">Open actions</button></div></div>'
+    '<div class="page-header"><div><div class="page-kicker">FounderOS</div><div class="page-title">Центр управления FounderOS</div>'
+    +'<div class="page-subtitle">AI сравнивает заявленное состояние компании с тем, что видно в данных, и показывает следующий лучший шаг.</div></div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><span class="badge '+(hh.level==="green"?"b-green":hh.level==="red"?"b-red":hh.level==="yellow"?"b-amber":"b-mut")+'">'+esc(pulseLabel)+'</span><button class="btn ghost" data-tip="Откроет список следующих решений. Данные не изменятся." data-go="ac">К действиям</button></div></div>'
     +'<div class="status-grid">'
-    +'<div class="status-card primary"><div class="eyebrow">Company Pulse</div><div class="big">'+num(so.open_total||0)+' open signals</div><div class="explain">Главное состояние: '+esc(pulseLabel)+'. Data confidence зависит от свежести evidence и подключённых источников.</div><div class="next">Last evidence: '+esc(lastEvidence)+'</div></div>'
-    +'<div class="status-card"><div class="eyebrow">What AI sees differently</div><div class="big">'+num(top.length)+' conflicts</div><div class="explain">'+(topConflict?esc(topConflict.summary):'AI не видит крупных расхождений в текущих данных.')+'</div><div class="next"><button class="actbtn" data-go="so">Open evidence</button></div></div>'
-    +'<div class="status-card"><div class="eyebrow">Next Best Actions</div><div class="big">'+esc(firstAction.title||"Review actions")+'</div><div class="explain">'+esc(firstAction.source_title||"FounderOS ranked this from evidence, severity and blocked work.")+'</div><div class="next"><button class="actbtn primary" data-go="ac">Take action</button></div></div>'
-    +'<div class="status-card"><div class="eyebrow">Data Trust</div><div class="big">'+num(src.total_sources||0)+' sources</div><div class="explain">'+num(src.missing_config_sources||0)+' need setup · '+num(src.failed_recent_runs||0)+' failed recent runs · '+num(ready)+'/'+num(totalSeries)+' evidence series ready.</div><div class="next"><button class="actbtn" data-go="src">Connect sources</button></div></div>'
-    +'<div class="status-card"><div class="eyebrow">Obsidian Vault</div><div class="big"><span class="badge '+obsCls+'">'+esc(obsStatus)+'</span></div><div class="explain">FounderOS generates a real local Obsidian vault for graph, backlinks and Markdown notes.</div><div class="next"><button class="actbtn" data-go="kt">Open vault tools</button></div></div>'
-    +'<div class="status-card"><div class="eyebrow">Setup Progress</div><div class="big">'+setupDone+'/'+setupTotal+' ready</div><div class="explain">Local workspace, source setup, evidence pipeline and Obsidian bridge are tracked separately.</div><div class="next">'+(dqs.high?'<span class="badge b-red">Data quality needs review</span>':'<span class="badge b-green">No critical setup blocker</span>')+'</div></div>'
+    +'<div class="status-card primary"><div class="eyebrow">Пульс компании</div><div class="big">'+num(so.open_total||0)+' сигналов</div><div class="explain">Главное состояние: '+esc(pulseLabel)+'. Доверие зависит от свежести доказательств и подключённых источников.</div><div class="next">Последнее доказательство: '+esc(lastEvidence)+'</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Что AI видит иначе</div><div class="big">'+num(top.length)+' конфликтов</div><div class="explain">'+(topConflict?esc(topConflict.summary):'Крупных расхождений в текущих данных нет.')+'</div><div class="next"><button class="actbtn" data-tip="Откроет цепочку доказательств и расхождения. Ничего не изменит." data-go="so">Открыть доказательства</button></div></div>'
+    +'<div class="status-card"><div class="eyebrow">Следующее лучшее действие</div><div class="big">'+esc(firstAction.title||"Разобрать действия")+'</div><div class="explain">'+esc(firstAction.source_title||"Выбрано по доказательствам, важности и заблокированной работе.")+'</div><div class="next"><button class="actbtn primary" data-tip="Откроет раздел «Следующие действия». Само действие не выполняется автоматически." data-go="ac">Выполнить</button></div></div>'
+    +'<div class="status-card"><div class="eyebrow">Доверие к данным</div><div class="big">'+num(src.total_sources||0)+' источников</div><div class="explain">'+num(src.missing_config_sources||0)+' требуют настройки · '+num(src.failed_recent_runs||0)+' запусков с ошибкой · '+num(ready)+'/'+num(totalSeries)+' evidence-серий готовы.</div><div class="next"><button class="actbtn" data-tip="Откроет мастер подключения источников. Внешние API не вызываются." data-go="src">Настроить источники</button></div></div>'
+    +'<div class="status-card"><div class="eyebrow">Obsidian Vault</div><div class="big"><span class="badge '+obsCls+'">'+esc(RU.statusLabel(obsStatus))+'</span></div><div class="explain">FounderOS генерирует настоящий локальный Obsidian vault для графа, backlinks и markdown notes.</div><div class="next"><button class="actbtn" data-tip="Откроет экран синхронизации и запуска Obsidian vault." data-go="kt">Открыть vault</button></div></div>'
+    +'<div class="status-card"><div class="eyebrow">Настройка системы</div><div class="big">'+setupDone+'/'+setupTotal+' готово</div><div class="explain">Локальный workspace, источники, evidence pipeline и Obsidian проверяются отдельно.</div><div class="next">'+(dqs.high?'<span class="badge b-red">Качество данных требует внимания</span>':'<span class="badge b-green">Критичных блокеров нет</span>')+'</div></div>'
     +'</div>';
-  $("cc-focus").innerHTML='<div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap"><div><span class="badge b-accent">Main next action</span><div style="font-size:16px;font-weight:650;margin-top:8px">'+esc(firstAction.title||"Review Action Center")+'</div><div class="mut">Why now: '+esc(firstAction.source_title||firstAction.why_now||"This is the clearest next step from current evidence.")+'</div></div><button class="btn" data-go="ac">Open Action Center</button></div>';
-  $("cc-conflicts").innerHTML=technicalDetails("Show detailed company diagnostics",'<div class="grid2"><div class="card">'+($("cc-threat").innerHTML||"")+'</div><div class="card">'+($("cc-team").innerHTML||"")+'</div><div class="card">'+($("cc-fresh").innerHTML||"")+'</div><div class="card">'+($("cc-avail").innerHTML||"")+'</div><div class="card">'+($("cc-source").innerHTML||"")+'</div><div class="card">'+($("cc-quality").innerHTML||"")+'</div></div>',false);
+  $("cc-focus").innerHTML='<div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap"><div><span class="badge b-accent">Главный следующий шаг</span><div style="font-size:16px;font-weight:650;margin-top:8px">'+esc(firstAction.title||"Открыть следующие действия")+'</div><div class="mut">Почему сейчас: '+esc(firstAction.source_title||firstAction.why_now||"Это самый понятный следующий шаг по текущим доказательствам.")+'</div></div><button class="btn" data-tip="Откроет доску решений. Ничего не выполняется без вашего действия." data-go="ac">Открыть действия</button></div>';
+  $("cc-conflicts").innerHTML=technicalDetails("Показать подробную диагностику компании",'<div class="grid2"><div class="card">'+($("cc-threat").innerHTML||"")+'</div><div class="card">'+($("cc-team").innerHTML||"")+'</div><div class="card">'+($("cc-fresh").innerHTML||"")+'</div><div class="card">'+($("cc-avail").innerHTML||"")+'</div><div class="card">'+($("cc-source").innerHTML||"")+'</div><div class="card">'+($("cc-quality").innerHTML||"")+'</div></div>',false);
   ["cc-threat","cc-team","cc-fresh","cc-avail","cc-source","cc-quality"].forEach(function(id){$(id).classList.add("simple-hidden");});
 }
 
@@ -711,7 +804,7 @@ function ccRender(){
       +(drift?'<div class="alert warn" style="margin-top:8px">AI видит иначе: активность команды расходится с заявленным фокусом — см. Second opinion (focus_drift).</div>':'')
       +'<div class="row" style="margin-top:10px"><span class="h"><span class="edit" id="focus-edit">изменить</span></span></div>';
   } else {
-    $("cc-focus").innerHTML='<span class="badge b-accent">Фокус недели</span><div class="mut" style="margin:8px 0">Один фокус на неделю. Агенты сверят его с реальной активностью.</div><button class="btn ghost" id="focus-edit">Задать фокус</button>';
+    $("cc-focus").innerHTML='<span class="badge b-accent">Фокус недели</span><div class="mut" style="margin:8px 0">Один фокус на неделю. Агенты сверят его с реальной активностью.</div><button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="btn ghost" id="focus-edit">Задать фокус</button>';
   }
   $("focus-edit").addEventListener("click",function(){
     var ff=DECL.focus||{};
@@ -735,7 +828,7 @@ function ccRender(){
         var sb=t.severity==="high"?"b-red":t.severity==="low"?"b-mut":"b-amber";
         ch+='<div class="item"><span class="badge '+sb+'">'+esc(t.severity)+'</span><div class="t">'+esc(t.summary)
           +'<div class="s">conf '+Number(t.confidence).toFixed(2)+' · '+esc(t.suggested_action||"")+'</div></div>'
-          +'<button class="actbtn" data-soact="trail" data-fk="'+esc(t.finding_key)+'">trail</button></div>';
+          +'<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-soact="trail" data-fk="'+esc(t.finding_key)+'">trail</button></div>';
       }
     } else ch+='<div class="mut">AI согласен с заявленной картиной — конфликтов нет.</div>';
     var na=CC.next_actions||[];
@@ -819,7 +912,7 @@ function ccRender(){
       +'<span class="badge b-mut">paused '+num(ss.paused_sources||0)+'</span>'
       +(ss.last_successful_sync?'<span class="badge b-blue">last success '+esc(ss.last_successful_sync.slice(0,16).replace("T"," "))+'</span>':'')
       +'</div>';
-    if((ss.degraded_sources||[]).length)srcH+='<div class="alert warn" style="margin-top:8px">Needs attention: '+esc(ss.degraded_sources.join(", "))+'</div>';
+    if((ss.degraded_sources||[]).length)srcH+='<div class="alert warn" style="margin-top:8px">Нужно внимание: '+esc(ss.degraded_sources.join(", "))+'</div>';
     else if(ss.pending_requests)srcH+='<div class="mut" style="margin-top:8px">Requests are queued; use the safe source runner before reading them as completed syncs.</div>';
     else srcH+='<div class="mut" style="margin-top:8px">No degraded sources in the current read-model.</div>';
     $("cc-source").innerHTML=srcH;
@@ -836,7 +929,7 @@ function ccRender(){
     var sp2=CC.share_packs;
     if(sp2){
       var crit=(sp2.critical_redaction_warnings||[]).length;
-      var sh='<p class="h">Share packs <span class="edit" data-go="spk">открыть →</span></p>'
+      var sh='<p class="h">Пакеты <span class="edit" data-go="spk">открыть →</span></p>'
         +'<div class="row" style="gap:16px;flex-wrap:wrap"><span>Ждут approve: <b>'+num(sp2.updates_awaiting_approval||0)+'</b></span>'
         +'<span>Stale approved: <b style="color:'+(sp2.stale_approved_count?"var(--amber)":"inherit")+'">'+num(sp2.stale_approved_count||0)+'</b></span>'
         +'<span>Critical leak warnings: <b style="color:'+(crit?"var(--red)":"inherit")+'">'+crit+'</b></span></div>';
@@ -893,7 +986,7 @@ function stRender(){
         +(ns[0][2]?'<div class="row" style="margin-top:8px"><div class="track"><div class="fill" style="width:'+Math.min(100,Math.round((Number(String(ns[0][1]).replace(/[^\d.]/g,""))||0)/(Number(String(ns[0][2]).replace(/[^\d.]/g,""))||1)*100))+'%;background:var(--blue)"></div></div></div><div class="mut" style="margin-top:4px">цель: '+esc(ns[0][2])+'</div>':'')
         :'<div class="mut">Одна метрика, которая лучше всего отражает ценность для клиента.</div>')
     +'</div></div>'
-    +'<div class="row"><button class="btn ghost" data-stedit>Изменить стратегию</button></div>';
+    +'<div class="row"><button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="btn ghost" data-stedit>Изменить стратегию</button></div>';
   var btns=$("st-body").querySelectorAll("[data-stedit],#st-edit-btn");
   for(var b=0;b<btns.length;b++)btns[b].addEventListener("click",function(){
     var s=manual().strategy||{};
@@ -935,7 +1028,7 @@ function prRender(){
     } else html+='<div class="mut">Гипотезы не заданы. Добавьте их в Strategy — hypothesis-агент сверит с evidence.</div>';
     html+='</div>';
   }
-  html=aiSeesBlock(findingsOfTypes(["execution_mismatch","stale_claim","validation_gap","evidence_contradiction"]),"What AI sees differently — продукт")+html;
+  html=aiSeesBlock(findingsOfTypes(["execution_mismatch","stale_claim","validation_gap","evidence_contradiction"]),"Что AI видит иначе — продукт")+html;
   if(OV&&OV.projects.length){
     for(var i=0;i<OV.projects.length;i++){
       var p=OV.projects[i];
@@ -977,7 +1070,7 @@ function prRender(){
   var cb='<div class="chain">';
   for(var s=0;s<4;s++)cb+='<div class="step" style="background:'+CH[s][1]+'"><div style="font-size:10.5px;font-weight:700;letter-spacing:.05em;color:'+CH[s][2]+'">'+CH[s][0]+'</div><div style="color:'+CH[s][2]+';margin-top:3px">'+esc((chain[s]&&chain[s][0])||"—")+'</div></div>';
   cb+='</div>';
-  html+='<div class="card"><p class="h">Roadmap: Now / Next / Later <span class="edit" id="pr-edit">изменить</span></p>'+ch+'</div>';
+  html+='<div class="card"><p class="h">План: сейчас / дальше / позже <span class="edit" id="pr-edit">изменить</span></p>'+ch+'</div>';
   html+='<div class="card"><p class="h">Цепочка валидации <span class="edit" id="pr-edit2">изменить</span></p>'+cb+'</div>';
   $("pr-body").innerHTML=html;
   function prEdit(){
@@ -1040,7 +1133,7 @@ function saRender(){
   if(!accounts.length){
     $("sa-body").innerHTML=emptyState(
       "Аккаунтов из переписки пока нет. Подключите Gmail и прогоните агентов — accounts/contacts/deals появятся из реальных тредов без денежных показателей.",
-      "Открыть Knowledge tree",'data-go="kt"');
+      "Открыть Obsidian-граф",'data-go="kt"');
     return;
   }
   var bw=SALES.counts.by_warmth||{};
@@ -1075,7 +1168,7 @@ function saRender(){
 
 function teRender(){
   if(!TEAM){if($("te-body").innerHTML.indexOf("Загружаю")<0)$("te-body").innerHTML='<div class="mut">Открой раздел для загрузки карты нагрузки…</div>';return;}
-  var html=aiSeesBlock(findingsOfTypes(["ownership_gap"]),"What AI sees differently — команда");
+  var html=aiSeesBlock(findingsOfTypes(["ownership_gap"]),"Что AI видит иначе — команда");
   var ppl=TEAM.people||[];
   var maxOpen=1;ppl.forEach(function(p){maxOpen=Math.max(maxOpen,p.open);});
   html+='<div class="card"><p class="h">Operational load map '+daChipAnyScope("jira.open")+'</p>';
@@ -1102,7 +1195,7 @@ function teRender(){
   if(gaps.length){
     html+='<div class="card"><p class="h">Ownership gaps <span class="mut">'+gaps.length+'</span></p>';
     gaps.slice(0,6).forEach(function(g){
-      html+='<div class="item"><span class="badge b-mut">ownership</span><div class="t">'+esc(g.summary)+'</div><button class="actbtn" data-soact="trail" data-fk="'+esc(g.finding_key)+'">trail</button></div>';
+      html+='<div class="item"><span class="badge b-mut">ownership</span><div class="t">'+esc(g.summary)+'</div><button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-soact="trail" data-fk="'+esc(g.finding_key)+'">trail</button></div>';
     });
     html+='</div>';
   }
@@ -1135,7 +1228,7 @@ function questGroup(title,items,color,clickable){
 }
 function taRender(){
   if(!EXEC){if($("ta-body").innerHTML.indexOf("Загружаю")<0)$("ta-body").innerHTML='<div class="mut">Открой раздел для загрузки quest log…</div>';return;}
-  var html=aiSeesBlock(findingsOfTypes(["delivery_risk","execution_mismatch"]),"What AI sees differently — исполнение");
+  var html=aiSeesBlock(findingsOfTypes(["delivery_risk","execution_mismatch"]),"Что AI видит иначе — исполнение");
   // Project health rings (done/total) — only where total>0.
   var ph=EXEC.project_health||[];
   if(ph.length){
@@ -1148,7 +1241,7 @@ function taRender(){
   // Main quest = weekly focus.
   var mq=EXEC.main_quest||{};
   html+='<div class="card focus" style="margin-top:12px"><span class="badge b-accent">Main quest · фокус недели</span>'
-    +(mq.focus?'<div style="font-size:15px;font-weight:600;margin:8px 0 4px">'+esc(mq.focus)+'</div>'+(mq.project?'<div class="mut">проект: '+esc(mq.project.project)+' · '+mq.project.done+'/'+mq.project.total+'</div>':''):'<div class="mut" style="margin:8px 0">Фокус недели не задан. <span class="edit" data-go="cc">задать в Command center →</span></div>')
+    +(mq.focus?'<div style="font-size:15px;font-weight:600;margin:8px 0 4px">'+esc(mq.focus)+'</div>'+(mq.project?'<div class="mut">проект: '+esc(mq.project.project)+' · '+mq.project.done+'/'+mq.project.total+'</div>':''):'<div class="mut" style="margin:8px 0">Фокус недели не задан. <span class="edit" data-go="cc">задать в Центре управления →</span></div>')
     +'</div>';
   html+=questGroup("Blocked quests · заблокированы",EXEC.blocked_quests,"var(--red)");
   html+=questGroup("Overdue quests · просрочены",EXEC.overdue_quests,"var(--red)");
@@ -1168,7 +1261,7 @@ async function openTask(issueKey){
     if(t.suggested_next_action)h+='<div class="mut" style="margin-bottom:8px">→ '+esc(t.suggested_next_action)+'</div>';
     if(t.related_findings&&t.related_findings.length){
       h+='<p class="h" style="margin-top:10px">Связанные конфликты</p>';
-      t.related_findings.forEach(function(f){h+='<div class="item"><span class="badge '+(f.severity==="high"?"b-red":f.severity==="low"?"b-mut":"b-amber")+'">'+esc(f.severity)+'</span><div class="t">'+esc(f.summary)+'</div><button class="actbtn" data-soact="trail" data-fk="'+esc(f.finding_key)+'">trail</button></div>';});
+      t.related_findings.forEach(function(f){h+='<div class="item"><span class="badge '+(f.severity==="high"?"b-red":f.severity==="low"?"b-mut":"b-amber")+'">'+esc(f.severity)+'</span><div class="t">'+esc(f.summary)+'</div><button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-soact="trail" data-fk="'+esc(f.finding_key)+'">trail</button></div>';});
     }
     if(t.related_nodes&&t.related_nodes.length){
       h+='<p class="h" style="margin-top:10px">Граф</p><div class="row" style="flex-wrap:wrap;gap:6px">';
@@ -1179,7 +1272,7 @@ async function openTask(issueKey){
     if(t.status_history&&t.status_history.length){
       t.status_history.forEach(function(s){
         h+='<div class="item"><span class="badge b-mut">'+esc(s.source_system)+'</span><div class="t">'+esc(s.title||"")+'<div class="s">'+esc((s.received_at||"").slice(0,16).replace("T"," "))+(s.created_by_run_id?' · run '+esc(String(s.created_by_run_id).slice(0,10)):'')+'</div></div>'
-          +(s.source_event_id?'<button class="actbtn" data-srcevt="'+esc(s.source_event_id)+'">источник</button>':'')+'</div>';
+          +(s.source_event_id?'<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-srcevt="'+esc(s.source_event_id)+'">источник</button>':'')+'</div>';
       });
     } else h+='<div class="mut">Нет событий источника по этой задаче.</div>';
     h+='<details class="ev" style="margin-top:10px"><summary>source refs</summary><pre>'+esc(JSON.stringify(t.source_refs,null,1))+'</pre></details>';
@@ -1193,42 +1286,43 @@ document.addEventListener("click",function(e){
 
 var ACT_SRC_LABEL={second_opinion:"second opinion",graph_gardener:"gardener",execution:"задача",sales:"продажи",data_availability:"данные",product:"продукт",connector:"sources"};
 var GROUP_BADGE={critical_now:"b-red",needs_decision:"b-accent",setup_required:"b-amber",waiting_for_evidence:"b-amber",cleanup:"b-mut",later:"b-mut"};
+var GROUP_LABEL_RU={critical_now:"Срочно сейчас",needs_decision:"Нужно решение",setup_required:"Нужна настройка",waiting_for_evidence:"Ждём evidence",cleanup:"Гигиена",later:"Позже"};
 function actionCard(a){
   var sev=a.severity==="high"?"sev-high":a.severity==="low"?"sev-low":"";
   var sevClass=a.severity==="high"?"high":a.severity==="medium"?"medium":"low";
   var ref=a.action_ref||{};
   var cta="";
-  if(ref.kind==="finding")cta+='<button class="actbtn" data-soact="trail" data-fk="'+esc(ref.finding_key)+'">trail</button><button class="actbtn primary" data-acresolve="'+esc(ref.finding_key)+'">решено</button><button class="actbtn" data-acsnooze="'+esc(ref.finding_key)+'">отложить</button>';
-  else if(ref.kind==="proposal")cta+='<button class="actbtn" data-go="ib">принять/отклонить в Inbox</button>';
-  else if(ref.kind==="task")cta+='<button class="actbtn" data-task="'+esc(ref.issue_key)+'">открыть</button><button class="actbtn" data-acowner="'+esc(ref.issue_key)+'">владелец → proposal</button>';
+  if(ref.kind==="finding")cta+='<button class="actbtn" data-tip="Откроет цепочку доказательств по этому конфликту. Ничего не изменит." data-soact="trail" data-fk="'+esc(ref.finding_key)+'">Evidence</button><button class="actbtn primary" data-tip="Пометит finding как решённый и запишет audit trail." data-acresolve="'+esc(ref.finding_key)+'">Решено</button><button class="actbtn" data-tip="Отложит finding на 7 дней. Это локальное решение с audit trail." data-acsnooze="'+esc(ref.finding_key)+'">Отложить</button>';
+  else if(ref.kind==="proposal")cta+='<button class="actbtn" data-tip="Откроет Решения, где можно принять или отклонить proposal." data-go="ib">В решения</button>';
+  else if(ref.kind==="task")cta+='<button class="actbtn" data-tip="Откроет карточку задачи и evidence timeline." data-task="'+esc(ref.issue_key)+'">Открыть</button><button class="actbtn" data-tip="Создаст proposal назначить владельца. Внешние системы не меняются." data-acowner="'+esc(ref.issue_key)+'">Владелец</button>';
   else if(ref.kind==="metric")cta+='<span class="mut">прогнать агентов / синк</span>';
-  cta+='<button class="actbtn" data-acreview="'+esc(JSON.stringify(ref))+'">отметить просмотренным</button>';
+  cta+='<button class="actbtn" data-tip="Отметит действие просмотренным в FounderOS. Внешние системы не меняются." data-acreview="'+esc(JSON.stringify(ref))+'">Просмотрено</button>';
   return '<div class="action-card '+sevClass+' '+sev+'"><div class="row" style="flex-wrap:wrap;gap:6px">'
     +'<span class="badge '+(a.severity==="high"?"b-red":a.severity==="low"?"b-mut":"b-amber")+'">'+esc(a.severity)+'</span>'
     +'<span class="src-badge">'+esc(ACT_SRC_LABEL[a.source]||a.source)+'</span>'
     +'</div>'
     +'<div style="font-weight:650;margin:7px 0 3px">'+esc(a.title)+'</div>'
-    +'<div class="mut">Why now: '+esc(a.why_now||"This is the next useful decision from current evidence.")+'</div>'
-    +'<div class="explanation-card" style="margin-top:8px"><b>What to do next:</b> '+esc(a.cta||"Open the related evidence and decide.")+'</div>'
+    +'<div class="mut">Почему сейчас: '+esc(a.why_now||"Это ближайшее полезное решение по текущему evidence.")+'</div>'
+    +'<div class="explanation-card" style="margin-top:8px"><b>Что сделать:</b> '+esc(a.cta||"Откройте связанное evidence и примите решение.")+'</div>'
     +'<div class="row" style="margin-top:8px;gap:6px;flex-wrap:wrap">'+cta+'</div>'
-    +technicalDetails("Show evidence and routing",'<div class="mut">почему в группе / group reason: '+esc(a.group_reason||"")+'</div><div class="mut">Affected: '+esc(a.affected_entity||"global")+'</div><div class="mut">Evidence: '+num(a.evidence_count||0)+(a.confidence!=null?' · confidence '+Number(a.confidence).toFixed(2):'')+'</div><pre>'+esc(JSON.stringify(ref,null,1))+'</pre>',false)
+    +technicalDetails("Показать evidence и routing",'<div class="mut">почему в группе / group reason: '+esc(a.group_reason||"")+'</div><div class="mut">Затронуто: '+esc(a.affected_entity||"global")+'</div><div class="mut">Evidence: '+num(a.evidence_count||0)+(a.confidence!=null?' · confidence '+Number(a.confidence).toFixed(2):'')+'</div><pre>'+esc(JSON.stringify(ref,null,1))+'</pre>',false)
     +'</div>';
 }
 function acRender(){
   if(!ACTIONS){$("ac-body").innerHTML='<div class="mut">Собираю действия…</div>';return;}
   var groups=ACTIONS.groups||[];
   var total=(ACTIONS.counts&&ACTIONS.counts.total)||0;
-  if(!total){$("ac-body").innerHTML='<div class="empty-state">No actions right now. Keep collecting evidence and review Data Quality after the next sync.</div>';return;}
+  if(!total){$("ac-body").innerHTML='<div class="empty-state">Сейчас действий нет. Продолжайте собирать evidence и проверьте качество данных после следующего sync.</div>';return;}
   var shown=0,limit=isDetailed()?100:8;
-  var html='<div class="status-grid" style="margin-bottom:14px"><div class="status-card primary"><div class="eyebrow">Next decisions</div><div class="big">'+num(total)+'</div><div class="explain">AI proposes actions. You decide. Simple mode shows the top few; Detailed mode shows routing and evidence refs.</div></div><div class="status-card"><div class="eyebrow">Default view</div><div class="big">Top '+Math.min(limit,total)+'</div><div class="explain">Use groups to separate urgent decisions, setup blockers, evidence waits and cleanup.</div></div></div>';
+  var html='<div class="status-grid" style="margin-bottom:14px"><div class="status-card primary"><div class="eyebrow">Следующие решения</div><div class="big">'+num(total)+'</div><div class="explain">AI предлагает. Решение принимает основатель. «Просто» показывает главное, «Подробно» — routing и evidence refs.</div></div><div class="status-card"><div class="eyebrow">По умолчанию</div><div class="big">Топ '+Math.min(limit,total)+'</div><div class="explain">Группы отделяют срочные решения, настройку, ожидание evidence и гигиену.</div></div></div>';
   groups.forEach(function(g){
     if(!g.count||shown>=limit)return;
     var slice=(g.actions||[]).slice(0,Math.max(0,limit-shown));
     shown+=slice.length;
-    html+='<div class="card" style="margin-bottom:12px"><p class="h"><span class="badge '+(GROUP_BADGE[g.key]||"b-mut")+'">'+esc(g.label)+'</span><span class="mut">'+g.count+'</span></p>'
-      +'<div class="mut" style="margin:-4px 0 8px">'+esc(g.rule||"Grouped by urgency, evidence and decision type.")+'</div>';
+    html+='<div class="card" style="margin-bottom:12px"><p class="h"><span class="badge '+(GROUP_BADGE[g.key]||"b-mut")+'">'+esc(GROUP_LABEL_RU[g.key]||g.label)+'</span><span class="mut">'+g.count+'</span></p>'
+      +'<div class="mut" style="margin:-4px 0 8px">'+esc(g.rule||"Сгруппировано по срочности, evidence и типу решения.")+'</div>';
     slice.forEach(function(a){html+=actionCard(a);});
-    if((g.actions||[]).length>slice.length)html+='<div class="mut">Switch to Detailed mode to see '+((g.actions||[]).length-slice.length)+' more in this group.</div>';
+    if((g.actions||[]).length>slice.length)html+='<div class="mut">Переключитесь в «Подробно», чтобы увидеть ещё '+((g.actions||[]).length-slice.length)+' в этой группе.</div>';
     html+='</div>';
   });
   $("ac-body").innerHTML=html;
@@ -1248,7 +1342,7 @@ function meRender(){
   if(!OV){$("me-body").innerHTML='<div class="mut">Загружаю…</div>';return;}
   var m=OV.metrics;
   var ns=(manual().strategy&&manual().strategy.ns)||[];
-  var html=aiSeesBlock(findingsOfTypes(["focus_drift","validation_gap","evidence_contradiction"]),"What AI sees differently — метрики и гипотезы");
+  var html=aiSeesBlock(findingsOfTypes(["focus_drift","validation_gap","evidence_contradiction"]),"Что AI видит иначе — метрики и гипотезы");
   if(ns.length){
     var val=Number(String(ns[0][1]).replace(/[^\d.]/g,""))||0,tgt=Number(String(ns[0][2]||"").replace(/[^\d.]/g,""))||0;
     html+='<div class="card" style="border:2px solid var(--blue)"><div class="row" style="justify-content:space-between"><span class="mut">North star · '+esc(ns[0][0]||"")+'</span></div>'
@@ -1406,7 +1500,7 @@ var RHYTHM={},ORH_TAB="weekly";
 function renderRhythmTabs(){
   var tabs=[["weekly","Weekly review"],["daily","Daily check"]];
   if(VIEW==="founder")tabs.push(["decision","Decision review"]);
-  var h="";tabs.forEach(function(t){h+='<button class="chip'+(ORH_TAB===t[0]?" on":"")+'" data-orhtab="'+t[0]+'">'+t[1]+'</button>';});
+  var h="";tabs.forEach(function(t){h+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="chip'+(ORH_TAB===t[0]?" on":"")+'" data-orhtab="'+t[0]+'">'+t[1]+'</button>';});
   $("orh-tabs").innerHTML=h;
 }
 async function loadRhythm(){renderRhythmTabs();await loadRhythmTab(ORH_TAB);}
@@ -1453,7 +1547,7 @@ function orhRender(){
     if(di.length){html+='<div class="card"><p class="h">Проблемы с данными</p>';di.forEach(function(r){html+='<div class="item"><span class="dachip da-'+esc(r.status)+'"><span class="dot" style="background:currentColor"></span>'+esc(r.status)+'</span><div class="t">'+esc(r.metric_key)+' ('+esc(r.scope)+')<div class="s">'+esc(r.message)+'</div></div></div>';});html+='</div>';}
   } else {
     var pend=d.pending||{},co=d.counts||{};
-    html+='<div class="card"><p class="h">Ожидают решения</p><div class="row" style="gap:14px;flex-wrap:wrap"><span>Предложения: <b>'+(co.pending_proposals||0)+'</b></span><span>Спорные связи: <b>'+(co.pending_disputed_links||0)+'</b></span><span>Открытых конфликтов: <b>'+(pend.findings_open||0)+'</b></span></div><div class="row" style="margin-top:8px"><button class="actbtn" data-go="ib">открыть Inbox</button></div></div>';
+    html+='<div class="card"><p class="h">Ожидают решения</p><div class="row" style="gap:14px;flex-wrap:wrap"><span>Предложения: <b>'+(co.pending_proposals||0)+'</b></span><span>Спорные связи: <b>'+(co.pending_disputed_links||0)+'</b></span><span>Открытых конфликтов: <b>'+(pend.findings_open||0)+'</b></span></div><div class="row" style="margin-top:8px"><button data-tip="Откроет очередь решений. Внешние системы не меняются." class="actbtn" data-go="ib">открыть решения</button></div></div>';
     var rd=d.recent_decisions||[];
     html+='<div class="card"><p class="h">Недавние решения <span class="mut">'+rd.length+'</span></p>';
     rd.forEach(function(a){var ns=a.next_state||{};html+='<div class="item"><span class="badge '+(ns.status==="accepted"?"b-green":"b-red")+'">'+esc(ns.status||a.action)+'</span><div class="t">'+esc(a.target_id||"")+'<div class="s">'+esc(a.actor||"")+' · '+esc((a.created_at||"").slice(0,16).replace("T"," "))+'</div></div></div>';});
@@ -1474,7 +1568,7 @@ function orhRender(){
 var UPD={kind:"founder_weekly",draft:null};
 function renderUpdTabs(){
   var kinds=[["founder_weekly","Founder weekly"],["team_brief","Team brief"],["investor_update","Investor update"]];
-  var h="";kinds.forEach(function(k){h+='<button class="chip'+(UPD.kind===k[0]?" on":"")+'" data-updkind="'+k[0]+'">'+k[1]+'</button>';});
+  var h="";kinds.forEach(function(k){h+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="chip'+(UPD.kind===k[0]?" on":"")+'" data-updkind="'+k[0]+'">'+k[1]+'</button>';});
   $("upd-tabs").innerHTML=h;
 }
 async function loadUpdates(){renderUpdTabs();await loadUpdateDraft(UPD.kind);}
@@ -1496,7 +1590,7 @@ function updRender(){
       +'<div style="margin:6px 0">'+esc(s.text)+'</div>'
       +'<div class="mut">evidence: '+esc(s.evidence_coverage)+' · confidence: '+Number(s.confidence).toFixed(2)+' · '+esc(s.declared_vs_observed)+'</div></div>';
   });
-  html+='<div class="row" style="margin-top:8px;gap:8px"><button class="btn" id="upd-approve">Approve & подготовить текст</button><span class="mut" id="upd-approve-msg"></span></div>';
+  html+='<div class="row" style="margin-top:8px;gap:8px"><button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="btn" id="upd-approve">Approve & подготовить текст</button><span class="mut" id="upd-approve-msg"></span></div>';
   html+='<div class="card" id="upd-export" style="display:none"><p class="h">Готовый текст (после approve)</p><pre class="digest" id="upd-export-text"></pre></div>';
   $("upd-body").innerHTML=html;
   $("upd-approve").addEventListener("click",async function(){
@@ -1539,15 +1633,15 @@ function packCard(p){
   (p.sections||[]).forEach(function(s){
     var inc=s.included!==false;
     html+='<div class="item"><span class="badge '+(inc?"b-green":"b-mut")+'">'+(inc?"вкл":"искл")+'</span><div class="t"><b>'+esc(s.title)+'</b> '+basisChip(s.basis)+'<div class="s">'+esc(String(s.text||"").slice(0,160))+'</div></div>'
-      +'<button class="actbtn" data-spksectoggle="'+esc(p.pack_id)+'" data-seckey="'+esc(s.key)+'" data-inc="'+(inc?"0":"1")+'">'+(inc?"исключить":"включить")+'</button></div>';
+      +'<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-spksectoggle="'+esc(p.pack_id)+'" data-seckey="'+esc(s.key)+'" data-inc="'+(inc?"0":"1")+'">'+(inc?"исключить":"включить")+'</button></div>';
   });
   html+=manifestPanel(p.redaction_manifest);
   var acts='<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">';
-  if(p.status==="draft"||p.status==="pending_approval")acts+='<button class="actbtn primary" data-spkact="approve" data-spkid="'+esc(p.pack_id)+'" data-hash="'+esc(p.content_hash)+'">Approve</button>';
-  acts+='<button class="actbtn'+(p.is_exportable?" primary":"")+'" data-spkact="export" data-spkid="'+esc(p.pack_id)+'"'+(p.is_exportable?"":' disabled title="нужно approve + неизменный hash + manifest ok"')+'>Export</button>';
-  acts+='<button class="actbtn" data-spkact="preview" data-spkid="'+esc(p.pack_id)+'">Preview</button>';
-  acts+='<button class="actbtn" data-spkact="regenerate" data-spkid="'+esc(p.pack_id)+'">Regenerate</button>';
-  if(p.status!=="revoked")acts+='<button class="actbtn danger" data-spkact="revoke" data-spkid="'+esc(p.pack_id)+'">Revoke</button>';
+  if(p.status==="draft"||p.status==="pending_approval")acts+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn primary" data-spkact="approve" data-spkid="'+esc(p.pack_id)+'" data-hash="'+esc(p.content_hash)+'">Approve</button>';
+  acts+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn'+(p.is_exportable?" primary":"")+'" data-spkact="export" data-spkid="'+esc(p.pack_id)+'"'+(p.is_exportable?"":' disabled title="нужно approve + неизменный hash + manifest ok"')+'>Export</button>';
+  acts+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-spkact="preview" data-spkid="'+esc(p.pack_id)+'">Preview</button>';
+  acts+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-spkact="regenerate" data-spkid="'+esc(p.pack_id)+'">Regenerate</button>';
+  if(p.status!=="revoked")acts+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn danger" data-spkact="revoke" data-spkid="'+esc(p.pack_id)+'">Revoke</button>';
   return html+acts+'</div></div>';
 }
 function spkRender(){
@@ -1561,7 +1655,7 @@ function spkRender(){
 async function loadSharePacks(){
   setMsgEl("spk-msg","загружаю share packs…",false);
   var gb='<span class="mut" style="align-self:center">Сгенерировать:</span>';
-  Object.keys(PACK_TYPE_LABELS).forEach(function(t){gb+='<button class="chip" data-spkgen="'+t+'">'+PACK_TYPE_LABELS[t]+'</button>';});
+  Object.keys(PACK_TYPE_LABELS).forEach(function(t){gb+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="chip" data-spkgen="'+t+'">'+PACK_TYPE_LABELS[t]+'</button>';});
   $("spk-gen").innerHTML=gb;
   try{
     SHARE_PACKS=await (await api("/v1/share-packs")).json();
@@ -1613,9 +1707,9 @@ function ntfRender(){
   items.forEach(function(n){
     var sb=n.severity==="high"?"b-red":n.severity==="low"?"b-mut":"b-amber";
     var ref=n.cta_ref||{},cta="";
-    if(ref.kind==="finding")cta='<button class="actbtn" data-soact="trail" data-fk="'+esc(ref.finding_key)+'">trail</button><button class="actbtn" data-acresolve="'+esc(ref.finding_key)+'">решено</button><button class="actbtn" data-acsnooze="'+esc(ref.finding_key)+'">отложить</button>';
-    else if(ref.kind==="proposal")cta='<button class="actbtn" data-go="ib">в Inbox</button>';
-    else if(ref.kind==="share_pack")cta='<button class="actbtn" data-go="spk">открыть pack</button>';
+    if(ref.kind==="finding")cta='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-soact="trail" data-fk="'+esc(ref.finding_key)+'">trail</button><button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-acresolve="'+esc(ref.finding_key)+'">решено</button><button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-acsnooze="'+esc(ref.finding_key)+'">отложить</button>';
+    else if(ref.kind==="proposal")cta='<button data-tip="Откроет очередь решений для proposal." class="actbtn" data-go="ib">в решения</button>';
+    else if(ref.kind==="share_pack")cta='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-go="spk">открыть pack</button>';
     else if(ref.kind==="metric")cta='<span class="mut">прогнать агентов</span>';
     html+='<div class="actcard '+(n.severity==="high"?"sev-high":n.severity==="low"?"sev-low":"")+'"><div class="row" style="flex-wrap:wrap;gap:6px"><span class="badge '+sb+'">'+esc(n.severity)+'</span><span class="src-badge">'+esc(NOTIF_SRC[n.source]||n.source)+'</span><span class="badge b-mut">'+esc(n.type)+'</span><span class="mut">'+esc(n.status)+'</span></div>'
       +'<div style="font-weight:500;margin:6px 0 2px">'+esc(n.title)+'</div>'
@@ -1650,21 +1744,23 @@ function sourceSetupChips(items){
 }
 function sourceRunBadge(status){
   var cls=status==="succeeded"?"b-green":status==="failed"?"b-red":status==="running"?"b-blue":(status==="skipped"||status==="blocked")?"b-amber":"b-mut";
-  return '<span class="badge '+cls+'">'+esc(status||"none")+'</span>';
+  var label=status?RU.statusLabel(status):"Нет запуска";
+  return '<span class="badge '+cls+'" title="'+esc(status||"none")+'">'+esc(label)+'</span>';
 }
 function sourceRunLine(label,run){
-  if(!run)return'<div class="mut">'+esc(label)+': none</div>';
+  if(!run)return'<div class="mut">'+esc(label)+': нет данных</div>';
   var rs=run.result_summary||{};
   var at=run.finished_at||run.started_at||run.requested_at||"";
   return '<div class="item"><div class="t"><div>'+esc(label)+' '+sourceRunBadge(run.status)+' <span class="badge b-mut">'+esc(run.action_type||"")+'</span></div>'
     +'<div class="s">'+esc((at||"").slice(0,16).replace("T"," "))+(run.run_id?' · run '+esc(String(run.run_id).slice(0,18)):'')+(rs.status?' · connector '+esc(rs.status):'')+'</div></div>'
-    +'<button class="actbtn" data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">detail</button>'
-    +(run.run_id?'<button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">run events</button>':'')+'</div>';
+    +'<button class="actbtn" data-tip="Откроет receipt, watermarks и sanitized summary этого запуска." data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">Детали</button>'
+    +(run.run_id?'<button class="actbtn" data-tip="Покажет source events, созданные этим запуском." data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">События запуска</button>':'')+'</div>';
 }
 function sourceQueueChips(q){
   q=q||{};
   var items=[["pending",q.pending,"b-amber"],["running",q.running,"b-blue"],["succeeded",q.succeeded,"b-green"],["failed",q.failed,"b-red"],["skipped",q.skipped,"b-amber"],["blocked",q.blocked,"b-amber"]];
-  return items.map(function(x){return x[1]?'<span class="badge '+x[2]+'">'+x[0]+' '+num(x[1])+'</span>':'';}).join(" ")||'<span class="badge b-mut">queue empty</span>';
+  var labels={pending:"ожидают",running:"в работе",succeeded:"успешно",failed:"ошибка",skipped:"пропущено",blocked:"заблокировано"};
+  return items.map(function(x){return x[1]?'<span class="badge '+x[2]+'">'+labels[x[0]]+' '+num(x[1])+'</span>':'';}).join(" ")||'<span class="badge b-mut">очередь пуста</span>';
 }
 function connectorDiagBlock(s){
   var d=(CONNECTOR_DIAGS||{})[s.source_type];
@@ -1726,44 +1822,54 @@ function sourceCard(s){
   var latest=s.latest_run||s.latest_request;
   var latestReceipt=latest&&(latest.receipt||(latest.result_summary||{}).receipt);
   var steps=[
-    ["Add credentials",!(setup.status==="missing"||setup.status==="partial"||diag.connector_state==="missing_config")],
-    ["Add scope",!(diag.scope_required&&!diag.scope_configured)],
-    ["Enable safe real reads",diag.real_execution==="enabled"||diag.real_execution==="local_only"],
-    ["Test connection",diag.connector_state==="connected"||s.last_success_at],
-    ["Preview sync",!!(latest&&latest.action_type==="preview_sync")],
-    ["Sync and build evidence",!!(s.events_ingested||s.normalized_events)]
+    ["Credentials",!(setup.status==="missing"||setup.status==="partial"||diag.connector_state==="missing_config")],
+    ["Scope",!(diag.scope_required&&!diag.scope_configured)],
+    ["Real sync",diag.real_execution==="enabled"||diag.real_execution==="local_only"],
+    ["Test",diag.connector_state==="connected"||s.last_success_at],
+    ["Preview",!!(latest&&latest.action_type==="preview_sync")],
+    ["Sync",!!s.events_ingested],
+    ["Evidence",!!s.normalized_events],
+    ["Obsidian",!!(OBSIDIAN.status&&OBSIDIAN.status.status==="configured")]
   ];
-  var html='<div class="card">'
-    +'<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><div class="row" style="gap:8px;flex-wrap:wrap"><b>'+esc(s.label)+'</b><span class="badge '+human.cls+'">'+esc(human.label)+'</span></div><div class="mut" style="margin-top:4px">'+esc(statusMeaning(human.key))+'</div></div><button class="actbtn" data-srcact="runs" data-source="'+esc(s.source_type)+'">View runs</button></div>'
-    +'<div class="callout '+(human.cls==="b-red"?"danger":human.cls==="b-amber"?"warn":"")+'" style="margin-top:12px"><b>Next step:</b> '+esc(human.next)+'</div>'
+  var html='<div class="source-card">'
+    +'<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><div class="row" style="gap:8px;flex-wrap:wrap"><b>'+esc(s.label)+'</b><span class="badge '+human.cls+'">'+esc(human.label)+'</span></div><div class="mut" style="margin-top:4px">'+esc(statusMeaning(human.key))+'</div></div><button class="actbtn" data-tip="Откроет список запросов и запусков этого источника. Внешние API не вызываются." data-srcact="runs" data-source="'+esc(s.source_type)+'">Запуски</button></div>'
+    +'<div class="callout '+(human.cls==="b-red"?"danger":human.cls==="b-amber"?"warn":"")+'" style="margin-top:12px"><b>Следующий шаг:</b> '+esc(human.next)+'</div>'
     +'<div class="stepper">';
-  steps.forEach(function(st,idx){html+='<div class="step '+(st[1]?"done":idx<3?"warn":"")+'"><span class="num">'+(idx+1)+'</span><div><b>'+esc(st[0])+'</b><div class="mut">'+(st[1]?"Ready":"Needs attention")+'</div></div></div>';});
+  steps.forEach(function(st,idx){html+='<div class="step '+(st[1]?"done":idx<3?"warn":"")+'"><span class="num">'+(idx+1)+'</span><div><b>'+esc(st[0])+'</b><div class="mut">'+(st[1]?"Готово":"Нужно внимание")+'</div></div></div>';});
   html+='</div>'
     +'<div class="status-grid" style="margin-top:12px">'
-    +'<div class="substate"><div class="l">events ingested</div><div class="v">'+num(s.events_ingested||0)+'</div></div>'
-    +'<div class="substate"><div class="l">usable evidence</div><div class="v">'+num(s.normalized_events||0)+'</div></div>'
-    +'<div class="substate"><div class="l">last sync</div><div class="v" style="font-size:14px">'+esc((s.last_sync_at||"—").slice(0,16).replace("T"," "))+'</div></div>'
+    +'<div class="substate"><div class="l">события</div><div class="v">'+num(s.events_ingested||0)+'</div></div>'
+    +'<div class="substate"><div class="l">evidence</div><div class="v">'+num(s.normalized_events||0)+'</div></div>'
+    +'<div class="substate"><div class="l">последний sync</div><div class="v" style="font-size:14px">'+esc((s.last_sync_at||"—").slice(0,16).replace("T"," "))+'</div></div>'
     +'</div>'
     +'<div class="mut" style="margin-top:8px">'+esc(da.message||("Availability: "+(da.status||"no data yet")))+'</div>';
   if(s.warnings&&s.warnings.length)html+='<div class="callout warn" style="margin-top:8px">'+esc(s.warnings.join(" · "))+'</div>';
   if(latestReceipt&&latestReceipt.status){
-    html+='<div class="explanation-card" style="margin-top:10px">Latest receipt: '+esc(latestReceipt.status)+' · '+esc(latestReceipt.watermark_update_reason||"watermark unchanged")+'. '+esc(statusMeaning(latestReceipt.blocked_reason||latestReceipt.status))+'</div>';
+    html+='<div class="explanation-card" style="margin-top:10px">Последний receipt: '+esc(latestReceipt.status)+' · '+esc(latestReceipt.watermark_update_reason||"точка sync не изменилась")+'. '+esc(statusMeaning(latestReceipt.blocked_reason||latestReceipt.status))+'</div>';
   }
   html+='<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">';
   actions.forEach(function(a){
-    var label=a==="preview_sync"?"Preview sync":a==="backfill"?"Backfill":a==="test"?"Test connection":a.charAt(0).toUpperCase()+a.slice(1);
-    html+='<button class="actbtn" data-srcact="'+a+'" data-source="'+esc(s.source_type)+'">'+esc(label)+'</button>';
+    var label={test:"Проверить",preview_sync:"Предпросмотр",sync:"Синхронизировать",backfill:"История",pause:"Пауза",resume:"Возобновить"}[a]||a;
+    var tip={
+      test:"Создаст запрос на проверку подключения. Внешний read-only вызов произойдёт только при запуске operator script.",
+      preview_sync:"Создаст предпросмотр sync. Source events и watermarks не изменятся.",
+      sync:"Создаст безопасный sync request. Реальное чтение выполнится только через operator runner и при настроенном scope.",
+      backfill:"Создаст backfill request. Normal sync watermark не будет перезаписан.",
+      pause:"Поставит источник на паузу локально и запишет audit trail.",
+      resume:"Снимет источник с паузы локально и запишет audit trail."
+    }[a]||"Создаст безопасный запрос для источника.";
+    html+='<button class="actbtn" data-tip="'+esc(tip)+'" data-srcact="'+a+'" data-source="'+esc(s.source_type)+'">'+esc(label)+'</button>';
   });
-  html+='<button class="actbtn" data-srcact="events" data-source="'+esc(s.source_type)+'">events</button>'
-    +'<button class="actbtn" data-srcact="errors" data-source="'+esc(s.source_type)+'">errors</button>'
-    +'<button class="actbtn" data-srcact="runs" data-source="'+esc(s.source_type)+'">runs</button>'
+  html+='<button class="actbtn" data-tip="Покажет source events этого источника. Raw bodies и секреты не выводятся." data-srcact="events" data-source="'+esc(s.source_type)+'">События</button>'
+    +'<button class="actbtn" data-tip="Покажет события со статусом ошибки для этого источника." data-srcact="errors" data-source="'+esc(s.source_type)+'">Ошибки</button>'
+    +'<button class="actbtn" data-tip="Откроет историю source requests и runs." data-srcact="runs" data-source="'+esc(s.source_type)+'">Запуски</button>'
     +'</div>'
-    +technicalDetails("Show technical details",connectorDiagBlock(s)
+    +technicalDetails("Показать технические детали",connectorDiagBlock(s)
       +'<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">'+sourceSetupChips(setup.setup||[])+'</div>'
       +'<div class="mut" style="margin-top:8px">graph updates: '+num(s.graph_updates||0)+' · findings / proposals: '+num(s.findings_generated||0)+' / '+num(s.proposals_generated||0)+'</div>'
       +'<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">'+sourceQueueChips(s.queue_status)+'</div>'
-      +sourceRunLine("latest request",s.latest_request)
-      +sourceRunLine("latest run",s.latest_run)
+      +sourceRunLine("последний request",s.latest_request)
+      +sourceRunLine("последний run",s.latest_run)
       +'<details class="ev"><summary>Visibility / redaction policy</summary><pre>'+esc(JSON.stringify({visibility:s.visibility_policy,redaction:s.redaction_policy,masked_connection:s.masked_connection},null,1))+'</pre></details>',false)
     +'</div>';
   return html;
@@ -1773,44 +1879,44 @@ function sourceRunSummaryList(title,items,empty){
   if(!(items||[]).length)return html+'<div class="mut">'+esc(empty)+'</div></div>';
   (items||[]).slice(0,8).forEach(function(run){
     SOURCE_RUN_CACHE[run.request_id]=run;
-    html+='<div class="item"><span class="badge b-mut">'+esc(run.source_type)+'</span><div class="t">'+sourceRunBadge(run.status)+' '+esc(run.action_type||"")+'<div class="s">'+esc((run.finished_at||run.started_at||run.requested_at||"").slice(0,16).replace("T"," "))+(run.run_id?' · '+esc(String(run.run_id).slice(0,22)):'')+'</div></div><button class="actbtn" data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">detail</button></div>';
+    html+='<div class="item"><span class="badge b-mut">'+esc(run.source_type)+'</span><div class="t">'+sourceRunBadge(run.status)+' '+esc(run.action_type||"")+'<div class="s">'+esc((run.finished_at||run.started_at||run.requested_at||"").slice(0,16).replace("T"," "))+(run.run_id?' · '+esc(String(run.run_id).slice(0,22)):'')+'</div></div><button data-tip="Откроет receipt и технические детали запуска." class="actbtn" data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">Детали</button></div>';
   });
   return html+'</div>';
 }
 function sourcesRender(){
-  if(!SOURCES){$("sources-body").innerHTML='<div class="mut">Loading sources…</div>';return;}
+  if(!SOURCES){$("sources-body").innerHTML='<div class="mut">Загружаю источники…</div>';return;}
   var sum=SOURCES.summary||{};
   var ready=sum.total_sources?Math.max(0,(sum.total_sources||0)-(sum.sources_needing_attention||0)):0;
-  $("sources-summary").innerHTML='<div class="status-card primary"><div class="eyebrow">Source readiness</div><div class="big">'+num(ready)+' / '+num(sum.total_sources||0)+'</div><div class="explain">Ready means setup is safe enough to test or sync. Missing config and missing scope are setup blockers, not app failures.</div></div>'
-    +'<div class="status-card"><div class="eyebrow">Safe mode</div><div class="big">'+(REAL_CONNECTORS_ENABLED?"Read-only enabled":"No external reads")+'</div><div class="explain">'+(REAL_CONNECTORS_ENABLED?"Real connectors can read only after explicit requests, scope and operator confirmation.":"FounderOS will not call external APIs. You can still use local data, previews and setup checks.")+'</div></div>'
-    +'<div class="status-card"><div class="eyebrow">Evidence collected</div><div class="big">'+num(sum.events_ingested||0)+'</div><div class="explain">Events become useful only after normalization, graph lift and second-opinion generation.</div></div>'
-    +'<div class="status-card"><div class="eyebrow">Needs attention</div><div class="big">'+num(sum.sources_needing_attention||0)+'</div><div class="explain">'+num(sum.missing_config_sources||0)+' missing config · '+num(sum.failed_recent_runs||0)+' failed runs · '+num(sum.pending_requests||0)+' pending requests.</div></div>';
+  $("sources-summary").innerHTML='<div class="status-card primary"><div class="eyebrow">Готовность источников</div><div class="big">'+num(ready)+' / '+num(sum.total_sources||0)+'</div><div class="explain">Готово значит: источник можно безопасно проверить или синхронизировать. Нет config/scope — это блокер настройки.</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Режим безопасности</div><div class="big">'+(REAL_CONNECTORS_ENABLED?"Read-only включён":"Внешних чтений нет")+'</div><div class="explain">'+(REAL_CONNECTORS_ENABLED?"Реальные коннекторы читают только после request, scope и operator confirmation.":"FounderOS не вызывает внешние API. Можно использовать локальные данные и предпросмотр.")+'</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Собрано доказательств</div><div class="big">'+num(sum.events_ingested||0)+'</div><div class="explain">События становятся полезными после нормализации, graph lift и второго мнения.</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Нужно внимание</div><div class="big">'+num(sum.sources_needing_attention||0)+'</div><div class="explain">'+num(sum.missing_config_sources||0)+' без config · '+num(sum.failed_recent_runs||0)+' запусков с ошибкой · '+num(sum.pending_requests||0)+' ожидают.</div></div>';
   var banner=REAL_CONNECTORS_ENABLED
-    ?'<div class="callout" style="margin-bottom:12px;background:var(--green-soft);color:var(--green-text)">Read-only connector execution is enabled. FounderOS still requires scope, request rows and operator confirmation before external reads. <span class="simple-hidden">Real connector execution is enabled.</span></div>'
-    :'<div class="callout warn" style="margin-bottom:12px">Safe mode: FounderOS will not call external APIs. Requests can be queued and previewed without writing events. <span class="simple-hidden">Real connector execution is disabled.</span></div>';
+    ?'<div class="callout" style="margin-bottom:12px;background:var(--green-soft);color:var(--green-text)">Read-only выполнение включено. Перед внешним чтением всё равно нужны scope, request row и operator confirmation. <span class="simple-hidden">Real connector execution is enabled.</span></div>'
+    :'<div class="callout warn" style="margin-bottom:12px">Безопасный режим: FounderOS не вызывает внешние API. Requests можно поставить в очередь и посмотреть предпросмотр без записи событий. <span class="simple-hidden">Real connector execution is disabled.</span></div>';
   var runbook="";
   if(PILOT_INFO){
     var cmd=PILOT_INFO.commands||{};
-    runbook='<div class="card" style="margin-bottom:12px"><p class="h">Guided setup steps</p><div class="stepper">'
-      +'<div class="step done"><span class="num">1</span><div><b>Local workspace</b><div class="mut">Bootstrap creates .local and browser dev auth.</div></div></div>'
-      +'<div class="step '+(sum.missing_config_sources?"warn":"done")+'"><span class="num">2</span><div><b>Add credentials</b><div class="mut">Use backend env vars only. Token values never reach the browser.</div></div></div>'
-      +'<div class="step"><span class="num">3</span><div><b>Add scope</b><div class="mut">Limit Jira project keys and GitHub repos before real reads.</div></div></div>'
-      +'<div class="step"><span class="num">4</span><div><b>Test, preview, sync</b><div class="mut">Preview writes nothing. Sync requires the safe runner.</div></div></div>'
-      +'<div class="step"><span class="num">5</span><div><b>Build evidence</b><div class="mut"><code>'+esc(cmd.evidence_pipeline||"")+'</code></div></div></div>'
-      +'<div class="step"><span class="num">6</span><div><b>Sync Obsidian</b><div class="mut"><code>'+esc(cmd.sync_obsidian||"")+'</code></div></div></div>'
+    runbook='<div class="card" style="margin-bottom:12px"><p class="h">Мастер настройки</p><div class="stepper">'
+      +'<div class="step done"><span class="num">1</span><div><b>Локальный workspace</b><div class="mut">Bootstrap создаёт .local и local dev auth.</div></div></div>'
+      +'<div class="step '+(sum.missing_config_sources?"warn":"done")+'"><span class="num">2</span><div><b>Credentials</b><div class="mut">Только backend env vars. Значения токенов не попадают в браузер.</div></div></div>'
+      +'<div class="step"><span class="num">3</span><div><b>Scope</b><div class="mut">Ограничьте Jira projects и GitHub repos перед real read.</div></div></div>'
+      +'<div class="step"><span class="num">4</span><div><b>Проверка → Предпросмотр → Sync</b><div class="mut">Предпросмотр ничего не записывает. Sync требует safe runner.</div></div></div>'
+      +'<div class="step"><span class="num">5</span><div><b>Evidence pipeline</b><div class="mut"><code>'+esc(cmd.evidence_pipeline||"")+'</code></div></div></div>'
+      +'<div class="step"><span class="num">6</span><div><b>Obsidian</b><div class="mut"><code>'+esc(cmd.sync_obsidian||"")+'</code></div></div></div>'
       +'</div>'+technicalDetails("Connector E2E runbook / operator commands",'<div class="mut">Enable when ready: <code>FOUNDEROS_ENABLE_REAL_CONNECTORS=true</code></div><div class="mut">Connector runner: <code>'+esc(cmd.operator_run||"")+'</code></div><div class="mut">Full local pilot: <code>'+esc(cmd.pilot||"")+'</code></div>',false)
-      +((PILOT_INFO.next_steps||[]).length?'<div class="mut" style="margin-top:6px"><b>Next steps:</b></div>'+PILOT_INFO.next_steps.map(function(s){return '<div class="mut">• '+esc(s)+'</div>';}).join(""):'')
+      +((PILOT_INFO.next_steps||[]).length?'<div class="mut" style="margin-top:6px"><b>Следующие шаги:</b></div>'+PILOT_INFO.next_steps.map(function(s){return '<div class="mut">• '+esc(s)+'</div>';}).join(""):'')
       +'</div>';
   }
   var ops='<div class="grid2" style="margin-bottom:14px">'
-    +sourceRunSummaryList("Pending source requests",SOURCES.pending_requests,"No source requests are queued.")
-    +sourceRunSummaryList("Recent source runs",SOURCES.recent_runs,"No source runs have executed yet.")
+    +sourceRunSummaryList("Запросы в очереди",SOURCES.pending_requests,"Запросов в очереди нет.")
+    +sourceRunSummaryList("Последние запуски",SOURCES.recent_runs,"Запусков ещё не было.")
     +'</div>';
-  $("sources-body").innerHTML=banner+runbook+technicalDetails("Show requests and recent runs",ops,false)+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty-state">No sources configured yet.</div>');
+  $("sources-body").innerHTML=banner+runbook+technicalDetails("Показать requests и последние runs",ops,false)+((SOURCES.sources||[]).map(sourceCard).join("")||'<div class="empty-state">Источники пока не настроены.</div>');
   $("nav-src-n").textContent=sum.sources_needing_attention?String(sum.sources_needing_attention):"";
 }
 async function loadSources(){
-  setMsgEl("sources-msg","loading source health…",false);
+  setMsgEl("sources-msg","загружаю источники…",false);
   try{
     SOURCES=await (await api("/v1/founder/sources")).json();
     try{
@@ -1831,42 +1937,42 @@ async function loadSources(){
   }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
 }
 async function sourceAction(source,action){
-  if((action==="backfill"||action==="pause")&&!confirm("Record safe request for "+action+" on "+source+"? No external connector will run."))return;
+  if((action==="backfill"||action==="pause")&&!confirm("Создать безопасный request для "+action+" по источнику "+source+"? Внешний connector сейчас не запустится."))return;
   try{
     var r=await (await api("/v1/founder/sources/"+encodeURIComponent(source)+"/"+encodeURIComponent(action),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_key:source+"-"+action+"-"+Date.now(),requested_by:"founder"})})).json();
-    setMsgEl("sources-msg",action+" "+r.status+" · "+r.request_id,false);
+    setMsgEl("sources-msg","запрос создан: "+action+" · "+r.status+" · "+r.request_id,false);
     loadSources();loadDataQuality();loadCommandCenter();
   }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
 }
 async function retrySourceRun(source,requestId){
-  if(!confirm("Create a safe retry request for this source run? It will not call the external connector until the operator runner is executed."))return;
+  if(!confirm("Создать безопасный retry request? Внешний connector не будет вызван до запуска operator runner."))return;
   try{
     var r=await (await api("/v1/founder/sources/"+encodeURIComponent(source)+"/retry/"+encodeURIComponent(requestId),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_key:source+"-retry-"+Date.now(),requested_by:"founder"})})).json();
-    setMsgEl("sources-msg","retry "+r.status+" · "+r.request_id,false);
+    setMsgEl("sources-msg","retry request создан · "+r.status+" · "+r.request_id,false);
     loadSources();loadDataQuality();loadCommandCenter();
   }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
 }
 async function openSourceEventList(source,status,runId){
   overlay("ov-src",true);
-  $("src-body").innerHTML='<div class="mut">Loading source events…</div>';
+  $("src-body").innerHTML='<div class="mut">Загружаю события источника…</div>';
   try{
     var url="/v1/source-events?source_type="+encodeURIComponent(source)+"&limit=50";
     if(status)url+="&status="+encodeURIComponent(status);
     if(runId)url+="&run_id="+encodeURIComponent(runId);
     var d=await (await api(url)).json();
-    var h='<p class="h">Source events <span class="badge b-mut">'+esc(source)+'</span>'+(runId?'<span class="badge b-blue">run '+esc(String(runId).slice(0,18))+'</span>':'')+'</p>';
-    if(!(d.events||[]).length)h+='<div class="empty">No matching source events.</div>';
+    var h='<p class="h">События источника <span class="badge b-mut">'+esc(source)+'</span>'+(runId?'<span class="badge b-blue">run '+esc(String(runId).slice(0,18))+'</span>':'')+'</p>';
+    if(!(d.events||[]).length)h+='<div class="empty">Подходящих событий нет.</div>';
     (d.events||[]).forEach(function(e){
       h+='<div class="item"><span class="badge b-mut">'+esc(e.status||"received")+'</span><div class="t">'+esc(e.title||e.event_type)+'<div class="s">'+esc(e.source_system)+' · '+esc(e.source_object_type||"event")+' · '+esc(e.source_object_id||"")+' · received '+esc((e.received_at||"").slice(0,16).replace("T"," "))+(e.occurred_at?' · occurred '+esc((e.occurred_at||"").slice(0,16).replace("T"," ")):'')+(e.normalized_at?' · normalized '+esc((e.normalized_at||"").slice(0,16).replace("T"," ")):'')+(e.run_id?' · run '+esc(String(e.run_id).slice(0,18)):'')+'</div>'
         +(e.summary?'<div class="s">'+esc(String(e.summary).slice(0,160))+'</div>':'')
-        +'<div class="row" style="gap:5px;flex-wrap:wrap;margin-top:4px"><span class="badge b-mut">normalized '+num(e.normalized_event_count||0)+'</span></div></div><button class="actbtn" data-srcevt="'+esc(e.source_event_id)+'">open</button></div>';
+        +'<div class="row" style="gap:5px;flex-wrap:wrap;margin-top:4px"><span class="badge b-mut">normalized '+num(e.normalized_event_count||0)+'</span></div></div><button data-tip="Откроет sanitized detail события источника. Raw bodies и секреты не показываются." class="actbtn" data-srcevt="'+esc(e.source_event_id)+'">Открыть</button></div>';
     });
     $("src-body").innerHTML=h;
   }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 async function openSourceRunDetail(requestId,source){
   overlay("ov-src",true);
-  $("src-body").innerHTML='<div class="mut">Loading source run detail…</div>';
+  $("src-body").innerHTML='<div class="mut">Загружаю receipt запуска…</div>';
   try{
     var run=SOURCE_RUN_CACHE[requestId];
     if(!run){
@@ -1874,7 +1980,7 @@ async function openSourceRunDetail(requestId,source){
       (d.runs||[]).forEach(function(r){SOURCE_RUN_CACHE[r.request_id]=r;});
       run=SOURCE_RUN_CACHE[requestId];
     }
-    if(!run){$("src-body").innerHTML='<div class="empty">Run not found.</div>';return;}
+    if(!run){$("src-body").innerHTML='<div class="empty">Запуск не найден.</div>';return;}
     var rs=run.result_summary||{},safe=rs.sanitized_summary||{},ing=safe.ingestion||{},pipe=rs.evidence_pipeline||{};
     var receipt=(run.receipt||rs.receipt||null);
     try{
@@ -1885,7 +1991,7 @@ async function openSourceRunDetail(requestId,source){
     }catch(e){}
     var diag=(CONNECTOR_DIAGS||{})[run.source_type]||{};
     var preview=!!(rs.preview||receipt&&receipt.action_type==="preview_sync");
-    var h='<p class="h">Source run detail <span class="badge b-mut">'+esc(run.source_type)+'</span></p>'
+    var h='<p class="h">Детали запуска <span class="badge b-mut">'+esc(run.source_type)+'</span></p>'
       +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">'+sourceRunBadge(run.status)+'<span class="badge b-mut">'+esc(run.action_type||"")+'</span>'+(rs.status?'<span class="badge b-blue">connector '+esc(rs.status)+'</span>':'')+(run.external_side_effect?'<span class="badge b-red">external side effect</span>':'<span class="badge b-green">no external side effect</span>')+(preview?'<span class="badge b-amber">preview only · no writes</span>':'')+'</div>'
       +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">'
       +'<span class="badge b-mut">adapter: '+esc(diag.adapter_type||"noop")+'</span>'
@@ -1893,7 +1999,7 @@ async function openSourceRunDetail(requestId,source){
       +(safe.mode?'<span class="badge b-mut">mode: '+esc(safe.mode)+'</span>':'')
       +(diag.pipeline_state?'<span class="badge b-mut">stage: '+esc(diag.pipeline_state)+'</span>':'')
       +'</div>'
-      +(receipt?'<div class="alert" style="margin-bottom:10px;background:var(--accent-soft);color:var(--accent-text)"><b>Receipt</b> '+esc(receipt.receipt_id||"")+' · hash '+esc(String(receipt.content_hash||"").slice(0,16))+' · watermark '+(receipt.watermark_updated?'<b>updated</b>':'unchanged')+' ('+esc(receipt.watermark_update_reason||"") +')</div>':'')
+      +(receipt?'<div class="alert" style="margin-bottom:10px;background:var(--accent-soft);color:var(--accent-text)"><b>Receipt</b> '+esc(receipt.receipt_id||"")+' · hash '+esc(String(receipt.content_hash||"").slice(0,16))+' · точка sync '+(receipt.watermark_updated?'<b>обновлена</b>':'не изменилась')+' ('+esc(receipt.watermark_update_reason||"") +')</div>':'')
       +'<div class="grid3">'
       +'<div class="substate"><div class="l">events seen / ingested</div><div class="v">'+num(ing.events_seen||rs.events_seen||0)+' / '+num(ing.events_ingested||rs.events_ingested||0)+'</div></div>'
       +'<div class="substate"><div class="l">duplicates</div><div class="v">'+num(ing.duplicates_skipped||0)+'</div></div>'
@@ -1915,9 +2021,9 @@ async function openSourceRunDetail(requestId,source){
     if((rs.warnings||[]).length)h+='<div class="alert warn" style="margin-top:10px">'+esc(rs.warnings.join(" · "))+'</div>';
     if((ing.errors||[]).length)h+='<details class="ev" open><summary>Errors</summary><pre>'+esc(JSON.stringify(ing.errors,null,1))+'</pre></details>';
     h+='<div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">';
-    if(run.run_id)h+='<button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">open events</button>';
-    h+='<button class="actbtn" data-srcact="runs" data-source="'+esc(run.source_type)+'">all runs</button>';
-    if(["failed","blocked","skipped","partial_succeeded"].indexOf(run.status)>=0)h+='<button class="actbtn" data-srcact="retry-run" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">retry safely</button>';
+    if(run.run_id)h+='<button data-tip="Откроет события, связанные с этим run_id. Данные не изменятся." class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">События</button>';
+    h+='<button data-tip="Вернёт к списку запусков этого источника." class="actbtn" data-srcact="runs" data-source="'+esc(run.source_type)+'">Все запуски</button>';
+    if(["failed","blocked","skipped","partial_succeeded"].indexOf(run.status)>=0)h+='<button data-tip="Создаст новый retry request. Внешний connector не запустится до operator runner." class="actbtn" data-srcact="retry-run" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">Повторить безопасно</button>';
     h+='</div>';
     if(receipt)h+='<details class="ev" open><summary>Full run receipt</summary><pre>'+esc(JSON.stringify(receipt,null,1))+'</pre></details>';
     h+='<details class="ev"><summary>Connector state before / after</summary><pre>'+esc(JSON.stringify({before:run.source_state_before,after:run.source_state_after},null,1))+'</pre></details>'
@@ -1931,17 +2037,17 @@ async function openSourceRunDetail(requestId,source){
 }
 async function openSourceRunList(source){
   overlay("ov-src",true);
-  $("src-body").innerHTML='<div class="mut">Loading source runs…</div>';
+  $("src-body").innerHTML='<div class="mut">Загружаю запуски источника…</div>';
   try{
     var d=await (await api("/v1/founder/source-runs?source_type="+encodeURIComponent(source)+"&limit=50")).json();
-    var h='<p class="h">Source runs <span class="badge b-mut">'+esc(source)+'</span></p>';
-    if(!(d.runs||[]).length)h+='<div class="empty">No source runs or requests yet.</div>';
+    var h='<p class="h">Запуски источника <span class="badge b-mut">'+esc(source)+'</span></p>';
+    if(!(d.runs||[]).length)h+='<div class="empty">Запросов и запусков пока нет.</div>';
     (d.runs||[]).forEach(function(run){
       SOURCE_RUN_CACHE[run.request_id]=run;
       var rs=run.result_summary||{};
       h+='<div class="item"><span class="badge b-mut">'+esc(run.action_type||"")+'</span><div class="t">'+sourceRunBadge(run.status)+'<div class="s">'+esc((run.finished_at||run.started_at||run.requested_at||"").slice(0,16).replace("T"," "))+(run.run_id?' · run '+esc(String(run.run_id).slice(0,24)):'')+(rs.status?' · connector '+esc(rs.status):'')+'</div></div>'
-        +'<button class="actbtn" data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">detail</button>'
-        +(run.run_id?'<button class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">events</button>':'')+'</div>';
+        +'<button data-tip="Откроет receipt и технические детали запуска." class="actbtn" data-srcact="run-detail" data-source="'+esc(run.source_type)+'" data-requestid="'+esc(run.request_id)+'">Детали</button>'
+        +(run.run_id?'<button data-tip="Покажет события, созданные этим запуском." class="actbtn" data-srcact="events" data-source="'+esc(run.source_type)+'" data-runid="'+esc(run.run_id)+'">События</button>':'')+'</div>';
     });
     $("src-body").innerHTML=h;
   }catch(e){$("src-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
@@ -1951,10 +2057,10 @@ function dqIssueCard(i){
   var sev=i.severity==="high"?"high":i.severity==="medium"?"medium":"low";
   return '<div class="issue-card '+sev+'"><div class="row" style="flex-wrap:wrap;gap:6px"><span class="badge '+sb+'">'+esc(i.severity)+'</span>'+(i.affected_source?'<span class="badge b-mut">'+esc(i.affected_source)+'</span>':'')+'</div>'
     +'<div style="font-weight:650;margin:8px 0 4px">'+esc(humanIssueTitle(i))+'</div>'
-    +'<div class="mut">'+esc(i.why_it_matters||"This affects how much FounderOS can trust the evidence.")+'</div>'
-    +'<div class="explanation-card" style="margin-top:8px"><b>What to do next:</b> '+esc(i.suggested_action||"Open details and inspect the linked source.")+'</div>'
-    +'<div class="mut" style="margin-top:8px">Affected: '+esc(i.affected_entity||i.affected_source||"global")+' · evidence '+num(i.evidence_count||0)+(i.confidence!=null?' · confidence '+Number(i.confidence).toFixed(2):'')+'</div>'
-    +technicalDetails("Show technical issue details",'<pre>'+esc(JSON.stringify({category:i.category,issue_type:i.issue_type,cta:i.cta,related_run_id:i.related_run_id,related_source_event_id:i.related_source_event_id},null,1))+'</pre>',false)
+    +'<div class="mut">'+esc(i.why_it_matters||"Это влияет на то, насколько FounderOS может доверять evidence.")+'</div>'
+    +'<div class="explanation-card" style="margin-top:8px"><b>Что сделать:</b> '+esc(i.suggested_action||"Откройте детали и проверьте связанный источник.")+'</div>'
+    +'<div class="mut" style="margin-top:8px">Затронуто: '+esc(i.affected_entity||i.affected_source||"global")+' · evidence '+num(i.evidence_count||0)+(i.confidence!=null?' · confidence '+Number(i.confidence).toFixed(2):'')+'</div>'
+    +technicalDetails("Показать технические детали проблемы",'<pre>'+esc(JSON.stringify({category:i.category,issue_type:i.issue_type,cta:i.cta,related_run_id:i.related_run_id,related_source_event_id:i.related_source_event_id},null,1))+'</pre>',false)
     +'</div>';
 }
 function dqGroupKey(i){
@@ -1967,30 +2073,30 @@ function dqGroupKey(i){
   return"evidence";
 }
 function dataQualityRender(){
-  if(!DQ){$("dq-body").innerHTML='<div class="mut">Loading data quality…</div>';return;}
+  if(!DQ){$("dq-body").innerHTML='<div class="mut">Загружаю качество данных…</div>';return;}
   var c=DQ.counts||{},bs=c.by_severity||{};
-  $("dq-summary").innerHTML='<div class="status-card primary"><div class="eyebrow">What blocks accuracy</div><div class="big">'+num(c.total||0)+' issues</div><div class="explain">Data Quality is not a score. It lists concrete reasons FounderOS may be less precise.</div></div>'
-    +'<div class="status-card"><div class="eyebrow">Needs founder review</div><div class="big">'+num(bs.high||0)+'</div><div class="explain">High severity means setup, evidence or lineage is blocking trustworthy answers.</div></div>'
-    +'<div class="status-card"><div class="eyebrow">Next move</div><div class="big">'+(bs.high?"Fix top blocker":"Keep collecting")+'</div><div class="explain">'+(bs.high?"Open the first high severity card and follow its next action.":"No critical blocker detected. Continue source sync and evidence pipeline.")+'</div></div>';
+  $("dq-summary").innerHTML='<div class="status-card primary"><div class="eyebrow">Что блокирует точность</div><div class="big">'+num(c.total||0)+' проблем</div><div class="explain">Это не score. Это конкретные причины, почему ответам FounderOS нельзя доверять полностью.</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Нужен review</div><div class="big">'+num(bs.high||0)+'</div><div class="explain">High severity значит: настройка, evidence или lineage блокируют надёжный ответ.</div></div>'
+    +'<div class="status-card"><div class="eyebrow">Следующий шаг</div><div class="big">'+(bs.high?"Исправить блокер":"Продолжать сбор")+'</div><div class="explain">'+(bs.high?"Откройте первую high severity карточку и выполните её next action.":"Критичных блокеров нет. Продолжайте sync и evidence pipeline.")+'</div></div>';
   var groups={setup:[],evidence:[],graph:[],runs:[],obsidian:[]};
   (DQ.issues||[]).forEach(function(i){groups[dqGroupKey(i)].push(i);});
   var labels={
-    setup:["Setup blockers","Credentials, scopes and safe-mode settings that prevent source reads."],
-    evidence:["Evidence gaps","Events that are not yet normalized, fresh or linked enough to trust."],
-    graph:["Graph hygiene","Nodes, edges and identity matches that need cleanup or approval."],
-    runs:["Run issues","Receipts, retries, rate limits and watermark problems."],
-    obsidian:["Obsidian sync","Vault state and note sync issues."]
+    setup:["Блокеры настройки","Credentials, scope и safe-mode настройки, которые мешают чтению источников."],
+    evidence:["Пробелы в evidence","События ещё не нормализованы, устарели или слабо связаны."],
+    graph:["Гигиена графа","Ноды, связи и identity matches, которым нужна очистка или approval."],
+    runs:["Ошибки запусков","Receipts, retries, rate limits и проблемы с точкой sync."],
+    obsidian:["Obsidian sync","Состояние vault и синхронизации заметок."]
   };
   var html="";
   Object.keys(labels).forEach(function(k){
     var arr=groups[k]||[];
     html+='<div class="card"><p class="h">'+labels[k][0]+' <span class="mut">'+arr.length+'</span></p><div class="mut" style="margin:-4px 0 10px">'+labels[k][1]+'</div>';
     if(arr.length)html+='<div class="issue-board">'+arr.slice(0,isDetailed()?20:4).map(dqIssueCard).join("")+'</div>';
-    else html+='<div class="empty-state">No issues in this group.</div>';
-    if(arr.length>4&&!isDetailed())html+='<div class="mut" style="margin-top:8px">Switch to Detailed mode to see '+(arr.length-4)+' more.</div>';
+    else html+='<div class="empty-state">В этой группе проблем нет.</div>';
+    if(arr.length>4&&!isDetailed())html+='<div class="mut" style="margin-top:8px">Переключитесь в «Подробно», чтобы увидеть ещё '+(arr.length-4)+'.</div>';
     html+='</div>';
   });
-  $("dq-body").innerHTML=html||'<div class="empty-state">No data quality issues detected.</div>';
+  $("dq-body").innerHTML=html||'<div class="empty-state">Проблем качества данных не найдено.</div>';
   $("nav-dq-n").textContent=c.total?String(c.total):"";
 }
 async function loadDataQuality(){
@@ -2105,14 +2211,14 @@ function findingCard(f){
     +'<details class="ev"><summary>evidence и источники</summary><pre>'+esc(JSON.stringify({evidence:f.evidence_refs,sources:f.source_refs},null,1))+'</pre></details>'
     +(f.status==="open"
       ?'<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:6px">'
-        +'<button class="actbtn" data-soact="trail" data-fk="'+key+'">Цепочка доказательств</button>'
-        +'<button class="actbtn primary" data-soact="accepted" data-fk="'+key+'">Подтверждаю</button>'
-        +'<button class="actbtn" data-soact="resolved" data-fk="'+key+'">Решено</button>'
-        +'<button class="actbtn" data-soact="snooze" data-fk="'+key+'">Отложить 7д</button>'
-        +'<button class="actbtn" data-soact="note" data-fk="'+key+'">Заметка</button>'
-        +'<button class="actbtn danger" data-soact="dismissed" data-fk="'+key+'">Не проблема</button>'
+        +'<button data-tip="Откроет цепочку доказательств. Данные не изменятся." class="actbtn" data-soact="trail" data-fk="'+key+'">Evidence</button>'
+        +'<button data-tip="Пометит finding как подтверждённый и запишет audit trail." class="actbtn primary" data-soact="accepted" data-fk="'+key+'">Подтвердить</button>'
+        +'<button data-tip="Пометит finding как решённый и запишет audit trail." class="actbtn" data-soact="resolved" data-fk="'+key+'">Решено</button>'
+        +'<button data-tip="Отложит finding на 7 дней. Это локальное действие FounderOS." class="actbtn" data-soact="snooze" data-fk="'+key+'">Отложить</button>'
+        +'<button data-tip="Откроет редактор заметки к finding." class="actbtn" data-soact="note" data-fk="'+key+'">Заметка</button>'
+        +'<button data-tip="Пометит finding как неактуальный. Действие попадёт в audit trail." class="actbtn danger" data-soact="dismissed" data-fk="'+key+'">Не проблема</button>'
         +'</div>'
-      :'<div class="row" style="margin-top:8px;gap:8px"><span class="mut">статус: '+esc(f.status)+'</span><button class="actbtn" data-soact="trail" data-fk="'+key+'">Цепочка</button></div>')
+      :'<div class="row" style="margin-top:8px;gap:8px"><span class="mut">статус: '+esc(f.status)+'</span><button data-tip="Откроет цепочку доказательств. Данные не изменятся." class="actbtn" data-soact="trail" data-fk="'+key+'">Evidence</button></div>')
     +'</div>';
 }
 
@@ -2120,11 +2226,11 @@ async function loadFeed(){
   setMsgEl("so-msg","загружаю…",false);
   var chips='<span class="mut">Статус:</span>';
   [["open","открытые"],["accepted","принятые"],["resolved","решённые"],["dismissed","отклонённые"]].forEach(function(s){
-    chips+='<button class="chip'+(SO_STATE.status===s[0]?" on":"")+'" data-sostatus="'+s[0]+'">'+s[1]+'</button>';
+    chips+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="chip'+(SO_STATE.status===s[0]?" on":"")+'" data-sostatus="'+s[0]+'">'+s[1]+'</button>';
   });
-  chips+='<span class="mut" style="margin-left:10px">Тип:</span><button class="chip'+(SO_STATE.type===""?" on":"")+'" data-sotype="">все</button>';
+  chips+='<span class="mut" style="margin-left:10px">Тип:</span><button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="chip'+(SO_STATE.type===""?" on":"")+'" data-sotype="">все</button>';
   Object.keys(TYPE_LABEL).forEach(function(t){
-    chips+='<button class="chip'+(SO_STATE.type===t?" on":"")+'" data-sotype="'+t+'">'+TYPE_LABEL[t]+'</button>';
+    chips+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="chip'+(SO_STATE.type===t?" on":"")+'" data-sotype="'+t+'">'+TYPE_LABEL[t]+'</button>';
   });
   $("so-filters").innerHTML=chips;
   try{
@@ -2167,7 +2273,7 @@ async function openTrail(key){
         h+='<div class="item"><span class="badge b-mut">'+esc(ev.source_system)+'</span><div class="t">'+esc(ev.title||ev.event_type)
           +'<div class="s">'+esc(ev.event_type)+' · получено '+esc((ev.received_at||"").slice(0,16).replace("T"," "))
           +'<br><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px">'+esc(ev.raw_object_ref||"")+'</span></div></div>'
-          +(ev.source_event_id?'<button class="actbtn" data-srcevt="'+esc(ev.source_event_id)+'">источник</button>':'')+'</div>';
+          +(ev.source_event_id?'<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="actbtn" data-srcevt="'+esc(ev.source_event_id)+'">источник</button>':'')+'</div>';
       }
     } else h+='<div class="mut">События источников для этого evidence не найдены (внутренний сигнал).</div>';
     h+='<details class="ev"><summary>полная цепочка evidence (refs → события → normalized → graph → source runs)</summary><pre>'+esc(JSON.stringify(t.evidence_chain,null,1))+'</pre></details>';
@@ -2262,8 +2368,8 @@ function proposalCard(p){
     +(p.reject_note?'<div class="mut" style="margin-top:4px;font-size:11.5px">'+esc(p.reject_note)+'</div>':'')
     +'<details class="ev"><summary>evidence / что видел агент</summary><pre>'+esc(JSON.stringify({payload:p.payload,snapshot:p.source_snapshot,evidence:p.evidence_refs},null,1))+'</pre></details>'
     +'<div class="row" style="margin-top:10px;gap:6px">'
-    +'<button class="actbtn primary" data-pact="accepted" data-pid="'+esc(p.proposal_id)+'">Accept</button>'
-    +'<button class="actbtn danger" data-pact="rejected" data-pid="'+esc(p.proposal_id)+'">Reject</button>'
+    +'<button data-tip="Примет proposal и запишет audit trail. Внешние системы не меняются." class="actbtn primary" data-pact="accepted" data-pid="'+esc(p.proposal_id)+'">Принять</button>'
+    +'<button data-tip="Отклонит proposal и запишет audit trail. Внешние системы не меняются." class="actbtn danger" data-pact="rejected" data-pid="'+esc(p.proposal_id)+'">Отклонить</button>'
     +'</div></div>';
 }
 
@@ -2289,8 +2395,8 @@ async function loadInbox(){
           +'<span style="font-size:13px">'+esc(l["from"])+' <span class="mut">—'+esc(l.relation)+'→</span> '+esc(l.to)+'</span></div>'
           +'<div class="mut" style="margin:6px 0">'+esc(l.confidence_hint||"")+'</div>'
           +'<div class="row" style="gap:6px">'
-          +'<button class="actbtn primary" data-lact="confirm" data-lid="'+esc(l.link_id)+'">Подтвердить связь</button>'
-          +'<button class="actbtn danger" data-lact="remove" data-lid="'+esc(l.link_id)+'">Удалить связь</button>'
+          +'<button data-tip="Подтвердит связь в FounderOS и запишет audit trail." class="actbtn primary" data-lact="confirm" data-lid="'+esc(l.link_id)+'">Подтвердить связь</button>'
+          +'<button data-tip="Удалит связь локально в FounderOS и запишет audit trail." class="actbtn danger" data-lact="remove" data-lid="'+esc(l.link_id)+'">Удалить связь</button>'
           +'</div></div>';
       }
     } else h+='<div class="empty">Все связи графа с высокой уверенностью.</div>';
@@ -2352,7 +2458,7 @@ function ktEdgeTo(l){return l.target_node_id||l.to;}
 function ktEdgeRel(l){return l.relation_type||l.relation;}
 
 async function loadTree(force){
-  $("kt-bridge").innerHTML='<div class="statusline">Loading Obsidian Bridge…</div>';
+  $("kt-bridge").innerHTML='<div class="statusline">Загружаю Obsidian Bridge…</div>';
   try{
     var d=await (await api("/v1/knowledge/obsidian/status")).json();
     OBSIDIAN.status=d;
@@ -2367,31 +2473,31 @@ function renderObsidianBridge(){
   var d=OBSIDIAN.status||{},stats=d.stats||{},sync=OBSIDIAN.lastSync||{};
   var configured=d.status==="configured";
   var cls=configured?"b-green":d.status==="disabled"?"b-mut":"b-amber";
-  var h='<div class="hero-card"><div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px"><div><div style="font-size:20px;font-weight:720">Obsidian Bridge</div><div class="mut">FounderOS generates a real local Obsidian-compatible vault. Use Obsidian for Graph View, Local Graph, Backlinks, Markdown notes, tags and search.</div></div>'
-    +'<div class="row" style="gap:8px;flex-wrap:wrap"><span class="badge '+cls+'">'+esc(d.status||"unknown")+'</span><button class="btn ghost" data-obsact="dry">Dry Run</button><button class="btn" data-obsact="sync">Sync Now</button><button class="btn ghost" data-obsact="open-vault">Open Vault in Obsidian</button><button class="btn ghost" data-obsact="open-index">Open Index Note</button></div></div>';
+  var h='<div class="hero-card"><div class="row" style="justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px"><div><div style="font-size:20px;font-weight:720">Мост Obsidian</div><div class="mut">FounderOS генерирует локальный Obsidian-compatible vault. Используйте Obsidian для Graph View, Local Graph, Backlinks, Markdown notes, tags и search.</div></div>'
+    +'<div class="row" style="gap:8px;flex-wrap:wrap"><span class="badge '+cls+'">'+esc(RU.statusLabel(d.status||"unknown"))+'</span><button class="btn ghost" data-tip="Покажет, какие markdown files будут созданы или обновлены. Файлы не записываются." data-obsact="dry">Проверить без записи</button><button class="btn" data-tip="Запишет markdown notes только внутрь настроенного vault path. Секреты и raw bodies не экспортируются." data-obsact="sync">Синхронизировать</button><button class="btn ghost" data-tip="Откроет локальный vault через obsidian://open. Работает, если Obsidian Desktop установлен." data-obsact="open-vault">Открыть в Obsidian</button><button class="btn ghost" data-tip="Откроет index note в Obsidian через obsidian://open." data-obsact="open-index">Открыть индекс</button></div></div>';
   if(!configured){
-    h+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Run <code>uv run python scripts/bootstrap_local_workspace.py --apply</code>, then restart the backend. Recommended path: <code>'+esc(d.recommended_relative_path||".local/obsidian/FounderOS Knowledge Vault")+'</code>. No files are written while the bridge is disabled or missing a path.</div>';
+    h+='<div class="alert" style="background:var(--accent-soft);color:var(--accent-text)">Запустите <code>uv run python scripts/bootstrap_local_workspace.py --apply</code>, затем перезапустите backend. Рекомендуемый путь: <code>'+esc(d.recommended_relative_path||".local/obsidian/FounderOS Knowledge Vault")+'</code>. Пока bridge выключен или path не задан, файлы не записываются.</div>';
   }
   h+='<div class="grid3" style="margin-bottom:12px">'
-    +'<div class="kpi"><div class="l">notes</div><div class="v">'+num(d.notes_seen||0)+'</div><div class="d">generated from graph</div></div>'
-    +'<div class="kpi"><div class="l">projects / people</div><div class="v">'+num(stats.projects||0)+' / '+num(stats.people||0)+'</div><div class="d">vault notes</div></div>'
-    +'<div class="kpi"><div class="l">tasks / findings</div><div class="v">'+num(stats.tasks||0)+' / '+num(stats.findings||0)+'</div><div class="d">evidence-backed</div></div>'
+    +'<div class="kpi"><div class="l">заметки</div><div class="v">'+num(d.notes_seen||0)+'</div><div class="d">из графа знаний</div></div>'
+    +'<div class="kpi"><div class="l">проекты / люди</div><div class="v">'+num(stats.projects||0)+' / '+num(stats.people||0)+'</div><div class="d">заметки в vault</div></div>'
+    +'<div class="kpi"><div class="l">задачи / findings</div><div class="v">'+num(stats.tasks||0)+' / '+num(stats.findings||0)+'</div><div class="d">с доказательствами</div></div>'
     +'</div>';
-  h+='<div class="grid2"><div class="card"><p class="h">Open in Obsidian</p><div class="mut">The graph is built from real wikilinks in markdown files, not from a custom browser canvas.</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px"><span class="badge b-mut">Graph View</span><span class="badge b-mut">Local Graph</span><span class="badge b-mut">Backlinks</span><span class="badge b-mut">Markdown Notes</span><span class="badge b-mut">Tags / Properties</span><span class="badge b-mut">Search</span></div>'
-    +'<div class="mut" style="margin-top:10px">Vault files are generated locally even without Obsidian. The <code>obsidian://</code> links (Open Vault / Open Index / open note) open only if Obsidian Desktop is installed.</div>'
-    +(sync.status?technicalDetails("Show last sync summary",'<pre>'+esc(JSON.stringify(sync,null,1))+'</pre>',false):'')
-    +((d.warnings||[]).length?'<div class="callout warn" style="margin-top:10px">'+esc((d.warnings||[])[0])+'</div>'+technicalDetails("Show all warnings",'<pre>'+esc(JSON.stringify(d.warnings,null,1))+'</pre>',false):'')
-    +'</div><div class="card" id="kt-note-preview"><p class="h">Recent generated notes</p>';
+  h+='<div class="grid2"><div class="card"><p class="h">Открыть в Obsidian</p><div class="mut">Граф строится из реальных wikilinks в markdown files, а не из слабого browser canvas.</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px"><span class="badge b-mut">Graph View</span><span class="badge b-mut">Local Graph</span><span class="badge b-mut">Backlinks</span><span class="badge b-mut">Markdown Notes</span><span class="badge b-mut">Tags / Properties</span><span class="badge b-mut">Search</span></div>'
+    +'<div class="mut" style="margin-top:10px">Файлы vault генерируются локально даже без Obsidian. Ссылки <code>obsidian://</code> открываются только если установлен Obsidian Desktop.</div>'
+    +(sync.status?technicalDetails("Показать summary последней синхронизации",'<pre>'+esc(JSON.stringify(sync,null,1))+'</pre>',false):'')
+    +((d.warnings||[]).length?'<div class="callout warn" style="margin-top:10px">'+esc((d.warnings||[])[0])+'</div>'+technicalDetails("Показать все warnings",'<pre>'+esc(JSON.stringify(d.warnings,null,1))+'</pre>',false):'')
+    +'</div><div class="card" id="kt-note-preview"><p class="h">Последние заметки</p>';
   (d.recent_notes||[]).slice(0,10).forEach(function(n){
-    h+='<div class="item"><span class="badge b-mut">'+esc((n.path||"").split("/")[0])+'</span><div class="t">'+esc(n.title||n.path)+'<div class="s">'+esc(n.path||"")+'</div></div><button class="actbtn" data-obsnode="'+esc(n.node_id)+'">open</button></div>';
+    h+='<div class="item"><span class="badge b-mut">'+esc((n.path||"").split("/")[0])+'</span><div class="t">'+esc(n.title||n.path)+'<div class="s">'+esc(n.path||"")+'</div></div><button class="actbtn" data-tip="Откроет эту заметку в Obsidian через obsidian://open." data-obsnode="'+esc(n.node_id)+'">Открыть</button></div>';
   });
-  if(!(d.recent_notes||[]).length)h+='<div class="empty">No generated notes yet. Run the evidence pipeline or sync after data arrives.</div>';
+  if(!(d.recent_notes||[]).length)h+='<div class="empty">Заметок пока нет. Запустите evidence pipeline или sync после появления данных.</div>';
   h+='</div></div></div>';
   $("kt-bridge").innerHTML=h;
 }
 
 async function obsidianSync(dryRun){
-  if(!dryRun&&!confirm("Sync local Obsidian vault now? This writes markdown files only inside the configured vault path."))return;
+  if(!dryRun&&!confirm("Синхронизировать локальный Obsidian vault? Файлы будут записаны только внутрь настроенного vault path."))return;
   try{
     var d=await (await api("/v1/knowledge/obsidian/sync?dry_run="+(dryRun?"true":"false"),{method:"POST"})).json();
     OBSIDIAN.lastSync=d;
@@ -2420,16 +2526,16 @@ async function loadTreeGraphPreview(force){
     KT.links.forEach(function(l){if(byId[ktEdgeFrom(l)])byId[ktEdgeFrom(l)].degree++;if(byId[ktEdgeTo(l)])byId[ktEdgeTo(l)].degree++;});
     KT.byId=byId;
     var stats=d.stats||d.counts||{},byType=stats.by_node_type||stats.by_type||{};
-    var chips='<input id="kt-search" placeholder="Search notes…" value="'+esc(KT.query||"")+'" style="min-width:180px">'
-      +'<button class="chip'+(!KT.focus?" on":"")+'" id="kt-global">Global graph</button>'
-      +(KT.selected?'<button class="chip'+(KT.focus?" on":"")+'" id="kt-local">Local graph</button>':'')
-      +'<button class="chip" id="kt-depth">depth '+KT.depth+'</button>'
-      +'<button class="chip'+(KT.includeArchived?" on":"")+'" id="kt-archived">archived</button>'
-      +'<button class="chip" id="kt-export">Obsidian preview</button>';
+    var chips='<input id="kt-search" placeholder="Искать заметки…" value="'+esc(KT.query||"")+'" style="min-width:180px">'
+      +'<button data-tip="Покажет общий fallback web-граф. Основной граф смотрите в Obsidian." class="chip'+(!KT.focus?" on":"")+'" id="kt-global">Весь граф</button>'
+      +(KT.selected?'<button data-tip="Покажет связи вокруг выбранной ноды." class="chip'+(KT.focus?" on":"")+'" id="kt-local">Локальный граф</button>':'')
+      +'<button data-tip="Увеличит или уменьшит глубину local graph." class="chip" id="kt-depth">глубина '+KT.depth+'</button>'
+      +'<button data-tip="Покажет или скроет архивные ноды." class="chip'+(KT.includeArchived?" on":"")+'" id="kt-archived">архив</button>'
+      +'<button data-tip="Покажет markdown preview без записи файлов." class="chip" id="kt-export">Предпросмотр Obsidian</button>';
     Object.keys(byType).forEach(function(t){
-      chips+='<button class="chip'+(KT.hidden[t]?"":" on")+'" data-kttype="'+t+'">'+(KT_LABEL[t]||t)+' '+byType[t]+'</button>';
+      chips+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="chip'+(KT.hidden[t]?"":" on")+'" data-kttype="'+t+'">'+(KT_LABEL[t]||t)+' '+byType[t]+'</button>';
     });
-    chips+='<button class="chip" id="kt-relayout">перестроить</button>';
+    chips+='<button data-tip="Перестроит layout fallback-графа в браузере. Данные не изменятся." class="chip" id="kt-relayout">Перестроить</button>';
     $("kt-filters").innerHTML=chips;
     $("kt-stats").innerHTML='<p class="h">Obsidian-like Knowledge Graph '+daChipAnyScope("activity.events")+'</p><div class="mut">mode: '+esc(d.mode||"global")+' · nodes: '+num(stats.nodes||0)+' · edges: '+num(stats.edges||0)+' · disputed: '+num(stats.disputed_edges||0)+' · hidden: '+num(stats.hidden_count||0)+'</div>'
       +'<div class="mut" style="margin-top:6px">Node size = evidence, glow = freshness, edge thickness = confidence, dashed = disputed. Use search/local graph to avoid hairball.</div>'
@@ -2522,7 +2628,7 @@ function ktDraw(){
 async function ktOpenNode(nodeId){
   KT.selected=nodeId;
   ktDraw();
-  $("kt-detail").innerHTML='<p class="h">Loading note…</p>';
+  $("kt-detail").innerHTML='<p class="h">Загружаю заметку…</p>';
   try{
     var note=await (await api("/v1/knowledge/nodes/"+encodeURIComponent(nodeId))).json();
     var n=note.node||{};
@@ -2530,11 +2636,11 @@ async function ktOpenNode(nodeId){
       +'<div class="row" style="gap:6px;flex-wrap:wrap"><span class="badge b-mut">fresh '+Math.round((note.freshness||0)*100)+'%</span><span class="badge b-mut">conf '+Number(n.confidence||0).toFixed(2)+'</span><span class="badge b-mut">evidence '+num((note.evidence||{}).evidence_count||0)+'</span></div>'
       +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">'+(n.created_by_run_id?'<span class="badge b-mut">created run '+esc(String(n.created_by_run_id).slice(0,14))+'</span>':'')+(n.updated_by_run_id?'<span class="badge b-mut">updated run '+esc(String(n.updated_by_run_id).slice(0,14))+'</span>':'')+'</div>'
       +(note.summary?'<div class="mut" style="margin-top:8px">'+esc(note.summary)+'</div>':'')
-      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px"><button class="actbtn" id="kt-note-local" data-nodeid="'+esc(nodeId)+'">local graph</button><button class="actbtn" data-go="src">open sources</button><button class="actbtn" data-go="ac">action center</button></div>';
+      +'<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px"><button data-tip="Покажет local graph вокруг этой ноды." class="actbtn" id="kt-note-local" data-nodeid="'+esc(nodeId)+'">Локальный граф</button><button data-tip="Откроет источники и события, связанные с evidence." class="actbtn" data-go="src">Источники</button><button data-tip="Откроет действия, связанные с этой нодой." class="actbtn" data-go="ac">Действия</button></div>';
     h+='<details class="ev" open><summary>Properties</summary><pre>'+esc(JSON.stringify(note.properties||{},null,1))+'</pre></details>';
     h+='<p class="h" style="margin-top:10px">Backlinks</p>'+((note.backlinks||[]).slice(0,8).map(function(e){return '<div class="item"><span class="badge b-mut">'+esc(e.relation_type)+'</span><div class="t">'+esc(e.source_node_id)+'</div><span class="mut">'+Number(e.confidence||0).toFixed(2)+'</span></div>';}).join("")||'<div class="mut">No backlinks yet.</div>');
     h+='<p class="h" style="margin-top:10px">Outgoing</p>'+((note.outgoing_links||[]).slice(0,8).map(function(e){return '<div class="item"><span class="badge b-mut">'+esc(e.relation_type)+'</span><div class="t">'+esc(e.target_node_id)+'</div><span class="mut">'+Number(e.confidence||0).toFixed(2)+'</span></div>';}).join("")||'<div class="mut">No outgoing links yet.</div>');
-    if((note.related_findings||[]).length)h+='<p class="h" style="margin-top:10px">Findings</p>'+note.related_findings.slice(0,5).map(function(f){return '<div class="item"><span class="badge b-amber">'+esc(f.severity)+'</span><div class="t">'+esc(f.summary)+'</div><button class="actbtn" data-trail="'+esc(f.finding_key)+'">trail</button></div>';}).join("");
+    if((note.related_findings||[]).length)h+='<p class="h" style="margin-top:10px">Findings</p>'+note.related_findings.slice(0,5).map(function(f){return '<div class="item"><span class="badge b-amber">'+esc(f.severity)+'</span><div class="t">'+esc(f.summary)+'</div><button data-tip="Откроет evidence trail по этому finding." class="actbtn" data-trail="'+esc(f.finding_key)+'">Evidence</button></div>';}).join("");
     if((note.related_proposals||[]).length)h+='<p class="h" style="margin-top:10px">Proposals</p>'+note.related_proposals.slice(0,5).map(function(p){return '<div class="item"><span class="badge b-mut">'+esc(p.proposal_type)+'</span><div class="t">'+esc(p.title)+'</div><span class="mut">'+Number(p.confidence||0).toFixed(2)+'</span></div>';}).join("");
     h+='<details class="ev"><summary>Evidence timeline / source lineage</summary><pre>'+esc(JSON.stringify({timeline:note.timeline||[],source_events:note.source_events||[],normalized_events:note.normalized_events||[],audit_history:note.audit_history||[]},null,1))+'</pre></details>';
     $("kt-detail").innerHTML=h;
@@ -2782,6 +2888,7 @@ applyNavVisibility();
 try{var cached=localStorage.getItem(CACHE_KEY);if(cached){OV=JSON.parse(cached);}}catch(e){}
 $("rolemsg").textContent=VIEW==="founder"?"":"Режим «"+VIEW+"»: backend отдаёт только разрешённый этой роли read-model с redaction на сервере.";
 (async function boot(){
+  initTooltips();
   // Pick up the local dev key (if any) BEFORE the first authenticated load.
   await devBootstrap();
   renderDevBadge();

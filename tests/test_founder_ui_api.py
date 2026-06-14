@@ -56,19 +56,20 @@ def test_ui_contains_sources_and_data_quality_surfaces(monkeypatch) -> None:
     assert response.status_code == 200
     for marker in (
         "Sources / Data Control",
-        "Data Quality",
+        "Качество данных",
+        "Источники данных",
         "/v1/founder/sources",
         "/v1/founder/data-quality",
         "/v1/founder/source-runs",
         "loadSources",
         "loadDataQuality",
         "masked_connection",
-        "Pending source requests",
-        "Recent source runs",
+        "Запросы в очереди",
+        "Последние запуски",
         "sourceRunBadge",
         "openSourceRunDetail",
         "normalized_event_count",
-        "run events",
+        "События запуска",
     ):
         assert marker in response.text, marker
     assert "test-api-key" not in response.text

@@ -84,4 +84,4 @@ def test_docs_point_to_ui_and_local_vault_not_legacy_static() -> None:
 def test_knowledge_tree_ui_explains_obsidian_install_requirement() -> None:
     html = (ROOT / "app" / "static" / "founder_ui.html").read_text(encoding="utf-8")
     assert "Obsidian Desktop" in html
-    assert "generated locally even without Obsidian" in html
+    assert "Файлы vault генерируются локально даже без Obsidian" in html
