@@ -32,6 +32,10 @@ ISSUE_FIELDS = (
     "resolutiondate,components,labels,project,parent"
 )
 
+# /search/jql rejects unbounded JQL; a wide date floor bounds it while still
+# matching essentially every issue.
+DEFAULT_ISSUE_JQL = 'created >= "2000-01-01" ORDER BY updated DESC'
+
 # Endpoint labels (used as artifact names and per-endpoint status keys).
 EP_PROJECTS = "projects"
 EP_BOARDS = "boards"
@@ -184,27 +188,28 @@ class JiraReadOnlyDiscoveryClient:
         return dict(data) if isinstance(data, Mapping) else {}
 
     def search_issues(self, *, max_total: int = 500) -> list[dict[str, Any]]:
+        # Jira Cloud removed the old GET /search (410). The enhanced endpoint
+        # /search/jql rejects unbounded JQL, so a date restriction is required;
+        # it also paginates by nextPageToken rather than startAt.
         out: list[dict[str, Any]] = []
-        start_at = 0
+        next_token: str | None = None
         for _ in range(self._page_cap):
-            page = self._get(
-                "/rest/api/3/search",
-                {
-                    "jql": "ORDER BY updated DESC",
-                    "fields": ISSUE_FIELDS,
-                    "startAt": start_at,
-                    "maxResults": self._page_size,
-                },
-            )
+            params: dict[str, Any] = {
+                "jql": DEFAULT_ISSUE_JQL,
+                "fields": ISSUE_FIELDS,
+                "maxResults": self._page_size,
+            }
+            if next_token:
+                params["nextPageToken"] = next_token
+            page = self._get("/rest/api/3/search/jql", params)
             if not isinstance(page, Mapping):
                 break
             issues = page.get("issues")
             chunk = [i for i in issues if isinstance(i, dict)] if isinstance(issues, list) else []
             out.extend(chunk)
-            # Stop on empty, the bound, or a short (final) page.
-            if not chunk or len(out) >= max_total or len(chunk) < self._page_size:
+            next_token = page.get("nextPageToken")
+            if not chunk or not next_token or len(out) >= max_total:
                 break
-            start_at += len(chunk)
         return out[:max_total]
 
 
