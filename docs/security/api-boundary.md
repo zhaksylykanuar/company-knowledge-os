@@ -3,9 +3,9 @@
 ## Status
 
 - Endpoint-level auth: implemented for selected protected API routes
-- Rate limiting: planned; boundary plan documented
-- Webhook signature validation: planned
-- Write/action approval boundary: planned
+- Rate limiting: planned; boundary plan documented (deferred by design — no public exposure yet)
+- Webhook signature validation: planned (deferred — no webhook routes exist yet)
+- Write/action approval enforcement: implemented as a guard (FOS-007E); write endpoints/agents not built yet
 - Read-only connector posture: implemented for Drive/Gmail wrappers; partial for future connectors
 
 ## Endpoint Classification
@@ -47,6 +47,56 @@ Future write/action endpoints must:
 - Require explicit approval.
 - Respect `enable_write_actions` and `require_approval_for_writes`.
 - Never be directly triggered by LLM output.
+
+The enforcement primitive for the last three now exists — see FOS-007E below.
+
+## FOS-007E Plan — Write-Action Approval Enforcement
+
+### Status
+
+- Implemented as a pure enforcement guard: `app/services/write_action_guard.py`.
+- No external write endpoints or source-agent write paths are wired yet; the
+  guard is the gate any future write call site must pass through.
+
+### Contract
+
+Before any external write (Jira/GitHub) executes, the call site calls
+`require_approved_write_action(...)`, which fails closed unless **all** hold:
+
+1. `enable_write_actions is True` (the feature flag, default off).
+2. When `require_approval_for_writes` (default on): a founder approval exists
+   for **this exact write boundary** — an `AgentProposal`
+   (`kind == "external_write_action"`) the founder accepted in the inbox, whose
+   payload declares the `write_boundary`. Only `accepted`/`applied` statuses
+   authorize; `pending`/`rejected` are blocked.
+3. The live-provider execution ack is present (composes
+   `provider_execution_guard.require_live_provider_execution_ack`).
+
+Write boundaries are a closed registry distinct from read/event boundaries, so
+a read ack can never authorize a write: `jira_create_issue`,
+`jira_update_issue`, `jira_transition_issue`, `jira_comment_issue`,
+`jira_create_project`, `jira_create_component`, `github_create_issue`,
+`github_update_issue`, `github_comment_issue`, `github_create_pull_request`,
+`github_update_repository`, `github_transfer_repository`.
+
+### Flow
+
+An agent that wants to write files a proposal (reusing
+`agent_proposals.create_proposal` with the `external_write_action` kind) → the
+founder accepts it in the existing inbox → the agent executes via
+`require_approved_write_action`, building the approval with
+`write_approval_from_proposal`. The full draft → approve → execute loop reuses
+the existing proposal queue, audit trail, and reversibility fields.
+
+### Security Invariants
+
+- Diagnostics are sanitized: unknown boundaries collapse to
+  `external_write_boundary`; no raw payload, provider content, or secrets are
+  surfaced. Only the internal approval id (our own proposal id) is included.
+- The guard is pure/synchronous — it makes no provider call and mutates
+  nothing; it only decides whether a write may proceed.
+- LLM output can file a proposal but can never grant approval or execute a
+  write; approval is a human decision recorded against `AgentProposal`.
 
 ## Rate-Limit Policy
 

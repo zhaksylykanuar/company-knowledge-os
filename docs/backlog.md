@@ -83,8 +83,13 @@ Small FOS tickets. Keep tickets scoped and update status when work changes behav
   - scope: validate provider signatures or secret tokens before webhook persistence.
 
 - FOS-007E: Define write/action approval enforcement
-  - status: planned
-  - scope: require auth, feature flags, and explicit approval before write actions.
+  - status: implemented
+  - scope: a single fail-closed enforcement point any external Jira/GitHub write call site must pass through, layering founder approval on top of the existing execution acks.
+  - implementation: `app/services/write_action_guard.py` exposes `require_approved_write_action(...)`, requiring (1) `enable_write_actions`, (2) a matching accepted/applied `AgentProposal` (`kind="external_write_action"`, payload declares `write_boundary`) when `require_approval_for_writes`, and (3) the live-provider ack via `provider_execution_guard`. Write boundaries are a closed registry distinct from read/event boundaries; `write_approval_from_proposal` binds an accepted proposal to the guard.
+  - behavior: feature off, missing approval, unapproved status, boundary mismatch, or missing/wrong live ack all block; only a fully granted write returns allowed diagnostics. `applied` status still authorizes idempotent retries.
+  - non-goals: no external write endpoints, no source-agent write paths, no provider calls, no migrations, no new dependencies, no production data mutation. The guard only decides; it never writes.
+  - security: diagnostics are sanitized (unknown boundary → `external_write_boundary`, no payload/provider content/secrets); LLM output can file a proposal but can never approve or execute a write; approval is a recorded human decision on `AgentProposal`.
+  - tests: `tests/test_write_action_guard.py` (17 cases) covers feature-off, missing/unapproved/mismatched approval, missing/wrong ack, full grant, GitHub provider resolution, idempotent `applied`, approval-waived policy, boundary sanitization, fixed diagnostics shape, and the proposal adapter.
 
 - FOS-008: Improve search beyond simple ILIKE later
   - status: planned

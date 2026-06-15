@@ -50,6 +50,11 @@ Navigation map for future Codex sessions.
   target-org migration metadata, and safe diagnostics.
 - `runbooks/jira-operating-model.md`: safe Jira inventory diagnostics,
   operating model, and creation dry-run boundary.
+- `ops/jira-target-blueprint.md`: clean from-scratch Jira target model
+  (projects, boards, issue types, workflow, components, labels, ownership,
+  DoR/DoD, repo↔project mapping, agent rules, rollout sequence).
+- `ops/jira-rebuild-audit.md` / `ops/jira-rebuild-runbook-draft.md`:
+  read-only audit, discovery package, and no-write migration runbook.
 - `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
 
 ## Doctor Scripts
