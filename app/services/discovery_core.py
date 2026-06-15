@@ -55,6 +55,17 @@ OPTIONAL_CREDENTIALS: dict[str, tuple[str, ...]] = {
 
 SAFE_SOURCES = frozenset(CREDENTIAL_REQUIREMENTS)
 
+# The only env var names discovery ever reads from local env files. Restricting
+# the parse to this allowlist keeps unrelated secrets out of memory entirely.
+DISCOVERY_ENV_KEYS: frozenset[str] = frozenset(
+    name
+    for source in SAFE_SOURCES
+    for name in (*CREDENTIAL_REQUIREMENTS[source], *OPTIONAL_CREDENTIALS.get(source, ()))
+)
+
+# Local env files, lowest precedence first; later files override earlier ones.
+DISCOVERY_ENV_FILES = (".env", ".env.local")
+
 CRED_READY = "credentials_present"
 CRED_MISSING = "credentials_missing"
 CRED_UNKNOWN_SOURCE = "unknown_discovery_source"
@@ -205,6 +216,127 @@ def assert_summary_safe(summary: Mapping[str, Any]) -> dict[str, Any]:
     if not safety.safe:
         raise ValueError("discovery_summary_unsafe")
     return dict(summary)
+
+
+def load_discovery_environment(
+    *,
+    root: Path,
+    base_environ: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Build the discovery env from local files, restricted to the allowlist.
+
+    Reads only :data:`DISCOVERY_ENV_KEYS` from ``.env`` then ``.env.local``
+    (local overrides), layered over ``base_environ``. Values are held in memory
+    only and never logged. Unrelated keys in the files are ignored entirely.
+    """
+
+    env: dict[str, str] = {
+        key: value
+        for key, value in (base_environ or {}).items()
+        if key in DISCOVERY_ENV_KEYS and isinstance(value, str)
+    }
+    for filename in DISCOVERY_ENV_FILES:
+        path = Path(root) / filename
+        env.update(_parse_env_allowlisted(path))
+    return env
+
+
+def _parse_env_allowlisted(path: Path) -> dict[str, str]:
+    if not path.is_file():
+        return {}
+    parsed: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :]
+        name, _, value = line.partition("=")
+        name = name.strip()
+        if name not in DISCOVERY_ENV_KEYS:
+            continue
+        cleaned = value.strip()
+        if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {'"', "'"}:
+            cleaned = cleaned[1:-1]
+        parsed[name] = cleaned
+    return parsed
+
+
+def run_dir(source: str, *, root: Path, timestamp: str) -> Path:
+    """Create and return ``<root>/.local/discovery/<source>/<timestamp>/``."""
+
+    target = (
+        Path(root)
+        / DISCOVERY_LOCAL_DIRNAME
+        / DISCOVERY_SUBDIR
+        / _safe_source(source)
+        / _safe_timestamp(timestamp)
+    )
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def write_run_artifact(
+    *,
+    root: Path,
+    run_directory: Path,
+    name: str,
+    records: Any,
+    subdir: str | None = None,
+    scrub: Any = None,
+) -> ArtifactRef:
+    """Write a JSON artifact inside a run dir; optionally scrub before saving."""
+
+    directory = run_directory / _safe_artifact_name(subdir) if subdir else run_directory
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = scrub(records) if callable(scrub) else records
+    safe_name = _safe_artifact_name(name)
+    path = directory / f"{safe_name}.json"
+    text = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    path.write_text(text, encoding="utf-8")
+    record_count = len(payload) if isinstance(payload, (list, tuple, dict)) else 1
+    return ArtifactRef(
+        artifact_name=safe_name,
+        relative_path=_relative_path(path, root),
+        record_count=record_count,
+        byte_count=len(text.encode("utf-8")),
+    )
+
+
+def write_run_text(
+    *,
+    root: Path,
+    run_directory: Path,
+    name: str,
+    text: str,
+    extension: str = "md",
+) -> ArtifactRef:
+    """Write a text artifact (e.g. an audit.md) inside a run dir."""
+
+    run_directory.mkdir(parents=True, exist_ok=True)
+    safe_name = _safe_artifact_name(name)
+    safe_ext = _safe_artifact_name(extension) or "txt"
+    path = run_directory / f"{safe_name}.{safe_ext}"
+    body = text if text.endswith("\n") else text + "\n"
+    path.write_text(body, encoding="utf-8")
+    return ArtifactRef(
+        artifact_name=f"{safe_name}.{safe_ext}",
+        relative_path=_relative_path(path, root),
+        record_count=body.count("\n"),
+        byte_count=len(body.encode("utf-8")),
+    )
+
+
+def _relative_path(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(Path(root)))
+    except ValueError:
+        return str(path)
+
+
+def _safe_timestamp(timestamp: str) -> str:
+    cleaned = "".join(c for c in str(timestamp) if c.isalnum() or c in {"-", "_"})
+    return cleaned or "run"
 
 
 def _safe_source(source: str) -> str:
