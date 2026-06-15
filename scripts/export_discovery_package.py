@@ -31,6 +31,7 @@ from app.services.discovery_package import (  # noqa: E402
     PACKAGE_FILES,
     build_discovery_package,
     find_latest_run,
+    load_decisions,
     load_latest_summary,
 )
 
@@ -62,6 +63,7 @@ def run(*, root: Path, timestamp: str | None = None) -> dict[str, Any]:
         else ""
     )
 
+    decisions = load_decisions(root)
     package = build_discovery_package(
         jira_summary=jira_summary,
         github_summary=github_summary,
@@ -69,6 +71,7 @@ def run(*, root: Path, timestamp: str | None = None) -> dict[str, Any]:
         jira_audit_md=_read_latest_text(root, "jira", "current-jira-audit.md"),
         github_audit_md=_read_latest_text(root, "github", "github-repo-audit.md"),
         blueprint_base_text=blueprint_base,
+        decisions=decisions,
     )
 
     stamp = _safe_timestamp(timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
@@ -97,6 +100,7 @@ def run(*, root: Path, timestamp: str | None = None) -> dict[str, Any]:
             "jira_discovery_present": bool(jira_summary),
             "github_discovery_present": bool(github_summary),
             "local_repo_discovery_present": bool(local_summary),
+            "decisions_applied": bool(decisions),
         },
         "planned_write_action_count": package["dry-run-write-plan.json"]["planned_action_count"],
         "artifacts": artifacts,

@@ -29,6 +29,7 @@ from app.services.discovery_core import (  # noqa: E402
 )
 from app.services.discovery_package import (  # noqa: E402
     build_target_jira_blueprint,
+    load_decisions,
     load_latest_summary,
 )
 
@@ -51,7 +52,9 @@ def run(*, root: Path, timestamp: str | None = None) -> dict[str, Any]:
         else ""
     )
 
-    content = build_target_jira_blueprint(jira_summary, github_summary, base_text=base)
+    content = build_target_jira_blueprint(
+        jira_summary, github_summary, base_text=base, decisions=load_decisions(root)
+    )
 
     stamp = _safe_timestamp(timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
     directory = root / DISCOVERY_LOCAL_DIRNAME / DISCOVERY_SUBDIR / "package" / stamp
