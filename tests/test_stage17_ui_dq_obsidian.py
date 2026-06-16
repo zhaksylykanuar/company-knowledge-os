@@ -92,9 +92,9 @@ async def test_obsidian_connector_notes_include_scope(monkeypatch) -> None:
     async with AsyncSessionLocal() as session:
         plan = await generate_obsidian_vault_plan(session)
     jira = next(n for n in plan.notes if n.path == "Sources/Jira.md")
-    assert "## Scope & Limits" in jira.markdown
-    assert "Scope required:" in jira.markdown
-    assert "Limits: sync" in jira.markdown
+    assert "## Область и лимиты" in jira.markdown
+    assert "Область обязательна (scope required):" in jira.markdown
+    assert "Лимиты: синхронизация" in jira.markdown
 
     connector_notes = [n for n in plan.notes if n.node_type == "connector_diagnostics"]
     blob = "\n".join(n.markdown for n in connector_notes)

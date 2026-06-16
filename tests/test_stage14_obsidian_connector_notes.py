@@ -34,7 +34,7 @@ async def test_connector_diagnostics_notes_present_and_safe() -> None:
     # Each note passes the markdown safety guard.
     for note in connector_notes:
         _assert_markdown_safe(note.markdown)
-        assert "## Security Policy" in note.markdown or note.path.endswith(
+        assert "## Политика безопасности" in note.markdown or note.path.endswith(
             "Connector Diagnostics.md"
         )
 
@@ -51,7 +51,7 @@ async def test_connector_notes_have_wikilinks_and_show_env_names() -> None:
     github = next(note for note in plan.notes if note.path == "Sources/GitHub.md")
     # Env-var name is shown by name (setup step / missing list), never a value.
     assert "GITHUB_TOKEN" in github.markdown
-    assert "Read only: `true`" in github.markdown
+    assert "Только чтение (read only): `true`" in github.markdown
 
 
 def test_markdown_guard_allows_names_but_blocks_values() -> None:

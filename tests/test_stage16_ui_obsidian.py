@@ -55,13 +55,13 @@ async def test_obsidian_local_pilot_note_generated_and_safe() -> None:
     assert "_System/Local Pilot.md" in paths
 
     pilot = next(n for n in plan.notes if n.path == "_System/Local Pilot.md")
-    assert "## Pipeline States" in pilot.markdown
-    assert "## Next Steps" in pilot.markdown
-    assert "Real connectors enabled:" in pilot.markdown
+    assert "## Этапы конвейера" in pilot.markdown
+    assert "## Следующие шаги" in pilot.markdown
+    assert "Реальные коннекторы включены (real connectors enabled):" in pilot.markdown
 
     jira = next(n for n in plan.notes if n.path == "Sources/Jira.md")
-    assert "Pipeline stage:" in jira.markdown
-    assert "Next action:" in jira.markdown
+    assert "Этап конвейера (pipeline stage):" in jira.markdown
+    assert "Следующее действие (next action):" in jira.markdown
 
     connector_notes = [n for n in plan.notes if n.node_type == "connector_diagnostics"]
     blob = "\n".join(n.markdown for n in connector_notes)

@@ -51,9 +51,9 @@ async def test_obsidian_connector_notes_include_real_execution_and_counts() -> N
         note for note in plan.notes if note.node_type == "connector_diagnostics"
     ]
     jira = next(note for note in plan.notes if note.path == "Sources/Jira.md")
-    assert "Real execution:" in jira.markdown
-    assert "Events ingested:" in jira.markdown
-    assert "Normalized events:" in jira.markdown
+    assert "Реальное выполнение (real execution):" in jira.markdown
+    assert "Событий загружено (events ingested):" in jira.markdown
+    assert "Нормализованных событий (normalized events):" in jira.markdown
 
     blob = "\n".join(note.markdown for note in connector_notes)
     for forbidden in ("ghp_", "sk-", "raw://", "dev_api_key"):

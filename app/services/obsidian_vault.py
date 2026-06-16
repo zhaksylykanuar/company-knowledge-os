@@ -95,6 +95,176 @@ NODE_DIRECTORY = {
     "knowledge_note": "Projects",
 }
 
+# --- Russian-first founder-facing text ---------------------------------------
+# All founder-facing prose in generated notes is Russian. Technical identifiers
+# (Jira keys, repo names, env-var names, source/connector names, SSE, run ids)
+# stay verbatim but are given a Russian label or explanation in context.
+
+RU_NOTICE = (
+    "> Сгенерировано FounderOS из локального графа знаний. "
+    "Не редактируй этот файл вручную — изменения потеряются при следующей "
+    "синхронизации."
+)
+RU_CONNECTOR_NOTICE = (
+    "> Сгенерировано диагностикой коннекторов FounderOS. Только чтение; "
+    "управляй коннекторами в FounderOS. Секреты в это хранилище не пишутся."
+)
+
+# Jira-style technical key, e.g. CORE-1 — not a human-readable title.
+JIRA_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
+
+# Russian display names for node types (the raw type is kept alongside).
+NODE_TYPE_RU = {
+    "project": "проект",
+    "person": "человек",
+    "task": "задача",
+    "issue": "задача",
+    "pull_request": "pull request",
+    "commit": "коммит",
+    "repo": "репозиторий/компонент",
+    "feature": "функция",
+    "product_area": "продуктовая область",
+    "meeting": "встреча",
+    "decision": "решение",
+    "action_item": "действие",
+    "risk": "риск",
+    "blocker": "блокер",
+    "account": "компания",
+    "company": "компания",
+    "contact": "контакт",
+    "email_thread": "почтовая переписка",
+    "hypothesis": "гипотеза",
+    "declaration": "декларация",
+    "finding": "вывод",
+    "proposal": "предложение",
+    "share_pack": "пакет для шаринга",
+    "source_event": "событие источника",
+    "normalized_event": "нормализованное событие",
+    "knowledge_note": "заметка",
+    "system": "система",
+    "connector_diagnostics": "диагностика коннектора",
+}
+
+# Russian display labels for vault directories (folder paths stay English so
+# wikilinks and deterministic paths are unchanged).
+DIRECTORY_RU = {
+    "Projects": "Проекты",
+    "People": "Люди",
+    "Tasks": "Задачи",
+    "Products": "Продукты (репозитории/компоненты)",
+    "Meetings": "Встречи",
+    "Decisions": "Решения",
+    "Risks": "Риски",
+    "Accounts": "Компании",
+    "Contacts": "Контакты",
+    "Hypotheses": "Гипотезы",
+    "Findings": "Выводы",
+    "Sources": "Источники",
+    "Share Packs": "Пакеты для шаринга",
+    "Inbox": "Входящие",
+    "Data Quality": "Качество данных",
+}
+
+# Russian explanations for common issue/Jira statuses (raw value kept too).
+STATUS_RU = {
+    "backlog": "в очереди",
+    "to do": "к выполнению",
+    "todo": "к выполнению",
+    "selected for development": "выбрано в работу",
+    "in progress": "в работе",
+    "in review": "на проверке",
+    "in dev": "в разработке",
+    "blocked": "заблокировано",
+    "done": "готово",
+    "closed": "закрыто",
+    "resolved": "решено",
+    "active": "активно",
+    "archived": "в архиве",
+}
+
+
+def _clean(value: Any, max_chars: int = 300) -> str:
+    return str(sanitize_markdown_content(value, max_chars=max_chars) or "")
+
+
+def _first_present(*values: Any) -> str | None:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _is_technical_key(value: str, node: dict[str, Any]) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return True
+    props = node.get("properties") or {}
+    if text == str(props.get("jira_key") or ""):
+        return True
+    if text == str(node.get("node_id") or ""):
+        return True
+    return bool(JIRA_KEY_RE.match(text))
+
+
+def display_title_for_node(node: dict[str, Any]) -> str:
+    """Russian-first human title: title_ru → name_ru → readable title → key."""
+    props = node.get("properties") or {}
+    russian = _first_present(
+        props.get("title_ru"),
+        props.get("name_ru"),
+        props.get("display_name_ru"),
+        node.get("title_ru"),
+        node.get("name_ru"),
+        node.get("display_name"),
+    )
+    if russian:
+        return russian
+    title = str(node.get("title") or "").strip()
+    if title and not _is_technical_key(title, node):
+        return title
+    return title or str(node.get("node_id") or "Без названия")
+
+
+def display_summary_for_node(node: dict[str, Any]) -> str:
+    """Russian-first summary; falls back to the Russian title, never a raw key."""
+    props = node.get("properties") or {}
+    summary = _first_present(
+        props.get("summary_ru"),
+        props.get("description_ru"),
+        node.get("summary_ru"),
+    )
+    if summary:
+        return summary
+    raw_summary = str(node.get("summary") or "").strip()
+    if raw_summary and not _is_technical_key(raw_summary, node):
+        return raw_summary
+    russian_title = _first_present(props.get("title_ru"), props.get("name_ru"))
+    if russian_title:
+        return russian_title
+    return "Пока нет краткого описания."
+
+
+def status_ru_label(node: dict[str, Any]) -> str:
+    """Render status as `raw` (русское пояснение)."""
+    props = node.get("properties") or {}
+    explicit = _first_present(props.get("status_ru"), node.get("status_ru"))
+    raw = "archived" if node.get("archived") else str(props.get("status") or "active")
+    if explicit:
+        return f"`{_clean(raw, 60)}` ({_clean(explicit, 60)})"
+    russian = STATUS_RU.get(raw.strip().casefold())
+    if russian:
+        return f"`{_clean(raw, 60)}` ({russian})"
+    return f"`{_clean(raw, 60)}`"
+
+
+def node_type_ru_label(node_type: str) -> str:
+    russian = NODE_TYPE_RU.get(str(node_type))
+    return f"`{node_type}` ({russian})" if russian else f"`{node_type}`"
+
+
 SENSITIVE_KEY_RE = re.compile(
     r"(secret|token|api[_-]?key|password|client_secret|dev_api_key|"
     r"raw_object_ref|raw_payload|raw_body|email_body|body_html|body_text)",
@@ -409,7 +579,9 @@ def _node_note(
 ) -> ObsidianNote:
     node_id = str(node["node_id"])
     node_type = str(node.get("node_type") or "knowledge_note")
-    title = str(sanitize_markdown_content(node.get("title") or node_id, max_chars=180))
+    title = str(sanitize_markdown_content(display_title_for_node(node), max_chars=180))
+    raw_key = str(sanitize_markdown_content(node.get("title") or node_id, max_chars=180))
+    aliases = [title] + ([raw_key] if raw_key and raw_key != title else [])
     relative_path = Path(node_path_map[node_id])
     outgoing = [edge for edge in edges if edge.get("source_node_id") == node_id]
     backlinks = [edge for edge in edges if edge.get("target_node_id") == node_id]
@@ -434,7 +606,7 @@ def _node_note(
             "node_type": node_type,
             "status": "archived" if archived else str(node.get("properties", {}).get("status") or "active"),
             "tags": _frontmatter_tags(node_type, source_types),
-            "aliases": [title],
+            "aliases": aliases,
             "confidence": node.get("confidence"),
             "evidence_count": node.get("evidence_count") or 0,
             "finding_count": node.get("finding_count") or 0,
@@ -491,8 +663,9 @@ def _edge_links(
         if target not in node_path_map or target in seen:
             continue
         seen.add(target)
-        title = node_lookup.get(target, {}).get("title") or target
-        links.append(_wikilink(node_path_map[target], str(title)))
+        target_node = node_lookup.get(target)
+        label = display_title_for_node(target_node) if target_node else target
+        links.append(_wikilink(node_path_map[target], str(label)))
     return links
 
 
@@ -510,65 +683,78 @@ def _render_note_body(
     outgoing: list[dict[str, Any]],
     backlinks: list[dict[str, Any]],
 ) -> str:
-    title = str(sanitize_markdown_content(node.get("title") or node.get("node_id")))
+    title = _clean(display_title_for_node(node), 180)
     properties = sanitize_markdown_content(node.get("properties") or {})
+    raw_props = node.get("properties") or {}
     source_types = [str(item) for item in node.get("source_types") or []]
     node_id = str(node.get("node_id"))
+    node_type = str(node.get("node_type") or "knowledge_note")
+    jira_key = raw_props.get("jira_key")
+    raw_title = str(node.get("title") or "").strip()
     lines = [
         f"# {title}",
         "",
-        "> Generated by FounderOS from evidence-backed Postgres graph data. Edit in FounderOS; treat this vault as a local mirror.",
+        RU_NOTICE,
         "",
-        "## Summary",
+        "## Кратко",
         "",
-        str(sanitize_markdown_content(node.get("summary") or "No summary yet.")),
+        _clean(display_summary_for_node(node), 1200),
         "",
-        "## Properties",
+        "## Свойства",
         "",
-        f"- Type: `{sanitize_markdown_content(node.get('node_type'))}`",
-        f"- Confidence: `{sanitize_markdown_content(node.get('confidence'))}`",
-        f"- Evidence count: `{sanitize_markdown_content(node.get('evidence_count') or 0)}`",
-        f"- Source types: {', '.join(f'`{sanitize_markdown_content(s)}`' for s in source_types) or 'none'}",
-        f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/kt?node={quote(node_id, safe='')}",
+        f"- Тип (type): {node_type_ru_label(node_type)}",
+        f"- Статус (status): {status_ru_label(node)}",
+    ]
+    if jira_key:
+        lines.append(f"- Ключ Jira: `{_clean(jira_key, 60)}`")
+    elif raw_title and _is_technical_key(raw_title, node):
+        lines.append(f"- Технический ключ: `{_clean(raw_title, 60)}`")
+    lines += [
+        f"- Уверенность (confidence): `{_clean(node.get('confidence'))}`",
+        f"- Число подтверждений (evidence): `{_clean(node.get('evidence_count') or 0)}`",
+        "- Источник (source type): "
+        + (", ".join(f"`{_clean(s)}`" for s in source_types) or "нет"),
+        f"- Открыть в FounderOS: {FOUNDEROS_UI_BASE_URL}#/kt?node={quote(node_id, safe='')}",
         "",
-        "## Backlinks",
+        "## Обратные ссылки",
         "",
-        *(_markdown_list(backlink_links) or ["No backlinks yet."]),
+        *(_markdown_list(backlink_links) or ["Пока нет обратных ссылок."]),
         "",
-        "## Outgoing Links",
+        "## Исходящие связи",
         "",
-        *(_markdown_list(links) or ["No outgoing links yet."]),
+        *(_markdown_list(links) or ["Пока нет исходящих связей."]),
         "",
-        "## Evidence",
+        "## Подтверждения",
         "",
-        f"- Evidence-backed links: {len(outgoing) + len(backlinks)}",
-        "- Source lineage is summarized here; raw source payloads stay in FounderOS.",
+        f"- Связей с подтверждениями: {len(outgoing) + len(backlinks)}",
+        "- Здесь сводка происхождения; исходные данные источников остаются в FounderOS.",
         "",
-        "## Related Findings",
+        "## Связанные выводы FounderOS",
         "",
-        f"- Findings linked: `{sanitize_markdown_content(node.get('finding_count') or 0)}`",
+        f"- Связано выводов (findings): `{_clean(node.get('finding_count') or 0)}`",
         "",
-        "## Related Actions",
+        "## Следующие действия",
         "",
-        "- [ ] Review finding or proposal in FounderOS",
-        "- [ ] Open evidence trail in FounderOS",
+        "- [ ] Просмотреть вывод или предложение в FounderOS",
+        "- [ ] Открыть цепочку подтверждений в FounderOS",
         "",
-        "## Source Lineage",
+        "## Происхождение данных",
         "",
-        f"- Created by run: `{sanitize_markdown_content(node.get('created_by_run_id') or '')}`",
-        f"- Updated by run: `{sanitize_markdown_content(node.get('updated_by_run_id') or '')}`",
-        f"- Last observed: `{sanitize_markdown_content(node.get('last_observed_at') or '')}`",
+        f"- Создано запуском (run id): `{_clean(node.get('created_by_run_id') or '')}`",
+        f"- Обновлено запуском (run id): `{_clean(node.get('updated_by_run_id') or '')}`",
+        f"- Замечено (observed at): `{_clean(node.get('last_observed_at') or '')}`",
         "",
-        "## Decision History",
+        "## История решений",
         "",
-        "Review audit history in FounderOS for approved changes.",
+        "История изменений и одобрений доступна в аудите FounderOS.",
         "",
-        "## Data Quality",
+        "## Качество данных",
         "",
-        "Check FounderOS Data Quality for gaps, stale evidence, or low-confidence links.",
+        "Проверь раздел «Качество данных» в FounderOS: пробелы, устаревшие "
+        "подтверждения, связи с низкой уверенностью.",
     ]
     if isinstance(properties, dict) and properties:
-        lines.extend(["", "### Sanitized Properties", ""])
+        lines.extend(["", "### Свойства (очищенные)", ""])
         for key in sorted(properties):
             value = properties[key]
             if value in (None, "", [], {}):
@@ -599,58 +785,72 @@ def _system_notes(
     recent = notes[:25]
     index_body = "\n".join(
         [
-            "# FounderOS Knowledge Vault",
+            "# Хранилище знаний FounderOS",
             "",
-            "Open this vault in Obsidian to use Graph View, Local Graph, Backlinks, Markdown notes, tags, properties, and search.",
+            "Открой это хранилище в Obsidian: граф знаний (Graph View), локальный "
+            "граф, обратные ссылки, markdown-заметки, теги, свойства и поиск.",
             "",
-            "## Sections",
+            "## Разделы",
             "",
-            *[f"- [[{directory}/_Index|{directory}]]" for directory in VAULT_DIRECTORIES if not directory.startswith("_")],
+            *[
+                f"- [[{directory}/_Index|{DIRECTORY_RU.get(directory, directory)}]]"
+                for directory in VAULT_DIRECTORIES
+                if not directory.startswith("_")
+            ],
             "",
-            "## Recent Generated Notes",
+            "## Недавно сгенерированные заметки",
             "",
             *[f"- {_wikilink(note.path, note.title)}" for note in recent],
             "",
-            "## Graph Stats",
+            "## Статистика графа",
             "",
-            f"- Nodes: `{graph.get('stats', {}).get('nodes', 0)}`",
-            f"- Edges: `{graph.get('stats', {}).get('edges', 0)}`",
-            f"- Hidden by limit: `{graph.get('stats', {}).get('hidden_count', 0)}`",
+            f"- Узлы (nodes): `{graph.get('stats', {}).get('nodes', 0)}`",
+            f"- Связи (edges): `{graph.get('stats', {}).get('edges', 0)}`",
+            f"- Скрыто лимитом: `{graph.get('stats', {}).get('hidden_count', 0)}`",
         ]
     ).rstrip() + "\n"
     system = [
-        _system_note("00 Index.md", "FounderOS Knowledge Vault", index_body),
+        _system_note("00 Index.md", "Хранилище знаний FounderOS", index_body),
         _system_note(
             "01 Command Center.md",
-            "Command Center",
-            "# Command Center\n\nOpen FounderOS for live status, actions, sources, and data-quality review.\n",
+            "Командный центр",
+            "# Командный центр\n\nОткрой FounderOS для актуального статуса, действий, "
+            "источников и проверки качества данных.\n",
         ),
         _system_note(
             "_System/Manifest.md",
-            "Manifest",
-            "# Manifest\n\n"
-            + "\n".join(f"- {node_type}: {count}" for node_type, count in sorted(by_type.items()))
+            "Манифест",
+            "# Манифест\n\n"
+            + "\n".join(
+                f"- {node_type} ({NODE_TYPE_RU.get(node_type, node_type)}): {count}"
+                for node_type, count in sorted(by_type.items())
+            )
             + "\n",
         ),
         _system_note(
             "_System/Sync Log.md",
-            "Sync Log",
-            "# Sync Log\n\nSync history is also recorded in FounderOS `audit_logs`.\n",
+            "Журнал синхронизации",
+            "# Журнал синхронизации\n\nИстория синхронизаций также пишется в "
+            "`audit_logs` FounderOS.\n",
         ),
         _system_note(
             "_System/Redaction Policy.md",
-            "Redaction Policy",
-            "# Redaction Policy\n\nRaw source payloads, external tokens, local dev keys, and raw email bodies are not written to this vault.\n",
+            "Политика очистки данных",
+            "# Политика очистки данных\n\nИсходные данные источников, внешние токены, "
+            "локальные dev-ключи и тела писем в это хранилище не записываются.\n",
         ),
     ]
     for directory in VAULT_DIRECTORIES:
         if directory.startswith("_"):
             continue
         matching = [note for note in notes if note.path.startswith(f"{directory}/")]
-        body = f"# {directory}\n\n" + "\n".join(
+        directory_ru = DIRECTORY_RU.get(directory, directory)
+        body = f"# {directory_ru}\n\n" + "\n".join(
             f"- {_wikilink(note.path, note.title)}" for note in matching[:100]
         )
-        system.append(_system_note(f"{directory}/_Index.md", directory, body.rstrip() + "\n"))
+        system.append(
+            _system_note(f"{directory}/_Index.md", directory_ru, body.rstrip() + "\n")
+        )
     return system
 
 
@@ -738,7 +938,7 @@ def _safe_env_label(value: Any) -> str:
 def _connector_missing_lines(missing_env_vars: list[Any]) -> list[str]:
     names = [str(name) for name in missing_env_vars if name]
     if not names:
-        return ["- All required environment variables are present (by name)."]
+        return ["- Все обязательные переменные окружения присутствуют (по имени)."]
     return [f"- `{_safe_env_label(name)}`" for name in names]
 
 
@@ -753,76 +953,76 @@ def _connector_note_body(
     error_line = (
         sanitize_markdown_content(last_error.get("message"), max_chars=200)
         if isinstance(last_error, dict) and last_error.get("message")
-        else "none"
+        else "нет"
     )
     # Setup steps are controlled constants; render literally so env-var names
     # stay readable (the markdown safety guard still blocks secret values).
     setup_steps = [f"- {step}" for step in connector.get("setup_steps") or []]
+    limits = connector.get("limits") or {}
     lines = [
-        f"# {name} connector",
+        f"# Коннектор {name}",
         "",
-        "> Generated by FounderOS connector diagnostics. Read-only mirror; "
-        "manage connectors in FounderOS. No secrets are written to this vault.",
+        RU_CONNECTOR_NOTICE,
         "",
-        "## Status",
+        "## Статус",
         "",
-        f"- Connector state: `{sanitize_markdown_content(connector.get('connector_state'))}`",
-        f"- Configured: `{bool(connector.get('configured'))}`",
-        f"- Readiness: `{sanitize_markdown_content(connector.get('readiness'))}`",
-        f"- Adapter type: `{sanitize_markdown_content(connector.get('adapter_type'))}`",
-        f"- Real execution: `{sanitize_markdown_content(connector.get('real_execution'))}`",
-        f"- Pipeline stage: `{sanitize_markdown_content(connector.get('pipeline_state'))}`",
-        f"- Blocked reason: `{sanitize_markdown_content(connector.get('blocked_reason') or 'none')}`",
-        f"- Scope required: `{bool(connector.get('scope_required'))}`",
-        f"- Scope configured: `{bool(connector.get('scope_configured'))}`",
-        f"- Scope count: `{sanitize_markdown_content((connector.get('scope_summary') or {}).get('count') or 0)}`",
-        f"- Paused: `{bool(connector.get('paused'))}`",
-        f"- Events ingested: `{sanitize_markdown_content(connector.get('events_ingested') or 0)}`",
-        f"- Normalized events: `{sanitize_markdown_content(connector.get('normalized_events') or 0)}`",
-        f"- Next action: {sanitize_markdown_content((connector.get('runbook') or {}).get('next_action'))}",
+        f"- Состояние коннектора (state): `{_clean(connector.get('connector_state'))}`",
+        f"- Настроен (configured): `{bool(connector.get('configured'))}`",
+        f"- Готовность (readiness): `{_clean(connector.get('readiness'))}`",
+        f"- Тип адаптера (adapter type): `{_clean(connector.get('adapter_type'))}`",
+        f"- Реальное выполнение (real execution): `{_clean(connector.get('real_execution'))}`",
+        f"- Этап конвейера (pipeline stage): `{_clean(connector.get('pipeline_state'))}`",
+        f"- Причина блокировки (blocked reason): `{_clean(connector.get('blocked_reason') or 'нет')}`",
+        f"- Область обязательна (scope required): `{bool(connector.get('scope_required'))}`",
+        f"- Область настроена (scope configured): `{bool(connector.get('scope_configured'))}`",
+        f"- Размер области (scope count): `{_clean((connector.get('scope_summary') or {}).get('count') or 0)}`",
+        f"- На паузе (paused): `{bool(connector.get('paused'))}`",
+        f"- Событий загружено (events ingested): `{_clean(connector.get('events_ingested') or 0)}`",
+        f"- Нормализованных событий (normalized events): `{_clean(connector.get('normalized_events') or 0)}`",
+        f"- Следующее действие (next action): {_clean((connector.get('runbook') or {}).get('next_action'))}",
         "",
-        "## Missing Required Configuration (names only)",
+        "## Отсутствующая конфигурация (только имена)",
         "",
         *_connector_missing_lines(list(connector.get("missing_env_vars") or [])),
         "",
-        "## Scope & Limits",
+        "## Область и лимиты",
         "",
         *(
             _connector_missing_lines(list(connector.get("missing_scope_fields") or []))
             if connector.get("scope_required")
             and not connector.get("scope_configured")
-            else ["- Scope OK or not required."]
+            else ["- Область в порядке или не требуется."]
         ),
-        f"- Limits: sync `{sanitize_markdown_content((connector.get('limits') or {}).get('sync_limit') or 0)}`, "
-        f"backfill `{sanitize_markdown_content((connector.get('limits') or {}).get('backfill_limit') or 0)}`, "
-        f"max days `{sanitize_markdown_content((connector.get('limits') or {}).get('backfill_max_days') or 0)}`",
+        f"- Лимиты: синхронизация `{_clean(limits.get('sync_limit') or 0)}`, "
+        f"добор `{_clean(limits.get('backfill_limit') or 0)}`, "
+        f"макс. дней `{_clean(limits.get('backfill_max_days') or 0)}`",
         "",
-        "## Last Activity",
+        "## Последняя активность",
         "",
-        f"- Last test at: `{sanitize_markdown_content(connector.get('last_test_at') or 'never')}`",
-        f"- Last success at: `{sanitize_markdown_content(connector.get('last_success_at') or 'never')}`",
-        f"- Last error at: `{sanitize_markdown_content(connector.get('last_error_at') or 'none')}`",
-        f"- Last error: {error_line}",
+        f"- Последняя проверка (last test): `{_clean(connector.get('last_test_at') or 'никогда')}`",
+        f"- Последний успех (last success): `{_clean(connector.get('last_success_at') or 'никогда')}`",
+        f"- Время последней ошибки (last error at): `{_clean(connector.get('last_error_at') or 'нет')}`",
+        f"- Последняя ошибка (last error): {error_line}",
         "",
-        "## Latest Run Receipt",
+        "## Последний отчёт о запуске",
         "",
         *_connector_receipt_lines(latest_receipt),
         "",
-        "## Security Policy",
+        "## Политика безопасности",
         "",
-        "- Read only: `true`",
-        "- Secrets exposed to browser: `false`",
-        "- External writes allowed: `false`",
+        "- Только чтение (read only): `true`",
+        "- Секреты доступны браузеру: `false`",
+        "- Внешние записи разрешены: `false`",
         "",
-        "## Setup",
+        "## Настройка",
         "",
-        *(setup_steps or ["- No setup required."]),
-        f"- Docs: {sanitize_markdown_content(connector.get('docs_link'))}",
-        f"- {sanitize_markdown_content(connector.get('restart_required_hint'))}",
+        *(setup_steps or ["- Настройка не требуется."]),
+        f"- Документация (docs): {_clean(connector.get('docs_link'))}",
+        f"- {_clean(connector.get('restart_required_hint'))}",
         "",
-        "## Links",
+        "## Ссылки",
         "",
-        "- [[_System/Connector Diagnostics|Connector Diagnostics]]",
+        "- [[_System/Connector Diagnostics|Диагностика коннекторов]]",
         f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
     ]
     return "\n".join(lines).rstrip() + "\n"
@@ -830,24 +1030,24 @@ def _connector_note_body(
 
 def _connector_receipt_lines(receipt: dict[str, Any] | None) -> list[str]:
     if not receipt:
-        return ["- No connector run receipt yet."]
+        return ["- Отчётов о запусках пока нет."]
     warnings = receipt.get("warnings_sanitized") or []
     errors = receipt.get("errors_sanitized") or []
     return [
-        f"- Receipt: `{sanitize_markdown_content(receipt.get('receipt_id'))}`",
-        f"- Status: `{sanitize_markdown_content(receipt.get('status'))}`",
-        f"- Action: `{sanitize_markdown_content(receipt.get('action_type'))}`",
-        f"- Scope configured: `{bool(receipt.get('scope_configured'))}`",
-        f"- Limits: `{sanitize_markdown_content(receipt.get('limits_applied') or {})}`",
-        f"- Watermark: `{sanitize_markdown_content(receipt.get('watermark_update_reason'))}`",
-        f"- Events: seen `{sanitize_markdown_content(receipt.get('events_seen') or 0)}`, "
-        f"ingested `{sanitize_markdown_content(receipt.get('events_ingested') or 0)}`, "
-        f"normalized `{sanitize_markdown_content(receipt.get('normalized_events') or 0)}`",
-        f"- Pages read: `{sanitize_markdown_content(receipt.get('pages_read') or 0)}`",
-        f"- Stopped reason: `{sanitize_markdown_content(receipt.get('stopped_reason') or 'none')}`",
-        f"- Warnings: `{sanitize_markdown_content(len(warnings))}`",
-        f"- Errors: `{sanitize_markdown_content(len(errors))}`",
-        f"- Next action: `{_receipt_next_action(receipt)}`",
+        f"- Отчёт (receipt): `{_clean(receipt.get('receipt_id'))}`",
+        f"- Статус (status): `{_clean(receipt.get('status'))}`",
+        f"- Действие (action): `{_clean(receipt.get('action_type'))}`",
+        f"- Область настроена (scope configured): `{bool(receipt.get('scope_configured'))}`",
+        f"- Лимиты (limits): `{_clean(receipt.get('limits_applied') or {})}`",
+        f"- Водяной знак (watermark): `{_clean(receipt.get('watermark_update_reason'))}`",
+        f"- События: замечено `{_clean(receipt.get('events_seen') or 0)}`, "
+        f"загружено `{_clean(receipt.get('events_ingested') or 0)}`, "
+        f"нормализовано `{_clean(receipt.get('normalized_events') or 0)}`",
+        f"- Прочитано страниц (pages read): `{_clean(receipt.get('pages_read') or 0)}`",
+        f"- Причина остановки (stopped reason): `{_clean(receipt.get('stopped_reason') or 'нет')}`",
+        f"- Предупреждений (warnings): `{_clean(len(warnings))}`",
+        f"- Ошибок (errors): `{_clean(len(errors))}`",
+        f"- Следующее действие (next action): `{_receipt_next_action(receipt)}`",
         f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
     ]
 
@@ -856,21 +1056,21 @@ def _receipt_next_action(receipt: dict[str, Any]) -> str:
     status = str(receipt.get("status") or "")
     action = str(receipt.get("action_type") or "")
     if action == "preview_sync":
-        return "Review preview, then run sync if scope/limits look right"
+        return "Проверь предпросмотр, затем запусти синхронизацию, если область и лимиты верны"
     if status in {"failed", "blocked", "skipped", "partial_succeeded"}:
-        return "Inspect receipt and retry safely after fixing the reason"
+        return "Изучи отчёт и безопасно повтори после устранения причины"
     if status == "succeeded" and int(receipt.get("events_ingested") or 0) > 0:
-        return "Run evidence pipeline, then sync Obsidian"
-    return "Monitor next source run"
+        return "Запусти evidence pipeline, затем синхронизацию Obsidian"
+    return "Наблюдай за следующим запуском источника"
 
 
 def _connector_receipts_body(receipts: list[dict[str, Any]]) -> str:
     lines = [
-        "# Connector Run Receipts",
+        "# Отчёты о запусках коннекторов",
         "",
-        "> Generated by FounderOS. Sanitized receipts only; no raw payloads or secrets.",
+        "> Сгенерировано FounderOS. Только очищенные отчёты; без исходных данных и секретов.",
         "",
-        "| Source | Action | Status | Watermark | Events | Limit | Reason |",
+        "| Источник | Действие | Статус | Водяной знак | События | Лимит | Причина |",
         "| --- | --- | --- | --- | ---: | ---: | --- |",
     ]
     for receipt in receipts:
@@ -887,20 +1087,20 @@ def _connector_receipts_body(receipts: list[dict[str, Any]]) -> str:
             f"| {source} | {action} | {status} | {watermark} | {events} | {limit} | {reason} |"
         )
     if not receipts:
-        lines.append("| none | none | none | none | 0 | 0 | no receipts yet |")
+        lines.append("| нет | нет | нет | нет | 0 | 0 | отчётов пока нет |")
     lines.extend(
         [
             "",
-            "## Security Policy",
+            "## Политика безопасности",
             "",
-            "- Read only: `true`",
-            "- Secrets exposed to browser: `false`",
-            "- External writes allowed: `false`",
-            "- Raw provider payloads included: `false`",
+            "- Только чтение (read only): `true`",
+            "- Секреты доступны браузеру: `false`",
+            "- Внешние записи разрешены: `false`",
+            "- Исходные данные провайдера включены: `false`",
             "",
-            "## Links",
+            "## Ссылки",
             "",
-            "- [[_System/Connector Diagnostics|Connector Diagnostics]]",
+            "- [[_System/Connector Diagnostics|Диагностика коннекторов]]",
             f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
         ]
     )
@@ -909,13 +1109,13 @@ def _connector_receipts_body(receipts: list[dict[str, Any]]) -> str:
 
 def _connector_overview_body(connectors: list[dict[str, Any]]) -> str:
     lines = [
-        "# Connector Diagnostics",
+        "# Диагностика коннекторов",
         "",
-        "> Generated by FounderOS. Read-only connector readiness. No secrets.",
+        "> Сгенерировано FounderOS. Только чтение, готовность коннекторов. Без секретов.",
         "",
-        "## Connectors",
+        "## Коннекторы",
         "",
-        "| Connector | State | Configured | Adapter | Real exec | Missing vars |",
+        "| Коннектор | Состояние | Настроен | Адаптер | Реальное вып. | Нет переменных |",
         "| --- | --- | --- | --- | --- | --- |",
     ]
     for connector in connectors:
@@ -933,11 +1133,11 @@ def _connector_overview_body(connectors: list[dict[str, Any]]) -> str:
     lines.extend(
         [
             "",
-            "## Security Policy",
+            "## Политика безопасности",
             "",
-            "- Read only: `true`",
-            "- Secrets exposed to browser: `false`",
-            "- External writes allowed: `false`",
+            "- Только чтение (read only): `true`",
+            "- Секреты доступны браузеру: `false`",
+            "- Внешние записи разрешены: `false`",
             "",
             f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
         ]
@@ -949,18 +1149,19 @@ def _local_pilot_body(diagnostics: dict[str, Any]) -> str:
     pilot = diagnostics.get("pilot") or {}
     connectors = list(diagnostics.get("connectors") or [])
     lines = [
-        "# Local Connector Pilot",
+        "# Локальный пилот коннекторов",
         "",
-        "> Generated by FounderOS connector diagnostics. Read-only E2E status. "
-        "No secrets are written to this vault.",
+        "> Сгенерировано диагностикой коннекторов FounderOS. Только чтение, статус "
+        "сквозного прогона (E2E). Секреты в это хранилище не пишутся.",
         "",
-        "## Real Execution",
+        "## Реальное выполнение",
         "",
-        f"- Real connectors enabled: `{bool(pilot.get('real_execution_enabled'))}`",
+        f"- Реальные коннекторы включены (real connectors enabled): "
+        f"`{bool(pilot.get('real_execution_enabled'))}`",
         "",
-        "## Connectors",
+        "## Коннекторы",
         "",
-        "| Connector | Pipeline stage | Events | Normalized | Next action |",
+        "| Коннектор | Этап конвейера | События | Нормализовано | Следующее действие |",
         "| --- | --- | --- | --- | --- |",
     ]
     for connector in connectors:
@@ -974,27 +1175,27 @@ def _local_pilot_body(diagnostics: dict[str, Any]) -> str:
             f"| {sanitize_markdown_content(connector.get('normalized_events') or 0)} "
             f"| {sanitize_markdown_content(runbook.get('next_action'))} |"
         )
-    lines.extend(["", "## Pipeline States", ""])
+    lines.extend(["", "## Этапы конвейера", ""])
     for state, count in sorted((pilot.get("by_pipeline_state") or {}).items()):
         lines.append(f"- {sanitize_markdown_content(state)}: `{int(count)}`")
-    lines.extend(["", "## Next Steps", ""])
+    lines.extend(["", "## Следующие шаги", ""])
     for step in pilot.get("next_steps") or []:
         lines.append(f"- {sanitize_markdown_content(step, max_chars=400)}")
     commands = pilot.get("commands") or {}
-    lines.extend(["", "## Commands", ""])
+    lines.extend(["", "## Команды", ""])
     for label in ("pilot", "operator_run", "evidence_pipeline", "sync_obsidian", "restart"):
         if commands.get(label):
             lines.append(f"- {label}: `{commands[label]}`")
     lines.extend(
         [
             "",
-            "## Security Policy",
+            "## Политика безопасности",
             "",
-            "- Read only: `true`",
-            "- Secrets exposed to browser: `false`",
-            "- External writes allowed: `false`",
+            "- Только чтение (read only): `true`",
+            "- Секреты доступны браузеру: `false`",
+            "- Внешние записи разрешены: `false`",
             "",
-            "- [[_System/Connector Diagnostics|Connector Diagnostics]]",
+            "- [[_System/Connector Diagnostics|Диагностика коннекторов]]",
             f"- FounderOS: {FOUNDEROS_UI_BASE_URL}#/src",
         ]
     )
@@ -1019,14 +1220,14 @@ def _connector_notes(
         notes.append(
             _connector_note(
                 path=path,
-                title=f"{name} connector",
+                title=f"Коннектор {name}",
                 node_id=f"connector:{source_type}",
                 connector_state=str(connector.get("connector_state") or "unknown"),
                 body=_connector_note_body(
                     connector,
                     latest_receipt=(receipts_by_source.get(source_type) or [None])[0],
                 ),
-                links=["[[_System/Connector Diagnostics|Connector Diagnostics]]"],
+                links=["[[_System/Connector Diagnostics|Диагностика коннекторов]]"],
                 source_type=source_type,
             )
         )
@@ -1035,7 +1236,7 @@ def _connector_notes(
     notes.append(
         _connector_note(
             path=overview_path,
-            title="Connector Diagnostics",
+            title="Диагностика коннекторов",
             node_id="connector:diagnostics",
             connector_state="overview",
             body=_connector_overview_body(connectors),
@@ -1053,7 +1254,7 @@ def _connector_notes(
     notes.append(
         _connector_note(
             path=receipts_path,
-            title="Connector Run Receipts",
+            title="Отчёты о запусках коннекторов",
             node_id="connector:run_receipts",
             connector_state="receipts",
             body=_connector_receipts_body(all_receipts[:50]),
@@ -1066,11 +1267,11 @@ def _connector_notes(
     notes.append(
         _connector_note(
             path=pilot_path,
-            title="Local Connector Pilot",
+            title="Локальный пилот коннекторов",
             node_id="connector:local_pilot",
             connector_state="pilot",
             body=_local_pilot_body(diagnostics),
-            links=["[[_System/Connector Diagnostics|Connector Diagnostics]]"],
+            links=["[[_System/Connector Diagnostics|Диагностика коннекторов]]"],
             source_type="all",
         )
     )
