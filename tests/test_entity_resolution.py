@@ -122,7 +122,11 @@ async def test_status_reply_names_recognized_project() -> None:
     # has Jira projects mapped to SSAP: a project snapshot, or the digest
     # fallback with an explicit project prefix.
     if "Snapshot: SSAP" in text:
-        assert "статус по Jira" in text
+        # A Jira-status snapshot of the recognized project. When Jira keys are
+        # mapped it shows "статус по Jira (<keys>)"; on a fresh database with
+        # no mapped issues it honestly reports "no Jira keys". Both name the
+        # recognized project.
+        assert ("статус по Jira" in text) or ("no Jira keys" in text)
     else:
         assert "📂 Проект: SSAP" in text
         assert "🧠 Дайджест внимания" in text
