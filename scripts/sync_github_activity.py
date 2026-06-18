@@ -68,10 +68,32 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+MAX_RESPONSE_BYTES = 5_000_000
+_READ_CHUNK_BYTES = 65_536
+
+
+def _read_response_body(response: Any, *, max_bytes: int = MAX_RESPONSE_BYTES) -> bytes:
+    # A single read(amt) may return fewer bytes than available on the socket,
+    # truncating large GitHub responses; read to EOF with a total-size cap.
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = response.read(_READ_CHUNK_BYTES)
+        if not chunk:
+            return b"".join(chunks)
+        total += len(chunk)
+        if total > max_bytes:
+            raise RuntimeError(
+                f"GitHub API response exceeds {max_bytes} bytes; "
+                "lower --max-results"
+            )
+        chunks.append(chunk)
+
+
 def _default_fetcher(url: str, headers: Mapping[str, str]) -> bytes:
     api_request = urllib.request.Request(url, headers=dict(headers))
     with urllib.request.urlopen(api_request, timeout=15) as response:
-        return response.read(5_000_000)
+        return _read_response_body(response)
 
 
 def _github_get(
@@ -301,6 +323,11 @@ def main(argv: list[str] | None = None) -> int:
             settings=settings,
             environ=os.environ,
         )
+        from uuid import uuid4
+
+        from app.services.run_context import set_run_id
+
+        set_run_id(f"github-sync-{uuid4().hex[:12]}")
         return asyncio.run(_run(args))
     except prepare_script.PrepareBlockedError as exc:
         print(f"Error: {exc}", file=sys.stderr)

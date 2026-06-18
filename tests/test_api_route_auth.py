@@ -25,6 +25,42 @@ PROTECTED_ROUTE_METHODS = {
     ("/v1/extraction/process-document", "POST"),
     ("/v1/digest/source-activity", "GET"),
     ("/v1/digest/source-activity/text", "GET"),
+    ("/v1/founder/overview", "GET"),
+    ("/v1/founder/status", "GET"),
+    ("/v1/founder/dev", "GET"),
+    ("/v1/inbox", "GET"),
+    ("/v1/inbox/proposals/{proposal_id}/decision", "POST"),
+    ("/v1/founder/second-opinion", "GET"),
+    ("/v1/founder/second-opinion/{finding_key:path}/trail", "GET"),
+    ("/v1/founder/second-opinion/{finding_key:path}/status", "POST"),
+    ("/v1/founder/second-opinion/{finding_key:path}/snooze", "POST"),
+    ("/v1/founder/second-opinion/{finding_key:path}/note", "POST"),
+    ("/v1/graph/tree", "GET"),
+    ("/v1/knowledge/graph", "GET"),
+    ("/v1/knowledge/nodes/{node_id:path}", "GET"),
+    ("/v1/knowledge/export/obsidian-preview", "POST"),
+    ("/v1/knowledge/obsidian/status", "GET"),
+    ("/v1/knowledge/obsidian/sync", "POST"),
+    ("/v1/knowledge/obsidian/open-vault", "GET"),
+    ("/v1/knowledge/obsidian/open-node/{node_id:path}", "GET"),
+    ("/v1/graph/links/{link_id:path}/review", "POST"),
+    ("/v1/founder/data-availability", "GET"),
+    ("/v1/founder/sources", "GET"),
+    ("/v1/founder/sources/{source_type}/{action_type}", "POST"),
+    ("/v1/founder/data-quality", "GET"),
+    ("/v1/founder/source-runs", "GET"),
+    ("/v1/founder/declarations/{key}", "GET"),
+    ("/v1/founder/declarations/{key}", "PUT"),
+    ("/v1/source-events", "GET"),
+    ("/v1/source-events/{source_event_id}", "GET"),
+    ("/v1/founder/command-center", "GET"),
+    ("/v1/founder/agent-runs", "GET"),
+    ("/v1/founder/sales-signals", "GET"),
+    ("/v1/founder/execution", "GET"),
+    ("/v1/founder/execution/tasks/{issue_key}", "GET"),
+    ("/v1/founder/team-load", "GET"),
+    ("/v1/founder/product", "GET"),
+    ("/v1/founder/action-center", "GET"),
 }
 
 
@@ -276,3 +312,7 @@ def test_current_protected_routes_use_existing_api_key_dependency() -> None:
 
 def test_health_route_does_not_use_api_key_dependency() -> None:
     assert require_api_key not in _route_dependency_calls("/health", "GET")
+
+
+def test_ui_page_route_does_not_use_api_key_dependency() -> None:
+    assert require_api_key not in _route_dependency_calls("/ui", "GET")

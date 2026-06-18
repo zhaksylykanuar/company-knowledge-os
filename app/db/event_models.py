@@ -36,6 +36,9 @@ class SourceEvent(Base):
     raw_object_ref: Mapped[str] = mapped_column(String(1000))
     evidence_refs: Mapped[list[dict]] = mapped_column(JSON, default=list)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by_run_id: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
 
     schema_version: Mapped[str] = mapped_column(String(40), default="1.0")
 
@@ -86,6 +89,7 @@ class NormalizedActivityItemRecord(Base):
     related_prs: Mapped[list[str]] = mapped_column(JSON, default=list)
     related_files: Mapped[list[str]] = mapped_column(JSON, default=list)
     evidence_refs: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    run_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

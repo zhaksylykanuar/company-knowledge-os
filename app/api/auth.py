@@ -44,15 +44,42 @@ def _configured_header_name(config: ApiAuthConfig) -> str | None:
     return stripped or None
 
 
+def _accepted_keys(config: ApiAuthConfig) -> list[str]:
+    """Every key the backend accepts: the primary api_auth_key, any keys in
+    FOUNDEROS_API_KEYS, and — only in local with the browser-dev flag on —
+    the local dev key. Read via getattr so minimal config objects still work.
+    """
+
+    keys: list[str] = []
+    primary = _configured_key(config)
+    if primary:
+        keys.append(primary)
+    raw = getattr(config, "api_keys", None)
+    if isinstance(raw, str):
+        for part in raw.split(","):
+            part = part.strip()
+            if part:
+                keys.append(part)
+    if (
+        getattr(config, "app_env", None) == "local"
+        and bool(getattr(config, "enable_browser_dev_config", False))
+    ):
+        dev = getattr(config, "dev_api_key", None)
+        if isinstance(dev, str) and dev.strip():
+            keys.append(dev.strip())
+    return keys
+
+
 def validate_api_key(*, config: ApiAuthConfig, provided_key: str | None) -> None:
     if not config.api_auth_enabled:
         return
 
-    expected_key = _configured_key(config)
-    if expected_key is None or not provided_key:
+    accepted = _accepted_keys(config)
+    if not accepted or not provided_key:
         _reject_api_auth()
 
-    if not compare_digest(provided_key.encode("utf-8"), expected_key.encode("utf-8")):
+    provided = provided_key.encode("utf-8")
+    if not any(compare_digest(provided, key.encode("utf-8")) for key in accepted):
         _reject_api_auth()
 
 

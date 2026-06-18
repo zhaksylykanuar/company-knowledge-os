@@ -29,25 +29,40 @@ Navigation map for future Codex sessions.
 - `features/ingestion.md`: raw/document/event ingestion.
 - `features/source-events.md`: normalized source event foundation.
 - `features/source-integrations.md`: external source identity, credentials, and activation contract.
+- `source-connectors.md`: safe connector execution, ingestion, normalization, and secret handling.
 - `features/extraction.md`: task/risk/decision extraction.
 - `features/retrieval.md`: search and Q&A.
 - `features/attention.md`: scoring and attention dashboard.
 - `features/telegram-digest.md`: future Telegram interface and daily digest contract.
 - `features/obsidian-export.md`: read-only Obsidian export.
+- `obsidian-bridge.md`: native local Obsidian vault bridge and sync flow.
+- `features/local-ui.md`: local founder command center at `/ui`.
+- `features/knowledge-graph.md`: entity graph core, lift agents, approval queue, metric snapshots.
 - `features/gmail.md`: Gmail connector status.
 - `features/drive.md`: Drive connector status.
 
 ## Runbooks
 
 - `operator_runtime_setup.md`: project-local `.env`, health checks, and Codex launcher setup.
+- `dev-env.md`: automatic local workspace bootstrap, local env override, and local UI startup.
+- `obsidian-bridge.md`: local Obsidian vault bridge, sync, and open-link flow.
 - `runbooks/guarded-operations.md`: guarded execution boundaries, GitHub
   target-org migration metadata, and safe diagnostics.
 - `runbooks/jira-operating-model.md`: safe Jira inventory diagnostics,
   operating model, and creation dry-run boundary.
+- `ops/jira-target-blueprint.md`: clean from-scratch Jira target model
+  (projects, boards, issue types, workflow, components, labels, ownership,
+  DoR/DoD, repo↔project mapping, agent rules, rollout sequence).
+- `ops/jira-rebuild-audit.md` / `ops/jira-rebuild-runbook-draft.md`:
+  read-only audit, discovery package, and no-write migration runbook.
 - `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
 
 ## Doctor Scripts
 
+- `../scripts/bootstrap_local_workspace.py`: creates the gitignored `.local/` workspace,
+  preserves local env override secrets, and safely copies an existing Obsidian vault.
+- `../scripts/start_local.py`: bootstraps local runtime files, runs migrations, and
+  starts the local backend on `127.0.0.1:8765`.
 - `../scripts/doctor_guarded_execution.py`: read-only guarded-execution safety preflight.
 - `../scripts/doctor_external_connector_config.py`: read-only GitHub/Jira configuration doctor.
 - `../scripts/report_guarded_execution_readiness.py`: read-only guarded-execution readiness report.

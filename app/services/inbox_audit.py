@@ -1,0 +1,139 @@
+"""Audit trail for human decisions in the inbox.
+
+Every accept/reject/confirm/remove/resolve/snooze/note writes an
+``audit_logs`` row with previous_state / next_state and reversibility,
+so the trust layer can always answer: who decided, when, what changed.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+from uuid import uuid4
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models import AuditLog
+
+# New audit action kinds introduced for Stage 7 CTAs / curated updates.
+ACTION_ACTION_REVIEWED = "action_reviewed"
+ACTION_UPDATE_APPROVED = "update_approved"
+ACTION_OWNER_ASSIGNMENT = "owner_assignment_proposed"
+
+# Stage 8 share-pack lifecycle actions — every mutation is one audit row.
+ACTION_PACK_GENERATED = "pack_generated"
+ACTION_PACK_REGENERATED = "pack_regenerated"
+ACTION_PACK_SECTION_EDITED = "pack_section_edited"
+ACTION_PACK_SECTION_TOGGLED = "pack_section_toggled"
+ACTION_PACK_FINDING_TOGGLED = "pack_finding_toggled"
+ACTION_PACK_NOTE_ADDED = "pack_note_added"
+ACTION_PACK_APPROVED = "pack_approved"
+ACTION_PACK_REJECTED = "pack_rejected"
+ACTION_PACK_EXPORTED = "pack_exported"
+ACTION_PACK_REVOKED = "pack_revoked"
+
+INBOX_AUDIT_PREFIX = "inbox."
+
+ACTION_PROPOSAL_DECISION = "proposal_decision"
+ACTION_LINK_REVIEW = "link_review"
+ACTION_FINDING_STATUS = "finding_status"
+ACTION_FINDING_SNOOZE = "finding_snooze"
+ACTION_FINDING_NOTE = "finding_note"
+
+
+async def record_inbox_action(
+    session: AsyncSession,
+    *,
+    action: str,
+    actor: str,
+    target_id: str,
+    previous_state: dict[str, Any] | None,
+    next_state: dict[str, Any] | None,
+    reversible: bool,
+    details: dict[str, Any] | None = None,
+    run_id: str | None = None,
+) -> None:
+    # agent_run_id links the human decision back to the agent run that
+    # produced the finding/proposal being decided on.
+    session.add(
+        AuditLog(
+            event_type=f"{INBOX_AUDIT_PREFIX}{action}",
+            actor=actor,
+            correlation_id=target_id[:120],
+            trace_id=f"inbox-{uuid4().hex[:16]}",
+            agent_run_id=run_id,
+            before_ref=str((previous_state or {}).get("status") or "")[:500] or None,
+            after_ref=str((next_state or {}).get("status") or "")[:500] or None,
+            payload={
+                "target_id": target_id,
+                "previous_state": previous_state or {},
+                "next_state": next_state or {},
+                "reversible": reversible,
+                "details": details or {},
+            },
+        )
+    )
+    await session.flush()
+
+
+def _audit_read_model(row: AuditLog) -> dict[str, Any]:
+    return {
+        "action": row.event_type.removeprefix(INBOX_AUDIT_PREFIX),
+        "actor": row.actor,
+        "target_id": (row.payload or {}).get("target_id") or row.correlation_id,
+        "previous_state": (row.payload or {}).get("previous_state"),
+        "next_state": (row.payload or {}).get("next_state"),
+        "reversible": (row.payload or {}).get("reversible"),
+        "details": (row.payload or {}).get("details"),
+        "run_id": row.agent_run_id,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+async def list_inbox_actions(
+    session: AsyncSession,
+    *,
+    target_id: str,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    rows = (
+        await session.execute(
+            select(AuditLog)
+            .where(AuditLog.event_type.like(f"{INBOX_AUDIT_PREFIX}%"))
+            .where(AuditLog.correlation_id == target_id[:120])
+            .order_by(AuditLog.created_at.desc())
+            .limit(limit)
+        )
+    ).scalars()
+    return [_audit_read_model(row) for row in rows]
+
+
+async def list_recent_inbox_actions(
+    session: AsyncSession,
+    *,
+    since: datetime | None = None,
+    actions: tuple[str, ...] | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Recent human decisions across all targets (for operating rhythm).
+
+    ``actions`` filters to specific action kinds at the SQL level, so the
+    ``limit`` applies to the relevant rows only — unrelated audit writes
+    (e.g. an update approval) cannot perturb the result set.
+    """
+
+    query = (
+        select(AuditLog)
+        .where(AuditLog.event_type.like(f"{INBOX_AUDIT_PREFIX}%"))
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    )
+    if since is not None:
+        query = query.where(AuditLog.created_at >= since)
+    if actions:
+        query = query.where(
+            AuditLog.event_type.in_([f"{INBOX_AUDIT_PREFIX}{a}" for a in actions])
+        )
+    rows = (await session.execute(query)).scalars()
+    return [_audit_read_model(row) for row in rows]
