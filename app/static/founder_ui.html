@@ -222,6 +222,7 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
   <div class="logo"><span class="mark">F</span> FounderOS</div>
   <div class="navgroup">Обзор</div>
   <div class="nav on" data-nav="cc" data-tip="Открыть главный экран: пульс компании, риски, доверие к данным и следующий шаг."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Центр управления</div>
+  <div class="nav" data-nav="cb" data-tip="Открыть «Мозг компании»: кто есть в команде, какие идентичности подтверждены, где нет владельца и что требует решения. Локальный предпросмотр, в БД ничего не записывается."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3a3 3 0 00-3 3 3 3 0 00-1 5.8A3 3 0 007 17a3 3 0 005 1 3 3 0 005-1 3 3 0 002-5.2A3 3 0 0015 3a3 3 0 00-3 1.5A3 3 0 009 3z"/><path d="M12 5v13"/></svg>Мозг компании</div>
   <div class="nav" data-nav="ac" data-tip="Показать короткий список следующих действий и решений."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/></svg>Следующие действия<span class="navbadge" id="nav-ac-n"></span></div>
   <div class="nav" data-nav="ntf" data-tip="Показать уведомления, которые требуют внимания."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>Уведомления<span class="navbadge" id="nav-ntf-n"></span></div>
   <div class="navgroup">Данные</div>
@@ -298,6 +299,20 @@ details.ev pre{font:11.5px/1.5 ui-monospace,Menlo,monospace;background:var(--sur
         <p class="h" style="margin-bottom:10px">Карта бизнеса</p>
         <div class="mapgrid" id="cc-map"></div>
       </div>
+    </div>
+  </section>
+
+  <section class="sec" data-sec="cb">
+    <div class="statusline" id="cb-msg"></div>
+    <div id="cb-hero" style="margin-bottom:12px"></div>
+    <div class="grid3" id="cb-cards" style="margin-bottom:12px"></div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:8px">Второе мнение — что не сходится и что требует решения</div>
+      <div class="stack" id="cb-feed"></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:8px">Нерешённые вопросы</div>
+      <div class="stack" id="cb-unresolved"></div>
     </div>
   </section>
 
@@ -589,8 +604,8 @@ function humanIssueTitle(i){
   return map[i.category]||map[i.issue_type]||t.charAt(0).toUpperCase()+t.slice(1);
 }
 
-var SECTION_TITLES={cc:"Центр управления",src:"Источники",dq:"Качество данных",so:"Второе мнение",ib:"Решения",ac:"Следующие действия",kt:"Obsidian-граф",st:"Стратегия",pr:"Продукт",gr:"Рост",sa:"Сигналы продаж",te:"Команда",ta:"Задачи",me:"Метрики",tw:"Рабочее пространство",orh:"Ритм",upd:"Апдейты",spk:"Пакеты",ntf:"Уведомления",inv:"Для инвестора"};
-var LAZY_LOADERS={src:function(){loadSources();},dq:function(){loadDataQuality();},so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},spk:function(){loadSharePacks();},ntf:function(){loadNotifications();},inv:function(){loadInvestor();}};
+var SECTION_TITLES={cc:"Центр управления",cb:"Мозг компании",src:"Источники",dq:"Качество данных",so:"Второе мнение",ib:"Решения",ac:"Следующие действия",kt:"Obsidian-граф",st:"Стратегия",pr:"Продукт",gr:"Рост",sa:"Сигналы продаж",te:"Команда",ta:"Задачи",me:"Метрики",tw:"Рабочее пространство",orh:"Ритм",upd:"Апдейты",spk:"Пакеты",ntf:"Уведомления",inv:"Для инвестора"};
+var LAZY_LOADERS={cb:function(){loadCompanyBrain();},src:function(){loadSources();},dq:function(){loadDataQuality();},so:function(){loadFeed();},ib:function(){loadInbox();},kt:function(){loadTree(false);},sa:function(){loadSales();},ac:function(){loadActions();},te:function(){loadTeam();},ta:function(){loadExecution();},pr:function(){loadProduct();},tw:function(){loadWorkspace();},orh:function(){loadRhythm();},upd:function(){loadUpdates();},spk:function(){loadSharePacks();},ntf:function(){loadNotifications();},inv:function(){loadInvestor();}};
 var LAZY_LOADED={};
 function show(id){
   var secs=document.querySelectorAll(".sec");
@@ -2279,6 +2294,53 @@ async function loadFeed(){
 }
 
 function setMsgEl(id,text,err){var el=$(id);el.textContent=text||"";el.classList.toggle("err",!!err);}
+
+// --- Мозг компании (Company Brain preview) ---------------------------------
+// Read-only: data comes from the protected /v1/founder/company-brain/* API,
+// which reads the local Stage 22 preview. No raw email, no external writes.
+async function loadCompanyBrain(){
+  setMsgEl("cb-msg","Загрузка предпросмотра…");
+  try{
+    var d=await (await api("/v1/founder/company-brain/preview")).json();
+    renderCompanyBrain(d);
+    setMsgEl("cb-msg","");
+  }catch(err){
+    setMsgEl("cb-msg","Не удалось загрузить предпросмотр: "+String(err.message||err),true);
+    $("cb-hero").innerHTML="";$("cb-cards").innerHTML="";$("cb-feed").innerHTML="";$("cb-unresolved").innerHTML="";
+  }
+}
+function cbChip(t){return '<span class="badge b-mut" style="margin-right:6px">'+esc(t)+'</span>';}
+function renderCompanyBrain(d){
+  d=d||{};
+  var src=d.source_status||{};
+  if(!src.available){
+    $("cb-hero").innerHTML='<div class="card"><div style="font-weight:600">Предпросмотр недоступен</div><div class="mut">'+esc(src.message_ru||"Нет локальных данных предпросмотра. Внешние источники не вызывались.")+'</div></div>';
+    $("cb-cards").innerHTML="";$("cb-feed").innerHTML="";$("cb-unresolved").innerHTML="";
+    return;
+  }
+  var ov=d.overview||{};
+  var badges=(ov.preview_badges_ru||[]).map(cbChip).join("");
+  var metrics=(ov.hero_metrics||[]).map(function(m){
+    return '<div class="card" data-tip="'+esc(m.label_ru||"")+'"><div class="mut">'+esc(m.label_ru||"")+'</div><div style="font-weight:600;font-size:15px">'+esc(m.value_ru||"")+'</div></div>';
+  }).join("");
+  $("cb-hero").innerHTML='<div style="font-weight:600;margin-bottom:6px">'+esc(ov.headline_ru||"Мозг компании")+'</div><div style="margin-bottom:10px">'+badges+'</div><div class="grid3">'+metrics+'</div>';
+  $("cb-cards").innerHTML=(ov.cards||[]).map(function(c){
+    return '<div class="card" data-tip="'+esc(c.tooltip_ru||"")+'"><div style="font-weight:600">'+esc(c.label_ru||"")+'</div><div class="mut">'+esc(c.metric_ru||"")+'</div></div>';
+  }).join("");
+  $("cb-feed").innerHTML=(d.second_opinion_feed||[]).map(function(f){
+    var bits=[];
+    bits.push('<div class="mut">id: '+esc(f.id||"")+' · тип: '+esc(f.type||"")+'</div>');
+    if(f.blocked_actions&&f.blocked_actions.length)bits.push('<div class="mut">заблокировано: '+esc(f.blocked_actions.join(", "))+'</div>');
+    if(f.evidence_refs&&f.evidence_refs.length)bits.push('<div class="mut">источники: '+esc(f.evidence_refs.join(", "))+'</div>');
+    var tech=technicalDetails("Технические детали",bits.join(""));
+    return '<div class="card"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px"><div style="font-weight:600">'+esc(f.title_ru||"")+'</div><span class="badge b-mut">важность: '+esc(f.severity_label_ru||f.severity||"")+'</span></div>'+(f.recommended_next_step_ru?'<div class="mut">Следующий шаг: '+esc(f.recommended_next_step_ru)+'</div>':"")+tech+'</div>';
+  }).join("")||'<div class="mut">Наблюдений нет.</div>';
+  $("cb-unresolved").innerHTML=(d.unresolved_questions||[]).map(function(q){
+    var blk=q.blocks_stage22?'<span class="badge b-amber">блокирует</span>':'<span class="badge b-mut">не блокирует</span>';
+    var tech=technicalDetails("Технические детали",'<div class="mut">id: '+esc(q.question_id||"")+' · категория: '+esc(q.category||"")+' · статус: '+esc(q.answer_status||"")+'</div>');
+    return '<div class="card"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px"><div>'+esc(q.title_ru||q.question_id||"")+'</div>'+blk+'</div>'+tech+'</div>';
+  }).join("")||'<div class="mut">Открытых вопросов нет.</div>';
+}
 
 async function openTrail(key){
   overlay("ov-trail",true);
