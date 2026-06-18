@@ -13,13 +13,16 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 from app.db.base import Base  # noqa: E402
+import app.db.agent_models  # noqa: F401,E402
 import app.db.attention_models  # noqa: F401,E402
+import app.db.declaration_models  # noqa: F401,E402
 import app.db.gmail_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402
 import app.db.source_models  # noqa: F401,E402
 import app.db.source_control_models  # noqa: F401,E402
 import app.db.event_models  # noqa: F401,E402
 import app.db.score_models  # noqa: F401,E402
+import app.db.second_opinion_models  # noqa: F401,E402
 import app.db.task_models  # noqa: F401,E402
 import app.db.status_models  # noqa: F401,E402
 import app.db.share_pack_models  # noqa: F401,E402
