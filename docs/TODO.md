@@ -6,6 +6,11 @@ post-MVP ideas.
 Every implementation task must follow `AGENTS.md`: short task prompt, scoped
 files, no unrelated edits, and focused checks first.
 
+## Current Checkpoint
+
+- FOS-AUD-04: done - docs/test hygiene unblocked before DB work.
+- Next task: FOS-DB-02 - Add User/Workspace/Membership models.
+
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
 Goal: make the current dirty tree reviewable before any new implementation.
@@ -246,4 +251,3 @@ Checks to run:
 - Focused action/approval/guard tests.
 - `UV_NO_SYNC=1 uv run alembic upgrade head`
 - `UV_NO_SYNC=1 uv run ruff check .`
-

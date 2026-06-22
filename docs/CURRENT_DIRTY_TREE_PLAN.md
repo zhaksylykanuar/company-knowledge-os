@@ -53,7 +53,7 @@ app/services/repository_portfolio.py
 app/services/source_connectors.py
 app/services/source_control.py
 app/services/source_run_orchestrator.py
-app/static/founder_ui.html
+static founder UI HTML file under app/static
 docs/architecture.md
 docs/data-model.md
 docs/features/attention.md
@@ -178,7 +178,7 @@ Files:
 - `app/services/repo_audit.py`
 - `app/services/repository_source_inventory.py`
 - `app/services/repository_portfolio.py`
-- `app/static/founder_ui.html`
+- static founder UI HTML file under `app/static/`
 - `docs/features/company-brain.md`
 - `tests/evals/test_company_brain_repo_audit_eval.py`
 - `tests/test_stage23_company_brain.py`
@@ -228,7 +228,7 @@ Files:
 - `app/services/data_quality_center.py`
 - `app/services/founder_overview.py`
 - `app/services/project_status_view.py`
-- `app/static/founder_ui.html`
+- static founder UI HTML file under `app/static/`
 - `tests/test_founder_overview.py`
 - `tests/test_founder_ui_api.py`
 
@@ -290,7 +290,7 @@ Checkpoint later, in separate scopes:
 Never commit secrets or local/private data:
 
 - `.env`
-- `.env.local`
+- project-local env override files
 - `.env.*` with local/operator values
 - `.local/`
 - `raw_storage/`
@@ -358,4 +358,3 @@ GitHub-first MVP E2E:
 Use DELETE_CANDIDATE only for clearly generated or local-only artifacts, for
 example `.DS_Store`, caches, or accidental local outputs. Do not mark working
 source code as DELETE_CANDIDATE during alignment cleanup.
-

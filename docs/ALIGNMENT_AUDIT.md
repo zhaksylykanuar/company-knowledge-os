@@ -166,8 +166,9 @@ and Phase 4 GitHub-first E2E is absent.
 
 ## 10. Safety Notes
 
-- Do not touch `.env`, `.env.local`, `.local`, `raw_storage`,
-  `obsidian_vault`, `secrets`, caches, or generated local artifacts.
+- Do not touch real env files, project-local env overrides, `.local`,
+  `raw_storage`, `obsidian_vault`, `secrets`, caches, or generated local
+  artifacts.
 - Do not run live provider connectors, Telegram sends, scheduler/outbox
   execution, or external writes without explicit human approval.
 - Do not create migrations before FOS-DB-01 is approved.
@@ -181,4 +182,3 @@ and Phase 4 GitHub-first E2E is absent.
 Continue from the current codebase. Do not rewrite. The immediate practical
 next step is FOS-AUD-02: checkpoint and split the current dirty tree by scope,
 then proceed to FOS-DB-01 data-model reconciliation.
-
