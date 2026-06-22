@@ -11,7 +11,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-AUD-04: done - docs/test hygiene unblocked before DB work.
 - FOS-DB-02: done - User, Workspace, and Membership identity foundation added.
 - FOS-DB-03: done - IntegrationConnection and SyncJob foundation added.
-- Next task: FOS-BE-01 - Workspace-aware auth contract.
+- FOS-BE-01: done - workspace-aware operator compatibility contract added.
+- Next task: FOS-GH-01 - Decide GitHub OAuth vs existing Source Control product path.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -115,6 +116,8 @@ Checks to run:
 - `UV_NO_SYNC=1 uv run ruff check .`
 
 ## FOS-BE-01 - Workspace-aware auth contract
+
+Status: done.
 
 Goal: define how login, current user, workspace access, and protected routes
 work before changing API behavior.

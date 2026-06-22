@@ -98,3 +98,13 @@ checkpointed and split by scope.
 Implication: useful but out-of-scope code is marked POST_MVP or FREEZE, not
 deleted. Delete candidates are limited to clearly generated/local artifacts.
 
+## DEC-012 - Workspace Auth Starts As Operator-Compatible Contract
+
+Decision: keep the current API-key/operator auth boundary while adding
+workspace-aware backend helpers on top of `User`, `Workspace`, and
+`Membership`.
+
+Implication: there is no public password login or session UI in the MVP
+contract yet. The workspace bootstrap route is operator-protected and MVP-only.
+New workspace-aware routes must check `Membership` for access; operator access
+requires explicit owner context until session-based user auth is introduced.
