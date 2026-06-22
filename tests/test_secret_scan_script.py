@@ -59,6 +59,25 @@ def test_secret_scan_staged_does_not_print_matched_secret_value(tmp_path: Path) 
     assert token not in result.stderr
 
 
+def test_secret_scan_staged_allows_removing_token_shaped_literal(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    token = "ghp_" + "C" * 32
+    source = tmp_path / "test_fixture.py"
+    source.write_text(f"TOKEN = '{token}'\n", encoding="utf-8")
+    _git(tmp_path, "add", "test_fixture.py")
+    _git(tmp_path, "commit", "-m", "seed token-shaped fixture")
+
+    source.write_text("TOKEN = 'redacted fixture value'\n", encoding="utf-8")
+    _git(tmp_path, "add", "test_fixture.py")
+
+    result = _run_scan(tmp_path)
+
+    assert result.returncode == 0
+    assert "No obvious staged secrets found" in result.stdout
+    assert token not in result.stdout
+    assert token not in result.stderr
+
+
 def test_secret_scan_rejects_sensitive_tracked_paths(tmp_path: Path) -> None:
     _init_repo(tmp_path)
     (tmp_path / ".env").write_text("PLACEHOLDER=1\n", encoding="utf-8")

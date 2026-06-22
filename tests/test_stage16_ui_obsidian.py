@@ -72,7 +72,7 @@ async def test_obsidian_local_pilot_note_generated_and_safe() -> None:
 
 
 async def test_adversarial_secret_shaped_env_does_not_leak(monkeypatch) -> None:
-    secret = "ghp_STAGE16ADVERSARIAL1234567890abcd"
+    secret = "ghp_" + "A" * 32
     monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
     monkeypatch.setenv("JIRA_EMAIL", "ops@example.com")
     monkeypatch.setenv("JIRA_API_TOKEN", secret)

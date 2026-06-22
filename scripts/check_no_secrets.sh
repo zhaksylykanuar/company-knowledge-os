@@ -30,9 +30,14 @@ if [[ "$mode" == "--staged" ]]; then
   # Real provider keys are long tokens; require a substantial run after the
   # prefix so ordinary identifiers like "task-body" / "risk-review" (which
   # contain the substring "sk-") do not trigger a false positive while real
-  # OpenAI / Slack / Google / GitHub / GitLab tokens still match. Keep grep
-  # quiet so a failing scan never prints the matched secret value.
-  if git diff --cached --no-ext-diff | grep -qE "$secret_pattern"; then
+  # OpenAI / Slack / Google / GitHub / GitLab tokens still match. In staged
+  # mode, scan added/resulting diff lines only so cleanup commits that remove
+  # old token-shaped literals are not blocked. Keep grep quiet so a failing
+  # scan never prints the matched secret value.
+  if git diff --cached --no-ext-diff --unified=0 \
+    | grep -E '^\+' \
+    | grep -vE '^\+\+\+' \
+    | grep -qE "$secret_pattern"; then
     echo 'ERROR: possible secret pattern detected in staged diff' >&2
     exit 1
   fi

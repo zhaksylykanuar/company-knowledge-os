@@ -106,7 +106,7 @@ async def test_obsidian_connector_notes_include_scope(monkeypatch) -> None:
 
 
 async def test_adversarial_secret_env_and_wildcard_scope_no_leak(monkeypatch) -> None:
-    secret = "ghp_STAGE17ADV1234567890abcdefghij"
+    secret = "ghp_" + "B" * 32
     monkeypatch.setattr(app_settings, "enable_real_connectors", True)
     monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
     monkeypatch.setenv("JIRA_EMAIL", "ops@example.com")
