@@ -5,25 +5,43 @@
 - FastAPI backend: implemented
 - Raw storage + Postgres source of truth: implemented
 - Obsidian export-only model: implemented
-- End-to-end Gmail-to-knowledge pipeline: partial
-- GitHub/Jira/Telegram real connectors: planned
+- Local founder UI / Company Brain read models: implemented, protected, and
+  read-only by default
+- Source Control orchestration: implemented for guarded request lifecycles;
+  live provider execution remains opt-in and acknowledged
+- Gmail/Drive/Jira/GitHub ingestion: partial; compatibility backfill/sync
+  surfaces now create Source Control requests instead of directly calling
+  providers or persisting provider payloads
+- Telegram founder bot: operator-launched long polling exists behind live
+  provider acknowledgement; production webhook/scheduler behavior is planned
+- End-to-end scheduled delivery: planned
 
 ## System Shape
 
 FounderOS is a Python/FastAPI backend for evidence-backed company knowledge and decisions.
 
-Pipeline:
+Current pipeline:
 
 ```text
-Drive / Gmail / manual text / future connector payloads
--> raw storage
--> ingested_events
--> source_documents + document_chunks or source_events
--> extraction
--> extracted_tasks / extracted_risks / extracted_decisions
--> deterministic scoring
--> search / ask / attention dashboard
--> Obsidian export
+manual text / local discovery / guarded Source Control requests
+-> raw storage + Postgres
+-> source_documents + document_chunks and/or normalized source_events
+-> extraction / deterministic scoring / attention triage
+-> evidence graph + status read models + Company Brain previews
+-> founder UI / Telegram bot views / Obsidian export
+```
+
+Target pipeline:
+
+```text
+All external sources
+-> Source Control request + provider guard + receipt/audit trail
+-> raw storage + Postgres
+-> unified normalized source-event contract
+-> evidence-backed extraction and graph/status agents
+-> FounderAnswer / Company Brain / digest read models
+-> human approval gate
+-> audited write outbox for any Jira/GitHub/Telegram action
 ```
 
 ## Source Of Truth
@@ -42,4 +60,26 @@ Drive / Gmail / manual text / future connector payloads
 
 ## API Boundary
 
-Endpoint-level auth, rate limiting, webhook signature validation, and write/action approval enforcement are planned in `security/api-boundary.md`. Current connector posture remains read-only first, and future write/action endpoints must be authenticated, feature-flagged, and explicitly approval-gated.
+Endpoint-level auth is implemented for selected protected API routers. Write
+approval enforcement exists as a guard for future external write call sites.
+Rate limiting and webhook signature validation remain planned because public
+exposure and webhook routes are not implemented yet.
+
+GET/read-model routes must remain side-effect free unless an endpoint explicitly
+declares snapshot or audit persistence. Derived history such as project status
+snapshots belongs behind an operator/bot/command path, not behind ordinary UI
+reads.
+
+## Modernization Direction
+
+- Keep Source Control as the only production path for Jira/GitHub/Gmail/Drive
+  provider activity; compatibility CLI/API surfaces should stay thin Source
+  Control request wrappers.
+- Keep Company Brain and repo audit computed from saved evidence with visible
+  provenance labels (`computed`, `preview`, `source discovery`).
+- Use agent/orchestration frameworks only where they buy durable state,
+  approval handoff, tool governance, or observability. The default remains
+  small deterministic services with strict JSON, validation, and
+  `evidence_refs`.
+- Treat live providers, LLM execution, DB writes, Obsidian sync, and outbound
+  delivery as separate gates with separate approvals.

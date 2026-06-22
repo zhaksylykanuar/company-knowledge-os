@@ -15,16 +15,20 @@ only behind separately gated, audited boundaries.**
   Postgres source of truth, rule-based extraction with `evidence_refs`,
   deterministic search / Q&A / scoring / attention dashboard, Obsidian export,
   normalized source events, persisted attention digest read model + renderer,
-  and a large family of **read-only operator/diagnostic tools** under `scripts/`
-  (no-marker candidate / quality / duplicate-root-cause / grouped-preview /
-  grouped-lifecycle reports, guarded-execution doctors, connector config
-  doctors).
+  local founder UI, Company Brain preview/repo audit, Source Control request
+  lifecycles, and a large family of **read-only operator/diagnostic tools**
+  under `scripts/` (no-marker candidate / quality / duplicate-root-cause /
+  grouped-preview / grouped-lifecycle reports, guarded-execution doctors,
+  connector config doctors).
 - **Scaffolded but gated/off by default:** LLM-based attention triage and
   extraction (`ENABLE_LLM=false`), inert delivery drafts + audit-logged
-  approval/intention/result records, and a bounded test-only Telegram send path.
-- **Planned (not implemented):** scheduled daily digest delivery, production
-  Telegram/Slack bot behavior, production GitHub/Jira sync, and
-  approval-triggered execution.
+  approval/intention/result records, guarded read-only GitHub/Jira connector
+  checks and Source Control runs, an operator-launched Telegram founder bot,
+  and a bounded test/manual Telegram send path.
+- **Planned:** scheduled daily digest delivery, production webhook/scheduler
+  Telegram/Slack behavior, production source schedulers/webhooks, production
+  Gmail/Drive connector execution, and approval-triggered external write
+  execution.
 
 Authoritative, up-to-date detail lives in [`docs/`](docs/index.md), not in this
 README.
@@ -43,35 +47,85 @@ Pydantic · OpenAI SDK (gated) · `uv` for env/deps · `ruff` + `pytest`.
 ## Quick start
 
 ```bash
-# 1. Install dependencies
-uv sync
-
-# 2. Start local services (Postgres + Redis)
-docker compose up -d postgres redis
-
-# 3. Apply database migrations
-uv run alembic upgrade head
-
-# 4. Run the API
-uv run uvicorn app.main:app --reload
+# One command bootstraps the project-local runtime, runs migrations, and starts
+# the backend on 127.0.0.1:8765.
+uv run python scripts/start_local.py
 ```
 
-Verify the API is up with the `/health` route, then follow
+Verify the API at `http://127.0.0.1:8765/health`, open
+`http://127.0.0.1:8765/ui`, then follow
 [`docs/mvp-quickstart.md`](docs/mvp-quickstart.md) to ingest a manual note and
 inspect extracted tasks/risks/decisions, search, ask, attention, and the
 source-activity digest.
 
 ## Health checks
 
+Quick local checks:
+
 ```bash
 uv run ruff check .          # lint (must be clean)
 uv run pytest -q             # full test suite
 ./scripts/check_no_secrets.sh   # staged-secret scan
+./scripts/check_no_secrets.sh --tracked   # CI-safe tracked-file scan
 ```
+
+CI parity before opening a PR:
+
+```bash
+uv sync --frozen
+uv run ruff check .
+uv run alembic upgrade head
+uv run pytest -q
+bash scripts/check_no_secrets.sh --tracked
+```
+
+GitHub also runs CodeQL code scanning for Python and GitHub Actions workflows
+via `.github/workflows/codeql.yml`. Treat CodeQL findings as release-blocking
+until triaged or explicitly accepted.
+
+Dependency Review runs on pull requests via
+`.github/workflows/dependency-review.yml` and fails PRs that introduce
+high-or-critical vulnerable runtime, development, or unknown-scope dependencies
+recognized by GitHub's dependency graph.
+
+uv Dependency Submission runs on `main` pushes and manual dispatch via
+`.github/workflows/uv-dependency-submission.yml`. It submits the resolved
+`uv.lock transitive coverage` to GitHub's dependency graph so Dependabot alerts
+and repository dependency insights can include uv transitive dependencies. The
+workflow intentionally does not run on untrusted PR heads because dependency
+submission requires `contents: write`; PR-time enforcement stays with
+Dependency Review.
+
+OpenSSF Scorecard runs weekly via `.github/workflows/scorecard.yml` and uploads
+SARIF to GitHub code scanning without publishing project results to the external
+OpenSSF API. Use it as the repository-level supply-chain audit: dependency
+updates, CI, token permissions, pinned actions, branch protection, and code
+scanning posture.
+
+All GitHub workflow actions are pinned by full commit SHA with the human tag
+kept as a comment, for example `owner/action@<sha> # vX.Y.Z`. Service
+containers are pinned by image digest. Dependabot tracks GitHub Actions update
+availability, while maintainers perform manual SHA rotation when action tags
+move: update the SHA and keep the commented tag for reviewability.
+
+## Dependency automation
+
+- `renovate.json` owns Python dependency updates for this uv project. It is
+  limited to Renovate's PEP 621/uv lockfile path so dependency PRs must update
+  `pyproject.toml` and `uv.lock` together, with weekly lockfile maintenance for
+  transitive dependencies. Treat any Renovate PR that changes only one of those
+  files as incomplete until `uv lock` / `uv sync --frozen` confirms parity.
+- `.github/dependabot.yml` owns GitHub Actions updates only. Keeping the scopes
+  separate avoids duplicate dependency PRs.
+- Dependency PRs should pass the same CI parity gate above before merge.
 
 ## Configuration
 
-Copy the template and fill in your own local values (never commit real secrets):
+For the default local workflow, let `scripts/start_local.py` call
+`scripts/bootstrap_local_workspace.py`, which creates `.local/` and safely
+updates the project-local env override without deleting existing local secrets.
+For manual
+configuration, copy the template and fill in your own values:
 
 ```bash
 cp .env.example .env

@@ -2,9 +2,13 @@
 
 ## Status
 
-- Telegram bot/interface: planned
-- Daily digest generation: planned
-- Telegram delivery: planned
+- Telegram bot/interface: operator-launched long-polling bot implemented for
+  allowlisted founder commands; production webhook/scheduler bot behavior is
+  planned.
+- Persisted attention digest read model and renderer: implemented; scheduled
+  daily digest generation is planned.
+- Telegram delivery: bounded adapter implemented for already-rendered text and
+  test/manual pilot paths; production delivery cadence is planned.
 - Telegram Q&A: planned
 - Implemented status slices: founder bot command parsing, `/status` digest
   fallback, project alias detection, Jira/GitHub project status rendering, and
@@ -15,7 +19,7 @@
 - Telegram outbound delivery adapter for already-rendered text: implemented
   (used only by the bounded, test-only send path)
 - Default-disabled scheduler/outbox execution guard baseline: implemented
-- Current implemented MVP: manual ingestion and processing through
+- Legacy manual text MVP still supported: manual ingestion and processing through
   `POST /v1/knowledge/ingest-text-process` with evidence-backed
   `extracted_items_preview`
 
@@ -27,9 +31,10 @@ feature builds on are tracked authoritatively in
 [`attention.md`](attention.md#status). That status list is intentionally not
 duplicated here to avoid drift between the two documents.
 
-This document is a product and architecture contract for a future feature. It
-does not describe an implemented Telegram bot, scheduled digest, Jira connector,
-GitHub connector, Calendar connector, or full production sync.
+This document is a product and architecture contract for Telegram as a founder
+interface. It now has an operator-launched read-only bot slice, but it still
+does not describe a production webhook bot, scheduled digest, Calendar
+connector, or full production sync.
 
 ## Product Intent
 
@@ -121,9 +126,17 @@ phase and stay behind the existing guards.
   be treated as the database or source of truth.
 - Generated digest prose is derived output, not authoritative source data.
 
-## Planned Source Inputs
+## Source Inputs: Current vs Target
 
-The future digest should be able to draw from evidence-backed data derived from:
+Current supported stored/local paths:
+
+- Persisted `AttentionTriageResult` rows for explicit digest windows.
+- Stored `SourceEvent` rows normalized into activity items by guarded/local
+  commands.
+- Deterministic Gmail `EmailThreadState` rows when already present locally.
+- Manual text ingestion remains supported as the legacy MVP path.
+
+Target production source inputs:
 
 - Gmail messages.
 - Google Drive documents.
@@ -134,7 +147,7 @@ The future digest should be able to draw from evidence-backed data derived from:
 - Calendar events.
 - Manual Telegram founder notes, after explicit ingestion.
 
-Each source must preserve raw input before downstream processing. Connector data
+Each target source must preserve raw input before downstream processing. Connector data
 must be normalized into stored source events, source documents, and chunks before
 it can be trusted by extraction, retrieval, Q&A, or digest workflows.
 Future real source connectivity must follow the credentials, source identity,
@@ -443,9 +456,14 @@ trusted facts.
   low-priority details. No-marker data is not production truth, and downstream
   human approval remains separate.
 
-## Current Status
+## Historical Implementation Ledger (Archived)
 
-Implemented today:
+The remaining FOS-* notes are retained for traceability. They are not the
+current status source; use the top `Status`, `Product Intent`, delivery
+contract, and `Source Of Truth` sections for current truth. New status changes
+should go to the changelog or backlog instead of extending this ledger.
+
+Historical implemented slices:
 
 - Manual text ingestion and processing through
   `POST /v1/knowledge/ingest-text-process`.
@@ -1217,14 +1235,13 @@ Implemented today:
   text only. It can build plain `sendMessage` payloads, split long text into
   Telegram-safe chunks, and send chunks through an injected transport.
 
-Not implemented today:
+Still not implemented / target gaps:
 
-- Telegram bot/interface.
-- Telegram bot webhook.
-- Telegram polling or `getUpdates`.
+- Production Telegram webhook bot.
+- Production scheduler-managed Telegram bot/digest cadence.
 - Scheduled daily digest generation.
 - End-to-end scheduled Telegram digest delivery.
-- Telegram Q&A.
+- Free-form Telegram Q&A beyond allowlisted command/status handling.
 - Full Jira sync.
 - Full GitHub repository sync.
 - Calendar connector.

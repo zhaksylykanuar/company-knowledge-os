@@ -84,10 +84,12 @@ plus `Blocked` as a side state reachable from any active status.
 Statuses are **not** flattened by name during any future migration — resolution
 and release semantics are mapped explicitly (`jira-rebuild-audit.md`).
 
-## 5. Components (repo ↔ project)
+## 5. Components (repo → area project component)
 
 Strategy: `repo_as_component`. Each repository (and each long-lived service)
-becomes a Component inside its owning area project.
+becomes a Component inside its owning area project. Repositories are not Jira
+projects; they are component/evidence records used to organize work within a
+product or operating area.
 
 Mapping schema (filled in discovery — one row per repo):
 
@@ -98,8 +100,8 @@ repo-alpha-api, area-product-core, repo-alpha-api, Person A, active, pilot repo
 
 Rules:
 
-- Exactly one owning project per repo; cross-area work is linked, not
-  duplicated.
+- Exactly one owning area project per repo component; this does not create one
+  Jira project per repository. Cross-area work is linked, not duplicated.
 - A repo with no clear owner is a **manual decision**, not an auto-assignment.
 - The pilot repo is wired first end-to-end before the rest (§9).
 

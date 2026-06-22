@@ -2,6 +2,24 @@
 
 ## Status
 
+Current operating truth:
+
+- Core implemented: deterministic scoring, attention dashboard, feedback
+  storage, normalized activity and triage persistence foundations, persisted
+  attention digest read model, deterministic renderer, protected previews, and
+  provider-free/local manual commands.
+- Manual/test-only implemented: delivery draft review/approval/intention
+  records, bounded Telegram delivery preflight, duplicate-success protection,
+  and test-only Telegram send commands behind explicit guards.
+- Read-only diagnostics implemented: readiness, reconciliation, quality,
+  duplicate-root-cause, grouped lifecycle, connector launchpad, repository
+  portfolio, GitHub org inventory, and Jira operating-model reports.
+- Production target gaps: autonomous scheduler/outbox execution, production
+  Telegram cadence/webhook behavior, broad source sync, LLM-generated prose
+  digest, and external write/action execution remain planned or gated.
+
+Detailed implementation inventory:
+
 - Deterministic scoring: implemented
 - Attention dashboard: implemented
 - Feedback storage: implemented
@@ -86,8 +104,9 @@
 - Jira read-only inventory diagnostics and operating-model planner:
   strict sanitized JSON, implemented
 - GitHub/Jira/Drive activity normalization: implemented
-- LLM-generated digest: planned
-- Telegram delivery: planned
+- LLM-generated prose digest: planned
+- Production Telegram delivery cadence/webhook: planned; bounded test-only send
+  is implemented behind guards
 
 ## Current Behavior
 
@@ -309,7 +328,14 @@
   `NormalizedActivityItem` objects without calling live providers or source
   APIs.
 
-## Universal Activity Triage
+## Historical Implementation Ledger (Archived)
+
+The remaining FOS-* notes are retained for traceability. They are not the
+current feature contract; use the `Status`, `Current Behavior`, and runbook/API
+sections above for current truth. New status changes should go to the changelog
+or backlog instead of extending this ledger.
+
+### Universal Activity Triage
 
 - FOS-041 adds reusable contracts for a future universal attention triage layer.
 - FOS-044 aligns those contracts with the QazTwin Company Knowledge OS
@@ -1182,7 +1208,8 @@
 ## Known Gaps
 
 - No scheduled digest is visible.
-- No Telegram delivery is implemented.
+- Manual/test-only bounded Telegram send path is implemented; production
+  scheduled delivery remains planned.
 - Score refresh is explicit, not automatic.
 - Feedback API, CLI, and UI controls are not implemented.
 - Feedback API/buttons/action execution are not implemented.

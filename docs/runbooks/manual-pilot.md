@@ -1,7 +1,12 @@
 # Runbook: Manual MVP Pilot
 
-This runbook is for a developer-operated 5-day manual pilot. It keeps the pilot
-read-only and draft-only unless a later, explicit approval/action layer exists.
+This runbook separates two manual paths that must not be blurred:
+
+- Synthetic dry run: provider-free, no DB, no source APIs, no delivery.
+- Current daily founder digest v2 loop: human-operated, local/manual, and
+  guarded; it may use acknowledged Gmail/Drive windows, LLM triage, and the
+  bounded Telegram test-send chain, but it is still not a production scheduler,
+  webhook, or autonomous action system.
 
 ## First Check: Synthetic Dry Run
 
@@ -106,16 +111,17 @@ AI-generated or deterministic draft artifacts are not actions. A human must
 approve before any future workflow creates Jira issues, writes KB/Obsidian
 files, sends delivery messages, or mutates production data.
 
-## Deferred During This Pilot
+## Deferred / Not Productionized
 
-- Live source API connectors and webhooks.
+- Production source API connectors and webhooks beyond explicitly acknowledged
+  local/manual Gmail and Drive windows.
 - Scheduled digest.
-- Telegram/Slack delivery.
-- Feedback buttons/actions.
+- Production Telegram/Slack delivery cadence; the current send path is bounded,
+  manual, duplicate-guarded, and test/pilot-only.
+- Telegram feedback buttons/actions beyond manual review/eval capture.
 - Feedback-aware live triage wiring.
-- `AttentionTriageResult` persistence.
-- `normalized_activity_items` persistence.
-- Human approval/action execution.
+- Autonomous human-approval/action execution beyond existing draft/review
+  records and guarded test-send boundaries.
 - Jira creation after approval.
 - KB/Obsidian writes after approval.
 - PR review agent.
@@ -128,7 +134,8 @@ Stop and investigate if any of these happen:
   non-synthetic input.
 - A command unexpectedly reads credentials, private data, raw storage, or the
   generated Obsidian vault.
-- A live source API, provider, Jira, Telegram, Slack, or Google call happens.
+- A live source API, provider, Jira, Telegram, Slack, or Google call happens
+  outside the explicitly acknowledged manual step that is being tested.
 - A DB write happens outside an explicitly approved local manual endpoint.
 - A Jira issue, KB file, or Obsidian file is created by the pilot workflow.
 - The git tree becomes dirty unexpectedly.

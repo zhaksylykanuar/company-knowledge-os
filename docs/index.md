@@ -2,10 +2,20 @@
 
 Navigation map for future Codex sessions.
 
+## Current Truth vs Target Direction
+
+- Current operating truth: `playbook.md`, feature docs' current-status/current
+  behavior sections, and runbooks for guarded local/manual flows.
+- Target direction: `playbook-digital-twin.md` and `vision.md`.
+- Historical traceability: archived FOS ledgers and implementation inventories;
+  they are not the current feature contract when they conflict with current
+  behavior sections.
+
 ## Start Here
 
-- `playbook-digital-twin.md`: FounderOS Digital Twin playbook v3 — full product
-  and architecture source of truth (graph, state engine, second opinion, UI).
+- `playbook-digital-twin.md`: FounderOS Digital Twin playbook v3 — target
+  product and architecture direction (graph, state engine, second opinion, UI),
+  not a complete statement of current implementation.
 - `vision.md`: condensed north star; superseded in detail by
   `playbook-digital-twin.md`, kept as the short map.
 - `playbook.md`: operating playbook v2 — phases, usage gates, weekly ritual,
@@ -28,12 +38,13 @@ Navigation map for future Codex sessions.
 
 - `features/ingestion.md`: raw/document/event ingestion.
 - `features/source-events.md`: normalized source event foundation.
-- `features/source-integrations.md`: external source identity, credentials, and activation contract.
-- `source-connectors.md`: safe connector execution, ingestion, normalization, and secret handling.
+- `features/source-integrations.md`: Source Control, external source identity, credentials, and activation contract.
+- `source-connectors.md`: safe connector execution, Source Control requests, ingestion, normalization, and secret handling.
 - `features/extraction.md`: task/risk/decision extraction.
 - `features/retrieval.md`: search and Q&A.
 - `features/attention.md`: scoring and attention dashboard.
-- `features/telegram-digest.md`: future Telegram interface and daily digest contract.
+- `features/telegram-digest.md`: Telegram founder interface and daily digest contract.
+- `features/company-brain.md`: Company Brain preview, computed repo audit, provenance, and guardrails.
 - `features/obsidian-export.md`: read-only Obsidian export.
 - `obsidian-bridge.md`: native local Obsidian vault bridge and sync flow.
 - `features/local-ui.md`: local founder command center at `/ui`.
@@ -55,7 +66,9 @@ Navigation map for future Codex sessions.
   DoR/DoD, repo↔project mapping, agent rules, rollout sequence).
 - `ops/jira-rebuild-audit.md` / `ops/jira-rebuild-runbook-draft.md`:
   read-only audit, discovery package, and no-write migration runbook.
-- `runbooks/google-local-backfill.md`: safe local Gmail and Drive manual backfill runbook.
+- `runbooks/google-local-backfill.md`: Google preflight and Gmail/Drive
+  compatibility request-wrapper runbook; preferred operator path is Source
+  Control.
 
 ## Doctor Scripts
 

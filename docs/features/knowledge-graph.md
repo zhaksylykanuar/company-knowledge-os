@@ -4,6 +4,19 @@ Foundation of the agent-driven second-opinion platform: every UI block
 is a query over an evidence-backed entity graph that agents populate
 from company sources. Humans only confirm uncertain facts and set goals.
 
+## Current Implementation Status
+
+- Implemented foundations: graph entities/links, evidence refs, deterministic
+  lift agents, metric snapshots, proposal queue, identity/merge proposals,
+  second-opinion findings, data availability, confidence factors, and guarded
+  read-model endpoints.
+- Preview/read-model surfaces: decision center, second-opinion feed, task/team
+  product views, and Action Center are bounded UI/read-model slices over stored
+  evidence.
+- Target direction: cron-driven agents, full multi-view founder/team/investor
+  surfaces, deal-agent enrichment, and broader autonomous graph maintenance are
+  not the current runtime contract.
+
 ## Ontology
 
 Entity types (`app/services/knowledge_graph.py`): `project`,

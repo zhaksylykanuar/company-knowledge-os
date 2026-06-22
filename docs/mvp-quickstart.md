@@ -47,23 +47,16 @@ Use it as the first pilot readiness check, then follow
 - Database migrations applied before DB-backed endpoints are used.
 - API auth configured only if your local environment enables it.
 
-Start local services:
+Start the local runtime:
 
 ```bash
-docker compose up -d postgres redis
-uv run alembic upgrade head
-```
-
-Start the API:
-
-```bash
-uv run uvicorn app.main:app --reload
+uv run python scripts/start_local.py
 ```
 
 Check that the API is reachable:
 
 ```bash
-curl http://localhost:8000/health
+curl http://127.0.0.1:8765/health
 ```
 
 ## Process Manual Text
@@ -78,7 +71,7 @@ enabled, use a real key from your own environment; never paste real secrets into
 docs, commits, tickets, or sample text.
 
 ```bash
-curl -X POST http://localhost:8000/v1/knowledge/ingest-text-process \
+curl -X POST http://127.0.0.1:8765/v1/knowledge/ingest-text-process \
   -H "Content-Type: application/json" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY" \
   -d '{
@@ -142,14 +135,14 @@ to inspect the stored knowledge through existing read endpoints.
 Search:
 
 ```bash
-curl "http://localhost:8000/v1/knowledge/search?q=proposal&limit=10" \
+curl "http://127.0.0.1:8765/v1/knowledge/search?q=proposal&limit=10" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY"
 ```
 
 Ask:
 
 ```bash
-curl -X POST http://localhost:8000/v1/knowledge/ask \
+curl -X POST http://127.0.0.1:8765/v1/knowledge/ask \
   -H "Content-Type: application/json" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY" \
   -d '{
@@ -161,14 +154,14 @@ curl -X POST http://localhost:8000/v1/knowledge/ask \
 Attention:
 
 ```bash
-curl "http://localhost:8000/v1/knowledge/attention?limit=10" \
+curl "http://127.0.0.1:8765/v1/knowledge/attention?limit=10" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY"
 ```
 
 Source activity digest:
 
 ```bash
-curl -G http://localhost:8000/v1/digest/source-activity \
+curl -G http://127.0.0.1:8765/v1/digest/source-activity \
   -H "X-FounderOS-API-Key: YOUR_API_KEY" \
   --data-urlencode "start_at=2026-01-01T00:00:00+00:00" \
   --data-urlencode "end_at=2026-01-02T00:00:00+00:00" \
@@ -202,7 +195,7 @@ secrets, or large source contents.
 Rendered source activity digest text:
 
 ```bash
-curl -G http://localhost:8000/v1/digest/source-activity/text \
+curl -G http://127.0.0.1:8765/v1/digest/source-activity/text \
   -H "X-FounderOS-API-Key: YOUR_API_KEY" \
   --data-urlencode "start_at=2026-01-01T00:00:00+00:00" \
   --data-urlencode "end_at=2026-01-02T00:00:00+00:00" \

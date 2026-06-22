@@ -18,6 +18,11 @@ toc-depth: 3
 
 Документ предназначен для Codex, Claude, технического архитектора, продуктовой команды и разработчиков. Его можно использовать как исходное техническое задание, архитектурный ориентир и backlog для итерационной разработки.
 
+Статус: это target architecture / implementation playbook. Он описывает, куда
+двигается система, но не означает, что все перечисленные источники,
+интерфейсы, агенты и write-actions уже включены в текущей реализации. Текущий
+контракт реализации смотри в feature docs и README.
+
 ## 0.1. Главное правило
 
 FounderOS - это не дайджест, не обычный чат-бот, не поиск по документам и не dashboard поверх Jira.
@@ -2570,14 +2575,12 @@ POST /api/actions/{draft_id}/execute
 ## 21.1. Sync workers
 
 ```text
-sync_jira_projects
-sync_jira_issues
-sync_github_repos
-sync_github_prs
-sync_github_commits
-sync_gmail_threads
-sync_calendar_events
-sync_drive_documents
+source_control_test_request
+source_control_preview_sync
+source_control_sync_request
+source_control_backfill_request
+source_run_receipt_writer
+source_watermark_updater
 ```
 
 ## 21.2. Processing workers
