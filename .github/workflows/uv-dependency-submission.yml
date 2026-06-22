@@ -1,0 +1,33 @@
+name: uv Dependency Submission
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "uv.lock"
+      - "**/uv.lock"
+      - ".github/workflows/uv-dependency-submission.yml"
+
+concurrency:
+  group: uv-dependency-submission-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  dependency-submission:
+    name: Submit uv.lock dependency graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Submit uv dependency snapshot
+        uses: rmuir/uv-dependency-submission@8c650a3e5e519b93e604e644f7a4a3953144babe # v1.1.1

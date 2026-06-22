@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["pep621"],
+  "dependencyDashboard": true,
+  "timezone": "Asia/Almaty",
+  "labels": ["dependencies", "python", "uv"],
+  "rangeStrategy": "bump",
+  "prConcurrentLimit": 5,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "Keep Python dependency updates stable enough for uv lockfile regeneration.",
+      "matchManagers": ["pep621"],
+      "matchDatasources": ["pypi"],
+      "minimumReleaseAge": "3 days",
+      "groupName": "python dependencies"
+    }
+  ]
+}
