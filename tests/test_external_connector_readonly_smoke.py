@@ -106,9 +106,12 @@ def test_connector_smoke_default_mode_makes_no_live_calls() -> None:
     assert result["providers"]["jira"]["default_denied"] == "pass"
     assert result["providers"]["github"]["live_readonly_status"] == "not_run"
     assert result["providers"]["jira"]["live_readonly_status"] == "not_run"
-    assert result["providers"]["github"]["portfolio_expected_count"] == 19
+    assert result["providers"]["github"]["legacy_seed_repo_count"] == 19
+    assert result["providers"]["github"]["portfolio_expected_count"] >= result[
+        "providers"
+    ]["github"]["legacy_seed_repo_count"]
     assert result["providers"]["github"]["portfolio_compare_scope"] == (
-        "seed_portfolio_counts_only"
+        "operational_inventory_counts_only"
     )
     assert result["providers"]["github"]["github_target_owner_class"] == (
         "github_organization"
@@ -179,14 +182,19 @@ def test_connector_smoke_synthetic_mode_reports_counts_only() -> None:
     assert result["provider_calls"] == "synthetic"
     assert result["no_provider_calls"] is True
     assert github_result["synthetic_status"] == "pass"
-    assert github_result["portfolio_expected_count"] == 19
-    assert github_result["portfolio_compare_scope"] == "seed_portfolio_counts_only"
+    assert github_result["legacy_seed_repo_count"] == 19
+    assert github_result["portfolio_expected_count"] >= github_result[
+        "legacy_seed_repo_count"
+    ]
+    assert github_result["portfolio_compare_scope"] == (
+        "operational_inventory_counts_only"
+    )
     assert github_result["github_org_migration_status"] == (
         "manual_org_migration_planned"
     )
     assert github_result["github_org_live_inventory_status"] == "gated_not_verified"
     assert github_result["live_inventory_count_class"] == "matches_expected_count"
-    assert github_result["matched_count"] == 19
+    assert github_result["matched_count"] == github_result["portfolio_expected_count"]
     assert github_result["missing_count"] == 0
     assert github_result["extra_count"] == 0
     assert jira_result["synthetic_status"] == "pass"
@@ -245,7 +253,9 @@ def test_connector_smoke_mocked_live_readonly_path_reports_safe_counts_only() ->
     assert result["provider_calls"] == "live_readonly_attempted"
     assert result["no_provider_calls"] is False
     assert result["providers"]["github"]["live_readonly_status"] == "pass"
-    assert result["providers"]["github"]["matched_count"] == 19
+    assert result["providers"]["github"]["matched_count"] == result["providers"][
+        "github"
+    ]["portfolio_expected_count"]
     assert result["providers"]["github"]["missing_count"] == 0
     assert result["providers"]["github"]["extra_count"] == 0
     assert result["providers"]["jira"]["live_readonly_status"] == "pass"
@@ -515,7 +525,9 @@ def test_connector_smoke_does_not_echo_unsafe_mocked_provider_data() -> None:
 
     assert result["status"] == "pass"
     assert result["providers"]["github"]["extra_count"] == 1
-    assert result["providers"]["github"]["missing_count"] == 19
+    assert result["providers"]["github"]["missing_count"] == result["providers"][
+        "github"
+    ]["portfolio_expected_count"]
     assert result["providers"]["jira"]["project_count"] == 1
     _assert_smoke_output_safe(result)
 
@@ -543,7 +555,10 @@ def test_connector_smoke_cli_outputs_strict_json_in_synthetic_mode() -> None:
     payload = json.loads(completed.stdout)
     assert payload["report_kind"] == "external_connector_readonly_smoke"
     assert payload["provider_calls"] == "synthetic"
-    assert payload["providers"]["github"]["portfolio_expected_count"] == 19
+    assert payload["providers"]["github"]["legacy_seed_repo_count"] == 19
+    assert payload["providers"]["github"]["portfolio_expected_count"] >= payload[
+        "providers"
+    ]["github"]["legacy_seed_repo_count"]
     _assert_smoke_output_safe(payload)
 
 

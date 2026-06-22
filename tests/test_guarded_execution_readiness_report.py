@@ -204,7 +204,13 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
         "legacy_personal_account_seed"
     )
     assert result["portfolio_summary"]["seed_portfolio_status"] == "present"
-    assert result["portfolio_summary"]["repo_total_count"] == 19
+    assert result["portfolio_summary"]["legacy_seed_repo_count"] == 19
+    assert result["portfolio_summary"]["repo_total_count"] == result[
+        "portfolio_summary"
+    ]["operational_repo_count"]
+    assert result["portfolio_summary"]["repo_total_count_source"] == result[
+        "portfolio_summary"
+    ]["operational_repo_source"]
     assert result["portfolio_summary"]["product_area_count"] == 7
     assert result["portfolio_summary"]["target_owner_class"] == "github_organization"
     assert result["portfolio_summary"]["target_org_key"] == "qtwin-io"
@@ -214,7 +220,10 @@ def test_guarded_execution_readiness_report_confirms_safe_guard_summary() -> Non
     assert result["portfolio_summary"]["target_org_current_repo_count_class"] == (
         "one_repo_reported_by_operator"
     )
-    assert result["portfolio_summary"]["target_expected_migration_count"] == 19
+    assert result["portfolio_summary"]["target_expected_migration_count"] == result[
+        "portfolio_summary"
+    ]["operational_repo_count"]
+    assert result["portfolio_summary"]["legacy_seed_migration_candidate_count"] == 19
     assert result["portfolio_summary"]["target_remaining_migration_count_class"] == (
         "nonzero_count"
     )

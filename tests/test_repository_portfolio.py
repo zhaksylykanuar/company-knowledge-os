@@ -54,7 +54,11 @@ def test_repository_portfolio_catalog_has_expected_counts() -> None:
     summary = repository_portfolio_public_summary()
 
     assert len(catalog) == 19
-    assert summary["repo_total_count"] == 19
+    assert summary["legacy_seed_repo_count"] == 19
+    assert summary["repo_total_count"] == summary["operational_repo_count"]
+    assert summary["repo_total_count_source"] == summary["operational_repo_source"]
+    assert summary["operational_repo_count"] >= summary["legacy_seed_repo_count"]
+    assert summary["catalog_drift"]["legacy_seed_count"] == 19
     assert summary["lifecycle_status_counts"] == {
         LIFECYCLE_ACTIVE: 8,
         LIFECYCLE_LEGACY: 2,
@@ -66,7 +70,8 @@ def test_repository_portfolio_catalog_has_expected_counts() -> None:
     assert summary["seed_portfolio_status"] == "present"
     assert summary["target_owner_class"] == "github_organization"
     assert summary["target_org_key"] == "qtwin-io"
-    assert summary["target_expected_migration_count"] == 19
+    assert summary["target_expected_migration_count"] == summary["operational_repo_count"]
+    assert summary["legacy_seed_migration_candidate_count"] == 19
     assert summary["source_of_truth_status"] == "planning_metadata_only"
 
 
@@ -141,7 +146,9 @@ def test_repository_portfolio_target_org_status_is_safe_and_non_executing() -> N
     )
     assert target["target_org_existing_role_class"] == "frontend_repo_present"
     assert counts["seed_portfolio_count"] == 19
-    assert counts["target_expected_migration_count"] == 19
+    assert counts["legacy_seed_migration_candidate_count"] == 19
+    assert counts["target_expected_migration_count"] == counts["operational_repo_count"]
+    assert readiness["operational_repo_count"] == counts["operational_repo_count"]
     assert counts["target_remaining_migration_count_class"] == "nonzero_count"
     assert readiness["seed_source_class"] == "legacy_personal_account_seed"
     assert readiness["github_write_operations"] == "disabled"
@@ -154,7 +161,9 @@ def test_repository_portfolio_onboarding_plan_is_non_executing() -> None:
     plan = repository_portfolio_onboarding_plan_summary()
 
     assert plan["github_inventory_step"] == "target_org_manual_readonly_gated"
-    assert plan["github_seed_comparison_step"] == "seed_portfolio_counts_only"
+    assert plan["github_seed_comparison_step"] == (
+        "operational_inventory_with_legacy_seed_reconciliation"
+    )
     assert plan["github_target_owner_class"] == "github_organization"
     assert plan["github_target_org_key"] == "qtwin-io"
     assert plan["github_org_migration_status"] == "manual_org_migration_planned"
@@ -163,7 +172,8 @@ def test_repository_portfolio_onboarding_plan_is_non_executing() -> None:
     assert plan["metadata_update_execution"] == "not_implemented"
     assert plan["archive_execution"] == "not_implemented"
     assert plan["secret_rotation_execution"] == "not_implemented"
-    assert plan["target_expected_migration_count"] == 19
+    assert plan["target_expected_migration_count"] == plan["operational_repo_count"]
+    assert plan["legacy_seed_migration_candidate_count"] == 19
     assert plan["target_remaining_migration_count_class"] == "nonzero_count"
     assert plan["github_write_operations"] == "disabled"
     assert plan["github_repo_transfer_operations"] == "disabled"

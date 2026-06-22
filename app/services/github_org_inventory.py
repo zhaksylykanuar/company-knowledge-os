@@ -340,15 +340,19 @@ def _base_github_summary(
         "live_readonly_status": LIVE_READONLY_STATUS_NOT_RUN,
         "org_repo_count_class": COUNT_NOT_OBSERVED,
         "seed_portfolio_status": PORTFOLIO_SEED_STATUS,
-        "seed_repo_count": portfolio["repo_total_count"],
+        "seed_repo_count": portfolio["legacy_seed_repo_count"],
+        "legacy_seed_repo_count": portfolio["legacy_seed_repo_count"],
+        "operational_repo_count": portfolio["operational_repo_count"],
+        "operational_repo_source": portfolio["operational_repo_source"],
         "expected_migration_count": portfolio["target_expected_migration_count"],
+        "expected_migration_count_source": portfolio["operational_repo_source"],
         "matched_count_class": COUNT_NOT_OBSERVED,
         "missing_count_class": COUNT_NOT_OBSERVED,
         "extra_count_class": COUNT_NOT_OBSERVED,
         "frontend_repo_reported_class": TARGET_ORG_CURRENT_REPO_COUNT_CLASS,
         "migration_status_class": MIGRATION_STATUS_CLASS,
         "live_inventory_status_class": TARGET_ORG_INVENTORY_STATUS,
-        "portfolio_compare_scope": "seed_portfolio_counts_only"
+        "portfolio_compare_scope": "operational_inventory_counts_only"
         if compare_portfolio
         else "not_requested",
         "write_operations": GITHUB_WRITE_OPERATIONS_DISABLED,

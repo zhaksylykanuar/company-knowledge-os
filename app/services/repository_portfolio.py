@@ -327,6 +327,7 @@ def repository_portfolio_public_summary() -> dict[str, Any]:
     validation = validate_repository_portfolio()
     target_org = summarize_target_org_status()
     migration_counts = summarize_portfolio_migration_counts()
+    inventory = _repository_source_inventory_snapshot()
     summary = {
         "portfolio_catalog": PORTFOLIO_CATALOG_PRESENT,
         "provider_key": PORTFOLIO_PROVIDER_KEY,
@@ -334,7 +335,16 @@ def repository_portfolio_public_summary() -> dict[str, Any]:
         "seed_source_class": PORTFOLIO_SEED_SOURCE_CLASS,
         "seed_portfolio_status": PORTFOLIO_SEED_STATUS,
         "overview_current_as_of": PORTFOLIO_CURRENT_AS_OF,
-        "repo_total_count": len(REPOSITORY_PORTFOLIO),
+        "repo_total_count": inventory["operational_repo_count"],
+        "repo_total_count_source": inventory["operational_repo_source"],
+        "operational_repo_count": inventory["operational_repo_count"],
+        "operational_repo_source": inventory["operational_repo_source"],
+        "operational_repo_count_class": inventory["operational_repo_count_class"],
+        "source_event_repo_count": inventory["source_event_repo_count"],
+        "discovery_repo_count": inventory["discovery_repo_count"],
+        "legacy_seed_repo_count": inventory["legacy_seed_repo_count"],
+        "catalog_drift": _catalog_drift_counts(inventory["catalog_drift"]),
+        "repository_inventory_source_priority": inventory["source_priority"],
         "product_area_count": len(_count_by("product_area")),
         "product_area_counts": _count_by("product_area"),
         "lifecycle_status_counts": _count_by("lifecycle_status"),
@@ -353,6 +363,12 @@ def repository_portfolio_public_summary() -> dict[str, Any]:
         "target_org_existing_role_class": target_org["target_org_existing_role_class"],
         "target_expected_migration_count": migration_counts[
             "target_expected_migration_count"
+        ],
+        "operational_migration_candidate_count": migration_counts[
+            "operational_migration_candidate_count"
+        ],
+        "legacy_seed_migration_candidate_count": migration_counts[
+            "legacy_seed_migration_candidate_count"
         ],
         "target_remaining_migration_count_class": migration_counts[
             "target_remaining_migration_count_class"
@@ -426,7 +442,7 @@ def repository_portfolio_onboarding_plan_summary() -> dict[str, Any]:
     summary = repository_portfolio_public_summary()
     plan = {
         "github_inventory_step": "target_org_manual_readonly_gated",
-        "github_seed_comparison_step": "seed_portfolio_counts_only",
+        "github_seed_comparison_step": "operational_inventory_with_legacy_seed_reconciliation",
         "github_target_owner_class": summary["target_owner_class"],
         "github_target_org_key": summary["target_org_key"],
         "github_org_migration_status": summary["migration_status_class"],
@@ -436,7 +452,12 @@ def repository_portfolio_onboarding_plan_summary() -> dict[str, Any]:
         "archive_execution": "not_implemented",
         "secret_rotation_execution": "not_implemented",
         "repo_total_count": summary["repo_total_count"],
+        "operational_repo_count": summary["operational_repo_count"],
+        "operational_repo_source": summary["operational_repo_source"],
         "target_expected_migration_count": summary["target_expected_migration_count"],
+        "legacy_seed_migration_candidate_count": summary[
+            "legacy_seed_migration_candidate_count"
+        ],
         "target_remaining_migration_count_class": summary[
             "target_remaining_migration_count_class"
         ],
@@ -473,13 +494,22 @@ def summarize_target_org_status() -> dict[str, Any]:
 
 
 def summarize_portfolio_migration_counts() -> dict[str, Any]:
+    inventory = _repository_source_inventory_snapshot()
+    operational_count = int(inventory["operational_repo_count"])
+    legacy_seed_count = int(inventory["legacy_seed_repo_count"])
     summary = {
-        "seed_portfolio_count": len(REPOSITORY_PORTFOLIO),
-        "target_expected_migration_count": len(REPOSITORY_PORTFOLIO),
+        "seed_portfolio_count": legacy_seed_count,
+        "legacy_seed_repo_count": legacy_seed_count,
+        "legacy_seed_migration_candidate_count": legacy_seed_count,
+        "operational_repo_count": operational_count,
+        "operational_repo_source": inventory["operational_repo_source"],
+        "operational_migration_candidate_count": operational_count,
+        "target_expected_migration_count": operational_count,
         "target_org_current_repo_count_class": TARGET_ORG_CURRENT_REPO_COUNT_CLASS,
         "target_remaining_migration_count_class": TARGET_REMAINING_MIGRATION_COUNT_CLASS,
         "migration_status_class": MIGRATION_STATUS_CLASS,
         "source_of_truth_status": PORTFOLIO_SOURCE_OF_TRUTH_STATUS,
+        "repo_mapping_policy": inventory["repo_mapping_policy"],
         "no_send": True,
         "no_source_of_truth_mutation": True,
         "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
@@ -495,6 +525,8 @@ def summarize_org_migration_readiness() -> dict[str, Any]:
         "seed_source_class": PORTFOLIO_SEED_SOURCE_CLASS,
         "seed_portfolio_status": PORTFOLIO_SEED_STATUS,
         "seed_portfolio_count": migration_counts["seed_portfolio_count"],
+        "operational_repo_count": migration_counts["operational_repo_count"],
+        "operational_repo_source": migration_counts["operational_repo_source"],
         "target_owner_class": target_org["target_owner_class"],
         "target_org_key": target_org["target_org_key"],
         "target_org_current_repo_count_class": target_org[
@@ -537,6 +569,30 @@ def _action_class_counts() -> dict[str, int]:
 def _entry_contains_unsafe_action_material(entry: RepositoryPortfolioEntry) -> bool:
     action_values = " ".join(entry.action_classes)
     return "token" in action_values.casefold() or "://" in action_values
+
+
+def _catalog_drift_counts(value: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "status": str(value.get("status") or "unknown"),
+        "operational_count": int(value.get("operational_count") or 0),
+        "legacy_seed_count": int(value.get("legacy_seed_count") or 0),
+        "matched_count": int(value.get("matched_count") or 0),
+        "operational_only_count": len(
+            value.get("in_operational_not_in_legacy_seed") or []
+        ),
+        "legacy_seed_only_count": len(
+            value.get("in_legacy_seed_not_in_operational") or []
+        ),
+        "repo_mapping_policy": str(value.get("repo_mapping_policy") or ""),
+    }
+
+
+def _repository_source_inventory_snapshot() -> dict[str, Any]:
+    from app.services.repository_source_inventory import (
+        load_repository_source_inventory_snapshot,
+    )
+
+    return load_repository_source_inventory_snapshot()
 
 
 def _assert_public_summary_safe(value: Mapping[str, Any]) -> None:

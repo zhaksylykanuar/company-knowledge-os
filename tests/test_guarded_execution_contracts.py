@@ -180,7 +180,13 @@ def test_valid_github_org_readonly_inventory_contract_passes() -> None:
     assert result["github"]["auth_status_class"] == "synthetic_not_checked"
     assert result["github"]["response_contract_status"] == "pass"
     assert result["github"]["seed_repo_count"] == 19
-    assert result["github"]["expected_migration_count"] == 19
+    assert result["github"]["legacy_seed_repo_count"] == 19
+    assert result["github"]["expected_migration_count"] == result["github"][
+        "operational_repo_count"
+    ]
+    assert result["github"]["expected_migration_count_source"] == result["github"][
+        "operational_repo_source"
+    ]
     assert result["github"]["write_operations"] == "disabled"
     assert result["migration_readiness"]["migration_status_class"] == (
         "manual_org_migration_planned"

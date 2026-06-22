@@ -41,10 +41,9 @@ from app.services.provider_execution_guard import (  # noqa: E402
     PROVIDER_EXECUTION_DEFAULT_DENIED,
     ProviderExecutionBlockedError,
 )
-from app.services.repository_portfolio import (  # noqa: E402
-    PORTFOLIO_TOTAL_COUNT,
-    repository_portfolio_catalog,
-    repository_portfolio_public_summary,
+from app.services.repository_portfolio import repository_portfolio_public_summary  # noqa: E402
+from app.services.repository_source_inventory import (  # noqa: E402
+    load_repository_source_inventory_snapshot,
 )
 
 REPORT_KIND = "external_connector_readonly_smoke"
@@ -447,8 +446,16 @@ def _base_github_result(*, selected: bool, compare_portfolio: bool) -> dict[str,
         "synthetic_status": NOT_RUN,
         "gated_status": REQUIRES_ACKNOWLEDGEMENT if selected else NOT_RUN,
         "provider_reason_code": None,
-        "portfolio_expected_count": PORTFOLIO_TOTAL_COUNT if compare_portfolio else 0,
-        "portfolio_compare_scope": "seed_portfolio_counts_only"
+        "portfolio_expected_count": _portfolio_expected_count()
+        if compare_portfolio
+        else 0,
+        "legacy_seed_repo_count": int(
+            portfolio_summary.get("legacy_seed_repo_count") or 0
+        ),
+        "portfolio_expected_count_source": portfolio_summary.get(
+            "operational_repo_source"
+        ),
+        "portfolio_compare_scope": "operational_inventory_counts_only"
         if compare_portfolio
         else "not_requested",
         "portfolio_compare": "not_requested",
@@ -803,8 +810,10 @@ def _portfolio_compare_summary(observed_repo_keys: set[str]) -> dict[str, Any]:
     observed_count = len(observed_repo_keys)
     return {
         "portfolio_expected_count": len(expected_repo_keys),
+        "legacy_seed_repo_count": _legacy_seed_repo_count(),
+        "portfolio_expected_count_source": _portfolio_source_class(),
         "portfolio_compare": "counts_only",
-        "portfolio_compare_scope": "seed_portfolio_counts_only",
+        "portfolio_compare_scope": "operational_inventory_counts_only",
         "live_inventory_count_class": _expected_count_class(
             observed_count,
             len(expected_repo_keys),
@@ -834,11 +843,26 @@ def _repo_keys_from_events(events: Iterable[Mapping[str, Any]]) -> set[str]:
 
 
 def _portfolio_repo_keys() -> set[str]:
+    inventory = load_repository_source_inventory_snapshot()
     return {
         str(entry["repo_key"])
-        for entry in repository_portfolio_catalog()
-        if isinstance(entry.get("repo_key"), str)
+        for entry in inventory.get("repositories", [])
+        if isinstance(entry, Mapping) and isinstance(entry.get("repo_key"), str)
     }
+
+
+def _portfolio_expected_count() -> int:
+    return len(_portfolio_repo_keys())
+
+
+def _legacy_seed_repo_count() -> int:
+    inventory = load_repository_source_inventory_snapshot()
+    return int(inventory.get("legacy_seed_repo_count") or 0)
+
+
+def _portfolio_source_class() -> str:
+    inventory = load_repository_source_inventory_snapshot()
+    return str(inventory.get("operational_repo_source") or "unknown")
 
 
 def _safe_connector_payload() -> dict[str, str]:

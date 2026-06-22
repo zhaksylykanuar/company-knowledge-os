@@ -95,7 +95,13 @@ def test_github_org_inventory_cli_default_no_live_outputs_strict_json() -> None:
     assert payload["github"]["target_org_key"] == "qtwin-io"
     assert payload["github"]["target_owner_class"] == "github_organization"
     assert payload["github"]["seed_repo_count"] == 19
-    assert payload["github"]["expected_migration_count"] == 19
+    assert payload["github"]["legacy_seed_repo_count"] == 19
+    assert payload["github"]["expected_migration_count"] == payload["github"][
+        "operational_repo_count"
+    ]
+    assert payload["github"]["expected_migration_count_source"] == payload["github"][
+        "operational_repo_source"
+    ]
     assert payload["github"]["write_operations"] == "disabled"
     assert payload["github"]["repo_transfer_operations"] == "disabled"
     assert payload["github"]["repo_edit_operations"] == "disabled"

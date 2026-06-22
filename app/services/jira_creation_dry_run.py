@@ -80,7 +80,7 @@ def jira_creation_dry_run_plan() -> dict[str, Any]:
         jira_inventory_status=JIRA_INVENTORY_STATUS_LIVE_READONLY_VERIFIED,
         mapping_status=MAPPING_STATUS_LIVE_READONLY_OBSERVED,
     )
-    repo_total_count = int(portfolio_summary["repo_total_count"])
+    repo_total_count = int(portfolio_summary["operational_repo_count"])
     component_count_class = _zero_nonzero_count_class(repo_total_count)
     proposed_structure = {
         "recommended_model_class": MODEL_PRODUCT_AREA,
@@ -122,6 +122,10 @@ def jira_creation_dry_run_plan() -> dict[str, Any]:
         "diagnostics": {
             "portfolio_area_count": portfolio_summary["product_area_count"],
             "portfolio_repo_count_class": component_count_class,
+            "portfolio_repo_count_source": portfolio_summary[
+                "operational_repo_source"
+            ],
+            "legacy_seed_repo_count": portfolio_summary["legacy_seed_repo_count"],
             "mapping_readiness_status": mapping["mapping_readiness_status"],
             "manual_mapping_required_count_class": mapping[
                 "manual_mapping_required_count_class"

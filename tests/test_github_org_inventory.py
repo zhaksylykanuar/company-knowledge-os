@@ -81,7 +81,13 @@ def test_github_org_inventory_default_mode_makes_no_live_call() -> None:
     assert result["github"]["org_inventory_status"] == "configured_not_executed"
     assert result["github"]["org_repo_count_class"] == "not_observed"
     assert result["github"]["seed_repo_count"] == 19
-    assert result["github"]["expected_migration_count"] == 19
+    assert result["github"]["legacy_seed_repo_count"] == 19
+    assert result["github"]["expected_migration_count"] == result["github"][
+        "operational_repo_count"
+    ]
+    assert result["github"]["expected_migration_count_source"] == result["github"][
+        "operational_repo_source"
+    ]
     assert result["github"]["write_operations"] == "disabled"
     assert result["github"]["repo_transfer_operations"] == "disabled"
     assert result["github"]["repo_edit_operations"] == "disabled"
