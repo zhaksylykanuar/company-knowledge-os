@@ -2,11 +2,16 @@ import builtins
 
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
+from sqlalchemy import delete
 
 import app.api.drive as drive_api
 import app.api.gmail as gmail_api
 from app.api.auth import API_AUTH_FAILURE_DETAIL, require_api_key, settings
+from app.db.base import AsyncSessionLocal, engine
+from app.db.models import AuditLog
+from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.main import app
 
 
@@ -84,6 +89,10 @@ def _post_demo(client: TestClient, *, key: str | None = None):
     return client.post("/v1/extraction/demo", json=_demo_payload(), headers=headers)
 
 
+def _async_client() -> AsyncClient:
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+
 def _route_dependency_calls(path: str, method: str) -> list[object]:
     for route in app.routes:
         if not isinstance(route, APIRoute):
@@ -125,6 +134,29 @@ def _trap_google_connector_paths(monkeypatch, *, message: str) -> None:
         return real_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", fail_connector_import)
+
+
+async def _ensure_source_control_tables() -> None:
+    async with engine.begin() as conn:
+        for table in (
+            AuditLog.__table__,
+            SourceControlState.__table__,
+            SourceRunRequest.__table__,
+        ):
+            await conn.run_sync(table.create, checkfirst=True)
+
+
+async def _cleanup_source_requests(marker: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(SourceRunRequest).where(SourceRunRequest.request_key.like(f"%{marker}%"))
+        )
+        await session.execute(
+            delete(SourceControlState).where(
+                SourceControlState.last_request_key.like(f"%{marker}%")
+            )
+        )
+        await session.commit()
 
 
 def test_health_remains_public_when_auth_enabled(monkeypatch) -> None:
@@ -205,15 +237,15 @@ def test_google_backfill_routes_reject_unauthenticated_before_connector_paths(
         "PRIVATE_BACKFILL_AUTH_LINK_MARKER",
         "PRIVATE_BACKFILL_AUTH_RAW_MARKER",
     ]
-    monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", True)
+    monkeypatch.setattr(settings, "google_gmail_backfill_enabled", True)
     monkeypatch.setattr(
-        gmail_api.settings,
+        settings,
         "google_gmail_backfill_query",
         private_markers[3],
     )
-    monkeypatch.setattr(drive_api.settings, "google_drive_backfill_enabled", True)
+    monkeypatch.setattr(settings, "google_drive_backfill_enabled", True)
     monkeypatch.setattr(
-        drive_api.settings,
+        settings,
         "google_drive_ai_inbox_folder_id",
         private_markers[4],
     )
@@ -244,9 +276,11 @@ def test_google_backfill_routes_reject_unauthenticated_before_connector_paths(
             assert marker not in response.text
 
 
-def test_google_backfill_routes_reject_authenticated_when_disabled_before_connector_paths(
+async def test_google_backfill_routes_record_source_requests_when_disabled_before_connector_paths(
     monkeypatch,
 ) -> None:
+    marker = "route-auth-disabled"
+    await _ensure_source_control_tables()
     _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
     private_markers = [
         "PRIVATE_DISABLED_SECRET_MARKER",
@@ -258,18 +292,18 @@ def test_google_backfill_routes_reject_authenticated_when_disabled_before_connec
         "PRIVATE_DISABLED_LINK_MARKER",
         "PRIVATE_DISABLED_RAW_MARKER",
     ]
-    monkeypatch.setattr(gmail_api.settings, "google_client_secrets_file", private_markers[0])
-    monkeypatch.setattr(gmail_api.settings, "google_gmail_token_file", private_markers[1])
-    monkeypatch.setattr(drive_api.settings, "google_token_file", private_markers[1])
-    monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", False)
+    monkeypatch.setattr(settings, "google_client_secrets_file", private_markers[0])
+    monkeypatch.setattr(settings, "google_gmail_token_file", private_markers[1])
+    monkeypatch.setattr(settings, "google_token_file", private_markers[1])
+    monkeypatch.setattr(settings, "google_gmail_backfill_enabled", False)
     monkeypatch.setattr(
-        gmail_api.settings,
+        settings,
         "google_gmail_backfill_query",
         private_markers[3],
     )
-    monkeypatch.setattr(drive_api.settings, "google_drive_backfill_enabled", False)
+    monkeypatch.setattr(settings, "google_drive_backfill_enabled", False)
     monkeypatch.setattr(
-        drive_api.settings,
+        settings,
         "google_drive_ai_inbox_folder_id",
         private_markers[4],
     )
@@ -279,30 +313,42 @@ def test_google_backfill_routes_reject_authenticated_when_disabled_before_connec
     )
 
     headers = {"X-FounderOS-API-Key": "test-api-key"}
-    with TestClient(app) as client:
-        gmail_response = client.post(
-            "/v1/gmail/backfill",
-            params={
-                "persist": "false",
-                "max_results": 1,
-                "query": private_markers[3],
-            },
-            headers=headers,
-        )
-        drive_response = client.post(
-            "/v1/drive/backfill",
-            params={"persist": "false", "max_results": 1},
-            headers=headers,
-        )
+    try:
+        async with _async_client() as client:
+            gmail_response = await client.post(
+                "/v1/gmail/backfill",
+                params={
+                    "persist": "false",
+                    "max_results": 1,
+                    "query": private_markers[3],
+                    "request_key": f"gmail-{marker}",
+                },
+                headers=headers,
+            )
+            drive_response = await client.post(
+                "/v1/drive/backfill",
+                params={
+                    "persist": "false",
+                    "max_results": 1,
+                    "request_key": f"drive-{marker}",
+                },
+                headers=headers,
+            )
 
-    assert gmail_response.status_code == 403
-    assert gmail_response.json() == {"detail": "Gmail backfill is disabled."}
-    assert drive_response.status_code == 403
-    assert drive_response.json() == {"detail": "Google Drive backfill is disabled."}
-    for response in (gmail_response, drive_response):
-        assert "test-api-key" not in response.text
-        for marker in private_markers:
-            assert marker not in response.text
+        assert gmail_response.status_code == 202
+        assert gmail_response.json()["mode"] == "source_control_request"
+        assert gmail_response.json()["source_type"] == "gmail"
+        assert gmail_response.json()["action_type"] == "preview_sync"
+        assert drive_response.status_code == 202
+        assert drive_response.json()["mode"] == "source_control_request"
+        assert drive_response.json()["source_type"] == "drive"
+        assert drive_response.json()["action_type"] == "preview_sync"
+        for response in (gmail_response, drive_response):
+            assert "test-api-key" not in response.text
+            for private_marker in private_markers:
+                assert private_marker not in response.text
+    finally:
+        await _cleanup_source_requests(marker)
 
 
 def test_current_protected_routes_use_existing_api_key_dependency() -> None:

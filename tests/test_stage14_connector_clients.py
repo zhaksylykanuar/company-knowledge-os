@@ -15,6 +15,7 @@ from app.services.connector_clients import (
     ReadOnlyRecord,
     live_connector_clients,
 )
+from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
 
 
 class _FakeJiraProvider:
@@ -133,6 +134,79 @@ async def test_email_client_threads_have_no_body() -> None:
     events = await client.sync_events("gmail")
     assert len(events) == 1
     assert "body" not in events[0].safe_payload()
+
+
+async def test_live_github_provider_filters_since_client_side() -> None:
+    provider = LiveGitHubReadOnlyProvider(
+        token="stage14-fake-token-value",
+        repos=("org/repo",),
+        enabled=True,
+        allow_live_provider_execution=True,
+        provider_execution_ack=LIVE_PROVIDER_EXECUTION_ACK,
+    )
+
+    async def fake_get(url: str, params: dict) -> list[dict]:
+        if url.endswith("/pulls"):
+            return [
+                {
+                    "number": 1,
+                    "title": "old pr",
+                    "state": "open",
+                    "updated_at": "2026-01-01T00:00:00Z",
+                },
+                {
+                    "number": 2,
+                    "title": "new pr",
+                    "state": "open",
+                    "updated_at": "2026-01-10T00:00:00Z",
+                },
+            ]
+        if url.endswith("/issues"):
+            assert params["since"] == "2026-01-05T00:00:00Z"
+            return [
+                {
+                    "number": 3,
+                    "title": "old issue",
+                    "state": "open",
+                    "updated_at": "2026-01-02T00:00:00Z",
+                },
+                {
+                    "number": 4,
+                    "title": "new issue",
+                    "state": "open",
+                    "updated_at": "2026-01-06T00:00:00Z",
+                },
+            ]
+        if url.endswith("/commits"):
+            assert params["since"] == "2026-01-05T00:00:00Z"
+            return [
+                {
+                    "sha": "old",
+                    "commit": {
+                        "message": "old commit",
+                        "author": {"date": "2026-01-03T00:00:00Z"},
+                    },
+                },
+                {
+                    "sha": "new",
+                    "commit": {
+                        "message": "new commit",
+                        "author": {"date": "2026-01-07T00:00:00Z"},
+                    },
+                },
+            ]
+        raise AssertionError(f"unexpected url: {url}")
+
+    provider._get = fake_get  # type: ignore[method-assign]
+
+    since = "2026-01-05T00:00:00Z"
+    pulls = await provider.list_pull_requests(since=since, limit=10)
+    issues = await provider.list_repo_activity(since=since, limit=10)
+    commits = await provider.list_commits(since=since, limit=10)
+
+    assert [record.external_id for record in pulls] == ["org/repo#pull/2"]
+    assert [record.external_id for record in issues] == ["org/repo#issue/4"]
+    assert [record.external_id for record in commits] == ["org/repo@new"]
 
 
 async def test_live_providers_refuse_without_enablement() -> None:

@@ -1,58 +1,17 @@
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from uuid import uuid4
+
+from fastapi import APIRouter, Query, status
 
 from app.core.config import settings
 from app.db.base import AsyncSessionLocal
-from app.db.models import AuditLog, IngestedEvent
-from app.db.source_models import DocumentChunk, SourceDocument
 from app.events.schemas import EventEnvelope
-from app.services.chunking import chunk_text
-from app.services.production_operation_guard import (
-    SOURCE_OF_TRUTH_MUTATION,
-    ProductionOperationBlockedError,
-    require_production_operation_ack,
-)
-from app.services.provider_execution_guard import ProviderExecutionBlockedError
-from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json, write_text
-from app.services.source_events import normalize_ingested_event_to_source_event
+from app.services.raw_storage import raw_storage_root, safe_path_part, write_json, write_text
+from app.services.source_control import ACTION_BACKFILL, ACTION_PREVIEW_SYNC, request_source_action
 
 router = APIRouter(prefix="/v1/drive", tags=["drive"])
 
 DRIVE_BACKFILL_DEFAULT_MAX_RESULTS = 10
 DRIVE_BACKFILL_MAX_RESULTS = 50
-DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED = "connector_failed"
-DRIVE_BACKFILL_STATUS_FETCH_FAILED = "fetch_failed"
-
-
-def _require_drive_backfill_enabled() -> str:
-    if not settings.google_drive_backfill_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Google Drive backfill is disabled.",
-        )
-
-    folder_id = settings.google_drive_ai_inbox_folder_id
-    cleaned_folder_id = folder_id.strip() if isinstance(folder_id, str) else ""
-    if not cleaned_folder_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google Drive backfill requires GOOGLE_DRIVE_AI_INBOX_FOLDER_ID.",
-        )
-
-    return cleaned_folder_id
-
-
-def _live_provider_kwargs(
-    *,
-    allow_live_provider_execution: bool,
-    provider_execution_ack: str | None,
-) -> dict[str, object]:
-    if allow_live_provider_execution is not True and provider_execution_ack is None:
-        return {}
-    return {
-        "allow_live_provider_execution": allow_live_provider_execution,
-        "provider_execution_ack": provider_execution_ack,
-    }
 
 
 def list_ai_inbox_files(
@@ -134,67 +93,9 @@ def save_drive_raw_snapshot(
     return metadata_ref, content_ref
 
 
-def _redacted_drive_backfill_item(
-    *,
-    persisted: bool,
-    accepted: bool = True,
-    duplicate: bool | None = None,
-    event_id: str | None = None,
-    status_value: str | None = None,
-    error_code: str | None = None,
-) -> dict:
-    item = {
-        "accepted": accepted,
-        "persisted": persisted,
-        "redacted": True,
-        "source_system": "drive",
-        "source_object_type": "file",
-        "event_type": "drive.file.ingested",
-    }
-    if duplicate is not None:
-        item["duplicate"] = duplicate
-    if event_id is not None:
-        item["event_id"] = event_id
-    if status_value is not None:
-        item["status"] = status_value
-    if error_code is not None:
-        item["error_code"] = error_code
-    return item
-
-
-def _redacted_drive_backfill_response(
-    *,
-    discovered: int,
-    saved: int,
-    duplicates: int,
-    max_results: int,
-    persist: bool,
-    events: list[dict],
-    failed: int = 0,
-    status_value: str | None = None,
-) -> dict:
-    return {
-        "provider": "drive",
-        "persist": persist,
-        "max_results": max_results,
-        "redacted": True,
-        "discovered": discovered,
-        "saved": saved,
-        "duplicates": duplicates,
-        "failed": failed,
-        "status": status_value
-        or (
-            "completed_with_failures"
-            if failed
-            else "completed"
-        ),
-        "events": events,
-    }
-
-
 @router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
 async def drive_backfill(
-    persist: bool = Query(True),
+    persist: bool = Query(False),
     max_results: int = Query(
         DRIVE_BACKFILL_DEFAULT_MAX_RESULTS,
         ge=1,
@@ -204,217 +105,39 @@ async def drive_backfill(
     confirm_production_operation: str | None = Query(None),
     allow_live_provider_execution: bool = Query(False),
     confirm_live_provider_execution: str | None = Query(None),
+    request_key: str | None = Query(None),
 ) -> dict:
-    _require_drive_backfill_enabled()
-    if persist:
-        try:
-            require_production_operation_ack(
-                operation_class=SOURCE_OF_TRUTH_MUTATION,
-                boundary="drive_backfill_persist",
-                allow_production_operation=allow_production_operation,
-                production_operation_ack=confirm_production_operation,
-            )
-        except ProductionOperationBlockedError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=exc.reason_code,
-            ) from exc
-
-    live_provider_kwargs = _live_provider_kwargs(
-        allow_live_provider_execution=allow_live_provider_execution,
-        provider_execution_ack=confirm_live_provider_execution,
-    )
-    try:
-        files = list_ai_inbox_files(max_results=max_results, **live_provider_kwargs)
-    except ProviderExecutionBlockedError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=exc.reason_code,
-        ) from exc
-    except Exception:
-        return _redacted_drive_backfill_response(
-            discovered=0,
-            saved=0,
-            duplicates=0,
-            failed=1,
-            max_results=max_results,
-            persist=persist,
-            events=[
-                _redacted_drive_backfill_item(
-                    accepted=False,
-                    persisted=False,
-                    status_value=DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED,
-                    error_code=DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED,
-                )
-            ],
-            status_value=DRIVE_BACKFILL_STATUS_CONNECTOR_FAILED,
-        )
-    events = []
-    saved = 0
-    duplicates = 0
-    failed = 0
-
-    if not persist:
-        for _file_metadata in files:
-            events.append(_redacted_drive_backfill_item(persisted=False))
-        return _redacted_drive_backfill_response(
-            discovered=len(files),
-            saved=0,
-            duplicates=0,
-            failed=0,
-            max_results=max_results,
-            persist=persist,
-            events=events,
-        )
-
+    action_type = ACTION_BACKFILL if persist else ACTION_PREVIEW_SYNC
+    safe_request_key = request_key or f"legacy-drive-{action_type}-{uuid4().hex}"
+    input_payload = {
+        "max_results": max_results,
+        "persist_requested": persist,
+        "folder_boundary_configured": bool(settings.google_drive_ai_inbox_folder_id),
+        "allow_live_provider_execution": bool(allow_live_provider_execution),
+        "live_provider_ack_supplied": confirm_live_provider_execution is not None,
+        "allow_production_operation": bool(allow_production_operation),
+        "production_ack_supplied": confirm_production_operation is not None,
+        "legacy_route": "/v1/drive/backfill",
+    }
     async with AsyncSessionLocal() as session:
-        session.add(
-            AuditLog(
-                event_type="drive.backfill.started",
-                actor="system",
-                correlation_id="system",
-                trace_id="system",
-                payload={"files": len(files)},
-            )
+        request = await request_source_action(
+            session,
+            source_type="drive",
+            action_type=action_type,
+            request_key=safe_request_key,
+            requested_by="legacy_drive_backfill_route",
+            input_payload=input_payload,
         )
-
-        for file_metadata in files:
-            event = build_drive_event(file_metadata)
-            existing = await session.scalar(
-                select(IngestedEvent).where(IngestedEvent.idempotency_key == event.idempotency_key)
-            )
-            if existing:
-                duplicates += 1
-                events.append(
-                    _redacted_drive_backfill_item(
-                        persisted=True,
-                        duplicate=True,
-                        event_id=existing.event_id,
-                    )
-                )
-                continue
-
-            try:
-                text = download_file_text(
-                    file_metadata["id"],
-                    file_metadata.get("mimeType"),
-                    **live_provider_kwargs,
-                )
-            except ProviderExecutionBlockedError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=exc.reason_code,
-                ) from exc
-            except Exception:
-                failed += 1
-                events.append(
-                    _redacted_drive_backfill_item(
-                        accepted=False,
-                        persisted=False,
-                        status_value=DRIVE_BACKFILL_STATUS_FETCH_FAILED,
-                        error_code=DRIVE_BACKFILL_STATUS_FETCH_FAILED,
-                    )
-                )
-                continue
-            metadata_ref, content_ref = save_drive_raw_snapshot(
-                file_metadata,
-                text,
-                allow_production_operation=allow_production_operation,
-                production_operation_ack=confirm_production_operation,
-            )
-            content_hash = sha256_text(text)
-            source_document_id = f"drive:{file_metadata['id']}:{content_hash[:12]}"
-            chunks = chunk_text(text)
-
-            event.raw_object_ref = metadata_ref
-            event.payload = {
-                **event.payload,
-                "raw_content_ref": content_ref,
-                "content_hash": content_hash,
-                "source_document_id": source_document_id,
-                "chunks_found": len(chunks),
-                "text_preview": text[:500],
-            }
-
-            ingested_event = IngestedEvent(
-                event_id=event.event_id,
-                event_type=event.event_type,
-                source_system=event.source_system,
-                source_object_id=event.source_object_id,
-                idempotency_key=event.idempotency_key,
-                correlation_id=event.correlation_id,
-                trace_id=event.trace_id,
-                raw_object_ref=event.raw_object_ref,
-                payload=event.payload,
-            )
-            session.add(ingested_event)
-            await session.flush()
-            await normalize_ingested_event_to_source_event(session, ingested_event)
-            existing_doc = await session.scalar(
-                select(SourceDocument).where(SourceDocument.source_document_id == source_document_id)
-            )
-            if not existing_doc:
-                session.add(
-                    SourceDocument(
-                        source_document_id=source_document_id,
-                        source_system="drive",
-                        source_object_id=file_metadata["id"],
-                        title=file_metadata.get("name"),
-                        source_url=file_metadata.get("webViewLink"),
-                        mime_type=file_metadata.get("mimeType"),
-                        raw_object_ref=content_ref,
-                        content_hash=content_hash,
-                        modified_at=file_metadata.get("modifiedTime"),
-                        metadata_json=file_metadata,
-                    )
-                )
-                for chunk in chunks:
-                    session.add(
-                        DocumentChunk(
-                            source_document_id=source_document_id,
-                            chunk_id=chunk.chunk_id,
-                            source_system="drive",
-                            source_object_id=file_metadata["id"],
-                            raw_object_ref=content_ref,
-                            text=chunk.text,
-                            start_char=chunk.start_char,
-                            end_char=chunk.end_char,
-                            content_hash=sha256_text(chunk.text),
-                            metadata_json={"source_url": file_metadata.get("webViewLink")},
-                        )
-                    )
-            session.add(
-                AuditLog(
-                    event_type=event.event_type,
-                    actor="system",
-                    correlation_id=event.correlation_id,
-                    trace_id=event.trace_id,
-                    after_ref=event.event_id,
-                    payload={
-                        "idempotency_key": event.idempotency_key,
-                        "source_object_id": event.source_object_id,
-                        "name": file_metadata.get("name"),
-                    },
-                )
-            )
-
-            saved += 1
-            events.append(
-                _redacted_drive_backfill_item(
-                    persisted=True,
-                    duplicate=False,
-                    event_id=event.event_id,
-                )
-            )
-
         await session.commit()
-
-    return _redacted_drive_backfill_response(
-        discovered=len(files),
-        saved=saved,
-        duplicates=duplicates,
-        failed=failed,
-        max_results=max_results,
-        persist=persist,
-        events=events,
-    )
+    return {
+        "provider": "drive",
+        "mode": "source_control_request",
+        "redacted": True,
+        "persist": persist,
+        "max_results": max_results,
+        "status": request["status"],
+        "request_id": request["request_id"],
+        "source_type": request["source_type"],
+        "action_type": request["action_type"],
+        "source_control_request": request,
+    }

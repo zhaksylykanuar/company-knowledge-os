@@ -2,59 +2,30 @@ import base64
 import binascii
 import re
 from html.parser import HTMLParser
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
 
-from app.core.config import settings
 from app.db.base import AsyncSessionLocal
-from app.db.gmail_models import GmailAttachment, GmailMessage, GmailThread
-from app.db.models import AuditLog, IngestedEvent
 from app.db.source_models import DocumentChunk, SourceDocument
 from app.events.schemas import EventEnvelope
 from app.services.chunking import chunk_text
-from app.services.production_operation_guard import (
-    SOURCE_OF_TRUTH_MUTATION,
-    ProductionOperationBlockedError,
-    require_production_operation_ack,
-)
-from app.services.provider_execution_guard import ProviderExecutionBlockedError
 from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json
-from app.services.source_events import normalize_ingested_event_to_source_event
+from app.services.source_control import ACTION_BACKFILL, ACTION_PREVIEW_SYNC, request_source_action
 
 router = APIRouter(prefix="/v1/gmail", tags=["gmail"])
 
 BROAD_GMAIL_BACKFILL_QUERY = "in:inbox OR in:sent"
 GMAIL_BACKFILL_DEFAULT_MAX_RESULTS = 10
 GMAIL_BACKFILL_MAX_RESULTS = 50
-GMAIL_BACKFILL_STATUS_COMPLETED = "completed"
-GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES = "completed_with_failures"
-GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED = "connector_failed"
-GMAIL_BACKFILL_STATUS_FETCH_FAILED = "fetch_failed"
-GMAIL_BACKFILL_STATUS_PERSIST_FAILED = "persist_failed"
-GMAIL_ATTACHMENT_ID_MAX_LENGTH = 255
 
 
 def _normalize_gmail_query(query: str) -> str:
     return " ".join(query.casefold().split())
 
 
-def _bounded_gmail_attachment_id(value: str) -> str:
-    if len(value) <= GMAIL_ATTACHMENT_ID_MAX_LENGTH:
-        return value
-    suffix = f":sha256:{sha256_text(value)}"
-    return f"{value[: GMAIL_ATTACHMENT_ID_MAX_LENGTH - len(suffix)]}{suffix}"
-
-
-def _safe_gmail_backfill_query(query: str | None) -> str:
-    if not settings.google_gmail_backfill_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Gmail backfill is disabled.",
-        )
-
-    selected_query = query if query is not None else settings.google_gmail_backfill_query
-    cleaned_query = selected_query.strip() if isinstance(selected_query, str) else ""
+def _validate_gmail_query_text(query: str | None) -> str:
+    cleaned_query = query.strip() if isinstance(query, str) else ""
     if not cleaned_query:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -70,26 +41,6 @@ def _safe_gmail_backfill_query(query: str | None) -> str:
         )
 
     return cleaned_query
-
-
-def _gmail_dependency_unavailable() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_424_FAILED_DEPENDENCY,
-        detail="Gmail backfill dependency is unavailable.",
-    )
-
-
-def _live_provider_kwargs(
-    *,
-    allow_live_provider_execution: bool,
-    provider_execution_ack: str | None,
-) -> dict[str, object]:
-    if allow_live_provider_execution is not True and provider_execution_ack is None:
-        return {}
-    return {
-        "allow_live_provider_execution": allow_live_provider_execution,
-        "provider_execution_ack": provider_execution_ack,
-    }
 
 
 class _ReadableHtmlParser(HTMLParser):
@@ -383,67 +334,6 @@ def iter_attachment_metadata(msg: dict) -> list[dict]:
     return found
 
 
-def _redacted_gmail_backfill_item(
-    *,
-    persisted: bool,
-    accepted: bool = True,
-    duplicate: bool | None = None,
-    event_id: str | None = None,
-    status: str | None = None,
-    error_code: str | None = None,
-) -> dict:
-    item = {
-        "accepted": accepted,
-        "persisted": persisted,
-        "redacted": True,
-        "source_system": "gmail",
-        "source_object_type": "message",
-        "event_type": "gmail.message.ingested",
-    }
-    if duplicate is not None:
-        item["duplicate"] = duplicate
-    if event_id is not None:
-        item["event_id"] = event_id
-    if status is not None:
-        item["status"] = status
-    if error_code is not None:
-        item["error_code"] = error_code
-    return item
-
-
-def _redacted_gmail_backfill_response(
-    *,
-    discovered: int,
-    saved: int,
-    duplicates: int,
-    failed: int,
-    max_results: int,
-    persist: bool,
-    events: list[dict],
-    status_value: str | None = None,
-) -> dict:
-    accepted = sum(1 for event in events if event.get("accepted") is True)
-    return {
-        "provider": "gmail",
-        "persist": persist,
-        "max_results": max_results,
-        "redacted": True,
-        "discovered": discovered,
-        "processed": len(events),
-        "accepted": accepted,
-        "saved": saved,
-        "duplicates": duplicates,
-        "failed": failed,
-        "status": status_value
-        or (
-            GMAIL_BACKFILL_STATUS_COMPLETED_WITH_FAILURES
-            if failed
-            else GMAIL_BACKFILL_STATUS_COMPLETED
-        ),
-        "events": events,
-    }
-
-
 @router.post("/backfill", status_code=status.HTTP_202_ACCEPTED)
 async def gmail_backfill(
     max_results: int = Query(
@@ -452,250 +342,47 @@ async def gmail_backfill(
         le=GMAIL_BACKFILL_MAX_RESULTS,
     ),
     query: str | None = Query(None),
-    persist: bool = Query(True),
+    persist: bool = Query(False),
     allow_production_operation: bool = Query(False),
     confirm_production_operation: str | None = Query(None),
     allow_live_provider_execution: bool = Query(False),
     confirm_live_provider_execution: str | None = Query(None),
+    request_key: str | None = Query(None),
 ) -> dict:
-    safe_query = _safe_gmail_backfill_query(query)
-    if persist:
-        try:
-            require_production_operation_ack(
-                operation_class=SOURCE_OF_TRUTH_MUTATION,
-                boundary="gmail_backfill_persist",
-                allow_production_operation=allow_production_operation,
-                production_operation_ack=confirm_production_operation,
-            )
-        except ProductionOperationBlockedError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=exc.reason_code,
-            ) from exc
-
-    live_provider_kwargs = _live_provider_kwargs(
-        allow_live_provider_execution=allow_live_provider_execution,
-        provider_execution_ack=confirm_live_provider_execution,
-    )
-    try:
-        refs = list_messages(
-            query=safe_query,
-            max_results=max_results,
-            **live_provider_kwargs,
+    if query is not None:
+        _validate_gmail_query_text(query)
+    action_type = ACTION_BACKFILL if persist else ACTION_PREVIEW_SYNC
+    safe_request_key = request_key or f"legacy-gmail-{action_type}-{uuid4().hex}"
+    input_payload = {
+        "max_results": max_results,
+        "persist_requested": persist,
+        "query_provided": query is not None,
+        "uses_configured_query": query is None,
+        "allow_live_provider_execution": bool(allow_live_provider_execution),
+        "live_provider_ack_supplied": confirm_live_provider_execution is not None,
+        "allow_production_operation": bool(allow_production_operation),
+        "production_ack_supplied": confirm_production_operation is not None,
+        "legacy_route": "/v1/gmail/backfill",
+    }
+    async with AsyncSessionLocal() as session:
+        request = await request_source_action(
+            session,
+            source_type="gmail",
+            action_type=action_type,
+            request_key=safe_request_key,
+            requested_by="legacy_gmail_backfill_route",
+            input_payload=input_payload,
         )
-    except ProviderExecutionBlockedError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=exc.reason_code,
-        ) from exc
-    except Exception:
-        return _redacted_gmail_backfill_response(
-            discovered=0,
-            saved=0,
-            duplicates=0,
-            failed=1,
-            max_results=max_results,
-            persist=persist,
-            events=[
-                _redacted_gmail_backfill_item(
-                    accepted=False,
-                    persisted=False,
-                    status=GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED,
-                    error_code=GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED,
-                )
-            ],
-            status_value=GMAIL_BACKFILL_STATUS_CONNECTOR_FAILED,
-        )
-
-    events = []
-    saved = 0
-    duplicates = 0
-    failed = 0
-
-    for ref in refs:
-        try:
-            msg = get_message(ref["id"], **live_provider_kwargs)
-            event = build_gmail_event(msg)
-        except ProviderExecutionBlockedError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=exc.reason_code,
-            ) from exc
-        except Exception:
-            failed += 1
-            events.append(
-                _redacted_gmail_backfill_item(
-                    accepted=False,
-                    persisted=False,
-                    status=GMAIL_BACKFILL_STATUS_FETCH_FAILED,
-                    error_code=GMAIL_BACKFILL_STATUS_FETCH_FAILED,
-                )
-            )
-            continue
-
-        if not persist:
-            events.append(_redacted_gmail_backfill_item(persisted=False))
-            continue
-
-        session = None
-        try:
-            async with AsyncSessionLocal() as session:
-                existing = await session.scalar(
-                    select(IngestedEvent).where(
-                        IngestedEvent.idempotency_key == event.idempotency_key
-                    )
-                )
-                if existing:
-                    duplicates += 1
-                    events.append(
-                        _redacted_gmail_backfill_item(
-                            persisted=True,
-                            duplicate=True,
-                            event_id=existing.event_id,
-                        )
-                    )
-                    continue
-
-                raw_ref = save_gmail_raw_message(
-                    msg,
-                    allow_production_operation=allow_production_operation,
-                    production_operation_ack=confirm_production_operation,
-                )
-                event.raw_object_ref = raw_ref
-                event.payload = {**event.payload, "raw_object_ref": raw_ref}
-                source_document, document_chunks, _readable_text = build_gmail_document_records(
-                    msg, raw_ref
-                )
-
-                ingested_event = IngestedEvent(
-                    event_id=event.event_id,
-                    event_type=event.event_type,
-                    source_system=event.source_system,
-                    source_object_id=event.source_object_id,
-                    idempotency_key=event.idempotency_key,
-                    correlation_id=event.correlation_id,
-                    trace_id=event.trace_id,
-                    raw_object_ref=event.raw_object_ref,
-                    payload=event.payload,
-                )
-                session.add(ingested_event)
-                await session.flush()
-                if event.payload.get("subject"):
-                    await normalize_ingested_event_to_source_event(session, ingested_event)
-                if msg.get("threadId"):
-                    existing_thread = await session.scalar(
-                        select(GmailThread).where(GmailThread.thread_id == msg["threadId"])
-                    )
-                    if not existing_thread:
-                        session.add(
-                            GmailThread(
-                                thread_id=msg["threadId"],
-                                history_id=msg.get("historyId"),
-                                raw_object_ref=raw_ref,
-                                metadata_json={"message_id": msg["id"]},
-                            )
-                        )
-
-                existing_message = await session.scalar(
-                    select(GmailMessage).where(GmailMessage.message_id == msg["id"])
-                )
-                if not existing_message:
-                    session.add(
-                        GmailMessage(
-                            message_id=msg["id"],
-                            thread_id=msg.get("threadId"),
-                            history_id=msg.get("historyId"),
-                            snippet=msg.get("snippet"),
-                            label_ids=msg.get("labelIds", []),
-                            raw_object_ref=raw_ref,
-                            payload=event.payload,
-                        )
-                    )
-
-                if source_document is not None:
-                    existing_doc = await session.scalar(
-                        select(SourceDocument).where(
-                            SourceDocument.source_document_id
-                            == source_document.source_document_id
-                        )
-                    )
-                    if not existing_doc:
-                        session.add(source_document)
-                        for chunk in document_chunks:
-                            session.add(chunk)
-
-                for attachment in iter_attachment_metadata(msg):
-                    attachment_id = _bounded_gmail_attachment_id(attachment["attachment_id"])
-                    existing_attachment = await session.scalar(
-                        select(GmailAttachment).where(
-                            GmailAttachment.message_id == attachment["message_id"],
-                            GmailAttachment.attachment_id == attachment_id,
-                        )
-                    )
-                    if existing_attachment:
-                        continue
-                    session.add(
-                        GmailAttachment(
-                            message_id=attachment["message_id"],
-                            attachment_id=attachment_id,
-                            filename=attachment.get("filename"),
-                            mime_type=attachment.get("mime_type"),
-                            size=attachment.get("size"),
-                            metadata_json=attachment,
-                        )
-                    )
-                    session.add(
-                        AuditLog(
-                            event_type="gmail.attachment.detected",
-                            actor="system",
-                            correlation_id=event.correlation_id,
-                            trace_id=event.trace_id,
-                            payload=attachment,
-                        )
-                    )
-                session.add(
-                    AuditLog(
-                        event_type=event.event_type,
-                        actor="system",
-                        correlation_id=event.correlation_id,
-                        trace_id=event.trace_id,
-                        after_ref=event.event_id,
-                        payload={"idempotency_key": event.idempotency_key, "message_id": msg["id"]},
-                    )
-                )
-                await session.commit()
-        except Exception:
-            if session is not None:
-                try:
-                    await session.rollback()
-                except Exception:
-                    pass
-            failed += 1
-            events.append(
-                _redacted_gmail_backfill_item(
-                    accepted=False,
-                    persisted=False,
-                    status=GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
-                    error_code=GMAIL_BACKFILL_STATUS_PERSIST_FAILED,
-                )
-            )
-            continue
-
-        saved += 1
-        events.append(
-            _redacted_gmail_backfill_item(
-                persisted=True,
-                duplicate=False,
-                event_id=event.event_id,
-            )
-        )
-
-    return _redacted_gmail_backfill_response(
-        discovered=len(refs),
-        saved=saved,
-        duplicates=duplicates,
-        failed=failed,
-        max_results=max_results,
-        persist=persist,
-        events=events,
-    )
+        await session.commit()
+    return {
+        "provider": "gmail",
+        "mode": "source_control_request",
+        "redacted": True,
+        "persist": persist,
+        "max_results": max_results,
+        "status": request["status"],
+        "request_id": request["request_id"],
+        "source_type": request["source_type"],
+        "action_type": request["action_type"],
+        "source_control_request": request,
+    }

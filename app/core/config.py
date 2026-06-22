@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     # --- Real read-only connector execution (opt-in; default OFF) ---
     # When false, real Jira/GitHub clients never make a network call; only
     # internal/local sources run. Even when true, connectors stay read-only
-    # and only run through an explicit operator request.
+    # and only run through an explicit operator request plus live-provider ack.
     enable_real_connectors: bool = Field(
         default=False,
         validation_alias=AliasChoices("FOUNDEROS_ENABLE_REAL_CONNECTORS"),

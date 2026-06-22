@@ -86,10 +86,17 @@ SOURCE_DEFINITIONS: tuple[SourceDefinition, ...] = (
         setup_groups=("gmail",),
     ),
     SourceDefinition(
+        "drive",
+        "Google Drive",
+        event_systems=("drive",),
+        normalized_sources=("drive",),
+        setup_groups=("drive",),
+    ),
+    SourceDefinition(
         "meetings",
         "Meetings",
-        event_systems=("calendar", "meeting", "meetings", "drive"),
-        normalized_sources=("calendar", "meeting", "meetings", "drive"),
+        event_systems=("calendar", "meeting", "meetings"),
+        normalized_sources=("calendar", "meeting", "meetings"),
         setup_groups=("meetings",),
     ),
     SourceDefinition("declarations", "Declarations", virtual=True),
@@ -118,6 +125,11 @@ SOURCE_DEFINITIONS: tuple[SourceDefinition, ...] = (
 SOURCE_BY_TYPE = {definition.source_type: definition for definition in SOURCE_DEFINITIONS}
 _FAILED_EVENT_STATUSES = {"error", "failed", "normalization_failed"}
 _PENDING_REQUEST_STATUSES = {"requested", "accepted"}
+_LIVE_PROVIDER_ACK_KEYS = (
+    "provider_execution_ack",
+    "confirm_live_provider_execution",
+    "live_provider_execution_ack",
+)
 
 
 def known_source_types() -> tuple[str, ...]:
@@ -181,6 +193,24 @@ def _connector_setup() -> dict[str, list[dict[str, Any]]]:
                 secret=True,
             ),
         ],
+        "drive": [
+            _setup_item(
+                "FOS_GOOGLE_DRIVE_READONLY_CLIENT_ID",
+                configured=_configured("FOS_GOOGLE_DRIVE_READONLY_CLIENT_ID"),
+            ),
+            _setup_item(
+                "FOS_GOOGLE_DRIVE_READONLY_CLIENT_SECRET",
+                configured=_configured("FOS_GOOGLE_DRIVE_READONLY_CLIENT_SECRET"),
+                secret=True,
+            ),
+            _setup_item(
+                "GOOGLE_DRIVE_AI_INBOX_FOLDER_ID",
+                configured=_configured(
+                    "GOOGLE_DRIVE_AI_INBOX_FOLDER_ID",
+                    attrs=("google_drive_ai_inbox_folder_id",),
+                ),
+            ),
+        ],
         "meetings": [
             _setup_item(
                 "MEETINGS_SOURCE",
@@ -236,6 +266,20 @@ def _redaction_policy() -> dict[str, Any]:
         "external_tokens": "never returned",
         "connection_status": "configured/missing/masked only",
     }
+
+
+def _source_action_input_snapshot(input_payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Store operator intent without persisting the live-provider ack phrase."""
+
+    raw = dict(input_payload or {})
+    raw.pop("provider_execution_ack_valid", None)
+    ack_values: list[Any] = []
+    for key in _LIVE_PROVIDER_ACK_KEYS:
+        if key in raw:
+            ack_values.append(raw.pop(key))
+    if ack_values:
+        raw["live_provider_ack_supplied"] = any(value not in (None, "") for value in ack_values)
+    return sanitize_for_logs(raw) if raw else {}
 
 
 def _safe_actions(definition: SourceDefinition) -> list[dict[str, Any]]:
@@ -845,7 +889,7 @@ async def request_source_action(
         "action_type": action_type,
         "connector_readiness": setup_status,
         "external_side_effect": False,
-        "input": sanitize_for_logs(dict(input_payload or {})),
+        "input": _source_action_input_snapshot(input_payload),
     }
     result_summary = {
         "mode": "request_only",

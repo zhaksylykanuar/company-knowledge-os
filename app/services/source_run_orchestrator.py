@@ -2,12 +2,13 @@
 
 The orchestrator drives local lifecycle state only. Connector adapters are
 injected behind a small contract and the default adapters are noop/missing
-config, so tests and operator runs do not call real providers.
+config unless real connectors, scope, and live-provider acknowledgement are all
+present, so tests and default operator runs do not call real providers.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -26,7 +27,11 @@ from app.services.source_connectors import (
     SourceConnector,
     default_connector_registry,
 )
-from app.services.connector_scope import scope_model, sync_scope_block
+from app.services.connector_scope import (
+    scoped_live_read_guard_active,
+    scope_model,
+    sync_scope_block,
+)
 from app.services.source_run_receipts import attach_source_run_receipt
 from app.services.source_ingestion import ingest_connector_events
 from app.services.source_control import (
@@ -104,6 +109,53 @@ def _state_snapshot(state: SourceControlState | None) -> dict[str, Any]:
         "input_watermark": state.input_watermark,
         "latest_run_id": state.latest_run_id,
     }
+
+
+def _request_input(request: SourceRunRequest) -> dict[str, Any]:
+    snapshot = request.input_snapshot if isinstance(request.input_snapshot, dict) else {}
+    input_data = snapshot.get("input") if isinstance(snapshot, dict) else {}
+    return input_data if isinstance(input_data, dict) else {}
+
+
+def _parse_backfill_window_time(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _backfill_window_block(
+    input_data: dict[str, Any],
+    *,
+    now: datetime,
+    max_days: int,
+) -> dict[str, Any] | None:
+    since = _parse_backfill_window_time(input_data.get("since"))
+    if since is None:
+        return {"blocked_reason": "backfill_window_missing_since"}
+
+    until_raw = input_data.get("until")
+    until = _parse_backfill_window_time(until_raw) if until_raw else now
+    if until is None:
+        return {"blocked_reason": "backfill_window_invalid_until"}
+    if since > until:
+        return {"blocked_reason": "backfill_window_invalid_order"}
+
+    max_window = timedelta(days=max(1, int(max_days or 1)))
+    if until - since > max_window:
+        return {
+            "blocked_reason": "backfill_window_too_wide",
+            "backfill_max_days": max_days,
+        }
+    return None
 
 
 async def _get_or_create_state(
@@ -184,6 +236,8 @@ def _empty_summary() -> dict[str, Any]:
         "skipped_missing_config": 0,
         "skipped_real_disabled": 0,
         "skipped_missing_scope": 0,
+        "skipped_scope_too_broad": 0,
+        "skipped_backfill_window": 0,
         "blocked_invalid": 0,
         "receipts_created": 0,
         "receipts_by_status": {},
@@ -257,9 +311,15 @@ async def run_source_request(
     connectors: dict[str, SourceConnector] | None = None,
     run_id: str | None = None,
     now: datetime | None = None,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
 ) -> dict[str, Any]:
     safe_now = now or _now()
-    registry = connectors or default_connector_registry(session=session)
+    registry = connectors or default_connector_registry(
+        session=session,
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
+    )
 
     if request.status in TERMINAL_REQUEST_STATUSES:
         return {"request_id": request.request_id, "status": "unchanged"}
@@ -331,18 +391,25 @@ async def run_source_request(
         await session.flush()
         return {"request_id": request.request_id, "status": "skipped_paused"}
 
-    if (
-        request.action_type in _SCOPE_GATED_ACTIONS
-        and sync_scope_block(request.source_type) == "missing_scope"
-    ):
+    scope_block = (
+        sync_scope_block(request.source_type)
+        if request.action_type in _SCOPE_GATED_ACTIONS
+        else None
+    )
+    if scope_block is not None:
+        status_code = (
+            "blocked_scope_too_broad"
+            if scope_block == "scope_too_broad"
+            else "blocked_missing_scope"
+        )
         request.status = REQUEST_STATUS_BLOCKED
         request.finished_at = safe_now
         request.result_summary = {
-            "status": "blocked_missing_scope",
-            "blocked_reason": "missing_scope",
+            "status": status_code,
+            "blocked_reason": scope_block,
             "external_side_effect": False,
             "watermark_updated": False,
-            "watermark_update_reason": "missing_scope",
+            "watermark_update_reason": scope_block,
             **_scope_meta(request.source_type),
         }
         request.error_summary = {}
@@ -352,8 +419,8 @@ async def run_source_request(
                 event_type="source_run_blocked",
                 request=request,
                 payload={
-                    "status": "blocked_missing_scope",
-                    "blocked_reason": "missing_scope",
+                    "status": status_code,
+                    "blocked_reason": scope_block,
                     "source_type": request.source_type,
                     "action_type": request.action_type,
                     "external_side_effect": False,
@@ -362,7 +429,49 @@ async def run_source_request(
         )
         _mark_receipt(request)
         await session.flush()
-        return {"request_id": request.request_id, "status": "blocked_missing_scope"}
+        return {"request_id": request.request_id, "status": status_code}
+
+    if request.action_type == ACTION_BACKFILL and scoped_live_read_guard_active(
+        request.source_type
+    ):
+        meta = _scope_meta(request.source_type)
+        window_block = _backfill_window_block(
+            _request_input(request),
+            now=safe_now,
+            max_days=int(meta["limits_applied"].get("backfill_max_days") or 30),
+        )
+        if window_block is not None:
+            request.status = REQUEST_STATUS_BLOCKED
+            request.finished_at = safe_now
+            request.result_summary = {
+                "status": "blocked_backfill_window",
+                "external_side_effect": False,
+                "watermark_updated": False,
+                "watermark_update_reason": window_block["blocked_reason"],
+                **window_block,
+                **meta,
+            }
+            request.error_summary = {}
+            request.source_state_after = _state_snapshot(state)
+            session.add(
+                _audit(
+                    event_type="source_run_blocked",
+                    request=request,
+                    payload={
+                        "status": "blocked_backfill_window",
+                        "blocked_reason": window_block["blocked_reason"],
+                        "source_type": request.source_type,
+                        "action_type": request.action_type,
+                        "external_side_effect": False,
+                    },
+                )
+            )
+            _mark_receipt(request)
+            await session.flush()
+            return {
+                "request_id": request.request_id,
+                "status": "blocked_backfill_window",
+            }
 
     connector = registry.get(request.source_type)
     if connector is None:
@@ -426,7 +535,7 @@ async def run_source_request(
             # Preview reuses the read-only sync listing but never persists.
             result = await connector.sync(watermark=state.input_watermark)
         else:
-            input_data = request.input_snapshot.get("input") or {}
+            input_data = _request_input(request)
             result = await connector.backfill(
                 since=input_data.get("since"),
                 until=input_data.get("until"),
@@ -693,6 +802,8 @@ async def run_source_requests(
     connectors: dict[str, SourceConnector] | None = None,
     limit: int = 25,
     now: datetime | None = None,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
 ) -> dict[str, Any]:
     started = now or _now()
     run_id = f"src_orch_{uuid4().hex}"
@@ -709,6 +820,8 @@ async def run_source_requests(
             connectors=connectors,
             run_id=f"{run_id}_{request.id or request.request_id}",
             now=_now(),
+            allow_live_provider_execution=allow_live_provider_execution,
+            provider_execution_ack=provider_execution_ack,
         )
         status = result.get("status")
         if status == "unchanged":
@@ -717,6 +830,10 @@ async def run_source_requests(
             _bump(summary, "skipped_paused")
         elif status == "blocked_missing_scope":
             _bump(summary, "skipped_missing_scope")
+        elif status == "blocked_scope_too_broad":
+            _bump(summary, "skipped_scope_too_broad")
+        elif status == "blocked_backfill_window":
+            _bump(summary, "skipped_backfill_window")
         elif status == "blocked_invalid":
             _bump(summary, "blocked_invalid")
         elif status == REQUEST_STATUS_SUCCEEDED:

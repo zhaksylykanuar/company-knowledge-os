@@ -8,6 +8,7 @@ results that are safe to persist in audit/result summaries.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -59,10 +60,16 @@ _CONNECTOR_SENSITIVE_KEY_PARTS = (
     "oauth",
     "raw",
 )
+_EMAIL_SHAPED_RE = re.compile(
+    r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+    re.IGNORECASE,
+)
 
 
 def _sanitize_connector_payload(value: Any) -> Any:
     value = sanitize_for_logs(value)
+    if isinstance(value, str) and _EMAIL_SHAPED_RE.search(value):
+        return "***redacted***"
     if isinstance(value, dict):
         safe: dict[str, Any] = {}
         for key, item in value.items():
@@ -125,13 +132,13 @@ class ConnectorEvent:
         if self.summary:
             payload.setdefault("summary", self.summary)
         if self.actor:
-            payload.setdefault("actor_external_id", self.actor)
+            payload.setdefault("actor_external_id", _sanitize_connector_payload(self.actor))
         if self.url:
             payload.setdefault("source_url", self.url)
         payload.setdefault("visibility_scope", self.visibility_scope)
         if self.occurred_at:
             payload.setdefault("occurred_at", self.occurred_at.isoformat())
-        metadata = sanitize_for_logs(dict(self.source_metadata or {}))
+        metadata = _sanitize_connector_payload(dict(self.source_metadata or {}))
         if isinstance(metadata, dict) and metadata:
             payload.setdefault("source_metadata", metadata)
         return payload
@@ -385,26 +392,44 @@ class NoopSourceConnector:
                 "source_type": self.source_type,
                 "action_type": action_type,
             }
-            if action_type == ACTION_TEST:
-                check = sanitize_for_logs(
-                    await self._client.test_connection(self.source_type)
-                )
-                summary["test_connection"] = check
+            try:
+                if action_type == ACTION_TEST:
+                    check = sanitize_for_logs(
+                        await self._client.test_connection(self.source_type)
+                    )
+                    summary["test_connection"] = check
+                    events = []
+                    output_watermark = input_watermark
+                elif action_type == ACTION_SYNC:
+                    events = await self._client.sync_events(
+                        self.source_type,
+                        watermark=input_watermark,
+                    )
+                    output_watermark = _events_watermark(events) or input_watermark
+                else:
+                    events = await self._client.backfill_events(
+                        self.source_type,
+                        since=(sanitized_input or {}).get("since"),
+                        until=(sanitized_input or {}).get("until"),
+                        limit=(sanitized_input or {}).get("limit"),
+                    )
+                    output_watermark = input_watermark
+            except Exception as exc:
+                reason_code = getattr(exc, "reason_code", None)
+                if not isinstance(reason_code, str):
+                    raise
+                status = CONNECTOR_STATUS_SKIPPED
+                warnings = [reason_code, *warnings]
+                diagnostics = getattr(exc, "diagnostics", {})
+                summary = {
+                    "mode": "provider_execution_blocked",
+                    "reason": reason_code,
+                    "real_execution": "blocked",
+                    "source_type": self.source_type,
+                    "action_type": action_type,
+                    "provider_execution": sanitize_for_logs(diagnostics),
+                }
                 events = []
-                output_watermark = input_watermark
-            elif action_type == ACTION_SYNC:
-                events = await self._client.sync_events(
-                    self.source_type,
-                    watermark=input_watermark,
-                )
-                output_watermark = _events_watermark(events) or input_watermark
-            else:
-                events = await self._client.backfill_events(
-                    self.source_type,
-                    since=(sanitized_input or {}).get("since"),
-                    until=(sanitized_input or {}).get("until"),
-                    limit=(sanitized_input or {}).get("limit"),
-                )
                 output_watermark = input_watermark
         elif self._is_internal or "local_email_records" in readiness.warnings:
             # Internal sources and email read from already-ingested local
@@ -768,14 +793,18 @@ def default_connector_registry(
     session: AsyncSession | None = None,
     clients: dict[str, ReadOnlyConnectorClient] | None = None,
     config: Any = None,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
 ) -> dict[str, SourceConnector]:
     """Build the connector registry.
 
     Real Jira/GitHub clients are wired ONLY when ``enable_real_connectors`` is
-    true. When it is false, those sources get ``real_disabled=True`` so a
-    configured source is safely skipped (no network, no fake success) instead of
-    silently succeeding. Internal and local sources are unaffected. Explicit
-    ``clients`` (used by tests) always take precedence.
+    true. The live providers still require the caller's live-provider
+    acknowledgement before any HTTP read. When the flag is false, those sources
+    get ``real_disabled=True`` so a configured source is safely skipped (no
+    network, no fake success) instead of silently succeeding. Internal and local
+    sources are unaffected. Explicit ``clients`` (used by tests) always take
+    precedence.
     """
 
     from app.core.config import settings as default_settings
@@ -787,7 +816,11 @@ def default_connector_registry(
     if enabled:
         from app.services.connector_clients import build_real_connector_clients
 
-        real_clients = build_real_connector_clients(cfg)
+        real_clients = build_real_connector_clients(
+            cfg,
+            allow_live_provider_execution=allow_live_provider_execution,
+            provider_execution_ack=provider_execution_ack,
+        )
 
     registry: dict[str, SourceConnector] = {}
     for source_type in SOURCE_BY_TYPE:

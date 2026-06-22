@@ -115,6 +115,76 @@ def _configure(monkeypatch, *, scope: bool) -> None:
         monkeypatch.delenv("FOUNDEROS_JIRA_PROJECT_KEYS", raising=False)
 
 
+async def test_sync_blocked_with_too_broad_scope_never_calls_connector(
+    monkeypatch,
+) -> None:
+    await _ensure_tables()
+    _configure(monkeypatch, scope=True)
+    monkeypatch.setenv("FOUNDEROS_JIRA_PROJECT_KEYS", "all")
+    marker = uuid4().hex[:8]
+    snapshot = await _state_snapshot("jira")
+    fake = _CountingConnector(marker)
+    try:
+        async with AsyncSessionLocal() as session:
+            req = _request("sync", marker)
+            session.add(req)
+            await session.flush()
+            result = await run_source_request(
+                session, request=req, connectors={"jira": fake}, run_id=f"r_{marker}"
+            )
+            row = await session.scalar(
+                select(SourceRunRequest).where(
+                    SourceRunRequest.request_key == f"jira-sync-{marker}"
+                )
+            )
+            await session.commit()
+        assert result["status"] == "blocked_scope_too_broad"
+        assert fake.sync_calls == 0
+        assert row.result_summary["blocked_reason"] == "scope_too_broad"
+        assert row.result_summary["scope_summary"]["too_broad"] is True
+    finally:
+        await _cleanup(marker)
+        await _restore_state("jira", snapshot)
+
+
+async def test_backfill_blocks_window_over_max_days_before_connector(
+    monkeypatch,
+) -> None:
+    await _ensure_tables()
+    _configure(monkeypatch, scope=True)
+    monkeypatch.setattr(app_settings, "connector_backfill_max_days", 7)
+    marker = uuid4().hex[:8]
+    snapshot = await _state_snapshot("jira")
+    fake = _CountingConnector(marker)
+    try:
+        async with AsyncSessionLocal() as session:
+            req = _request("backfill", marker)
+            req.input_snapshot = {
+                "input": {
+                    "since": "2026-01-01",
+                    "until": "2026-01-20",
+                }
+            }
+            session.add(req)
+            await session.flush()
+            result = await run_source_request(
+                session, request=req, connectors={"jira": fake}, run_id=f"r_{marker}"
+            )
+            row = await session.scalar(
+                select(SourceRunRequest).where(
+                    SourceRunRequest.request_key == f"jira-backfill-{marker}"
+                )
+            )
+            await session.commit()
+        assert result["status"] == "blocked_backfill_window"
+        assert fake.backfill_calls == 0
+        assert row.result_summary["blocked_reason"] == "backfill_window_too_wide"
+        assert row.result_summary["backfill_max_days"] == 7
+    finally:
+        await _cleanup(marker)
+        await _restore_state("jira", snapshot)
+
+
 async def test_test_connection_runs_without_scope(monkeypatch) -> None:
     await _ensure_tables()
     _configure(monkeypatch, scope=False)

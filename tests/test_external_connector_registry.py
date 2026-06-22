@@ -54,6 +54,14 @@ def test_external_connector_registry_includes_known_provider_classes() -> None:
     )
     assert by_provider["github"]["source_of_truth_role"] == "raw_event_source_only"
     assert by_provider["jira"]["source_of_truth_role"] == "raw_event_source_only"
+    assert by_provider["gmail"]["connector_status"] == "local_only"
+    assert by_provider["gmail"]["execution_mode"] == "local_noop"
+    assert by_provider["gmail"]["readiness_category"] == "present/local_only/noop"
+    assert by_provider["google_drive"]["connector_status"] == "local_only"
+    assert by_provider["google_drive"]["execution_mode"] == "local_noop"
+    assert by_provider["google_drive"]["readiness_category"] == (
+        "present/local_only/noop"
+    )
     _assert_safe(catalog)
 
 
@@ -78,7 +86,14 @@ def test_external_connector_readiness_summary_uses_safe_classes_only() -> None:
     assert summary["scheduler_execution"] == "disabled"
     assert summary["payload_leakage"] == "absent"
     assert summary["repository_portfolio"] == "present/safe_counts_only"
-    assert summary["repository_portfolio_repo_count"] == 19
+    assert summary["repository_portfolio_legacy_seed_repo_count"] == 19
+    assert summary["repository_portfolio_repo_count"] >= summary[
+        "repository_portfolio_legacy_seed_repo_count"
+    ]
+    assert summary["repository_portfolio_repo_count_source"] in {
+        "github_discovery_snapshot",
+        "legacy_seed_catalog",
+    }
     assert summary["github_live_inventory_status"] == "gated_not_verified"
     assert summary["github_target_owner_class"] == "github_organization"
     assert summary["github_target_org_key"] == "qtwin-io"
@@ -100,11 +115,14 @@ def test_external_connector_inventory_categories_are_sanitized() -> None:
 
     assert categories["github"] == "guarded_live_boundary"
     assert categories["jira"] == "guarded_live_boundary"
+    assert categories["gmail"] == "local_only_noop"
+    assert categories["google_drive"] == "local_only_noop"
     assert categories["payload_mapper"] == "read_only_local_transform"
     assert set(categories.values()) <= {
         "already_guarded",
         "already_guarded_delivery_interface",
         "guarded_live_boundary",
+        "local_only_noop",
         "planned_connector",
         "read_only_local_transform",
     }

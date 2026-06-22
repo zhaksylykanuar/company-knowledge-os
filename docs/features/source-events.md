@@ -30,7 +30,10 @@
 - Gmail message source events can be projected into `NormalizedActivityItem`
   rows as `source="gmail"` and `activity_type="email.received"` for explicit
   local attention triage windows.
-- SourceEvent persistence from external inputs requires future API auth and webhook signature validation boundaries.
+- SourceEvent persistence from external inputs happens through the Source
+  Control orchestrator/connector ingestion boundary or through already-protected
+  local/manual paths. Public webhook ingestion still requires future API auth
+  and webhook signature validation boundaries.
 
 ## Activity Normalization
 
@@ -69,6 +72,8 @@
 
 - No public SourceEvent query/read API is visible yet.
 - Duplicate or legacy Drive/Gmail ingested events are not repaired into SourceEvent rows by backfill.
-- GitHub/Jira/Telegram real connectors are planned, not implemented.
-- Live GitHub/Jira/Drive webhook handling and API polling are deferred.
+- Opt-in read-only GitHub/Jira Source Control connectors exist for operator-run
+  polling. Public webhook handling, production schedulers, and external writes
+  remain deferred.
+- Live Drive webhook handling and production API polling are deferred.
 - GitHub/Jira/Drive digest integration is deferred.

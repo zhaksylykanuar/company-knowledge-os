@@ -15,6 +15,7 @@ from app.services.connector_clients import (
     LiveGitHubReadOnlyProvider,
     LiveJiraReadOnlyProvider,
 )
+from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
 from app.services.source_connectors import default_connector_registry
 from app.services.source_run_orchestrator import run_source_request
 from tests.test_stage11_connector_ingestion import (
@@ -70,6 +71,32 @@ def test_enabling_flag_wires_real_client_boundary(monkeypatch) -> None:
     assert registry["jira"]._real_disabled is False
     assert registry["jira"]._client is not None
     assert registry["github"]._client is not None
+
+
+class _FakeResponse:
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict:
+        return {"ok": True}
+
+
+class _FakeAsyncClient:
+    calls: list[tuple[str, dict]] = []
+
+    def __init__(self, *args, **kwargs) -> None:
+        self.args = args
+        self.kwargs = kwargs
+
+    async def __aenter__(self) -> "_FakeAsyncClient":
+        return self
+
+    async def __aexit__(self, *exc_info) -> None:
+        return None
+
+    async def get(self, url: str, **kwargs) -> _FakeResponse:
+        self.calls.append((url, kwargs))
+        return _FakeResponse()
 
 
 async def test_live_providers_never_network_when_disabled(monkeypatch) -> None:
@@ -140,6 +167,89 @@ async def test_configured_jira_run_skips_when_real_disabled(monkeypatch) -> None
         )
         # No fake "connected" from a disabled run.
         assert state is None or state.last_success_at is None
+    finally:
+        await _cleanup(marker)
+        await _restore_state("jira", snapshot)
+
+
+async def test_request_snapshot_live_ack_does_not_authorize_provider_run(
+    monkeypatch,
+) -> None:
+    await _ensure_tables()
+    monkeypatch.setattr(app_settings, "enable_real_connectors", True)
+    monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
+    monkeypatch.setenv("JIRA_EMAIL", "ops@example.com")
+    monkeypatch.setenv("JIRA_API_TOKEN", "stage15-fake-token-value")
+
+    def _boom(*args, **kwargs):  # pragma: no cover - must never be called
+        raise AssertionError("network attempted without live provider ack")
+
+    monkeypatch.setattr(httpx, "AsyncClient", _boom)
+    marker = uuid4().hex[:8]
+    snapshot = await _state_snapshot("jira")
+    try:
+        async with AsyncSessionLocal() as session:
+            request = _make_request("jira", "test", marker)
+            request.input_snapshot = {
+                "input": {
+                    "allow_live_provider_execution": True,
+                    "live_provider_ack_supplied": True,
+                    "provider_execution_ack_valid": True,
+                }
+            }
+            session.add(request)
+            await session.flush()
+            result = await run_source_request(
+                session, request=request, run_id=f"src_run_{marker}"
+            )
+            await session.commit()
+        assert result["status"] == "skipped"
+        async with AsyncSessionLocal() as session:
+            row = await session.scalar(
+                select(SourceRunRequest).where(
+                    SourceRunRequest.request_key == f"jira-test-{marker}"
+                )
+            )
+        assert row.result_summary["status"] == "skipped"
+        assert row.result_summary["sanitized_summary"]["mode"] == (
+            "provider_execution_blocked"
+        )
+        assert row.result_summary["sanitized_summary"]["reason"] == (
+            "provider_execution_default_denied"
+        )
+    finally:
+        await _cleanup(marker)
+        await _restore_state("jira", snapshot)
+
+
+async def test_enabled_jira_run_accepts_runner_live_provider_ack(
+    monkeypatch,
+) -> None:
+    await _ensure_tables()
+    monkeypatch.setattr(app_settings, "enable_real_connectors", True)
+    monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
+    monkeypatch.setenv("JIRA_EMAIL", "ops@example.com")
+    monkeypatch.setenv("JIRA_API_TOKEN", "stage15-fake-token-value")
+    _FakeAsyncClient.calls = []
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeAsyncClient)
+    marker = uuid4().hex[:8]
+    snapshot = await _state_snapshot("jira")
+    try:
+        async with AsyncSessionLocal() as session:
+            request = _make_request("jira", "test", marker)
+            session.add(request)
+            await session.flush()
+            result = await run_source_request(
+                session,
+                request=request,
+                run_id=f"src_run_{marker}",
+                allow_live_provider_execution=True,
+                provider_execution_ack=LIVE_PROVIDER_EXECUTION_ACK,
+            )
+            await session.commit()
+        assert result["status"] == "succeeded"
+        assert _FakeAsyncClient.calls
+        assert _FakeAsyncClient.calls[0][0].endswith("/rest/api/3/myself")
     finally:
         await _cleanup(marker)
         await _restore_state("jira", snapshot)

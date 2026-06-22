@@ -2,8 +2,10 @@
 
 ## Status
 
-- Gmail read-only API wrapper: implemented
-- Gmail raw backfill: partial
+- Current default: request-only/local/noop. The default Source Control registry
+  does not wire a real Gmail client.
+- Gmail read-only API wrapper library: implemented
+- Gmail raw backfill request wrapper: implemented through Source Control
 - Gmail backfill activation/query guardrail: implemented
 - Gmail manual backfill limit guardrail: implemented
 - Gmail manual backfill response redaction: implemented
@@ -13,24 +15,39 @@
 
 ## Current Behavior
 
-- Gmail messages can be listed and fetched with read-only scope.
-- Gmail backfill is disabled by default and must be explicitly enabled before
-  the route calls connector code.
-- Enabled Gmail backfill requires a narrower explicit query or configured safe
-  query. The historical broad `in:inbox OR in:sent` query is rejected.
-- Manual Gmail backfill uses a safe default of 10 messages per request and a
+- Low-level Gmail read-only wrapper code exists, but the current default Source
+  Control registry does not wire a real Gmail client. Operator-facing Source
+  Control runs use local already-ingested records/noop behavior until a
+  first-class real Google client is implemented and explicitly enabled.
+- Preferred operator path is Source Control:
+  `POST /v1/founder/sources/gmail/{preview_sync|backfill}` records a request,
+  and `scripts/run_source_requests.py` advances that queued request through the
+  orchestrator.
+- The compatibility `POST /v1/gmail/backfill` route is request-only. It does
+  not call Gmail connector code, write raw storage, or persist provider data.
+  It records a redacted Source Control request instead.
+- On the compatibility route, `persist=false` maps to a `preview_sync` request
+  and `persist=true` maps to a `backfill` request for the orchestrator; the
+  wrapper itself never performs the live Gmail read.
+- An explicit Gmail query on the compatibility route must be non-blank and
+  narrower than the historical broad `in:inbox OR in:sent` query. The raw query
+  is not stored or returned. If omitted, the route records only that the
+  configured query path was selected.
+- Gmail request wrappers use a safe default of 10 messages per request and a
   hard API maximum of 50 messages per request.
-- Manual Gmail backfill responses are redacted by default and return safe
-  counts/status fields instead of snippets, subjects, email addresses,
-  attachment names, provider message IDs, thread IDs, or raw event payloads.
+- Gmail request wrapper responses are redacted by default and return request
+  IDs, status, action type, source type, safe limits, and sanitized input flags
+  instead of snippets, subjects, email addresses, attachment names, provider
+  message IDs, thread IDs, or raw event payloads.
 - The protected Google preflight endpoint can validate Gmail backfill readiness
   and safe local Google credential file presence without calling Gmail APIs,
   reading credential contents, or returning the query value, credential paths,
   token paths, or credential values.
 - Local manual Gmail backfill testing should follow
   `../runbooks/google-local-backfill.md`.
-- Raw Gmail messages are stored under raw storage.
-- Threads, messages, and attachment metadata are persisted.
+- Raw Gmail messages, threads, messages, and attachment metadata are persisted
+  only by approved connector/orchestrator execution paths, not by the
+  compatibility HTTP wrapper itself.
 - Deterministic email thread state can be rebuilt from stored Gmail rows with
   no live Gmail or LLM calls. The MVP stores one state row per detected
   conversation using Gmail thread IDs first, then message-header relationships,
@@ -59,7 +76,8 @@
 - Gmail emits registry-compatible `gmail.message.ingested` events with `source_object_type` and `subject` when a Subject header is present.
 - Gmail messages with readable `text/plain` body content, or `text/html` body content when no plain text exists, are converted into `source_documents` and `document_chunks`.
 - Gmail messages without readable body text are skipped for document/chunk creation.
-- Gmail `persist=true` backfill creates SourceEvent rows for new ingested message events when registry-required fields are present.
+- Gmail connector/orchestrator backfill can create SourceEvent rows for new
+  ingested message events when registry-required fields are present.
 - Persisted Gmail message SourceEvent rows can be projected into
   `NormalizedActivityItem` rows with `activity_type="email.received"` for
   explicit local attention triage windows.

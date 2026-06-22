@@ -93,7 +93,7 @@ _CONNECTOR_ACTIONS: dict[str, tuple[str, str, str]] = {
     "sync_requested": ("run_sync", "medium", "run the operator script for the queued request"),
     "test_failed": ("inspect_failed_run", "high", "inspect the failed connector run"),
     "sync_failed": ("inspect_failed_run", "high", "inspect the failed connector run"),
-    "test_succeeded": ("run_sync", "medium", "run a connector sync"),
+    "test_succeeded": ("run_preview_sync", "medium", "preview connector sync"),
     "synced_no_events": ("run_sync", "low", "check source scope or backfill"),
     "sync_succeeded": ("run_evidence_pipeline", "low", "process new evidence into the graph"),
     "connected": ("run_evidence_pipeline", "low", "process new evidence into the graph"),

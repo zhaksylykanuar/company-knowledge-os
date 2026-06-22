@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, select
 
+import app.services.command_center as command_center_service
 from app.api.auth import settings
 from app.db.agent_models import AgentProposal, AgentRunLog
 from app.db.base import AsyncSessionLocal, engine
@@ -248,6 +249,105 @@ async def test_sales_signals_endpoint_founder_only(monkeypatch) -> None:
 
 
 # --- command center unassigned bucket -----------------------------------
+
+
+async def test_command_center_next_actions_preserve_evidence_provenance(
+    monkeypatch,
+) -> None:
+    async def fake_overview(**kwargs: object) -> dict[str, object]:
+        return {
+            "status": {"level": "yellow", "headline": "Есть действия"},
+            "metrics": {},
+            "projects": [],
+            "risks": [],
+            "actions": [
+                {
+                    "title": "Позвонить клиенту",
+                    "item_type": "task",
+                    "attention_score": 0.91,
+                    "impact": "high",
+                    "urgent": True,
+                    "source_title": "Client One thread",
+                    "source_document_id": 42,
+                    "reasons": ["Клиент ждёт ответа", "Высокая срочность"],
+                }
+            ],
+        }
+
+    async def fake_second_opinion(session: object) -> dict[str, object]:
+        return {
+            "open_total": 0,
+            "by_severity": {},
+            "by_type": {},
+            "top_conflicts": [],
+            "validation_gaps": 0,
+        }
+
+    async def fake_team(session: object, *, now: datetime) -> dict[str, object]:
+        return {"people": [], "overloaded_count": 0, "tracked_people": 0}
+
+    async def fake_freshness(session: object) -> dict[str, object]:
+        return {}
+
+    async def fake_focus(
+        session: object,
+        overview: dict[str, object],
+    ) -> dict[str, object]:
+        return {"declared_focus": None, "focus_progress": None, "has_drift_signal": False}
+
+    async def fake_availability(session: object) -> dict[str, object]:
+        return {"ready": 0, "total_series": 0, "by_status": {}}
+
+    async def fake_share_packs(session: object, *, now: datetime) -> dict[str, object]:
+        return {"pending_count": 0}
+
+    async def fake_source_health(session: object, *, now: datetime) -> dict[str, object]:
+        return {
+            "summary": {
+                "degraded_sources": 0,
+                "pending_requests": 0,
+                "missing_config_sources": 0,
+                "failed_recent_runs": 0,
+                "total_sources": 0,
+            }
+        }
+
+    async def fake_data_quality(session: object, *, now: datetime) -> dict[str, object]:
+        return {"counts": {"by_severity": {}}, "issues": []}
+
+    monkeypatch.setattr(command_center_service, "build_founder_overview", fake_overview)
+    monkeypatch.setattr(
+        command_center_service,
+        "_second_opinion_summary",
+        fake_second_opinion,
+    )
+    monkeypatch.setattr(command_center_service, "_team_load", fake_team)
+    monkeypatch.setattr(command_center_service, "_knowledge_freshness", fake_freshness)
+    monkeypatch.setattr(command_center_service, "_focus_vs_activity", fake_focus)
+    monkeypatch.setattr(command_center_service, "_availability_summary", fake_availability)
+    monkeypatch.setattr(command_center_service, "_share_packs_block", fake_share_packs)
+    monkeypatch.setattr(command_center_service, "build_source_health", fake_source_health)
+    monkeypatch.setattr(
+        command_center_service,
+        "build_data_quality_center",
+        fake_data_quality,
+    )
+
+    result = await command_center_service.build_command_center(object())
+
+    action = result["next_actions"][0]
+    assert action["source_document_id"] == 42
+    assert action["reasons"] == ["Клиент ждёт ответа", "Высокая срочность"]
+    assert action["item_type"] == "task"
+    assert action["attention_score"] == 0.91
+    assert action["evidence_status"] == "evidence_backed"
+    assert action["provenance"] == {
+        "source": "founder_overview.actions",
+        "source_label_ru": "Действие из evidence-backed read-model",
+        "evidence_backed": True,
+        "synthetic": False,
+        "ui_fallback": False,
+    }
 
 
 async def test_command_center_has_unassigned_bucket(monkeypatch) -> None:

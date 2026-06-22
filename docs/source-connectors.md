@@ -11,6 +11,8 @@ adds a write path.
 - GitHub: read-only readiness, test, sync, and backfill contract.
 - Gmail / Email: local stored email records are supported; OAuth/provider
   reads require configured credentials and explicit operator execution.
+- Drive: local/noop Source Control request path is supported; live Google Drive
+  reads are not wired into the default connector registry yet.
 - Meetings: internal/local documents and meeting-like records.
 - Declarations: internal declaration records.
 - Manual inputs: internal/manual source documents.
@@ -57,13 +59,16 @@ Required backend env vars:
 - Jira: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` (read-only API token).
 - GitHub: `GITHUB_TOKEN` (read-only), plus optional `GITHUB_REPOS`
   (`owner/repo,owner/other`) and `GITHUB_ORG` to scope reads.
-- Gmail: stays **local-only** in this release. If OAuth is not configured the
-  diagnostics report `local_only` / `oauth_not_configured` and never a fake
-  `connected` state. Already-ingested local email threads are read without any
-  network call; raw email bodies never leave backend storage.
+- Gmail/Drive: stay **local-only/noop through Source Control** in this release.
+  Low-level Google wrappers and compatibility request routes exist, but the
+  default Source Control registry does not wire real Google clients yet.
+  Diagnostics report `local_only`, `noop`, or `oauth_not_configured` rather
+  than a fake `connected` state. Already-ingested local email/file records are
+  read without any network call; raw email bodies and document contents never
+  leave backend storage.
 
-Read-only guarantee: connectors only issue HTTP GET reads. No connector writes
-to Jira, GitHub, or Gmail, and no email is ever sent.
+Read-only guarantee: live connectors only issue HTTP GET reads. No connector
+writes to Jira, GitHub, Gmail, or Drive, and no email is ever sent.
 
 ### Enable, test, and sync from the UI
 
@@ -71,11 +76,15 @@ to Jira, GitHub, or Gmail, and no email is ever sent.
    (`uv run python scripts/start_local.py`).
 2. Open `http://127.0.0.1:8765/ui` → **Sources / Data Control**.
 3. For Jira or GitHub: **Test connection** (records a founder request).
-4. **Sync now** to record a sync request; **Backfill** for a bounded history.
+4. **Preview sync** first to record a no-write preview request; after reviewing
+   the receipt/scope, use **Sync now** or **Backfill** for bounded history.
 5. Execute the queued requests with the operator script:
 
 ```bash
-uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS"
+uv run python scripts/run_source_requests.py \
+  --confirm-run "RUN SOURCE REQUESTS" \
+  --allow-live-provider-execution \
+  --acknowledge-live-provider-risk "ALLOW LIVE PROVIDER EXECUTION"
 ```
 
 A connector only shows `connected` after a real `test`/`sync` succeeds — never
@@ -91,9 +100,11 @@ environment-variable names and masked statuses are exposed.
 
 ## Safe Live Connector Setup (scopes & limits)
 
-Before any real Jira/GitHub read, an explicit scope is required so a whole org
-can never be read by accident. `test_connection` is exempt (it is only a
-read-only auth check); `sync`, `preview_sync`, and `backfill` require a scope.
+Before any real Jira/GitHub read, the operator must provide the live-provider
+acknowledgement phrase at execution time. `test_connection` is exempt only from
+scope (it is a read-only auth check); `sync`, `preview_sync`, and `backfill`
+require both the live-provider ack and an explicit scope so a whole org can
+never be read by accident.
 
 1. Keep real connectors disabled by default
    (`FOUNDEROS_ENABLE_REAL_CONNECTORS=false`).
@@ -112,7 +123,8 @@ FOUNDEROS_ENABLE_REAL_CONNECTORS=true
 ```
 
 5. Restart the backend.
-6. **Test connection** (works without a scope).
+6. **Test connection** (works without a scope, but the operator runner still
+   needs live-provider ack to call the provider).
 7. **Preview sync** — counts and shows sample sanitized titles; writes no
    source events.
 8. **Sync** — only runs when a scope is configured.
@@ -131,7 +143,8 @@ Guarantees:
 
 - No writes to Jira/GitHub/Gmail; no email is sent.
 - No full-org scan: sync/backfill are blocked with `blocked_missing_scope` until
-  an explicit scope is set; a wildcard/`*` scope is flagged as too broad.
+  an explicit scope is set, and with `blocked_scope_too_broad` when the scope is
+  a wildcard/`*`/`all`.
 - Limits bound every live read.
 - Tests use fakes and never hit a real external API.
 - Secrets stay backend-side and never reach the browser, API, audit, source
@@ -161,11 +174,14 @@ uv run python scripts/run_local_connector_pilot.py \
 FOUNDEROS_ENABLE_REAL_CONNECTORS=true
 ```
 
-5. Run test/sync through the Sources UI (Test connection → Sync now) or re-run
-   the pilot. Execute queued requests with:
+5. Run test/preview/sync through the Sources UI (Test connection → Preview
+   sync → Sync now) or re-run the pilot. Execute queued requests with:
 
 ```bash
-uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS"
+uv run python scripts/run_source_requests.py \
+  --confirm-run "RUN SOURCE REQUESTS" \
+  --allow-live-provider-execution \
+  --acknowledge-live-provider-risk "ALLOW LIVE PROVIDER EXECUTION"
 ```
 
 6. Process evidence into the graph:
@@ -222,8 +238,10 @@ Watermark rules:
   runs never update the normal sync watermark.
 - `sync` updates the normal watermark only on success or partial success with a
   valid output watermark.
-- `backfill` never overwrites the normal sync watermark; it records its window
-  in the receipt/result summary.
+- `backfill` never overwrites the normal sync watermark; for live-scoped Jira
+  and GitHub reads it must include a bounded `since` window within
+  `FOUNDEROS_CONNECTOR_BACKFILL_MAX_DAYS`, then records that window in the
+  receipt/result summary.
 - completed requests do not run twice.
 
 Pagination and limits:
@@ -250,7 +268,10 @@ Operator sequence:
 uv run python scripts/run_local_connector_pilot.py \
   --confirm-run "RUN LOCAL CONNECTOR PILOT" --preview-only
 
-uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS"
+uv run python scripts/run_source_requests.py \
+  --confirm-run "RUN SOURCE REQUESTS" \
+  --allow-live-provider-execution \
+  --acknowledge-live-provider-risk "ALLOW LIVE PROVIDER EXECUTION"
 
 uv run python scripts/run_evidence_pipeline.py --confirm-run "RUN EVIDENCE PIPELINE"
 
@@ -263,14 +284,17 @@ Source actions are requested through Source Control Center first. The operator
 execution command is:
 
 ```bash
-uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS"
+uv run python scripts/run_source_requests.py \
+  --confirm-run "RUN SOURCE REQUESTS" \
+  --allow-live-provider-execution \
+  --acknowledge-live-provider-risk "ALLOW LIVE PROVIDER EXECUTION"
 ```
 
 The script processes queued source run requests through the orchestrator. It
 does not push code and does not require credentials for noop or local internal
 sources. External adapters must remain read-only and behind explicit
-configuration, unpaused source state, a queued request, and the confirmation
-flag.
+configuration, unpaused source state, a queued request, the run confirmation
+flag, and the live-provider acknowledgement phrase.
 
 ## Ingestion Contract
 

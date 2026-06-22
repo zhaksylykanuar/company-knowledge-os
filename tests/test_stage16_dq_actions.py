@@ -96,6 +96,9 @@ async def test_dq_tested_not_synced(monkeypatch) -> None:
         await session.rollback()
     cats = {i["category"] for i in center["issues"]}
     assert "connector_tested_not_synced" in cats
+    tested = next(i for i in center["issues"] if i["category"] == "connector_tested_not_synced")
+    assert tested["cta"]["action"] == "preview_sync"
+    assert "Preview sync" in tested["suggested_action"]
 
 
 async def test_dq_synced_without_events(monkeypatch) -> None:
@@ -135,6 +138,42 @@ async def test_action_center_includes_connector_actions(monkeypatch) -> None:
         assert action["group_reason"]
         assert action["action_ref"]["kind"] in {"connector", "obsidian"}
     assert not contains_secret_value(json.dumps(center))
+
+
+async def test_action_center_test_succeeded_suggests_preview_before_sync(
+    monkeypatch,
+) -> None:
+    await _ensure_tables()
+    monkeypatch.setattr(app_settings, "enable_real_connectors", True)
+    monkeypatch.setenv("FOUNDEROS_JIRA_PROJECT_KEYS", "QS")
+    _configure_jira(monkeypatch)
+    marker = uuid4().hex[:8]
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(SourceControlState).where(SourceControlState.source_type == "jira")
+        )
+        session.add(
+            SourceControlState(
+                source_type="jira",
+                status="connected",
+                last_success_at=datetime(2026, 6, 14, tzinfo=timezone.utc),
+            )
+        )
+        session.add(_test_request(marker))
+        await session.flush()
+        center = await build_action_center(session)
+        await session.rollback()
+
+    connector_actions = [
+        action
+        for action in center["actions"]
+        if action["source"] == "connector"
+        and action["affected_entity"] == "jira"
+        and action["action_ref"].get("pipeline_state") == "test_succeeded"
+    ]
+    assert connector_actions
+    assert connector_actions[0]["action_type"] == "run_preview_sync"
+    assert "Preview sync" in connector_actions[0]["why_now"]
 
 
 async def test_queued_request_is_not_succeeded_and_terminal_not_rerun(

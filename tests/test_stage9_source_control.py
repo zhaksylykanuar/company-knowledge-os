@@ -21,6 +21,7 @@ from app.db.share_pack_models import SharePack
 from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.db.source_models import SourceDocument
 from app.main import app
+from app.services.provider_execution_guard import LIVE_PROVIDER_EXECUTION_ACK
 
 
 def _client() -> AsyncClient:
@@ -218,7 +219,43 @@ async def test_source_health_counts_and_masks_connector_setup(monkeypatch) -> No
         assert "LEAKED-JIRA-VALUE" not in response.text
         assert "LEAKED-GH-VALUE" not in response.text
         assert "masked" in setup_blob
+        drive = next(item for item in body["sources"] if item["source_type"] == "drive")
+        assert drive["label"] == "Google Drive"
+        backfill = next(action for action in drive["safe_actions"] if action["action"] == "backfill")
+        assert backfill["external_side_effect"] is False
         assert body["summary"]["total_sources"] >= 8
+    finally:
+        await _cleanup(marker)
+
+
+async def test_drive_source_control_action_is_request_only(monkeypatch) -> None:
+    await _ensure_tables()
+    marker = uuid4().hex[:8]
+    _set_auth(monkeypatch, enabled=False)
+    try:
+        async with _client() as client:
+            response = await client.post(
+                "/v1/founder/sources/drive/backfill",
+                json={
+                    "request_key": f"drive-backfill-{marker}",
+                    "input": {"max_results": 1},
+                },
+            )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["source_type"] == "drive"
+        assert body["action_type"] == "backfill"
+        assert body["external_side_effect"] is False
+
+        async with AsyncSessionLocal() as session:
+            row = await session.scalar(
+                select(SourceRunRequest).where(
+                    SourceRunRequest.request_key == f"drive-backfill-{marker}"
+                )
+            )
+        assert row is not None
+        assert row.source_type == "drive"
+        assert row.status == "requested"
     finally:
         await _cleanup(marker)
 
@@ -301,14 +338,24 @@ async def test_source_control_request_input_is_log_safe(monkeypatch) -> None:
                 "/v1/founder/sources/manual_inputs/test",
                 json={
                     "request_key": f"safe-input-{marker}",
-                    "input": {"api_token": secret_value, "limit": 10},
+                    "input": {
+                        "api_token": secret_value,
+                        "limit": 10,
+                        "allow_live_provider_execution": True,
+                        "provider_execution_ack": LIVE_PROVIDER_EXECUTION_ACK,
+                    },
                 },
             )
         assert response.status_code == 200
         assert secret_value not in response.text
+        assert LIVE_PROVIDER_EXECUTION_ACK not in response.text
         body = response.json()
         assert body["input_snapshot"]["input"]["api_token"] == "***redacted***"
         assert body["input_snapshot"]["input"]["limit"] == 10
+        assert body["input_snapshot"]["input"]["allow_live_provider_execution"] is True
+        assert body["input_snapshot"]["input"]["live_provider_ack_supplied"] is True
+        assert "provider_execution_ack_valid" not in body["input_snapshot"]["input"]
+        assert "provider_execution_ack" not in body["input_snapshot"]["input"]
 
         async with AsyncSessionLocal() as session:
             row = await session.scalar(
@@ -318,6 +365,7 @@ async def test_source_control_request_input_is_log_safe(monkeypatch) -> None:
             )
         assert row is not None
         assert secret_value not in json.dumps(row.input_snapshot)
+        assert LIVE_PROVIDER_EXECUTION_ACK not in json.dumps(row.input_snapshot)
     finally:
         await _cleanup(marker)
 

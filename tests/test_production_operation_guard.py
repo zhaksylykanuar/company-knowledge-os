@@ -3,10 +3,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete, select
 
 import app.api.drive as drive_api
 import app.api.gmail as gmail_api
+from app.core.config import settings as app_settings
+from app.db.base import AsyncSessionLocal, engine
+from app.db.models import AuditLog
+from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.main import app
 from app.services.production_operation_guard import (
     DELIVERY_EXECUTION,
@@ -44,13 +49,9 @@ PRODUCTION_OPERATION_BOUNDARY_INVENTORY = {
     "app/api/knowledge.py::ingest_text_process_endpoint": (
         "guarded_source_of_truth_mutation"
     ),
-    "app/api/gmail.py::gmail_backfill": "guarded_source_of_truth_mutation",
-    "app/api/drive.py::drive_backfill": "guarded_source_of_truth_mutation",
 }
 
 GUARDED_OPERATION_FILES = {
-    "app/api/drive.py",
-    "app/api/gmail.py",
     "app/api/knowledge.py",
     "app/services/knowledge_ingestion.py",
     "app/services/obsidian_exporter.py",
@@ -58,6 +59,33 @@ GUARDED_OPERATION_FILES = {
     "scripts/export_obsidian_vault.py",
     "scripts/send_test_telegram_delivery_intention.py",
 }
+
+
+def _client() -> AsyncClient:
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+
+async def _ensure_source_control_tables() -> None:
+    async with engine.begin() as conn:
+        for table in (
+            AuditLog.__table__,
+            SourceControlState.__table__,
+            SourceRunRequest.__table__,
+        ):
+            await conn.run_sync(table.create, checkfirst=True)
+
+
+async def _cleanup_source_requests(marker: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(SourceRunRequest).where(SourceRunRequest.request_key.like(f"%{marker}%"))
+        )
+        await session.execute(
+            delete(SourceControlState).where(
+                SourceControlState.last_request_key.like(f"%{marker}%")
+            )
+        )
+        await session.commit()
 
 
 def test_production_operation_guard_default_denies_without_ack() -> None:
@@ -371,12 +399,15 @@ async def test_export_script_default_denies_before_score_refresh_or_export(
     assert export_called is False
 
 
-def test_gmail_backfill_persist_default_denies_before_connector(
+async def test_gmail_backfill_persist_records_source_request_without_connector(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(gmail_api.settings, "api_auth_enabled", False)
-    monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_enabled", True)
-    monkeypatch.setattr(gmail_api.settings, "google_gmail_backfill_query", "label:synthetic")
+    await _ensure_source_control_tables()
+    marker = "prod-guard-gmail"
+    request_key = f"{marker}-backfill"
+    monkeypatch.setattr(app_settings, "api_auth_enabled", False)
+    monkeypatch.setattr(app_settings, "google_gmail_backfill_enabled", False)
+    monkeypatch.setattr(app_settings, "google_gmail_backfill_query", "label:synthetic")
 
     connector_called = False
 
@@ -387,23 +418,43 @@ def test_gmail_backfill_persist_default_denies_before_connector(
 
     monkeypatch.setattr(gmail_api, "list_messages", forbidden_list_messages)
 
-    with TestClient(app) as client:
-        response = client.post(
-            "/v1/gmail/backfill",
-            params={"persist": "true"},
-        )
+    try:
+        async with _client() as client:
+            response = await client.post(
+                "/v1/gmail/backfill",
+                params={"persist": "true", "request_key": request_key},
+            )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == PRODUCTION_OPERATION_DEFAULT_DENIED
-    assert connector_called is False
+        assert response.status_code == 202
+        body = response.json()
+        assert body["mode"] == "source_control_request"
+        assert body["action_type"] == "backfill"
+        assert body["source_control_request"]["external_side_effect"] is False
+        assert connector_called is False
+
+        async with AsyncSessionLocal() as session:
+            row = await session.scalar(
+                select(SourceRunRequest).where(
+                    SourceRunRequest.request_key == request_key
+                )
+            )
+        assert row is not None
+        assert row.source_type == "gmail"
+        assert row.action_type == "backfill"
+        assert row.external_side_effect is False
+    finally:
+        await _cleanup_source_requests(marker)
 
 
-def test_drive_backfill_persist_default_denies_before_connector(
+async def test_drive_backfill_persist_records_source_request_without_connector(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(drive_api.settings, "api_auth_enabled", False)
-    monkeypatch.setattr(drive_api.settings, "google_drive_backfill_enabled", True)
-    monkeypatch.setattr(drive_api.settings, "google_drive_ai_inbox_folder_id", "synthetic")
+    await _ensure_source_control_tables()
+    marker = "prod-guard-drive"
+    request_key = f"{marker}-backfill"
+    monkeypatch.setattr(app_settings, "api_auth_enabled", False)
+    monkeypatch.setattr(app_settings, "google_drive_backfill_enabled", False)
+    monkeypatch.setattr(app_settings, "google_drive_ai_inbox_folder_id", "synthetic")
 
     connector_called = False
 
@@ -414,12 +465,29 @@ def test_drive_backfill_persist_default_denies_before_connector(
 
     monkeypatch.setattr(drive_api, "list_ai_inbox_files", forbidden_list_files)
 
-    with TestClient(app) as client:
-        response = client.post(
-            "/v1/drive/backfill",
-            params={"persist": "true"},
-        )
+    try:
+        async with _client() as client:
+            response = await client.post(
+                "/v1/drive/backfill",
+                params={"persist": "true", "request_key": request_key},
+            )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == PRODUCTION_OPERATION_DEFAULT_DENIED
-    assert connector_called is False
+        assert response.status_code == 202
+        body = response.json()
+        assert body["mode"] == "source_control_request"
+        assert body["action_type"] == "backfill"
+        assert body["source_control_request"]["external_side_effect"] is False
+        assert connector_called is False
+
+        async with AsyncSessionLocal() as session:
+            row = await session.scalar(
+                select(SourceRunRequest).where(
+                    SourceRunRequest.request_key == request_key
+                )
+            )
+        assert row is not None
+        assert row.source_type == "drive"
+        assert row.action_type == "backfill"
+        assert row.external_side_effect is False
+    finally:
+        await _cleanup_source_requests(marker)

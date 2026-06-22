@@ -46,7 +46,9 @@ SECURITY_POLICY = {
 CONNECTOR_DOCS = "docs/source-connectors.md"
 RESTART_CMD = "uv run python scripts/start_local.py"
 RUN_SOURCE_REQUESTS_CMD = (
-    'uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS"'
+    'uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS" '
+    '--allow-live-provider-execution --acknowledge-live-provider-risk '
+    '"ALLOW LIVE PROVIDER EXECUTION"'
 )
 RUN_EVIDENCE_CMD = (
     'uv run python scripts/run_evidence_pipeline.py --confirm-run "RUN EVIDENCE PIPELINE"'
@@ -77,6 +79,12 @@ SETUP_STEPS: dict[str, list[str]] = {
         "Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET (backend env).",
         "Complete the Gmail OAuth token file, or rely on already-ingested "
         "local email records.",
+        "Restart the backend, then run Test connection.",
+    ],
+    "drive": [
+        "Set FOS_GOOGLE_DRIVE_READONLY_CLIENT_ID and "
+        "FOS_GOOGLE_DRIVE_READONLY_CLIENT_SECRET (backend env).",
+        "Set GOOGLE_DRIVE_AI_INBOX_FOLDER_ID to the bounded folder.",
         "Restart the backend, then run Test connection.",
     ],
     "meetings": [
@@ -322,8 +330,8 @@ def _runbook(
         }
     if pipeline_state == "test_succeeded":
         return {
-            "stage": "sync",
-            "next_action": "Click Sync now, then run the operator script.",
+            "stage": "preview_sync",
+            "next_action": "Click Preview sync, review scope/limits, then run the operator script.",
             "next_command": RUN_SOURCE_REQUESTS_CMD,
             "blockers": [],
         }

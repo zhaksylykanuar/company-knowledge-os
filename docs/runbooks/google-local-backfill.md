@@ -8,9 +8,9 @@ full production sync.
 
 ## Current Status
 
-- Gmail and Google Drive manual backfill routes exist, but they are guarded and
-  are not production sync.
-- Gmail and Drive backfill are default-off:
+- Gmail and Google Drive compatibility backfill routes exist as Source Control
+  request wrappers. They record redacted requests and are not production sync.
+- Live Gmail and Drive connector execution remains default-off/guarded:
   `GOOGLE_GMAIL_BACKFILL_ENABLED=false` and
   `GOOGLE_DRIVE_BACKFILL_ENABLED=false`.
 - Real Google credentials are not included in the repo.
@@ -49,11 +49,12 @@ full production sync.
 Before any future local manual backfill test:
 
 - Confirm the repo is clean with `git status --short`.
-- Start Postgres and Redis with `docker compose up -d postgres redis`.
-- Apply migrations with `uv run alembic upgrade head`.
-- Start the API with `uv run uvicorn app.main:app --reload`.
+- Start the local backend with `uv run python scripts/start_local.py`; it
+  bootstraps the local workspace and runs migrations before serving
+  `127.0.0.1:8765`.
 - Use `X-FounderOS-API-Key: YOUR_API_KEY` if local API auth is enabled.
-- Enable Gmail or Drive backfill only for a controlled local test.
+- Enable live Gmail or Drive connector execution only for a controlled local
+  orchestrator test.
 - Keep Gmail query scope narrow and explicit.
 - Keep Drive folder scope explicit with `GOOGLE_DRIVE_AI_INBOX_FOLDER_ID`.
 - Start with `max_results=1` before testing the default of 10.
@@ -67,13 +68,12 @@ readiness step before any real Gmail or Drive manual backfill is attempted.
 
 Do not run these actions during FOS-029:
 
-- Do not call `POST /v1/gmail/backfill`.
-- Do not call `POST /v1/drive/backfill`.
+- Do not use `POST /v1/gmail/backfill` or `POST /v1/drive/backfill` as proof
+  of Google readiness; they only create Source Control requests.
 - Do not call Google APIs, OAuth flows, Gmail connectors, or Drive connectors.
 - Do not start a local app session that points at real Google services.
-- Do not treat `persist=false` as a no-Google dry run. The current backfill
-  routes may still list or fetch through connector paths before deciding
-  whether to persist local records.
+- Do not treat a recorded request as a completed provider dry run. Provider
+  execution happens only through the Source Control orchestrator/adapters.
 
 The only intended endpoint for the first real local readiness check is
 `GET /v1/google/backfill/preflight`, and only in a later human-approved local
@@ -132,8 +132,7 @@ Safe before credentials are configured:
 First real step after the human configures local credentials:
 
 - Run only the protected `GET /v1/google/backfill/preflight` endpoint.
-- Do not call `POST /v1/gmail/backfill`.
-- Do not call `POST /v1/drive/backfill`.
+- Do not run the Source Control orchestrator yet.
 - Do not use a broad Gmail query.
 - Do not use sync-all Drive behavior.
 - Do not run any persistence-changing backfill.
@@ -153,12 +152,15 @@ Before that real preflight, the human must confirm:
 
 After a successful real preflight:
 
-- The first Gmail test must be separately human-approved, use
-  `max_results=1`, and use only the chosen narrow query.
-- The first Drive test must be separately human-approved, use
-  `max_results=1`, and stay inside the chosen folder boundary.
-- Treat `persist=false` as a real Google API call. It avoids local
-  persistence, but connector listing or fetching may still happen.
+- The first Gmail Source Control/orchestrator test must be separately
+  human-approved, use `max_results=1`, and use only the chosen narrow query.
+- The first Drive Source Control/orchestrator test must be separately
+  human-approved, use `max_results=1`, and stay inside the chosen folder
+  boundary.
+- Treat orchestrator `preview_sync` as a possible real Google API call only
+  after a first-class live Google adapter is explicitly implemented and wired.
+  The current default registry does not wire real Gmail/Drive clients; the
+  compatibility HTTP wrappers themselves do not call Google APIs.
 - Inspect only redacted API response metadata.
 - Never paste private response content into docs, issues, chat, or logs.
 
@@ -177,11 +179,11 @@ Stop immediately if any of these happen:
 
 ## Guardrail Preflight
 
-Before calling either manual backfill route, use the protected preflight endpoint
-to validate local guardrail readiness without calling Google APIs:
+Before any real Google backfill request, use the protected preflight endpoint to
+validate local guardrail readiness without calling Google APIs:
 
 ```bash
-curl -G http://localhost:8000/v1/google/backfill/preflight \
+curl -G http://127.0.0.1:8765/v1/google/backfill/preflight \
   -H "X-FounderOS-API-Key: YOUR_API_KEY" \
   --data-urlencode "gmail_query=YOUR_SAFE_GMAIL_QUERY" \
   --data-urlencode "gmail_max_results=1" \
@@ -204,53 +206,111 @@ OAuth hardening, or production token storage. `overall_ready` is true only when
 Gmail guardrails, Drive guardrails, and the local credential file presence
 checks are ready for a bounded manual backfill check.
 
-## Gmail Safe Manual Backfill
+## Preferred Source Control Request Flow
+
+Use this path for operator runs. It records a request and lets the Source
+Control orchestrator own provider execution, receipts, state transitions, and
+sanitized summaries.
+
+Gmail preview/backfill request:
+
+```bash
+curl -X POST http://127.0.0.1:8765/v1/founder/sources/gmail/backfill \
+  -H "Content-Type: application/json" \
+  -H "X-FounderOS-API-Key: YOUR_API_KEY" \
+  -d '{
+    "request_key": "gmail-backfill-manual-YYYYMMDD",
+    "requested_by": "operator",
+    "input": {
+      "max_results": 1,
+      "mode": "preview_first"
+    }
+  }'
+```
+
+Drive preview/backfill request:
+
+```bash
+curl -X POST http://127.0.0.1:8765/v1/founder/sources/drive/backfill \
+  -H "Content-Type: application/json" \
+  -H "X-FounderOS-API-Key: YOUR_API_KEY" \
+  -d '{
+    "request_key": "drive-backfill-manual-YYYYMMDD",
+    "requested_by": "operator",
+    "input": {
+      "max_results": 1,
+      "mode": "preview_first"
+    }
+  }'
+```
+
+Then run queued requests:
+
+```bash
+uv run python scripts/run_source_requests.py --confirm-run "RUN SOURCE REQUESTS" --limit 5
+```
+
+This advances the Source Control request lifecycle. In the current default
+registry it does not execute real Gmail/Drive API reads because real Google
+clients are not wired.
+
+Report only request IDs, run IDs, statuses, counts, watermarks, and sanitized
+blocker classes. Do not paste provider content, private queries, folder IDs, or
+credential paths into reports.
+
+## Compatibility Gmail Backfill Request Wrapper
+
+This route remains for compatibility. It is already a Source Control wrapper:
+it records a redacted request and does not call Gmail, write raw storage, or
+persist provider data. Prefer the `/v1/founder/sources/gmail/{action}` route
+for new operator flows.
 
 Endpoint:
 
 - Method and path: `POST /v1/gmail/backfill`
 - Query parameters:
   - `query`: explicit Gmail search query. If omitted, the route can use the
-    configured `GOOGLE_GMAIL_BACKFILL_QUERY` only when it is non-blank and safe.
+    configured query path, but it records only a boolean flag and never returns
+    or stores the query value.
   - `max_results`: optional bounded result count. Default is 10. Hard maximum
     is 50.
-  - `persist`: optional boolean. Defaults to `true`.
+  - `persist`: optional boolean. Defaults to `false`; `false` records a
+    `preview_sync` request and `true` records a `backfill` request.
+  - `request_key`: optional idempotency key for the recorded Source Control
+    request.
 
 Activation and guardrails:
 
-- `GOOGLE_GMAIL_BACKFILL_ENABLED` must be explicitly enabled locally.
-- `GOOGLE_GMAIL_BACKFILL_QUERY` is optional and must be narrow if used.
-- Blank queries are rejected.
-- The historical broad query `in:inbox OR in:sent` is rejected.
-- `max_results=0`, negative values, and values above 50 are rejected before the
-  connector path.
-- Persisted or dry-run connector access must pass the live-provider guard with
-  `allow_live_provider_execution=true` and
-  `confirm_live_provider_execution=ALLOW LIVE PROVIDER EXECUTION`.
-- Persisted writes additionally require the source-of-truth mutation guard with
-  `allow_production_operation=true` and
-  `confirm_production_operation=ALLOW PRODUCTION OPERATION`.
-- The API response is intentionally redacted. It returns safe counts/status
-  fields only and must not include raw full email body content, snippets,
-  subjects, email addresses, attachment names, provider message IDs, or thread
-  IDs.
+- Blank explicit queries are rejected.
+- The historical broad explicit query `in:inbox OR in:sent` is rejected.
+- `max_results=0`, negative values, and values above 50 are rejected before a
+  request is recorded.
+- Live-provider and production-operation acknowledgements are reduced to
+  booleans in the recorded request; acknowledgement text is not stored or
+  returned.
+- The API response is intentionally redacted. It returns request IDs, status,
+  source/action type, safe limits, and sanitized input flags only.
 
-Start with a dry manual check before persistence:
+Compatibility preview request:
 
 ```bash
-curl -X POST "http://localhost:8000/v1/gmail/backfill?persist=false&query=YOUR_SAFE_GMAIL_QUERY&max_results=1" \
+curl -X POST "http://127.0.0.1:8765/v1/gmail/backfill?persist=false&query=YOUR_SAFE_GMAIL_QUERY&max_results=1&request_key=gmail-preview-YYYYMMDD" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY"
 ```
 
-After confirming the query and result bounds are safe, a local operator can use
-the same narrow query with `persist=true`:
+Compatibility backfill request:
 
 ```bash
-curl -X POST "http://localhost:8000/v1/gmail/backfill?persist=true&query=YOUR_SAFE_GMAIL_QUERY&max_results=1" \
+curl -X POST "http://127.0.0.1:8765/v1/gmail/backfill?persist=true&query=YOUR_SAFE_GMAIL_QUERY&max_results=1&request_key=gmail-backfill-YYYYMMDD" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY"
 ```
 
-## Google Drive Safe Manual Backfill
+## Compatibility Google Drive Backfill Request Wrapper
+
+This route remains for compatibility. It is already a Source Control wrapper:
+it records a redacted request and does not call Drive, write raw storage, or
+persist provider data. Prefer the `/v1/founder/sources/drive/{action}` route
+for new operator flows.
 
 Endpoint:
 
@@ -258,38 +318,37 @@ Endpoint:
 - Query parameters:
   - `max_results`: optional bounded result count. Default is 10. Hard maximum
     is 50.
-  - `persist`: optional boolean. Defaults to `true`.
+  - `persist`: optional boolean. Defaults to `false`; `false` records a
+    `preview_sync` request and `true` records a `backfill` request.
+  - `request_key`: optional idempotency key for the recorded Source Control
+    request.
 
 Activation and guardrails:
 
-- `GOOGLE_DRIVE_BACKFILL_ENABLED` must be explicitly enabled locally.
-- `GOOGLE_DRIVE_AI_INBOX_FOLDER_ID` must be configured and non-blank.
-- Drive backfill must remain bounded to that configured folder.
+- The route records only whether a Drive folder boundary is configured. It does
+  not store or return the folder ID.
+- Drive backfill execution must remain bounded to the configured folder when a
+  live orchestrator adapter is used.
 - Sync-all Drive behavior is not allowed.
-- `max_results=0`, negative values, and values above 50 are rejected before the
-  connector path.
-- Persisted or dry-run connector access must pass the live-provider guard with
-  `allow_live_provider_execution=true` and
-  `confirm_live_provider_execution=ALLOW LIVE PROVIDER EXECUTION`.
-- Persisted writes additionally require the source-of-truth mutation guard with
-  `allow_production_operation=true` and
-  `confirm_production_operation=ALLOW PRODUCTION OPERATION`.
-- The API response is intentionally redacted. It returns safe counts/status
-  fields only and must not include raw full document contents, file names,
-  titles, Drive links, provider file IDs, or large source contents.
+- `max_results=0`, negative values, and values above 50 are rejected before a
+  request is recorded.
+- Live-provider and production-operation acknowledgements are reduced to
+  booleans in the recorded request; acknowledgement text is not stored or
+  returned.
+- The API response is intentionally redacted. It returns request IDs, status,
+  source/action type, safe limits, and sanitized input flags only.
 
-Start with a dry manual check before persistence:
+Compatibility preview request:
 
 ```bash
-curl -X POST "http://localhost:8000/v1/drive/backfill?persist=false&max_results=1" \
+curl -X POST "http://127.0.0.1:8765/v1/drive/backfill?persist=false&max_results=1&request_key=drive-preview-YYYYMMDD" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY"
 ```
 
-After confirming the folder boundary and result bounds are safe, a local
-operator can use the same bounded folder with `persist=true`:
+Compatibility backfill request:
 
 ```bash
-curl -X POST "http://localhost:8000/v1/drive/backfill?persist=true&max_results=1" \
+curl -X POST "http://127.0.0.1:8765/v1/drive/backfill?persist=true&max_results=1&request_key=drive-backfill-YYYYMMDD" \
   -H "X-FounderOS-API-Key: YOUR_API_KEY"
 ```
 
@@ -302,7 +361,7 @@ risks.
 JSON source activity digest:
 
 ```bash
-curl -G http://localhost:8000/v1/digest/source-activity \
+curl -G http://127.0.0.1:8765/v1/digest/source-activity \
   -H "X-FounderOS-API-Key: YOUR_API_KEY" \
   --data-urlencode "start_at=2026-01-01T00:00:00+00:00" \
   --data-urlencode "end_at=2026-01-02T00:00:00+00:00" \
@@ -312,7 +371,7 @@ curl -G http://localhost:8000/v1/digest/source-activity \
 Plain-text source activity digest:
 
 ```bash
-curl -G http://localhost:8000/v1/digest/source-activity/text \
+curl -G http://127.0.0.1:8765/v1/digest/source-activity/text \
   -H "X-FounderOS-API-Key: YOUR_API_KEY" \
   --data-urlencode "start_at=2026-01-01T00:00:00+00:00" \
   --data-urlencode "end_at=2026-01-02T00:00:00+00:00" \

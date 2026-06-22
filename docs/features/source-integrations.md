@@ -1,28 +1,26 @@
 # Feature Contract: Source Integrations And Credentials
 
-FOS-019 defines the setup contract for future real external source
-connectivity. It is documentation only. It does not implement connectors,
-OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
+FOS-019 defines the setup contract for external source connectivity. It
+documents the current Source Control request/orchestrator path and the future
+production webhook/scheduler/write boundaries. It does not implement public
+webhooks, schedulers, Telegram inbound flows, or external write actions.
 
 ## Current Status
 
 - Manual ingest/process MVP: implemented through
   `POST /v1/knowledge/ingest-text-process`.
-- Gmail: partial read-only foundation. The repo can list/fetch messages with
-  read-only OAuth, store raw messages, persist Gmail read models, create source
-  documents and chunks for readable message bodies, and normalize valid new
-  message events into `SourceEvent` rows. Gmail backfill is default-off and
-  requires an explicit safe query or configured safe query before connector
-  calls are made. Manual backfill requests are bounded to a small result
-  window, and manual backfill API responses are redacted to safe counts/status
-  fields.
-- Google Drive: partial read-only foundation. The repo can list a configured
-  Drive AI inbox folder, download/export text content when supported, store raw
-  snapshots, create source documents and chunks, and normalize valid new file
-  events into `SourceEvent` rows. Drive backfill is default-off and still
-  requires the configured AI inbox folder boundary. Manual backfill requests are
-  bounded to a small result window, and manual backfill API responses are
-  redacted to safe counts/status fields.
+- Gmail: partial read-only foundation. The repo has read-only connector
+  helpers, raw/message read models, readable-body document/chunk builders, and
+  registry-compatible event mapping. The direct Gmail backfill HTTP route is
+  now a Source Control request wrapper: it does not call Gmail, write raw
+  storage, or persist provider data. Manual requests are bounded to a small
+  result window and responses are redacted to safe request/status fields.
+- Google Drive: partial read-only foundation. The repo has Drive connector
+  helpers, raw snapshot/document builders, and registry-compatible event
+  mapping. The direct Drive backfill HTTP route is now a Source Control request
+  wrapper: it does not call Drive, write raw storage, or persist provider data.
+  Manual requests are bounded to a small result window and responses are
+  redacted to safe request/status fields.
 - Local manual Gmail and Drive backfill testing must follow the safe runbook in
   `../runbooks/google-local-backfill.md`.
 - The protected `GET /v1/google/backfill/preflight` endpoint can validate local
@@ -31,17 +29,24 @@ OAuth, webhooks, schedulers, Telegram inbound flows, or production sync.
   returning private query, folder, token path, credential path, or credential
   values. File presence does not prove credential validity, token freshness, or
   production OAuth readiness.
-- GitHub repositories, including `qaztwin`: registry contracts, fixtures, and
-  connector payload mapping exist, but there is no real production GitHub
-  connector or webhook endpoint yet.
-- Jira: registry contracts, fixtures, and connector payload mapping exist, but
-  there is no real production Jira connector yet.
+- GitHub repositories, including `qaztwin`: registry contracts, fixtures,
+  connector payload mapping, and an opt-in read-only Source Control connector
+  path exist. Production webhook/scheduler/write behavior remains planned.
+- Jira: registry contracts, fixtures, connector payload mapping, and an opt-in
+  read-only Source Control connector path exist. Production webhook/scheduler
+  and write behavior remain planned.
 - Source Control Center: implemented as a read-model and request-only control
   surface. `GET /v1/founder/sources` summarizes existing stored evidence,
   connector readiness and masked setup status. `POST
   /v1/founder/sources/{source}/{action}` records local safe requests for
-  `test`, `sync`, `backfill`, `pause`, and `resume` with audit/idempotency,
-  but does not call external APIs.
+  `test`, `preview_sync`, `sync`, `backfill`, `pause`, and `resume` with
+  audit/idempotency. Provider execution happens only when the operator runs the
+  Source Control orchestrator and the relevant connector is configured.
+- Source Control source types include first-class `jira`, `github`, `gmail`,
+  and `drive` sources. Direct Gmail/Drive backfill routes are compatibility
+  wrappers that create Source Control requests for the orchestrator. The legacy
+  Jira/GitHub sync CLIs are also compatibility wrappers; they no longer call
+  providers or persist provider payloads directly.
 - Data Quality Center: implemented as `GET /v1/founder/data-quality`. It
   groups evidence-backed issues such as stale availability, orphan graph
   nodes, low-confidence links, findings without evidence, failed runs, paused

@@ -1,16 +1,16 @@
 #!/usr/bin/env python
-"""Sync Jira issues of mapped projects into source events (A3, read Jira only).
+"""Jira sync compatibility helper.
 
-Live read-only Jira search per mapped project key; each issue becomes a
-connector payload persisted through the existing raw-event-first ingestion
-boundary (IngestedEvent -> SourceEvent), idempotent by issue+updated
-timestamp. Writes only ingestion rows; never mutates Jira.
+The production path is Source Control requests via
+``scripts/run_source_requests.py``. Running this script records a sanitized
+Source Control ``sync`` request for Jira; it does not call Jira or persist
+provider payloads directly. The pure fetch/map/ingest helper functions remain
+for connector-adapter tests and migration work.
 
 Example:
   uv run python scripts/sync_jira_issues.py \\
-    --allow-live-readonly-apis \\
-    --acknowledge-live-readonly-risk "ALLOW LIVE PROVIDER EXECUTION" \\
-    --confirm-sync "SYNC JIRA ISSUES"
+    --confirm-sync "SYNC JIRA ISSUES" \\
+    --request-key "jira-sync-manual-YYYYMMDD"
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ import argparse
 import asyncio
 import base64
 import json
-import os
 import sys
 import urllib.parse
 import urllib.request
@@ -31,27 +30,25 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from app.services.local_connector_env import (  # noqa: E402
-    load_local_connector_environment,
-)
-from app.services.provider_execution_guard import (  # noqa: E402
-    LIVE_PROVIDER_EXECUTION_ACK,
-)
 from scripts import check_external_connectors_readonly as smoke  # noqa: E402
-from scripts import prepare_manual_pilot_delivery_draft as prepare_script  # noqa: E402
 
 IssueFetcher = Callable[[str, Mapping[str, str]], bytes]
 
 CONFIRM_SYNC_PHRASE = "SYNC JIRA ISSUES"
 ISSUE_FIELDS = "summary,status,assignee,updated,created,duedate,priority,issuetype"
+LEGACY_SCRIPT_NAME = "scripts/sync_jira_issues.py"
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--allow-live-readonly-apis", action="store_true")
+    parser.add_argument(
+        "--allow-live-readonly-apis",
+        action="store_true",
+        help="Compatibility flag recorded as metadata only; this script no longer calls Jira.",
+    )
     parser.add_argument(
         "--acknowledge-live-readonly-risk",
-        help=f'Must be exactly "{LIVE_PROVIDER_EXECUTION_ACK}".',
+        help="Compatibility acknowledgement; only whether it was supplied is recorded.",
     )
     parser.add_argument(
         "--confirm-sync",
@@ -61,9 +58,15 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--jira-key",
         action="append",
-        help="Jira project key to sync (repeatable). Default: all mapped keys.",
+        help="Jira project key to request (repeatable). Values are recorded as scope names.",
     )
     parser.add_argument("--max-results", type=int, default=50)
+    parser.add_argument("--request-key", help="Optional Source Control idempotency key.")
+    parser.add_argument(
+        "--requested-by",
+        default="legacy_jira_sync_script",
+        help="Safe actor label for the Source Control request.",
+    )
     return parser.parse_args(argv)
 
 
@@ -184,89 +187,51 @@ async def ingest_issue_payloads(
     return {"source_events_created": created, "already_present": seen}
 
 
+def _requested_jira_keys(args: argparse.Namespace) -> list[str]:
+    return sorted({key.strip().upper() for key in (args.jira_key or []) if key.strip()})
+
+
 async def _run(args: argparse.Namespace) -> int:
     from app.db.base import AsyncSessionLocal
-    from app.services.jira_graph_mapping import all_mapped_jira_keys
+    from app.services.source_control import ACTION_SYNC, request_source_action
 
-    environment = load_local_connector_environment(environ=os.environ).environment
-
-    if args.jira_key:
-        keys = [key.strip().upper() for key in args.jira_key if key.strip()]
-    else:
-        async with AsyncSessionLocal() as session:
-            keys = sorted((await all_mapped_jira_keys(session)))
-    if not keys:
-        print("Error: no mapped jira keys; run map_jira_projects.py first", file=sys.stderr)
-        return 1
-
-    total = {"source_events_created": 0, "already_present": 0}
-    for key in keys:
-        site, issues = fetch_jira_issues(
-            environment,
-            jira_key=key,
-            max_results=args.max_results,
+    keys = _requested_jira_keys(args)
+    request_key = args.request_key or "legacy-jira-sync"
+    input_payload = {
+        "legacy_script": LEGACY_SCRIPT_NAME,
+        "max_results": max(1, min(int(args.max_results), 100)),
+        "requested_jira_keys": keys,
+        "requested_jira_key_count": len(keys),
+        "uses_configured_scope": not bool(keys),
+        "live_readonly_requested": bool(args.allow_live_readonly_apis),
+        "live_readonly_ack_supplied": args.acknowledge_live_readonly_risk is not None,
+    }
+    async with AsyncSessionLocal() as session:
+        request = await request_source_action(
+            session,
+            source_type="jira",
+            action_type=ACTION_SYNC,
+            request_key=request_key,
+            requested_by=args.requested_by,
+            input_payload=input_payload,
         )
-        payloads = [
-            payload
-            for issue in issues
-            if (
-                payload := build_issue_connector_payload(
-                    issue, site=site, jira_project_key=key
-                )
-            )
-            is not None
-        ]
-        counts = await ingest_issue_payloads(payloads)
-        total["source_events_created"] += counts["source_events_created"]
-        total["already_present"] += counts["already_present"]
-        print(
-            f"{key}: issues={len(payloads)} "
-            f"new_source_events={counts['source_events_created']} "
-            f"already_present={counts['already_present']}"
-        )
-
-    print(
-        "sync done: "
-        f"new={total['source_events_created']} known={total['already_present']}"
-    )
+        await session.commit()
+    print(json.dumps(request, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    from app.core.config import settings
-
     try:
         args = _parse_args(argv)
         if args.confirm_sync != CONFIRM_SYNC_PHRASE:
             print("Error: confirm_sync phrase did not match", file=sys.stderr)
             return 2
-        if not args.allow_live_readonly_apis:
-            print(
-                "Error: live read-only Jira call requires --allow-live-readonly-apis",
-                file=sys.stderr,
-            )
-            return 2
-        if args.acknowledge_live_readonly_risk != LIVE_PROVIDER_EXECUTION_ACK:
-            print(
-                "Error: live readonly acknowledgement phrase did not match",
-                file=sys.stderr,
-            )
-            return 2
-        prepare_script._assert_local_environment(
-            settings=settings,
-            environ=os.environ,
-        )
-        from uuid import uuid4
-
-        from app.services.run_context import set_run_id
-
-        set_run_id(f"jira-sync-{uuid4().hex[:12]}")
         return asyncio.run(_run(args))
-    except prepare_script.PrepareBlockedError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
     except Exception as exc:
-        print(f"Error: jira sync failed: {type(exc).__name__}", file=sys.stderr)
+        print(
+            f"Error: jira sync request failed: {type(exc).__name__}",
+            file=sys.stderr,
+        )
         return 1
 
 

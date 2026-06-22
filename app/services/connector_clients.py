@@ -7,9 +7,10 @@ contract. The boundary is deliberately conservative:
 - Provider methods are read-only by name and by contract.
 - Providers return ``ReadOnlyRecord`` values that have **no raw body field**,
   so a raw email/issue body cannot structurally leak into a ``ConnectorEvent``.
-- The live (real) providers refuse to run until live access is explicitly
-  enabled, and they never make a network call from this module. Tests use the
-  fake providers only, so the suite never touches a real external API.
+- The live (real) providers refuse to run until real connectors are enabled and
+  the operator supplies the live-provider acknowledgement. Tests use fake
+  providers or monkeypatched transports, so the suite never touches a real
+  external API.
 - ``NoopSourceConnector`` already gates on readiness, so a client is only ever
   invoked when the source is configured; a missing-config source never reaches
   a client at all.
@@ -21,10 +22,14 @@ import base64
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Protocol
 
 from app.services.browser_config import sanitize_for_logs
+from app.services.provider_execution_guard import (
+    ProviderExecutionBlockedError,
+    require_live_provider_execution_ack,
+)
 from app.services.source_connectors import ConnectorEvent, ReadOnlyConnectorClient
 
 DEFAULT_SYNC_LIMIT = 50
@@ -38,9 +43,15 @@ class ConnectorClientNotEnabledError(RuntimeError):
     sanitized error without exposing provider internals.
     """
 
-    def __init__(self, reason_code: str = "live_connector_disabled") -> None:
+    def __init__(
+        self,
+        reason_code: str = "live_connector_disabled",
+        *,
+        diagnostics: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(reason_code)
         self.reason_code = reason_code
+        self.diagnostics = sanitize_for_logs(diagnostics or {})
 
 
 @dataclass(frozen=True)
@@ -232,9 +243,10 @@ class EmailReadOnlyConnectorClient:
 
 # --- Real (live) read-only providers: gated, read-only HTTP --------------
 #
-# These perform real HTTP GET requests ONLY when real connectors are enabled.
-# When disabled they fail closed (no network) with a sanitized reason code.
-# All requests are read-only; no method ever writes to an external system.
+# These perform real HTTP GET requests ONLY when real connectors are enabled and
+# the live-provider acknowledgement has been supplied. Otherwise they fail
+# closed (no network) with a sanitized reason code. All requests are read-only;
+# no method ever writes to an external system.
 # The pure mapping helpers (``map_*``) are unit-tested with sample API payloads
 # so the risky parsing is covered without any network access.
 
@@ -260,6 +272,30 @@ def _parse_iso(value: Any) -> datetime | None:
         except ValueError:
             return None
     return None
+
+
+def _to_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _filter_since(
+    records: list[ReadOnlyRecord],
+    *,
+    since: str | None,
+) -> list[ReadOnlyRecord]:
+    since_at = _to_utc(_parse_iso(since))
+    if since_at is None:
+        return records
+    return [
+        record
+        for record in records
+        if (occurred_at := _to_utc(record.occurred_at)) is not None
+        and occurred_at >= since_at
+    ]
 
 
 def _first_line(value: Any, *, limit: int = 200) -> str:
@@ -372,14 +408,23 @@ class _RealProviderBase:
 
     source_type = "external"
 
-    def __init__(self, *, enabled: bool = False, timeout: float = 10.0) -> None:
+    def __init__(
+        self,
+        *,
+        enabled: bool = False,
+        timeout: float = 10.0,
+        allow_live_provider_execution: bool = False,
+        provider_execution_ack: str | None = None,
+    ) -> None:
         self._enabled = enabled
         self._timeout = timeout
+        self._allow_live_provider_execution = allow_live_provider_execution
+        self._provider_execution_ack = provider_execution_ack
 
     def _has_config(self) -> bool:
         return True
 
-    def _guard(self) -> None:
+    def _guard(self, *, boundary: str) -> None:
         if not self._enabled:
             raise ConnectorClientNotEnabledError(
                 f"{self.source_type}_real_connector_disabled"
@@ -388,6 +433,18 @@ class _RealProviderBase:
             raise ConnectorClientNotEnabledError(
                 f"{self.source_type}_missing_config"
             )
+        try:
+            require_live_provider_execution_ack(
+                provider=self.source_type,
+                boundary=boundary,
+                allow_live_provider_execution=self._allow_live_provider_execution,
+                provider_execution_ack=self._provider_execution_ack,
+            )
+        except ProviderExecutionBlockedError as exc:
+            raise ConnectorClientNotEnabledError(
+                exc.reason_code,
+                diagnostics=exc.diagnostics.as_dict(),
+            ) from exc
 
 
 class LiveJiraReadOnlyProvider(_RealProviderBase):
@@ -404,8 +461,15 @@ class LiveJiraReadOnlyProvider(_RealProviderBase):
         timeout: float = 10.0,
         sync_limit: int = DEFAULT_SYNC_LIMIT,
         backfill_limit: int = DEFAULT_BACKFILL_LIMIT,
+        allow_live_provider_execution: bool = False,
+        provider_execution_ack: str | None = None,
     ) -> None:
-        super().__init__(enabled=enabled, timeout=timeout)
+        super().__init__(
+            enabled=enabled,
+            timeout=timeout,
+            allow_live_provider_execution=allow_live_provider_execution,
+            provider_execution_ack=provider_execution_ack,
+        )
         self._base_url = (base_url or "").strip()
         self._email = (email or "").strip()
         self._token = token or ""
@@ -424,7 +488,7 @@ class LiveJiraReadOnlyProvider(_RealProviderBase):
         }
 
     async def test_connection(self) -> dict[str, Any]:
-        self._guard()
+        self._guard(boundary="jira_issue_events")
         import httpx
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -436,7 +500,7 @@ class LiveJiraReadOnlyProvider(_RealProviderBase):
         return {"status": "ok", "checked": "jira", "real_execution": "enabled"}
 
     async def _search(self, *, jql: str, limit: int) -> list[ReadOnlyRecord]:
-        self._guard()
+        self._guard(boundary="jira_issue_events")
         import httpx
 
         params = {
@@ -507,8 +571,15 @@ class LiveGitHubReadOnlyProvider(_RealProviderBase):
         timeout: float = 10.0,
         sync_limit: int = DEFAULT_SYNC_LIMIT,
         backfill_limit: int = DEFAULT_BACKFILL_LIMIT,
+        allow_live_provider_execution: bool = False,
+        provider_execution_ack: str | None = None,
     ) -> None:
-        super().__init__(enabled=enabled, timeout=timeout)
+        super().__init__(
+            enabled=enabled,
+            timeout=timeout,
+            allow_live_provider_execution=allow_live_provider_execution,
+            provider_execution_ack=provider_execution_ack,
+        )
         self._token = token or ""
         self._repos = tuple(repo for repo in repos if repo)
         self._sync_limit = sync_limit
@@ -532,14 +603,14 @@ class LiveGitHubReadOnlyProvider(_RealProviderBase):
             return resp.json()
 
     async def test_connection(self) -> dict[str, Any]:
-        self._guard()
+        self._guard(boundary="github_repository_events")
         await self._get("https://api.github.com/user", {})
         return {"status": "ok", "checked": "github", "real_execution": "enabled"}
 
     async def list_pull_requests(
         self, *, since: str | None = None, limit: int = DEFAULT_SYNC_LIMIT
     ) -> list[ReadOnlyRecord]:
-        self._guard()
+        self._guard(boundary="github_pull_request_events")
         records: list[ReadOnlyRecord] = []
         for repo in self._repos:
             data = await self._get(
@@ -551,12 +622,12 @@ class LiveGitHubReadOnlyProvider(_RealProviderBase):
                 for item in (data or [])
                 if isinstance(item, dict)
             )
-        return records
+        return _filter_since(records, since=since)
 
     async def list_commits(
         self, *, since: str | None = None, limit: int = DEFAULT_SYNC_LIMIT
     ) -> list[ReadOnlyRecord]:
-        self._guard()
+        self._guard(boundary="github_repository_events")
         records: list[ReadOnlyRecord] = []
         for repo in self._repos:
             params: dict[str, Any] = {"per_page": max(1, int(limit))}
@@ -570,17 +641,25 @@ class LiveGitHubReadOnlyProvider(_RealProviderBase):
                 for item in (data or [])
                 if isinstance(item, dict)
             )
-        return records
+        return _filter_since(records, since=since)
 
     async def list_repo_activity(
         self, *, since: str | None = None, limit: int = DEFAULT_SYNC_LIMIT
     ) -> list[ReadOnlyRecord]:
-        self._guard()
+        self._guard(boundary="github_issue_events")
         records: list[ReadOnlyRecord] = []
         for repo in self._repos:
+            params: dict[str, Any] = {
+                "state": "all",
+                "per_page": max(1, int(limit)),
+                "sort": "updated",
+                "direction": "desc",
+            }
+            if isinstance(since, str) and since.strip():
+                params["since"] = since.strip()
             data = await self._get(
                 f"https://api.github.com/repos/{repo}/issues",
-                {"state": "all", "per_page": max(1, int(limit)), "sort": "updated", "direction": "desc"},
+                params,
             )
             for item in data or []:
                 if not isinstance(item, dict):
@@ -589,7 +668,7 @@ class LiveGitHubReadOnlyProvider(_RealProviderBase):
                     records.append(map_github_pull_request(item, repo=repo))
                 else:
                     records.append(map_github_issue(item, repo=repo))
-        return records
+        return _filter_since(records, since=since)
 
 
 class LiveEmailReadOnlyProvider(_RealProviderBase):
@@ -620,6 +699,9 @@ def _env(*names: str) -> str | None:
 
 def build_real_connector_clients(
     config: Any = None,
+    *,
+    allow_live_provider_execution: bool = False,
+    provider_execution_ack: str | None = None,
 ) -> dict[str, ReadOnlyConnectorClient]:
     """Build real read-only clients for Jira and GitHub from config/env.
 
@@ -649,6 +731,8 @@ def build_real_connector_clients(
         timeout=timeout,
         sync_limit=sync_limit,
         backfill_limit=backfill_limit,
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
     )
     github = LiveGitHubReadOnlyProvider(
         token=_env("GITHUB_TOKEN", "FOS_GITHUB_READONLY_TOKEN"),
@@ -657,6 +741,8 @@ def build_real_connector_clients(
         timeout=timeout,
         sync_limit=sync_limit,
         backfill_limit=backfill_limit,
+        allow_live_provider_execution=allow_live_provider_execution,
+        provider_execution_ack=provider_execution_ack,
     )
     return {
         "jira": JiraReadOnlyConnectorClient(jira),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from app.services.jira_operating_model import (
@@ -12,6 +13,8 @@ from app.services.jira_operating_model import (
     recommended_model_class,
 )
 from app.services.operator_output_sanitizer import inspect_operator_output
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _unsafe_values() -> tuple[str, ...]:
@@ -56,3 +59,15 @@ def test_recommended_model_class_scales_by_safe_counts() -> None:
     assert recommended_model_class(1) == MODEL_COMPACT
     assert recommended_model_class(7) == MODEL_PRODUCT_AREA
     assert recommended_model_class(11) == MODEL_PORTFOLIO_PROGRAM
+
+
+def test_jira_target_blueprint_keeps_repositories_as_components() -> None:
+    blueprint = (REPO_ROOT / "docs" / "ops" / "jira-target-blueprint.md").read_text(
+        encoding="utf-8"
+    )
+    collapsed_blueprint = " ".join(blueprint.split())
+
+    assert "Repositories are not Jira projects" in collapsed_blueprint
+    assert "this does not create one Jira project per repository" in collapsed_blueprint
+    assert "## 5. Components (repo \u2192 area project component)" in blueprint
+    assert "## 5. Components (repo \u2194 project)" not in blueprint

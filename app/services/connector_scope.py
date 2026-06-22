@@ -135,21 +135,26 @@ def scope_model(source_type: str, config: Any = settings) -> dict[str, Any]:
     }
 
 
+def scoped_live_read_guard_active(source_type: str, config: Any = settings) -> bool:
+    if not scope_required(source_type, config):
+        return False
+    if not bool(getattr(config, "enable_real_connectors", False)):
+        return False
+    return connector_setup_status(source_type) == "ready"
+
+
 def sync_scope_block(source_type: str, config: Any = settings) -> str | None:
-    """Return ``"missing_scope"`` when a live sync/backfill/preview must be
-    blocked for lack of an explicit scope; otherwise ``None``.
+    """Return the scope block reason for a live sync/backfill/preview.
 
     Returns ``None`` when real connectors are disabled or the source is not
     configured — those are handled (real_disabled / missing_config) closer to
     the adapter, and must take precedence so the reason is accurate.
     """
 
-    if not scope_required(source_type, config):
+    if not scoped_live_read_guard_active(source_type, config):
         return None
-    if not bool(getattr(config, "enable_real_connectors", False)):
-        return None
-    if connector_setup_status(source_type) != "ready":
-        return None
-    if scope_configured(source_type, config):
-        return None
-    return "missing_scope"
+    if scope_too_broad(source_type, config):
+        return "scope_too_broad"
+    if not scope_configured(source_type, config):
+        return "missing_scope"
+    return None

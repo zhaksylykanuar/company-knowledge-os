@@ -71,6 +71,7 @@ async def test_runbook_never_tested_when_enabled_configured(monkeypatch) -> None
     assert jira["pipeline_state"] == "never_tested"
     assert jira["runbook"]["stage"] == "test_connection"
     assert "RUN SOURCE REQUESTS" in jira["runbook"]["next_command"]
+    assert "ALLOW LIVE PROVIDER EXECUTION" in jira["runbook"]["next_command"]
 
 
 async def test_pilot_summary_and_no_secrets(monkeypatch) -> None:
@@ -80,7 +81,8 @@ async def test_pilot_summary_and_no_secrets(monkeypatch) -> None:
     pilot = diagnostics["pilot"]
     assert "by_pipeline_state" in pilot
     assert pilot["commands"]["pilot"].endswith('"RUN LOCAL CONNECTOR PILOT"')
-    assert pilot["commands"]["operator_run"].endswith('"RUN SOURCE REQUESTS"')
+    assert "RUN SOURCE REQUESTS" in pilot["commands"]["operator_run"]
+    assert "ALLOW LIVE PROVIDER EXECUTION" in pilot["commands"]["operator_run"]
     assert isinstance(pilot["next_steps"], list) and pilot["next_steps"]
     assert not contains_secret_value(json.dumps(diagnostics))
 

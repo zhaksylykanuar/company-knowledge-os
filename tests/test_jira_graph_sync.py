@@ -5,12 +5,13 @@ from collections.abc import Mapping
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
 from app.db.graph_models import EntityAliasRecord, EntityLinkRecord, EntityRecord
-from app.db.models import IngestedEvent
+from app.db.models import AuditLog, IngestedEvent
+from app.db.source_control_models import SourceControlState, SourceRunRequest
 from app.services.jira_graph_mapping import (
     all_mapped_jira_keys,
     jira_entity_id,
@@ -23,6 +24,7 @@ from scripts.sync_jira_issues import (
     fetch_jira_issues,
     ingest_issue_payloads,
 )
+from scripts import sync_jira_issues
 from tests.test_entity_resolution import _ensure_graph_tables, _seed
 
 ENVIRON = {
@@ -30,6 +32,31 @@ ENVIRON = {
     "FOS_JIRA_READONLY_USER": "reader@example.invalid",
     "FOS_JIRA_READONLY_TOKEN": "test-token-not-real",
 }
+
+
+async def _ensure_source_control_tables() -> None:
+    from app.db.base import engine
+
+    async with engine.begin() as conn:
+        for table in (
+            AuditLog.__table__,
+            SourceControlState.__table__,
+            SourceRunRequest.__table__,
+        ):
+            await conn.run_sync(table.create, checkfirst=True)
+
+
+async def _cleanup_source_request(marker: str) -> None:
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(SourceRunRequest).where(SourceRunRequest.request_key.like(f"%{marker}%"))
+        )
+        await session.execute(
+            delete(SourceControlState).where(
+                SourceControlState.last_request_key.like(f"%{marker}%")
+            )
+        )
+        await session.commit()
 
 
 def _issue(key: str, *, summary: str = "Sample issue", updated: str = "2026-06-12T10:00:00.000+0000") -> dict:
@@ -173,3 +200,56 @@ async def test_ingest_is_idempotent_and_counts_issues() -> None:
         assert count == 2
     finally:
         await _cleanup_test_key(test_key)
+
+
+async def test_jira_sync_script_records_source_control_request_without_live_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    marker = f"jira-sync-script-{uuid4().hex[:8]}"
+    await _ensure_source_control_tables()
+
+    def fail_fetch(*args, **kwargs):
+        raise AssertionError("compatibility script must not call Jira directly")
+
+    monkeypatch.setattr(sync_jira_issues, "fetch_jira_issues", fail_fetch)
+    try:
+        args = sync_jira_issues._parse_args(
+            [
+                "--confirm-sync",
+                sync_jira_issues.CONFIRM_SYNC_PHRASE,
+                "--request-key",
+                marker,
+                "--jira-key",
+                "QS",
+                "--max-results",
+                "7",
+                "--allow-live-readonly-apis",
+                "--acknowledge-live-readonly-risk",
+                "PRIVATE_ACK_DO_NOT_RETURN",
+            ]
+        )
+        rc = await sync_jira_issues._run(args)
+        output = capsys.readouterr().out
+        assert rc == 0
+        assert "PRIVATE_ACK_DO_NOT_RETURN" not in output
+
+        async with AsyncSessionLocal() as session:
+            row = await session.scalar(
+                select(SourceRunRequest).where(
+                    SourceRunRequest.request_key == marker
+                )
+            )
+            assert row is not None
+            assert row.source_type == "jira"
+            assert row.action_type == "sync"
+            assert row.external_side_effect is False
+            assert row.input_snapshot["input"]["legacy_script"] == (
+                "scripts/sync_jira_issues.py"
+            )
+            assert row.input_snapshot["input"]["requested_jira_keys"] == ["QS"]
+            assert row.input_snapshot["input"]["max_results"] == 7
+            assert row.input_snapshot["input"]["live_readonly_requested"] is True
+            assert row.input_snapshot["input"]["live_readonly_ack_supplied"] is True
+    finally:
+        await _cleanup_source_request(marker)

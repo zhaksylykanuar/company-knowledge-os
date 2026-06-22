@@ -7,10 +7,12 @@ from app.services.operator_output_sanitizer import inspect_operator_output
 from app.services.repository_portfolio import repository_portfolio_public_summary
 
 CONNECTOR_STATUS_IMPLEMENTED = "implemented"
+CONNECTOR_STATUS_LOCAL_ONLY = "local_only"
 CONNECTOR_STATUS_PLANNED = "planned"
 CONNECTOR_STATUS_SYNTHETIC_ONLY = "synthetic_only"
 
 EXECUTION_MODE_LIVE_DEFAULT_DENIED = "live_default_denied"
+EXECUTION_MODE_LOCAL_NOOP = "local_noop"
 EXECUTION_MODE_READ_ONLY_TRANSFORM = "read_only_transform"
 EXECUTION_MODE_SYNTHETIC_ALLOWED = "synthetic_allowed"
 
@@ -76,20 +78,20 @@ CONNECTOR_CATALOG: tuple[ExternalConnectorSpec, ...] = (
     ),
     ExternalConnectorSpec(
         provider_key="gmail",
-        connector_status=CONNECTOR_STATUS_IMPLEMENTED,
-        execution_mode=EXECUTION_MODE_LIVE_DEFAULT_DENIED,
+        connector_status=CONNECTOR_STATUS_LOCAL_ONLY,
+        execution_mode=EXECUTION_MODE_LOCAL_NOOP,
         source_of_truth_role=ROLE_RAW_EVENT_SOURCE_ONLY,
         guard_requirements=(PROVIDER_EXECUTION_GUARD,),
-        readiness_category="present/guarded",
+        readiness_category="present/local_only/noop",
         synthetic_fetch_supported=False,
     ),
     ExternalConnectorSpec(
         provider_key="google_drive",
-        connector_status=CONNECTOR_STATUS_IMPLEMENTED,
-        execution_mode=EXECUTION_MODE_LIVE_DEFAULT_DENIED,
+        connector_status=CONNECTOR_STATUS_LOCAL_ONLY,
+        execution_mode=EXECUTION_MODE_LOCAL_NOOP,
         source_of_truth_role=ROLE_RAW_EVENT_SOURCE_ONLY,
         guard_requirements=(PROVIDER_EXECUTION_GUARD,),
-        readiness_category="present/guarded",
+        readiness_category="present/local_only/noop",
         synthetic_fetch_supported=False,
     ),
     ExternalConnectorSpec(
@@ -163,7 +165,11 @@ def connector_readiness_summary() -> dict[str, Any]:
         "scheduler_execution": SCHEDULER_EXECUTION_DISABLED,
         "payload_leakage": PROVIDER_PAYLOAD_LEAKAGE_ABSENT,
         "repository_portfolio": portfolio["portfolio_catalog"],
-        "repository_portfolio_repo_count": portfolio["repo_total_count"],
+        "repository_portfolio_repo_count": portfolio["operational_repo_count"],
+        "repository_portfolio_repo_count_source": portfolio["operational_repo_source"],
+        "repository_portfolio_legacy_seed_repo_count": portfolio[
+            "legacy_seed_repo_count"
+        ],
         "github_live_inventory_status": portfolio["github_live_inventory_status"],
         "github_target_owner_class": portfolio["target_owner_class"],
         "github_target_org_key": portfolio["target_org_key"],
@@ -187,8 +193,8 @@ def connector_inventory_categories() -> dict[str, str]:
     return {
         "github": "guarded_live_boundary",
         "jira": "guarded_live_boundary",
-        "gmail": "already_guarded",
-        "google_drive": "already_guarded",
+        "gmail": "local_only_noop",
+        "google_drive": "local_only_noop",
         "openai": "already_guarded",
         "telegram": "already_guarded_delivery_interface",
         "slack": "planned_connector",

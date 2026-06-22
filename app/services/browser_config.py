@@ -30,6 +30,11 @@ _SENSITIVE_KEY_PARTS = (
     "password",
     "credential",
 )
+_SENSITIVE_KEYS = (
+    "provider_execution_ack",
+    "confirm_live_provider_execution",
+    "live_provider_execution_ack",
+)
 
 
 class BrowserConfigSource(Protocol):
@@ -78,7 +83,9 @@ def sanitize_for_logs(value: Any) -> Any:
         safe: dict[str, Any] = {}
         for key, item in value.items():
             key_text = str(key).casefold()
-            if any(part in key_text for part in _SENSITIVE_KEY_PARTS):
+            if key_text in _SENSITIVE_KEYS or any(
+                part in key_text for part in _SENSITIVE_KEY_PARTS
+            ):
                 safe[str(key)] = _MASKED if item not in (None, "") else item
             else:
                 safe[str(key)] = sanitize_for_logs(item)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -51,6 +52,12 @@ async def test_gmail_local_only_ingest_works_without_raw_body() -> None:
             for key in payload:
                 assert "body" not in str(key).lower()
                 assert "html" not in str(key).lower()
+            assert not re.search(
+                r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}",
+                payload["actor_external_id"],
+                flags=re.IGNORECASE,
+            )
+            assert "someone@example.com" not in json.dumps(payload)
             assert "raw://" not in json.dumps(payload)
     finally:
         async with AsyncSessionLocal() as session:

@@ -1,16 +1,17 @@
 #!/usr/bin/env python
-"""Sync PRs and commits of mapped repos into source events (A4, read GitHub only).
+"""GitHub activity sync compatibility helper.
 
-Live read-only GitHub calls per mapped repository; PRs and commits become
-connector payloads persisted through the existing ingestion boundary,
-idempotent by PR state+updated / commit sha. Jira issue keys are extracted
-from titles, branches and commit messages into payload ``jira_keys``.
+The production direction is Source Control requests via
+``scripts/run_source_requests.py``. Running this script records a sanitized
+Source Control ``sync`` request for GitHub; it does not call GitHub or persist
+provider payloads directly. The pure fetch/map helpers remain for
+connector-adapter tests and migration work. Jira issue keys are extracted from
+titles, branches and commit messages into payload ``jira_keys``.
 
 Example:
   uv run python scripts/sync_github_activity.py \\
-    --allow-live-readonly-apis \\
-    --acknowledge-live-readonly-risk "ALLOW LIVE PROVIDER EXECUTION" \\
-    --confirm-sync "SYNC GITHUB ACTIVITY"
+    --confirm-sync "SYNC GITHUB ACTIVITY" \\
+    --request-key "github-sync-manual-YYYYMMDD"
 """
 
 from __future__ import annotations
@@ -18,7 +19,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import re
 import sys
 import urllib.parse
@@ -31,18 +31,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from app.services.local_connector_env import (  # noqa: E402
-    load_local_connector_environment,
-)
-from app.services.provider_execution_guard import (  # noqa: E402
-    LIVE_PROVIDER_EXECUTION_ACK,
-)
-from scripts import prepare_manual_pilot_delivery_draft as prepare_script  # noqa: E402
-from scripts.sync_jira_issues import ingest_issue_payloads  # noqa: E402
-
 Fetcher = Callable[[str, Mapping[str, str]], bytes]
 
 CONFIRM_SYNC_PHRASE = "SYNC GITHUB ACTIVITY"
+LEGACY_SCRIPT_NAME = "scripts/sync_github_activity.py"
 JIRA_KEY_RE = re.compile(r"\b[A-Z][A-Z0-9]{1,9}-\d+\b")
 
 PR_STATE_EVENT_TYPES = {
@@ -54,10 +46,14 @@ PR_STATE_EVENT_TYPES = {
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--allow-live-readonly-apis", action="store_true")
+    parser.add_argument(
+        "--allow-live-readonly-apis",
+        action="store_true",
+        help="Compatibility flag recorded as metadata only; this script no longer calls GitHub.",
+    )
     parser.add_argument(
         "--acknowledge-live-readonly-risk",
-        help=f'Must be exactly "{LIVE_PROVIDER_EXECUTION_ACK}".',
+        help="Compatibility acknowledgement; only whether it was supplied is recorded.",
     )
     parser.add_argument(
         "--confirm-sync",
@@ -65,6 +61,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help=f'Must be exactly "{CONFIRM_SYNC_PHRASE}".',
     )
     parser.add_argument("--max-results", type=int, default=50)
+    parser.add_argument("--request-key", help="Optional Source Control idempotency key.")
+    parser.add_argument(
+        "--requested-by",
+        default="legacy_github_sync_script",
+        help="Safe actor label for the Source Control request.",
+    )
     return parser.parse_args(argv)
 
 
@@ -260,81 +262,40 @@ def fetch_repo_activity(
 
 async def _run(args: argparse.Namespace) -> int:
     from app.db.base import AsyncSessionLocal
-    from app.services.github_graph_mapping import all_mapped_repos
+    from app.services.source_control import ACTION_SYNC, request_source_action
 
-    environment = load_local_connector_environment(environ=os.environ).environment
-
+    request_key = args.request_key or "legacy-github-sync"
+    input_payload = {
+        "legacy_script": LEGACY_SCRIPT_NAME,
+        "max_results": max(1, min(int(args.max_results), 100)),
+        "uses_configured_scope": True,
+        "live_readonly_requested": bool(args.allow_live_readonly_apis),
+        "live_readonly_ack_supplied": args.acknowledge_live_readonly_risk is not None,
+    }
     async with AsyncSessionLocal() as session:
-        repos = await all_mapped_repos(session)
-    if not repos:
-        print("Error: no mapped repos; run map_github_repos.py first", file=sys.stderr)
-        return 1
-
-    total_new = 0
-    total_known = 0
-    for item in repos:
-        org, repo = item["org"], item["repo"]
-        prs, commits = fetch_repo_activity(
-            environment, org=org, repo=repo, max_results=args.max_results
+        request = await request_source_action(
+            session,
+            source_type="github",
+            action_type=ACTION_SYNC,
+            request_key=request_key,
+            requested_by=args.requested_by,
+            input_payload=input_payload,
         )
-        payloads = [
-            p
-            for pr in prs
-            if (p := build_pr_connector_payload(pr, org=org, repo=repo)) is not None
-        ] + [
-            p
-            for commit in commits
-            if (p := build_commit_connector_payload(commit, org=org, repo=repo))
-            is not None
-        ]
-        counts = await ingest_issue_payloads(payloads)
-        total_new += counts["source_events_created"]
-        total_known += counts["already_present"]
-        print(
-            f"{org}/{repo}: prs={len(prs)} commits={len(commits)} "
-            f"new={counts['source_events_created']} known={counts['already_present']}"
-        )
-
-    print(f"sync done: new={total_new} known={total_known}")
+        await session.commit()
+    print(json.dumps(request, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    from app.core.config import settings
-
     try:
         args = _parse_args(argv)
         if args.confirm_sync != CONFIRM_SYNC_PHRASE:
             print("Error: confirm_sync phrase did not match", file=sys.stderr)
             return 2
-        if not args.allow_live_readonly_apis:
-            print(
-                "Error: live read-only GitHub call requires --allow-live-readonly-apis",
-                file=sys.stderr,
-            )
-            return 2
-        if args.acknowledge_live_readonly_risk != LIVE_PROVIDER_EXECUTION_ACK:
-            print(
-                "Error: live readonly acknowledgement phrase did not match",
-                file=sys.stderr,
-            )
-            return 2
-        prepare_script._assert_local_environment(
-            settings=settings,
-            environ=os.environ,
-        )
-        from uuid import uuid4
-
-        from app.services.run_context import set_run_id
-
-        set_run_id(f"github-sync-{uuid4().hex[:12]}")
         return asyncio.run(_run(args))
-    except prepare_script.PrepareBlockedError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
     except Exception as exc:
         detail = str(exc) or type(exc).__name__
-        print(f"Error: github sync failed: {detail}", file=sys.stderr)
+        print(f"Error: github sync request failed: {detail}", file=sys.stderr)
         return 1
 
 

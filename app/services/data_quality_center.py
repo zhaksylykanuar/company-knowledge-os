@@ -528,16 +528,16 @@ async def build_data_quality_center(
                     category="connector_tested_not_synced",
                     severity="low",
                     why_it_matters=(
-                        "Test connection прошёл, но sync ещё не выполнялся — "
-                        "events не собраны."
+                        "Test connection прошёл, но preview sync ещё не выполнялся — "
+                        "сначала проверьте scope/limits без записи events."
                     ),
                     affected_source=definition.source_type,
                     evidence_count=1,
-                    suggested_action="Запустить Sync now, затем operator script.",
+                    suggested_action="Запустить Preview sync, затем operator script.",
                     cta={
                         "target": "sources",
                         "source_type": definition.source_type,
-                        "action": "sync",
+                        "action": "preview_sync",
                     },
                 )
             )
