@@ -1,1156 +1,287 @@
-# Data Model
+# founderOS Data Model Reconciliation
 
-> **Reading this status list:** "implemented" here means the **data model and
-> supporting infrastructure** exist and are tested (tables, read models, audit
-> records, draft/intention/result lifecycle, guards). It does **not** mean a
-> user-facing feature is live. End-to-end Telegram delivery, scheduled digests,
-> and live GitHub/Jira connectors remain **planned** — see
-> [`features/telegram-digest.md`](features/telegram-digest.md) and
-> [`features/attention.md`](features/attention.md) for the user-facing status.
+## 1. Purpose
 
-## Status
+founderOS already has a strong persistence foundation: raw ingestion events, source events, source documents, graph entities, attention triage, audit logs, agent proposals, source-control run requests, and several founder/operator read models.
 
-- Audit logs: implemented
-- Raw ingested events: implemented
-- Source documents and chunks: implemented
-- Extracted tasks/risks/decisions: implemented
-- Knowledge scores: implemented
-- Source events: partial
-- Normalized activity items: persistence and source-event projection foundation implemented
-- Attention triage results: persistence, single-activity triage bridge, and
-  persisted digest read-model foundations implemented
-- Attention triage feedback: implemented
-- Persisted attention digest delivery draft review records:
-  audit-log-backed, implemented
-- Persisted attention digest delivery draft approval decisions:
-  audit-log-backed, implemented
-- Persisted attention digest delivery readiness preview:
-  read-only, implemented
-- Persisted attention digest delivery intention records:
-  audit-log-backed, implemented
-- Persisted attention digest Telegram delivery plan preview:
-  read-only, implemented
-- Persisted attention digest delivery intention operator review:
-  read-only, implemented
-- Persisted attention digest Telegram execution preflight:
-  read-only, implemented
-- Persisted attention digest delivery result audit contract:
-  audit-log-backed, implemented
-- Persisted attention digest bounded Telegram execution gate:
-  read-only, implemented
-- Persisted attention digest test-only Telegram send command:
-  audit-log-backed result recording, implemented
-- Local/dev-only synthetic persisted attention digest seed command:
-  implemented
-- Duplicate-success protection for test-only Telegram sends:
-  implemented
-- Local approved-draft manual pilot handoff command:
-  implemented
-- Read-only manual pilot status report by sample/window:
-  implemented
-- Read-only persisted attention window discovery for manual pilots:
-  implemented
-- Read-only real stored local data readiness discovery:
-  implemented
-- Read-only stored source event normalization preview:
-  implemented
-- Local/dev-only stored source event normalization command:
-  implemented
-- Read-only normalized activity triage readiness preview:
-  implemented
-- Local/dev-only provider-free normalized activity triage command:
-  implemented
-- Read-only persisted attention window reconciliation report:
-  implemented
-- Read-only no-marker persisted attention candidate report:
-  implemented
-- Local/dev-only no-marker persisted attention delivery draft preparation:
-  audit-log-backed, implemented
-- Read-only no-marker persisted attention digest quality report:
-  implemented
-- Read-only no-marker duplicate root-cause linkage report:
-  implemented
-- Read-only presentation-variant canonical hash duplicate guard evaluator:
-  implemented
-- Read-only grouped lifecycle canonical hash guard review:
-  implemented
-- Read-only grouped lifecycle operator decision summary:
-  implemented
-- Sanitized grouped lifecycle report contract tests:
-  implemented
-- Decision-only grouped lifecycle review JSON output:
-  implemented
-- Grouped lifecycle CLI help and synthetic review smoke mode:
-  implemented
-- Grouped lifecycle review exit codes and sanitized artifacts:
-  implemented
-- Provider-free grouped lifecycle review operator doctor:
-  implemented
-- Gated manual local grouped lifecycle review runner:
-  implemented
-- Safe grouped lifecycle manual runner window presets and preflight:
-  implemented
-- Sanitized grouped lifecycle manual-review diagnostics:
-  implemented
-- Grouped lifecycle review artifact hash redaction:
-  implemented
-- Gated grouped lifecycle review window sweep runner:
-  implemented
-- Default-denied live provider execution guard:
-  implemented
-- Extended default-denied provider execution guard coverage for OpenAI, Gmail,
-  and Drive connector/client boundaries:
-  implemented
-- Default-denied production-operation guard baseline:
-  implemented
-- Extended production-operation guard coverage for source-of-truth mutation:
-  implemented
-- Default-disabled scheduler/outbox execution guard baseline:
-  implemented
-- Guarded-execution audit-event metadata contract:
-  in-memory/read-only, implemented
-- Non-persistent guarded-execution audit sink:
-  no-op/in-memory only, implemented
-- Read-only guarded-execution readiness report:
-  strict sanitized JSON, implemented
-- Guarded-execution JSON contract validation:
-  strict sanitized JSON, implemented
-- External API connector launchpad:
-  GitHub/Jira guarded raw-event foundations, implemented
-- Repository portfolio onboarding catalog:
-  static safe metadata counts/classes, implemented
-- GitHub organization target model:
-  legacy seed metadata and target organization migration classes, implemented
-- GitHub organization read-only inventory report:
-  strict sanitized JSON, no-write migration-readiness metadata, implemented
-- Read-only external connector smoke report:
-  strict sanitized JSON, implemented
-- Read-only external connector configuration doctor:
-  presence-only sanitized JSON, implemented
-- Read-only Jira inventory diagnostics and operating-model planner:
-  strict sanitized JSON, implemented
-- Jira creation dry-run planner:
-  strict sanitized JSON, no-write review metadata, implemented
-- Atlassian/Jira credential profile and write-readiness dry-run:
-  strict sanitized JSON, no-write profile metadata, implemented
-- Meeting transcript artifacts: draft-only, not persisted
-- Approval/action execution tables: planned
+The master playbook requires a canonical MVP data model. That model should not be added blindly on top of the current database, because several existing tables already represent parts of the same concepts. This document maps existing tables and model areas to the canonical playbook model so FOS-DB-02 and later migrations avoid duplicate tables, conflicting relationships, incompatible entities, and parallel sources of truth.
 
-## Core Tables
+The safe path is existing -> canonical reconciliation first, then narrow migrations.
 
-- `ingested_events`: raw event envelope with idempotency and trace fields.
-- `audit_logs`: append-style audit trail for accepted events and operations.
-  FOS-061 also stores sanitized persisted attention digest delivery draft review
-  records here as `digest.delivery_draft.created` events, with `after_ref`
-  set to the deterministic `delivery_draft_id`.
-  FOS-062 stores sanitized delivery draft decision records here as
-  `digest.delivery_draft.approved` and `digest.delivery_draft.rejected` events,
-  also keyed by `after_ref=delivery_draft_id`.
-  FOS-063 reads those draft and decision events to build a delivery readiness
-  preview, but it does not append audit rows or introduce new storage.
-  FOS-064 stores sanitized delivery intention handoff records here as
-  `digest.delivery_intention.created` events, with `before_ref` set to the
-  `delivery_draft_id` and `after_ref` set to the deterministic
-  `delivery_intention_id`.
-  FOS-065 reads delivery intention and referenced delivery draft events to build
-  a pure Telegram delivery plan preview, but it does not append audit rows or
-  introduce new storage.
-  FOS-066 reads those stored delivery intention, draft, decision, and readiness
-  artifacts for local operator review, but it does not append audit rows or
-  introduce new storage.
-  FOS-067 reads stored delivery intention and Telegram plan readiness plus
-  Telegram credential presence metadata for execution preflight, but it does
-  not append audit rows or introduce new storage.
-  FOS-068 stores sanitized future delivery outcome metadata here as
-  `digest.delivery_result.recorded` events, with `before_ref` set to the
-  `delivery_intention_id` and `after_ref` set to the deterministic
-  `delivery_result_id`; no new table or migration is introduced.
-  FOS-069 reads stored delivery intention, preflight, plan, readiness, and
-  result-contract metadata to build an execution gate preview, but it does not
-  append audit rows or introduce new storage.
-  FOS-070 records sanitized delivery result audit events after explicit
-  test-only bounded operator Telegram send attempts; it reuses
-  `digest.delivery_result.recorded`, writes no other rows, and introduces no new
-  storage.
-  FOS-072 reads existing `digest.delivery_result.recorded` rows by
-  `before_ref=delivery_intention_id` to block duplicate successful test sends
-  before any Telegram transport call; it appends no rows during the duplicate
-  guard and introduces no new storage.
-  FOS-078 reads existing delivery draft, decision, intention, and delivery
-  result audit rows for an explicit digest window to build a manual pilot status
-  report; it appends no rows and introduces no new storage.
-  FOS-079 reads the same audit metadata across bounded explicit persisted
-  attention windows for manual pilot candidate discovery; it appends no rows and
-  introduces no new storage.
-- FOS-080 reads existing `source_events`, `normalized_activity_items`, and
-  `attention_triage_results` rows over explicit bounded windows for count-only
-  real stored local data readiness discovery; it appends no rows and introduces
-  no new storage.
-- FOS-081 reads existing `source_events` and linked
-  `normalized_activity_items` over an explicit bounded window for count-only
-  normalization preview; it appends no rows and introduces no new storage.
-- FOS-082 projects supported stored `source_events` into existing
-  `normalized_activity_items` through the provider-free projection service from
-  a local/dev-only operator command. It writes no source events, attention
-  results, audit logs, delivery artifacts, new tables, or migrations.
-- FOS-083 reads existing `normalized_activity_items` and linked
-  `attention_triage_results` over an explicit bounded window for count-only
-  triage readiness preview; it appends no rows and introduces no new storage.
-- FOS-084 writes existing `normalized_activity_items` into existing
-  `attention_triage_results` through the provider-free strict triage service
-  from a local/dev-only operator command. It writes no source events,
-  normalized activity rows, audit logs, delivery artifacts, new tables, or
-  migrations.
-- FOS-085 reads existing `attention_triage_results`, linked
-  `normalized_activity_items`/`source_events`, and delivery draft audit logs for
-  count-only window reconciliation. It appends no rows and introduces no new
-  storage.
-- Guarded-execution audit-event metadata envelopes are JSON-serializable
-  sanitized metadata for provider, production-operation, scheduler, and
-  sanitizer guard decisions. They are suitable for future logging or review,
-  but this baseline does not persist them, append audit rows, execute delivery,
-  call providers, run scheduler work, or mutate source-of-truth stores.
-- Guarded-execution audit sinks are no-op or in-memory collectors for sanitized
-  audit-event metadata. They expose safe counts/classes for tests and the
-  guarded-execution doctor, but they do not write files, queues, audit rows,
-  raw storage, Obsidian, provider systems, scheduler/outbox workers, or
-  production databases.
-- The guarded-execution readiness report consolidates guard, doctor, audit
-  metadata, audit sink, docs, and remaining-risk status as strict sanitized
-  JSON. It is read-only operator-review metadata only, not a source-of-truth
-  record, not a full audit, not an approval, and not an execution path.
-- Guarded-execution audit events, audit sink summaries, doctor output, and
-  readiness report output are validated against reusable strict sanitized JSON
-  contracts. Contract validation exposes safe field names, reason codes,
-  classes, and counts only; it does not persist metadata, approve execution,
-  route logs, run providers, schedule work, or mutate source-of-truth stores.
-- The external connector registry records safe onboarding metadata only:
-  provider keys, guard requirements, execution modes, source-of-truth roles,
-  and readiness classes. GitHub and Jira connector foundations produce
-  raw-event-source envelopes through guarded live boundaries or synthetic
-  transports for tests. They do not persist, call live APIs by default, treat
-  provider payloads as interpreted truth, run scheduler work, or mutate
-  source-of-truth stores.
-- The repository portfolio catalog is static onboarding metadata for future
-  GitHub inventory comparison and Jira mapping. The 19-entry legacy seed
-  overview is planning metadata only; the future canonical GitHub owner is the
-  `qtwin-io` organization. Public summaries expose counts by product area,
-  lifecycle status, connector priority, safe action class, target-owner class,
-  migration-status class, and target organization inventory class only. The
-  catalog is not source of truth, does not call providers, does not transfer
-  repositories, does not update repository metadata, does not rotate secrets,
-  and does not write Jira, raw storage, Obsidian, or Postgres data.
-- The GitHub organization read-only inventory report is operator-review
-  metadata for checking the target organization migration state. Default mode
-  makes no live calls, synthetic mode uses provider-free inventory, and live
-  read-only mode requires separate explicit provider acknowledgement. It
-  exposes target-owner class, target organization key, seed counts, observed
-  count classes, matched/missing/extra count classes, migration-readiness
-  classes, sanitized live failure classes, and disabled write/transfer/edit
-  classes only. It does not persist inventory, ingest GitHub events, print
-  repository identities, call live APIs by default, create or transfer
-  repositories, edit repository metadata, perform credential rotation, run
-  scheduler work, or mutate raw storage, Obsidian, or Postgres.
-- The external connector read-only smoke report is operator-review metadata for
-  GitHub/Jira onboarding. Default mode makes no live calls, synthetic mode uses
-  synthetic transports, and live read-only mode requires a separate explicit
-  provider acknowledgement. GitHub portfolio comparison is a seed-portfolio
-  count comparison; target organization inventory remains gated and not
-  verified until a later authenticated read-only check. Jira mapping checks
-  expose counts/classes only. The report is not source of truth and does not
-  persist data, transfer repositories, update repositories, write Jira data,
-  run scheduler work, execute delivery, or mutate raw storage, Obsidian, or
-  Postgres.
-  Jira live-read-only failures are classified as sanitized operator classes
-  such as invalid configuration, auth or permission failure, wrong site,
-  rate limit, server error, transport error, timeout, malformed response, or
-  response-contract mismatch. Raw provider locations, credentials, project or
-  issue identifiers, payloads, and response bodies are never part of the report.
-- The Jira read-only inventory report is operator-review metadata for Jira
-  project inventory and portfolio-mapping preparation. Default mode makes no
-  live calls, synthetic mode uses synthetic inventory, and live read-only mode
-  requires explicit provider acknowledgement. It exposes project counts and
-  issue-count classes only, suppresses provider payloads, and never persists
-  Jira data, ingests issues, writes raw storage, writes Postgres, runs
-  scheduler work, or mutates Jira. Portfolio mapping remains safe planning
-  metadata against repository product-area counts, not source of truth.
-- Jira inventory diagnostics and the Jira operating-model planner are
-  operator-review metadata only. They classify empty inventory, zero access,
-  permission limits, issue inventory not observed, malformed responses,
-  response-contract mismatch, mapping readiness, next-action class, and the
-  recommended operating model as safe classes/counts. They do not store Jira
-  project or issue details, write Jira, ingest issues, write source-of-truth
-  stores, run scheduler work, or execute delivery.
-- The Jira creation dry-run planner is operator-review metadata for a future
-  manually approved Jira structure change. It combines the safe operating model
-  and repository portfolio counts into project, component, issue type,
-  workflow, board, governance, migration, blocked-write, and follow-up classes.
-  It makes no provider calls, writes no Jira data, creates no projects,
-  components, workflows, boards, fields, or issues, persists nothing, and keeps
-  scheduler execution disabled. Issue-search inventory remains a separate
-  follow-up class.
-- Atlassian/Jira credential profiles and write-readiness reports are
-  operator-review metadata for future approval planning. They separate Jira
-  read-only data API, Jira write-site API, and Atlassian Admin API profile
-  classes, expose only presence/configured classes and counts, hide all
-  values, and keep Jira and admin writes disabled. They do not call providers,
-  persist Org ID or credential material, create Jira objects, run scheduler
-  work, or mutate source-of-truth stores.
-- The external connector configuration doctor is operator-review metadata for
-  GitHub/Jira setup readiness. It checks expected environment variable
-  presence by name only, never prints values, and never calls providers. It can
-  merge allowlisted keys from project-root `.env`, fall back to the older
-  user-config connector file, or use an explicit env-file override before
-  evaluating presence; shell environment values take precedence, and env-file
-  diagnostics expose only status/count classes. It reports configured,
-  partially configured, or not configured classes plus safe next-action classes
-  for the later manually acknowledged live-read-only smoke step. It is not
-  source of truth and does not persist data, update repositories, write Jira
-  data, run scheduler work, execute delivery, or mutate raw storage, Obsidian,
-  or Postgres.
-- The ignored-file cleanup planner is read-only operator-review metadata for
-  local hygiene. It uses ignored-path metadata only, excludes raw storage and
-  Obsidian vault trees, reads no ignored file contents, deletes nothing, and
-  reports safe classes/counts plus action classes only.
-- `ingested_events`, `source_events`, `normalized_activity_items`, and
-  `attention_triage_results` may contain explicitly labeled local/dev-only
-  synthetic rows created by the FOS-071 operator seed command. Those rows exist
-  only to make an empty local persisted attention digest visible for delivery
-  workflow testing; they are not live provider data or source-of-truth company
-  facts.
-- `source_documents`: source document metadata and raw refs.
-- `document_chunks`: searchable text chunks with offsets and raw refs.
-- `extracted_tasks`: evidence-backed extracted task records.
-- `extracted_risks`: evidence-backed extracted risk records.
-- `extracted_decisions`: evidence-backed extracted decision records.
-- `knowledge_scores`: deterministic score payloads for extracted entities.
-- `source_events`: normalized connector event records linked to `ingested_events`.
-- `normalized_activity_items`: validated cross-source activity projections linked
-  to source/source object identifiers and optionally to a stored
-  `source_event_id`. Rows store `activity_item_id`, optional
-  `source_event_id`, source metadata, activity type, title, actor, activity
-  timestamp, project, safe summary, related people/Jira keys/PRs/files,
-  evidence refs, and record `created_at`.
-- `email_thread_states`: deterministic Gmail conversation state built from
-  stored Gmail rows for digest and source-intelligence workflows.
-- `attention_triage_results`: validated attention triage outputs linked to a
-  source and source object. Rows store `triage_result_id`, `source`,
-  `source_object_id`, optional `activity_item_id`, attention class,
-  priority, digest visibility, confidence, reason, recommended action, owner,
-  deadline, evidence refs, and `created_at`. Stored rows can now be read as
-  provider-free digest input for explicit time windows.
-- `attention_triage_feedback`: user feedback events for future attention
-  triage context. Rows store `feedback_id`, optional `source`, required
-  `source_object_id`, nullable `triage_result_id`, `user_action`, and
-  `created_at`.
-- Meeting transcript summaries, decisions, actions, risks, open questions,
-  Jira draft tickets, and KB update drafts are not stored in FOS-048. They are
-  strict in-memory draft schemas only.
+## 2. Current Database / Model Inventory
 
-## Invariants
+| Existing model/table | Purpose | Current usage | Related services/routes | Keep/adapt decision |
+|---|---|---|---|---|
+| `AuditLog` / `audit_logs` | Append-only operational audit events with actor, correlation/trace IDs, before/after refs, agent/approval lineage, and payload. | Existing audit trail for ingestion, delivery, evidence, source-control, Obsidian/export, and share-pack actions. | `app/api/events.py`, `app/services/audit_log.py`, `app/services/digest_builder.py`, `app/services/source_control.py`, `app/services/source_run_service.py`, `app/services/share_pack_service.py` | KEEP_AND_ADAPT |
+| `IngestedEvent` / `ingested_events` | Raw-ish ingestion event envelope with source IDs, idempotency key, raw object ref, payload, and status. | Foundation for provider/source ingestion and idempotent event capture. | `app/api/events.py`, `app/services/source_ingestion.py`, `tests/test_events_pipeline.py` | KEEP_AND_ADAPT |
+| `SourceDocument` / `source_documents` | Source-backed document metadata and raw object reference. | Drive/Gmail document ingestion, chunking, extraction, and evidence lookup. | `app/api/drive.py`, `app/api/gmail.py`, `app/services/drive_ingestion.py`, `app/services/extraction_pipeline.py`, `app/services/source_document_index.py` | KEEP_AND_ADAPT |
+| `DocumentChunk` / `document_chunks` | Chunk-level text/evidence record tied to a source document. | Extraction, scoring, evidence display, and chunk-level provenance. | `app/services/chunking.py`, `app/services/extraction_pipeline.py`, `app/services/source_document_index.py` | KEEP_AND_ADAPT |
+| `AgentRun` / `agent_runs` | Extraction/agent execution lineage for source documents and chunks. | Run tracking for extraction pipeline and provenance of extracted facts. | `app/services/extraction_pipeline.py`, extraction tests | KEEP |
+| `ExtractedTask` / `extracted_tasks` | Evidence-backed task candidate extracted from source material. | Founder/operator task read model and extraction output. | `app/services/extraction_pipeline.py`, `app/services/metric_collector.py`, extraction tests | KEEP_AND_ADAPT |
+| `ExtractedDecision` / `extracted_decisions` | Evidence-backed decision extracted from source material. | Decision read model and briefing/insight source candidate. | `app/services/extraction_pipeline.py`, `app/services/metric_collector.py`, extraction tests | KEEP_AND_ADAPT |
+| `ExtractedRisk` / `extracted_risks` | Evidence-backed risk extracted from source material. | Risk read model, attention scoring, second-opinion context. | `app/services/extraction_pipeline.py`, `app/services/metric_collector.py`, extraction tests | KEEP_AND_ADAPT |
+| `SourceEvent` / `source_events` | Normalized source event with source object identity, event type, source timestamp, raw ref, evidence refs, and metadata. | Current central source event layer for Jira/GitHub/Gmail/Drive-style activity. | `app/services/source_ingestion.py`, `app/services/evidence_explorer.py`, `app/services/repository_source_inventory.py`, `app/services/jira_graph_mapping.py` | COMPATIBILITY_LAYER |
+| `NormalizedActivityItemRecord` / `normalized_activity_items` | Normalized activity feed item derived from source events. | Digest, metrics, attention triage, and timeline-style founder read models. | `app/services/source_ingestion.py`, `app/services/metric_collector.py`, `app/services/attention_triage.py`, digest services | KEEP_AND_ADAPT |
+| `EntityRecord` / `entities` | Current graph entity table with type, canonical name, attrs, canonical entity relation, merge status, and lineage. | Company graph, Jira/project/entity mapping, graph tree, repo/company-brain context. | `app/services/graph_resolver.py`, `app/services/jira_graph_mapping.py`, `app/services/graph_tree.py`, `app/services/evidence_explorer.py` | COMPATIBILITY_LAYER |
+| `EntitySourceAccount` / `entity_source_accounts` | Maps graph entities to source-system account IDs. | Identity/entity matching across external providers. | `app/services/graph_resolver.py`, graph tests | KEEP_AND_ADAPT |
+| `EntityAliasRecord` / `entity_aliases` | Alias table for graph entity resolution. | Canonicalization and founder-confirmed aliases. | `app/services/graph_resolver.py`, graph tests | KEEP_AND_ADAPT |
+| `EntityLinkRecord` / `entity_links` | Evidence-backed graph relationships between entities. | Graph tree, related entities, ownership/project relationships. | `app/services/graph_resolver.py`, `app/services/graph_tree.py`, `app/services/evidence_explorer.py` | KEEP_AND_ADAPT |
+| `KnowledgeScore` / `knowledge_scores` | Score record for importance, urgency, risk, confidence, and attention. | Ranking and attention-oriented founder/operator surfaces. | `app/services/knowledge_scoring.py`, `app/services/metric_collector.py` | KEEP_AND_ADAPT |
+| `AttentionTriageResultRecord` / `attention_triage_results` | Attention classification, priority, digest visibility, reason, action, owner/deadline, evidence refs. | Attention triage and digest candidate selection. | `app/services/attention_triage.py`, `app/services/digest_builder.py`, attention tests | KEEP_AND_ADAPT |
+| `AttentionTriageFeedbackRecord` / `attention_triage_feedback` | Human feedback on attention triage results. | Feedback loop for triage decisions. | attention triage services/tests | KEEP |
+| `GmailThread` / `gmail_threads` | Gmail provider thread snapshot. | Gmail read-only ingestion and source-backed thread context. | `app/api/gmail.py`, Gmail ingestion services/tests | KEEP_AND_ADAPT |
+| `GmailMessage` / `gmail_messages` | Gmail provider message snapshot with raw object ref and payload. | Gmail read-only ingestion and evidence/source context. | `app/api/gmail.py`, Gmail ingestion services/tests | KEEP_AND_ADAPT |
+| `GmailAttachment` / `gmail_attachments` | Gmail attachment metadata and raw object ref. | Gmail attachment inventory and evidence context. | Gmail ingestion services/tests | KEEP |
+| `EmailThreadState` / `email_thread_states` | Aggregated thread state with participants, reply state, triage class, digest flags, and evidence refs. | Email founder/operator state, digest, triage context. | email state/attention services, digest services | KEEP_AND_ADAPT |
+| `AgentProposal` / `agent_proposals` | Human-reviewable proposal from an agent with payload, source snapshot, evidence refs, confidence, status, decision fields, and reversibility. | Existing approval-like layer for bounded AI suggestions. | `app/services/agent_proposals.py`, proposal-related tests | KEEP_AND_ADAPT |
+| `MetricSnapshot` / `metric_snapshots` | Point-in-time metrics by key/scope. | Dashboard/read-model support. | `app/services/metric_collector.py`, metric tests | DO_NOT_TOUCH_NOW |
+| `AgentRunLog` / `agent_run_logs` | Agent run lifecycle and counts/errors summary. | Operational observability and run history. | agent run logging services/tests | KEEP |
+| `DataAvailability` / `data_availability` | Availability state for metrics/read models. | Dashboard readiness and missing-data messaging. | metric/readiness services/tests | KEEP |
+| `FounderDeclaration` / `founder_declarations` | Founder-declared facts and configuration payloads. | Declared company/founder context and second-opinion comparisons. | `app/services/declarations.py`, declaration tests | KEEP_AND_ADAPT |
+| `SourceControlState` / `source_control_states` | Per-source control state, pause/status, last sync/action, watermarks, config status. | Operator control plane for source syncing. | `app/services/source_control.py`, `app/api/source_control.py`, source-control tests | KEEP_AND_ADAPT |
+| `SourceRunRequest` / `source_run_requests` | Requested/approved/started/finished source-control action with snapshots, result, idempotency, external-side-effect flag, and audit ref. | Human-controlled source run lifecycle and guarded provider actions. | `app/services/source_run_service.py`, `app/api/source_control.py`, action-center services | KEEP_AND_ADAPT |
+| `SecondOpinionFinding` / `second_opinion_findings` | Declared-vs-observed finding with evidence/source refs, severity, confidence, status, and visibility. | Company Brain / second-opinion insight surface. | `app/services/second_opinion.py`, `app/services/action_center.py`, company-brain services | KEEP_AND_ADAPT |
+| `StatusSnapshotRecord` / `status_snapshots` | Computed status summary for an entity with color, changes, work, blockers, risks, conflicts, recommendations, confidence, and evidence refs. | Founder/company status read model. | status services/tests, company-brain UI paths | POST_MVP_FREEZE |
+| `SharePack` / `share_packs` | Investor/share export package with sections, evidence coverage, redaction manifest, included entities/findings/sources, and lifecycle fields. | Post-MVP/share-pack operator surface. | `app/services/share_pack_service.py`, share-pack API/tests | POST_MVP_FREEZE |
 
-- Raw storage + Postgres are the source of truth.
-- Obsidian is export-only.
-- Extracted tasks/risks/decisions require `evidence_refs`.
-- `source_event_id` is for actual SourceEvent linkage when present.
-- Document-derived provenance belongs in `source_document_id`, `chunk_id`, and `evidence_refs`.
-- Source-event projections must preserve `raw_object_ref` and evidence links.
-- Missing evidence means no persisted fact.
-- Normalized activity item persistence stores only strict schema-validated
-  `NormalizedActivityItem` metadata and evidence refs. It must not store raw
-  source bodies, prompts, provider payloads, secrets, or unvalidated JSON blobs.
-- Provider-free source-event projection can persist one supported stored
-  `SourceEvent` as one validated `normalized_activity_items` row. Projection is
-  idempotent by `source_event_id`; repeating the projection returns the existing
-  activity row instead of creating duplicates.
-- Durable activity linkage is now:
-  `source_events` -> `normalized_activity_items` ->
-  `attention_triage_results` -> `attention_triage_feedback`.
-- `source_event_id` on normalized activity items remains nullable for provider-
-  free tests and future activity sources that do not yet have a durable source
-  event row.
-- Attention feedback stores user intent only; it must not store raw source
-  bodies or provider payloads.
-- `source` on attention feedback is optional collision protection because
-  `source_object_id` may not be globally unique across connectors.
-- Feedback context loaders use `source` as a DB/service-level filter; the
-  public `AttentionTriageFeedback` DTO remains playbook-compatible and does not
-  expose `source`.
-- Attention triage result persistence stores only strict schema-validated
-  result metadata and evidence refs. It must not store raw source bodies,
-  prompts, provider payloads, secrets, or unvalidated JSON blobs.
-- Persisted attention digest delivery drafts are audit-log-backed review
-  records only. They are derived from persisted attention digest read-model data
-  and deterministic rendered text, are not source-of-truth company facts, are
-  not approvals, and are not delivery execution.
-- Persisted delivery draft audit payloads must store only sanitized draft data:
-  `delivery_draft_id`, inert draft status, explicit window metadata, rendered
-  text and hash, chunk metadata, sanitized digest snapshot, safe
-  source-of-truth metadata, and safe debug evidence refs only when explicitly
-  requested. Hidden low-priority items remain count-only.
-- Persisted delivery draft audit payloads must not store raw source bodies,
-  provider payloads, prompts, source payloads, secrets, tokens, hidden item
-  details, or untrusted raw content.
-- Delivery draft idempotency is service-level and keyed by deterministic
-  `delivery_draft_id` in `audit_logs.after_ref`; no new table or migration is
-  introduced by FOS-061.
-- Delivery draft approval/rejection decisions are audit events only. They store
-  safe reviewer/note metadata, the decision, the referenced
-  `delivery_draft_id`, and the draft text hash; they must not store rendered
-  digest text, raw source bodies, prompts, provider payloads, secrets, tokens,
-  hidden item details, or untrusted raw content.
-- Approval/rejection decision idempotency is service-level and keyed by
-  `delivery_draft_id` plus terminal decision. Repeating the same decision
-  returns the existing decision status, while conflicting terminal decisions are
-  rejected. FOS-062 introduces no new table or migration.
-- Approval decisions are not delivery execution. They do not mutate the draft
-  event, do not mutate source-of-truth company facts, do not send
-  Telegram/Slack messages, and do not invoke scheduler or delivery adapters.
-- Delivery readiness for persisted delivery drafts is read-only and derived
-  from existing `digest.delivery_draft.created`,
-  `digest.delivery_draft.approved`, and `digest.delivery_draft.rejected` audit
-  events. It reports whether a draft is approved and eligible for a future
-  separately gated delivery path, but it must not store rendered digest text in
-  the readiness response, create outbox/intention records, mutate source-of-
-  truth data, mutate draft or decision events, send Telegram/Slack messages, or
-  invoke scheduler, providers, live APIs, approval execution, or delivery
-  adapters. FOS-063 introduces no new table or migration.
-- Delivery intention records are audit-log-backed execution metadata for
-  approved and ready persisted delivery drafts. They are durable handoff
-  artifacts for a future separately gated execution path, not delivery
-  execution, not outbox workers, not scheduler jobs, and not source-of-truth
-  company facts. They store only safe draft/readiness metadata such as
-  `delivery_intention_id`, `delivery_draft_id`, digest type, channel, rendered
-  text hash, window, chunk metadata, readiness summary, source-of-truth
-  metadata, and inert delivery flags.
-- Delivery intention payloads must not store rendered digest text, full digest
-  snapshots, raw source bodies, prompts, provider payloads, source payloads,
-  secrets, tokens, hidden item details, or newly exposed evidence refs. They
-  must not send Telegram/Slack messages, invoke delivery adapters, create
-  scheduler jobs, mutate draft or decision events, or mutate source-of-truth
-  company facts. FOS-064 introduces no new table or migration.
-- Telegram delivery plan previews for delivery intentions are read-only derived
-  metadata, not stored records. They may use the stored delivery draft rendered
-  text internally for deterministic Telegram chunk hashes and lengths, but plan
-  responses must not include rendered text, chunk text, Telegram bot tokens,
-  chat IDs, URLs, full digest snapshots, raw source bodies, prompts, provider
-  payloads, source payloads, secrets, hidden item details, or newly exposed
-  evidence refs. FOS-065 introduces no new table or migration.
-- Local delivery intention operator reviews are read-only derived bundles, not
-  stored records and not source-of-truth company facts. They read the stored
-  delivery intention, referenced delivery draft, approval status, readiness,
-  and Telegram delivery plan by `delivery_intention_id`. Default output must
-  omit rendered digest text and chunk text; optional rendered text output may
-  include only the stored sanitized draft text. Review output must not include
-  Telegram bot tokens, chat IDs, URLs, full digest snapshots, raw source
-  bodies, prompts, provider payloads, source payloads, secrets, hidden item
-  details, or newly exposed evidence refs. FOS-066 introduces no audit event,
-  new table, or migration.
-- Telegram execution preflight for delivery intentions is read-only derived
-  metadata, not a stored record and not delivery execution. It reads the stored
-  delivery intention and Telegram plan, checks Telegram bot token and chat ID
-  presence only, and returns safe booleans and blockers. It must not return,
-  print, store, log, or validate credential values; send Telegram/Slack
-  messages; call delivery adapters; create scheduler jobs, delivery result
-  events, outbox records, audit rows, new tables, or migrations; or expose
-  rendered text, chunk text, raw source bodies, prompts, provider payloads,
-  hidden item details, or newly exposed evidence refs.
-- Delivery result records for delivery intentions are audit-log-backed execution
-  outcome metadata, not source-of-truth company facts and not delivery
-  execution. They are keyed by deterministic `delivery_result_id` values and may
-  store only sanitized result fields: delivery intention ID, execution attempt
-  ID, channel, rendered text hash, planned/attempted/delivered/failed chunk
-  counts, bounded safe message refs, safe error code/summary, inert scheduler
-  and approval-execution flags, and source-of-truth/safety metadata. They must
-  not store rendered text, chunk text, Telegram bot tokens, chat IDs, URLs,
-  webhook secrets, raw Telegram API responses, full digest snapshots, raw source
-  bodies, prompts, provider payloads, source payloads, hidden item details, or
-  newly exposed evidence refs. FOS-068 adds no public result creation API, send
-  path, outbox table, scheduler job, new table, or migration.
-- Bounded Telegram execution gates for delivery intentions are read-only derived
-  metadata, not stored records and not delivery execution. They read stored
-  approval/readiness, delivery intention, Telegram plan, credential-presence
-  preflight, and result-contract metadata to report safe readiness booleans,
-  blockers, required future operator fields, and chunk bounds. They must not
-  return or store rendered text, chunk text, Telegram bot tokens, chat IDs,
-  URLs, webhook secrets, raw Telegram API responses, raw source bodies, prompts,
-  provider payloads, source payloads, hidden item details, or newly exposed
-  evidence refs. FOS-069 adds no send path, delivery result record creation,
-  execution API mutation, outbox table, scheduler job, new table, or migration.
-- Test-only bounded Telegram send attempts for delivery intentions are local
-  operator actions that reuse stored delivery drafts, intentions, plans,
-  preflight, and execution gate metadata. The command writes only sanitized
-  `digest.delivery_result.recorded` audit metadata after an attempt, keyed by
-  deterministic `delivery_result_id` and operator-provided
-  `execution_attempt_id`. It must not store rendered text, chunk text, bot
-  tokens, chat IDs, URLs, webhook secrets, raw Telegram API responses, full
-  digest snapshots, hidden item details, or newly exposed evidence refs. FOS-070
-  adds no API send endpoint, production mode, scheduler job, delivery worker,
-  outbox table, automatic retry, approval-triggered execution, new table, or
-  migration.
-- Provider execution guards are runtime boundaries, not data model tables. Live
-  provider calls are default-denied unless a separate bounded execution path
-  supplies explicit acknowledgement. External API responses remain raw event or
-  delivery-interface material until stored and validated through existing
-  source-of-truth paths; Telegram and Slack are not source-of-truth stores.
-- OpenAI, Gmail, and Drive connector/client calls share that default-denied
-  runtime boundary. Guard diagnostics are safe reason classes only and must not
-  include provider payloads, source identifiers, credential values, rendered
-  digest text, or raw event contents.
-- Production-operation guards are runtime gates, not data model tables. Delivery
-  execution and Obsidian vault export are default-denied unless an explicit
-  operator acknowledgement is supplied by a bounded execution path. Read-only
-  review, digest, report, preflight, and grouped lifecycle tools remain
-  no-send, non-enforcing, and not source-of-truth mutations. Migrations,
-  production DB operations, scheduler execution, outbox execution, and automatic
-  delivery remain out of scope.
-- Raw-storage writes, manual knowledge ingestion, and persisted Gmail/Drive
-  backfill writes are source-of-truth mutation boundaries and are default-denied
-  without the same production-operation acknowledgement. Guard diagnostics must
-  remain safe reason classes and operation classes only.
-- Scheduler, outbox drain, background dispatch, retry worker, and automatic
-  delivery execution are default-disabled runtime boundaries, not data model
-  tables. The current bounded Telegram send path remains manual-operator-only
-  and explicitly asserts it is not scheduler/outbox managed before reaching
-  provider or production-operation gates. Delivery intentions remain durable
-  handoff audit artifacts, and delivery results remain execution outcome
-  metadata only. See `runbooks/guarded-operations.md` for the concise operator
-  guard summary and diagnostic rules.
-- Operator-facing diagnostics and artifacts must expose only safe classes,
-  reason codes, and counts for unsafe content. They must not include raw
-  secrets, network locations, source identifiers, raw hashes, provider
-  payloads, rendered digest text, grouped preview text, item text, person
-  contact details, database connection details, or remote details.
-- `scripts/doctor_guarded_execution.py` is a read-only guarded-execution
-  doctor. It performs synthetic guard and sanitizer checks only and records no
-  source-of-truth mutation, delivery execution, provider call, scheduler job,
-  outbox drain, migration, or production operation.
-- Local/dev-only synthetic persisted attention digest seed rows are explicit
-  test fixtures in the local database, not company facts. The seed command uses
-  deterministic IDs and fails closed on conflicts while writing only enough
-  synthetic metadata to populate the persisted attention digest read model:
-  `ingested_events`, `source_events`, `normalized_activity_items`, and
-  `attention_triage_results`. Seed payloads must be clearly labeled synthetic
-  and must not contain raw provider payloads, source bodies, prompts, secrets,
-  credential values, chat IDs, webhook values, rendered digest text, chunk text,
-  hidden low-priority details, or untrusted raw content. FOS-071 adds no
-  delivery draft, approval, intention, plan, preflight, gate, delivery result,
-  send path, scheduler job, delivery worker, outbox table, raw-storage edit,
-  Obsidian export, new table, or migration.
-- Duplicate-success checks for test-only Telegram sends are read-only checks
-  over existing delivery result audit metadata. A prior result blocks a new
-  `execution_attempt_id` only when the sanitized payload clearly has
-  `result_status=succeeded`, `sent=true`, and a positive
-  `delivered_chunk_count`. Failed, partial, skipped, malformed, or incomplete
-  prior results do not silently count as successful duplicates. The lookup
-  returns only safe metadata: delivery result ID, delivery intention ID,
-  execution attempt ID, result status, sent flag, chunk counts, and recorded
-  time. It must not expose rendered text, chunk text, credentials, raw Telegram
-  responses, full digest snapshots, hidden item details, or newly exposed
-  evidence refs. FOS-072 adds no override flag, API send endpoint, production
-  mode, scheduler job, delivery worker, outbox table, automatic retry,
-  approval-triggered execution, new table, or migration.
-- FOS-073 adds a read-only operator report over the same delivery result audit
-  metadata. It lists safe result metadata for a `delivery_intention_id`, derives
-  whether the duplicate-success guard would block a new execution attempt, and
-  surfaces only safe prior-success identifiers/counts. It does not append audit
-  rows, send messages, read bot credentials, expose rendered text or chunks,
-  expose raw Telegram/provider payloads, create a send API, add scheduler or
-  worker behavior, introduce an outbox table, add a migration, or create a new
-  table.
-- FOS-074 adds a local manual pilot preparation path that can create only the
-  existing `digest.delivery_draft.created` audit-log-backed review artifact for
-  an explicit persisted attention digest window. It uses deterministic
-  `delivery_draft_id` behavior, remains idempotent for the same window and
-  rendered digest, and does not create approval/rejection rows, readiness
-  records, delivery intentions, Telegram plans, preflight/gate records, delivery
-  results, scheduler jobs, outbox rows, migrations, or new tables.
-- FOS-075 extends that preparation path with read-only stale draft status. It
-  reads existing `digest.delivery_intention.created` rows by
-  `before_ref=delivery_draft_id` and existing `digest.delivery_result.recorded`
-  rows by `before_ref=delivery_intention_id`, then reports only safe IDs,
-  counts, statuses, and prior-success metadata. A draft is considered already
-  sent only when an associated result has `result_status=succeeded`, `sent=true`,
-  and `delivered_chunk_count > 0`; failed, partial, skipped, malformed, or
-  incomplete results do not silently count as successful sends.
-- FOS-075 appends no rows for the status lookup and does not approve, create
-  intentions, create results, send, schedule, create outbox rows, add
-  migrations, or add tables. Delivery drafts, intentions, and results remain
-  audit/review/execution metadata, not source-of-truth company facts.
-- FOS-076 adds a local/dev-only combined seed-and-draft operator path. It
-  reuses the existing synthetic persisted attention seed rows
-  (`ingested_events`, `source_events`, `normalized_activity_items`, and
-  `attention_triage_results`) plus the existing
-  `digest.delivery_draft.created` audit-log-backed review artifact. Re-running
-  the same sample/window/draft inputs remains idempotent and appends no
-  duplicate seed rows or draft audit rows.
-- FOS-076 does not create approval/rejection rows, readiness records, delivery
-  intentions, Telegram plans, preflight/gate records, delivery results,
-  scheduler jobs, outbox rows, migrations, or new tables. It may surface the
-  FOS-075 already-sent draft warning from existing audit rows, but the warning
-  is status metadata only. Synthetic sample rows are local/dev test fixtures,
-  not source-of-truth company facts.
-- FOS-077 adds a local approved-draft handoff operator path. It reads an
-  explicit stored `delivery_draft_id`, verifies existing approval and readiness,
-  refuses stale/already-sent drafts using the FOS-075 status lookup, and creates
-  or returns the deterministic `digest.delivery_intention.created` audit event
-  through the existing FOS-064 service path.
-- FOS-077 appends no approval/rejection rows, delivery result rows, Telegram
-  plans, preflight/gate records, scheduler jobs, outbox rows, migrations, or new
-  tables. Its derived review/status/gate summaries expose only safe IDs, counts,
-  hashes, statuses, blockers, and safety flags; delivery drafts, intentions,
-  and results remain audit/review/execution metadata, not source-of-truth
-  company facts.
-- FOS-078 adds a read-only manual pilot status report over an explicit persisted
-  attention digest window and optional synthetic `sample_id`. It reads
-  `attention_triage_results` for safe digest counts and existing
-  `audit_logs` rows for matching drafts, approval decisions, delivery
-  intentions, and delivery results. The report exposes only safe counts, IDs,
-  hashes, statuses, duplicate/stale metadata, recommended next action, and
-  placeholder command shapes.
-- FOS-078 appends no seed rows, draft rows, decision rows, intention rows,
-  result rows, Telegram plan/preflight/gate rows, scheduler jobs, outbox rows,
-  migrations, or new tables. It does not expose rendered text, stored digest
-  text, chunk text, raw payloads, credential values, hidden low-priority item
-  details, or newly exposed evidence refs. Manual pilot status is operational
-  metadata only and is not source-of-truth company data.
-- FOS-079 adds a read-only persisted attention window discovery operator
-  command. It reads `attention_triage_results` over explicit bounded windows
-  for safe count summaries and reads existing `audit_logs` rows for matching
-  delivery draft, decision, intention, and result lifecycle metadata. It can
-  label synthetic/local/dev windows when safe FOS-071 seed markers are present,
-  but absence of that marker is not proof of production truth.
-- FOS-079 appends no seed rows, draft rows, decision rows, intention rows,
-  result rows, Telegram plan/preflight/gate rows, scheduler jobs, outbox rows,
-  migrations, or new tables. It does not expose rendered text, stored digest
-  text, chunk text, digest item details, raw payloads, credential values, hidden
-  low-priority item details, or newly exposed evidence refs. Window discovery is
-  operational metadata only and is not source-of-truth company data.
-- FOS-080 adds a read-only real stored local data readiness operator command
-  over existing `source_events`, `normalized_activity_items`, and
-  `attention_triage_results`. It returns only aggregate counts, synthetic/no-
-  marker labels, pipeline coverage booleans, and recommended next actions for
-  explicit bounded windows. It does not treat no-marker rows as production
-  truth and does not expose row-level titles, summaries, actions, people, URLs,
-  source identifiers, raw refs, raw payloads, provider payloads, prompts,
-  evidence refs, rendered digest text, chunk text, secrets, credential values,
-  or hidden low-priority details.
-- FOS-080 appends no source events, normalized activity rows, attention result
-  rows, seed rows, draft rows, decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
-  or new tables. Readiness discovery is operational metadata only and is not
-  source-of-truth company data.
-- FOS-081 adds a read-only stored source event normalization preview over
-  existing `source_events` and linked `normalized_activity_items`. It returns
-  only aggregate source event counts, synthetic/no-marker counts, already-
-  normalized counts, eligible/unsupported/invalid preview counts, safe projected
-  normalized source/activity-type counts, and recommended next actions. It does
-  not treat no-marker rows as production truth and does not expose row-level
-  titles, summaries, actions, people, URLs, source object identifiers, raw refs,
-  raw payloads, provider payloads, prompts, evidence refs, rendered digest text,
-  chunk text, secrets, credential values, or hidden low-priority details.
-- FOS-081 appends no source events, normalized activity rows, attention result
-  rows, seed rows, draft rows, decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
-  or new tables. Normalization preview is operational metadata only and is not
-  source-of-truth company data; any future projection write command must be
-  separate and explicit.
-- FOS-082 adds a local/dev-only stored source event normalization operator
-  command. It requires an explicit timezone-aware window, bounded `--max-events`,
-  and the exact `NORMALIZE STORED SOURCE EVENTS` confirmation phrase before
-  calling the existing provider-free
-  `project_source_event_to_normalized_activity_item` service. It refuses
-  production-like environments, excludes clearly synthetic local/dev rows by
-  default, skips already-normalized rows, counts unsupported or invalid rows
-  safely, and is idempotent by `source_event_id`.
-- FOS-082 writes only `normalized_activity_items` rows and only through the
-  existing normalized activity service. It appends no source events, attention
-  result rows, audit logs, seed rows, draft rows, decision rows, intention rows,
-  result rows, Telegram plan/preflight/gate rows, scheduler jobs, outbox rows,
-  migrations, or new tables. Its output is count-only operational metadata and
-  must not expose row-level titles, summaries, actions, people, URLs, source
-  object identifiers, raw refs, raw payloads, provider payloads, prompts,
-  evidence refs, rendered digest text, chunk text, secrets, credential values,
-  or hidden low-priority details. No-marker rows are not production truth, and
-  attention triage remains a separate explicit step.
-- FOS-083 adds a read-only normalized activity triage readiness preview over
-  existing `normalized_activity_items` and linked `attention_triage_results`.
-  It reports only aggregate normalized activity counts, synthetic/no-marker
-  counts, already-triaged and untriaged counts, provider-free eligibility
-  counts, and conservative fallback projected attention class, priority,
-  visible, and hidden counts.
-- FOS-083 appends no source events, normalized activity rows, attention result
-  rows, audit logs, seed rows, draft rows, decision rows, intention rows,
-  result rows, Telegram plan/preflight/gate rows, scheduler jobs, outbox rows,
-  migrations, or new tables. It does not call write-oriented triage services,
-  live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery code.
-  Its output is count-only operational metadata and must not expose row-level
-  titles, summaries, actions, people, URLs, source object identifiers, raw
-  refs, raw payloads, provider payloads, prompts, evidence refs, rendered
-  digest text, chunk text, secrets, credential values, or hidden low-priority
-  details. No-marker rows are not production truth, and attention triage writes
-  remain a separate explicit local/dev step.
-- FOS-084 adds a local/dev-only provider-free normalized activity triage
-  operator command. It requires an explicit timezone-aware window, bounded
-  `--max-items`, and the exact `TRIAGE NORMALIZED ACTIVITY` confirmation
-  phrase before calling the existing `triage_normalized_activity_item` service
-  with the provider-free fallback. It refuses production-like environments,
-  excludes clearly synthetic local/dev rows by default, skips already-triaged
-  rows, counts unsupported or invalid rows safely, and is idempotent by
-  `activity_item_id`.
-- FOS-084 writes only `attention_triage_results` rows and only through the
-  existing strict schema-validated attention result service. It appends no
-  source events, normalized activity rows, audit logs, seed rows, draft rows,
-  decision rows, intention rows, result rows, Telegram plan/preflight/gate
-  rows, scheduler jobs, outbox rows, migrations, or new tables. Its output is
-  count-only operational metadata and must not expose row-level titles,
-  summaries, actions, people, URLs, source object identifiers, raw refs, raw
-  payloads, provider payloads, prompts, evidence refs, rendered digest text,
-  chunk text, secrets, credential values, or hidden low-priority details.
-  No-marker rows are not production truth; real-data readiness and persisted
-  attention window discovery remain separate explicit checks.
-- FOS-085 adds a local read-only persisted attention window reconciliation
-  report. It compares attention-result `created_at` windows with optional
-  linked normalized/source activity windows, labels synthetic/no-marker/mixed
-  windows conservatively, and computes the current digest `text_sha256` without
-  returning rendered digest text or chunk text.
-- FOS-085 also compares the current digest hash with existing delivery draft
-  hashes for the same window, limit, debug-evidence setting, and channel. It
-  distinguishes successful delivery for different digest content from
-  successful delivery for the current digest content. It appends no source
-  events, normalized activity rows, attention results, audit logs, draft rows,
-  decision rows, intention rows, result rows, Telegram plan/preflight/gate
-  rows, scheduler jobs, outbox rows, migrations, or new tables. Its output is
-  count-only operational metadata plus hashes and must not expose row-level
-  titles, summaries, actions, people, URLs, source object identifiers, raw refs,
-  raw payloads, provider payloads, prompts, evidence refs, rendered digest text,
-  chunk text, secrets, credential values, or hidden low-priority details.
-  No-marker rows are not production truth, and real stored local draft
-  preparation remains separately human-gated.
-- FOS-086 adds a local read-only no-marker persisted attention candidate
-  report. It reads existing `attention_triage_results` for an explicit
-  persisted window, excludes rows with detected synthetic/local/dev markers,
-  and computes no-marker-only candidate count metadata plus digest hash/chunk
-  metadata without returning rendered digest text, chunk text, raw content, row
-  details, or evidence refs.
-- FOS-086 compares the no-marker candidate hash with existing delivery draft
-  hashes for the same window, limit, debug-evidence setting, and channel. It
-  distinguishes prior successful delivery for different digest content from
-  successful delivery for the current no-marker candidate content. It appends no
-  source events, normalized activity rows, attention results, audit logs, draft
-  rows, decision rows, intention rows, result rows, Telegram plan/preflight/gate
-  rows, scheduler jobs, outbox rows, migrations, or new tables. No-marker rows
-  are not production truth, and real stored local draft preparation remains a
-  separate explicit downstream step.
-- FOS-087 adds a local/dev-only no-marker persisted attention delivery draft
-  preparation command. It writes only one sanitized
-  `digest.delivery_draft.created` audit-log record through the existing
-  delivery draft persistence path, and only after an explicit time window,
-  exact confirmation phrase, local/dev environment check, and visible
-  no-marker candidate check pass.
-- FOS-087 draft payloads carry safe review metadata such as
-  `marker_filter=no_marker_only`, `no_marker_not_production_truth=true`, the
-  no-marker candidate `text_sha256`, candidate count/chunk metadata, excluded
-  synthetic counts, optional linked activity window metadata, timestamp
-  mismatch warnings, and prior-different-hash warnings. They remain delivery
-  draft review artifacts, not source-of-truth company facts. FOS-087 does not
-  append approval, intention, result, Telegram plan/preflight/gate, scheduler,
-  worker, outbox, migration, or new-table records and does not call live APIs,
-  providers/OpenAI, connectors, Telegram/Slack, or delivery code.
-- FOS-088 adds a read-only no-marker persisted attention digest quality report.
-  It reads existing no-marker candidate attention results and linked normalized
-  activity/source-event metadata to compute duplicate-looking/noise metrics at
-  rendered-shape, attention-result, normalized-activity, and source-event
-  linkage layers. It returns counts, safe enum summaries, opaque cluster labels,
-  candidate hash/chunk metadata, lifecycle status, warnings, and limitations
-  only.
-- FOS-088 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
-  or tables. It does not expose raw titles, summaries, actions, source object
-  identifiers, PR numbers, repository names, author names, rendered digest text,
-  chunk text, raw payloads, evidence refs, secrets, or credentials, and it does
-  not call live APIs, providers/OpenAI, connectors, Telegram/Slack, or delivery
-  code. Duplicate-looking remains operational quality metadata, not proof of a
-  semantic duplicate.
-- FOS-089 adds a read-only no-marker duplicate root-cause linkage report. It
-  reads existing no-marker candidate attention results and linked normalized
-  activity/source event metadata to compute safe bucket counts, fanout metrics,
-  likely origin, confidence, warnings, and limitations across source object,
-  source event, normalized activity, attention result, and rendered-shape
-  layers.
-- FOS-089 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
-  or tables. It does not modify renderer grouping, digest read-model grouping,
-  source event dedupe, normalization dedupe, attention triage dedupe, or
-  delivery behavior. It does not expose raw source object identifiers, PR
-  numbers, repository names, author names, titles, summaries, actions, source
-  bodies, evidence refs, rendered digest text, chunk text, raw payloads,
-  secrets, credentials, or raw fingerprints and does not call live APIs,
-  providers/OpenAI, connectors, Telegram/Slack, or delivery code.
-- FOS-090 adds a read-only no-marker grouped digest preview. It reads existing
-  no-marker candidate attention results and linked normalized activity/source
-  event metadata to group repeated source-object visible items by source object
-  for presentation planning only, returning count-only group metadata, opaque
-  group labels, safe enum summaries, per-section counts, and a separate grouped
-  preview hash/chunk metadata. Every visible item maps to exactly one group, the
-  sum of group item counts equals the ungrouped visible count, and the canonical
-  ungrouped candidate `text_sha256` is returned unchanged.
-- FOS-090 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
-  or tables. It does not modify renderer grouping, digest read-model grouping,
-  delivery draft text, `text_sha256` lifecycle, source event dedupe,
-  normalization dedupe, attention triage dedupe, or delivery behavior. It does
-  not expose raw source object identifiers, PR numbers, repository names, author
-  names, titles, summaries, actions, source bodies, evidence refs, rendered
-  digest text, grouped preview text, chunk text, raw payloads, secrets,
-  credentials, or raw fingerprints and does not call live APIs, providers/OpenAI,
-  connectors, Telegram/Slack, or delivery code.
-- FOS-091 adds a read-only no-marker grouped lifecycle compatibility report. It
-  reuses the grouped preview (canonical candidate hash, grouped preview hash,
-  duplicate-quality, canonical lifecycle) and reads existing window delivery
-  draft/result lifecycle facts (per-draft `text_sha256` and a derived
-  successful-delivery boolean) to classify whether a grouped preview would be
-  treated as `already_sent` or a `new_unsent_presentation_variant` under the
-  current hash-oriented duplicate guard, and flags
-  `presentation_variant_duplicate_send_risk` and
-  `requires_guard_extension_before_grouped_send`.
-- FOS-091 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations,
-  or tables. It does not modify renderer grouping, digest read-model grouping,
-  delivery draft text, `text_sha256` lifecycle, draft/intention/result id
-  derivation, the duplicate-success guard, source event dedupe, normalization
-  dedupe, attention triage dedupe, or delivery behavior. The grouped hash is a
-  presentation-variant hash and is not delivered content; a future grouped
-  draft/send requires a guard extension or canonical-hash linkage. It does not
-  expose raw source object identifiers, PR numbers, repository names, author
-  names, titles, summaries, actions, source bodies, evidence refs, rendered
-  digest text, grouped preview text, chunk text, raw payloads, secrets,
-  credentials, or raw fingerprints and does not call live APIs, providers/OpenAI,
-  connectors, Telegram/Slack, or delivery code.
-- FOS-092 adds a read-only canonical-hash duplicate guard evaluator for
-  presentation variants. It reads existing `digest.delivery_draft.created`,
-  `digest.delivery_intention.created`, and `digest.delivery_result.recorded`
-  audit metadata for an explicit delivery window, current presentation
-  `text_sha256`, and optional explicitly linked canonical `text_sha256`, then
-  reports whether the current presentation hash has a successful delivery result
-  and whether a distinct canonical hash has a successful delivery result.
-- FOS-092 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not enforce blocking in send paths yet, does not change
-  renderer grouping, digest read-model grouping, delivery draft text,
-  `text_sha256` lifecycle, draft/intention/result id derivation, delivery result
-  writing, or delivery behavior, and does not claim semantic duplication. It
-  only evaluates explicitly linked canonical/presentation hashes; grouping
-  preview remains presentation planning, not source-of-truth mutation, and
-  duplicate-success protection remains the final send-time guard.
-- FOS-093 exposes the FOS-092 evaluator inside the read-only no-marker grouped
-  lifecycle compatibility report. It does not add new storage. The report maps
-  the grouped preview hash to the current presentation hash and the no-marker
-  candidate hash to the linked canonical hash, then returns only sanitized
-  evaluation metadata: current-hash success, linked-canonical success, future
-  blocker/recommended-action codes, `enforced=false`, and
-  `semantic_duplicate_claimed=false`.
-- FOS-093 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not enforce blocking in send paths, does not change renderer
-  grouping, digest read-model grouping, delivery draft text, `text_sha256`
-  lifecycle, delivery result writing, or delivery behavior, and does not claim
-  semantic duplication. It only applies to explicitly linked
-  canonical/presentation hashes; grouping preview remains presentation planning,
-  not source-of-truth mutation, and duplicate-success protection remains the
-  final send-time guard.
-- FOS-094 adds a read-only operator decision summary to the grouped lifecycle
-  compatibility report. It does not add new storage. The summary is derived
-  from existing lifecycle compatibility and canonical-hash guard evaluation
-  metadata, and reports a sanitized decision for current-hash already-sent,
-  explicitly linked canonical-hash blocker, not-blocked, or manual-review
-  outcomes.
-- FOS-094 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not enforce blocking in send paths, does not change renderer
-  grouping, digest read-model grouping, delivery draft text, `text_sha256`
-  lifecycle, delivery result writing, or delivery behavior, and does not claim
-  semantic duplication. It only applies to explicitly linked
-  canonical/presentation hashes; missing or insufficient evidence leads to
-  conservative manual review, grouping preview remains presentation planning,
-  and duplicate-success protection remains the final send-time guard.
-- FOS-095 adds sanitized contract tests for the grouped lifecycle compatibility
-  report. It does not add new storage. The tests cover
-  `lifecycle_compatibility`, `canonical_hash_guard_evaluation`, and
-  `operator_review_summary`, including required fields, stable decision values,
-  `enforced=false`, `semantic_duplicate_claimed=false`, and sanitized JSON/text
-  output.
-- FOS-095 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not enforce blocking in send paths, does not change renderer
-  grouping, digest read-model grouping, delivery draft text, `text_sha256`,
-  API behavior, schema, delivery result writing, delivery execution, or
-  scheduler behavior, and does not claim semantic duplication. Grouping preview
-  remains presentation planning, and duplicate-success protection remains the
-  final send-time guard.
-- FOS-096 adds a decision-only `review-json` output mode for the grouped
-  lifecycle compatibility report. It does not add new storage. The output
-  contains only minimal safe report/window metadata,
-  `lifecycle_compatibility`, `canonical_hash_guard_evaluation`,
-  `operator_review_summary`, and safety flags.
-- FOS-096 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not enforce blocking in send paths, does not change renderer
-  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
-  behavior, schema, delivery result writing, delivery execution, scheduler
-  behavior, or automatic delivery, and does not claim semantic duplication.
-  Grouping preview remains presentation planning, and duplicate-success
-  protection remains the final send-time guard.
-- FOS-097 improves grouped lifecycle report CLI help and adds a local synthetic
-  review smoke mode. It does not add new storage. The smoke mode returns
-  in-memory synthetic scenarios over `lifecycle_compatibility`,
-  `canonical_hash_guard_evaluation`, and `operator_review_summary` so local
-  operators can verify the sanitized decision surface without reading real
-  local data.
-- FOS-097 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not enforce blocking in send paths, does not change renderer
-  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
-  behavior, schema, delivery result writing, delivery execution, scheduler
-  behavior, or automatic delivery, and does not claim semantic duplication.
-  Grouping preview remains presentation planning, and duplicate-success
-  protection remains the final send-time guard.
-- FOS-098 adds optional grouped lifecycle review exit codes and sanitized JSON
-  artifact output. It does not add new storage. Exit codes are derived only from
-  `operator_review_summary.decision`; artifact output is limited to
-  `review-json` and synthetic review smoke JSON, and artifact files are local
-  review artifacts rather than source-of-truth records.
-- FOS-098 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It rejects unsafe artifact paths and unsafe output modes, does not
-  enforce blocking in send paths, does not change renderer grouping, digest
-  read-model grouping, delivery draft text, `text_sha256`, API behavior, schema,
-  delivery result writing, delivery execution, scheduler behavior, or automatic
-  delivery, and does not claim semantic duplication. Grouping preview remains
-  presentation planning, and duplicate-success protection remains the final
-  send-time guard.
-- FOS-099 adds a provider-free grouped lifecycle review operator doctor. It does
-  not add new storage. The doctor checks CLI help/discoverability, synthetic
-  review smoke output, `review-json` contract shape, review exit-code mapping,
-  sanitized artifact writing, and unsafe artifact rejection using synthetic
-  in-memory review data and a local temporary JSON artifact only.
-- FOS-099 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not use real local data, does not enforce blocking in send
-  paths, does not change renderer grouping, digest read-model grouping, delivery
-  draft text, `text_sha256`, API behavior, schema, delivery result writing,
-  delivery execution, scheduler behavior, or automatic delivery, and does not
-  claim semantic duplication. Any doctor artifact is a local review/debug
-  artifact only, grouping preview remains presentation planning, and
-  duplicate-success protection remains the final send-time guard.
-- FOS-100 adds a gated manual local grouped lifecycle review runner. It does not
-  add new storage. The runner blocks by default unless
-  `--allow-local-data-readonly` is passed, runs the provider-free doctor before
-  delegation, forces sanitized `review-json`, requires a safe local artifact
-  path, and rejects unsafe output modes or artifact paths before report
-  execution.
-- FOS-100 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not enforce blocking in send paths, does not change renderer
-  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
-  behavior, schema, delivery result writing, delivery execution, scheduler
-  behavior, or automatic delivery, and does not claim semantic duplication.
-  Runner artifacts are local review/debug artifacts only, grouping preview
-  remains presentation planning, and duplicate-success protection remains the
-  final send-time guard.
-- FOS-102 adds safe bounded window presets and preflight planning to the manual
-  grouped lifecycle review runner. It does not add new storage.
-  `--lookback-hours` resolves UTC `--start-at`/`--end-at` values for local
-  read-only debugging, and `--preflight-only` validates acknowledgement, doctor
-  readiness, output mode, artifact path, and the resolved window without report
-  execution.
-- FOS-102 appends no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It does not enforce blocking in send paths, does not change renderer
-  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
-  behavior, schema, delivery result writing, delivery execution, scheduler
-  behavior, or automatic delivery, and does not claim semantic duplication.
-  Runner artifacts are local review/debug artifacts only, grouping preview
-  remains presentation planning, and duplicate-success protection remains the
-  final send-time guard.
-- FOS-104 adds sanitized manual-review diagnostics to grouped lifecycle review
-  output. The diagnostics are derived from already sanitized lifecycle
-  compatibility, canonical-hash guard evaluation, operator review summary, and
-  resolved window metadata. They expose booleans, stable reason codes, and safe
-  next-step/action codes only; they add no source events, normalized activity
-  rows, attention results, audit logs, draft rows, approval/decision rows,
-  intention rows, result rows, Telegram plan/preflight/gate rows, scheduler
-  jobs, outbox rows, migrations, or tables.
-- FOS-104 diagnostics are read-only reporting/debug metadata only. They do not
-  enforce blocking in send paths, do not claim semantic duplication, do not
-  change renderer grouping, digest read-model grouping, delivery draft text,
-  `text_sha256`, API behavior, schema, delivery result writing, delivery
-  execution, scheduler behavior, or automatic delivery. Runner artifacts remain
-  local review/debug artifacts only, grouping preview remains presentation
-  planning, and duplicate-success protection remains the final send-time guard.
-- FOS-106 removes raw hash values from grouped lifecycle `review-json`,
-  synthetic smoke, doctor, and manual-runner artifact output. Sanitized
-  operator artifacts use booleans and relationship categories instead of raw
-  hash identifiers, while internal read-only lifecycle comparison and
-  duplicate-guard evaluation may still use hashes.
-- FOS-106 adds no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It is reporting/debug sanitization only, does not enforce blocking in
-  send paths, does not claim semantic duplication, does not change renderer
-  grouping, digest read-model grouping, delivery draft text, `text_sha256`, API
-  behavior, schema, delivery result writing, delivery execution, scheduler
-  behavior, or automatic delivery. Sanitized review artifacts remain local
-  review/debug artifacts only, grouping preview remains presentation planning,
-  and duplicate-success protection remains the final send-time guard.
-- FOS-108 adds a gated grouped lifecycle review window sweep runner. It compares
-  sanitized review decisions and diagnostics across multiple bounded lookback
-  windows, supports preflight-only checks, writes only sanitized local
-  review/debug artifacts under a safe output directory, and returns a
-  conservative aggregate review decision.
-- FOS-108 adds no source events, normalized activity rows, attention results,
-  audit logs, draft rows, approval/decision rows, intention rows, result rows,
-  Telegram plan/preflight/gate rows, scheduler jobs, outbox rows, migrations, or
-  tables. It remains manual/read-only/debug tooling, is default-blocked unless
-  explicitly acknowledged, runs the provider-free doctor before acknowledged
-  sweep delegation, does not enforce blocking in send paths, does not claim
-  semantic duplication, does not change renderer grouping, digest read-model
-  grouping, delivery draft text, `text_sha256`, API behavior, schema, delivery
-  result writing, delivery execution, scheduler behavior, or automatic delivery.
-  Sweep artifacts are local review/debug artifacts only, grouping preview
-  remains presentation planning, and duplicate-success protection remains the
-  final send-time guard.
-- FOS-110 adds no storage and changes only grouped lifecycle sweep outcome
-  handling. Delegated review exit codes `0`, `10`, `20`, and `30` are completed
-  window outcomes, including `30` for `manual_review_needed`; acknowledged
-  sweeps finish all requested windows when every delegated result is one of
-  those review outcomes.
-- FOS-110 aggregate sweep decisions preserve conservative precedence and return
-  the matching aggregate review exit code. Unexpected delegated failures still
-  fail with sanitized metadata only. Sweep artifacts remain local review/debug
-  artifacts only; the runner remains default-blocked, doctor-gated,
-  sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
-  mutation.
-- FOS-112 adds no storage and changes only the grouped lifecycle sweep
-  delegated execution boundary. Each acknowledged sweep window is routed
-  through the gated manual runner and the captured review return code is
-  classified there, so valid delegated review outcomes `0`, `10`, `20`, and
-  `30` are completed window outcomes.
-- FOS-112 keeps unexpected delegated return codes or malformed delegated output
-  as sanitized failures. Sweep artifacts remain local review/debug artifacts
-  only; the runner remains default-blocked, doctor-gated,
-  sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
-  mutation.
-- FOS-114 adds no storage and changes only the upstream delegated report
-  boundary used by the manual grouped lifecycle review runner and sweep
-  windows. Valid delegated report review outcomes `0`, `10`, `20`, and `30`
-  are classified before failure handling; valid sanitized review output remains
-  a completed review outcome even if delegated stderr was captured.
-- FOS-114 keeps unexpected return codes, malformed output, decision/code
-  mismatches, and sanitizer failures as sanitized failures only. Review and
-  sweep artifacts remain local review/debug artifacts only; the tooling remains
-  default-blocked, doctor-gated, sanitized-output-only, no-send,
-  non-enforcing, and not a source-of-truth mutation.
-- FOS-116 adds no storage and changes only the nested sweep/manual review
-  artifact contract. After a valid delegated review outcome, the sweep
-  validates the per-window manual review artifact as the durable sanitized
-  payload instead of requiring captured delegated stdout to be the review
-  payload.
-- FOS-116 keeps missing or malformed artifacts, unexpected return codes,
-  decision/code mismatches, and sanitizer failures as sanitized failures only.
-  Review and sweep artifacts remain local review/debug artifacts only; the
-  tooling remains default-blocked, doctor-gated, sanitized-output-only,
-  no-send, non-enforcing, and not a source-of-truth mutation.
-- FOS-118 adds no storage and changes only the nested manual/report review
-  artifact contract. The manual runner passes its safe review artifact path to
-  the delegated report command and validates that durable sanitized artifact
-  after a valid review outcome instead of requiring captured delegated stdout
-  to be the review payload.
-- FOS-118 keeps missing or malformed delegated report artifacts, unexpected
-  return codes, decision/code mismatches, and sanitizer failures as sanitized
-  failures only. Review and sweep artifacts remain local review/debug artifacts
-  only; the tooling remains default-blocked, doctor-gated,
-  sanitized-output-only, no-send, non-enforcing, and not a source-of-truth
-  mutation.
-- FOS-120 adds no storage and makes the delegated report review-json artifact
-  contract explicit. Review-json artifacts carry a stable schema marker so the
-  manual runner can distinguish them from full compatibility reports; full
-  reports are converted through the sanitized formatter before validation.
-- FOS-120 keeps ambiguous, missing, malformed, mismatched, or unsafe delegated
-  report artifacts as sanitized failures only. Review and sweep artifacts
-  remain local review/debug artifacts only; the tooling remains
-  default-blocked, doctor-gated, sanitized-output-only, no-send,
-  non-enforcing, and not a source-of-truth mutation.
-- FOS-122 adds no storage and tightens the CLI-level delegated report artifact
-  contract. The manual runner requests `review-json` at the exact delegated
-  artifact path, accepts schema-marked review artifacts, markerless legacy
-  review-json artifacts, or full compatibility reports only after sanitized
-  conversion, and keeps wrong-path, wrong-schema, malformed, mismatched, or
-  unsafe artifacts as sanitized failures.
-- FOS-124 adds no storage and refines markerless delegated review-json
-  handling to require the safe review sections instead of one status value.
-  Delegated report failure summaries may include sanitized contract diagnostics
-  with boundary, exit-code class, artifact presence, schema kind, contract
-  status, validator, and missing field names only.
-- FOS-126 adds no storage and fixes the manual-runner to report delegated CLI
-  invocation. The compatibility report command is default-blocked for
-  non-synthetic review execution unless `--allow-local-data-readonly` is
-  present, and the manual runner passes that acknowledgement so the delegated
-  command reaches the artifact-writing review path.
-- FOS-126 keeps parser/default-block/infrastructure exits as sanitized
-  delegated failures with CLI contract diagnostics only. Review and sweep
-  artifacts remain local review/debug artifacts only; the tooling remains
-  doctor-gated, sanitized-output-only, no-send, non-enforcing, and not a
-  source-of-truth mutation.
-- FOS-128 adds no storage and fixes the remaining sweep/manual/report
-  delegated review path for artifact-backed local-readonly review execution.
-  When an acknowledged `review-json` report review-exit-code run hits a local
-  read-only runtime blocker before artifact writing, the report command writes
-  a conservative sanitized `manual_review_needed` review artifact instead of
-  returning an artifactless infrastructure code.
-- FOS-128 keeps parser errors, missing acknowledgement, default-block exits,
-  wrong modes, missing/malformed artifacts, decision/code mismatches, and
-  unsafe artifacts as sanitized failures. Review and sweep artifacts remain
-  local review/debug artifacts only; the tooling remains no-send,
-  non-enforcing, and not a source-of-truth mutation.
-- Provider-free persisted activity triage can classify one stored
-  `normalized_activity_items` row through the shared `AttentionTriageAgent`
-  contract and persist one linked `attention_triage_results` row. The service
-  loads bounded recent feedback into `AttentionContext.recent_feedback` as
-  advisory context only.
-- Persisted activity triage is service-level idempotent by `activity_item_id`;
-  repeating triage for the same activity returns the existing linked attention
-  result instead of creating a duplicate.
-- Persisted attention digest reading is provider-free and read-only. It groups
-  existing `attention_triage_results` rows for an explicit timezone-aware
-  window into daily digest section keys, applies the existing low-confidence
-  visibility policy for read-time safety, and keeps hidden/no-action
-  low-priority rows as count-only summary data.
-- Persisted attention digest items may enrich visible rows from linked
-  `normalized_activity_items` via `activity_item_id`. Enrichment is optional:
-  missing normalized activity rows do not fail digest building, and result
-  evidence refs are not fabricated.
-- `triage_result_id` on attention feedback remains nullable. Feedback can
-  reference a stored attention triage result, but feedback remains advisory and
-  does not force deterministic show/hide behavior.
-- Automatic batch projection from all source events into normalized activity
-  rows is still deferred. Batch persisted attention triage,
-  retriage/versioning, digest replacement/rendering from persisted attention
-  rows, scheduler behavior, delivery, and human approvals are also still
-  deferred.
-- Meeting artifacts must not mutate Jira, Obsidian, raw storage, or Postgres
-  until a future persistence and human approval/action model exists.
+## 3. Canonical Master Playbook Models
+
+| Canonical model | MVP required? | Existing exact match? | Existing similar model/table | Decision |
+|---|---|---|---|---|
+| `User` | Yes | No | API-key auth only; no user table. | ADD_NOW |
+| `Workspace` | Yes | No | Some tables have `company_id`, `organization_id`, or `scope`, but no canonical workspace. | ADD_NOW |
+| `Membership` | Yes | No | No user-workspace membership table. | ADD_NOW |
+| `IntegrationConnection` | Yes | No | `SourceControlState`, provider config/status conventions. | ADD_NOW |
+| `SyncJob` | Yes | No | `SourceRunRequest`, `AgentRunLog`, source watermarks. | ADD_NOW |
+| `SourceRecord` | Yes | No | `IngestedEvent`, `SourceEvent`, `SourceDocument`, Gmail provider tables. | COMPATIBILITY_LAYER |
+| `EvidenceRef` | Yes | No | JSON `evidence_refs` fields, `DocumentChunk`, `SourceEvent`, source refs. | COMPATIBILITY_LAYER |
+| `NormalizedEntity` | Yes | No | `EntityRecord`, `EntityAliasRecord`, `EntityLinkRecord`, `NormalizedActivityItemRecord`. | COMPATIBILITY_LAYER |
+| `Project` | Yes | No | `EntityRecord` with project-like entity types, `StatusSnapshotRecord`, Jira graph mapping. | COMPATIBILITY_LAYER |
+| `Task` | Yes | No | `ExtractedTask`, source activity items, Jira source events. | COMPATIBILITY_LAYER |
+| `Repository` | Yes for GitHub-first E2E | No | Repository source inventory and repo audit outputs derived from source events/discovery snapshots. | ADD_LATER |
+| `PullRequest` | Yes for GitHub-first E2E | No | GitHub/source events and normalized activity items. | ADD_LATER |
+| `MessageThread` | Yes for source context | No | `EmailThreadState`, `GmailThread`, `GmailMessage`. | ADAPT_EXISTING |
+| `DriveFile` | Yes for source context | No | `SourceDocument` with Drive metadata/raw refs. | ADAPT_EXISTING |
+| `Document` | Yes | Partial | `SourceDocument` and `DocumentChunk`; canonical internal document semantics are not separated yet. | COMPATIBILITY_LAYER |
+| `Goal` | Later MVP context | No | `FounderDeclaration`, declarations payloads, status snapshots. | ADD_LATER |
+| `Insight` | Yes | No | `SecondOpinionFinding`, `AttentionTriageResultRecord`, `KnowledgeScore`, extracted decisions/risks. | ADAPT_EXISTING |
+| `Briefing` | Yes | No | Digest/read-model services only; no canonical briefing table. | ADD_LATER |
+| `BriefingItem` | Yes | No | Attention triage results, normalized activity, findings, extracted tasks/risks/decisions. | ADD_LATER |
+| `ActionProposal` | Yes | Partial | `AgentProposal`, `SourceRunRequest`. | ADAPT_EXISTING |
+| `ActionExecution` | Yes | Partial | `SourceRunRequest`, `AuditLog`, source-control lifecycle fields. | ADAPT_EXISTING |
+| `AuditLog` | Yes | Yes, mostly | `AuditLog` / `audit_logs`. | USE_EXISTING_AS_CANONICAL |
+
+## 4. Existing → Canonical Mapping
+
+| Existing area | Closest canonical concept | Match quality | Risk | MVP decision |
+|---|---|---|---|---|
+| Existing source events / ingested events | `SourceRecord` | partial | Creating a new `source_records` table without mapping could split raw/source identity across `ingested_events`, `source_events`, and canonical records. | Use compatibility mapping first; do not duplicate source truth in FOS-DB-02. |
+| Existing source documents/chunks | `Document`, `DriveFile`, `EvidenceRef` | partial | `SourceDocument` is a provider/source artifact, while canonical `Document` may also represent founderOS-authored/internal docs. | Keep existing source document/chunk layer; define `EvidenceRef` adapter to point at document/chunk/source-event refs. |
+| Existing graph entities | `NormalizedEntity` | close | A parallel normalized entity table would fork canonical entity identity and merge state. | Treat graph tables as the current normalized entity substrate; add compatibility semantics before a new table. |
+| Existing normalized activity | `NormalizedEntity`, `Insight`, timeline/read-model concepts | partial | Activity items are events/read-model rows, not durable canonical entities. | Keep as activity feed; use it as input to future insight/briefing models. |
+| Existing attention triage | `Insight`, `BriefingItem` | partial | Triage rows can look like briefing items but do not have briefing membership, ordering, or publication lifecycle. | Adapt as briefing-item source material; add canonical briefing tables later. |
+| Existing agent proposals | `ActionProposal` | close | Status, approval, reversibility, and payload semantics may diverge from playbook action proposals if a second table is added blindly. | Reconcile fields before adding or adapting canonical action proposal. |
+| Existing source-control requests | `IntegrationConnection`, `SyncJob`, `ActionProposal`, `ActionExecution` | partial | Current requests combine control-plane action, run lifecycle, approval fields, and execution result. | Add connection/sync foundation separately, then map run requests to jobs/executions. |
+| Existing audit logs | `AuditLog` | close | A duplicate audit log would make compliance and debugging ambiguous. | Use existing `audit_logs` as canonical baseline; add workspace/user refs later if needed. |
+| Existing repo audit outputs | `Repository`, `EvidenceRef`, `NormalizedEntity` | weak | Repo audit is currently computed/preview-style and may not persist canonical repository rows. | Keep computed repo audit as evidence-backed read model until GitHub-first E2E defines repository persistence. |
+| Existing Company Brain preview models | Briefing context / brain entities / `Insight` | weak | Preview/read-model state can be mistaken for canonical source of truth. | Keep as read-model context; do not make it canonical persistence in FOS-DB-02. |
+| Existing Gmail tables and email thread state | `MessageThread`, `SourceRecord`, `EvidenceRef` | close | Provider snapshots and aggregated thread state can drift if a new canonical message thread table is independent. | Adapt existing email thread state; define canonical mapping before adding thread duplicates. |
+| Existing extracted tasks/decisions/risks | `Task`, `Insight`, `BriefingItem` | partial | Extracted facts are evidence-backed candidates, not necessarily canonical founderOS work items. | Keep as evidence-backed candidates; promote through compatibility layer or explicit human workflow later. |
+| Existing status snapshots and second-opinion findings | `Insight`, `Project`, briefing context | partial | Read-model findings and status summaries can be over-promoted into canonical entities. | Use findings as insight sources; freeze broad status/share surfaces until GitHub-first MVP E2E is stable. |
+| Existing declarations and metrics | `Goal`, briefing context, workspace context | partial | Declarations are founder-provided facts, while goals need explicit lifecycle and ownership. | Keep declarations; add goals later after identity/workspace foundation. |
+
+## 5. Collision Risks
+
+| Risk | Consequence | Safe MVP approach |
+|---|---|---|
+| Duplicate source records | Provider/source facts could exist in both existing ingestion tables and a new canonical table with different IDs and freshness rules. | Keep `ingested_events`, `source_events`, and source documents as current source substrate; add `SourceRecord` only through a documented compatibility adapter or a carefully scoped migration. |
+| `source_events` vs `SourceRecord` | Source event identity, idempotency, and raw refs could diverge. | Treat `source_events.source_event_id` plus provider fields as the current canonical source-event identity until a migration explicitly reconciles it. |
+| Existing audit logs vs `AuditLog` | Two audit histories would weaken traceability and approval evidence. | Use existing `audit_logs` as the canonical audit baseline; extend later for workspace/user references instead of adding a parallel audit table. |
+| Graph entities vs `NormalizedEntity` | Entity identity, aliases, merge status, and relationships could split. | Reuse graph tables as the normalized-entity substrate and add compatibility naming/constraints incrementally. |
+| Existing agent proposals vs `ActionProposal` | Human approval state could split between proposal systems. | Reconcile `AgentProposal` fields with playbook semantics before adding new action proposal persistence. |
+| Source-control requests vs `IntegrationConnection` / `ActionExecution` | A source run request could be confused with a connection, sync job, approval proposal, or execution result. | Add `IntegrationConnection` and `SyncJob` as separate foundations, then map `SourceRunRequest` to job/execution lifecycle deliberately. |
+| Documents/chunks vs `Document` | Provider source documents could be confused with founderOS-authored documents. | Preserve `SourceDocument`/`DocumentChunk`; use `Document` naming carefully or defer until source/evidence compatibility is explicit. |
+| Attention triage vs `BriefingItem` / `Insight` | Triage rows may be displayed as briefing facts without briefing lifecycle or review semantics. | Use triage as input to `BriefingItem`, not as the briefing item itself. |
+| Existing API-key auth vs `User` / `Workspace` / `Membership` | New workspace-aware models could break operator routes or create ambiguous actor identity. | Add identity models without changing auth behavior first; introduce workspace-aware auth contract in FOS-BE-01. |
+| Existing static `/ui` assumptions vs future workspace-aware UI | Local/operator UI could assume global data while the Next.js app expects workspace-scoped data. | Keep static `/ui` as local/operator UI; make future web shell workspace-aware separately. |
+
+## 6. MVP Database Decision
+
+### 6.1 What to add now
+
+Add canonical identity first:
+
+1. `User`
+2. `Workspace`
+3. `Membership`
+
+Then add connection/sync foundation:
+
+4. `IntegrationConnection`
+5. `SyncJob`
+
+Then define compatibility mapping for source and evidence:
+
+6. `SourceRecord`, `EvidenceRef`, and `NormalizedEntity` should be implemented either as compatibility adapters over existing tables or as narrowly scoped canonical tables only after field-level reconciliation confirms no duplicate source of truth.
+
+Then add founder-facing workflow foundations:
+
+7. `Briefing`
+8. `BriefingItem`
+9. `ActionProposal`
+10. `ActionExecution`
+
+### 6.2 What to adapt instead of duplicate
+
+Adapt or wrap these existing areas rather than duplicating them:
+
+| Existing area | Adaptation decision |
+|---|---|
+| `audit_logs` | Use as canonical `AuditLog` baseline; add workspace/user refs later if required. |
+| `ingested_events`, `source_events`, `source_documents`, `document_chunks` | Treat as source/evidence substrate; add `SourceRecord`/`EvidenceRef` compatibility before new persistence. |
+| `entities`, `entity_aliases`, `entity_source_accounts`, `entity_links` | Treat as current normalized entity graph; map to `NormalizedEntity`. |
+| `normalized_activity_items` | Keep as activity/read-model input to insights and briefings. |
+| `attention_triage_results` | Use as briefing/insight source material, not canonical briefing rows. |
+| `agent_proposals` | Reconcile with `ActionProposal` before adding another approval model. |
+| `source_control_states`, `source_run_requests` | Map carefully to `IntegrationConnection`, `SyncJob`, and `ActionExecution`. |
+| `gmail_threads`, `gmail_messages`, `email_thread_states` | Adapt to `MessageThread` and source/evidence compatibility. |
+| `second_opinion_findings`, `knowledge_scores`, extracted decisions/risks | Use as insight candidates and ranking context. |
+
+### 6.3 What to leave untouched
+
+Do not touch these during FOS-DB-02:
+
+- Existing source ingestion tables and services.
+- Existing audit log table and audit-writing services.
+- Existing graph entity tables and resolver services.
+- Existing attention triage tables and digest behavior.
+- Existing agent proposal and source-control request lifecycle.
+- Existing Gmail/Drive/source document tables.
+- Existing static `/ui` local/operator assumptions.
+- Existing post-MVP surfaces such as share packs and broader status snapshots.
+
+### 6.4 What to freeze as post-MVP
+
+Keep these areas in the repository, but do not expand them before GitHub-first MVP E2E is stable:
+
+- `share_packs` and investor/share-pack flows.
+- Broad `status_snapshots` expansion beyond current read models.
+- Advanced second-opinion workflows beyond MVP insight sources.
+- Scheduler/outbox expansion and Telegram/manual pilot delivery flows.
+- Jira write planning.
+- Role agents, multi-model council, natural-language rule compiler, sandbox workflow execution.
+- Advanced diagnostics, marketplace/plugins, mobile app, and compliance hardening beyond MVP baseline.
+
+## 7. Recommended Migration Plan
+
+### Migration 1 — Identity foundation
+
+| Item | Detail |
+|---|---|
+| Purpose | Add canonical `User`, `Workspace`, and `Membership` without changing current API-key/operator behavior. |
+| Likely files | New identity model module under `app/db/`; Alembic migration under `migrations/versions/`; metadata import in `migrations/env.py`; focused identity model tests. |
+| Tests required | Model/constraint tests for user uniqueness, workspace uniqueness, membership uniqueness, membership role/status values, and Alembic metadata import. |
+| Rollback caution | Do not bind existing source rows to workspace IDs in the same migration; avoid destructive backfills. |
+| Acceptance criteria | Tables exist, constraints are enforced, metadata is visible to Alembic, existing routes/services continue to work unchanged. |
+
+### Migration 2 — Connection/sync foundation
+
+| Item | Detail |
+|---|---|
+| Purpose | Add canonical `IntegrationConnection` and `SyncJob` while preserving existing source-control state/run request behavior. |
+| Likely files | New or existing integration DB model module; Alembic migration; source-control compatibility tests. |
+| Tests required | Connection uniqueness per workspace/provider/account, sync job status lifecycle, no regression in `SourceControlState` and `SourceRunRequest` tests. |
+| Rollback caution | Do not migrate credentials or live provider config in this step; avoid external writes and provider calls. |
+| Acceptance criteria | Canonical connection/job rows can be created in tests, but existing source-control flows are untouched. |
+
+### Migration 3 — Source/evidence compatibility
+
+| Item | Detail |
+|---|---|
+| Purpose | Decide whether to add `SourceRecord`/`EvidenceRef` tables or expose compatibility adapters over `ingested_events`, `source_events`, `source_documents`, and chunk/evidence JSON fields. |
+| Likely files | Source/evidence model or adapter module, evidence service tests, Alembic migration only if new tables are required. |
+| Tests required | Mapping tests from source events/documents/chunks to canonical refs; duplicate-prevention tests; evidence lookup tests. |
+| Rollback caution | Do not rewrite raw refs, source event IDs, document IDs, or evidence refs in bulk. |
+| Acceptance criteria | One documented source/evidence identity path exists for MVP features; no duplicate source-of-truth table is introduced accidentally. |
+
+### Migration 4 — Briefing foundation
+
+| Item | Detail |
+|---|---|
+| Purpose | Add `Briefing` and `BriefingItem` for founder briefing generation with evidence-backed item references. |
+| Likely files | Briefing DB model module; Alembic migration; briefing service/API tests. |
+| Tests required | Briefing creation, item ordering, item evidence refs, workspace scoping, and status/lifecycle tests. |
+| Rollback caution | Do not convert all attention triage or digest rows into briefing items in the first migration. |
+| Acceptance criteria | Manual Founder Briefing v0 can persist a briefing and evidence-backed items without changing source ingestion. |
+
+### Migration 5 — Human-approved actions
+
+| Item | Detail |
+|---|---|
+| Purpose | Add or reconcile `ActionProposal` and `ActionExecution` so AI suggestions and external writes remain human-approved. |
+| Likely files | Action proposal/execution model module or adaptation of `AgentProposal`; Alembic migration; approval/action API tests. |
+| Tests required | Proposal lifecycle, approval/rejection, execution status, idempotency, audit log linkage, and no-direct-AI-write guard tests. |
+| Rollback caution | Do not wire live provider writes into this migration. Keep execution records local/test-only until explicit provider approval flow exists. |
+| Acceptance criteria | Human-approved action persistence exists with auditability, but no live external write path is enabled by the migration itself. |
+
+## 8. Implementation Notes for FOS-DB-02
+
+Next task: FOS-DB-02 — Add User/Workspace/Membership models.
+
+Use the existing SQLAlchemy/Alembic conventions:
+
+- Use `app.db.base.Base` and async-session-compatible SQLAlchemy models.
+- Put identity models in a focused DB module such as `app/db/identity_models.py`.
+- Import the new module in `migrations/env.py` so Alembic metadata can see the tables.
+- Prefer existing timestamp style: timezone-aware `created_at`/`updated_at`, server defaults where the codebase already uses them, and explicit update behavior.
+- Use canonical UUID primary keys for `User`, `Workspace`, and `Membership` unless implementation review finds an established local helper that should be reused. Keep external/provider IDs separate from canonical IDs.
+- Use `String` status/role fields with explicit constraints/tests unless the repo already has a local enum/check-constraint pattern selected during implementation.
+
+Recommended constraints:
+
+- `users.email` unique, normalized lower-case at the application boundary, nullable only if the auth contract explicitly allows it.
+- `workspaces.slug` unique if slugs are added.
+- `memberships` has foreign keys to `users` and `workspaces`.
+- Unique membership per `(workspace_id, user_id)`.
+- Membership role supports at least owner/admin/member or the smallest equivalent set chosen for MVP.
+- Membership status supports active/invited/disabled or the smallest equivalent set chosen for MVP.
+- Add indexes for `workspace_id`, `user_id`, and common auth lookup fields.
+
+Recommended tests:
+
+- Model metadata/import test for identity models.
+- Constraint test for unique user email.
+- Constraint test for unique workspace slug, if slug exists.
+- Constraint test for one membership per user/workspace.
+- Relationship/cascade test only if cascade semantics are explicitly chosen.
+- Alembic migration smoke test if the repo has an established migration test pattern.
+
+Commands to run for FOS-DB-02:
+
+```bash
+git status --short
+UV_NO_SYNC=1 uv run ruff check .
+UV_NO_SYNC=1 uv run pytest -q <focused identity/migration tests>
+git diff --check
+```
+
+Run broader tests only if the implementation touches shared metadata/import paths or existing auth behavior.
+
+## 9. Open Questions / Assumptions
+
+- MVP starts with one owner per workspace, then expands membership roles after the identity foundation exists.
+- Existing API-key auth remains temporarily for operator routes.
+- Workspace-aware auth is introduced gradually in FOS-BE-01, after identity tables exist.
+- Static `/ui` remains local/operator UI until the separate Next.js web shell exists.
+- Existing rows are not backfilled into workspaces during FOS-DB-02.
+- Existing source/evidence tables remain the source substrate until Migration 3 resolves compatibility.
+- AI remains evidence-first and does not directly mutate production data.
+- External writes remain blocked behind human-approved action proposals.
+
+## 10. Final Recommendation
+
+Ready for FOS-DB-02: YES.
+
+Why: the current repo has no exact `User`, `Workspace`, or `Membership` equivalents, and adding identity foundation tables is the lowest-collision first migration. Existing source, evidence, graph, action, and audit areas already have partial equivalents and should not be duplicated before compatibility mapping is implemented.
+
+What exact task should be run next: FOS-DB-02 — Add User/Workspace/Membership models.
