@@ -15,6 +15,8 @@ EXPECTED_ALEMBIC_TABLES = {
     "users",
     "workspaces",
     "memberships",
+    "integration_connections",
+    "sync_jobs",
 }
 
 EXPECTED_ALEMBIC_MODEL_MODULES = {
@@ -22,6 +24,7 @@ EXPECTED_ALEMBIC_MODEL_MODULES = {
     "app.db.second_opinion_models",
     "app.db.declaration_models",
     "app.db.identity_models",
+    "app.db.integration_models",
 }
 
 

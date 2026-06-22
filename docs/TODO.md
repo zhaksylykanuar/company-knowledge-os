@@ -10,7 +10,8 @@ files, no unrelated edits, and focused checks first.
 
 - FOS-AUD-04: done - docs/test hygiene unblocked before DB work.
 - FOS-DB-02: done - User, Workspace, and Membership identity foundation added.
-- Next task: FOS-DB-03 - Add IntegrationConnection/SyncJob canonical models.
+- FOS-DB-03: done - IntegrationConnection and SyncJob foundation added.
+- Next task: FOS-BE-01 - Workspace-aware auth contract.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -86,6 +87,8 @@ Checks to run:
 - `UV_NO_SYNC=1 uv run ruff check .`
 
 ## FOS-DB-03 - Add IntegrationConnection/SyncJob canonical models
+
+Status: done.
 
 Goal: add canonical provider connection and sync tracking models aligned with
 the master playbook.
