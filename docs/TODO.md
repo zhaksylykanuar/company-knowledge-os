@@ -9,7 +9,8 @@ files, no unrelated edits, and focused checks first.
 ## Current Checkpoint
 
 - FOS-AUD-04: done - docs/test hygiene unblocked before DB work.
-- Next task: FOS-DB-02 - Add User/Workspace/Membership models.
+- FOS-DB-02: done - User, Workspace, and Membership identity foundation added.
+- Next task: FOS-DB-03 - Add IntegrationConnection/SyncJob canonical models.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -57,6 +58,8 @@ Checks to run:
 - Docs tests if available.
 
 ## FOS-DB-02 - Add User/Workspace/Membership models
+
+Status: done.
 
 Goal: add the canonical identity and workspace foundation required by the
 master playbook.

@@ -12,12 +12,16 @@ EXPECTED_ALEMBIC_TABLES = {
     "data_availability",
     "second_opinion_findings",
     "founder_declarations",
+    "users",
+    "workspaces",
+    "memberships",
 }
 
 EXPECTED_ALEMBIC_MODEL_MODULES = {
     "app.db.agent_models",
     "app.db.second_opinion_models",
     "app.db.declaration_models",
+    "app.db.identity_models",
 }
 
 

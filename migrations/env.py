@@ -17,6 +17,7 @@ import app.db.agent_models  # noqa: F401,E402
 import app.db.attention_models  # noqa: F401,E402
 import app.db.declaration_models  # noqa: F401,E402
 import app.db.gmail_models  # noqa: F401,E402
+import app.db.identity_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402
 import app.db.source_models  # noqa: F401,E402
 import app.db.source_control_models  # noqa: F401,E402
