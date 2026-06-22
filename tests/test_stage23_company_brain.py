@@ -118,10 +118,57 @@ def test_missing_files_handled_gracefully(tmp_path: Path) -> None:
     # empty workspace: no stage22 files at all
     preview = load_company_brain_preview(workspace_path=tmp_path)
     assert preview["source_status"]["available"] is False
+    assert preview["provenance"]["mode_label_ru"] == "Предпросмотр"
+    assert preview["provenance"]["computed_facts_label_ru"] == "Вычисленные факты"
+    assert preview["provenance"]["production_graph"] is False
     assert preview["people"] == []
     assert preview["second_opinion_feed"] == []
     # still returns a coherent guardrail block, never raises
     assert preview["guardrails"]["preview_only"] is True
+    assert preview["source_status"]["artifact_provenance"]["mode"] == "static_local_preview"
+    assert all(
+        item["status"] == "missing"
+        for item in preview["source_status"]["artifact_provenance"]["artifacts"]
+    )
+
+
+def test_source_status_includes_artifact_provenance(tmp_path: Path) -> None:
+    nodes = {"nodes": [{"id": "p-x", "type": "Person", "name_ru": "Тест"}]}
+    workspace = _write_stage22(
+        tmp_path,
+        {
+            "stage22-proposed-graph-nodes.json": json.dumps(nodes, ensure_ascii=False),
+            "stage22-proposed-graph-edges.json": json.dumps({"edges": []}),
+            "second-opinion-feed-v0.json": json.dumps({"feed": []}),
+            "stage22-unresolved-questions.md": "# ok\n",
+        },
+    )
+
+    preview = load_company_brain_preview(workspace_path=workspace)
+    source_status = preview["source_status"]
+    provenance = source_status["artifact_provenance"]
+
+    assert source_status["available"] is True
+    assert source_status["generated_at"] == provenance["generated_at"]
+    assert source_status["snapshot_id"] == provenance["snapshot_id"]
+    assert provenance["source_label_ru"] == "Локальный preview snapshot"
+    assert provenance["artifact_count"] == 4
+    assert len(provenance["snapshot_id"]) == 64
+    assert isinstance(provenance["artifact_age_seconds"], int)
+    assert {
+        item["name"]: item["status"]
+        for item in provenance["artifacts"]
+    } == {
+        "stage22-proposed-graph-nodes.json": "available",
+        "stage22-proposed-graph-edges.json": "available",
+        "second-opinion-feed-v0.json": "available",
+        "stage22-unresolved-questions.md": "available",
+    }
+    assert all(
+        len(item["content_sha256"]) == 64
+        for item in provenance["artifacts"]
+        if item["status"] == "available"
+    )
 
 
 def test_invalid_json_handled_gracefully(tmp_path: Path) -> None:

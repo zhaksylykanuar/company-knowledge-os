@@ -75,6 +75,30 @@ def test_ui_contains_sources_and_data_quality_surfaces(monkeypatch) -> None:
     assert "test-api-key" not in response.text
 
 
+def test_ui_marks_cached_manual_and_code_provenance(monkeypatch) -> None:
+    _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
+
+    with TestClient(app) as client:
+        response = client.get("/ui")
+
+    assert response.status_code == 200
+    for marker in (
+        "CACHE_SCHEMA_VERSION",
+        "restoreOverviewCache",
+        "overview_generated_at",
+        "Показан кеш до обновления",
+        "server read-model",
+        "manualProvenance",
+        "Вручную · только этот браузер",
+        "not evidence-backed",
+        "codeProvenanceBadge",
+        "source_event_count",
+        "github_source_events",
+    ):
+        assert marker in response.text, marker
+    assert "test-api-key" not in response.text
+
+
 def test_root_redirects_to_ui_page(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
 
@@ -100,7 +124,7 @@ def test_founder_overview_returns_read_model(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["status"]["level"] == "green"
-    assert captured == {"attention_limit": 7}
+    assert captured == {"attention_limit": 7, "persist_status_snapshots": False}
 
 
 def test_founder_status_returns_builder_text(monkeypatch) -> None:

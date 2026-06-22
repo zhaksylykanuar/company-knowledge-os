@@ -39,6 +39,10 @@ def test_stage20_command_center_is_russian_and_clear() -> None:
         "Obsidian Vault",
         "Настройка системы",
         "Главный следующий шаг",
+        "actionProvenanceBadge",
+        "UI fallback · not evidence-backed",
+        "evidence-backed",
+        "insufficient evidence",
     ):
         assert marker in html, marker
 

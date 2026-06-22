@@ -26,10 +26,13 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.services.repo_audit import load_repo_audit
 
 STAGE = "23.2"
 STATUS_PREVIEW = "local_preview_only"
@@ -77,6 +80,79 @@ def _read_text(path: Path, errors: dict[str, list[str]]) -> str | None:
         return None
 
 
+def _iso_mtime(path: Path) -> str | None:
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
+    except OSError:
+        return None
+
+
+def _artifact_status(name: str, errors: dict[str, list[str]]) -> str:
+    if name in errors["missing"]:
+        return "missing"
+    if name in errors["invalid"]:
+        return "invalid"
+    return "available"
+
+
+def _artifact_provenance(stage_dir: Path, errors: dict[str, list[str]]) -> dict[str, Any]:
+    artifacts: list[dict[str, Any]] = []
+    present_hashes: list[str] = []
+    present_mtimes: list[str] = []
+    for name in (_NODES_FILE, _EDGES_FILE, _FEED_FILE, _UNRESOLVED_FILE):
+        path = stage_dir / name
+        status = _artifact_status(name, errors)
+        item: dict[str, Any] = {
+            "name": name,
+            "relative_path": f"company-brain/stage22/{name}",
+            "status": status,
+        }
+        if path.exists():
+            try:
+                content = path.read_bytes()
+                digest = sha256(content).hexdigest()
+                mtime = _iso_mtime(path)
+                item.update(
+                    {
+                        "size_bytes": len(content),
+                        "content_sha256": digest,
+                        "modified_at": mtime,
+                    }
+                )
+                present_hashes.append(digest)
+                if mtime:
+                    present_mtimes.append(mtime)
+            except OSError:
+                item["status"] = "invalid"
+        artifacts.append(item)
+
+    generated_at = max(present_mtimes) if present_mtimes else None
+    now = datetime.now(timezone.utc)
+    age_seconds = None
+    if generated_at:
+        try:
+            age_seconds = max(
+                0,
+                int((now - datetime.fromisoformat(generated_at)).total_seconds()),
+            )
+        except ValueError:
+            age_seconds = None
+    snapshot_id = None
+    if present_hashes:
+        snapshot_id = sha256("|".join(sorted(present_hashes)).encode("utf-8")).hexdigest()
+    return {
+        "mode": "static_local_preview",
+        "source_label_ru": "Локальный preview snapshot",
+        "directory": "company-brain/stage22",
+        "artifact_count": len([item for item in artifacts if item["status"] == "available"]),
+        "generated_at": generated_at,
+        "generated_at_source": "latest_artifact_mtime" if generated_at else None,
+        "artifact_age_seconds": age_seconds,
+        "snapshot_id": snapshot_id,
+        "artifacts": artifacts,
+    }
+
+
 def _redact_emails(obj: Any) -> tuple[Any, bool]:
     """Return ``(clean, found)`` where any email-shaped string is masked.
 
@@ -115,6 +191,18 @@ def _guardrails(raw_email_detected: bool) -> dict[str, Any]:
             "Jira — подсказка основателя, не сверенный accountId. RACI не подтверждён. "
             "Предложенный граф — не рабочий граф компании."
         ),
+    }
+
+
+def _provenance() -> dict[str, Any]:
+    return {
+        "mode": "static_local_preview",
+        "mode_label_ru": "Предпросмотр",
+        "static_preview_label_ru": "Предпросмотр",
+        "computed_facts_label_ru": "Вычисленные факты",
+        "computed_facts_source_ru": "Только локальные снимки discovery, если они есть.",
+        "production_graph": False,
+        "production_graph_label_ru": "Рабочий граф компании не заявлен",
     }
 
 
@@ -261,12 +349,12 @@ def _build_overview(
             {"key": "people", "label_ru": "Компания", "value_ru": f"{people_count} человек"},
             {
                 "key": "github",
-                "label_ru": "GitHub identities",
+                "label_ru": "GitHub-аккаунты",
                 "value_ru": f"{github_confirmed} подтверждены / {github_unknown} неизвестны",
             },
             {
                 "key": "jira_email",
-                "label_ru": "Jira / email",
+                "label_ru": "Jira и email",
                 "value_ru": "подсказки founder’а, не verified accountId",
             },
             {"key": "raci", "label_ru": "RACI", "value_ru": "не подтверждён"},
@@ -315,11 +403,16 @@ def _build_overview(
     }
 
 
-def _empty_payload(source_status: dict[str, Any]) -> dict[str, Any]:
+def _empty_payload(
+    source_status: dict[str, Any],
+    *,
+    workspace_path: str | Path | None = None,
+) -> dict[str, Any]:
     guardrails = _guardrails(raw_email_detected=False)
     return {
         "stage": STAGE,
         "status": STATUS_PREVIEW,
+        "provenance": _provenance(),
         "guardrails": guardrails,
         "source_status": source_status,
         "overview": _build_overview([], [], [], []),
@@ -327,6 +420,7 @@ def _empty_payload(source_status: dict[str, Any]) -> dict[str, Any]:
         "ownership_gaps": [],
         "second_opinion_feed": [],
         "unresolved_questions": [],
+        "repo_audit": load_repo_audit(workspace_path=workspace_path),
     }
 
 
@@ -346,11 +440,16 @@ def load_company_brain_preview(
     _read_text(stage_dir / _UNRESOLVED_FILE, errors)
 
     available = bool(nodes_doc) and isinstance(nodes_doc, dict) and bool(nodes_doc.get("nodes"))
+    artifacts = _artifact_provenance(stage_dir, errors)
     source_status = {
         "available": available,
         "missing_files": errors["missing"],
         "invalid_files": errors["invalid"],
         "directory_ru": "company-brain/stage22 (локально)",
+        "artifact_provenance": artifacts,
+        "generated_at": artifacts["generated_at"],
+        "snapshot_id": artifacts["snapshot_id"],
+        "artifact_age_seconds": artifacts["artifact_age_seconds"],
         "message_ru": (
             "Предпросмотр загружен из локальных файлов."
             if available
@@ -360,7 +459,7 @@ def load_company_brain_preview(
     }
 
     if not available:
-        return _empty_payload(source_status)
+        return _empty_payload(source_status, workspace_path=workspace_path)
 
     nodes = nodes_doc.get("nodes", []) if isinstance(nodes_doc, dict) else []
     edges = edges_doc.get("edges", []) if isinstance(edges_doc, dict) else []
@@ -375,12 +474,14 @@ def load_company_brain_preview(
     payload = {
         "stage": STAGE,
         "status": STATUS_PREVIEW,
+        "provenance": _provenance(),
         "source_status": source_status,
         "overview": overview,
         "people": people,
         "ownership_gaps": ownership_gaps,
         "second_opinion_feed": second_opinion,
         "unresolved_questions": unresolved,
+        "repo_audit": load_repo_audit(workspace_path=workspace_path),
     }
 
     cleaned, raw_email_detected = _redact_emails(payload)
@@ -393,6 +494,7 @@ def load_overview(workspace_path: str | Path | None = None) -> dict[str, Any]:
     return {
         "stage": preview["stage"],
         "status": preview["status"],
+        "provenance": preview["provenance"],
         "guardrails": preview["guardrails"],
         "source_status": preview["source_status"],
         "overview": preview["overview"],
@@ -404,6 +506,7 @@ def load_people(workspace_path: str | Path | None = None) -> dict[str, Any]:
     return {
         "stage": preview["stage"],
         "status": preview["status"],
+        "provenance": preview["provenance"],
         "guardrails": preview["guardrails"],
         "source_status": preview["source_status"],
         "people": preview["people"],
@@ -416,6 +519,7 @@ def load_second_opinion(workspace_path: str | Path | None = None) -> dict[str, A
     return {
         "stage": preview["stage"],
         "status": preview["status"],
+        "provenance": preview["provenance"],
         "guardrails": preview["guardrails"],
         "source_status": preview["source_status"],
         "second_opinion_feed": preview["second_opinion_feed"],
@@ -427,6 +531,7 @@ def load_unresolved_questions(workspace_path: str | Path | None = None) -> dict[
     return {
         "stage": preview["stage"],
         "status": preview["status"],
+        "provenance": preview["provenance"],
         "guardrails": preview["guardrails"],
         "source_status": preview["source_status"],
         "unresolved_questions": preview["unresolved_questions"],

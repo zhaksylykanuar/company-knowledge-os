@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -66,6 +66,12 @@ class RepoActivity:
     commit_count_7d: int
     commit_jira_keys_7d: frozenset[str]
     pr_jira_keys: frozenset[str]
+    source_event_count: int = 0
+    last_source_event_at: datetime | None = None
+    source_run_ids: tuple[str, ...] = ()
+    window_start: datetime | None = None
+    window_end: datetime | None = None
+    window_days: int = FRESH_DAYS
 
 
 def _parse_jira_datetime(value: Any) -> datetime | None:
@@ -78,6 +84,14 @@ def _parse_jira_datetime(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def snapshot_from_payload(source_object_id: str, payload: Any) -> JiraIssueSnapshot:
@@ -151,13 +165,17 @@ async def load_repo_activity(
         return None
     from app.db.models import IngestedEvent
 
-    safe_now = now or datetime.now(timezone.utc)
+    safe_now = _as_utc(now) or datetime.now(timezone.utc)
+    window_start = safe_now - timedelta(days=FRESH_DAYS)
     prefixes = [f"{r['org']}/{r['repo']}" for r in repos]
     rows = (
         await session.execute(
             select(
                 SourceEvent.source_object_id,
                 SourceEvent.source_object_type,
+                SourceEvent.source_event_ts,
+                SourceEvent.created_at,
+                SourceEvent.created_by_run_id,
                 IngestedEvent.payload,
             )
             .join(
@@ -180,7 +198,26 @@ async def load_repo_activity(
     latest_prs: dict[str, PullRequestSnapshot] = {}
     commit_count_7d = 0
     commit_keys_7d: set[str] = set()
-    for object_id, object_type, payload in rows:
+    source_event_count = 0
+    last_source_event_at: datetime | None = None
+    source_run_ids: set[str] = set()
+    for (
+        object_id,
+        object_type,
+        source_event_ts,
+        created_at,
+        created_by_run_id,
+        payload,
+    ) in rows:
+        source_event_count += 1
+        observed_at = _as_utc(source_event_ts) or _as_utc(created_at)
+        if observed_at is not None and (
+            last_source_event_at is None or observed_at > last_source_event_at
+        ):
+            last_source_event_at = observed_at
+        if isinstance(created_by_run_id, str) and created_by_run_id:
+            source_run_ids.add(created_by_run_id)
+
         data = payload if isinstance(payload, dict) else {}
         if object_type == "commit":
             authored = _parse_jira_datetime(data.get("authored_at"))
@@ -228,6 +265,12 @@ async def load_repo_activity(
         commit_count_7d=commit_count_7d,
         commit_jira_keys_7d=frozenset(commit_keys_7d),
         pr_jira_keys=pr_keys,
+        source_event_count=source_event_count,
+        last_source_event_at=last_source_event_at,
+        source_run_ids=tuple(sorted(source_run_ids)),
+        window_start=window_start,
+        window_end=safe_now,
+        window_days=FRESH_DAYS,
     )
 
 
@@ -257,7 +300,8 @@ def render_project_status_text(
     if not snapshots:
         return (
             f"{header}\n\nЗадачи ещё не синхронизированы.\n"
-            "Запустите sync_jira_issues.py и спросите снова.\n"
+            "Запустите Source Control request через операторский run_source_requests.py "
+            "и спросите снова.\n"
         )
 
     open_items = [s for s in snapshots if not s.is_done]

@@ -2,8 +2,10 @@
 
 These endpoints expose the local Stage 22 preview read models to the founder
 UI. They are GET-only and side-effect free: no DB writes, no external calls,
-no raw email. They reuse the same ``require_api_key`` protection as the other
-founder views (wired in ``app/main.py``); no write path is exposed here.
+no raw email. Payloads label static/local data as ``Предпросмотр`` and computed
+snapshot facts separately; they never imply a production graph. They reuse the
+same ``require_api_key`` protection as the other founder views (wired in
+``app/main.py``); no write path is exposed here.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from app.services.company_brain_preview import (
     load_second_opinion,
     load_unresolved_questions,
 )
+from app.services.repo_audit import load_repo_audit
 
 router = APIRouter(prefix="/v1/founder/company-brain", tags=["company-brain"])
 
@@ -46,3 +49,8 @@ async def get_company_brain_second_opinion() -> dict:
 @router.get("/unresolved-questions")
 async def get_company_brain_unresolved_questions() -> dict:
     return load_unresolved_questions()
+
+
+@router.get("/repo-audit")
+async def get_company_brain_repo_audit() -> dict:
+    return load_repo_audit()

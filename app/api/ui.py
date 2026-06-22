@@ -2,7 +2,8 @@
 
 The page is a data-free static shell; every data call goes through the
 protected API. Founder views reuse the same read models as the Telegram
-bot plus the composed overview document. No write paths are exposed.
+bot plus the composed overview document. GET views do not persist snapshots or
+execute write paths.
 """
 
 import html
@@ -66,7 +67,10 @@ async def get_founder_ui_page() -> HTMLResponse:
 async def get_founder_overview(
     attention_limit: int = Query(default=20, ge=1, le=MAX_ATTENTION_LIMIT),
 ) -> dict:
-    return await build_founder_overview(attention_limit=attention_limit)
+    return await build_founder_overview(
+        attention_limit=attention_limit,
+        persist_status_snapshots=False,
+    )
 
 
 @views_router.get("/status", response_class=PlainTextResponse)

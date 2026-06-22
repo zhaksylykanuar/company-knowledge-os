@@ -197,6 +197,33 @@ def _suggest_next_update(
     }
 
 
+def _next_action(action: dict[str, Any]) -> dict[str, Any]:
+    source_document_id = action.get("source_document_id")
+    evidence_backed = bool(source_document_id)
+    return {
+        "title": action.get("title"),
+        "impact": action.get("impact"),
+        "urgent": action.get("urgent"),
+        "source_title": action.get("source_title"),
+        "item_type": action.get("item_type"),
+        "attention_score": action.get("attention_score"),
+        "source_document_id": source_document_id,
+        "reasons": list(action.get("reasons") or [])[:2],
+        "evidence_status": "evidence_backed" if evidence_backed else "insufficient_evidence",
+        "provenance": {
+            "source": "founder_overview.actions",
+            "source_label_ru": (
+                "Действие из evidence-backed read-model"
+                if evidence_backed
+                else "Действие без достаточного evidence"
+            ),
+            "evidence_backed": evidence_backed,
+            "synthetic": False,
+            "ui_fallback": False,
+        },
+    }
+
+
 async def _share_packs_block(
     session: AsyncSession, *, now: datetime
 ) -> dict[str, Any]:
@@ -284,15 +311,7 @@ async def build_command_center(
     source_health = await build_source_health(session, now=safe_now)
     data_quality = await build_data_quality_center(session, now=safe_now)
 
-    next_actions = [
-        {
-            "title": action.get("title"),
-            "impact": action.get("impact"),
-            "urgent": action.get("urgent"),
-            "source_title": action.get("source_title"),
-        }
-        for action in overview.get("actions", [])[:5]
-    ]
+    next_actions = [_next_action(action) for action in overview.get("actions", [])[:5]]
 
     return {
         "generated_at": safe_now.isoformat(),

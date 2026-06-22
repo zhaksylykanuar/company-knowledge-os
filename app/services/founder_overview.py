@@ -1,10 +1,10 @@
 """Composed founder overview read model for the local UI.
 
-Aggregates existing read models into one JSON document per request:
-project status snapshots (built and persisted the same way the Telegram
-bot does), attention items split into actions and risks, recent extracted
-decisions, normalized activity counts, and operational metrics. Read-only
-apart from status snapshot persistence, which mirrors bot behaviour.
+Aggregates existing read models into one JSON document per request: project
+status, attention items split into actions and risks, recent extracted
+decisions, normalized activity counts, and operational metrics. UI/founder GET
+views are read-only by default; status snapshot persistence is an explicit
+operator/bot behavior, not an implicit side effect of reading the overview.
 """
 
 from __future__ import annotations
@@ -23,8 +23,10 @@ from app.services.github_graph_mapping import repos_for_project
 from app.services.jira_graph_mapping import jira_keys_for_project
 from app.services.knowledge_attention import get_attention_dashboard
 from app.services.project_status_view import (
+    FRESH_DAYS,
     STALE_DAYS,
     JiraIssueSnapshot,
+    RepoActivity,
     load_project_issue_snapshots,
     load_repo_activity,
 )
@@ -89,11 +91,33 @@ def _jira_stats(snapshots: list[JiraIssueSnapshot], now: datetime) -> dict[str, 
     }
 
 
+def _repo_activity_provenance(
+    repo_activity: RepoActivity,
+    *,
+    now: datetime,
+) -> dict[str, Any]:
+    return {
+        "computed": True,
+        "source": "github_source_events",
+        "source_system": "github",
+        "metric_family": "code",
+        "window_days": repo_activity.window_days or FRESH_DAYS,
+        "window_start": _iso(repo_activity.window_start),
+        "window_end": _iso(repo_activity.window_end or now),
+        "source_event_count": repo_activity.source_event_count,
+        "last_source_event_at": _iso(repo_activity.last_source_event_at),
+        "source_run_ids": list(repo_activity.source_run_ids[:5]),
+        "computed_at": _iso(now),
+        "scope": "mapped_repositories_only",
+    }
+
+
 async def _project_blocks(
     session: Any,
     *,
     now: datetime,
     organization_id: str,
+    persist_status_snapshots: bool,
 ) -> list[dict[str, Any]]:
     rows = (
         await session.execute(
@@ -125,7 +149,8 @@ async def _project_blocks(
             organization_id=organization_id,
             now=now,
         )
-        await save_status_snapshot(session, snapshot)
+        if persist_status_snapshots:
+            await save_status_snapshot(session, snapshot)
 
         code: dict[str, Any] | None = None
         if repo_activity is not None:
@@ -134,6 +159,7 @@ async def _project_blocks(
                 "commits_7d": repo_activity.commit_count_7d,
                 "open_prs": len(repo_activity.open_prs),
                 "merged_prs": len(repo_activity.merged_prs),
+                "provenance": _repo_activity_provenance(repo_activity, now=now),
             }
 
         top_signal: str | None = None
@@ -303,17 +329,22 @@ async def build_founder_overview(
     now: datetime | None = None,
     attention_limit: int = DEFAULT_ATTENTION_LIMIT,
     organization_id: str = DEFAULT_ORGANIZATION_ID,
+    persist_status_snapshots: bool = False,
 ) -> dict[str, Any]:
     safe_now = now or datetime.now(timezone.utc)
 
     async with AsyncSessionLocal() as session:
         projects = await _project_blocks(
-            session, now=safe_now, organization_id=organization_id
+            session,
+            now=safe_now,
+            organization_id=organization_id,
+            persist_status_snapshots=persist_status_snapshots,
         )
         decisions = await _recent_decisions(session)
         activity = await _activity_block(session, now=safe_now)
         counts = await _counts_block(session)
-        await session.commit()
+        if persist_status_snapshots:
+            await session.commit()
 
     dashboard = await get_attention_dashboard(limit=attention_limit)
     actions, risks = _split_attention_items(dashboard.get("top_items", []))
@@ -329,7 +360,17 @@ async def build_founder_overview(
     )
 
     return {
+        "schema_version": "founder_overview.v2",
         "generated_at": _iso(safe_now),
+        "provenance": {
+            "source": "server_read_model",
+            "computed": True,
+            "cache_policy": {
+                "browser_cache_key": "fos_overview_cache",
+                "cache_is_client_side_only": True,
+                "stale_on_read": True,
+            },
+        },
         "status": _overall_status(projects, risks),
         "projects": projects,
         "actions": actions,
