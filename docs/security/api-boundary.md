@@ -162,7 +162,7 @@ FOS-007A is split so planning stays separate from implementation:
 - `app/api/auth.py`
 - `tests/test_api_auth.py`
 - `docs/security/api-boundary.md`
-- `docs/backlog.md`
+- `docs/TODO.md`
 
 ### Later Test Plan
 
@@ -239,7 +239,7 @@ FOS-007B is split so route enforcement is planned before implementation:
 - `app/main.py`
 - `tests/test_api_route_auth.py`
 - `docs/security/api-boundary.md`
-- `docs/backlog.md`
+- `docs/TODO.md`
 
 ### Later Test Plan
 
@@ -309,7 +309,7 @@ FOS-007C is split so rate limiting boundaries are planned before implementation:
 - `app/api/rate_limit.py` or equivalent helper if app-layer implementation is approved.
 - `tests/test_api_rate_limit.py`
 - `docs/security/api-boundary.md`
-- `docs/backlog.md`
+- `docs/TODO.md`
 
 ### Later Focused Test Plan
 

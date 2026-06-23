@@ -8,6 +8,8 @@ files, no unrelated edits, and focused checks first.
 
 ## Current Checkpoint
 
+- Docs consolidation active: canonical trio added, audit report committed, and
+  old documentation generations are being archived under `docs/_archive/`.
 - FOS-AUD-04: done - docs/test hygiene unblocked before DB work.
 - FOS-DB-02: done - User, Workspace, and Membership identity foundation added.
 - FOS-DB-03: done - IntegrationConnection and SyncJob foundation added.
@@ -31,13 +33,13 @@ Goal: make the current dirty tree reviewable before any new implementation.
 
 Likely files:
 
-- `docs/CURRENT_DIRTY_TREE_PLAN.md`
-- Git staging/checkpoint plan only; no application code edits.
+- `docs/_audit/DOCS_AUDIT.md`
+- `docs/_archive/MANIFEST.md`
+- Canonical docs only; no application code edits.
 
 Acceptance criteria:
 
-- Dirty tree is grouped by logical scope.
-- Docs-only alignment files are isolated from pre-existing application changes.
+- Docs-only consolidation files are isolated from application changes.
 - No useful working code is deleted.
 - Post-MVP surfaces are marked FREEZE/POST_MVP, not removed.
 

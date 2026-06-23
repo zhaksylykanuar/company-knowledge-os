@@ -285,3 +285,41 @@ Consequences:
   `X-FounderOS-API-Key`; production session login is deferred.
 - FOS-FE-01 does not add OAuth, provider calls, backend routes, migrations, or
   browser E2E tests.
+
+## DEC-021 - Canonical Documentation Set
+
+Decision: the current documentation source of truth is the root canonical trio:
+`founderOS_MASTER_PLAYBOOK.md`, `EXECUTION_PLAN.md`, and `PROGRESS.md`, plus the
+required control docs in `docs/`: `README.md`, `DECISIONS.md`, `ROADMAP.md`,
+`TODO.md`, `POST_MVP.md`, and `CHANGELOG.md`.
+
+Rationale: older playbook, vision, audit, backlog, and ledger documents came
+from several rebuild generations and conflicted with the incoming master
+playbook's MVP order.
+
+Consequences:
+
+- `docs/README.md` is the single current docs navigation entry.
+- `docs/index.md` remains only as a compatibility pointer for older tooling.
+- Archived docs under `docs/_archive/` are traceability only.
+- Supporting feature/runbook docs must describe current repo behavior or clearly
+  mark post-MVP/frozen status; they do not override the root playbook.
+
+## DEC-022 - Archived Playbooks And Ledgers Are Not Current Scope
+
+Decision: archived docs from the v2 playbook, digital-twin playbook, vision,
+Telegram/manual-pilot, Jira rebuild, and historical FOS ledger generations do
+not define current MVP scope.
+
+Rationale: the incoming master playbook fixes the MVP spine around
+GitHub-first UI flow, evidence-backed Company Brain, Founder Briefing, and
+human-approved actions.
+
+Consequences:
+
+- New work follows `EXECUTION_PLAN.md` chunk order.
+- Telegram, digest, broad second-opinion graph expansion, Jira rebuild/write
+  planning, and share/investor surfaces stay frozen/post-MVP unless explicitly
+  pulled into a scoped task.
+- If a supporting doc conflicts with the master playbook, record the conflict
+  here before implementation.
