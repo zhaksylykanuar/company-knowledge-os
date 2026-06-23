@@ -108,3 +108,25 @@ Implication: there is no public password login or session UI in the MVP
 contract yet. The workspace bootstrap route is operator-protected and MVP-only.
 New workspace-aware routes must check `Membership` for access; operator access
 requires explicit owner context until session-based user auth is introduced.
+
+## DEC-013 - GitHub MVP Path Uses Hybrid Source Control Bridge
+
+Decision: use a hybrid staged GitHub path for the MVP. Existing Source Control,
+repository source inventory, and repo audit remain the bridge/read substrate.
+The canonical product path for GitHub connection and sync is
+`IntegrationConnection` plus `SyncJob`.
+
+Rationale: existing GitHub/source-control code is guarded, tested, and useful,
+but it is not yet the master-playbook OAuth product flow. Starting with a
+workspace-scoped repository read API validates the source/evidence layer before
+OAuth, sync jobs, and approved writes are added.
+
+Consequences:
+
+- Do not rewrite `source_control` now.
+- Do not add GitHub OAuth before the workspace-scoped repository read API.
+- Do not expose tokens or raw provider payloads.
+- Do not make live provider calls without explicit approval.
+- Do not execute external writes before the human-approved action path exists.
+- Defer Jira writes, Telegram/share-pack expansion, and new provider modules
+  until the GitHub-first E2E is working.

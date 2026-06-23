@@ -12,7 +12,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-DB-02: done - User, Workspace, and Membership identity foundation added.
 - FOS-DB-03: done - IntegrationConnection and SyncJob foundation added.
 - FOS-BE-01: done - workspace-aware operator compatibility contract added.
-- Next task: FOS-GH-01 - Decide GitHub OAuth vs existing Source Control product path.
+- FOS-GH-01: done - hybrid GitHub MVP path decision documented.
+- Next task: FOS-GH-02 - Workspace-scoped GitHub repositories read API from existing source/evidence layer.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -141,6 +142,8 @@ Checks to run:
 
 ## FOS-GH-01 - Decide GitHub OAuth vs existing Source Control product path
 
+Status: done.
+
 Goal: choose the product path for GitHub-first MVP before building GitHub
 OAuth/sync UI.
 
@@ -165,8 +168,8 @@ Checks to run:
 
 ## FOS-GH-02 - GitHub repositories read API from existing evidence/source layer
 
-Goal: expose GitHub repository data from stored evidence/source records without
-requiring live provider calls by default.
+Goal: expose workspace-scoped GitHub repository data from stored evidence/source
+records without requiring live provider calls by default.
 
 Likely files:
 
@@ -179,8 +182,11 @@ Acceptance criteria:
 
 - Protected read API returns GitHub repositories from stored evidence/source
   layer.
+- Workspace access is enforced with the FOS-BE-01 contract.
+- Operator `owner_email` context works for the current local/operator mode.
 - Response includes provenance/freshness.
 - Response does not imply repo equals Jira project.
+- Tests prove no provider call or external write occurs.
 - No raw secrets or raw provider payloads are returned.
 
 Checks to run:

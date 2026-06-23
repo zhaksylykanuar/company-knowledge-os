@@ -137,10 +137,13 @@ Done:
 - Some GitHub read-only/evidence/source pieces exist.
 - Repository source inventory and repo audit foundations exist.
 - Provider boundaries are guarded by default.
+- GitHub MVP integration path decision is documented as a hybrid staged path.
 
 Missing:
 
-- GitHub OAuth product decision and implementation path.
+- Workspace-scoped GitHub repositories read API from existing source/evidence
+  layer.
+- GitHub OAuth implementation path.
 - GitHub sync for repos/issues/PRs through the product flow.
 - SourceRecords/normalized entities aligned to master model.
 - Dashboard with GitHub data.
@@ -149,8 +152,8 @@ Missing:
 - ActionProposal approval.
 - Approved GitHub issue creation and external result.
 
-Next step: FOS-GH-01 decide GitHub OAuth vs existing Source Control product
-path.
+Next step: FOS-GH-02 workspace-scoped GitHub repositories read API from the
+existing source/evidence layer.
 
 Definition of Done:
 
@@ -276,4 +279,3 @@ Definition of Done:
 - GitHub-first flow is stable.
 - Expansion item has a real usage case.
 - New surface reuses evidence_refs, approval gates, and source-of-truth rules.
-
