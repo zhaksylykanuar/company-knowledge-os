@@ -26,6 +26,16 @@ from app.services.github_repository_read_service import (
     GitHubRepositoryFilters,
     list_workspace_github_repositories,
 )
+from app.services.github_sync_job_service import (
+    GITHUB_SYNC_JOB_CONNECTION_NOT_CONNECTED,
+    GITHUB_SYNC_JOB_CONNECTION_NOT_FOUND,
+    GITHUB_SYNC_JOB_NO_EXECUTION_WARNING,
+    GitHubManualSyncJobInput,
+    GitHubSyncJobError,
+    create_manual_github_sync_job,
+    get_github_sync_job,
+    list_github_sync_jobs,
+)
 from app.services.secret_encryption import SecretEncryptionError
 
 router = APIRouter(prefix="/v1/workspaces/{workspace_id}/github", tags=["github"])
@@ -127,6 +137,52 @@ class GitHubProviderTokenConnectionResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class GitHubSyncJobCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    sync_type: str = Field(default="manual", pattern="^manual$")
+    cursor_before: dict[str, Any] | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class GitHubSyncJobRead(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    connection_id: UUID
+    provider: str
+    status: str
+    sync_type: str
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    cursor_before: dict[str, Any] | None = None
+    cursor_after: dict[str, Any] | None = None
+    records_seen: int
+    records_created: int
+    records_updated: int
+    error_message: str | None = None
+    logs: dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+    is_live: bool
+    execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubSyncJobCreateResponse(BaseModel):
+    sync_job: GitHubSyncJobRead
+    is_live: bool
+    execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubSyncJobListResponse(BaseModel):
+    sync_jobs: list[GitHubSyncJobRead]
+    count: int
+    provider: str
+    is_live: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
 @router.get("/connections", response_model=GitHubConnectionListResponse)
 async def list_github_connection_records(
     workspace_id: UUID,
@@ -201,6 +257,54 @@ async def create_github_provider_token_connection(
     )
 
 
+@router.post(
+    "/connections/{connection_id}/sync-jobs",
+    response_model=GitHubSyncJobCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_github_manual_sync_job_record(
+    workspace_id: UUID,
+    connection_id: UUID,
+    payload: GitHubSyncJobCreateRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubSyncJobCreateResponse:
+    async with AsyncSessionLocal() as session:
+        try:
+            sync_job = await create_manual_github_sync_job(
+                session,
+                workspace_id=workspace_id,
+                connection_id=connection_id,
+                payload=GitHubManualSyncJobInput(
+                    cursor_before=payload.cursor_before,
+                    notes=payload.notes,
+                    requested_by=access.actor.auth_mode,
+                ),
+            )
+            await session.commit()
+        except GitHubSyncJobError as exc:
+            await session.rollback()
+            if exc.detail == GITHUB_SYNC_JOB_CONNECTION_NOT_FOUND:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=exc.detail,
+                ) from exc
+            if exc.detail == GITHUB_SYNC_JOB_CONNECTION_NOT_CONNECTED:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=exc.detail,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubSyncJobCreateResponse(
+        sync_job=GitHubSyncJobRead.model_validate(sync_job),
+        is_live=False,
+        execution_started=False,
+        warnings=[GITHUB_SYNC_JOB_NO_EXECUTION_WARNING],
+    )
+
+
 @router.get(
     "/connections/{connection_id}",
     response_model=GitHubConnectionRead,
@@ -223,6 +327,50 @@ async def get_github_connection_record(
             detail="github connection not found",
         )
     return GitHubConnectionRead.model_validate(connection)
+
+
+@router.get("/sync-jobs", response_model=GitHubSyncJobListResponse)
+async def list_github_sync_job_records(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> GitHubSyncJobListResponse:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        sync_jobs = await list_github_sync_jobs(
+            session,
+            workspace_id=workspace_id,
+        )
+    return GitHubSyncJobListResponse(
+        sync_jobs=[
+            GitHubSyncJobRead.model_validate(sync_job)
+            for sync_job in sync_jobs
+        ],
+        count=len(sync_jobs),
+        provider="github",
+        is_live=False,
+        warnings=[],
+    )
+
+
+@router.get("/sync-jobs/{sync_job_id}", response_model=GitHubSyncJobRead)
+async def get_github_sync_job_record(
+    workspace_id: UUID,
+    sync_job_id: UUID,
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> GitHubSyncJobRead:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        sync_job = await get_github_sync_job(
+            session,
+            workspace_id=workspace_id,
+            sync_job_id=sync_job_id,
+        )
+    if sync_job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="github sync job not found",
+        )
+    return GitHubSyncJobRead.model_validate(sync_job)
 
 
 @router.get("/repositories", response_model=GitHubRepositoryListResponse)

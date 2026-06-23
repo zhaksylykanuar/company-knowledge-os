@@ -16,7 +16,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-02: done - workspace-scoped GitHub repositories read API added.
 - FOS-GH-03: done - workspace-scoped GitHub connection contract added.
 - FOS-GH-04: done - operator-protected GitHub provider-token bridge added.
-- Next task: FOS-GH-05 - Manual GitHub sync job record using SyncJob.
+- FOS-GH-05: done - manual GitHub SyncJob record API added without live sync.
+- Next task: FOS-GH-06 - Normalize GitHub repositories/issues/PRs into existing graph/source substrate or compatibility layer.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -261,6 +262,8 @@ Checks to run:
 
 ## FOS-GH-05 - Manual GitHub sync job record using SyncJob
 
+Status: done.
+
 Goal: add the MVP endpoint that records a manual GitHub sync intent as a local
 `SyncJob` without running a worker or calling GitHub.
 
@@ -281,6 +284,32 @@ Acceptance criteria:
 Checks to run:
 
 - Focused GitHub sync-job tests.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `git diff --check`
+
+## FOS-GH-06 - Normalize GitHub repositories/issues/PRs into existing graph/source substrate or compatibility layer
+
+Goal: define and implement the first small normalization bridge for GitHub data
+without duplicating canonical SourceRecord/EvidenceRef work.
+
+Likely files:
+
+- GitHub normalization service files.
+- Existing graph/source compatibility files.
+- Focused normalization tests.
+- `docs/TODO.md`
+
+Acceptance criteria:
+
+- Existing GitHub repository/issue/PR records map to one clear graph/source
+  substrate.
+- Evidence/source references are preserved where available.
+- No live provider calls or external writes occur.
+- Existing repository read and SyncJob APIs remain unchanged.
+
+Checks to run:
+
+- Focused GitHub normalization tests.
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `git diff --check`
 

@@ -144,11 +144,14 @@ Done:
   `IntegrationConnection`.
 - Operator-protected provider-token bridge can create/update encrypted GitHub
   `IntegrationConnection` records without live provider calls.
+- Manual GitHub SyncJob record API can create/list/detail queued local sync
+  intents without live provider calls or worker execution.
 
 Missing:
 
 - Full GitHub OAuth implementation path.
-- GitHub sync for repos/issues/PRs through the product flow.
+- Actual GitHub sync execution and repos/issues/PR normalization through the
+  product flow.
 - SourceRecords/normalized entities aligned to master model.
 - Dashboard with GitHub data.
 - Company Brain over GitHub-first evidence.
@@ -156,7 +159,8 @@ Missing:
 - ActionProposal approval.
 - Approved GitHub issue creation and external result.
 
-Next step: FOS-GH-05 manual GitHub sync job record using `SyncJob`.
+Next step: FOS-GH-06 normalize GitHub repositories/issues/PRs into the existing
+graph/source substrate or compatibility layer.
 
 Definition of Done:
 
