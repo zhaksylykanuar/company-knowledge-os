@@ -22,7 +22,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
-- Next task: FOS-FE-01 - Scaffold minimal frontend shell for MVP backend flow.
+- FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
+- Next task: FOS-FE-02 - Wire frontend to backend GitHub-first flow.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -351,26 +352,60 @@ Checks to run:
 
 ## FOS-FE-01 - Minimal web shell plan
 
-Goal: plan the master-playbook Next.js shell without building it in the same
-task.
+Status: done.
+
+Goal: scaffold the master-playbook frontend shell without implementing the full
+GitHub-first UI flow.
 
 Likely files:
 
+- `web/*`
 - `docs/ROADMAP.md`
-- A frontend plan/spec doc if needed.
+- `docs/DECISIONS.md`
+- `docs/TODO.md`
 
 Acceptance criteria:
 
-- Pages are listed: login, dashboard, connectors, GitHub, Company Brain,
-  briefings, actions, settings.
-- API client and auth assumptions are explicit.
-- Required frontend checks are listed.
+- Next.js + TypeScript shell exists in `web/`.
+- App shell, sidebar, placeholder MVP pages, API client, and local operator
+  settings exist.
+- Frontend typecheck/build/lint checks pass.
 - Static `/ui` remains local/operator UI.
 
 Checks to run:
 
 - `git diff --check`
-- Docs tests if available.
+- `npm run typecheck`
+- `npm run build`
+- `npm run lint`
+
+## FOS-FE-02 - Wire frontend to backend GitHub-first flow
+
+Goal: connect the `web/` shell to the existing workspace, GitHub, briefing, and
+action APIs without adding new backend behavior.
+
+Likely files:
+
+- `web/app/dashboard/page.tsx`
+- `web/app/github/page.tsx`
+- `web/app/briefings/page.tsx`
+- `web/app/actions/page.tsx`
+- `web/lib/api.ts`
+
+Acceptance criteria:
+
+- Settings-driven API calls use `X-FounderOS-API-Key`, `owner_email`, and
+  `workspace_id` from browser-local operator config.
+- Dashboard/GitHub/Briefings/Actions pages read existing backend APIs.
+- External write execution remains disabled or separately confirmed.
+- No OAuth, provider calls, backend route changes, or migrations are added.
+
+Checks to run:
+
+- `npm run typecheck`
+- `npm run build`
+- `npm run lint`
+- Focused backend tests only if frontend wiring reveals a contract issue.
 
 ## FOS-BRF-01 - Manual Founder Briefing v0 with evidence refs
 

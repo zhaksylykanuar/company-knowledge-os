@@ -264,3 +264,24 @@ Consequences:
 - Plaintext and encrypted token values must not appear in API responses or
   stored provider response payloads.
 - Browser/product E2E remains a later frontend task.
+
+## DEC-020 - Frontend Shell Starts As Separate Next.js App
+
+Decision: FOS-FE-01 starts the product frontend as a separate `web/` Next.js
+and TypeScript app while keeping the existing static `/ui` as the local/operator
+interface.
+
+Rationale: the backend GitHub-first path is now covered, but the product UI
+needs a clean shell before wiring live backend panels. A separate `web/` app
+keeps the new MVP frontend isolated from the existing static operator surface.
+
+Consequences:
+
+- `web/` owns the new App Shell, sidebar, placeholder MVP pages, API client, and
+  browser-local operator settings.
+- Static `/ui` remains available for current local/operator workflows until a
+  deliberate replacement is scoped.
+- The frontend MVP uses local operator API key configuration through
+  `X-FounderOS-API-Key`; production session login is deferred.
+- FOS-FE-01 does not add OAuth, provider calls, backend routes, migrations, or
+  browser E2E tests.

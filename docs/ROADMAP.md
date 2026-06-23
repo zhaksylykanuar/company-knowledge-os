@@ -99,26 +99,28 @@ Definition of Done:
 
 ## Phase 3 - Frontend Core
 
-Current status: partially done through local/operator UI, but master frontend is
-missing.
+Current status: minimal master frontend shell exists, but the product flow is
+not wired yet.
 
 Done:
 
 - Static `/ui` exists and is useful for local/operator workflows.
 - Company Brain/repo audit and source/data views are visible in local UI.
+- Minimal Next.js + TypeScript app exists in `web/`.
+- App shell, sidebar, MVP placeholder pages, browser-local operator settings,
+  and typed API client foundation exist.
+- Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
 
-- Next.js + TypeScript + Tailwind + shadcn app.
+- Backend wiring for the GitHub-first flow.
+- Tailwind/shadcn or final product UI system.
 - Login page.
 - Workspace onboarding.
-- Sidebar/app shell.
-- Typed API client.
 - Product-grade loading/error/empty states.
-- Frontend lint/test/build pipeline.
+- Browser/product E2E coverage.
 
-Next step: FOS-FE-01 minimal web shell plan, after GitHub path and core model
-decisions are clear.
+Next step: FOS-FE-02 wire frontend to the existing backend GitHub-first flow.
 
 Definition of Done:
 
