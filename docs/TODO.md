@@ -13,7 +13,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-DB-03: done - IntegrationConnection and SyncJob foundation added.
 - FOS-BE-01: done - workspace-aware operator compatibility contract added.
 - FOS-GH-01: done - hybrid GitHub MVP path decision documented.
-- Next task: FOS-GH-02 - Workspace-scoped GitHub repositories read API from existing source/evidence layer.
+- FOS-GH-02: done - workspace-scoped GitHub repositories read API added.
+- Next task: FOS-GH-03 - GitHub connection contract using IntegrationConnection.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -168,6 +169,8 @@ Checks to run:
 
 ## FOS-GH-02 - GitHub repositories read API from existing evidence/source layer
 
+Status: done.
+
 Goal: expose workspace-scoped GitHub repository data from stored evidence/source
 records without requiring live provider calls by default.
 
@@ -192,6 +195,33 @@ Acceptance criteria:
 Checks to run:
 
 - Focused API tests.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `git diff --check`
+
+## FOS-GH-03 - GitHub connection contract using IntegrationConnection
+
+Goal: define and expose the MVP GitHub connection contract on top of the
+canonical `IntegrationConnection` model without adding OAuth yet.
+
+Likely files:
+
+- GitHub connection API route/service files.
+- Pydantic request/response schemas.
+- Focused API/service tests.
+- `docs/TODO.md`
+
+Acceptance criteria:
+
+- Workspace access is enforced with the FOS-BE-01 contract.
+- API reads/creates GitHub `IntegrationConnection` records without exposing
+  token fields.
+- No OAuth callback or live provider call is added.
+- Duplicate connection behavior is explicit.
+- Tests prove no external writes occur.
+
+Checks to run:
+
+- Focused GitHub connection contract tests.
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `git diff --check`
 

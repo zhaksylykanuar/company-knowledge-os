@@ -7,6 +7,7 @@ from app.api.events import router as events_router
 from app.api.extraction import router as extraction_router
 from app.api.gmail import router as gmail_router
 from app.api.google import router as google_router
+from app.api.github import router as github_router
 from app.api.health import router as health_router
 from app.api.inbox import router as inbox_router
 from app.api.dev import router as dev_router
@@ -38,6 +39,7 @@ app.include_router(founder_views_router, dependencies=protected_api_dependencies
 app.include_router(inbox_router, dependencies=protected_api_dependencies)
 app.include_router(share_packs_router, dependencies=protected_api_dependencies)
 app.include_router(workspaces_router, dependencies=protected_api_dependencies)
+app.include_router(github_router, dependencies=protected_api_dependencies)
 # Company Brain preview: read-only views over the local Stage 22 preview.
 # Same protected auth as the other founder views; no write paths.
 app.include_router(company_brain_router, dependencies=protected_api_dependencies)

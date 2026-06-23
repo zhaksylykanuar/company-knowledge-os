@@ -138,11 +138,12 @@ Done:
 - Repository source inventory and repo audit foundations exist.
 - Provider boundaries are guarded by default.
 - GitHub MVP integration path decision is documented as a hybrid staged path.
+- Workspace-scoped GitHub repositories read API exists over the local
+  source/evidence inventory bridge.
 
 Missing:
 
-- Workspace-scoped GitHub repositories read API from existing source/evidence
-  layer.
+- GitHub connection contract using `IntegrationConnection`.
 - GitHub OAuth implementation path.
 - GitHub sync for repos/issues/PRs through the product flow.
 - SourceRecords/normalized entities aligned to master model.
@@ -152,8 +153,7 @@ Missing:
 - ActionProposal approval.
 - Approved GitHub issue creation and external result.
 
-Next step: FOS-GH-02 workspace-scoped GitHub repositories read API from the
-existing source/evidence layer.
+Next step: FOS-GH-03 GitHub connection contract using `IntegrationConnection`.
 
 Definition of Done:
 

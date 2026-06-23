@@ -130,6 +130,11 @@ async def _source_event_items(session: AsyncSession) -> list[dict[str, Any]]:
         identity = _identity_from_source_event(row)
         if identity is None:
             continue
+        metadata = row.metadata_json if isinstance(row.metadata_json, Mapping) else {}
+        visibility = _safe_visibility(
+            metadata.get("visibility"), private=metadata.get("private")
+        )
+        archived = _safe_bool(metadata.get("archived"))
         key = _match_key(identity["repo_key"])
         current = items.get(key)
         item = {
@@ -137,6 +142,9 @@ async def _source_event_items(session: AsyncSession) -> list[dict[str, Any]]:
             "full_name": identity.get("full_name") or identity["repo_key"],
             "provider_key": "github",
             "source_class": INVENTORY_SOURCE_EVENTS,
+            "visibility": visibility or "unknown",
+            "archived": archived if archived is not None else False,
+            "default_branch": _safe_text(metadata.get("default_branch")),
             "last_observed_at": _iso(row.source_event_ts or row.updated_at or row.created_at),
             "source_event_count": 1,
             "repo_role": "component_evidence",
@@ -208,6 +216,12 @@ def _discovery_items(
                 "full_name": full_name or name,
                 "provider_key": "github",
                 "source_class": INVENTORY_DISCOVERY_SNAPSHOT,
+                "visibility": _safe_visibility(
+                    repo.get("visibility"), private=repo.get("private")
+                )
+                or "unknown",
+                "archived": _safe_bool(repo.get("archived")) or False,
+                "default_branch": _safe_text(repo.get("default_branch")),
                 "last_observed_at": _safe_text(repo.get("updated_at"))
                 or _safe_text(repo.get("pushed_at")),
                 "repo_role": "component_evidence",
@@ -414,6 +428,19 @@ def _safe_full_name(value: Any) -> str | None:
     if not owner or not repo:
         return None
     return f"{owner}/{repo}"
+
+
+def _safe_visibility(value: Any, *, private: Any = None) -> str | None:
+    text = _safe_text(value, limit=40)
+    if text in {"public", "private", "internal"}:
+        return text
+    if isinstance(private, bool):
+        return "private" if private else "public"
+    return None
+
+
+def _safe_bool(value: Any) -> bool | None:
+    return value if isinstance(value, bool) else None
 
 
 def _safe_text(value: Any, *, limit: int = 300) -> str | None:
