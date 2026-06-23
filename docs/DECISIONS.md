@@ -220,3 +220,26 @@ Consequences:
 - `ActionExecution` rows are not created by approval in FOS-ACT-01.
 - FOS-ACT-02 must add the separate, guarded execution path for approved GitHub
   issue creation.
+
+## DEC-018 - GitHub Issue Execution Requires Approved Proposal And Confirmation
+
+Decision: FOS-ACT-02 allows one controlled external action: executing an
+approved `github/create_github_issue` `ActionProposal` through an owner/admin
+workspace route with `confirm_external_write=true` and a connected GitHub
+`IntegrationConnection`.
+
+Rationale: GitHub-first MVP needs a real write path, but only after the local
+human approval boundary exists. The execution service validates the proposal,
+payload, workspace connection, and token record before calling the isolated
+GitHub issue client.
+
+Consequences:
+
+- Tests must mock the GitHub issue client; no live GitHub calls are used during
+  development verification.
+- GitHub tokens are decrypted only immediately before the issue-client call and
+  are never returned by API responses.
+- Execution creates `ActionExecution` rows and updates proposal status to
+  `executed` or `failed`.
+- No background execution, Source Control execution, OAuth flow, or Jira/Gmail/
+  Drive execution is introduced in this step.

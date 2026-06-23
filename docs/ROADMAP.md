@@ -152,6 +152,8 @@ Done:
   evidence-aware briefing from local workspace GitHub signals.
 - Local ActionProposal approval foundation can store, approve, and reject
   workspace-scoped proposals without external execution.
+- Approved GitHub issue proposals can execute through the guarded backend path
+  with local `ActionExecution` tracking.
 
 Missing:
 
@@ -161,9 +163,9 @@ Missing:
 - SourceRecords/normalized entities aligned to master model.
 - Dashboard with GitHub data.
 - Company Brain over GitHub-first evidence.
-- Approved GitHub issue creation and external result.
+- Backend E2E smoke flow for the GitHub-first MVP path.
 
-Next step: FOS-ACT-02 execute approved GitHub issue action safely.
+Next step: FOS-E2E-01 GitHub-first backend E2E smoke flow.
 
 Definition of Done:
 

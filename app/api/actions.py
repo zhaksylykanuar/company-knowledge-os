@@ -30,6 +30,15 @@ from app.services.action_proposal_service import (
     reject_action_proposal,
     serialize_action_proposal,
 )
+from app.services.github_issue_execution_service import (
+    GITHUB_ISSUE_EXECUTION_CONNECTION_NOT_FOUND,
+    GitHubIssueExecutionConflictError,
+    GitHubIssueExecutionError,
+    GitHubIssueExecutionInput,
+    GitHubIssueExecutionNotFoundError,
+    GitHubIssueProviderExecutionError,
+    execute_approved_github_issue_action,
+)
 
 router = APIRouter(prefix="/v1/workspaces/{workspace_id}/actions", tags=["actions"])
 
@@ -51,6 +60,14 @@ class ActionProposalRejectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     reason: str | None = Field(default=None, max_length=1000)
+
+
+class ActionProposalExecuteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    connection_id: UUID
+    confirm_external_write: bool = False
+    idempotency_key: str | None = Field(default=None, max_length=255)
 
 
 class ActionProposalRead(BaseModel):
@@ -89,6 +106,30 @@ class ActionProposalMutationResponse(BaseModel):
     proposal: ActionProposalRead
     is_live: bool
     execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ExecutedActionProposalRead(BaseModel):
+    id: UUID
+    status: str
+
+
+class ActionExecutionRead(BaseModel):
+    id: UUID
+    status: str
+    external_id: str | None = None
+    provider_response: dict[str, Any]
+    error_message: str | None = None
+    started_at: datetime
+    finished_at: datetime | None = None
+
+
+class ActionExecutionResponse(BaseModel):
+    proposal: ExecutedActionProposalRead
+    execution: ActionExecutionRead
+    is_live: bool
+    external_write_performed: bool
+    provider: str
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -260,6 +301,59 @@ async def reject_action_proposal_endpoint(
         proposal=ActionProposalRead.model_validate(serialize_action_proposal(proposal)),
         warnings=[ACTION_PROPOSAL_NO_EXECUTION_WARNING],
     )
+
+
+@router.post(
+    "/proposals/{proposal_id}/execute",
+    response_model=ActionExecutionResponse,
+)
+async def execute_action_proposal_endpoint(
+    workspace_id: UUID,
+    proposal_id: UUID,
+    payload: ActionProposalExecuteRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> ActionExecutionResponse:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await execute_approved_github_issue_action(
+                session,
+                workspace_id=workspace_id,
+                proposal_id=proposal_id,
+                input_payload=GitHubIssueExecutionInput(
+                    connection_id=payload.connection_id,
+                    confirm_external_write=payload.confirm_external_write,
+                    idempotency_key=payload.idempotency_key,
+                ),
+            )
+            await session.commit()
+        except GitHubIssueExecutionNotFoundError as exc:
+            await session.rollback()
+            status_code = (
+                status.HTTP_404_NOT_FOUND
+                if exc.detail == GITHUB_ISSUE_EXECUTION_CONNECTION_NOT_FOUND
+                else status.HTTP_404_NOT_FOUND
+            )
+            raise HTTPException(status_code=status_code, detail=exc.detail) from exc
+        except GitHubIssueExecutionConflictError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except GitHubIssueProviderExecutionError as exc:
+            await session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=exc.detail,
+            ) from exc
+        except GitHubIssueExecutionError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return ActionExecutionResponse.model_validate(result)
 
 
 def _mutation_response(

@@ -20,7 +20,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-06: done - local GitHub normalization projection added for manual SyncJobs.
 - FOS-BRF-01: done - deterministic transient manual Founder Briefing v0 added.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
-- Next task: FOS-ACT-02 - Execute approved GitHub issue action safely.
+- FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
+- Next task: FOS-E2E-01 - GitHub-first backend E2E smoke flow.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -394,3 +395,25 @@ Checks to run:
 - Focused action/approval/guard tests.
 - `UV_NO_SYNC=1 uv run alembic upgrade head`
 - `UV_NO_SYNC=1 uv run ruff check .`
+
+## FOS-ACT-02 - Execute approved GitHub issue action safely
+
+Status: done.
+
+Goal: execute only approved GitHub issue action proposals through the guarded
+backend path.
+
+Acceptance criteria:
+
+- Execution requires owner/admin workspace role.
+- Execution requires `confirm_external_write=true`.
+- Execution requires a connected GitHub `IntegrationConnection`.
+- Success creates `ActionExecution` and marks the proposal executed.
+- Failure creates failed execution state without leaking tokens.
+- Tests mock the GitHub issue client; no live provider calls are made.
+
+Checks to run:
+
+- Focused execution/action/GitHub tests.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `UV_NO_SYNC=1 uv run pytest -q`
