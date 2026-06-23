@@ -17,9 +17,12 @@ EXPECTED_ALEMBIC_TABLES = {
     "memberships",
     "integration_connections",
     "sync_jobs",
+    "action_proposals",
+    "action_executions",
 }
 
 EXPECTED_ALEMBIC_MODEL_MODULES = {
+    "app.db.action_models",
     "app.db.agent_models",
     "app.db.second_opinion_models",
     "app.db.declaration_models",

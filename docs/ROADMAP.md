@@ -150,6 +150,8 @@ Done:
   founderOS-compatible shape and update the manual `SyncJob` without live sync.
 - Manual Founder Briefing v0 can return a deterministic, transient,
   evidence-aware briefing from local workspace GitHub signals.
+- Local ActionProposal approval foundation can store, approve, and reject
+  workspace-scoped proposals without external execution.
 
 Missing:
 
@@ -159,10 +161,9 @@ Missing:
 - SourceRecords/normalized entities aligned to master model.
 - Dashboard with GitHub data.
 - Company Brain over GitHub-first evidence.
-- ActionProposal approval.
 - Approved GitHub issue creation and external result.
 
-Next step: FOS-ACT-01 ActionProposal approval model/API foundation.
+Next step: FOS-ACT-02 execute approved GitHub issue action safely.
 
 Definition of Done:
 

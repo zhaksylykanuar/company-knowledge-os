@@ -199,3 +199,24 @@ Consequences:
 - Persistent `Briefing`/`BriefingItem` models and LLM briefing generation are
   deferred.
 - Recommendations in the briefing are not `ActionProposal` records.
+
+## DEC-017 - ActionProposal Approval Foundation Is Local-Only
+
+Decision: FOS-ACT-01 adds canonical `ActionProposal` and `ActionExecution`
+tables plus a workspace-scoped proposal API, but approval only records a local
+human decision. It does not execute provider actions.
+
+Rationale: the GitHub-first MVP needs a clear approval boundary before the
+first external write. Existing `AgentProposal` and `SourceRunRequest` tables
+remain useful compatibility/operator surfaces, but they are not the canonical
+workspace-scoped action proposal contract for this MVP path.
+
+Consequences:
+
+- Existing `AgentProposal` and `SourceRunRequest` behavior remains untouched.
+- Approving a proposal does not call GitHub, Jira, Gmail, Drive, Source Control,
+  workers, or any live provider.
+- `ActionExecution` exists as future execution tracking foundation only.
+- `ActionExecution` rows are not created by approval in FOS-ACT-01.
+- FOS-ACT-02 must add the separate, guarded execution path for approved GitHub
+  issue creation.

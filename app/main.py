@@ -1,5 +1,6 @@
 from fastapi import Depends, FastAPI
 
+from app.api.actions import router as actions_router
 from app.api.auth import require_api_key
 from app.api.briefings import router as briefings_router
 from app.api.digest import router as digest_router
@@ -42,6 +43,7 @@ app.include_router(share_packs_router, dependencies=protected_api_dependencies)
 app.include_router(workspaces_router, dependencies=protected_api_dependencies)
 app.include_router(github_router, dependencies=protected_api_dependencies)
 app.include_router(briefings_router, dependencies=protected_api_dependencies)
+app.include_router(actions_router, dependencies=protected_api_dependencies)
 # Company Brain preview: read-only views over the local Stage 22 preview.
 # Same protected auth as the other founder views; no write paths.
 app.include_router(company_brain_router, dependencies=protected_api_dependencies)

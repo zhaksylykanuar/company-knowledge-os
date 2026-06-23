@@ -19,7 +19,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-05: done - manual GitHub SyncJob record API added without live sync.
 - FOS-GH-06: done - local GitHub normalization projection added for manual SyncJobs.
 - FOS-BRF-01: done - deterministic transient manual Founder Briefing v0 added.
-- Next task: FOS-ACT-01 - ActionProposal approval model/API foundation.
+- FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
+- Next task: FOS-ACT-02 - Execute approved GitHub issue action safely.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -368,6 +369,8 @@ Checks to run:
 
 ## FOS-ACT-01 - ActionProposal approval model/API
 
+Status: done.
+
 Goal: add the canonical human approval foundation for external writes.
 
 Likely files:
@@ -382,6 +385,7 @@ Acceptance criteria:
 - ActionProposal and ActionExecution canonical models exist or are explicitly
   mapped to existing proposal/audit structures.
 - External writes require human approval.
+- Approval does not execute provider actions in FOS-ACT-01.
 - Approval state is auditable.
 - AI cannot approve or execute writes directly.
 
