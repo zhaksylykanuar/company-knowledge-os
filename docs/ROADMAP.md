@@ -148,6 +148,8 @@ Done:
   intents without live provider calls or worker execution.
 - Local GitHub normalization projection can transform repository inventory into
   founderOS-compatible shape and update the manual `SyncJob` without live sync.
+- Manual Founder Briefing v0 can return a deterministic, transient,
+  evidence-aware briefing from local workspace GitHub signals.
 
 Missing:
 
@@ -157,11 +159,10 @@ Missing:
 - SourceRecords/normalized entities aligned to master model.
 - Dashboard with GitHub data.
 - Company Brain over GitHub-first evidence.
-- Manual Founder Briefing.
 - ActionProposal approval.
 - Approved GitHub issue creation and external result.
 
-Next step: FOS-BRF-01 manual Founder Briefing v0 with evidence refs.
+Next step: FOS-ACT-01 ActionProposal approval model/API foundation.
 
 Definition of Done:
 

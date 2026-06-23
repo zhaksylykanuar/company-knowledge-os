@@ -177,3 +177,25 @@ Consequences:
   reconciled.
 - `persist_if_supported=true` is rejected until graph upsert is deliberately
   scoped.
+
+## DEC-016 - Founder Briefing V0 Is Deterministic And Transient
+
+Decision: FOS-BRF-01 adds a deterministic, transient, local-only Founder
+Briefing v0. It does not call an LLM and does not persist `Briefing` or
+`BriefingItem` rows.
+
+Rationale: the GitHub-first MVP now has workspace auth, connection records,
+manual sync jobs, and local normalization projection. A manual briefing can
+surface those local signals with evidence refs and warnings before the project
+adds persistent briefing tables or AI generation.
+
+Consequences:
+
+- Briefing v0 reads local DB/read-model services only.
+- Every factual item includes evidence refs when available.
+- Items without evidence refs include explicit warnings.
+- `is_live=false`, `llm_used=false`, and `persistence=transient` are part of
+  the contract.
+- Persistent `Briefing`/`BriefingItem` models and LLM briefing generation are
+  deferred.
+- Recommendations in the briefing are not `ActionProposal` records.

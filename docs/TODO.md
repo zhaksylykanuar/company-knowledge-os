@@ -18,7 +18,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-04: done - operator-protected GitHub provider-token bridge added.
 - FOS-GH-05: done - manual GitHub SyncJob record API added without live sync.
 - FOS-GH-06: done - local GitHub normalization projection added for manual SyncJobs.
-- Next task: FOS-BRF-01 - Manual Founder Briefing v0 with evidence refs.
+- FOS-BRF-01: done - deterministic transient manual Founder Briefing v0 added.
+- Next task: FOS-ACT-01 - ActionProposal approval model/API foundation.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -341,6 +342,8 @@ Checks to run:
 
 ## FOS-BRF-01 - Manual Founder Briefing v0 with evidence refs
 
+Status: done.
+
 Goal: create the MVP manual Founder Briefing path from stored evidence.
 
 Likely files:
@@ -354,7 +357,7 @@ Acceptance criteria:
 
 - Briefing items include evidence refs.
 - Missing evidence produces no factual claim.
-- Output is deterministic or LLM output is strict JSON and validated.
+- Output is deterministic, transient, and no-LLM.
 - No external writes occur.
 
 Checks to run:
