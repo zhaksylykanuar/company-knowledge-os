@@ -140,10 +140,11 @@ Done:
 - GitHub MVP integration path decision is documented as a hybrid staged path.
 - Workspace-scoped GitHub repositories read API exists over the local
   source/evidence inventory bridge.
+- Workspace-scoped GitHub connection list/status/detail contract exists over
+  `IntegrationConnection`.
 
 Missing:
 
-- GitHub connection contract using `IntegrationConnection`.
 - GitHub OAuth implementation path.
 - GitHub sync for repos/issues/PRs through the product flow.
 - SourceRecords/normalized entities aligned to master model.
@@ -153,7 +154,7 @@ Missing:
 - ActionProposal approval.
 - Approved GitHub issue creation and external result.
 
-Next step: FOS-GH-03 GitHub connection contract using `IntegrationConnection`.
+Next step: FOS-GH-04 GitHub OAuth start/callback or provider-token connection.
 
 Definition of Done:
 

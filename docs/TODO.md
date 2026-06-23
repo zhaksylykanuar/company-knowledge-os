@@ -14,7 +14,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-BE-01: done - workspace-aware operator compatibility contract added.
 - FOS-GH-01: done - hybrid GitHub MVP path decision documented.
 - FOS-GH-02: done - workspace-scoped GitHub repositories read API added.
-- Next task: FOS-GH-03 - GitHub connection contract using IntegrationConnection.
+- FOS-GH-03: done - workspace-scoped GitHub connection contract added.
+- Next task: FOS-GH-04 - GitHub OAuth start/callback or provider-token connection.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -200,6 +201,8 @@ Checks to run:
 
 ## FOS-GH-03 - GitHub connection contract using IntegrationConnection
 
+Status: done.
+
 Goal: define and expose the MVP GitHub connection contract on top of the
 canonical `IntegrationConnection` model without adding OAuth yet.
 
@@ -213,15 +216,43 @@ Likely files:
 Acceptance criteria:
 
 - Workspace access is enforced with the FOS-BE-01 contract.
-- API reads/creates GitHub `IntegrationConnection` records without exposing
-  token fields.
+- API reads GitHub `IntegrationConnection` records without exposing token fields.
 - No OAuth callback or live provider call is added.
-- Duplicate connection behavior is explicit.
+- Connection status covers empty/local bridge, connected, error, revoked, and
+  disabled records.
 - Tests prove no external writes occur.
 
 Checks to run:
 
 - Focused GitHub connection contract tests.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `git diff --check`
+
+## FOS-GH-04 - GitHub OAuth start/callback or provider-token connection
+
+Goal: choose and implement the smallest approved connection creation path for
+GitHub on top of `IntegrationConnection`.
+
+Likely files:
+
+- GitHub connection route/service files.
+- OAuth or provider-token contract tests.
+- Security/config docs if token handling is introduced.
+- `docs/TODO.md`
+
+Acceptance criteria:
+
+- Workspace access is enforced.
+- Connection creation stores only encrypted token fields or a documented safe
+  placeholder contract.
+- No repository sync or external write is triggered by connecting.
+- Error handling covers missing config, denied callback, and duplicate
+  connection cases.
+- Tests prove no token value is returned.
+
+Checks to run:
+
+- Focused GitHub connection creation tests.
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `git diff --check`
 
