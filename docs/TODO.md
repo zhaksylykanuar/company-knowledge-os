@@ -21,7 +21,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-BRF-01: done - deterministic transient manual Founder Briefing v0 added.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
-- Next task: FOS-E2E-01 - GitHub-first backend E2E smoke flow.
+- FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
+- Next task: FOS-FE-01 - Scaffold minimal frontend shell for MVP backend flow.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -318,6 +319,35 @@ Checks to run:
 - Focused GitHub normalization tests.
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `git diff --check`
+
+## FOS-E2E-01 - GitHub-first backend E2E smoke flow
+
+Status: done.
+
+Goal: cover the backend-only GitHub-first MVP path through existing API
+contracts, local repository inventory fakes, and a mocked GitHub issue client.
+
+Likely files:
+
+- `tests/test_github_first_backend_e2e.py`
+- `docs/TODO.md`
+- `docs/ROADMAP.md`
+
+Acceptance criteria:
+
+- Workspace bootstrap, GitHub connection, repository read, sync job,
+  normalization, manual briefing, action proposal, approval, and mocked issue
+  execution are covered in one smoke flow.
+- No real GitHub calls, live provider calls, LLM calls, workers, or external
+  writes occur during the test.
+- The response and stored execution data do not expose plaintext or encrypted
+  token values.
+
+Checks to run:
+
+- `UV_NO_SYNC=1 uv run pytest -q tests/test_github_first_backend_e2e.py -p no:cacheprovider`
+- `UV_NO_SYNC=1 uv run ruff check . --no-cache`
+- `UV_NO_SYNC=1 uv run pytest -q -p no:cacheprovider`
 
 ## FOS-FE-01 - Minimal web shell plan
 

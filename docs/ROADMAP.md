@@ -130,7 +130,8 @@ Definition of Done:
 
 ## Phase 4 - GitHub-First E2E
 
-Current status: missing as a full product flow.
+Current status: backend smoke path covered; frontend/product flow still
+missing.
 
 Done:
 
@@ -154,6 +155,8 @@ Done:
   workspace-scoped proposals without external execution.
 - Approved GitHub issue proposals can execute through the guarded backend path
   with local `ActionExecution` tracking.
+- Backend E2E smoke coverage exercises the GitHub-first path from workspace
+  bootstrap through mocked approved issue execution.
 
 Missing:
 
@@ -163,9 +166,9 @@ Missing:
 - SourceRecords/normalized entities aligned to master model.
 - Dashboard with GitHub data.
 - Company Brain over GitHub-first evidence.
-- Backend E2E smoke flow for the GitHub-first MVP path.
+- Product frontend flow for the GitHub-first MVP path.
 
-Next step: FOS-E2E-01 GitHub-first backend E2E smoke flow.
+Next step: FOS-FE-01 scaffold minimal frontend shell for the MVP backend flow.
 
 Definition of Done:
 
@@ -212,11 +215,13 @@ Done:
 - Full backend test suite passed during the audit.
 - Lint and migration checks passed during the audit.
 - Guard/evidence tests exist.
+- GitHub-first backend E2E smoke test covers the local API path with mocked
+  external provider execution.
 
 Missing:
 
 - Frontend checks.
-- GitHub-first E2E tests.
+- Browser/product GitHub-first E2E tests.
 - Briefing validation tests aligned to master MVP.
 - Action approval tests aligned to canonical ActionProposal.
 - Manual QA checklist for MVP.

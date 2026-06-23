@@ -243,3 +243,24 @@ Consequences:
   `executed` or `failed`.
 - No background execution, Source Control execution, OAuth flow, or Jira/Gmail/
   Drive execution is introduced in this step.
+
+## DEC-019 - GitHub-First Backend E2E Uses Local Mocks
+
+Decision: FOS-E2E-01 covers the GitHub-first backend MVP path with the real
+FastAPI app and test database, but with local repository inventory fakes and a
+mocked GitHub issue client.
+
+Rationale: the backend contracts can now be tested end to end without making a
+live provider call, running workers, invoking an LLM, or depending on the
+future product frontend.
+
+Consequences:
+
+- The smoke flow must prove workspace bootstrap, GitHub connection,
+  repository read, manual sync, local normalization, manual briefing,
+  ActionProposal approval, and approved issue execution work together.
+- Tests must fail if Source Control execution, live GitHub connectors, or LLM
+  imports are used in the smoke path.
+- Plaintext and encrypted token values must not appear in API responses or
+  stored provider response payloads.
+- Browser/product E2E remains a later frontend task.
