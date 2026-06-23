@@ -142,10 +142,12 @@ Done:
   source/evidence inventory bridge.
 - Workspace-scoped GitHub connection list/status/detail contract exists over
   `IntegrationConnection`.
+- Operator-protected provider-token bridge can create/update encrypted GitHub
+  `IntegrationConnection` records without live provider calls.
 
 Missing:
 
-- GitHub OAuth implementation path.
+- Full GitHub OAuth implementation path.
 - GitHub sync for repos/issues/PRs through the product flow.
 - SourceRecords/normalized entities aligned to master model.
 - Dashboard with GitHub data.
@@ -154,7 +156,7 @@ Missing:
 - ActionProposal approval.
 - Approved GitHub issue creation and external result.
 
-Next step: FOS-GH-04 GitHub OAuth start/callback or provider-token connection.
+Next step: FOS-GH-05 manual GitHub sync job record using `SyncJob`.
 
 Definition of Done:
 

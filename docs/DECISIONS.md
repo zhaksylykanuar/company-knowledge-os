@@ -130,3 +130,25 @@ Consequences:
 - Do not execute external writes before the human-approved action path exists.
 - Defer Jira writes, Telegram/share-pack expansion, and new provider modules
   until the GitHub-first E2E is working.
+
+## DEC-014 - GitHub MVP Connection Uses Provider-Token Bridge Before OAuth
+
+Decision: FOS-GH-04 uses an operator-protected manual provider-token bridge to
+create or update GitHub `IntegrationConnection` records before the full OAuth
+flow exists.
+
+Rationale: workspace auth, the GitHub connection contract, and
+`IntegrationConnection` are ready, but the product frontend/session login and
+OAuth callback/state machinery are not. A provider-token bridge keeps the next
+slice small while moving the product path away from purely local/operator
+source inventory.
+
+Consequences:
+
+- GitHub tokens are encrypted before storage and never returned by API
+  responses.
+- Token records expose only `has_access_token` / `has_refresh_token` booleans.
+- FOS-GH-04 does not live-validate the token with GitHub.
+- FOS-GH-04 does not create `SyncJob` rows or call GitHub APIs.
+- Full GitHub OAuth remains a later task after the manual connection bridge and
+  manual sync-job path are stable.

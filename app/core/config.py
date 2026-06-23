@@ -109,6 +109,10 @@ class Settings(BaseSettings):
 
     api_auth_enabled: bool = False
     api_auth_key: SecretStr | str | None = None
+    secret_encryption_key: SecretStr | str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_SECRET_ENCRYPTION_KEY"),
+    )
     api_auth_header_name: str = "X-FounderOS-API-Key"
 
     openai_api_key: str | None = Field(

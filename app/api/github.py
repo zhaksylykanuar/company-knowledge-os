@@ -5,11 +5,19 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.api.workspace_auth import WorkspaceAccess, require_workspace_access
+from app.api.workspace_auth import (
+    WorkspaceAccess,
+    require_workspace_access,
+    require_workspace_role,
+)
 from app.db.base import AsyncSessionLocal
+from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN
 from app.services.github_connection_service import (
+    GITHUB_PROVIDER_TOKEN_WARNING,
+    GitHubProviderTokenConnectionInput,
+    create_or_update_github_provider_token_connection,
     get_github_connection,
     get_github_connection_status,
     list_github_connections,
@@ -18,6 +26,7 @@ from app.services.github_repository_read_service import (
     GitHubRepositoryFilters,
     list_workspace_github_repositories,
 )
+from app.services.secret_encryption import SecretEncryptionError
 
 router = APIRouter(prefix="/v1/workspaces/{workspace_id}/github", tags=["github"])
 
@@ -91,6 +100,33 @@ class GitHubConnectionStatusResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class GitHubProviderTokenConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str | None = Field(default=None, max_length=255)
+    external_account_id: str | None = Field(default=None, max_length=255)
+    access_token: str = Field(min_length=1, max_length=4096)
+    scopes: list[str] = Field(default_factory=list, max_length=50)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("scopes")
+    @classmethod
+    def validate_scopes(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for raw_scope in value:
+            scope = raw_scope.strip()
+            if not scope:
+                continue
+            normalized.append(scope[:120])
+        return normalized
+
+
+class GitHubProviderTokenConnectionResponse(BaseModel):
+    connection: GitHubConnectionRead
+    is_live: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
 @router.get("/connections", response_model=GitHubConnectionListResponse)
 async def list_github_connection_records(
     workspace_id: UUID,
@@ -126,6 +162,43 @@ async def get_github_connection_state(
             workspace_id=workspace_id,
         )
     return GitHubConnectionStatusResponse.model_validate(payload)
+
+
+@router.post(
+    "/connections/provider-token",
+    response_model=GitHubProviderTokenConnectionResponse,
+)
+async def create_github_provider_token_connection(
+    workspace_id: UUID,
+    payload: GitHubProviderTokenConnectionRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubProviderTokenConnectionResponse:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        try:
+            connection = await create_or_update_github_provider_token_connection(
+                session,
+                workspace_id=workspace_id,
+                payload=GitHubProviderTokenConnectionInput(
+                    access_token=payload.access_token,
+                    display_name=payload.display_name,
+                    external_account_id=payload.external_account_id,
+                    scopes=payload.scopes,
+                    metadata=payload.metadata,
+                ),
+            )
+            await session.commit()
+        except SecretEncryptionError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="secret encryption is not configured",
+            ) from exc
+    return GitHubProviderTokenConnectionResponse(
+        connection=GitHubConnectionRead.model_validate(connection),
+        is_live=False,
+        warnings=[GITHUB_PROVIDER_TOKEN_WARNING],
+    )
 
 
 @router.get(

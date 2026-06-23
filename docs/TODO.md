@@ -15,7 +15,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-01: done - hybrid GitHub MVP path decision documented.
 - FOS-GH-02: done - workspace-scoped GitHub repositories read API added.
 - FOS-GH-03: done - workspace-scoped GitHub connection contract added.
-- Next task: FOS-GH-04 - GitHub OAuth start/callback or provider-token connection.
+- FOS-GH-04: done - operator-protected GitHub provider-token bridge added.
+- Next task: FOS-GH-05 - Manual GitHub sync job record using SyncJob.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -230,6 +231,8 @@ Checks to run:
 
 ## FOS-GH-04 - GitHub OAuth start/callback or provider-token connection
 
+Status: done.
+
 Goal: choose and implement the smallest approved connection creation path for
 GitHub on top of `IntegrationConnection`.
 
@@ -253,6 +256,31 @@ Acceptance criteria:
 Checks to run:
 
 - Focused GitHub connection creation tests.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `git diff --check`
+
+## FOS-GH-05 - Manual GitHub sync job record using SyncJob
+
+Goal: add the MVP endpoint that records a manual GitHub sync intent as a local
+`SyncJob` without running a worker or calling GitHub.
+
+Likely files:
+
+- GitHub sync-job route/service files.
+- Focused SyncJob API tests.
+- `docs/TODO.md`
+
+Acceptance criteria:
+
+- Workspace access is enforced.
+- Existing GitHub `IntegrationConnection` is required.
+- Endpoint creates a queued `SyncJob` with provider `github`.
+- No worker execution, provider call, or external write happens.
+- Response is local/read-only with `is_live: false`.
+
+Checks to run:
+
+- Focused GitHub sync-job tests.
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `git diff --check`
 

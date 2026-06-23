@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from app.db.integration_models import (
     INTEGRATION_PROVIDER_GITHUB,
     IntegrationConnection,
 )
+from app.services.secret_encryption import encrypt_secret
 
 GITHUB_CONNECTION_PROVIDER = INTEGRATION_PROVIDER_GITHUB
 GITHUB_CONNECTION_STATUS_LOCAL_BRIDGE_ONLY = "local_bridge_only"
@@ -37,6 +39,19 @@ _SENSITIVE_METADATA_KEY_MARKERS = (
     "token",
     "webhook",
 )
+_SAFE_METADATA_KEYS = {"token_validated"}
+GITHUB_PROVIDER_TOKEN_WARNING = (
+    "GitHub token is stored for future sync but was not validated with GitHub in this step."
+)
+
+
+@dataclass(frozen=True)
+class GitHubProviderTokenConnectionInput:
+    access_token: str
+    display_name: str | None = None
+    external_account_id: str | None = None
+    scopes: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 async def list_github_connections(
@@ -135,6 +150,43 @@ async def get_github_connection_status(
     }
 
 
+async def create_or_update_github_provider_token_connection(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    payload: GitHubProviderTokenConnectionInput,
+) -> dict[str, Any]:
+    connection = await _find_provider_token_connection(
+        session,
+        workspace_id=workspace_id,
+        external_account_id=payload.external_account_id,
+    )
+    encrypted_access_token = encrypt_secret(payload.access_token)
+    provider_metadata = _provider_token_metadata(
+        user_metadata=payload.metadata,
+        plaintext_token=payload.access_token,
+    )
+    if connection is None:
+        connection = IntegrationConnection(
+            workspace_id=workspace_id,
+            provider=INTEGRATION_PROVIDER_GITHUB,
+        )
+        session.add(connection)
+
+    connection.status = INTEGRATION_CONNECTION_STATUS_CONNECTED
+    connection.display_name = payload.display_name or "GitHub manual connection"
+    connection.external_account_id = payload.external_account_id
+    connection.scopes = _safe_scopes(payload.scopes)
+    connection.encrypted_access_token = encrypted_access_token
+    connection.encrypted_refresh_token = None
+    connection.token_expires_at = None
+    connection.provider_metadata = provider_metadata
+    connection.last_error = None
+    await session.flush()
+    await session.refresh(connection)
+    return redact_connection(connection)
+
+
 def redact_connection(connection: IntegrationConnection) -> dict[str, Any]:
     return {
         "id": connection.id,
@@ -152,6 +204,39 @@ def redact_connection(connection: IntegrationConnection) -> dict[str, Any]:
         "created_at": connection.created_at,
         "updated_at": connection.updated_at,
     }
+
+
+async def _find_provider_token_connection(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    external_account_id: str | None,
+) -> IntegrationConnection | None:
+    base_query = (
+        select(IntegrationConnection)
+        .where(IntegrationConnection.workspace_id == workspace_id)
+        .where(IntegrationConnection.provider == INTEGRATION_PROVIDER_GITHUB)
+    )
+    if external_account_id:
+        return await session.scalar(
+            base_query.where(IntegrationConnection.external_account_id == external_account_id)
+        )
+
+    rows = (
+        await session.execute(
+            base_query.where(IntegrationConnection.external_account_id.is_(None))
+        )
+    ).scalars()
+    manual_connections = [
+        connection
+        for connection in rows
+        if isinstance(connection.provider_metadata, Mapping)
+        and connection.provider_metadata.get("connection_method")
+        == "manual_provider_token"
+    ]
+    if len(manual_connections) == 1:
+        return manual_connections[0]
+    return None
 
 
 def _select_status_connection(
@@ -193,4 +278,62 @@ def _redact_metadata_value(value: Any) -> Any:
 
 def _metadata_key_is_sensitive(key: str) -> bool:
     normalized = key.casefold().replace("-", "_")
+    if normalized in _SAFE_METADATA_KEYS:
+        return False
     return any(marker in normalized for marker in _SENSITIVE_METADATA_KEY_MARKERS)
+
+
+def _provider_token_metadata(
+    *,
+    user_metadata: Mapping[str, Any],
+    plaintext_token: str,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "connection_method": "manual_provider_token",
+        "token_validated": False,
+        "created_via": "founderos_operator_bridge",
+    }
+    safe_user_metadata = _safe_user_metadata(user_metadata, plaintext_token=plaintext_token)
+    if safe_user_metadata:
+        metadata["user_metadata"] = safe_user_metadata
+    return metadata
+
+
+def _safe_user_metadata(value: Any, *, plaintext_token: str) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            str(key): safe_value
+            for key, raw_value in value.items()
+            if isinstance(key, str) and not _metadata_key_is_sensitive(key)
+            for safe_value in [_safe_user_metadata(raw_value, plaintext_token=plaintext_token)]
+            if safe_value is not None
+        }
+    if isinstance(value, list):
+        return [
+            safe_value
+            for item in value[:20]
+            for safe_value in [_safe_user_metadata(item, plaintext_token=plaintext_token)]
+            if safe_value is not None
+        ]
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped or stripped == plaintext_token:
+            return None
+        return stripped[:500]
+    if isinstance(value, bool | int | float) or value is None:
+        return value
+    return str(value)[:500]
+
+
+def _safe_scopes(scopes: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw_scope in scopes[:50]:
+        if not isinstance(raw_scope, str):
+            continue
+        scope = raw_scope.strip()
+        if not scope or scope in seen:
+            continue
+        normalized.append(scope[:120])
+        seen.add(scope)
+    return normalized
