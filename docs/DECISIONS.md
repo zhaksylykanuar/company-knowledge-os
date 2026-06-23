@@ -152,3 +152,28 @@ Consequences:
 - FOS-GH-04 does not create `SyncJob` rows or call GitHub APIs.
 - Full GitHub OAuth remains a later task after the manual connection bridge and
   manual sync-job path are stable.
+
+## DEC-015 - GitHub Normalization Starts As Compatibility Projection
+
+Decision: FOS-GH-06 normalizes GitHub data through a compatibility projection
+over existing local repository/source/evidence read models. Persistent graph
+upsert is deferred until the graph/source substrate is explicitly reconciled.
+
+Rationale: the existing GitHub graph helper is useful, but it maps repositories
+to project entities and is not yet a general workspace-scoped canonical
+Repository/Issue/PullRequest persistence path. Projection mode lets the MVP
+produce normalized founderOS-compatible shapes, preserve available evidence
+refs, and update `SyncJob` lifecycle state without creating duplicate source of
+truth.
+
+Consequences:
+
+- `normalize-local` does not call GitHub, Source Control execution, workers, or
+  external systems.
+- `SyncJob` records can track local normalization status and counters.
+- Repository normalization can use the existing local repository inventory
+  bridge.
+- Issues and pull requests remain empty with warnings until local source data is
+  reconciled.
+- `persist_if_supported=true` is rejected until graph upsert is deliberately
+  scoped.

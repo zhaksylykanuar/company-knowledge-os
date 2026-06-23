@@ -17,7 +17,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-03: done - workspace-scoped GitHub connection contract added.
 - FOS-GH-04: done - operator-protected GitHub provider-token bridge added.
 - FOS-GH-05: done - manual GitHub SyncJob record API added without live sync.
-- Next task: FOS-GH-06 - Normalize GitHub repositories/issues/PRs into existing graph/source substrate or compatibility layer.
+- FOS-GH-06: done - local GitHub normalization projection added for manual SyncJobs.
+- Next task: FOS-BRF-01 - Manual Founder Briefing v0 with evidence refs.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -288,6 +289,8 @@ Checks to run:
 - `git diff --check`
 
 ## FOS-GH-06 - Normalize GitHub repositories/issues/PRs into existing graph/source substrate or compatibility layer
+
+Status: done.
 
 Goal: define and implement the first small normalization bridge for GitHub data
 without duplicating canonical SourceRecord/EvidenceRef work.

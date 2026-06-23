@@ -146,12 +146,14 @@ Done:
   `IntegrationConnection` records without live provider calls.
 - Manual GitHub SyncJob record API can create/list/detail queued local sync
   intents without live provider calls or worker execution.
+- Local GitHub normalization projection can transform repository inventory into
+  founderOS-compatible shape and update the manual `SyncJob` without live sync.
 
 Missing:
 
 - Full GitHub OAuth implementation path.
-- Actual GitHub sync execution and repos/issues/PR normalization through the
-  product flow.
+- Actual GitHub sync execution and persistent repos/issues/PR graph upsert
+  through the product flow.
 - SourceRecords/normalized entities aligned to master model.
 - Dashboard with GitHub data.
 - Company Brain over GitHub-first evidence.
@@ -159,8 +161,7 @@ Missing:
 - ActionProposal approval.
 - Approved GitHub issue creation and external result.
 
-Next step: FOS-GH-06 normalize GitHub repositories/issues/PRs into the existing
-graph/source substrate or compatibility layer.
+Next step: FOS-BRF-01 manual Founder Briefing v0 with evidence refs.
 
 Definition of Done:
 

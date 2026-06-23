@@ -22,6 +22,16 @@ from app.services.github_connection_service import (
     get_github_connection_status,
     list_github_connections,
 )
+from app.services.github_normalization_service import (
+    GITHUB_NORMALIZATION_JOB_NOT_FOUND,
+    GITHUB_NORMALIZATION_JOB_NOT_GITHUB,
+    GITHUB_NORMALIZATION_JOB_NOT_MANUAL,
+    GITHUB_NORMALIZATION_JOB_NOT_QUEUED,
+    GITHUB_NORMALIZATION_PERSISTENCE_DEFERRED,
+    GitHubNormalizationError,
+    GitHubNormalizationOptions,
+    normalize_github_sync_job_local,
+)
 from app.services.github_repository_read_service import (
     GitHubRepositoryFilters,
     list_workspace_github_repositories,
@@ -180,6 +190,95 @@ class GitHubSyncJobListResponse(BaseModel):
     count: int
     provider: str
     is_live: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubNormalizationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    include_repositories: bool = True
+    include_issues: bool = True
+    include_pull_requests: bool = True
+    persist_if_supported: bool = False
+
+
+class GitHubNormalizedRepositoryRead(BaseModel):
+    entity_type: str
+    provider: str
+    external_id: str
+    name: str
+    full_name: str
+    default_branch: str | None = None
+    visibility: str
+    archived: bool
+    source_url: str | None = None
+    last_activity_at: str | None = None
+    source: str
+    evidence_refs: list[GitHubRepositoryEvidenceRef] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GitHubNormalizedIssueRead(BaseModel):
+    entity_type: str
+    provider: str
+    external_id: str
+    number: int | None = None
+    title: str | None = None
+    state: str | None = None
+    source_url: str | None = None
+    repository_full_name: str | None = None
+    created_at_source: str | None = None
+    updated_at_source: str | None = None
+    evidence_refs: list[GitHubRepositoryEvidenceRef] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GitHubNormalizedPullRequestRead(BaseModel):
+    entity_type: str
+    provider: str
+    external_id: str
+    number: int | None = None
+    title: str | None = None
+    state: str | None = None
+    source_url: str | None = None
+    repository_full_name: str | None = None
+    created_at_source: str | None = None
+    updated_at_source: str | None = None
+    merged_at_source: str | None = None
+    evidence_refs: list[GitHubRepositoryEvidenceRef] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GitHubNormalizedPayloadRead(BaseModel):
+    repositories: list[GitHubNormalizedRepositoryRead]
+    issues: list[GitHubNormalizedIssueRead]
+    pull_requests: list[GitHubNormalizedPullRequestRead]
+
+
+class GitHubNormalizationCountsRead(BaseModel):
+    repositories: int
+    issues: int
+    pull_requests: int
+
+
+class GitHubNormalizationSyncJobRead(BaseModel):
+    id: UUID
+    status: str
+    records_seen: int
+    records_created: int
+    records_updated: int
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class GitHubNormalizationResponse(BaseModel):
+    sync_job: GitHubNormalizationSyncJobRead
+    normalized: GitHubNormalizedPayloadRead
+    counts: GitHubNormalizationCountsRead
+    is_live: bool
+    provider_sync_started: bool
+    local_normalization_performed: bool
+    persistence_mode: str
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -350,6 +449,59 @@ async def list_github_sync_job_records(
         is_live=False,
         warnings=[],
     )
+
+
+@router.post(
+    "/sync-jobs/{sync_job_id}/normalize-local",
+    response_model=GitHubNormalizationResponse,
+)
+async def normalize_github_sync_job_record_local(
+    workspace_id: UUID,
+    sync_job_id: UUID,
+    payload: GitHubNormalizationRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubNormalizationResponse:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await normalize_github_sync_job_local(
+                session,
+                workspace_id=workspace_id,
+                sync_job_id=sync_job_id,
+                options=GitHubNormalizationOptions(
+                    include_repositories=payload.include_repositories,
+                    include_issues=payload.include_issues,
+                    include_pull_requests=payload.include_pull_requests,
+                    persist_if_supported=payload.persist_if_supported,
+                ),
+            )
+            await session.commit()
+        except GitHubNormalizationError as exc:
+            await session.rollback()
+            if exc.detail == GITHUB_NORMALIZATION_JOB_NOT_FOUND:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=exc.detail,
+                ) from exc
+            if exc.detail == GITHUB_NORMALIZATION_JOB_NOT_QUEUED:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=exc.detail,
+                ) from exc
+            if exc.detail in {
+                GITHUB_NORMALIZATION_JOB_NOT_GITHUB,
+                GITHUB_NORMALIZATION_JOB_NOT_MANUAL,
+                GITHUB_NORMALIZATION_PERSISTENCE_DEFERRED,
+            }:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=exc.detail,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubNormalizationResponse.model_validate(result)
 
 
 @router.get("/sync-jobs/{sync_job_id}", response_model=GitHubSyncJobRead)
