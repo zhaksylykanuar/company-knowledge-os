@@ -8,13 +8,10 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-import app.connectors.github as github_connector
 import app.services.github_repository_read_service as github_repository_read_service
-import app.services.source_control as source_control_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
-from app.db.graph_models import EntityRecord
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_ADMIN,
     MEMBERSHIP_ROLE_MEMBER,
@@ -35,7 +32,6 @@ from app.db.integration_models import (
     IntegrationConnection,
     SyncJob,
 )
-from app.db.source_control_models import SourceRunRequest
 from app.main import app
 from app.services.github_repository_read_service import GitHubRepositoryListResult
 from app.services.repository_source_inventory import INVENTORY_DISCOVERY_SNAPSHOT
@@ -602,16 +598,6 @@ async def test_normalize_local_does_not_call_live_source_or_graph_paths(
     _set_auth(monkeypatch)
     await _cleanup_normalization_fixture(marker)
 
-    def fail_live_call(*_args, **_kwargs):
-        raise AssertionError("live/source action should not be called")
-
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_live_call,
-    )
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_live_call)
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_live_call)
 
     async def fake_repository_read(**_kwargs):
         return _repository_result([_repo_payload()])
@@ -627,8 +613,6 @@ async def test_normalize_local_does_not_call_live_source_or_graph_paths(
         connection_id = await _seed_connection(created["workspace"]["id"])
         sync_job_id = await _seed_sync_job(created["workspace"]["id"], connection_id)
         source_event_count_before = await _count(SourceEvent)
-        source_run_request_count_before = await _count(SourceRunRequest)
-        entity_count_before = await _count(EntityRecord)
 
         async with _async_client() as client:
             response = await client.post(
@@ -641,8 +625,6 @@ async def test_normalize_local_does_not_call_live_source_or_graph_paths(
         assert response.status_code == 200
         assert response.json()["provider_sync_started"] is False
         assert await _count(SourceEvent) == source_event_count_before
-        assert await _count(SourceRunRequest) == source_run_request_count_before
-        assert await _count(EntityRecord) == entity_count_before
     finally:
         await _cleanup_normalization_fixture(marker)
 

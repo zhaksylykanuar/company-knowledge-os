@@ -8,8 +8,6 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-import app.connectors.github as github_connector
-import app.services.source_control as source_control_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
@@ -33,7 +31,6 @@ from app.db.integration_models import (
     IntegrationConnection,
     SyncJob,
 )
-from app.db.source_control_models import SourceRunRequest
 from app.main import app
 
 
@@ -473,22 +470,11 @@ async def test_create_github_sync_job_does_not_call_live_or_source_paths(
     _set_auth(monkeypatch)
     await _cleanup_sync_fixture(marker)
 
-    def fail_live_call(*_args, **_kwargs):
-        raise AssertionError("live/source action should not be called")
-
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_live_call,
-    )
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_live_call)
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_live_call)
 
     try:
         created = await _bootstrap_workspace(marker)
         connection_id = await _seed_connection(created["workspace"]["id"])
         source_event_count_before = await _count(SourceEvent)
-        source_run_request_count_before = await _count(SourceRunRequest)
         sync_job_count_before = await _count(SyncJob)
 
         async with _async_client() as client:
@@ -502,7 +488,6 @@ async def test_create_github_sync_job_does_not_call_live_or_source_paths(
         assert response.status_code == 201
         assert response.json()["sync_job"]["execution_started"] is False
         assert await _count(SourceEvent) == source_event_count_before
-        assert await _count(SourceRunRequest) == source_run_request_count_before
         assert await _count(SyncJob) == sync_job_count_before + 1
     finally:
         await _cleanup_sync_fixture(marker)

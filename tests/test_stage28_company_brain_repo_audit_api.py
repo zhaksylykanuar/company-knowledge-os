@@ -4,7 +4,6 @@ import json
 import re
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 import app.services.repo_audit as repo_audit_service
@@ -130,34 +129,3 @@ async def test_company_brain_repo_audit_requires_api_key_when_auth_enabled(
 
     assert response.status_code == 401
     assert response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
-
-
-def test_founder_ui_contains_repo_audit_section() -> None:
-    with TestClient(app) as client:
-        response = client.get("/ui")
-
-    assert response.status_code == 200
-    for marker in (
-        "Аудит репозиториев",
-        "renderCbSourceProvenance",
-        "Источник preview",
-        "source_label_ru",
-        "snapshot:",
-        "as-of:",
-        "source_snapshot.modified_at",
-        "snapshot_age_seconds",
-        "as-of source",
-        "Локальный discovery устарел",
-        "cb-repo-audit-badge",
-        "Discovery не найден",
-        "Вычислено из discovery",
-        "Предпросмотр, не production graph",
-        "Вычисленные факты",
-        "repo ≠ Jira project",
-        "Показано ",
-        "Показать детали",
-        "technical-details simple-hidden",
-        "renderCompanyBrainRepoAudit",
-    ):
-        assert marker in response.text
-    assert _EMAIL_RE.search(response.text) is None

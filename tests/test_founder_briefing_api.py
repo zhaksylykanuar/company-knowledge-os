@@ -9,9 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-import app.connectors.github as github_connector
 import app.services.github_repository_read_service as github_repository_read_service
-import app.services.source_control as source_control_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import (
@@ -596,16 +594,6 @@ async def test_manual_briefing_does_not_call_llm_provider_source_or_mutate_sync_
     _set_auth(monkeypatch)
     await _cleanup_briefing_fixture(marker)
 
-    def fail_live_call(*_args, **_kwargs):
-        raise AssertionError("live/source action should not be called")
-
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_live_call,
-    )
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_live_call)
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_live_call)
 
     original_import = builtins.__import__
 

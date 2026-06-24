@@ -5,13 +5,10 @@ from pathlib import Path
 from app.db.base import Base
 
 
+# Canonical lineage after the Lineage-2 purge (DEC-029). The temporary substrate
+# (source_events / normalized_activity_items / ingested_events) stays until
+# FOS-009 (DEC-030); the entities graph and other Lineage-2 tables are gone.
 EXPECTED_ALEMBIC_TABLES = {
-    "agent_proposals",
-    "metric_snapshots",
-    "agent_run_logs",
-    "data_availability",
-    "second_opinion_findings",
-    "founder_declarations",
     "users",
     "workspaces",
     "memberships",
@@ -19,15 +16,21 @@ EXPECTED_ALEMBIC_TABLES = {
     "sync_jobs",
     "action_proposals",
     "action_executions",
+    "audit_logs",
+    "source_records",
+    "evidence_refs",
+    "repositories",
+    "pull_requests",
+    "tasks",
 }
 
 EXPECTED_ALEMBIC_MODEL_MODULES = {
     "app.db.action_models",
-    "app.db.agent_models",
-    "app.db.second_opinion_models",
-    "app.db.declaration_models",
+    "app.db.canonical_models",
     "app.db.identity_models",
     "app.db.integration_models",
+    "app.db.models",
+    "app.db.event_models",
 }
 
 

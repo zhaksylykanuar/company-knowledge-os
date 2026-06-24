@@ -193,11 +193,11 @@ async def test_dev_key_authenticates_protected_endpoint(monkeypatch) -> None:
     monkeypatch.setattr(auth_settings, "api_auth_header_name", "X-FounderOS-API-Key")
     async with _client() as client:
         ok = await client.get(
-            "/api/v1/founder/command-center",
+            "/api/v1/founder/company-brain/preview",
             headers={"X-FounderOS-API-Key": "local-dev-key"},
         )
         bad = await client.get(
-            "/api/v1/founder/command-center",
+            "/api/v1/founder/company-brain/preview",
             headers={"X-FounderOS-API-Key": "not-the-dev-key"},
         )
     assert ok.status_code == 200
@@ -220,23 +220,3 @@ def test_dev_key_not_accepted_when_not_local(monkeypatch) -> None:
     assert "local-dev-key" not in _accepted_keys(Cfg())
     Cfg.app_env = "local"
     assert "local-dev-key" in _accepted_keys(Cfg())
-
-
-# --- UI bootstrap wiring -------------------------------------------------
-
-
-def test_ui_wires_dev_bootstrap() -> None:
-    from fastapi.testclient import TestClient
-
-    with TestClient(app) as client:
-        page = client.get("/ui").text
-    for marker in (
-        'id="dev-badge"',
-        "devBootstrap",
-        "/api/v1/dev/browser-config",
-        "LOCAL DEV",
-        "effectiveApiKey",
-        "RUNTIME_API_KEY",
-        "__FOUNDEROS_CONFIG__",
-    ):
-        assert marker in page, marker

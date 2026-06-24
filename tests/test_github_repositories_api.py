@@ -5,7 +5,6 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-import app.connectors.github as github_connector
 import app.services.github_repository_read_service as github_repository_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
@@ -368,16 +367,6 @@ async def test_github_repositories_makes_no_provider_call_or_connection_write(
     marker = uuid4().hex
     _set_auth(monkeypatch)
     await _cleanup_workspace_fixture(marker)
-
-    def fail_provider_call(*_args, **_kwargs):
-        raise AssertionError("provider call should not be made")
-
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_provider_call,
-    )
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_provider_call)
 
     async def fake_inventory(**_kwargs):
         return _inventory_payload([])

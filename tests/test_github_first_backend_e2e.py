@@ -9,12 +9,10 @@ from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
 import app.api.github as github_api
-import app.connectors.github as github_connector
 import app.services.founder_briefing_service as founder_briefing_service
 import app.services.github_issue_execution_service as github_issue_execution_service
 import app.services.github_normalization_service as github_normalization_service
 import app.services.github_repository_read_service as github_repository_read_service
-import app.services.source_control as source_control_service
 from app.api.auth import settings
 from app.db.action_models import (
     ACTION_EXECUTION_STATUS_SUCCEEDED,
@@ -224,22 +222,7 @@ def _install_no_live_call_guards(monkeypatch, issue_calls: list[dict]) -> None:
             "token": PLAIN_E2E_TOKEN,
         }
 
-    async def fail_source_action(*_args, **_kwargs):
-        raise AssertionError("source_control should not run in backend e2e smoke")
-
-    def fail_live_connector(*_args, **_kwargs):
-        raise AssertionError("live provider connector should not run in backend e2e smoke")
-
     monkeypatch.setattr(github_issue_execution_service, "create_issue", fake_create_issue)
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_source_action)
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_live_connector)
-    monkeypatch.setattr(github_connector, "fetch_issue_events", fail_live_connector)
-    monkeypatch.setattr(github_connector, "fetch_pull_request_events", fail_live_connector)
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_live_connector,
-    )
 
     original_import = builtins.__import__
 
