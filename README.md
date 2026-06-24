@@ -50,6 +50,39 @@ npm run build
 npm run lint
 ```
 
+## Development & CI
+
+See [`docs/playbook.md`](docs/playbook.md) for the dev/CI playbook.
+
+### Quick local checks
+
+Reproduce the CI gates locally:
+
+```bash
+uv sync --frozen
+uv run ruff check .
+uv run alembic upgrade head
+uv run pytest -q
+bash scripts/check_no_secrets.sh --tracked
+```
+
+### CI parity before opening a PR
+
+`.github/workflows/ci.yml` runs `uv sync --frozen`, `uv run alembic upgrade head`,
+ruff, pytest, and the tracked-secret scan against a pinned Postgres image. All
+actions are pinned by full commit SHA. Running the commands above reproduces CI
+locally.
+
+### Dependency automation
+
+- **Renovate** keeps Python (`pep621`) dependencies and `uv.lock` current.
+- **OpenSSF Scorecard** publishes a private SARIF supply-chain report.
+- **Dependency Review** blocks vulnerable or disallowed-license dependency
+  changes on pull requests.
+- **uv Dependency Submission** publishes the uv.lock transitive coverage graph
+  to GitHub on `main` only.
+- GitHub Actions are SHA-pinned; bumps come from Renovate or manual SHA rotation.
+
 ## Repository Layout
 
 ```text

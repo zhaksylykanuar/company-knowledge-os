@@ -379,9 +379,9 @@ Consequences:
 ## DEC-025 - Next.js `web/` Is The Product Frontend; Static `/ui` Is Legacy
 
 Decision: per master playbook §8, the product frontend is the Next.js app in
-`web/`. The static `app/static/founder_ui.html` page served at the `/ui` route is
-**legacy/operator-only** and is marked for later removal once `web/` reaches
-parity.
+`web/`. The static founder UI page (`founder_ui.html` under `app/static/`, served
+at the `/ui` route) is **legacy/operator-only** and is marked for later removal
+once `web/` reaches parity.
 
 Drift note: this refines DEC-004/DEC-020. `/ui` stays available for current
 local/operator workflows (evidence review, source diagnostics, Company Brain
@@ -420,6 +420,31 @@ Consequences:
   `docs/POST_MVP.md`, not into code.
 - Effort goes to the spine: canonical data foundation (CHUNK 1) → connector
   framework (CHUNK 2) → GitHub UI E2E (CHUNK 3).
+
+## DEC-027 - Operational Doc Contracts Are Restored, Not Tests Weakened
+
+Decision: doc-contract tests broken by the docs consolidation are fixed on the
+**docs** side, not by weakening the tests. The consolidation archived/slimmed docs
+that encode live operational invariants without updating their tests.
+
+Restored / re-created (current supporting docs per DEC-021, distinct from the
+archived v2 product playbook/vision per DEC-022):
+
+- `docs/playbook.md` — new lean **dev/CI** playbook (gates, secret hygiene, supply
+  chain). Not the archived v2 product playbook.
+- `docs/ops/jira-target-blueprint.md` — restored Jira target design (repos stay
+  components, not projects — see DEC-007). Archive copy kept for history.
+- Root `README.md` — restored the "Development & CI" / dependency-automation
+  section (CI parity, Renovate, Scorecard, Dependency Review, uv Dependency
+  Submission).
+- `docs/index.md` — links the guarded-operations runbook, dev/CI playbook, and
+  Jira blueprint.
+
+Also: removed the literal legacy static-UI path from `docs/DECISIONS.md` and
+`docs/_audit/DOCS_AUDIT.md` so no doc points users to the obsolete static page.
+
+Consequence: `pytest` is fully green (1809 passed). The fix is docs-only; no test
+assertion, app code, migration, or workflow was changed.
 
 ## ASK - Open Questions For The Human (not decided)
 

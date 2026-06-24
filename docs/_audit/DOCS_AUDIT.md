@@ -41,7 +41,7 @@ These are local/generated/export artifacts, not consolidation targets.
 | Database | SQLAlchemy model modules exist under `app/db/`; canonical identity, integration/sync, and action models now exist. |
 | Migrations | 25 tracked Alembic migration files under `migrations/versions/`. |
 | Frontend | Next.js shell exists under `web/`; current pages are dashboard, github, briefings, actions, settings, plus shared shell/components. |
-| Static UI | Existing local/operator static UI remains in `app/static/founder_ui.html` and `/ui` routes. |
+| Static UI | Existing local/operator static founder UI page (`founder_ui.html` under `app/static/`) remains, served at the `/ui` route. |
 | Tests | 175 top-level `tests/test_*.py` files plus 3 eval tests were present in inventory. |
 | Docs | 52 tracked documentation/instruction files, 14,052 lines total before incoming canonical files. |
 

@@ -22,6 +22,14 @@ Compatibility entry for older tooling. The canonical docs entry is
 - [`../AGENTS.md`](../AGENTS.md): agent operating rules.
 - [`../CLAUDE.md`](../CLAUDE.md): AI/token/extraction rules.
 
+## Runbooks & Ops
+
+- [`runbooks/guarded-operations.md`](runbooks/guarded-operations.md): default-deny
+  execution boundaries (provider / production / scheduler guards).
+- [`playbook.md`](playbook.md): local dev and CI-parity playbook.
+- [`ops/jira-target-blueprint.md`](ops/jira-target-blueprint.md): Jira target
+  design (repos stay components, not projects).
+
 ## Repo Navigation Rules
 
 - Do not scan the whole repo unless explicitly needed.
