@@ -19,13 +19,13 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-03: done - workspace-scoped GitHub connection contract added.
 - FOS-GH-04: done - operator-protected GitHub provider-token bridge added.
 - FOS-GH-05: done - manual GitHub SyncJob record API added without live sync.
-- FOS-GH-06: done - local GitHub normalization projection added for manual SyncJobs.
+- FOS-GH-06/FOS-008: done - local GitHub normalization projection remains for manual SyncJobs, and `persist_if_supported=true` writes canonical repository records.
 - FOS-BRF-01: done - deterministic transient manual Founder Briefing v0 added.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-FE-02 - Wire frontend to backend GitHub-first flow.
+- Next task: FOS-009 - persist issues/PRs where supported and retire/repoint retained substrate deliberately.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -295,27 +295,30 @@ Checks to run:
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `git diff --check`
 
-## FOS-GH-06 - Normalize GitHub repositories/issues/PRs into existing graph/source substrate or compatibility layer
+## FOS-GH-06 / FOS-008 - Normalize GitHub repositories into projection or canonical repository tables
 
 Status: done.
 
-Goal: define and implement the first small normalization bridge for GitHub data
-without duplicating canonical SourceRecord/EvidenceRef work.
+Goal: define and implement the first small normalization bridge for GitHub data.
+`persist_if_supported=false` remains projection-only; `persist_if_supported=true`
+persists repositories into canonical `SourceRecord` and `Repository` rows.
 
 Likely files:
 
 - GitHub normalization service files.
-- Existing graph/source compatibility files.
 - Focused normalization tests.
 - `docs/TODO.md`
 
 Acceptance criteria:
 
-- Existing GitHub repository/issue/PR records map to one clear graph/source
-  substrate.
-- Evidence/source references are preserved where available.
+- Existing GitHub repository records map to projection output and, when
+  requested, canonical `source_records`/`repositories`.
+- Evidence/source references are preserved in sanitized `SourceRecord` payloads
+  where available.
 - No live provider calls or external writes occur.
 - Existing repository read and SyncJob APIs remain unchanged.
+- Canonical `EvidenceRef`, issue, and pull request persistence remains deferred
+  to the next GitHub spine step.
 
 Checks to run:
 

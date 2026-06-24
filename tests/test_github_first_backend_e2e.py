@@ -21,6 +21,7 @@ from app.db.action_models import (
     ActionProposal,
 )
 from app.db.base import AsyncSessionLocal
+from app.db.canonical_models import Repository, SourceRecord
 from app.db.identity_models import Membership, User, Workspace
 from app.db.integration_models import IntegrationConnection, SyncJob
 from app.main import app
@@ -95,6 +96,12 @@ async def _cleanup_e2e_fixture(marker: str) -> None:
                 delete(ActionProposal).where(
                     ActionProposal.workspace_id.in_(workspace_ids)
                 )
+            )
+            await session.execute(
+                delete(Repository).where(Repository.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
+                delete(SourceRecord).where(SourceRecord.workspace_id.in_(workspace_ids))
             )
             await session.execute(
                 delete(SyncJob).where(SyncJob.workspace_id.in_(workspace_ids))
@@ -356,7 +363,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
                     "include_repositories": True,
                     "include_issues": True,
                     "include_pull_requests": True,
-                    "persist_if_supported": False,
+                    "persist_if_supported": True,
                 },
             )
             response_texts.append(normalize_response.text)
@@ -365,14 +372,30 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert normalize_body["is_live"] is False
             assert normalize_body["provider_sync_started"] is False
             assert normalize_body["local_normalization_performed"] is True
-            assert normalize_body["persistence_mode"] == "projection"
+            assert normalize_body["persistence_mode"] == "canonical"
             assert normalize_body["counts"]["repositories"] == 1
+            assert normalize_body["sync_job"]["records_created"] == 1
+            assert normalize_body["sync_job"]["records_updated"] == 0
             assert normalize_body["sync_job"]["status"] in {"succeeded", "partial"}
             assert normalize_body["normalized"]["repositories"][0]["full_name"] == (
                 FAKE_REPOSITORY_FULL_NAME
             )
             assert normalize_body["normalized"]["issues"] == []
             assert normalize_body["normalized"]["pull_requests"] == []
+            assert (
+                await _count(
+                    SourceRecord,
+                    where=SourceRecord.workspace_id == UUID(workspace_id),
+                )
+                == 1
+            )
+            assert (
+                await _count(
+                    Repository,
+                    where=Repository.workspace_id == UUID(workspace_id),
+                )
+                == 1
+            )
 
             sync_job_count_before_briefing = await _count(SyncJob)
             sync_job_before_briefing = await _stored_sync_job(sync_job_id)

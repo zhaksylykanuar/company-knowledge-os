@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -11,6 +12,13 @@ from sqlalchemy import delete, func, select
 import app.services.github_repository_read_service as github_repository_read_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
+from app.db.canonical_models import (
+    EvidenceRef,
+    PullRequest,
+    Repository,
+    SourceRecord,
+    Task,
+)
 from app.db.event_models import SourceEvent
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_ADMIN,
@@ -81,6 +89,21 @@ async def _cleanup_normalization_fixture(marker: str) -> None:
             ).scalars()
         )
         if workspace_ids:
+            await session.execute(
+                delete(EvidenceRef).where(EvidenceRef.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
+                delete(Task).where(Task.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
+                delete(PullRequest).where(PullRequest.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
+                delete(Repository).where(Repository.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
+                delete(SourceRecord).where(SourceRecord.workspace_id.in_(workspace_ids))
+            )
             await session.execute(
                 delete(SyncJob).where(SyncJob.workspace_id.in_(workspace_ids))
             )
@@ -191,6 +214,39 @@ async def _count(model: type) -> int:
         return int(await session.scalar(select(func.count()).select_from(model)) or 0)
 
 
+async def _count_workspace(model: type, workspace_id: str) -> int:
+    async with AsyncSessionLocal() as session:
+        return int(
+            await session.scalar(
+                select(func.count())
+                .select_from(model)
+                .where(model.workspace_id == UUID(workspace_id))
+            )
+            or 0
+        )
+
+
+async def _stored_canonical_repo_rows(
+    workspace_id: str,
+    external_id: str,
+) -> tuple[SourceRecord, Repository]:
+    async with AsyncSessionLocal() as session:
+        source_record = await session.scalar(
+            select(SourceRecord)
+            .where(SourceRecord.workspace_id == UUID(workspace_id))
+            .where(SourceRecord.provider == "github")
+            .where(SourceRecord.external_id == external_id)
+        )
+        repository = await session.scalar(
+            select(Repository)
+            .where(Repository.workspace_id == UUID(workspace_id))
+            .where(Repository.external_id == external_id)
+        )
+        assert source_record is not None
+        assert repository is not None
+        return source_record, repository
+
+
 def _repository_result(
     repositories: list[dict],
     *,
@@ -228,6 +284,7 @@ def _repo_payload() -> dict:
             "source_class": INVENTORY_DISCOVERY_SNAPSHOT,
             "repo_not_jira_project": True,
             "access_token_hint": "must-not-leak",
+            "nested": {"webhook_secret": "must-not-leak"},
         },
     }
 
@@ -562,31 +619,172 @@ async def test_normalize_local_empty_inventory_returns_warning(monkeypatch) -> N
         await _cleanup_normalization_fixture(marker)
 
 
-async def test_normalize_local_rejects_deferred_persistence(monkeypatch) -> None:
+async def test_owner_can_persist_canonical_repositories(monkeypatch) -> None:
     marker = uuid4().hex
     _set_auth(monkeypatch)
     await _cleanup_normalization_fixture(marker)
 
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repo_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
     try:
         created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
         connection_id = await _seed_connection(created["workspace"]["id"])
         sync_job_id = await _seed_sync_job(created["workspace"]["id"], connection_id)
+        source_event_count_before = await _count(SourceEvent)
+        evidence_count_before = await _count_workspace(EvidenceRef, workspace_id)
+        task_count_before = await _count_workspace(Task, workspace_id)
+        pull_request_count_before = await _count_workspace(PullRequest, workspace_id)
 
         async with _async_client() as client:
             response = await client.post(
                 f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
-                json={"persist_if_supported": True},
+                json={
+                    "include_issues": False,
+                    "include_pull_requests": False,
+                    "persist_if_supported": True,
+                },
             )
 
-        assert response.status_code == 400
-        assert response.json() == {
-            "detail": "persistent graph upsert is deferred for GitHub normalization"
-        }
+        assert response.status_code == 200
+        body = response.json()
+        assert body["persistence_mode"] == "canonical"
+        assert body["counts"] == {"repositories": 1, "issues": 0, "pull_requests": 0}
+        assert body["sync_job"]["status"] == "succeeded"
+        assert body["sync_job"]["records_seen"] == 1
+        assert body["sync_job"]["records_created"] == 1
+        assert body["sync_job"]["records_updated"] == 0
+
         stored = await _stored_sync_job(str(sync_job_id))
-        assert stored.status == SYNC_JOB_STATUS_QUEUED
-        assert stored.started_at is None
+        assert stored.status == SYNC_JOB_STATUS_SUCCEEDED
+        assert stored.records_seen == 1
+        assert stored.records_created == 1
+        assert stored.records_updated == 0
+        assert stored.cursor_after["persistence_mode"] == "canonical"
+        assert stored.cursor_after["canonical_persistence"] == {
+            "source_records_created": 1,
+            "source_records_updated": 0,
+            "repositories_created": 1,
+            "repositories_updated": 0,
+        }
+        assert stored.logs[-1]["local_normalization"]["source_records_created"] == 1
+        assert stored.logs[-1]["local_normalization"]["repositories_created"] == 1
+
+        source_record, repository = await _stored_canonical_repo_rows(
+            workspace_id,
+            "qtwin-io/founderos-api",
+        )
+        assert source_record.record_type == "repository"
+        assert source_record.connection_id == connection_id
+        assert source_record.sync_job_id == sync_job_id
+        assert source_record.payload_hash
+        assert source_record.payload["normalized_repository"]["full_name"] == (
+            "qtwin-io/founderos-api"
+        )
+        assert source_record.payload["evidence_refs"][0]["ref"] == "local-snap-1"
+        assert repository.provider == "github"
+        assert repository.name == "founderos-api"
+        assert repository.full_name == "qtwin-io/founderos-api"
+        assert repository.default_branch == "main"
+        assert repository.visibility == "private"
+        assert repository.archived is False
+        assert repository.source_url == "https://github.com/qtwin-io/founderos-api"
+        assert repository.repo_metadata["metadata"]["repo_not_jira_project"] is True
+
+        serialized = json.dumps(
+            {
+                "payload": source_record.payload,
+                "repo_metadata": repository.repo_metadata,
+                "logs": stored.logs,
+            },
+            default=str,
+            sort_keys=True,
+        )
+        assert "must-not-leak" not in serialized
+        assert "access_token_hint" not in serialized
+        assert "webhook_secret" not in serialized
+        assert await _count(SourceEvent) == source_event_count_before
+        assert await _count_workspace(EvidenceRef, workspace_id) == evidence_count_before
+        assert await _count_workspace(Task, workspace_id) == task_count_before
+        assert await _count_workspace(PullRequest, workspace_id) == pull_request_count_before
+    finally:
+        await _cleanup_normalization_fixture(marker)
+
+
+async def test_canonical_repository_persistence_is_idempotent(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_normalization_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repo_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        connection_id = await _seed_connection(workspace_id)
+        first_sync_job_id = await _seed_sync_job(workspace_id, connection_id)
+        second_sync_job_id = await _seed_sync_job(workspace_id, connection_id)
+
+        async with _async_client() as client:
+            first = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/{first_sync_job_id}/normalize-local",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "include_issues": False,
+                    "include_pull_requests": False,
+                    "persist_if_supported": True,
+                },
+            )
+            second = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/{second_sync_job_id}/normalize-local",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "include_issues": False,
+                    "include_pull_requests": False,
+                    "persist_if_supported": True,
+                },
+            )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["sync_job"]["records_created"] == 1
+        assert first.json()["sync_job"]["records_updated"] == 0
+        assert second.json()["sync_job"]["records_created"] == 0
+        assert second.json()["sync_job"]["records_updated"] == 1
+        assert await _count_workspace(SourceRecord, workspace_id) == 1
+        assert await _count_workspace(Repository, workspace_id) == 1
+
+        stored_second = await _stored_sync_job(str(second_sync_job_id))
+        assert stored_second.cursor_after["canonical_persistence"] == {
+            "source_records_created": 0,
+            "source_records_updated": 1,
+            "repositories_created": 0,
+            "repositories_updated": 1,
+        }
+        source_record, repository = await _stored_canonical_repo_rows(
+            workspace_id,
+            "qtwin-io/founderos-api",
+        )
+        assert source_record.sync_job_id == second_sync_job_id
+        assert repository.full_name == "qtwin-io/founderos-api"
     finally:
         await _cleanup_normalization_fixture(marker)
 
@@ -619,12 +817,17 @@ async def test_normalize_local_does_not_call_live_source_or_graph_paths(
                 f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
-                json={},
+                json={
+                    "include_issues": False,
+                    "include_pull_requests": False,
+                    "persist_if_supported": True,
+                },
             )
 
         assert response.status_code == 200
         assert response.json()["provider_sync_started"] is False
         assert await _count(SourceEvent) == source_event_count_before
+        assert not Path("app/services/source_control.py").exists()
     finally:
         await _cleanup_normalization_fixture(marker)
 

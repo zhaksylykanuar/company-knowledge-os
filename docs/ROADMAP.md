@@ -150,8 +150,9 @@ Done:
   `IntegrationConnection` records without live provider calls.
 - Manual GitHub SyncJob record API can create/list/detail queued local sync
   intents without live provider calls or worker execution.
-- Local GitHub normalization projection can transform repository inventory into
-  founderOS-compatible shape and update the manual `SyncJob` without live sync.
+- Local GitHub normalization can transform repository inventory into
+  founderOS-compatible projection output and, when explicitly requested, persist
+  repositories into canonical `source_records`/`repositories` without live sync.
 - Manual Founder Briefing v0 can return a deterministic, transient,
   evidence-aware briefing from local workspace GitHub signals.
 - Local ActionProposal approval foundation can store, approve, and reject
@@ -164,14 +165,16 @@ Done:
 Missing:
 
 - Full GitHub OAuth implementation path.
-- Actual GitHub sync execution and persistent repos/issues/PR graph upsert
-  through the product flow.
-- SourceRecords/normalized entities aligned to master model.
+- Actual GitHub sync execution and persistent issues/PR upsert through the
+  product flow.
+- Retained-substrate retirement/repointing for repository inventory after the
+  canonical repository write path is fully adopted.
 - Dashboard with GitHub data.
 - Company Brain over GitHub-first evidence.
 - Product frontend flow for the GitHub-first MVP path.
 
-Next step: FOS-FE-01 scaffold minimal frontend shell for the MVP backend flow.
+Next step: FOS-009 persist issues/PRs where supported and retire/repoint
+retained repository substrate deliberately.
 
 Definition of Done:
 

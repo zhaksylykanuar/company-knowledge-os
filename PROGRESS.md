@@ -9,9 +9,9 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 1 — Data Foundation` ✅ закрыт (gate зелёный). Следующая реальная работа спайна — CHUNK 3.
-- **Task:** wiring — заставить github sync/normalization **писать** в новые канонические таблицы (FOS-008/009). Сейчас `github_normalization` projection-only (никуда не персистит).
+- **Task:** CHUNK 3 / FOS-009 — сократить retained-substrate tail после того, как FOS-008 начал писать GitHub repositories в канонические `source_records`/`repositories`.
 - **State:** ✅ FOS-002 (spine-subset §6) готов: добавлены `source_records`, `evidence_refs`, `repositories`, `pull_requests`, `tasks` (uuid, workspace-scoped) — DEC-028, ветка A. `NormalizedEntity` отложен (нет GitHub-only читателя обобщённой сущности). Линия 2 (entities-граф+source_events+frozen) — frozen legacy.
-- **Next action:** CHUNK 3 / FOS-008–009: перевести github sync/normalization на персистентность в канонические таблицы (спайн пишет ТОЛЬКО туда; `source_events`/`entities` не трогать). FOS-004/005/006 (generic connector framework) — отложены по DEC-028 (выделить при 2-м коннекторе).
+- **Next action:** CHUNK 3 / FOS-009: оставить `source_events`/`normalized_activity_items`/`ingested_events` нетронутыми до отдельного retirement/repointing шага; issues/PR persistence тоже не входит в FOS-008.
 
 ---
 
@@ -72,7 +72,7 @@ DONE строго = есть код + проходящий тест/рабочи
 ### CHUNK 3 — GitHub E2E (SPINE) 🎯 критический milestone
 *Gate: пользователь подключает GitHub через UI → sync → данные в Dashboard и Brain.*
 - [~] FOS-007 — GitHub OAuth — нет OAuth start/callback (§7.5); соединение через PAT-bridge, токен шифруется. `tests/test_github_provider_token_connection.py` зелёный
-- [x] FOS-008 — GitHub sync repositories — `app/services/github_sync_job_service.py` + `/api/v1/.../github/repositories`; доказано `tests/test_github_first_backend_e2e.py` (repos count==1)
+- [x] FOS-008 — GitHub sync repositories — `normalize-local` при `persist_if_supported=true` пишет canonical `source_records`/`repositories` idempotent-upsert; `persist_if_supported=false` остаётся projection-only. Доказано `tests/test_github_normalization_api.py` + `tests/test_github_first_backend_e2e.py`
 - [~] FOS-009 — GitHub sync issues + PRs — PR-проекция есть; issues возвращаются пустыми с warning (`github_normalization_service.py:26-27`)
 - [ ] FOS-010 — Connectors UI page — нет `web/app/connectors/page.tsx`; есть только stub `web/app/github/page.tsx` (41 строка)
 - [~] FOS-011 — Dashboard v0 — backend `app/services/founder_overview.py`; `web/app/dashboard/page.tsx` — stub (62 строки), не подключён к live-данным
@@ -121,6 +121,7 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-24` — **FOS-008 canonical GitHub repository persistence.** `POST /api/v1/workspaces/{workspace_id}/github/sync-jobs/{sync_job_id}/normalize-local` сохраняет projection-only режим при `persist_if_supported=false`, а при `true` пишет GitHub repositories в canonical `SourceRecord`/`Repository` с idempotent upsert, sanitized payload, SyncJob counters/logs. `EvidenceRef`/issues/PRs не пишутся; retained substrate не тронут.
 - `2026-06-24` — **FOS-PURGE-01 final purge consistency cleanup.** Удалены leftover static UI HTML artifact и dedicated static UI test; local starter теперь открывает backend root, не `/ui`. Удержанный substrate `source_events`/`normalized_activity_items`/`ingested_events` остаётся до FOS-009. Актуальный `alembic check` drift: 7 operations, all on `ingested_events`; не чинить в этой задаче. Runtime namespace остаётся `/api/v1`.
 - `2026-06-24` — **Lineage-2 retired (purge, DEC-029).** Удалены entities-граф + identity-слой + knowledge-graph/RAG + digest/inbox/telegram/gmail/drive/extraction/share-packs/second-opinion/attention/jira/obsidian/source-control + legacy-коннекторы (`connectors.github`, `source_control`) + статичный `/ui` + их тесты/скрипты + non-canon доки. Дропнуто 27 таблиц (миграция `e1a2b3c4d5f6`, необратима). Удержан substrate `source_events`/`normalized_activity_items`/`ingested_events` (DEC-030, retire в FOS-009). Гейт: app boots, alembic head чист, drift now 7 operations on `ingested_events`, ruff ✅, pytest green, web build ✅, github-first E2E зелёный (спайн цел). Recovery tag `pre-purge-20260624`. Коммиты: eadd7d8 (код), 1d281e3 (таблицы), e83e5d2 (доки).
 - `2026-06-24` — **FOS-002 готов (spine-subset §6, ветка A / DEC-028).** Добавлены канонические `source_records`/`evidence_refs`/`repositories`/`pull_requests`/`tasks` (`app/db/canonical_models.py`, uuid+workspace-scoped) + миграция `f6b7c8d9e0a1` + `tests/test_canonical_models.py` (9). `NormalizedEntity` отложен (решено по коду: нет GitHub-only читателя обобщённой сущности). CHUNK 1 gate зелёный: alembic upgrade head ✅, model tests ✅, encryption roundtrip ✅. pytest 1818/0, ruff ✅. `alembic check` ругается на pre-existing legacy drift (Линия 2), не на канон-таблицы. DONE 5/23, chunks 2/9.

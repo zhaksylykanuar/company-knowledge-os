@@ -156,15 +156,17 @@ Consequences:
 ## DEC-015 - GitHub Normalization Starts As Compatibility Projection
 
 Decision: FOS-GH-06 normalizes GitHub data through a compatibility projection
-over existing local repository/source/evidence read models. Persistent graph
-upsert is deferred until the graph/source substrate is explicitly reconciled.
+over existing local repository/source/evidence read models. FOS-008 keeps that
+projection behavior for `persist_if_supported=false` and adds explicit
+canonical repository persistence for `persist_if_supported=true`.
 
 Rationale: the existing GitHub graph helper is useful, but it maps repositories
 to project entities and is not yet a general workspace-scoped canonical
 Repository/Issue/PullRequest persistence path. Projection mode lets the MVP
 produce normalized founderOS-compatible shapes, preserve available evidence
-refs, and update `SyncJob` lifecycle state without creating duplicate source of
-truth.
+refs, and update `SyncJob` lifecycle state. FOS-008 narrows persistence to the
+canonical `SourceRecord`/`Repository` tables that already exist, leaving
+issues/PRs and substrate retirement for FOS-009.
 
 Consequences:
 
@@ -173,10 +175,11 @@ Consequences:
 - `SyncJob` records can track local normalization status and counters.
 - Repository normalization can use the existing local repository inventory
   bridge.
-- Issues and pull requests remain empty with warnings until local source data is
-  reconciled.
-- `persist_if_supported=true` is rejected until graph upsert is deliberately
-  scoped.
+- `persist_if_supported=false` remains projection-only.
+- `persist_if_supported=true` persists only repository `SourceRecord` and
+  `Repository` rows with sanitized payloads and idempotent upsert semantics.
+- Issues, pull requests, and canonical `EvidenceRef` rows remain deferred until
+  deliberately scoped.
 
 ## DEC-016 - Founder Briefing V0 Is Deterministic And Transient
 
