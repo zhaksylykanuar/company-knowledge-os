@@ -4,13 +4,17 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  buildWorkspaceActionProposalAuditPath,
   buildWorkspaceActionProposalExecutePath,
   buildWorkspaceActionProposalExecutionPreviewPath,
   executeActionProposal,
+  fetchActionProposalAudit,
   fetchActionExecutionPreview
 } from "../lib/api";
 import type {
+  ActionExecutionAuditEvent,
   ActionExecutionPreviewResponse,
+  ActionExecutionReceipt,
   ActionExecutionResponse,
   ActionProposal
 } from "../lib/types";
@@ -62,23 +66,47 @@ const approvedProposal: ActionProposal = {
   title: "Approved local proposal"
 };
 
-const disabledPreview: ActionExecutionPreviewResponse = {
-  audit: [
-    {
-      actor: "user",
-      created_at: "2026-06-25T01:00:00+06:00",
-      event: "proposal_created",
-      id: "proposal-2:created",
-      message: "Local action proposal was created."
+function auditEvent(
+  overrides: Partial<ActionExecutionAuditEvent> = {}
+): ActionExecutionAuditEvent {
+  return {
+    action: "create_github_issue",
+    actor: "system",
+    confirmation_received: false,
+    created_at: "2026-06-25T01:06:00+06:00",
+    error_code: null,
+    error_message: null,
+    event: "execution_preview_generated",
+    event_metadata: {
+      evidence_refs_count: 1,
+      preview_hash: "preview-hash"
     },
-    {
-      actor: "workspace_admin",
-      created_at: "2026-06-25T01:05:00+06:00",
-      event: "proposal_approved",
-      id: "proposal-2:approved",
-      message: "Proposal was approved locally. No external write was run."
-    }
-  ],
+    event_type: "execution_preview_generated",
+    external_execution_enabled: false,
+    external_result_id: null,
+    external_result_url: null,
+    id: "event-1",
+    message:
+      "Preview ready. External execution is disabled in this environment. No external write occurred.",
+    provider: "github",
+    status: "recorded",
+    ...overrides
+  };
+}
+
+const emptyReceipt: ActionExecutionReceipt = {
+  action: "create_github_issue",
+  confirmation_received: false,
+  external_execution_enabled: false,
+  external_result_id: null,
+  external_result_url: null,
+  external_write_performed: false,
+  provider: "github",
+  provider_result: "none"
+};
+
+const disabledPreview: ActionExecutionPreviewResponse = {
+  audit: [auditEvent()],
   capabilities: {
     dry_run: true,
     external_execution: false,
@@ -120,6 +148,7 @@ function renderControls(
 ): string {
   return renderToStaticMarkup(
     <ActionExecutionControlsView
+      auditEvents={props.auditEvents ?? []}
       confirmationChecked={props.confirmationChecked ?? false}
       connectionId={props.connectionId ?? ""}
       error={props.error ?? null}
@@ -132,15 +161,20 @@ function renderControls(
       onPreview={props.onPreview}
       preview={props.preview ?? null}
       proposal={props.proposal ?? approvedProposal}
+      receipt={props.receipt ?? null}
       successMessage={props.successMessage ?? null}
     />
   );
 }
 
-test("builds action execution preview and execute URLs", () => {
+test("builds action execution preview, audit, and execute URLs", () => {
   assert.equal(
     buildWorkspaceActionProposalExecutionPreviewPath("workspace-123", "proposal-2"),
     "/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/execution-preview"
+  );
+  assert.equal(
+    buildWorkspaceActionProposalAuditPath("workspace-123", "proposal-2"),
+    "/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/audit"
   );
   assert.equal(
     buildWorkspaceActionProposalExecutePath("workspace-123", "proposal-2"),
@@ -171,6 +205,41 @@ test("fetches execution preview without posting a live write", async () => {
     assert.equal(payload.status, "preview_ready");
     assert.equal(payload.capabilities.external_execution, false);
     assert.equal(payload.preview?.repository, "qtwin-io/founderos-api");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("fetches persisted action proposal audit trail", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost:8000/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/audit"
+    );
+    assert.equal(init?.method, undefined);
+    return new Response(
+      JSON.stringify({
+        events: [auditEvent()],
+        proposal_id: "proposal-2",
+        receipt: emptyReceipt,
+        workspace_id: "workspace-123"
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const payload = await fetchActionProposalAudit(
+      "workspace-123",
+      "proposal-2",
+      { includeOwnerEmail: false }
+    );
+    assert.equal(payload.events[0]?.event_type, "execution_preview_generated");
+    assert.equal(payload.receipt.provider_result, "none");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -252,10 +321,45 @@ test("renders approved previewable state and dry-run preview details", () => {
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /FounderOS follow-up/);
   assert.match(html, /External execution disabled in this environment/);
-  assert.match(html, /proposal_approved/);
+  assert.match(html, /execution_preview_generated/);
+  assert.match(html, /Audit event recorded locally/);
   assert.match(html, /Evidence refs attached: 1/);
   assert.doesNotMatch(html, /source_events/);
   assert.doesNotMatch(html, /Created GitHub issue/i);
+});
+
+test("renders persisted audit events and local receipt", () => {
+  const html = renderControls({
+    auditEvents: [
+      auditEvent({
+        event_type: "execution_confirmation_received_but_disabled",
+        event: "execution_confirmation_received_but_disabled",
+        status: "blocked",
+        message:
+          "Execution confirmation was received, but external execution is disabled. No external write occurred."
+      })
+    ],
+    preview: disabledPreview,
+    receipt: emptyReceipt
+  });
+  assert.match(html, /Execution receipt/);
+  assert.match(html, /Provider result/);
+  assert.match(html, /none/);
+  assert.match(html, /execution_confirmation_received_but_disabled/);
+  assert.match(html, /No external write occurred/);
+  assert.match(html, /Audit event recorded locally/);
+});
+
+test("falls back to proposal status timestamps when audit trail is empty", () => {
+  const html = renderControls({
+    auditEvents: [],
+    preview: {
+      ...disabledPreview,
+      audit: []
+    }
+  });
+  assert.match(html, /proposal_created/);
+  assert.match(html, /proposal_approved/);
 });
 
 test("renders missing evidence warning without fabricating source refs", () => {

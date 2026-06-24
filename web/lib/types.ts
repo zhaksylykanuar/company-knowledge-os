@@ -243,10 +243,39 @@ export type GitHubIssueExecutionPreview = {
 
 export type ActionExecutionAuditEvent = {
   id: string;
+  event_type: string;
   event: string;
   actor: string;
+  status: string;
   created_at: string;
   message: string;
+  event_metadata: Record<string, unknown>;
+  provider: string | null;
+  action: string | null;
+  external_execution_enabled: boolean;
+  confirmation_received: boolean;
+  external_result_id: string | null;
+  external_result_url: string | null;
+  error_code: string | null;
+  error_message: string | null;
+};
+
+export type ActionExecutionReceipt = {
+  provider: string | null;
+  action: string | null;
+  external_execution_enabled: boolean;
+  confirmation_received: boolean;
+  external_result_id: string | null;
+  external_result_url: string | null;
+  external_write_performed: boolean;
+  provider_result: string;
+};
+
+export type ActionProposalAuditResponse = {
+  workspace_id: string;
+  proposal_id: string;
+  events: ActionExecutionAuditEvent[];
+  receipt: ActionExecutionReceipt;
 };
 
 export type ActionExecutionPreviewResponse = {

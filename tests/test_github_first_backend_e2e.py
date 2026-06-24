@@ -18,6 +18,7 @@ from app.db.action_models import (
     ACTION_EXECUTION_STATUS_SUCCEEDED,
     ACTION_PROPOSAL_STATUS_EXECUTED,
     ActionExecution,
+    ActionExecutionEvent,
     ActionProposal,
 )
 from app.db.base import AsyncSessionLocal
@@ -88,6 +89,11 @@ async def _cleanup_e2e_fixture(marker: str) -> None:
                 ).scalars()
             )
             if proposal_ids:
+                await session.execute(
+                    delete(ActionExecutionEvent).where(
+                        ActionExecutionEvent.action_proposal_id.in_(proposal_ids)
+                    )
+                )
                 await session.execute(
                     delete(ActionExecution).where(
                         ActionExecution.action_proposal_id.in_(proposal_ids)

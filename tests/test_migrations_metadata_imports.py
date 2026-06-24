@@ -16,6 +16,7 @@ EXPECTED_ALEMBIC_TABLES = {
     "sync_jobs",
     "action_proposals",
     "action_executions",
+    "action_execution_events",
     "audit_logs",
     "source_records",
     "evidence_refs",

@@ -18,6 +18,7 @@ from app.db.action_models import (
     ACTION_TYPE_CREATE_GITHUB_ISSUE,
     ACTION_TYPE_INTERNAL_TODO,
     ActionExecution,
+    ActionExecutionEvent,
     ActionProposal,
 )
 from app.db.base import AsyncSessionLocal
@@ -110,6 +111,11 @@ async def _cleanup_action_fixture(marker: str) -> None:
             )
             if proposal_ids:
                 await session.execute(
+                    delete(ActionExecutionEvent).where(
+                        ActionExecutionEvent.action_proposal_id.in_(proposal_ids)
+                    )
+                )
+                await session.execute(
                     delete(ActionExecution).where(
                         ActionExecution.action_proposal_id.in_(proposal_ids)
                     )
@@ -190,8 +196,10 @@ async def _count(model: type) -> int:
 def test_action_models_register_with_metadata() -> None:
     assert ActionProposal.__tablename__ == "action_proposals"
     assert ActionExecution.__tablename__ == "action_executions"
+    assert ActionExecutionEvent.__tablename__ == "action_execution_events"
     assert "action_proposals" in ActionProposal.metadata.tables
     assert "action_executions" in ActionExecution.metadata.tables
+    assert "action_execution_events" in ActionExecutionEvent.metadata.tables
 
 
 async def test_action_migration_tables_exist() -> None:
@@ -202,9 +210,13 @@ async def test_action_migration_tables_exist() -> None:
         action_executions = await session.scalar(
             text("select to_regclass('public.action_executions')")
         )
+        action_execution_events = await session.scalar(
+            text("select to_regclass('public.action_execution_events')")
+        )
 
     assert action_proposals == "action_proposals"
     assert action_executions == "action_executions"
+    assert action_execution_events == "action_execution_events"
 
 
 async def test_create_proposal_requires_api_key(monkeypatch) -> None:

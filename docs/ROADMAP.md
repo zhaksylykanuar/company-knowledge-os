@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / post-FOS-016. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / post-FOS-017. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,7 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` (currently CHUNK 4 / FOS-014).
+Next step: follow `../PROGRESS.md` for the human-gated live GitHub issue write proof.
 
 Definition of Done:
 
@@ -43,8 +43,9 @@ Done:
 
 - Canonical `User`, `Workspace`, `Membership`, `IntegrationConnection`,
   `SyncJob`, `SourceRecord`, `EvidenceRef`, `Repository`, `PullRequest`, `Task`,
-  `ActionProposal`, and `ActionExecution` foundations exist.
-- Existing migrations are at one Alembic head/current: `e1a2b3c4d5f6`.
+  `ActionProposal`, `ActionExecution`, and proposal-scoped
+  `ActionExecutionEvent` audit foundations exist.
+- Existing migrations are at one Alembic head/current: `a2b3c4d5e6f7`.
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
   compatibility substrate; FOS-009 repointed workspace repository reads to
@@ -95,8 +96,7 @@ Missing:
 - Human-approved live GitHub write proof behind explicit runtime config and
   confirmation.
 
-Next step: follow `../PROGRESS.md` for the human-gated live-write proof or
-audit hardening path.
+Next step: follow `../PROGRESS.md` for the human-gated live-write proof.
 
 Definition of Done:
 
@@ -130,6 +130,8 @@ Done:
   evidence refs in a frontend evidence drawer.
 - Dashboard and `/actions` surface local ActionProposal list/create/approve/
   reject plus guarded execution preview/audit controls.
+- `/actions` renders persisted execution audit events and local receipt/readiness
+  state for preview and blocked execution attempts.
 - Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
@@ -140,8 +142,8 @@ Missing:
 - Browser/product E2E coverage.
 - Live external write proof in product mode.
 
-Next step: harden the live-write proof or audit trail only after explicit human
-approval for that path.
+Next step: human-gated live GitHub issue write proof behind explicit config and
+confirmation.
 
 Definition of Done:
 
@@ -192,8 +194,9 @@ Done:
 - Approved GitHub issue proposals can execute through the guarded backend path
   with local `ActionExecution` tracking.
 - Product dashboard and `/actions` page can preview approved GitHub issue
-  execution readiness, inspect fallback audit/status history, and keep live
-  execution disabled unless backend capability explicitly enables it.
+  execution readiness, inspect persisted proposal-scoped audit events and local
+  receipt/readiness state, and keep live execution disabled unless backend
+  capability explicitly enables it.
 - Backend E2E smoke coverage exercises the GitHub-first path from workspace
   bootstrap through mocked approved issue execution.
 
@@ -206,8 +209,8 @@ Missing:
 - Full product frontend flow for final GitHub-first MVP external-write proof.
 - Real GitHub issue write proof behind explicit human approval/runtime config.
 
-Next step: human-gated live GitHub issue write proof, or dedicated audit
-hardening if live writes stay disabled.
+Next step: human-gated live GitHub issue write proof behind explicit runtime
+config and confirmation.
 
 Definition of Done:
 

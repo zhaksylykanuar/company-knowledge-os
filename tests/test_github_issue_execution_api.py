@@ -23,6 +23,7 @@ from app.db.action_models import (
     ACTION_TYPE_CREATE_GITHUB_ISSUE,
     ACTION_TYPE_INTERNAL_TODO,
     ActionExecution,
+    ActionExecutionEvent,
     ActionProposal,
 )
 from app.db.base import AsyncSessionLocal
@@ -143,6 +144,11 @@ async def _cleanup_issue_action_fixture(marker: str) -> None:
                 ).scalars()
             )
             if proposal_ids:
+                await session.execute(
+                    delete(ActionExecutionEvent).where(
+                        ActionExecutionEvent.action_proposal_id.in_(proposal_ids)
+                    )
+                )
                 await session.execute(
                     delete(ActionExecution).where(
                         ActionExecution.action_proposal_id.in_(proposal_ids)
@@ -335,6 +341,19 @@ async def _preview_execution(
         )
 
 
+async def _get_audit(
+    workspace_id: str,
+    proposal_id: str | UUID,
+    owner_email: str,
+):
+    async with _async_client() as client:
+        return await client.get(
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/audit",
+            headers=_headers(),
+            params={"owner_email": owner_email},
+        )
+
+
 async def _stored_proposal(proposal_id: str | UUID) -> ActionProposal:
     async with AsyncSessionLocal() as session:
         proposal = await session.scalar(
@@ -350,6 +369,21 @@ async def _stored_executions(proposal_id: str | UUID) -> list[ActionExecution]:
             await session.execute(
                 select(ActionExecution).where(
                     ActionExecution.action_proposal_id == UUID(str(proposal_id))
+                )
+            )
+        ).scalars()
+        return list(rows)
+
+
+async def _stored_execution_events(proposal_id: str | UUID) -> list[ActionExecutionEvent]:
+    async with AsyncSessionLocal() as session:
+        rows = (
+            await session.execute(
+                select(ActionExecutionEvent)
+                .where(ActionExecutionEvent.action_proposal_id == UUID(str(proposal_id)))
+                .order_by(
+                    ActionExecutionEvent.created_at.asc(),
+                    ActionExecutionEvent.id.asc(),
                 )
             )
         ).scalars()
@@ -414,12 +448,45 @@ async def test_execution_preview_is_dry_run_when_external_writes_disabled(
         assert body["preview"]["repository"] == "qtwin-io/founderos-api"
         assert body["preview"]["title"] == "FounderOS follow-up"
         assert body["preview"]["evidence_refs"][0]["ref"] == "qtwin-io/founderos-api"
-        assert body["audit"][0]["event"] == "proposal_created"
-        assert body["audit"][1]["event"] == "proposal_approved"
+        assert body["audit"][0]["event_type"] == "execution_preview_generated"
+        assert body["audit"][0]["event"] == "execution_preview_generated"
+        assert body["audit"][0]["status"] == "recorded"
+        assert body["audit"][0]["provider"] == "github"
+        assert body["audit"][0]["external_execution_enabled"] is False
+        assert body["audit"][0]["confirmation_received"] is False
+        assert body["audit"][0]["external_result_id"] is None
+        assert body["audit"][0]["external_result_url"] is None
+        assert body["audit"][0]["event_metadata"]["evidence_refs_count"] == 1
+        assert "Created through approved action execution" not in str(
+            body["audit"][0]["event_metadata"]
+        )
         assert body["warnings"] == [
             "Execution preview is dry-run only and does not call GitHub."
         ]
         assert await _stored_executions(proposal["id"]) == []
+        events = await _stored_execution_events(proposal["id"])
+        assert len(events) == 1
+        assert events[0].event_type == "execution_preview_generated"
+
+        repeated = await _preview_execution(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+        )
+        assert repeated.status_code == 200, repeated.text
+        assert len(await _stored_execution_events(proposal["id"])) == 1
+
+        audit_response = await _get_audit(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+        )
+        assert audit_response.status_code == 200, audit_response.text
+        audit = audit_response.json()
+        assert audit["events"][0]["event_type"] == "execution_preview_generated"
+        assert audit["receipt"]["provider"] == "github"
+        assert audit["receipt"]["provider_result"] == "none"
+        assert audit["receipt"]["external_write_performed"] is False
     finally:
         await _cleanup_issue_action_fixture(marker)
 
@@ -450,7 +517,48 @@ async def test_execution_preview_blocks_not_approved_proposal(monkeypatch) -> No
         assert body["capabilities"]["dry_run"] is False
         assert body["message"] == "action proposal is not approved"
         assert "Proposal has no evidence refs" in body["warnings"][1]
+        assert body["audit"][0]["event_type"] == "execution_preview_blocked"
+        assert body["audit"][0]["status"] == "blocked"
+        assert body["audit"][0]["error_code"] == "action_proposal_is_not_approved"
         assert await _stored_executions(proposal_id) == []
+        events = await _stored_execution_events(proposal_id)
+        assert len(events) == 1
+        assert events[0].event_type == "execution_preview_blocked"
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_audit_endpoint_returns_empty_trail_for_proposal_without_events(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal_id = await _seed_proposal(created["workspace"]["id"])
+
+        response = await _get_audit(
+            created["workspace"]["id"],
+            proposal_id,
+            owner_email,
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["events"] == []
+        assert body["receipt"] == {
+            "provider": None,
+            "action": None,
+            "external_execution_enabled": False,
+            "confirmation_received": False,
+            "external_result_id": None,
+            "external_result_url": None,
+            "external_write_performed": False,
+            "provider_result": "none",
+        }
     finally:
         await _cleanup_issue_action_fixture(marker)
 
@@ -477,6 +585,14 @@ async def test_execute_rejects_when_write_actions_disabled(monkeypatch) -> None:
         assert response.status_code == 409
         assert response.json() == {"detail": "external execution is disabled"}
         assert await _stored_executions(proposal["id"]) == []
+        events = await _stored_execution_events(proposal["id"])
+        assert len(events) == 1
+        assert (
+            events[0].event_type
+            == "execution_confirmation_received_but_disabled"
+        )
+        assert events[0].confirmation_received is True
+        assert events[0].external_execution_enabled is False
     finally:
         await _cleanup_issue_action_fixture(marker)
 
@@ -649,6 +765,12 @@ async def test_execute_rejects_missing_confirmation_or_connection(monkeypatch) -
             "detail": "confirm_external_write must be true"
         }
         assert missing_connection.status_code == 422
+        assert await _stored_executions(proposal["id"]) == []
+        events = await _stored_execution_events(proposal["id"])
+        assert len(events) == 1
+        assert events[0].event_type == "execution_confirmation_missing"
+        assert events[0].confirmation_received is False
+        assert events[0].external_execution_enabled is True
     finally:
         await _cleanup_issue_action_fixture(marker)
 

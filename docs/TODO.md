@@ -33,9 +33,10 @@ files, no unrelated edits, and focused checks first.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
 - FOS-015: done - dashboard and `/actions` surface local ActionProposal list/create/approve/reject with evidence refs and no external execution.
 - FOS-016: done - product execution preview/audit surface shows dry-run GitHub issue readiness, blocks live execute when `enable_write_actions=false`, and requires backend capability plus explicit confirmation before live writes.
+- FOS-017: done - execution preview and blocked execute paths persist proposal-scoped audit events and expose a local execution receipt/readiness model.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: human-gated live GitHub issue write proof behind explicit config/confirmation, or dedicated audit hardening if live-write approval is not granted yet.
+- Next task: human-gated live GitHub issue write proof behind explicit config/confirmation, now that persistent audit is green.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -526,3 +527,33 @@ Checks to run:
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `UV_NO_SYNC=1 uv run pytest -q`
 - `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build`.
+
+## FOS-017 - Persistent execution audit trail
+
+Status: done.
+
+Goal: make preview and blocked execution attempts durable and inspectable before
+any live GitHub write proof.
+
+Acceptance criteria:
+
+- Preview creates or reuses proposal-scoped `execution_preview_generated` audit
+  events.
+- Blocked execute creates or reuses confirmation-missing or
+  confirmation-received-but-disabled audit events.
+- Audit events are workspace/proposal scoped, deterministic, sanitized, and do
+  not use `source_events`, legacy `audit_logs`, or `ActionExecution` overloads.
+- Backend exposes a proposal-scoped audit endpoint and local receipt/readiness
+  view.
+- Product UI renders persisted audit events and keeps timestamp fallback when
+  the audit trail is empty.
+- No live provider call, OAuth flow, AI/LLM call, or external write is added.
+
+Checks to run:
+
+- Focused action/proposal/execution/audit tests.
+- Alembic heads/current/upgrade/check, allowing only documented retained
+  substrate drift.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `UV_NO_SYNC=1 uv run pytest -q`
+- `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`.

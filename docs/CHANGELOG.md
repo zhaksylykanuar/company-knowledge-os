@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added proposal-scoped `action_execution_events` plus migration
+  `a2b3c4d5e6f7` for durable, sanitized execution preview/blocked-attempt audit
+  records.
+- Added idempotent action execution audit helpers and
+  `/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/audit`
+  with a local execution receipt/readiness view.
+- Added frontend audit-trail reads so `ActionExecutionControls` displays
+  persisted audit events, local receipt state, and timestamp fallback when no
+  events exist.
 - Added dry-run GitHub issue execution preview endpoint at
   `/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execution-preview`.
 - Added typed frontend helpers for action execution preview and explicit execute
@@ -28,6 +37,9 @@
 
 ### Changed
 
+- Preview and blocked execute paths now record/reuse local audit events without
+  calling GitHub or overloading `ActionExecution`, legacy `audit_logs`, or
+  retained `source_events`.
 - Blocked `/execute` when `enable_write_actions=false`, so approval and preview
   cannot silently cross into live provider writes in default environments.
 - Wired `web/app/actions` and dashboard action panels to the guarded execution

@@ -4,12 +4,14 @@ import { useState } from "react";
 
 import {
   executeActionProposal,
+  fetchActionProposalAudit,
   fetchActionExecutionPreview
 } from "../lib/api";
 import { readOperatorConfig } from "../lib/config";
 import type {
   ActionExecutionAuditEvent,
   ActionExecutionPreviewResponse,
+  ActionExecutionReceipt,
   ActionExecutionResponse,
   ActionProposal
 } from "../lib/types";
@@ -20,6 +22,7 @@ type ActionExecutionControlsProps = {
 };
 
 type ActionExecutionControlsViewProps = {
+  auditEvents: ActionExecutionAuditEvent[];
   confirmationChecked: boolean;
   connectionId: string;
   error: string | null;
@@ -32,6 +35,7 @@ type ActionExecutionControlsViewProps = {
   onPreview?: () => void;
   preview: ActionExecutionPreviewResponse | null;
   proposal: ActionProposal;
+  receipt: ActionExecutionReceipt | null;
   successMessage?: string | null;
 };
 
@@ -39,6 +43,7 @@ export function ActionExecutionControls({
   onRefresh,
   proposal
 }: ActionExecutionControlsProps) {
+  const [auditEvents, setAuditEvents] = useState<ActionExecutionAuditEvent[]>([]);
   const [connectionId, setConnectionId] = useState("");
   const [confirmationChecked, setConfirmationChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +51,14 @@ export function ActionExecutionControls({
   const [isExecutePending, setIsExecutePending] = useState(false);
   const [isPreviewPending, setIsPreviewPending] = useState(false);
   const [preview, setPreview] = useState<ActionExecutionPreviewResponse | null>(null);
+  const [receipt, setReceipt] = useState<ActionExecutionReceipt | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  async function refreshAudit(workspaceId: string) {
+    const response = await fetchActionProposalAudit(workspaceId, proposal.id);
+    setAuditEvents(response.events);
+    setReceipt(response.receipt);
+  }
 
   async function previewExecution() {
     const config = readOperatorConfig();
@@ -61,6 +73,8 @@ export function ActionExecutionControls({
     try {
       const response = await fetchActionExecutionPreview(config.workspaceId, proposal.id);
       setPreview(response);
+      setAuditEvents(response.audit);
+      await refreshAudit(config.workspaceId);
       setSuccessMessage("Execution preview loaded. No external write was performed.");
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "Request failed");
@@ -93,6 +107,7 @@ export function ActionExecutionControls({
         confirm_external_write: true
       });
       setExecuteResult(response);
+      await refreshAudit(config.workspaceId);
       setSuccessMessage(
         response.external_write_performed
           ? "Backend reported an external execution result."
@@ -101,6 +116,11 @@ export function ActionExecutionControls({
       onRefresh?.();
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "Request failed");
+      try {
+        await refreshAudit(config.workspaceId);
+      } catch {
+        // Keep the primary execution error visible if audit refresh also fails.
+      }
     } finally {
       setIsExecutePending(false);
     }
@@ -108,6 +128,7 @@ export function ActionExecutionControls({
 
   return (
     <ActionExecutionControlsView
+      auditEvents={auditEvents}
       confirmationChecked={confirmationChecked}
       connectionId={connectionId}
       error={error}
@@ -120,12 +141,14 @@ export function ActionExecutionControls({
       onPreview={previewExecution}
       preview={preview}
       proposal={proposal}
+      receipt={receipt}
       successMessage={successMessage}
     />
   );
 }
 
 export function ActionExecutionControlsView({
+  auditEvents,
   confirmationChecked,
   connectionId,
   error,
@@ -138,6 +161,7 @@ export function ActionExecutionControlsView({
   onPreview,
   preview,
   proposal,
+  receipt,
   successMessage = null
 }: ActionExecutionControlsViewProps) {
   const isApproved = proposal.status === "approved";
@@ -150,8 +174,12 @@ export function ActionExecutionControlsView({
     confirmationChecked &&
     Boolean(connectionId.trim()) &&
     !isExecutePending;
-  const auditEvents =
-    preview && preview.audit.length > 0 ? preview.audit : fallbackAuditEvents(proposal);
+  const displayedAuditEvents =
+    auditEvents.length > 0
+      ? auditEvents
+      : preview && preview.audit.length > 0
+        ? preview.audit
+        : fallbackAuditEvents(proposal);
   const evidenceCount = preview?.preview?.evidence_refs.length ?? proposal.evidence_refs.length;
 
   return (
@@ -267,6 +295,23 @@ export function ActionExecutionControlsView({
         </div>
       ) : null}
 
+      {receipt ? (
+        <dl className="work-meta" aria-label="Execution receipt">
+          <div>
+            <dt>Provider result</dt>
+            <dd>{receipt.provider_result}</dd>
+          </div>
+          <div>
+            <dt>External write</dt>
+            <dd>{receipt.external_write_performed ? "reported by backend" : "none"}</dd>
+          </div>
+          <div>
+            <dt>Confirmation</dt>
+            <dd>{receipt.confirmation_received ? "received" : "not received"}</dd>
+          </div>
+        </dl>
+      ) : null}
+
       {executeResult ? (
         <dl className="work-meta" aria-label="Execution result">
           <div>
@@ -286,11 +331,17 @@ export function ActionExecutionControlsView({
         </dl>
       ) : null}
 
-      {auditEvents.length > 0 ? (
+      {displayedAuditEvents.length > 0 ? (
         <ul className="meta-list" aria-label={`Execution audit for ${proposal.title}`}>
-          {auditEvents.map((event) => (
+          {displayedAuditEvents.map((event) => (
             <li key={event.id}>
-              {event.event}: {event.message} ({event.created_at})
+              {event.event_type}: {event.message} ({event.created_at})
+              {event.status === "blocked" || event.external_result_id === null
+                ? " No external write occurred."
+                : ""}
+              {event.event_type.startsWith("execution_")
+                ? " Audit event recorded locally."
+                : ""}
             </li>
           ))}
         </ul>
@@ -309,33 +360,70 @@ export function ActionExecutionControlsView({
 
 function fallbackAuditEvents(proposal: ActionProposal): ActionExecutionAuditEvent[] {
   const events: ActionExecutionAuditEvent[] = [
-    {
+    fallbackAuditEvent({
       actor: proposal.created_by,
-      created_at: proposal.created_at,
-      event: "proposal_created",
+      createdAt: proposal.created_at,
+      eventType: "proposal_created",
       id: `${proposal.id}:created`,
       message: "Local action proposal was created."
-    }
+    })
   ];
   if (proposal.approved_at) {
-    events.push({
-      actor: "workspace_admin",
-      created_at: proposal.approved_at,
-      event: "proposal_approved",
-      id: `${proposal.id}:approved`,
-      message: "Proposal was approved locally. No external write was run."
-    });
+    events.push(
+      fallbackAuditEvent({
+        actor: "workspace_admin",
+        createdAt: proposal.approved_at,
+        eventType: "proposal_approved",
+        id: `${proposal.id}:approved`,
+        message: "Proposal was approved locally. No external write was run."
+      })
+    );
   }
   if (proposal.rejected_at) {
-    events.push({
-      actor: "workspace_admin",
-      created_at: proposal.rejected_at,
-      event: "proposal_rejected",
-      id: `${proposal.id}:rejected`,
-      message: "Proposal was rejected locally. No external write was run."
-    });
+    events.push(
+      fallbackAuditEvent({
+        actor: "workspace_admin",
+        createdAt: proposal.rejected_at,
+        eventType: "proposal_rejected",
+        id: `${proposal.id}:rejected`,
+        message: "Proposal was rejected locally. No external write was run."
+      })
+    );
   }
   return events;
+}
+
+function fallbackAuditEvent({
+  actor,
+  createdAt,
+  eventType,
+  id,
+  message
+}: {
+  actor: string;
+  createdAt: string;
+  eventType: string;
+  id: string;
+  message: string;
+}): ActionExecutionAuditEvent {
+  return {
+    action: null,
+    actor,
+    confirmation_received: false,
+    created_at: createdAt,
+    error_code: null,
+    error_message: null,
+    event: eventType,
+    event_metadata: {},
+    event_type: eventType,
+    external_execution_enabled: false,
+    external_result_id: null,
+    external_result_url: null,
+    id,
+    message,
+    provider: null,
+    status: "recorded"
+  };
 }
 
 function formatList(values: string[]): string {

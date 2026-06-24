@@ -6,6 +6,7 @@ import {
 import type {
   ActionExecutionPreviewResponse,
   ActionExecutionResponse,
+  ActionProposalAuditResponse,
   ActionProposalExecuteRequest,
   ActionProposalCreateRequest,
   ActionProposalListRequest,
@@ -213,6 +214,13 @@ export function buildWorkspaceActionProposalExecutionPreviewPath(
   )}/execution-preview`;
 }
 
+export function buildWorkspaceActionProposalAuditPath(
+  workspaceId: string,
+  proposalId: string
+): string {
+  return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/audit`;
+}
+
 export function buildWorkspaceActionProposalExecutePath(
   workspaceId: string,
   proposalId: string
@@ -294,6 +302,17 @@ export async function fetchActionExecutionPreview(
 ): Promise<ActionExecutionPreviewResponse> {
   return apiFetch<ActionExecutionPreviewResponse>(
     buildWorkspaceActionProposalExecutionPreviewPath(workspaceId, proposalId),
+    options
+  );
+}
+
+export async function fetchActionProposalAudit(
+  workspaceId: string,
+  proposalId: string,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalAuditResponse> {
+  return apiFetch<ActionProposalAuditResponse>(
+    buildWorkspaceActionProposalAuditPath(workspaceId, proposalId),
     options
   );
 }

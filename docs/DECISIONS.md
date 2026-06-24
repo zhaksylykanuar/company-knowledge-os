@@ -593,6 +593,32 @@ canonical set and collapsed (it duplicated the chunk map now in `PROGRESS.md`, i
 driver-prompts are unused, and its rules were partly stale vs DEC-028). The
 canonical control trio is **PLAYBOOK + PROGRESS + DECISIONS**.
 
+## DEC-032 - Action Execution Audit Is Durable And Proposal-Scoped
+
+Decision (2026-06-25): approval, preview, execution attempt, and provider result
+are separate states. Preview and blocked execution attempts are recorded as
+proposal-scoped `ActionExecutionEvent` rows, not as legacy `audit_logs`, retained
+`source_events`, or `ActionExecution` rows.
+
+Rationale: before any live GitHub write proof, the system needs an inspectable
+local audit/receipt trail that proves what was previewed or blocked without
+pretending an external provider action happened.
+
+Consequences:
+
+- Approval is still local approval only; it never executes provider writes.
+- External writes require all three gates: runtime capability, explicit user
+  confirmation, and the existing approved proposal validation.
+- Preview and blocked execute paths must be auditable and idempotent enough to
+  avoid noisy duplicate records on refresh/retry.
+- Audit event metadata is sanitized and compact. It must not contain tokens,
+  secrets, environment/config dumps, raw provider payloads, or raw request bodies.
+- `ActionExecution` remains for actual execution attempts/results. External
+  result IDs/URLs remain empty until a real provider result exists.
+- UI may show persisted audit events and a local receipt/readiness view, but
+  must not say a GitHub issue/comment/PR was created unless the backend returns
+  a real executed provider result.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
