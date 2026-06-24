@@ -32,6 +32,9 @@ from app.services.github_normalization_service import (
     GitHubNormalizationOptions,
     normalize_github_sync_job_local,
 )
+from app.services.github_operational_read_service import (
+    list_workspace_github_operational_work,
+)
 from app.services.github_repository_read_service import (
     GitHubRepositoryFilters,
     list_workspace_github_repositories,
@@ -282,6 +285,51 @@ class GitHubNormalizationResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class GitHubOperationalIssueRead(BaseModel):
+    id: UUID
+    external_id: str | None = None
+    number: int | None = None
+    title: str
+    state: str | None = None
+    source_url: str | None = None
+    repository_full_name: str | None = None
+    repository_external_id: str | None = None
+    source_record_id: UUID | None = None
+    source_updated_at: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GitHubOperationalPullRequestRead(BaseModel):
+    id: UUID
+    external_id: str
+    number: int
+    title: str
+    state: str
+    source_url: str | None = None
+    repository_id: UUID
+    repository_full_name: str | None = None
+    repository_external_id: str | None = None
+    created_at_source: datetime | None = None
+    updated_at_source: datetime | None = None
+    merged_at_source: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GitHubOperationalWorkCountsRead(BaseModel):
+    issues: int
+    pull_requests: int
+
+
+class GitHubOperationalWorkResponse(BaseModel):
+    issues: list[GitHubOperationalIssueRead]
+    pull_requests: list[GitHubOperationalPullRequestRead]
+    counts: GitHubOperationalWorkCountsRead
+    state: str
+    source: str
+    is_live: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
 @router.get("/connections", response_model=GitHubConnectionListResponse)
 async def list_github_connection_records(
     workspace_id: UUID,
@@ -502,6 +550,24 @@ async def normalize_github_sync_job_record_local(
                 detail=exc.detail,
             ) from exc
     return GitHubNormalizationResponse.model_validate(result)
+
+
+@router.get("/operational-work", response_model=GitHubOperationalWorkResponse)
+async def list_github_operational_work(
+    workspace_id: UUID,
+    state: str = Query(default="open", pattern="^(open|closed|merged|all)$"),
+    limit: int = Query(default=100, ge=1, le=200),
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> GitHubOperationalWorkResponse:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        result = await list_workspace_github_operational_work(
+            session=session,
+            workspace_id=workspace_id,
+            state=state,
+            limit=limit,
+        )
+    return GitHubOperationalWorkResponse.model_validate(result)
 
 
 @router.get("/sync-jobs/{sync_job_id}", response_model=GitHubSyncJobRead)

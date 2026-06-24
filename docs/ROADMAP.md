@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 3 / FOS-009. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 3 / FOS-010/FOS-011. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,7 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` (currently CHUNK 3 / FOS-009).
+Next step: follow `../PROGRESS.md` (currently CHUNK 3 / FOS-010/FOS-011).
 
 Definition of Done:
 
@@ -47,7 +47,8 @@ Done:
 - Existing migrations are at one Alembic head/current: `e1a2b3c4d5f6`.
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
-  temporary substrate until FOS-009.
+  compatibility substrate; FOS-009 repointed workspace repository reads to
+  canonical `repositories` first.
 
 Missing:
 
@@ -56,8 +57,8 @@ Missing:
   spine proves the need.
 - Person ambiguity remains open as ASK-1.
 
-Next step: FOS-009 repository-substrate retirement/repointing and issues/PR
-persistence where supported.
+Next step: product GitHub UI/dashboard wiring; physical substrate drop remains a
+later migration/cleanup task.
 
 Definition of Done:
 
@@ -76,19 +77,21 @@ Done:
 - FastAPI app with modular routes and services.
 - Workspace/operator auth helpers, identity foundation, GitHub connection,
   repository read, manual sync job, local normalization, canonical repository
-  persistence, briefing v0, action approval, and guarded mocked GitHub issue
-  execution.
+  persistence, canonical issue/PR persistence, briefing v0, action approval,
+  and guarded mocked GitHub issue execution.
+- Operational GitHub work read model exists for canonical issues/PRs:
+  `/api/v1/workspaces/{workspace_id}/github/operational-work`.
 - Company Brain repo-audit read model remains available.
 - LLM paths are gated/off by default.
 
 Missing:
 
 - Full GitHub OAuth/product connect flow.
-- Live GitHub sync and persistent issues/PR path.
+- Live GitHub sync/product OAuth execution path.
 - Persistent briefing models and evidence drawer workflow.
 - Product dashboard/brain wiring.
 
-Next step: FOS-009, then continue the GitHub-first product flow.
+Next step: continue the GitHub-first product flow through UI/dashboard wiring.
 
 Definition of Done:
 
@@ -168,16 +171,15 @@ Done:
 Missing:
 
 - Full GitHub OAuth implementation path.
-- Actual GitHub sync execution and persistent issues/PR upsert through the
-  product flow.
-- Retained-substrate retirement/repointing for repository inventory after the
-  canonical repository write path is fully adopted.
+- Actual GitHub sync execution through the product flow.
+- Physical retained-substrate drop after the canonical repository read path is
+  stable.
 - Dashboard with GitHub data.
 - Company Brain over GitHub-first evidence.
 - Product frontend flow for the GitHub-first MVP path.
 
-Next step: FOS-009 persist issues/PRs where supported and retire/repoint
-retained repository substrate deliberately.
+Next step: FOS-010/FOS-011 product UI/dashboard wiring over the canonical
+GitHub backend path.
 
 Definition of Done:
 

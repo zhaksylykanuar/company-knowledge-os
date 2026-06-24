@@ -113,20 +113,22 @@ requires explicit owner context until session-based user auth is introduced.
 
 Decision: use a hybrid staged GitHub path for the MVP. The canonical product
 path for GitHub connection and sync is `IntegrationConnection` plus `SyncJob`.
-Repository source inventory and repo audit remain temporary local read substrate
-until FOS-009.
+Repository source inventory and repo audit use a staged local read substrate;
+after FOS-009 workspace repository reads prefer canonical `repositories` and
+retain `source_events` only as compatibility fallback.
 
 Rationale: the first MVP slice needs a small, testable path before the full
 master-playbook OAuth product flow. Starting with a workspace-scoped repository
 read API validates the source/evidence layer before OAuth, sync jobs, and
 approved writes are fully productized. DEC-029 later removed the old
 `source_control` implementation; DEC-030 keeps only the temporary repository
-read substrate until FOS-009.
+read substrate until the FOS-009 repoint.
 
 Consequences:
 
 - Do not restore or extend `source_control`; use the canonical GitHub services
-  and retained repository inventory substrate until FOS-009.
+  and keep retained repository inventory substrate only as fallback after the
+  FOS-009 repoint.
 - Do not add GitHub OAuth before the workspace-scoped repository read API.
 - Do not expose tokens or raw provider payloads.
 - Do not make live provider calls without explicit approval.
@@ -168,8 +170,9 @@ to project entities and is not yet a general workspace-scoped canonical
 Repository/Issue/PullRequest persistence path. Projection mode lets the MVP
 produce normalized founderOS-compatible shapes, preserve available evidence
 refs, and update `SyncJob` lifecycle state. FOS-008 narrows persistence to the
-canonical `SourceRecord`/`Repository` tables that already exist, leaving
-issues/PRs and substrate retirement for FOS-009.
+canonical `SourceRecord`/`Repository` tables that already exist. FOS-009 later
+adds supported issue/PR persistence and repoints repository inventory to
+canonical repositories first.
 
 Consequences:
 
@@ -424,7 +427,7 @@ knowledge-graph/RAG code unless a later scoped decision pulls it back.
 Consequences:
 
 - New ideas go to `docs/POST_MVP.md`, not into code.
-- Effort goes to the spine in `PROGRESS.md`, currently CHUNK 3 / FOS-009.
+- Effort goes to the spine in `PROGRESS.md`, currently CHUNK 3 / FOS-010/FOS-011.
 
 ## DEC-027 - Operational Doc Contracts Are Restored, Not Tests Weakened
 
@@ -550,11 +553,16 @@ temporary read-substrate**, not permanent canon. The canonical Brain/Repo-Audit
 `repository_source_inventory`) reads `source_events` today, so dropping it now
 would break the spine.
 
-Retirement plan (FOS-009): when GitHub sync persists into the canonical
-`repositories`/`source_records` tables AND `repository_source_inventory` is
-repointed to read those instead of `source_events`, drop `source_events`,
-`normalized_activity_items`, and `ingested_events`. The goal remains a single
-lineage; this substrate simply dies one planned step later.
+FOS-009 implementation note (2026-06-24): workspace repository reads are now
+repointed to prefer canonical `repositories` and use `source_events` only as a
+read-only compatibility fallback. Supported local GitHub issue/PR records now
+persist into canonical `tasks`/`pull_requests` through `source_records`.
+
+Remaining retirement plan: physical drop of `source_events`,
+`normalized_activity_items`, and `ingested_events` requires a later focused
+migration/cleanup task after the canonical read path stays stable. The goal
+remains a single lineage; the retained substrate is no longer the first
+workspace repository source, but it is not deleted in FOS-009.
 
 ## DEC-031 - Documentation Hygiene Rule
 

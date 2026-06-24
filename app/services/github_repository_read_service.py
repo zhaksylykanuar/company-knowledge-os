@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.repository_source_inventory import (
+    INVENTORY_CANONICAL_REPOSITORIES,
     INVENTORY_DISCOVERY_SNAPSHOT,
     INVENTORY_LEGACY_SEED,
     INVENTORY_SOURCE_EVENTS,
@@ -45,19 +46,20 @@ async def list_workspace_github_repositories(
 ) -> GitHubRepositoryListResult:
     """Return workspace-scoped repository rows from local read models only.
 
-    The current repository inventory is still a local/operator bridge and is
-    not yet tied to IntegrationConnection rows. Workspace scoping is enforced by
-    the route dependency before this service runs.
+    The repository inventory is read-only and prefers canonical repository rows
+    for the requested workspace, with retained source_events/discovery data only
+    as compatibility fallback.
     """
 
-    inventory = await load_repository_source_inventory(session=session)
+    inventory = await load_repository_source_inventory(
+        session=session,
+        workspace_id=workspace_id,
+    )
     if inventory.get("network_calls") is not False or inventory.get("db_written") is not False:
         raise ValueError("repository_inventory_not_read_only")
 
     source_class = _safe_text(inventory.get("source_class")) or "unknown"
-    warnings = [
-        "repository inventory is currently from local/operator bridge and is not yet tied to IntegrationConnection"
-    ]
+    warnings = _source_warnings(source_class)
     raw_items = _inventory_items(inventory=inventory, source_class=source_class)
     if source_class == INVENTORY_LEGACY_SEED:
         warnings.append(
@@ -89,8 +91,21 @@ async def list_workspace_github_repositories(
         is_live=False,
         warnings=warnings,
     )
-    _ = workspace_id
     return result
+
+
+def _source_warnings(source_class: str) -> list[str]:
+    if source_class == INVENTORY_CANONICAL_REPOSITORIES:
+        return [
+            "repository inventory is read from canonical repositories; no live provider call was made"
+        ]
+    if source_class == INVENTORY_SOURCE_EVENTS:
+        return [
+            "repository inventory is using retained source_events compatibility fallback"
+        ]
+    return [
+        "repository inventory is currently from local/operator bridge and is not yet tied to IntegrationConnection"
+    ]
 
 
 def _inventory_items(

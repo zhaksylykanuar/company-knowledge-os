@@ -185,6 +185,7 @@ async def _seed_sync_job(
     provider: str = INTEGRATION_PROVIDER_GITHUB,
     status: str = SYNC_JOB_STATUS_QUEUED,
     sync_type: str = SYNC_JOB_TYPE_MANUAL,
+    cursor_before: dict | None = None,
 ) -> UUID:
     async with AsyncSessionLocal() as session:
         sync_job = SyncJob(
@@ -193,6 +194,7 @@ async def _seed_sync_job(
             provider=provider,
             status=status,
             sync_type=sync_type,
+            cursor_before=cursor_before,
             logs=[{"note": "manual sync job record only"}],
         )
         session.add(sync_job)
@@ -247,6 +249,44 @@ async def _stored_canonical_repo_rows(
         return source_record, repository
 
 
+async def _stored_source_record(
+    workspace_id: str,
+    external_id: str,
+) -> SourceRecord:
+    async with AsyncSessionLocal() as session:
+        source_record = await session.scalar(
+            select(SourceRecord)
+            .where(SourceRecord.workspace_id == UUID(workspace_id))
+            .where(SourceRecord.provider == "github")
+            .where(SourceRecord.external_id == external_id)
+        )
+        assert source_record is not None
+        return source_record
+
+
+async def _stored_task(workspace_id: str, external_id: str) -> Task:
+    async with AsyncSessionLocal() as session:
+        task = await session.scalar(
+            select(Task)
+            .where(Task.workspace_id == UUID(workspace_id))
+            .where(Task.source_provider == "github")
+            .where(Task.external_id == external_id)
+        )
+        assert task is not None
+        return task
+
+
+async def _stored_pull_request(workspace_id: str, external_id: str) -> PullRequest:
+    async with AsyncSessionLocal() as session:
+        pull_request = await session.scalar(
+            select(PullRequest)
+            .where(PullRequest.workspace_id == UUID(workspace_id))
+            .where(PullRequest.external_id == external_id)
+        )
+        assert pull_request is not None
+        return pull_request
+
+
 def _repository_result(
     repositories: list[dict],
     *,
@@ -286,6 +326,73 @@ def _repo_payload() -> dict:
             "access_token_hint": "must-not-leak",
             "nested": {"webhook_secret": "must-not-leak"},
         },
+    }
+
+
+def _issue_payload(*, number: int = 42, state: str = "open") -> dict:
+    return {
+        "external_id": f"qtwin-io/founderos-api#issue/{number}",
+        "number": number,
+        "title": f"Investigate issue {number}",
+        "state": state,
+        "source_url": f"https://github.com/qtwin-io/founderos-api/issues/{number}",
+        "repository_full_name": "qtwin-io/founderos-api",
+        "created_at": "2026-06-21T00:00:00+00:00",
+        "updated_at": "2026-06-21T01:00:00+00:00",
+        "evidence_refs": [
+            {
+                "kind": "github_issue",
+                "source": "github",
+                "ref": f"qtwin-io/founderos-api#issue/{number}",
+                "url": f"https://github.com/qtwin-io/founderos-api/issues/{number}",
+            }
+        ],
+        "metadata": {
+            "label_names": ["bug"],
+            "access_token_hint": "must-not-leak",
+            "nested": {"webhook_secret": "must-not-leak"},
+        },
+    }
+
+
+def _pull_request_payload(*, number: int = 7, state: str = "open") -> dict:
+    payload = {
+        "external_id": f"qtwin-io/founderos-api#pull/{number}",
+        "number": number,
+        "title": f"Ship PR {number}",
+        "state": state,
+        "source_url": f"https://github.com/qtwin-io/founderos-api/pull/{number}",
+        "repository_full_name": "qtwin-io/founderos-api",
+        "created_at": "2026-06-21T02:00:00+00:00",
+        "updated_at": "2026-06-21T03:00:00+00:00",
+        "evidence_refs": [
+            {
+                "kind": "github_pull_request",
+                "source": "github",
+                "ref": f"qtwin-io/founderos-api#pull/{number}",
+                "url": f"https://github.com/qtwin-io/founderos-api/pull/{number}",
+            }
+        ],
+        "metadata": {
+            "base_branch": "main",
+            "access_token_hint": "must-not-leak",
+        },
+    }
+    if state == "merged":
+        payload["merged_at"] = "2026-06-21T04:00:00+00:00"
+    return payload
+
+
+def _work_item_cursor(
+    *,
+    issues: list[dict] | None = None,
+    pull_requests: list[dict] | None = None,
+) -> dict:
+    return {
+        "local_github": {
+            "issues": issues or [],
+            "pull_requests": pull_requests or [],
+        }
     }
 
 
@@ -675,6 +782,10 @@ async def test_owner_can_persist_canonical_repositories(monkeypatch) -> None:
             "source_records_updated": 0,
             "repositories_created": 1,
             "repositories_updated": 0,
+            "tasks_created": 0,
+            "tasks_updated": 0,
+            "pull_requests_created": 0,
+            "pull_requests_updated": 0,
         }
         assert stored.logs[-1]["local_normalization"]["source_records_created"] == 1
         assert stored.logs[-1]["local_normalization"]["repositories_created"] == 1
@@ -778,6 +889,10 @@ async def test_canonical_repository_persistence_is_idempotent(monkeypatch) -> No
             "source_records_updated": 1,
             "repositories_created": 0,
             "repositories_updated": 1,
+            "tasks_created": 0,
+            "tasks_updated": 0,
+            "pull_requests_created": 0,
+            "pull_requests_updated": 0,
         }
         source_record, repository = await _stored_canonical_repo_rows(
             workspace_id,
@@ -785,6 +900,272 @@ async def test_canonical_repository_persistence_is_idempotent(monkeypatch) -> No
         )
         assert source_record.sync_job_id == second_sync_job_id
         assert repository.full_name == "qtwin-io/founderos-api"
+    finally:
+        await _cleanup_normalization_fixture(marker)
+
+
+async def test_owner_can_persist_canonical_issues_and_pull_requests(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_normalization_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repo_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        connection_id = await _seed_connection(workspace_id)
+        issue_external_id = "qtwin-io/founderos-api#issue/42"
+        pull_request_external_id = "qtwin-io/founderos-api#pull/7"
+        sync_job_id = await _seed_sync_job(
+            workspace_id,
+            connection_id,
+            cursor_before=_work_item_cursor(
+                issues=[_issue_payload()],
+                pull_requests=[_pull_request_payload()],
+            ),
+        )
+        source_event_count_before = await _count(SourceEvent)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/{sync_job_id}/normalize-local",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={"persist_if_supported": True},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["persistence_mode"] == "canonical"
+        assert body["counts"] == {"repositories": 1, "issues": 1, "pull_requests": 1}
+        assert body["sync_job"]["status"] == "succeeded"
+        assert body["sync_job"]["records_seen"] == 3
+        assert body["sync_job"]["records_created"] == 3
+        assert body["sync_job"]["records_updated"] == 0
+        assert not any("issues were not available" in warning for warning in body["warnings"])
+        assert not any("pull requests were not available" in warning for warning in body["warnings"])
+
+        stored = await _stored_sync_job(str(sync_job_id))
+        assert stored.cursor_after["canonical_persistence"] == {
+            "source_records_created": 3,
+            "source_records_updated": 0,
+            "repositories_created": 1,
+            "repositories_updated": 0,
+            "tasks_created": 1,
+            "tasks_updated": 0,
+            "pull_requests_created": 1,
+            "pull_requests_updated": 0,
+        }
+
+        issue_source_record = await _stored_source_record(workspace_id, issue_external_id)
+        pull_source_record = await _stored_source_record(workspace_id, pull_request_external_id)
+        source_record, repository = await _stored_canonical_repo_rows(
+            workspace_id,
+            "qtwin-io/founderos-api",
+        )
+        task = await _stored_task(workspace_id, issue_external_id)
+        pull_request = await _stored_pull_request(workspace_id, pull_request_external_id)
+
+        assert source_record.record_type == "repository"
+        assert issue_source_record.record_type == "issue"
+        assert pull_source_record.record_type == "pull_request"
+        assert task.source_record_id == issue_source_record.id
+        assert task.status == "open"
+        assert task.source_url == "https://github.com/qtwin-io/founderos-api/issues/42"
+        assert task.task_metadata["github_object_type"] == "issue"
+        assert task.task_metadata["repository_full_name"] == "qtwin-io/founderos-api"
+        assert pull_request.repository_id == repository.id
+        assert pull_request.state == "open"
+        assert pull_request.source_url == "https://github.com/qtwin-io/founderos-api/pull/7"
+        assert pull_request.pr_metadata["github_object_type"] == "pull_request"
+
+        serialized = json.dumps(
+            {
+                "normalized": body["normalized"],
+                "issue_source_record": issue_source_record.payload,
+                "pull_source_record": pull_source_record.payload,
+                "task_metadata": task.task_metadata,
+                "pr_metadata": pull_request.pr_metadata,
+                "logs": stored.logs,
+            },
+            default=str,
+            sort_keys=True,
+        )
+        assert "must-not-leak" not in serialized
+        assert "access_token_hint" not in serialized
+        assert "webhook_secret" not in serialized
+        assert await _count(SourceEvent) == source_event_count_before
+        assert await _count_workspace(SourceRecord, workspace_id) == 3
+        assert await _count_workspace(Repository, workspace_id) == 1
+        assert await _count_workspace(Task, workspace_id) == 1
+        assert await _count_workspace(PullRequest, workspace_id) == 1
+    finally:
+        await _cleanup_normalization_fixture(marker)
+
+
+async def test_canonical_github_work_persistence_is_idempotent(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_normalization_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repo_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        connection_id = await _seed_connection(workspace_id)
+        cursor = _work_item_cursor(
+            issues=[_issue_payload()],
+            pull_requests=[_pull_request_payload()],
+        )
+        first_sync_job_id = await _seed_sync_job(
+            workspace_id,
+            connection_id,
+            cursor_before=cursor,
+        )
+        second_sync_job_id = await _seed_sync_job(
+            workspace_id,
+            connection_id,
+            cursor_before=cursor,
+        )
+
+        async with _async_client() as client:
+            first = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/{first_sync_job_id}/normalize-local",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={"persist_if_supported": True},
+            )
+            second = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/{second_sync_job_id}/normalize-local",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={"persist_if_supported": True},
+            )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["sync_job"]["records_created"] == 3
+        assert first.json()["sync_job"]["records_updated"] == 0
+        assert second.json()["sync_job"]["records_created"] == 0
+        assert second.json()["sync_job"]["records_updated"] == 3
+        assert await _count_workspace(SourceRecord, workspace_id) == 3
+        assert await _count_workspace(Repository, workspace_id) == 1
+        assert await _count_workspace(Task, workspace_id) == 1
+        assert await _count_workspace(PullRequest, workspace_id) == 1
+
+        stored_second = await _stored_sync_job(str(second_sync_job_id))
+        assert stored_second.cursor_after["canonical_persistence"] == {
+            "source_records_created": 0,
+            "source_records_updated": 3,
+            "repositories_created": 0,
+            "repositories_updated": 1,
+            "tasks_created": 0,
+            "tasks_updated": 1,
+            "pull_requests_created": 0,
+            "pull_requests_updated": 1,
+        }
+    finally:
+        await _cleanup_normalization_fixture(marker)
+
+
+async def test_github_operational_work_read_model_filters_open_state(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_normalization_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repo_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        connection_id = await _seed_connection(workspace_id)
+        sync_job_id = await _seed_sync_job(
+            workspace_id,
+            connection_id,
+            cursor_before=_work_item_cursor(
+                issues=[
+                    _issue_payload(number=42, state="open"),
+                    _issue_payload(number=43, state="closed"),
+                ],
+                pull_requests=[
+                    _pull_request_payload(number=7, state="open"),
+                    _pull_request_payload(number=8, state="merged"),
+                ],
+            ),
+        )
+
+        async with _async_client() as client:
+            normalize_response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/{sync_job_id}/normalize-local",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={"persist_if_supported": True},
+            )
+            open_response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/operational-work",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+            all_response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/operational-work",
+                headers=_headers(),
+                params={
+                    "owner_email": _bootstrap_payload(marker)["owner_email"],
+                    "state": "all",
+                },
+            )
+            merged_response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/operational-work",
+                headers=_headers(),
+                params={
+                    "owner_email": _bootstrap_payload(marker)["owner_email"],
+                    "state": "merged",
+                },
+            )
+
+        assert normalize_response.status_code == 200, normalize_response.text
+        assert open_response.status_code == 200, open_response.text
+        open_body = open_response.json()
+        assert open_body["source"] == "canonical_github_operational_work"
+        assert open_body["is_live"] is False
+        assert open_body["state"] == "open"
+        assert open_body["counts"] == {"issues": 1, "pull_requests": 1}
+        assert open_body["issues"][0]["external_id"] == "qtwin-io/founderos-api#issue/42"
+        assert open_body["issues"][0]["repository_full_name"] == "qtwin-io/founderos-api"
+        assert open_body["pull_requests"][0]["external_id"] == (
+            "qtwin-io/founderos-api#pull/7"
+        )
+        assert open_body["pull_requests"][0]["repository_full_name"] == (
+            "qtwin-io/founderos-api"
+        )
+
+        assert all_response.status_code == 200, all_response.text
+        assert all_response.json()["counts"] == {"issues": 2, "pull_requests": 2}
+        assert merged_response.status_code == 200, merged_response.text
+        assert merged_response.json()["counts"] == {"issues": 0, "pull_requests": 1}
     finally:
         await _cleanup_normalization_fixture(marker)
 

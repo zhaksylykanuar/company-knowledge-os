@@ -6,15 +6,18 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.db.canonical_models import SOURCE_RECORD_PROVIDER_GITHUB, Repository
 from app.db.event_models import SourceEvent
 from app.services.operator_output_sanitizer import inspect_operator_output
 from app.services.repository_portfolio import repository_portfolio_catalog
 
+INVENTORY_CANONICAL_REPOSITORIES = "canonical_repositories"
 INVENTORY_SOURCE_EVENTS = "source_events"
 INVENTORY_DISCOVERY_SNAPSHOT = "github_discovery_snapshot"
 INVENTORY_LEGACY_SEED = "legacy_seed_catalog"
@@ -28,19 +31,40 @@ _FULL_NAME_RE = re.compile(r"^([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)(?:[#@/]|$)")
 async def load_repository_source_inventory(
     *,
     session: AsyncSession | None = None,
+    workspace_id: UUID | None = None,
     workspace_path: str | Path | None = None,
     raw_path: str | Path | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build the current repository inventory read model.
 
-    Precedence is SourceEvent/Postgres first, saved GitHub discovery snapshots
-    second, and the static repository portfolio only as a legacy seed fallback.
-    The function is read-only and never calls providers.
+    Precedence is canonical Repository/Postgres rows first when a workspace is
+    known, retained SourceEvent/Postgres compatibility second, saved GitHub
+    discovery snapshots third, and the static repository portfolio only as a
+    legacy seed fallback. The function is read-only and never calls providers.
     """
 
     safe_now = now or datetime.now(timezone.utc)
     legacy_items = _legacy_seed_items()
+    canonical_items: list[dict[str, Any]] = []
+    if session is not None and workspace_id is not None:
+        canonical_items = await _canonical_repository_items(
+            session,
+            workspace_id=workspace_id,
+        )
+    if canonical_items:
+        return _finalize(
+            _inventory_payload(
+                source_class=INVENTORY_CANONICAL_REPOSITORIES,
+                items=canonical_items,
+                legacy_items=legacy_items,
+                now=safe_now,
+                canonical_repo_count=len(canonical_items),
+                source_event_count=0,
+                discovery_snapshot=_empty_snapshot(),
+            )
+        )
+
     source_event_items: list[dict[str, Any]] = []
     if session is not None:
         source_event_items = await _source_event_items(session)
@@ -51,6 +75,7 @@ async def load_repository_source_inventory(
                 items=source_event_items,
                 legacy_items=legacy_items,
                 now=safe_now,
+                canonical_repo_count=0,
                 source_event_count=len(source_event_items),
                 discovery_snapshot=_empty_snapshot(),
             )
@@ -68,6 +93,7 @@ async def load_repository_source_inventory(
                 items=discovery_items,
                 legacy_items=legacy_items,
                 now=safe_now,
+                canonical_repo_count=0,
                 source_event_count=0,
                 discovery_snapshot=discovery_snapshot,
             )
@@ -76,12 +102,13 @@ async def load_repository_source_inventory(
     return _finalize(
         _inventory_payload(
             source_class=INVENTORY_LEGACY_SEED,
-            items=legacy_items,
-            legacy_items=legacy_items,
-            now=safe_now,
-            source_event_count=0,
-            discovery_snapshot=discovery_snapshot,
-        )
+        items=legacy_items,
+        legacy_items=legacy_items,
+        now=safe_now,
+        canonical_repo_count=0,
+        source_event_count=0,
+        discovery_snapshot=discovery_snapshot,
+    )
     )
 
 
@@ -110,10 +137,54 @@ def load_repository_source_inventory_snapshot(
             items=items,
             legacy_items=legacy_items,
             now=safe_now,
+            canonical_repo_count=0,
             source_event_count=0,
             discovery_snapshot=discovery_snapshot,
         )
     )
+
+
+async def _canonical_repository_items(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+) -> list[dict[str, Any]]:
+    rows = (
+        await session.execute(
+            select(Repository)
+            .where(Repository.workspace_id == workspace_id)
+            .where(Repository.provider == SOURCE_RECORD_PROVIDER_GITHUB)
+            .order_by(Repository.full_name.asc(), Repository.id.asc())
+            .limit(1000)
+        )
+    ).scalars()
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        full_name = _safe_full_name(row.full_name) or _safe_text(row.full_name)
+        repo_key = _safe_repo_part(row.name) or _safe_repo_part(
+            (full_name or row.external_id).rsplit("/", 1)[-1]
+        )
+        if repo_key is None:
+            continue
+        items.append(
+            {
+                "repo_key": repo_key,
+                "full_name": full_name or repo_key,
+                "provider_key": SOURCE_RECORD_PROVIDER_GITHUB,
+                "source_class": INVENTORY_CANONICAL_REPOSITORIES,
+                "visibility": _safe_visibility(row.visibility) or "unknown",
+                "archived": bool(row.archived),
+                "default_branch": _safe_text(row.default_branch),
+                "source_url": None,
+                "last_observed_at": _iso(
+                    row.last_activity_at or row.updated_at or row.created_at
+                ),
+                "source_event_count": 0,
+                "repo_role": "component_evidence",
+                "repo_not_jira_project": True,
+            }
+        )
+    return _dedupe_items(items)
 
 
 async def _source_event_items(session: AsyncSession) -> list[dict[str, Any]]:
@@ -253,13 +324,13 @@ def _legacy_seed_items() -> list[dict[str, Any]]:
         )
     return _dedupe_items(items)
 
-
 def _inventory_payload(
     *,
     source_class: str,
     items: Sequence[Mapping[str, Any]],
     legacy_items: Sequence[Mapping[str, Any]],
     now: datetime,
+    canonical_repo_count: int,
     source_event_count: int,
     discovery_snapshot: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -273,6 +344,7 @@ def _inventory_payload(
         "network_calls": False,
         "db_written": False,
         "source_priority": [
+            INVENTORY_CANONICAL_REPOSITORIES,
             INVENTORY_SOURCE_EVENTS,
             INVENTORY_DISCOVERY_SNAPSHOT,
             INVENTORY_LEGACY_SEED,
@@ -281,6 +353,7 @@ def _inventory_payload(
         "operational_repo_source": source_class,
         "operational_repo_count": len(operational_items),
         "operational_repo_count_class": _zero_nonzero(len(operational_items)),
+        "canonical_repo_count": canonical_repo_count,
         "source_event_repo_count": source_event_count,
         "discovery_repo_count": int(discovery_snapshot.get("repo_count") or 0),
         "legacy_seed_repo_count": len(legacy_seed_items),

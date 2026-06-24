@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,9 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.services.github_repository_read_service as github_repository_read_service
 from app.db.canonical_models import (
+    PULL_REQUEST_STATE_CLOSED,
+    PULL_REQUEST_STATE_MERGED,
+    PULL_REQUEST_STATE_OPEN,
     SOURCE_RECORD_PROVIDER_GITHUB,
+    TASK_PROVIDER_GITHUB,
+    PullRequest,
     Repository,
     SourceRecord,
+    Task,
 )
 from app.db.integration_models import (
     INTEGRATION_PROVIDER_GITHUB,
@@ -50,10 +57,14 @@ GITHUB_NORMALIZATION_PERSISTENCE_DEFERRED = (
 PERSISTENCE_MODE_PROJECTION = "projection"
 PERSISTENCE_MODE_CANONICAL = "canonical"
 SOURCE_RECORD_TYPE_REPOSITORY = "repository"
+SOURCE_RECORD_TYPE_ISSUE = "issue"
+SOURCE_RECORD_TYPE_PULL_REQUEST = "pull_request"
 
 GITHUB_NORMALIZATION_CANONICAL_WARNING = (
-    "GitHub repository normalization persisted to canonical SourceRecord/Repository tables."
+    "GitHub normalization persisted supported records to canonical tables."
 )
+
+_SAFE_REPO_PART_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 @dataclass(frozen=True)
@@ -70,12 +81,24 @@ class GitHubNormalizationError(ValueError):
         self.detail = detail
 
 
-@dataclass(frozen=True)
-class CanonicalRepositoryPersistenceCounts:
+@dataclass
+class CanonicalGitHubPersistenceCounts:
     source_records_created: int = 0
     source_records_updated: int = 0
     repositories_created: int = 0
     repositories_updated: int = 0
+    tasks_created: int = 0
+    tasks_updated: int = 0
+    pull_requests_created: int = 0
+    pull_requests_updated: int = 0
+
+    @property
+    def records_created(self) -> int:
+        return self.repositories_created + self.tasks_created + self.pull_requests_created
+
+    @property
+    def records_updated(self) -> int:
+        return self.repositories_updated + self.tasks_updated + self.pull_requests_updated
 
 
 async def normalize_github_sync_job_local(
@@ -125,24 +148,38 @@ async def normalize_github_sync_job_local(
         if not repositories:
             warnings.append(GITHUB_NORMALIZATION_NO_LOCAL_REPOSITORIES_WARNING)
 
+    local_records = _local_github_records(sync_job)
     issues: list[dict[str, Any]] = []
     pull_requests: list[dict[str, Any]] = []
     if options.include_issues:
-        warnings.append(GITHUB_NORMALIZATION_ISSUES_UNAVAILABLE_WARNING)
+        issues = [
+            build_normalized_issue(record)
+            for record in local_records["issues"]
+            if _is_issue_record(record)
+        ]
+        if not issues:
+            warnings.append(GITHUB_NORMALIZATION_ISSUES_UNAVAILABLE_WARNING)
     if options.include_pull_requests:
-        warnings.append(GITHUB_NORMALIZATION_PULL_REQUESTS_UNAVAILABLE_WARNING)
+        pull_requests = [
+            build_normalized_pull_request(record)
+            for record in local_records["pull_requests"]
+        ]
+        if not pull_requests:
+            warnings.append(GITHUB_NORMALIZATION_PULL_REQUESTS_UNAVAILABLE_WARNING)
 
     counts = {
         "repositories": len(repositories),
         "issues": len(issues),
         "pull_requests": len(pull_requests),
     }
-    persistence_counts = CanonicalRepositoryPersistenceCounts()
+    persistence_counts = CanonicalGitHubPersistenceCounts()
     if options.persist_if_supported:
-        persistence_counts = await _persist_canonical_repositories(
+        persistence_counts = await _persist_canonical_github_records(
             session,
             sync_job=sync_job,
             repositories=repositories,
+            issues=issues,
+            pull_requests=pull_requests,
             observed_at=started_at,
         )
     missing_requested_data = (
@@ -155,8 +192,8 @@ async def normalize_github_sync_job_local(
     )
     sync_job.finished_at = datetime.now(timezone.utc)
     sync_job.records_seen = sum(counts.values())
-    sync_job.records_created = persistence_counts.repositories_created
-    sync_job.records_updated = persistence_counts.repositories_updated
+    sync_job.records_created = persistence_counts.records_created
+    sync_job.records_updated = persistence_counts.records_updated
     sync_job.cursor_after = {
         "local_normalization_performed": True,
         "provider_sync_started": False,
@@ -220,37 +257,80 @@ def build_normalized_repository(repo: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def build_normalized_issue(record: Mapping[str, Any]) -> dict[str, Any]:
+    repository_full_name = _record_repository_full_name(record)
+    number = _safe_int(record.get("number"))
+    source_url = _work_item_source_url(record)
+    external_id = _work_item_external_id(
+        record,
+        repository_full_name=repository_full_name,
+        kind="issue",
+        number=number,
+        source_url=source_url,
+    )
+    metadata = _work_item_metadata(
+        record,
+        kind="issue",
+        repository_full_name=repository_full_name,
+        number=number,
+    )
     return {
         "entity_type": "task",
         "provider": INTEGRATION_PROVIDER_GITHUB,
-        "external_id": _safe_text(record.get("external_id")) or "unknown",
-        "number": record.get("number") if isinstance(record.get("number"), int) else None,
-        "title": _safe_text(record.get("title")),
-        "state": _safe_text(record.get("state")),
-        "source_url": _safe_url(record.get("source_url")),
-        "repository_full_name": _safe_text(record.get("repository_full_name")),
-        "created_at_source": _safe_text(record.get("created_at_source")),
-        "updated_at_source": _safe_text(record.get("updated_at_source")),
-        "evidence_refs": _safe_evidence_refs(record.get("evidence_refs")),
-        "metadata": _safe_metadata(record.get("metadata")),
+        "external_id": external_id,
+        "number": number,
+        "title": _safe_title(record.get("title"), f"GitHub issue {number or external_id}"),
+        "state": _issue_state(record.get("state")),
+        "source_url": source_url,
+        "repository_full_name": repository_full_name,
+        "created_at_source": _source_datetime_text(record, "created"),
+        "updated_at_source": _source_datetime_text(record, "updated"),
+        "evidence_refs": _work_item_evidence_refs(
+            record,
+            kind="github_issue",
+            external_id=external_id,
+            source_url=source_url,
+        ),
+        "metadata": metadata,
     }
 
 
 def build_normalized_pull_request(record: Mapping[str, Any]) -> dict[str, Any]:
+    repository_full_name = _record_repository_full_name(record)
+    number = _safe_int(record.get("number"))
+    source_url = _work_item_source_url(record)
+    external_id = _work_item_external_id(
+        record,
+        repository_full_name=repository_full_name,
+        kind="pull",
+        number=number,
+        source_url=source_url,
+    )
+    state = _pull_request_state(record)
+    metadata = _work_item_metadata(
+        record,
+        kind="pull_request",
+        repository_full_name=repository_full_name,
+        number=number,
+    )
     return {
         "entity_type": "pull_request",
         "provider": INTEGRATION_PROVIDER_GITHUB,
-        "external_id": _safe_text(record.get("external_id")) or "unknown",
-        "number": record.get("number") if isinstance(record.get("number"), int) else None,
-        "title": _safe_text(record.get("title")),
-        "state": _safe_text(record.get("state")),
-        "source_url": _safe_url(record.get("source_url")),
-        "repository_full_name": _safe_text(record.get("repository_full_name")),
-        "created_at_source": _safe_text(record.get("created_at_source")),
-        "updated_at_source": _safe_text(record.get("updated_at_source")),
-        "merged_at_source": _safe_text(record.get("merged_at_source")),
-        "evidence_refs": _safe_evidence_refs(record.get("evidence_refs")),
-        "metadata": _safe_metadata(record.get("metadata")),
+        "external_id": external_id,
+        "number": number,
+        "title": _safe_title(record.get("title"), f"GitHub PR {number or external_id}"),
+        "state": state,
+        "source_url": source_url,
+        "repository_full_name": repository_full_name,
+        "created_at_source": _source_datetime_text(record, "created"),
+        "updated_at_source": _source_datetime_text(record, "updated"),
+        "merged_at_source": _source_datetime_text(record, "merged"),
+        "evidence_refs": _work_item_evidence_refs(
+            record,
+            kind="github_pull_request",
+            external_id=external_id,
+            source_url=source_url,
+        ),
+        "metadata": metadata,
     }
 
 
@@ -280,7 +360,7 @@ def _append_normalization_log(
     current_logs: list[dict[str, Any]] | None,
     *,
     counts: dict[str, int],
-    persistence_counts: CanonicalRepositoryPersistenceCounts,
+    persistence_counts: CanonicalGitHubPersistenceCounts,
     persistence_mode: str,
     warnings: list[str],
     options: GitHubNormalizationOptions,
@@ -304,110 +384,597 @@ def _append_normalization_log(
     return logs
 
 
-async def _persist_canonical_repositories(
+async def _persist_canonical_github_records(
     session: AsyncSession,
     *,
     sync_job: SyncJob,
     repositories: list[dict[str, Any]],
+    issues: list[dict[str, Any]],
+    pull_requests: list[dict[str, Any]],
     observed_at: datetime,
-) -> CanonicalRepositoryPersistenceCounts:
-    source_records_created = 0
-    source_records_updated = 0
-    repositories_created = 0
-    repositories_updated = 0
+) -> CanonicalGitHubPersistenceCounts:
+    counts = CanonicalGitHubPersistenceCounts()
 
     for repo in repositories:
         external_id = _repository_external_id(repo)
-        payload = _source_record_payload(repo)
-        payload_hash = _stable_payload_hash(payload)
-        source_updated_at = _parse_optional_datetime(repo.get("last_activity_at"))
-
-        source_record = await session.scalar(
-            select(SourceRecord)
-            .where(SourceRecord.workspace_id == sync_job.workspace_id)
-            .where(SourceRecord.provider == SOURCE_RECORD_PROVIDER_GITHUB)
-            .where(SourceRecord.external_id == external_id)
-        )
-        if source_record is None:
-            source_record = SourceRecord(
-                workspace_id=sync_job.workspace_id,
-                provider=SOURCE_RECORD_PROVIDER_GITHUB,
-                external_id=external_id,
+        source_record, created = await _upsert_source_record(
+            session,
+            sync_job=sync_job,
+            external_id=external_id,
+            record_type=SOURCE_RECORD_TYPE_REPOSITORY,
+            payload=_source_record_payload(
                 record_type=SOURCE_RECORD_TYPE_REPOSITORY,
-                payload=payload,
-                payload_hash=payload_hash,
-                observed_at=observed_at,
-            )
-            session.add(source_record)
-            source_records_created += 1
-        else:
-            source_records_updated += 1
-
-        source_record.connection_id = sync_job.connection_id
-        source_record.record_type = SOURCE_RECORD_TYPE_REPOSITORY
-        source_record.source_url = _safe_url(repo.get("source_url"))
-        source_record.payload = payload
-        source_record.payload_hash = payload_hash
-        source_record.observed_at = observed_at
-        source_record.source_updated_at = source_updated_at
-        source_record.sync_job_id = sync_job.id
-        source_record.is_deleted = False
-
-        repository = await session.scalar(
-            select(Repository)
-            .where(Repository.workspace_id == sync_job.workspace_id)
-            .where(Repository.external_id == external_id)
+                normalized_key="normalized_repository",
+                record=repo,
+            ),
+            source_url=_safe_url(repo.get("source_url")),
+            source_updated_at=_parse_optional_datetime(repo.get("last_activity_at")),
+            observed_at=observed_at,
         )
-        if repository is None:
-            repository = Repository(
-                workspace_id=sync_job.workspace_id,
-                provider=SOURCE_RECORD_PROVIDER_GITHUB,
-                external_id=external_id,
-                name=_repository_name(repo),
-                full_name=_repository_full_name(repo),
-            )
-            session.add(repository)
-            repositories_created += 1
+        _ = source_record
+        if created:
+            counts.source_records_created += 1
         else:
-            repositories_updated += 1
+            counts.source_records_updated += 1
+        _, repository_created = await _upsert_repository(
+            session,
+            sync_job=sync_job,
+            repo=repo,
+            external_id=external_id,
+        )
+        if repository_created:
+            counts.repositories_created += 1
+        else:
+            counts.repositories_updated += 1
 
-        repository.provider = SOURCE_RECORD_PROVIDER_GITHUB
-        repository.name = _repository_name(repo)
-        repository.full_name = _repository_full_name(repo)
-        repository.default_branch = _safe_text(repo.get("default_branch"))
-        repository.visibility = _repository_visibility(repo.get("visibility"))
-        repository.archived = bool(repo.get("archived"))
-        repository.source_url = _safe_url(repo.get("source_url"))
-        repository.last_activity_at = source_updated_at
-        repository.repo_metadata = _repository_metadata(repo)
+    for issue in issues:
+        external_id = _work_item_external_id_from_normalized(issue)
+        source_updated_at = _parse_optional_datetime(issue.get("updated_at_source"))
+        source_record, created = await _upsert_source_record(
+            session,
+            sync_job=sync_job,
+            external_id=external_id,
+            record_type=SOURCE_RECORD_TYPE_ISSUE,
+            payload=_source_record_payload(
+                record_type=SOURCE_RECORD_TYPE_ISSUE,
+                normalized_key="normalized_issue",
+                record=issue,
+            ),
+            source_url=_safe_url(issue.get("source_url")),
+            source_updated_at=source_updated_at,
+            observed_at=observed_at,
+        )
+        if created:
+            counts.source_records_created += 1
+        else:
+            counts.source_records_updated += 1
+        task_created = await _upsert_github_issue_task(
+            session,
+            sync_job=sync_job,
+            issue=issue,
+            source_record=source_record,
+            source_updated_at=source_updated_at,
+        )
+        if task_created:
+            counts.tasks_created += 1
+        else:
+            counts.tasks_updated += 1
 
-    return CanonicalRepositoryPersistenceCounts(
-        source_records_created=source_records_created,
-        source_records_updated=source_records_updated,
-        repositories_created=repositories_created,
-        repositories_updated=repositories_updated,
-    )
+    for pull_request in pull_requests:
+        repository, repository_created = await _ensure_repository_for_work_item(
+            session,
+            sync_job=sync_job,
+            record=pull_request,
+        )
+        if repository_created:
+            counts.repositories_created += 1
+        external_id = _work_item_external_id_from_normalized(pull_request)
+        source_updated_at = _parse_optional_datetime(pull_request.get("updated_at_source"))
+        source_record, created = await _upsert_source_record(
+            session,
+            sync_job=sync_job,
+            external_id=external_id,
+            record_type=SOURCE_RECORD_TYPE_PULL_REQUEST,
+            payload=_source_record_payload(
+                record_type=SOURCE_RECORD_TYPE_PULL_REQUEST,
+                normalized_key="normalized_pull_request",
+                record=pull_request,
+            ),
+            source_url=_safe_url(pull_request.get("source_url")),
+            source_updated_at=source_updated_at,
+            observed_at=observed_at,
+        )
+        if created:
+            counts.source_records_created += 1
+        else:
+            counts.source_records_updated += 1
+        pull_request_created = await _upsert_pull_request(
+            session,
+            sync_job=sync_job,
+            pull_request=pull_request,
+            repository=repository,
+        )
+        if pull_request_created:
+            counts.pull_requests_created += 1
+        else:
+            counts.pull_requests_updated += 1
+
+    return counts
 
 
 def _persistence_counts_payload(
-    counts: CanonicalRepositoryPersistenceCounts,
+    counts: CanonicalGitHubPersistenceCounts,
 ) -> dict[str, int]:
     return {
         "source_records_created": counts.source_records_created,
         "source_records_updated": counts.source_records_updated,
         "repositories_created": counts.repositories_created,
         "repositories_updated": counts.repositories_updated,
+        "tasks_created": counts.tasks_created,
+        "tasks_updated": counts.tasks_updated,
+        "pull_requests_created": counts.pull_requests_created,
+        "pull_requests_updated": counts.pull_requests_updated,
     }
 
 
-def _source_record_payload(repo: Mapping[str, Any]) -> dict[str, Any]:
+async def _upsert_source_record(
+    session: AsyncSession,
+    *,
+    sync_job: SyncJob,
+    external_id: str,
+    record_type: str,
+    payload: dict[str, Any],
+    source_url: str | None,
+    source_updated_at: datetime | None,
+    observed_at: datetime,
+) -> tuple[SourceRecord, bool]:
+    payload_hash = _stable_payload_hash(payload)
+    source_record = await session.scalar(
+        select(SourceRecord)
+        .where(SourceRecord.workspace_id == sync_job.workspace_id)
+        .where(SourceRecord.provider == SOURCE_RECORD_PROVIDER_GITHUB)
+        .where(SourceRecord.external_id == external_id)
+    )
+    created = source_record is None
+    if source_record is None:
+        source_record = SourceRecord(
+            workspace_id=sync_job.workspace_id,
+            provider=SOURCE_RECORD_PROVIDER_GITHUB,
+            external_id=external_id,
+            record_type=record_type,
+            payload=payload,
+            payload_hash=payload_hash,
+            observed_at=observed_at,
+        )
+        session.add(source_record)
+
+    source_record.connection_id = sync_job.connection_id
+    source_record.record_type = record_type
+    source_record.source_url = source_url
+    source_record.payload = payload
+    source_record.payload_hash = payload_hash
+    source_record.observed_at = observed_at
+    source_record.source_updated_at = source_updated_at
+    source_record.sync_job_id = sync_job.id
+    source_record.is_deleted = False
+    await session.flush()
+    return source_record, created
+
+
+async def _upsert_repository(
+    session: AsyncSession,
+    *,
+    sync_job: SyncJob,
+    repo: Mapping[str, Any],
+    external_id: str,
+) -> tuple[Repository, bool]:
+    repository = await session.scalar(
+        select(Repository)
+        .where(Repository.workspace_id == sync_job.workspace_id)
+        .where(Repository.external_id == external_id)
+    )
+    created = repository is None
+    if repository is None:
+        repository = Repository(
+            workspace_id=sync_job.workspace_id,
+            provider=SOURCE_RECORD_PROVIDER_GITHUB,
+            external_id=external_id,
+            name=_repository_name(repo),
+            full_name=_repository_full_name(repo),
+        )
+        session.add(repository)
+
+    repository.provider = SOURCE_RECORD_PROVIDER_GITHUB
+    repository.name = _repository_name(repo)
+    repository.full_name = _repository_full_name(repo)
+    repository.default_branch = _safe_text(repo.get("default_branch"))
+    repository.visibility = _repository_visibility(repo.get("visibility"))
+    repository.archived = bool(repo.get("archived"))
+    repository.source_url = _safe_url(repo.get("source_url"))
+    repository.last_activity_at = _parse_optional_datetime(repo.get("last_activity_at"))
+    repository.repo_metadata = _repository_metadata(repo)
+    await session.flush()
+    return repository, created
+
+
+async def _ensure_repository_for_work_item(
+    session: AsyncSession,
+    *,
+    sync_job: SyncJob,
+    record: Mapping[str, Any],
+) -> tuple[Repository, bool]:
+    repository_full_name = _safe_text(record.get("repository_full_name")) or "unknown"
+    repository = await session.scalar(
+        select(Repository)
+        .where(Repository.workspace_id == sync_job.workspace_id)
+        .where(Repository.full_name == repository_full_name)
+    )
+    if repository is not None:
+        return repository, False
+
+    repo = {
+        "external_id": repository_full_name,
+        "name": repository_full_name.rsplit("/", 1)[-1],
+        "full_name": repository_full_name,
+        "visibility": "private",
+        "source_url": _repository_url_from_full_name(repository_full_name),
+        "metadata": {
+            "source": "github_normalization_work_item",
+            "created_from_work_item": True,
+        },
+    }
+    return await _upsert_repository(
+        session,
+        sync_job=sync_job,
+        repo=repo,
+        external_id=repository_full_name,
+    )
+
+
+async def _upsert_github_issue_task(
+    session: AsyncSession,
+    *,
+    sync_job: SyncJob,
+    issue: Mapping[str, Any],
+    source_record: SourceRecord,
+    source_updated_at: datetime | None,
+) -> bool:
+    external_id = _work_item_external_id_from_normalized(issue)
+    task = await session.scalar(
+        select(Task)
+        .where(Task.workspace_id == sync_job.workspace_id)
+        .where(Task.source_provider == TASK_PROVIDER_GITHUB)
+        .where(Task.external_id == external_id)
+    )
+    created = task is None
+    if task is None:
+        task = Task(
+            workspace_id=sync_job.workspace_id,
+            source_provider=TASK_PROVIDER_GITHUB,
+            external_id=external_id,
+            title=_safe_title(issue.get("title"), f"GitHub issue {external_id}"),
+        )
+        session.add(task)
+
+    task.source_record_id = source_record.id
+    task.title = _safe_title(issue.get("title"), f"GitHub issue {external_id}")
+    task.description = _safe_text(issue.get("description"))
+    task.status = _issue_state(issue.get("state"))
+    task.source_url = _safe_url(issue.get("source_url"))
+    task.source_updated_at = source_updated_at
+    task.task_metadata = _task_metadata(issue)
+    await session.flush()
+    return created
+
+
+async def _upsert_pull_request(
+    session: AsyncSession,
+    *,
+    sync_job: SyncJob,
+    pull_request: Mapping[str, Any],
+    repository: Repository,
+) -> bool:
+    external_id = _work_item_external_id_from_normalized(pull_request)
+    row = await session.scalar(
+        select(PullRequest)
+        .where(PullRequest.workspace_id == sync_job.workspace_id)
+        .where(PullRequest.external_id == external_id)
+    )
+    created = row is None
+    if row is None:
+        row = PullRequest(
+            workspace_id=sync_job.workspace_id,
+            repository_id=repository.id,
+            external_id=external_id,
+            number=int(pull_request.get("number") or 0),
+            title=_safe_title(pull_request.get("title"), f"GitHub PR {external_id}"),
+            state=_pull_request_state(pull_request),
+        )
+        session.add(row)
+
+    row.repository_id = repository.id
+    row.number = int(pull_request.get("number") or 0)
+    row.title = _safe_title(pull_request.get("title"), f"GitHub PR {external_id}")
+    row.state = _pull_request_state(pull_request)
+    row.source_url = _safe_url(pull_request.get("source_url"))
+    row.created_at_source = _parse_optional_datetime(pull_request.get("created_at_source"))
+    row.updated_at_source = _parse_optional_datetime(pull_request.get("updated_at_source"))
+    row.merged_at_source = _parse_optional_datetime(pull_request.get("merged_at_source"))
+    row.pr_metadata = _pull_request_metadata(pull_request)
+    await session.flush()
+    return created
+
+
+def _source_record_payload(
+    *,
+    record_type: str,
+    normalized_key: str,
+    record: Mapping[str, Any],
+) -> dict[str, Any]:
     return _sanitize_payload(
         {
-            "record_type": SOURCE_RECORD_TYPE_REPOSITORY,
-            "normalized_repository": dict(repo),
-            "evidence_refs": repo.get("evidence_refs") or [],
+            "record_type": record_type,
+            normalized_key: dict(record),
+            "evidence_refs": record.get("evidence_refs") or [],
         }
     )
+
+
+def _local_github_records(sync_job: SyncJob) -> dict[str, list[Mapping[str, Any]]]:
+    cursor = sync_job.cursor_before if isinstance(sync_job.cursor_before, Mapping) else {}
+    local = cursor.get("local_github") if isinstance(cursor.get("local_github"), Mapping) else {}
+    github = cursor.get("github") if isinstance(cursor.get("github"), Mapping) else {}
+    candidates = (local, github, cursor)
+    return {
+        "issues": _first_record_list(candidates, "issues", "github_issues"),
+        "pull_requests": _first_record_list(
+            candidates,
+            "pull_requests",
+            "prs",
+            "github_pull_requests",
+        ),
+    }
+
+
+def _first_record_list(
+    candidates: tuple[Mapping[str, Any], ...],
+    *keys: str,
+) -> list[Mapping[str, Any]]:
+    for candidate in candidates:
+        for key in keys:
+            value = candidate.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, Mapping)]
+    return []
+
+
+def _is_issue_record(record: Mapping[str, Any]) -> bool:
+    if record.get("pull_request") is not None:
+        return False
+    entity_type = _safe_text(record.get("entity_type"))
+    if entity_type == "pull_request":
+        return False
+    return True
+
+
+def _record_repository_full_name(record: Mapping[str, Any]) -> str | None:
+    repository = record.get("repository")
+    candidates: list[Any] = [
+        record.get("repository_full_name"),
+        record.get("full_name"),
+        record.get("repository_name"),
+        record.get("source_url"),
+        record.get("html_url"),
+        record.get("web_url"),
+        record.get("url"),
+    ]
+    if isinstance(repository, Mapping):
+        candidates.extend(
+            [
+                repository.get("full_name"),
+                repository.get("name_with_owner"),
+                repository.get("html_url"),
+                repository.get("url"),
+            ]
+        )
+    for candidate in candidates:
+        full_name = _safe_full_name(candidate) or _github_full_name_from_url(candidate)
+        if full_name:
+            return full_name
+    return None
+
+
+def _work_item_source_url(record: Mapping[str, Any]) -> str | None:
+    for key in ("source_url", "html_url", "web_url", "url"):
+        url = _safe_url(record.get(key))
+        if url:
+            return url
+    return None
+
+
+def _work_item_external_id(
+    record: Mapping[str, Any],
+    *,
+    repository_full_name: str | None,
+    kind: str,
+    number: int | None,
+    source_url: str | None,
+) -> str:
+    explicit = _safe_text(record.get("external_id"), limit=255) or _safe_text(
+        record.get("id"),
+        limit=255,
+    )
+    if explicit and explicit != "unknown":
+        return explicit
+    if repository_full_name and number is not None:
+        return f"{repository_full_name}#{kind}/{number}"[:255]
+    return (source_url or f"unknown-github-{kind}")[:255]
+
+
+def _work_item_external_id_from_normalized(record: Mapping[str, Any]) -> str:
+    return _safe_text(record.get("external_id"), limit=255) or "unknown"
+
+
+def _work_item_metadata(
+    record: Mapping[str, Any],
+    *,
+    kind: str,
+    repository_full_name: str | None,
+    number: int | None,
+) -> dict[str, Any]:
+    metadata = _safe_metadata(record.get("metadata"))
+    metadata.update(
+        {
+            "github_object_type": kind,
+            "repository_full_name": repository_full_name,
+            "repository_external_id": repository_full_name,
+            "number": number,
+        }
+    )
+    return _sanitize_payload(metadata)
+
+
+def _task_metadata(issue: Mapping[str, Any]) -> dict[str, Any]:
+    metadata = _safe_metadata(issue.get("metadata"))
+    metadata.update(
+        {
+            "github_object_type": "issue",
+            "repository_full_name": _safe_text(issue.get("repository_full_name")),
+            "repository_external_id": _safe_text(issue.get("repository_full_name")),
+            "number": issue.get("number") if isinstance(issue.get("number"), int) else None,
+            "evidence_refs": issue.get("evidence_refs") or [],
+        }
+    )
+    return _sanitize_payload(metadata)
+
+
+def _pull_request_metadata(pull_request: Mapping[str, Any]) -> dict[str, Any]:
+    metadata = _safe_metadata(pull_request.get("metadata"))
+    metadata.update(
+        {
+            "github_object_type": "pull_request",
+            "repository_full_name": _safe_text(pull_request.get("repository_full_name")),
+            "repository_external_id": _safe_text(pull_request.get("repository_full_name")),
+            "number": (
+                pull_request.get("number")
+                if isinstance(pull_request.get("number"), int)
+                else None
+            ),
+            "evidence_refs": pull_request.get("evidence_refs") or [],
+        }
+    )
+    return _sanitize_payload(metadata)
+
+
+def _work_item_evidence_refs(
+    record: Mapping[str, Any],
+    *,
+    kind: str,
+    external_id: str,
+    source_url: str | None,
+) -> list[dict[str, Any]]:
+    refs = _safe_evidence_refs(record.get("evidence_refs"))
+    if refs:
+        return refs
+    return [
+        {
+            "kind": kind,
+            "source": SOURCE_RECORD_PROVIDER_GITHUB,
+            "ref": external_id,
+            "url": source_url,
+        }
+    ]
+
+
+def _source_datetime_text(record: Mapping[str, Any], prefix: str) -> str | None:
+    for key in (f"{prefix}_at_source", f"{prefix}_at", f"{prefix}At"):
+        text = _safe_text(record.get(key))
+        if text:
+            return text
+    return None
+
+
+def _issue_state(value: Any) -> str | None:
+    text = _safe_text(value)
+    if text is None:
+        return None
+    normalized = text.casefold()
+    if normalized in {"open", "closed"}:
+        return normalized
+    return None
+
+
+def _pull_request_state(record: Mapping[str, Any]) -> str:
+    if _safe_text(record.get("merged_at_source")) or _safe_text(record.get("merged_at")):
+        return PULL_REQUEST_STATE_MERGED
+    if record.get("merged") is True:
+        return PULL_REQUEST_STATE_MERGED
+    text = _safe_text(record.get("state"))
+    if text is None:
+        return PULL_REQUEST_STATE_OPEN
+    normalized = text.casefold()
+    if normalized in {
+        PULL_REQUEST_STATE_OPEN,
+        PULL_REQUEST_STATE_CLOSED,
+        PULL_REQUEST_STATE_MERGED,
+    }:
+        return normalized
+    return PULL_REQUEST_STATE_OPEN
+
+
+def _safe_int(value: Any) -> int | None:
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+def _safe_full_name(value: Any) -> str | None:
+    text = _safe_text(value)
+    if not text:
+        return None
+    parts = text.removesuffix(".git").split("/")
+    if len(parts) != 2:
+        return None
+    owner = _safe_repo_part(parts[0])
+    repo = _safe_repo_part(parts[1])
+    if owner and repo:
+        return f"{owner}/{repo}"
+    return None
+
+
+def _github_full_name_from_url(value: Any) -> str | None:
+    text = _safe_text(value)
+    if not text or "github.com" not in text:
+        return None
+    marker = "github.com/"
+    if marker not in text:
+        return None
+    path = text.split(marker, 1)[1].split("?", 1)[0].split("#", 1)[0]
+    parts = path.strip("/").split("/")
+    if len(parts) < 2:
+        return None
+    owner = _safe_repo_part(parts[0])
+    repo = _safe_repo_part(parts[1])
+    if owner and repo:
+        return f"{owner}/{repo}"
+    return None
+
+
+def _repository_url_from_full_name(full_name: str) -> str | None:
+    safe = _safe_full_name(full_name)
+    return f"https://github.com/{safe}" if safe else None
+
+
+def _safe_repo_part(value: Any) -> str | None:
+    text = _safe_text(value)
+    if not text:
+        return None
+    text = text.removesuffix(".git")
+    if "/" in text or not _SAFE_REPO_PART_RE.match(text):
+        return None
+    return text
 
 
 def _repository_metadata(repo: Mapping[str, Any]) -> dict[str, Any]:
@@ -422,9 +989,9 @@ def _repository_metadata(repo: Mapping[str, Any]) -> dict[str, Any]:
 
 def _repository_external_id(repo: Mapping[str, Any]) -> str:
     return (
-        _safe_text(repo.get("external_id"))
-        or _safe_text(repo.get("full_name"))
-        or _safe_text(repo.get("name"))
+        _safe_text(repo.get("external_id"), limit=255)
+        or _safe_text(repo.get("full_name"), limit=255)
+        or _safe_text(repo.get("name"), limit=255)
         or "unknown"
     )
 
@@ -480,8 +1047,12 @@ def _sanitize_payload(value: Any) -> Any:
     return str(value)[:1000]
 
 
-def _safe_text(value: Any) -> str | None:
-    return value.strip() if isinstance(value, str) and value.strip() else None
+def _safe_text(value: Any, *, limit: int = 1000) -> str | None:
+    return value.strip()[:limit] if isinstance(value, str) and value.strip() else None
+
+
+def _safe_title(value: Any, fallback: str) -> str:
+    return (_safe_text(value, limit=500) or fallback)[:500]
 
 
 def _safe_visibility(value: Any) -> str:
