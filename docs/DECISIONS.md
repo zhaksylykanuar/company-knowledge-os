@@ -489,6 +489,70 @@ Build rules for the canonical layer (FOS-002, incremental — CHUNK 1):
   abstraction now; extract it at the second connector (Jira/Gmail). The shared §6
   substrate makes that extraction cheap later.
 
+## DEC-029 - Lineage-2 Is Purged (Code, Tables, Docs)
+
+Decision (2026-06-24, branch `chore/purge-legacy`): the frozen Lineage-2
+generation is removed from the repo, leaving only the canonical GitHub spine
+(Lineage 1) + canonical §6 tables (DEC-028). Classification proof and full lists
+are in `docs/_audit/PURGE_AUDIT.md` (import-graph closure from canonical roots).
+
+Removed:
+
+- **Code (~139 modules):** the entities graph + identity satellites
+  (`graph_models`, `entity_*`), knowledge-graph/RAG (`knowledge_*`, `chunking`,
+  `extraction_processor`, `agents/*`), digest/inbox/telegram/founder-views,
+  gmail/drive/google/events/extraction/share-packs connectors+routers,
+  second-opinion, attention, jira, obsidian, declarations, status,
+  source-control + discovery, the legacy connector layer
+  (`connectors.github`, `source_control`), the legacy guard machinery, and the
+  static `/ui` (`app/api/ui.py`, `app/static/founder_ui.html`).
+- **Tables (27, migration `e1a2b3c4d5f6`):** the entities graph + the
+  knowledge/gmail/attention/second-opinion/share-pack/source-control/declaration/
+  status/extraction tables. The migration is intentionally irreversible.
+- **Tests (~150)** of the deleted code, plus negative-guard lines trimmed from the
+  9 spine API tests (all positive spine assertions kept).
+- **Scripts (55)** that imported deleted modules; **docs**: `docs/_archive/**`,
+  `docs/features/*`, `docs/runbooks/*`, `docs/ops/*`, `docs/security/*`,
+  `docs/decisions/*`, and stray standalone docs (architecture, data-model,
+  dev-env, obsidian-bridge, operator_runtime_setup, source-connectors, playbook,
+  github-integration-decision, index).
+
+Kept: canonical spine + `canonical_models` + identity/integration/action/audit
+models + the temporary substrate (DEC-030), the canonical doc set
+(`founderOS_MASTER_PLAYBOOK.md`, `EXECUTION_PLAN.md`, `PROGRESS.md`,
+`docs/{README,DECISIONS,ROADMAP,TODO,POST_MVP,CHANGELOG}.md`, `docs/_audit/*`),
+`CLAUDE.md`/`AGENTS.md`/`SECURITY_BASELINE.md`, and the Next.js `web/` shell.
+
+Verification: app boots; `alembic upgrade head` clean; `alembic check` drift
+28→12 (residual is pre-existing on the retained substrate); `ruff` clean;
+`pytest` 267 passed (github-first E2E green → spine intact); web `tsc`/`build`
+clean.
+
+Recovery: git tag **`pre-purge-20260624`** is the full restore point. Recover any
+file with `git restore --source pre-purge-20260624 -- <path>`. Historical
+migrations are retained.
+
+Supersession: **supersedes DEC-025** — the static `/ui` is retired now (not
+later); the product frontend is `web/`. **Partially supersedes DEC-021** —
+`docs/index.md` and the supporting/feature/runbook docs are removed; the
+canonical set + `docs/_audit/*` remain the documentation.
+
+## DEC-030 - source_events Is Temporary Substrate, Retires In FOS-009
+
+Decision: `source_events`, `normalized_activity_items`, and `ingested_events`
+(`app/db/event_models.py` + `IngestedEvent`), plus the
+`repository_source_inventory` / `repository_portfolio` bridge, are **retained as a
+temporary read-substrate**, not permanent canon. The canonical Brain/Repo-Audit
+(`company_brain_preview` → `repo_audit` → `repository_portfolio` →
+`repository_source_inventory`) reads `source_events` today, so dropping it now
+would break the spine.
+
+Retirement plan (FOS-009): when GitHub sync persists into the canonical
+`repositories`/`source_records` tables AND `repository_source_inventory` is
+repointed to read those instead of `source_events`, drop `source_events`,
+`normalized_activity_items`, and `ingested_events`. The goal remains a single
+lineage; this substrate simply dies one planned step later.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

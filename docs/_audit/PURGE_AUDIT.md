@@ -172,9 +172,31 @@ including legacy model files `agent_models`, `declaration_models`,
 This conflicts with the "do not touch spine tests" rule, so it is escalated, not
 guessed.
 
-## Status
+## Resolution (human decisions on #1–#5)
 
-ФАЗА 1 complete. SHARED set is **non-empty** (#1, #2, #5 are real spine
-couplings; #3, #4 are mixed-file/doc-test entanglements). Per ФАЗА 2, **STOP
-before any deletion** pending human decisions on #1–#5. No files deleted, no
-tables dropped. Recovery tag `pre-purge-20260624`.
+- **#1 source_events:** keep as temporary substrate, drop only entities-graph +
+  clean Lineage-2; retire source_events in FOS-009 → DEC-030.
+- **#2 models.py:** kept (AuditLog canonical); `IngestedEvent` retained with the
+  substrate (DEC-030).
+- **#3 /ui:** deleted now (superseded DEC-025); `web/` is the product frontend.
+- **#4 docs+tests:** non-canon docs deleted; `test_jira_operating_model` +
+  `test_stage13_local_launch` deleted; `test_ci_workflow_contract` +
+  `test_docs_navigation_integrity` trimmed to canonical scope.
+- **#5 spine tests vs legacy:** deleted `connectors.github` + `source_control`;
+  trimmed the moot negative-guard lines from the 9 spine tests (positive
+  assertions kept).
+
+## Deleted (final) + recovery
+
+- Code: ~139 `app/` modules. Tables: 27 (migration `e1a2b3c4d5f6`, irreversible).
+  Tests: ~150 deleted + 11 trimmed. Scripts: 55. Docs: `_archive/**`, `features/*`,
+  `runbooks/*`, `ops/*`, `security/*`, `decisions/*` + 9 stray standalone docs.
+- Retained substrate (DEC-030): `source_events`, `normalized_activity_items`,
+  `ingested_events`, `repository_source_inventory`, `repository_portfolio`.
+- Gates: app boots; `alembic upgrade head` clean; drift 28→12; `ruff` clean;
+  `pytest` 267 passed (github-first E2E green); web `tsc`/`build` clean.
+- **Recovery: tag `pre-purge-20260624`.** Restore a file with
+  `git restore --source pre-purge-20260624 -- <path>`; historical migrations kept.
+
+Decisions recorded: DEC-029 (purge), DEC-030 (substrate retirement), DEC-025
+superseded, DEC-021 partially superseded.
