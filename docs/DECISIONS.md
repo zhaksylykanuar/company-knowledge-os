@@ -557,6 +557,31 @@ repointed to read those instead of `source_events`, drop `source_events`,
 `normalized_activity_items`, and `ingested_events`. The goal remains a single
 lineage; this substrate simply dies one planned step later.
 
+## DEC-031 - Documentation Hygiene Rule
+
+Decision (2026-06-24): no stale control docs accumulate.
+
+- When a plan/status/instruction changes, the outdated version is **DELETED in the
+  same commit** — never kept "just in case".
+- **Exception — `docs/DECISIONS.md`:** decisions are not deleted, only marked
+  "Superseded by DEC-NNN" (history, not clutter).
+- **Canonical doc-set is fixed:** `founderOS_MASTER_PLAYBOOK.md`, `PROGRESS.md`,
+  `docs/DECISIONS.md`, `docs/ROADMAP.md`, `docs/TODO.md`, `docs/POST_MVP.md`,
+  `docs/CHANGELOG.md`, `docs/README.md`, `docs/_audit/*`. Anything outside this set
+  and not matching the playbook is a deletion candidate, not a co-resident.
+- New ideas outside current scope → one line in `docs/POST_MVP.md`, not a new file
+  and not code.
+
+Doc-role map (do not blur): `founderOS_MASTER_PLAYBOOK.md` = **what** to build
+(content canon, rare changes); `PROGRESS.md` = **where** we are (live status,
+updated every task); `docs/DECISIONS.md` = **why** (decision history). Playbook and
+PROGRESS must not contradict each other — divergence is a signal, not normal.
+
+Amends **DEC-029** "kept canonical set": `EXECUTION_PLAN.md` is removed from the
+canonical set and collapsed (it duplicated the chunk map now in `PROGRESS.md`, its
+driver-prompts are unused, and its rules were partly stale vs DEC-028). The
+canonical control trio is **PLAYBOOK + PROGRESS + DECISIONS**.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

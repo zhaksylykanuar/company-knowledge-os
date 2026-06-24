@@ -2,7 +2,7 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Сверено с реальным кодом аудитом от 2026-06-24 (ветка `chore/docs-consolidation`).
+> Текущая ветка `feat/platform-part2-computed-repo-brain` (purge `chore/purge-legacy` влит → `9b893cb`).
 
 ---
 
@@ -25,7 +25,7 @@ Chunks: 2 / 9
 Разбивка: **DONE = 5** · **PARTIAL = 15** · **MISSING = 3**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
-Для сравнения: `docs/TODO.md` помечает «done» ~15 задач **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook-схемы FOS-000..022 строго готово 4.
+Для сравнения: `docs/TODO.md` помечает «done» ~15 задач **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook-схемы FOS-000..022 строго готово 5.
 
 **Легенда статусов задачи:** `[ ]` todo · `[~]` in progress/partial · `[x]` done · `[!]` blocked
 
@@ -38,11 +38,11 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic upgrade head` | ✅ pass | 2026-06-24 | один head `e1a2b3c4d5f6`, current==head (purge drop-migration применена) |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-24 | **258 passed / 0 failed** after FOS-PURGE-01 (267 before deleting the 9 static UI artifact tests; 1818 before Lineage-2 purge) |
+| backend tests (`pytest`) | ✅ pass | 2026-06-24 | **259 passed / 0 failed** (чекап на дереве с FOS-008; 258 после FOS-PURGE-01; 1818 до Lineage-2 purge) |
 | `ruff` | ✅ pass | 2026-06-24 | `All checks passed!` (ruff 0.15.16) |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
 | frontend build | ✅ pass | 2026-06-24 | `next build` ок (7 routes), `tsc --noEmit` чисто |
-| `alembic check` (retained substrate) | ⚠️ pre-existing drift | 2026-06-24 | actual drift now 7 operations, all on `ingested_events`; pre-existing retained-substrate drift, retire/fix in FOS-009 / DEC-030; НЕ про канон |
+| `alembic check` (retained substrate) | ⚠️ pre-existing drift | 2026-06-24 | drift 6 operations, all on `ingested_events`; retained-substrate, retire/fix in FOS-009 / DEC-030; НЕ про канон |
 | **GitHub E2E (spine)** | ❌ fail (backend ✅) | 2026-06-24 | `test_github_first_backend_e2e` зелёный (спайн цел), но `is_live=false`; нет UI-flow; страниц `/connectors`,`/brain` нет |
 | **full main E2E** | ❌ fail | 2026-06-24 | «approved action → реальный GitHub issue» не доказан (issue-client замокан) |
 | prod smoke | ❓ unknown | — | деплой не выполнялся; Makefile/`make smoke` отсутствует |
@@ -103,7 +103,7 @@ DONE строго = есть код + проходящий тест/рабочи
 ### CHUNK 8 — Testing Gate + Deploy
 *Gate: launch gate зелёный; production URL работает; первый E2E в проде.*
 - [~] FOS-022 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; нет `make smoke`/Makefile и full-stack/prod smoke
-- [~] FOS-T — Full tests + frontend build — pytest 1805✅/4❌ (doc-contract); web build ✅
+- [~] FOS-T — Full tests + frontend build — pytest 259/0 (чекап 2026-06-24); web build ✅
 - [ ] FOS-D — Deploy (Railway) — не выполнялся
 
 ---
@@ -112,8 +112,7 @@ DONE строго = есть код + проходящий тест/рабочи
 
 - ~~[CHUNK 0] 4 doc-contract теста красные~~ — **РЕШЕНО (ШАГ A, 2026-06-24).** Починено doc-side (тесты не ослаблялись): вернул CI-секцию в README, lean `docs/playbook.md`, восстановил `docs/ops/jira-target-blueprint.md`, прилинковал guarded-operations, убрал legacy static-UI путь. pytest 1809/0. Коммит `394df7b`.
 
-- [CHUNK 1] **Фундамент собран «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B.** Канонические §6-таблицы (SourceRecord, EvidenceRef, NormalizedEntity, Repository, PullRequest, Task, Project, Briefing и т.д.) не существуют. ШАГ B (shape-equivalence) показал: `source_events`/`entities` **не сводятся переименованием** к §6 (другой grain, Integer vs uuid PK, нет workspace_id, payload в отдельной таблице, identity/graph-слой). Полный анализ — `docs/_audit/DOCS_AUDIT.md` → «Shape-Equivalence Analysis». Rename силой не делал.
-  нужно от человека: дана инструкция — сначала read-only диагностика «что чем нагружено» (нагружен ли entities-граф рабочим спайном), затем ветка A (§6 как единственная модель, старое → legacy) или B (ратифицировать существующую модель через DECISION). См. `docs/DECISIONS.md` ASK-2.
+- ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). source_events удержан до FOS-009 (DEC-030).
 
 - [SPINE] **GitHub E2E не закрыт по-настоящему.** Backend-smoke зелёный, но `is_live=false`, UI — scaffold. Рефакторинг по §21.4 ещё **запрещён** (gate CHUNK 3 не пройден).
 
@@ -121,6 +120,7 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-24` — **Read-only чекап + doc-гигиена (новая сессия).** Ветка `feat/platform-part2` (purge влит, 40 ahead of main / 0 behind), app/ 39 модулей, `canonical_models` + `/api/v1` на месте. Гейт перепрогнан на дереве с FOS-008: alembic head чист, ruff ✅, **pytest 259/0**, drift 6 (`ingested_events`), github-first E2E зелёный → FOS-008 закоммичен (`fc6b55d`). Установлено правило гигиены доков (DEC-031); `EXECUTION_PLAN.md` свёрнут (дубль chunk-map + неиспользуемые driver-промпты, частично устарел vs DEC-028). Канон управления = PLAYBOOK(что)+PROGRESS(где)+DECISIONS(почему). Аномалий нет; substrate `source_events` удержан до FOS-009.
 - `2026-06-24` — **FOS-008 canonical GitHub repository persistence.** `POST /api/v1/workspaces/{workspace_id}/github/sync-jobs/{sync_job_id}/normalize-local` сохраняет projection-only режим при `persist_if_supported=false`, а при `true` пишет GitHub repositories в canonical `SourceRecord`/`Repository` с idempotent upsert, sanitized payload, SyncJob counters/logs. `EvidenceRef`/issues/PRs не пишутся; retained substrate не тронут.
 - `2026-06-24` — **FOS-PURGE-01 final purge consistency cleanup.** Удалены leftover static UI HTML artifact и dedicated static UI test; local starter теперь открывает backend root, не `/ui`. Удержанный substrate `source_events`/`normalized_activity_items`/`ingested_events` остаётся до FOS-009. Актуальный `alembic check` drift: 7 operations, all on `ingested_events`; не чинить в этой задаче. Runtime namespace остаётся `/api/v1`.
 - `2026-06-24` — **Lineage-2 retired (purge, DEC-029).** Удалены entities-граф + identity-слой + knowledge-graph/RAG + digest/inbox/telegram/gmail/drive/extraction/share-packs/second-opinion/attention/jira/obsidian/source-control + legacy-коннекторы (`connectors.github`, `source_control`) + статичный `/ui` + их тесты/скрипты + non-canon доки. Дропнуто 27 таблиц (миграция `e1a2b3c4d5f6`, необратима). Удержан substrate `source_events`/`normalized_activity_items`/`ingested_events` (DEC-030, retire в FOS-009). Гейт: app boots, alembic head чист, drift now 7 operations on `ingested_events`, ruff ✅, pytest green, web build ✅, github-first E2E зелёный (спайн цел). Recovery tag `pre-purge-20260624`. Коммиты: eadd7d8 (код), 1d281e3 (таблицы), e83e5d2 (доки).
