@@ -371,3 +371,76 @@ migrations, tests, or config were changed.
 | Static `/ui` vs Next.js `web/` | Product frontend = Next.js `web/` (§8); legacy `founder_ui.html` (`/ui`) retired later → **DEC-025** (refines DEC-004/020) | `app/static/` page + `ui_page_router` in `app/main.py` vs `web/app/*` |
 | Post-MVP surfaces built before GitHub E2E | No-go / out of scope (§3.3/3.4, EXECUTION_PLAN #5/#6) → **DEC-026** (concretizes DEC-006/022) | telegram/digest/share-pack/second-opinion/role-view/jira-write/attention/meeting/knowledge-QA services in `app/services/` |
 | Genuinely ambiguous | Not decided → **ASK-1** (23rd model / missing `Person`), **ASK-2** (rename-migrate vs add-alongside foundation strategy) | §6 defines 22; `assignee_person_id`/`author_person_id` imply undefined Person |
+
+## Shape-Equivalence Analysis (FOS-002, ШАГ B — 2026-06-24)
+
+Goal of the gate: decide whether canonicalization can be done by **renaming**
+existing tables, or whether their shape diverges enough that a rename would be
+destructive. Verdict columns: **yes** = present, same meaning; **no** = absent;
+**other** = present under a different name/shape.
+
+### `source_events` (`SourceEvent`) ↔ `SourceRecord` (§6.7)
+
+| Canonical field (§6.7) | In code? | Type matches? |
+|---|---|---|
+| `id: uuid` | other — `id: Integer` autoincrement; external key is `source_event_id: str` | **no** (int vs uuid) |
+| `workspace_id: uuid` | **no** — no tenancy column anywhere | **no** |
+| `provider` (enum) | other — `source_system: str` (free) | partial |
+| `connection_id: uuid` | **no** | **no** |
+| `external_id: string` | other — `source_object_id: str` | partial (name + grain) |
+| `record_type: string` | other — split into `source_object_type` + `event_type` | partial |
+| `source_url` | yes | yes |
+| `payload: jsonb` (req) | **no** — only `raw_object_ref: str` pointer; payload lives in `ingested_events.payload` | **no** (separate table) |
+| `payload_hash: string` | **no** | **no** |
+| `observed_at: datetime` | other — `source_event_ts` (nullable) / `created_at` | partial |
+| `source_updated_at` | **no** | **no** |
+| `sync_job_id` | **no** | **no** |
+| `is_deleted: bool` | **no** | **no** |
+| `created_at` | yes | yes |
+| unique `(workspace_id, provider, external_id)` | **no** — unique is `(source_system, source_object_type, source_object_id, event_type, source_event_key)` | **no** |
+
+**Grain mismatch:** `SourceEvent` = one row **per event** (append-only event log);
+`SourceRecord` = one row **per external object** (upserted snapshot holding full
+payload + hash). Different cardinality, different purpose.
+
+### `entities` (`EntityRecord`) ↔ `NormalizedEntity` (§6.9)
+
+| Canonical field (§6.9) | In code? | Type matches? |
+|---|---|---|
+| `id: uuid` | other — `id: Integer`; external key `entity_id: str` | **no** |
+| `workspace_id: uuid` | **no** | **no** |
+| `entity_type` (enum) | yes `entity_type: str` (free) | partial |
+| `canonical_key` (req, unique per workspace) | other — `entity_id` (globally unique) is the key | **no** (uniqueness scope differs) |
+| `title: string` (req) | other — `canonical_name` | partial (rename) |
+| `status` | **no** | **no** |
+| `summary: text` | **no** | **no** |
+| `metadata: jsonb` | yes — `attrs` | yes (rename) |
+| `first_seen_at` | **no** | **no** |
+| `last_seen_at` | **no** | **no** |
+| `created_at` / `updated_at` | yes | yes |
+| (not in §6) | `canonical_entity_id`, `merge_status`, `merge_confidence`, run-id columns + satellite tables `entity_source_accounts`, `entity_aliases`, `entity_links` | extra identity/graph layer |
+
+**Grain mismatch:** `entities` is a knowledge-graph node with an identity/merge
+layer and three satellite tables; `NormalizedEntity` is a flat per-object snapshot.
+
+### `EvidenceRef` (§6.8 = table) vs current
+
+Currently `EvidenceRef` exists **only as a Pydantic schema** (`app/agents/schemas.py`)
+bound to the RAG chunking subsystem (`source_document_id`, `chunk_id`,
+`raw_object_ref`, `quote`) plus denormalized `evidence_refs` JSON arrays on many
+tables. Canonical §6.8 wants a **table** with `workspace_id`, `source_record_id`
+FK → `source_records` (req), `entity_id`, `quote`, `field_path`, `source_url`,
+`confidence`. No table to rename; its FK target (`source_records`) does not
+equivalently exist.
+
+### Verdict
+
+**NOT shape-equivalent.** Rename is not safe for `source_events` or `entities`
+(different grain, Integer→uuid PK break, no `workspace_id` tenancy, payload in a
+separate table, identity/graph layer). Per the FOS-002 directive's ШАГ B rule,
+this **stops before ШАГ C (rename migration)** and asks the human. The only
+non-destructive path is option (b): add new uuid-keyed, workspace-scoped canonical
+§6 tables **alongside** the existing event/graph tables (which stay as the
+compatibility substrate, consistent with DEC-013/DEC-015). Namespace `/v1` →
+`/api/v1` (DEC-023) is independent and not blocked, but is part of ШАГ C and is
+held pending the same go/no-go.

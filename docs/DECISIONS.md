@@ -462,3 +462,11 @@ These are genuinely ambiguous and are NOT resolved by the playbook alone:
   as compatibility substrate (extends DEC-013/DEC-015 projection mode)? This
   decision gates all of CHUNK 1–3 and the spine; it should be made before more
   FOS-002 work.
+  **Shape-equivalence finding (2026-06-24, FOS-002 ШАГ B):** option (a) is **not
+  viable by rename** — `source_events` and `entities` are not shape-equivalent to
+  §6 `SourceRecord`/`NormalizedEntity` (different grain, Integer vs uuid PK, no
+  `workspace_id` tenancy anywhere, payload in a separate `ingested_events` table,
+  plus an identity/graph layer). Full comparison tables in
+  `docs/_audit/DOCS_AUDIT.md` → "Shape-Equivalence Analysis". A forced rename would
+  be destructive. Awaiting human go/no-go on option (b) add-alongside before any
+  schema change.
