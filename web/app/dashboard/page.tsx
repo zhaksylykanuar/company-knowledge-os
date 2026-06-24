@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { CompanyBrainPanel } from "../../components/CompanyBrainPanel";
 import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWorkPanel";
 import { GitHubSyncControls } from "../../components/GitHubSyncControls";
 import { PageHeader } from "../../components/PageHeader";
@@ -45,7 +46,7 @@ export default function DashboardPage() {
           value={keyStatus}
         />
         <StatusCard
-          description="Local sync controls and canonical work are loaded below."
+          description="Local sync controls, Company Brain, and canonical work are loaded below."
           title="GitHub"
           value="Wired"
         />
@@ -63,6 +64,7 @@ export default function DashboardPage() {
       <GitHubSyncControls
         onSyncComplete={() => setOperationalWorkRefresh((current) => current + 1)}
       />
+      <CompanyBrainPanel refreshSignal={operationalWorkRefresh} />
       <GitHubOperationalWorkPanel refreshSignal={operationalWorkRefresh} />
     </>
   );

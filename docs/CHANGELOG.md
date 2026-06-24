@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added `GET /api/v1/workspaces/{workspace_id}/company-brain`, a read-only
+  deterministic Company Brain endpoint over canonical GitHub repositories,
+  issue/task records, pull requests, and `SourceRecord` source refs.
+- Added a dashboard Company Brain panel showing evidence-backed GitHub state,
+  summary counts, repositories, open issue/PR highlights, recent work, source
+  refs, and explicit no-live-provider/no-AI capability status.
+- Added backend and frontend tests for the Company Brain GitHub evidence state,
+  including empty state, canonical summary, evidence/source refs, ignored
+  retained `source_events`, and UI loading/missing/error states.
 - Added `POST /api/v1/workspaces/{workspace_id}/github/local-sync` as a compact
   product backend wrapper over existing manual SyncJob + local normalization
   behavior; it persists through the canonical local path and does not start live

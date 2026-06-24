@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 3 / FOS-012. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 4 / FOS-014. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,7 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` (currently CHUNK 3 / FOS-012).
+Next step: follow `../PROGRESS.md` (currently CHUNK 4 / FOS-014).
 
 Definition of Done:
 
@@ -57,7 +57,7 @@ Missing:
   spine proves the need.
 - Person ambiguity remains open as ASK-1.
 
-Next step: Company Brain UI over GitHub-first evidence; physical substrate drop remains a
+Next step: briefing UI and evidence drawer; physical substrate drop remains a
 later migration/cleanup task.
 
 Definition of Done:
@@ -81,6 +81,9 @@ Done:
   and guarded mocked GitHub issue execution.
 - Operational GitHub work read model exists for canonical issues/PRs:
   `/api/v1/workspaces/{workspace_id}/github/operational-work`.
+- Workspace-scoped Company Brain read model exists for deterministic canonical
+  GitHub repository/work/evidence state:
+  `/api/v1/workspaces/{workspace_id}/company-brain`.
 - Company Brain repo-audit read model remains available.
 - LLM paths are gated/off by default.
 
@@ -89,9 +92,9 @@ Missing:
 - Full GitHub OAuth/product connect flow.
 - Live GitHub sync/product OAuth execution path.
 - Persistent briefing models and evidence drawer workflow.
-- Company Brain product UI wiring.
 
-Next step: continue the GitHub-first product flow through Company Brain UI wiring.
+Next step: continue the GitHub-first product flow through briefing UI/evidence
+drawer wiring.
 
 Definition of Done:
 
@@ -103,16 +106,16 @@ Definition of Done:
 
 ## Phase 3 - Frontend Core
 
-Current status: minimal master frontend shell exists; dashboard GitHub read and
-local-sync controls are wired, while Company Brain/briefing/action UI surfaces
-remain incomplete.
+Current status: minimal master frontend shell exists; dashboard GitHub read,
+local-sync controls, and Company Brain state are wired, while briefing/action UI
+surfaces remain incomplete.
 
 Done:
 
 - Legacy static `/ui` has been removed; `web/` is the only product frontend
   shell to extend.
-- Company Brain/repo audit read models remain available through backend/API
-  surfaces; Company Brain product UI wiring is still pending.
+- Company Brain has a product dashboard panel backed by canonical GitHub
+  repositories/tasks/PRs and source refs.
 - Minimal Next.js + TypeScript app exists in `web/`.
 - App shell, sidebar, MVP placeholder pages, browser-local operator settings,
   and typed API client foundation exist.
@@ -120,19 +123,21 @@ Done:
   issue/task and PR sections with open/all/closed/merged filters.
 - Dashboard exposes honest GitHub local-sync controls over existing backend
   contracts and does not claim live OAuth/provider execution.
+- Dashboard surfaces deterministic Company Brain state with summary counts,
+  repositories, open issue/PR highlights, recent work, and source refs.
 - Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
 
-- Company Brain UI over GitHub-first evidence.
+- Briefing UI + evidence drawer.
 - Tailwind/shadcn or final product UI system.
 - Login page.
 - Workspace onboarding.
 - Product-grade loading/error/empty states.
 - Browser/product E2E coverage.
 
-Next step: FOS-012 wires Company Brain UI over GitHub-first canonical
-evidence/read models.
+Next step: FOS-014 wires the briefing UI and evidence drawer over the existing
+deterministic manual briefing backend.
 
 Definition of Done:
 
@@ -169,6 +174,9 @@ Done:
   operational work after success.
 - Dashboard UI reads canonical GitHub operational work and displays synced
   issues/tasks plus pull requests from the FOS-009 backend path.
+- Company Brain dashboard panel reads canonical GitHub repositories, issue/task
+  records, pull requests, and source refs without reading retained
+  `source_events` as primary truth.
 - Manual Founder Briefing v0 can return a deterministic, transient,
   evidence-aware briefing from local workspace GitHub signals.
 - Local ActionProposal approval foundation can store, approve, and reject
@@ -184,10 +192,10 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Company Brain over GitHub-first evidence.
+- Briefing UI + evidence drawer over GitHub-first evidence.
 - Full product frontend flow for the GitHub-first MVP path.
 
-Next step: FOS-012 Company Brain UI over GitHub-first evidence.
+Next step: FOS-014 briefing UI + evidence drawer.
 
 Definition of Done:
 

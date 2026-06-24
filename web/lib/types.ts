@@ -19,6 +19,74 @@ export type ApiFetchOptions = RequestInit & {
 
 export type GitHubOperationalWorkState = "open" | "closed" | "merged" | "all";
 
+export type CompanyBrainSourceRef = {
+  id: string;
+  kind: string;
+  source: string;
+  label: string;
+  url: string | null;
+  record_type: string;
+  record_id: string;
+};
+
+export type CompanyBrainSummary = {
+  repositories: number;
+  open_issues: number;
+  open_pull_requests: number;
+  closed_issues: number;
+  merged_pull_requests: number;
+};
+
+export type CompanyBrainRepository = {
+  id: string;
+  provider: "github";
+  external_id: string;
+  name: string;
+  full_name: string;
+  visibility: string | null;
+  archived: boolean;
+  source_url: string | null;
+  last_activity_at: string | null;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type CompanyBrainWorkItem = {
+  id: string;
+  type: "issue" | "pull_request";
+  external_id: string | null;
+  number: number | null;
+  title: string;
+  state: string | null;
+  repository_full_name: string | null;
+  repository_external_id: string | null;
+  source_url: string | null;
+  updated_at: string | null;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type CompanyBrainResponse = {
+  workspace_id: string;
+  mode: "github_first_canonical";
+  source: "canonical_github_company_brain";
+  summary: CompanyBrainSummary;
+  repositories: CompanyBrainRepository[];
+  work: {
+    issues: CompanyBrainWorkItem[];
+    pull_requests: CompanyBrainWorkItem[];
+    recent: CompanyBrainWorkItem[];
+  };
+  evidence: CompanyBrainSourceRef[];
+  capabilities: {
+    live_github_oauth: boolean;
+    live_provider_sync: boolean;
+    local_sync: boolean;
+    llm_briefing: boolean;
+  };
+  is_live: boolean;
+  llm_used: boolean;
+  warnings: string[];
+};
+
 export type GitHubConnectionStatusResponse = {
   provider: string;
   status: string;

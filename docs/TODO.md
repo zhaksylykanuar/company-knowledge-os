@@ -26,12 +26,13 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-07/FOS-009: done - local GitHub normalization persists supported issue/PR records into canonical `tasks`/`pull_requests`, exposes operational-work read model, and repoints repository inventory to canonical `repositories` before retained `source_events` fallback.
 - FOS-010: done - dashboard product controls read GitHub connection/local-sync state, run the supported local normalization backend path, report counts/warnings, and refresh canonical operational work without live OAuth/provider execution.
 - FOS-FE-02/FOS-011: done - dashboard surfaces canonical GitHub operational work with issue/task and PR sections, repository labels, and open/all/closed/merged filters.
+- FOS-012: done - dashboard surfaces deterministic Company Brain state from canonical GitHub repositories/tasks/PRs with source refs and explicit no-live-provider/no-AI capabilities.
 - FOS-BRF-01: done - deterministic transient manual Founder Briefing v0 added.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-012 - wire Company Brain UI over GitHub-first canonical evidence/read models.
+- Next task: FOS-014 - wire briefing UI and evidence drawer over the deterministic manual briefing backend.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

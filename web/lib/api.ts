@@ -6,6 +6,7 @@ import {
 import type {
   ApiErrorPayload,
   ApiFetchOptions,
+  CompanyBrainResponse,
   GitHubConnectionStatusResponse,
   GitHubLocalSyncRequest,
   GitHubLocalSyncResponse,
@@ -101,6 +102,20 @@ export async function fetchGitHubOperationalWork(
 ): Promise<GitHubOperationalWorkResponse> {
   return apiFetch<GitHubOperationalWorkResponse>(
     buildWorkspaceGitHubOperationalWorkPath(workspaceId, request),
+    options
+  );
+}
+
+export function buildWorkspaceCompanyBrainPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-brain`;
+}
+
+export async function fetchCompanyBrain(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<CompanyBrainResponse> {
+  return apiFetch<CompanyBrainResponse>(
+    buildWorkspaceCompanyBrainPath(workspaceId),
     options
   );
 }

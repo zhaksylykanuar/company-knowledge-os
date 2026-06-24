@@ -187,6 +187,11 @@ input {
   gap: 16px;
 }
 
+.company-brain {
+  display: grid;
+  gap: 16px;
+}
+
 .work-columns {
   display: grid;
   gap: 16px;
@@ -253,6 +258,22 @@ input {
 .source-link {
   color: var(--accent-text);
   font-weight: 700;
+}
+
+.source-ref-list {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.source-ref-list li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  list-style: none;
+  padding: 6px 8px;
 }
 
 .muted {
