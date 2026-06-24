@@ -113,7 +113,7 @@ KEEP) AND `IngestedEvent` (`ingested_events`, Lineage-2; FK target of
 `source_events`). Cannot `git rm`. Resolution depends on #1.
 
 **#3 — Mixed router file `app/api/ui.py`** (not in closure). Holds `page_router`
-(static `/ui` operator UI + `app/static/founder_ui.html`) AND `views_router`
+(static `/ui` operator UI + its dedicated HTML artifact) AND `views_router`
 (`/api/v1/founder/*` overview — Lineage-2). DEC-025 said retire `/ui` in a
 *separate later* task, not now.
 - Question: delete `/ui` now (overriding DEC-025's "later"), or keep the static
@@ -188,13 +188,18 @@ guessed.
 
 ## Deleted (final) + recovery
 
-- Code: ~139 `app/` modules. Tables: 27 (migration `e1a2b3c4d5f6`, irreversible).
-  Tests: ~150 deleted + 11 trimmed. Scripts: 55. Docs: `_archive/**`, `features/*`,
+- Code: ~139 `app/` modules plus the final leftover static UI artifact removed
+  by FOS-PURGE-01. Tables: 27
+  (migration `e1a2b3c4d5f6`, irreversible).
+  Tests: ~150 deleted + 11 trimmed, plus the final dedicated static UI artifact
+  test removed by FOS-PURGE-01. Scripts: 55. Docs: `_archive/**`, `features/*`,
   `runbooks/*`, `ops/*`, `security/*`, `decisions/*` + 9 stray standalone docs.
 - Retained substrate (DEC-030): `source_events`, `normalized_activity_items`,
   `ingested_events`, `repository_source_inventory`, `repository_portfolio`.
-- Gates: app boots; `alembic upgrade head` clean; drift 28→12; `ruff` clean;
-  `pytest` 267 passed (github-first E2E green); web `tsc`/`build` clean.
+- Gates: app boots; `alembic upgrade head` clean; `alembic check` still has
+  expected retained-substrate drift, now 7 operations all on `ingested_events`;
+  `ruff` clean; full pytest is 258 passed after FOS-PURGE-01; github-first E2E
+  green; web `tsc`/`build` clean.
 - **Recovery: tag `pre-purge-20260624`.** Restore a file with
   `git restore --source pre-purge-20260624 -- <path>`; historical migrations kept.
 

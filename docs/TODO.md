@@ -372,7 +372,7 @@ Acceptance criteria:
 - App shell, sidebar, placeholder MVP pages, API client, and local operator
   settings exist.
 - Frontend typecheck/build/lint checks pass.
-- Static `/ui` remains local/operator UI.
+- Legacy static `/ui` has been removed; product UI work stays in `web/`.
 
 Checks to run:
 

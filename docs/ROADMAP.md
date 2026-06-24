@@ -103,8 +103,10 @@ not wired yet.
 
 Done:
 
-- Static `/ui` exists and is useful for local/operator workflows.
-- Company Brain/repo audit and source/data views are visible in local UI.
+- Legacy static `/ui` has been removed; `web/` is the only product frontend
+  shell to extend.
+- Company Brain/repo audit read models remain available through backend/API
+  surfaces; product UI wiring is still pending.
 - Minimal Next.js + TypeScript app exists in `web/`.
 - App shell, sidebar, MVP placeholder pages, browser-local operator settings,
   and typed API client foundation exist.

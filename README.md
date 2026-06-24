@@ -17,8 +17,8 @@ Read in this order:
 ## Status
 
 - Backend: FastAPI, SQLAlchemy async, Alembic, Postgres, Redis, Pydantic.
-- Frontend: minimal Next.js shell under [`web/`](web/README.md), plus existing
-  local/operator static UI at `/ui`.
+- Frontend: minimal Next.js shell under [`web/`](web/README.md). The legacy
+  local/operator static UI has been removed; do not restore `/ui`.
 - Current implemented foundations include evidence-backed ingestion/extraction,
   source events, Company Brain preview/repo audit, workspace/GitHub/action
   backend foundations, guarded execution boundaries, and a broad pytest suite.

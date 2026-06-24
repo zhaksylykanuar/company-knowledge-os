@@ -4,6 +4,13 @@ Date: 2026-06-23
 Branch: `chore/docs-consolidation`
 Removal mode requested: `archive`
 
+Post-purge correction (2026-06-24): this file contains the original
+pre-consolidation audit plus later reconciliation notes. Current runtime truth
+after DEC-029/FOS-PURGE-01 is: API namespace is `/api/v1`; static `/ui` and its
+dedicated HTML/test artifact are removed; `source_events` /
+`normalized_activity_items` / `ingested_events` remain intentionally retained
+until FOS-009.
+
 ## Scope And Inputs
 
 Canonical incoming files found and read:
@@ -41,7 +48,7 @@ These are local/generated/export artifacts, not consolidation targets.
 | Database | SQLAlchemy model modules exist under `app/db/`; canonical identity, integration/sync, and action models now exist. |
 | Migrations | 25 tracked Alembic migration files under `migrations/versions/`. |
 | Frontend | Next.js shell exists under `web/`; current pages are dashboard, github, briefings, actions, settings, plus shared shell/components. |
-| Static UI | Existing local/operator static founder UI page (`founder_ui.html` under `app/static/`) remains, served at the `/ui` route. |
+| Static UI | Historical at audit time: static founder UI still existed. Current post-purge state: static `/ui` is removed; `web/` is the product frontend shell. |
 | Tests | 175 top-level `tests/test_*.py` files plus 3 eval tests were present in inventory. |
 | Docs | 52 tracked documentation/instruction files, 14,052 lines total before incoming canonical files. |
 
@@ -66,13 +73,11 @@ Current DB model families observed:
 
 Current API families observed:
 
-- MVP-ish workspace/GitHub/action/briefing routes under
-  `/v1/workspaces/{workspace_id}/...`.
-- Existing local founder/operator routes under `/v1/founder/...`,
-  `/v1/inbox`, `/v1/knowledge/...`, `/v1/digest/...`.
-- Compatibility Gmail/Drive request wrappers under `/v1/gmail/backfill` and
-  `/v1/drive/backfill`.
-- Local static UI routes `/`, `/ui`, `/overview`, `/status`, `/dev`.
+- Historical at audit time: MVP-ish workspace/GitHub/action/briefing routes were
+  under `/v1/...`; DEC-023 later migrated active runtime routes to `/api/v1/...`.
+- Historical at audit time: local founder/operator routes and static UI routes
+  still existed; DEC-029/FOS-PURGE-01 removed the static `/ui` surface and
+  Lineage-2 routers.
 
 Current frontend map observed:
 
@@ -214,8 +219,8 @@ Code is not changed by this documentation consolidation.
 
 | Area | Observed duplication/drift | Why it matters | Proposed human decision |
 |---|---|---|---|
-| UI surfaces | Static `/ui` local/operator UI and Next.js `web/` shell both exist. | Master wants one user-facing web product; static UI is still useful local/operator code. | Keep static UI as local/operator until product `web/` is wired; avoid treating it as the MVP product UI. |
-| API base paths | Incoming playbook says `/api/v1`; existing routes are mostly `/v1/...`. | Docs can overpromise a different API namespace. | Decide whether to adapt docs to current `/v1` during MVP or plan an `/api/v1` migration later. |
+| UI surfaces | Historical conflict: static `/ui` local/operator UI and Next.js `web/` shell both existed. | Master wants one user-facing web product. | Resolved by DEC-029/FOS-PURGE-01: static `/ui` removed; `web/` is the product frontend shell. |
+| API base paths | Historical conflict: incoming playbook says `/api/v1`; existing routes were mostly `/v1/...`. | Docs can overpromise a different API namespace. | Resolved by DEC-023: active runtime namespace is `/api/v1`. |
 | Source model naming | Playbook uses `SourceRecord`; repo has `IngestedEvent`, `SourceDocument`, `DocumentChunk`, `SourceEvent`. | Risk of duplicate source-of-truth tables if docs blindly follow playbook names. | Keep data-model reconciliation as bridge; do not add duplicate tables without explicit schema task. |
 | Entity model naming | Playbook uses `NormalizedEntity`; repo has `EntityRecord`, `NormalizedActivityItemRecord`, extracted task/risk/decision tables. | Docs can imply one canonical entity table while code has graph and activity projections. | Preserve reconciliation docs until schema contract is finalized. |
 | GitHub path | Playbook product flow says OAuth + sync; current code includes provider-token bridge, manual local sync job, normalization-local, mocked E2E. | Current implementation is safer but not full product OAuth E2E. | Keep staged bridge decision or explicitly choose OAuth migration. |
@@ -287,10 +292,10 @@ Planned merge targets:
 
 ## Human Decisions Needed
 
-- Decide later whether the public API namespace should remain `/v1` or migrate
-  toward playbook `/api/v1`.
-- Decide later when the Next.js `web/` app replaces static `/ui` as the primary
-  product surface.
+- API namespace question resolved by DEC-023: active runtime namespace is
+  `/api/v1`.
+- Static UI question resolved by DEC-029/FOS-PURGE-01: `web/` is the product
+  frontend shell and static `/ui` is removed.
 - Decide later whether `migrations/README` should remain as a placeholder.
 
 ## Next Consolidation Actions
@@ -326,7 +331,7 @@ date: `alembic upgrade head` ✅ (head `f5a6b7c8d9e0`) · `ruff` ✅ · frontend
 | FOS-005 | Sync service | PARTIAL | No generic `sync_service.py`/SourceRecord; per-provider `app/services/github_sync_job_service.py` |
 | FOS-006 | Normalization service | PARTIAL | No generic `normalization_service.py`/NormalizedEntity/EvidenceRef; `github_normalization_service.py` projects dicts |
 | FOS-007 | GitHub OAuth | PARTIAL | No OAuth start/callback (§7.5); PAT-bridge connection, token encrypted; `tests/test_github_provider_token_connection.py` green |
-| FOS-008 | GitHub sync repositories | DONE | `app/services/github_sync_job_service.py` + `/v1/.../github/repositories`; `tests/test_github_first_backend_e2e.py` (repos count==1) |
+| FOS-008 | GitHub sync repositories | DONE | `app/services/github_sync_job_service.py` + `/api/v1/.../github/repositories`; `tests/test_github_first_backend_e2e.py` (repos count==1) |
 | FOS-009 | GitHub sync issues + PRs | PARTIAL | PR projection only; issues empty with warning (`github_normalization_service.py:26-27`) |
 | FOS-010 | Connectors UI page | MISSING | No `web/app/connectors/page.tsx`; only stub `web/app/github/page.tsx` |
 | FOS-011 | Dashboard v0 | PARTIAL | `app/services/founder_overview.py`; `web/app/dashboard/page.tsx` stub, not wired to live data |
@@ -366,9 +371,9 @@ migrations, tests, or config were changed.
 
 | Drift | Verdict (playbook ref) | Where the conflict lives |
 |---|---|---|
-| API namespace `/v1` vs `/api/v1` | Canonical = `/api/v1` (§7.1) → **DEC-023**. `/api/v1` used nowhere; `/v1` everywhere | `app/main.py` + all `app/api/*.py` prefixes + `web/app/github/page.tsx` |
+| API namespace historical drift | Canonical = `/api/v1` (§7.1) → **DEC-023**. Resolved: active runtime routes now use `/api/v1`. | `app/main.py` + active routers/tests/web references |
 | SourceRecord vs source/event tables | Canonical = `SourceRecord`/`NormalizedEntity`/`EvidenceRef` (§6.7/6.9/6.8) → **DEC-024** | `app/db/event_models.py` (`source_events`), `graph_models.py` (`entities`), `source_models.py`, `models.py`; `EvidenceRef` only a Pydantic schema |
-| Static `/ui` vs Next.js `web/` | Product frontend = Next.js `web/` (§8); legacy `founder_ui.html` (`/ui`) retired later → **DEC-025** (refines DEC-004/020) | `app/static/` page + `ui_page_router` in `app/main.py` vs `web/app/*` |
+| Static UI vs Next.js `web/` | Product frontend = Next.js `web/` (§8); static `/ui` removed by DEC-029/FOS-PURGE-01. | `web/app/*` is the surviving product frontend shell |
 | Post-MVP surfaces built before GitHub E2E | No-go / out of scope (§3.3/3.4, EXECUTION_PLAN #5/#6) → **DEC-026** (concretizes DEC-006/022) | telegram/digest/share-pack/second-opinion/role-view/jira-write/attention/meeting/knowledge-QA services in `app/services/` |
 | Genuinely ambiguous | Not decided → **ASK-1** (23rd model / missing `Person`), **ASK-2** (rename-migrate vs add-alongside foundation strategy) | §6 defines 22; `assignee_person_id`/`author_person_id` imply undefined Person |
 

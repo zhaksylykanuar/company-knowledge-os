@@ -36,13 +36,13 @@ DONE строго = есть код + проходящий тест/рабочи
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
 | `alembic upgrade head` | ✅ pass | 2026-06-24 | один head `e1a2b3c4d5f6`, current==head (purge drop-migration применена) |
-| **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; tag `pre-purge-20260624` |
+| **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-24 | **267 passed / 0 failed** (после purge; было 1818 — удалены тесты Линии 2) |
+| backend tests (`pytest`) | ✅ pass | 2026-06-24 | **258 passed / 0 failed** after FOS-PURGE-01 (267 before deleting the 9 static UI artifact tests; 1818 before Lineage-2 purge) |
 | `ruff` | ✅ pass | 2026-06-24 | `All checks passed!` (ruff 0.15.16) |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
 | frontend build | ✅ pass | 2026-06-24 | `next build` ок (7 routes), `tsc --noEmit` чисто |
-| `alembic check` (retained substrate) | ⚠️ pre-existing drift | 2026-06-24 | drift 28→12; остаток — pre-existing на удерживаемом substrate (`ingested_events`/`source_events`, retire в FOS-009 / DEC-030); НЕ про канон |
+| `alembic check` (retained substrate) | ⚠️ pre-existing drift | 2026-06-24 | actual drift now 7 operations, all on `ingested_events`; pre-existing retained-substrate drift, retire/fix in FOS-009 / DEC-030; НЕ про канон |
 | **GitHub E2E (spine)** | ❌ fail (backend ✅) | 2026-06-24 | `test_github_first_backend_e2e` зелёный (спайн цел), но `is_live=false`; нет UI-flow; страниц `/connectors`,`/brain` нет |
 | **full main E2E** | ❌ fail | 2026-06-24 | «approved action → реальный GitHub issue» не доказан (issue-client замокан) |
 | prod smoke | ❓ unknown | — | деплой не выполнялся; Makefile/`make smoke` отсутствует |
@@ -72,11 +72,11 @@ DONE строго = есть код + проходящий тест/рабочи
 ### CHUNK 3 — GitHub E2E (SPINE) 🎯 критический milestone
 *Gate: пользователь подключает GitHub через UI → sync → данные в Dashboard и Brain.*
 - [~] FOS-007 — GitHub OAuth — нет OAuth start/callback (§7.5); соединение через PAT-bridge, токен шифруется. `tests/test_github_provider_token_connection.py` зелёный
-- [x] FOS-008 — GitHub sync repositories — `app/services/github_sync_job_service.py` + `/v1/.../github/repositories`; доказано `tests/test_github_first_backend_e2e.py` (repos count==1)
+- [x] FOS-008 — GitHub sync repositories — `app/services/github_sync_job_service.py` + `/api/v1/.../github/repositories`; доказано `tests/test_github_first_backend_e2e.py` (repos count==1)
 - [~] FOS-009 — GitHub sync issues + PRs — PR-проекция есть; issues возвращаются пустыми с warning (`github_normalization_service.py:26-27`)
 - [ ] FOS-010 — Connectors UI page — нет `web/app/connectors/page.tsx`; есть только stub `web/app/github/page.tsx` (41 строка)
 - [~] FOS-011 — Dashboard v0 — backend `app/services/founder_overview.py`; `web/app/dashboard/page.tsx` — stub (62 строки), не подключён к live-данным
-- [~] FOS-012 — Brain entity API + UI — API `app/api/company_brain.py` (`/v1/founder/company-brain`); страницы `web/app/brain` нет
+- [~] FOS-012 — Brain entity API + UI — API `app/api/company_brain.py` (`/api/v1/founder/company-brain`); страницы `web/app/brain` нет
 
 ### CHUNK 4 — Briefing MVP
 *Gate: пользователь генерирует briefing с evidence drawer.*
@@ -121,7 +121,8 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
-- `2026-06-24` — **Lineage-2 retired (purge, DEC-029).** Удалены entities-граф + identity-слой + knowledge-graph/RAG + digest/inbox/telegram/gmail/drive/extraction/share-packs/second-opinion/attention/jira/obsidian/source-control + legacy-коннекторы (`connectors.github`, `source_control`) + статичный `/ui` + их тесты/скрипты + non-canon доки. Дропнуто 27 таблиц (миграция `e1a2b3c4d5f6`, необратима). Удержан substrate `source_events`/`normalized_activity_items`/`ingested_events` (DEC-030, retire в FOS-009). Гейт: app boots, alembic head чист, drift 28→12, ruff ✅, pytest 267/0, web build ✅, github-first E2E зелёный (спайн цел). Recovery tag `pre-purge-20260624`. Коммиты: eadd7d8 (код), 1d281e3 (таблицы), e83e5d2 (доки).
+- `2026-06-24` — **FOS-PURGE-01 final purge consistency cleanup.** Удалены leftover static UI HTML artifact и dedicated static UI test; local starter теперь открывает backend root, не `/ui`. Удержанный substrate `source_events`/`normalized_activity_items`/`ingested_events` остаётся до FOS-009. Актуальный `alembic check` drift: 7 operations, all on `ingested_events`; не чинить в этой задаче. Runtime namespace остаётся `/api/v1`.
+- `2026-06-24` — **Lineage-2 retired (purge, DEC-029).** Удалены entities-граф + identity-слой + knowledge-graph/RAG + digest/inbox/telegram/gmail/drive/extraction/share-packs/second-opinion/attention/jira/obsidian/source-control + legacy-коннекторы (`connectors.github`, `source_control`) + статичный `/ui` + их тесты/скрипты + non-canon доки. Дропнуто 27 таблиц (миграция `e1a2b3c4d5f6`, необратима). Удержан substrate `source_events`/`normalized_activity_items`/`ingested_events` (DEC-030, retire в FOS-009). Гейт: app boots, alembic head чист, drift now 7 operations on `ingested_events`, ruff ✅, pytest green, web build ✅, github-first E2E зелёный (спайн цел). Recovery tag `pre-purge-20260624`. Коммиты: eadd7d8 (код), 1d281e3 (таблицы), e83e5d2 (доки).
 - `2026-06-24` — **FOS-002 готов (spine-subset §6, ветка A / DEC-028).** Добавлены канонические `source_records`/`evidence_refs`/`repositories`/`pull_requests`/`tasks` (`app/db/canonical_models.py`, uuid+workspace-scoped) + миграция `f6b7c8d9e0a1` + `tests/test_canonical_models.py` (9). `NormalizedEntity` отложен (решено по коду: нет GitHub-only читателя обобщённой сущности). CHUNK 1 gate зелёный: alembic upgrade head ✅, model tests ✅, encryption roundtrip ✅. pytest 1818/0, ruff ✅. `alembic check` ругается на pre-existing legacy drift (Линия 2), не на канон-таблицы. DONE 5/23, chunks 2/9.
 - `2026-06-24` — **FOS-002 диагностика (read-only): две параллельные линии.** Спайн (github sync/normalize/action/briefing/brain) НЕ читает/пишет `entities`-граф и `source_events` — идёт мимо, на `integration_models`+`action_models`+проекциях. Граф+identity-слой+`source_events` нагружают ТОЛЬКО старую Graphiti/knowledge-graph генерацию + frozen founder-views/digest/inbox (DEC-026). Карта «что чем нагружено» — `docs/_audit/DOCS_AUDIT.md` → «Load-Bearing Map». Случай «две генерации» → СТОП, вопрос человеку (ветка A: §6 расширяет спайн, граф→legacy / ветка B). Схема не менялась.
 - `2026-06-24` — **FOS-002 ШАГ A+B + namespace.** ШАГ A: 4 doc-contract теста починены doc-side → pytest 1809/0 (`394df7b`). Namespace `/v1`→`/api/v1` (DEC-023) выполнен: 660 замен в 65 файлах, ruff/pytest/tsc зелёные (`fix(api)` коммит). ШАГ B (shape-equivalence) gate: `source_events`/`entities` **НЕ эквивалентны** §6 по форме → СТОП перед rename, finding в DECISIONS/DOCS_AUDIT (`d757835`). Канонизация данных ждёт решения A/B (диагностика «что чем нагружено» → ветка). Код-модель пока не менялась.

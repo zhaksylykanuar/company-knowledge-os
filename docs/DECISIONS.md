@@ -30,13 +30,13 @@ backend foundation.
 
 Reason: this matches the master playbook and the existing repository.
 
-## DEC-004 - Current Static `/ui` Remains Local/Operator UI
+## DEC-004 - Static `/ui` Local/Operator UI (Superseded)
 
-Decision: keep the current static `/ui` as a local/operator interface.
+Decision: originally keep the static `/ui` as a local/operator interface.
 
-Implication: do not delete it and do not treat it as the final product frontend.
-It is useful for local evidence review, source diagnostics, Company Brain
-preview, and guarded operator flows.
+Superseded by DEC-029 and FOS-PURGE-01: the static `/ui` router and its
+dedicated HTML artifact are now removed. The product frontend is `web/`; do not
+restore or extend `/ui`.
 
 ## DEC-005 - Next.js Web App Comes Later As A Separate Slice
 
@@ -268,8 +268,8 @@ Consequences:
 ## DEC-020 - Frontend Shell Starts As Separate Next.js App
 
 Decision: FOS-FE-01 starts the product frontend as a separate `web/` Next.js
-and TypeScript app while keeping the existing static `/ui` as the local/operator
-interface.
+and TypeScript app. At the time of this decision the existing static `/ui`
+remained local/operator-only; DEC-029 and FOS-PURGE-01 later removed it.
 
 Rationale: the backend GitHub-first path is now covered, but the product UI
 needs a clean shell before wiring live backend panels. A separate `web/` app
@@ -279,8 +279,8 @@ Consequences:
 
 - `web/` owns the new App Shell, sidebar, placeholder MVP pages, API client, and
   browser-local operator settings.
-- Static `/ui` remains available for current local/operator workflows until a
-  deliberate replacement is scoped.
+- Static `/ui` is no longer available; local startup points to the backend root,
+  and product UI work remains in `web/`.
 - The frontend MVP uses local operator API key configuration through
   `X-FounderOS-API-Key`; production session login is deferred.
 - FOS-FE-01 does not add OAuth, provider calls, backend routes, migrations, or
@@ -335,8 +335,7 @@ Wrong-namespace files (all of them): `app/main.py` (`/v1/events` mount) and ever
 `app/api/*.py` declaring a prefix — `digest.py`, `ui.py`, `company_brain.py`,
 `gmail.py`, `google.py`, `extraction.py`, `actions.py`, `share_packs.py`,
 `briefings.py`, `drive.py`, `dev.py`, `github.py`, `workspaces.py`,
-`knowledge.py`. The Next.js shell also references the wrong path
-(`web/app/github/page.tsx`: "Reads /v1/workspaces/...").
+`knowledge.py`. The Next.js shell also referenced the old workspace path.
 
 Consequences:
 
@@ -345,11 +344,12 @@ Consequences:
 
 **Status — DONE (2026-06-24).** Migrated uniformly: 660 `/v1` → `/api/v1`
 replacements across 65 files (router prefixes, `inbox.py` inline routes,
-`main.py` events mount, link-emitting services, the static founder UI page,
-operator scripts, `web/`, and all test request paths). No external provider URL
-contains `/v1`, so none were affected; `/health` and the `/ui` page routes stay
-unversioned. Verified: `ruff` ✅, `pytest` 1809 passed ✅, route check shows no
-stray `/v1`, web `tsc` ✅. Done independently of the FOS-002 data decision (A/B).
+`main.py` events mount, link-emitting services, the former static founder UI
+page, operator scripts, `web/`, and all test request paths). No external
+provider URL contains `/v1`, so none were affected; `/health` stays unversioned.
+FOS-PURGE-01 later removed the legacy `/ui` file/test. Verified: `ruff` ✅,
+`pytest` 1809 passed ✅, route check shows no active stray `/v1`, web `tsc` ✅.
+Done independently of the FOS-002 data decision (A/B).
 
 ## DEC-024 - Canonical Source/Entity/Evidence Naming Is SourceRecord / NormalizedEntity / EvidenceRef
 
@@ -381,17 +381,14 @@ Consequences:
   parallel schemas as the source of truth.
 - No schema/code change during this audit.
 
-## DEC-025 - Next.js `web/` Is The Product Frontend; Static `/ui` Is Legacy
+## DEC-025 - Next.js `web/` Is The Product Frontend; Static `/ui` Removed
 
 Decision: per master playbook §8, the product frontend is the Next.js app in
-`web/`. The static founder UI page (`founder_ui.html` under `app/static/`, served
-at the `/ui` route) is **legacy/operator-only** and is marked for later removal
-once `web/` reaches parity.
+`web/`. The former static founder UI page, previously served at `/ui`, is
+removed and must not be restored.
 
-Drift note: this refines DEC-004/DEC-020. `/ui` stays available for current
-local/operator workflows (evidence review, source diagnostics, Company Brain
-preview, guarded ops), but it is not the MVP product surface and must not be
-extended. New product UI work goes only into `web/`.
+Drift note: this supersedes DEC-004/DEC-020. New product UI work goes only into
+`web/`; local/operator helpers should not point users to `/ui`.
 
 Consequences:
 
@@ -399,8 +396,9 @@ Consequences:
   `/jira`, `/gmail`, `/drive`, `/documents`, `/brain`, `/briefings`, `/actions`,
   `/repo-audit`, `/settings`). Currently only `dashboard`, `github`, `briefings`,
   `actions`, `settings` exist as stubs.
-- `/ui` is retired (not deleted) — removal is a post-spine cleanup task.
-- No code change now.
+- `/ui` is retired and deleted by FOS-PURGE-01.
+- `scripts/start_local.py` opens the backend root and notes that product UI
+  lives in `web/`.
 
 ## DEC-026 - Out-Of-Order Post-MVP Surfaces Are No-Go Until GitHub-First E2E
 
@@ -505,7 +503,8 @@ Removed:
   second-opinion, attention, jira, obsidian, declarations, status,
   source-control + discovery, the legacy connector layer
   (`connectors.github`, `source_control`), the legacy guard machinery, and the
-  static `/ui` (`app/api/ui.py`, `app/static/founder_ui.html`).
+  static `/ui` router plus its final leftover HTML artifact removed by
+  FOS-PURGE-01.
 - **Tables (27, migration `e1a2b3c4d5f6`):** the entities graph + the
   knowledge/gmail/attention/second-opinion/share-pack/source-control/declaration/
   status/extraction tables. The migration is intentionally irreversible.
@@ -523,17 +522,19 @@ models + the temporary substrate (DEC-030), the canonical doc set
 `docs/{README,DECISIONS,ROADMAP,TODO,POST_MVP,CHANGELOG}.md`, `docs/_audit/*`),
 `CLAUDE.md`/`AGENTS.md`/`SECURITY_BASELINE.md`, and the Next.js `web/` shell.
 
-Verification: app boots; `alembic upgrade head` clean; `alembic check` drift
-28→12 (residual is pre-existing on the retained substrate); `ruff` clean;
-`pytest` 267 passed (github-first E2E green → spine intact); web `tsc`/`build`
-clean.
+Verification: app boots; `alembic upgrade head` clean; `alembic check` has
+expected retained-substrate drift. Current FOS-PURGE-01 check reports 7
+operations, all on `ingested_events`; this remains intentionally unfixed until
+FOS-009. `ruff` clean; full pytest is 258 passed after deleting the 9 static UI
+artifact tests (github-first E2E green → spine intact); web `tsc`/`build` clean.
 
 Recovery: git tag **`pre-purge-20260624`** is the full restore point. Recover any
 file with `git restore --source pre-purge-20260624 -- <path>`. Historical
 migrations are retained.
 
-Supersession: **supersedes DEC-025** — the static `/ui` is retired now (not
-later); the product frontend is `web/`. **Partially supersedes DEC-021** —
+Supersession: **supersedes DEC-025** — the static `/ui` is retired and the
+leftover static HTML/test were removed in FOS-PURGE-01; the product frontend is
+`web/`. **Partially supersedes DEC-021** —
 `docs/index.md` and the supporting/feature/runbook docs are removed; the
 canonical set + `docs/_audit/*` remain the documentation.
 
