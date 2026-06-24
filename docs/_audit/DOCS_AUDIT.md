@@ -442,5 +442,61 @@ this **stops before ШАГ C (rename migration)** and asks the human. The only
 non-destructive path is option (b): add new uuid-keyed, workspace-scoped canonical
 §6 tables **alongside** the existing event/graph tables (which stay as the
 compatibility substrate, consistent with DEC-013/DEC-015). Namespace `/v1` →
-`/api/v1` (DEC-023) is independent and not blocked, but is part of ШАГ C and is
-held pending the same go/no-go.
+`/api/v1` (DEC-023) is independent and not blocked — **done 2026-06-24**.
+
+## Load-Bearing Map (FOS-002 diagnostics — 2026-06-24)
+
+Read-only check of whether the GitHub MVP spine reads/writes the `entities`
+graph + identity satellites + `source_events`, or routes around them. Finding:
+**the repo has two parallel data lineages; the MVP spine routes entirely around
+the graph/event lineage.**
+
+### Lineage 1 — GitHub MVP spine (recent, green-tested, canonical direction)
+
+- **Tables:** `users`, `workspaces`, `memberships`, `integration_connections`,
+  `sync_jobs`, `action_proposals`, `action_executions`.
+- **Services:** `github_connection_service`, `github_sync_job_service`,
+  `github_normalization_service` (projection-only — `persist_if_supported=False`,
+  "persistent graph upsert is deferred"), `github_repository_read_service`,
+  `action_proposal_service`, `founder_briefing_service` (transient),
+  `company_brain_preview` (reads `.local` filesystem + `repo_audit`, no DB graph).
+- **Routers:** `app/api/{github,actions,briefings,workspaces,company_brain}.py` —
+  all import only `integration_models` / `action_models` / `identity_models`.
+- **Does NOT touch** `entities`, `entity_aliases`, `entity_links`,
+  `entity_source_accounts`, or `source_events`.
+- **Missing canonical §6 persistence:** `SourceRecord`, `NormalizedEntity`,
+  `EvidenceRef`, `Repository`, `PullRequest`, `Task`, `Project`, `Briefing` —
+  currently projected/transient, not persisted.
+
+### Lineage 2 — Graphiti / knowledge-graph generation (older, frozen post-MVP)
+
+- **Tables:** `ingested_events` → `source_events` → `normalized_activity_items`
+  → `entities` (+ `entity_aliases`, `entity_links`, `entity_source_accounts`,
+  merge layer) → `knowledge_scores`, `second_opinion_findings`.
+- **Services (load-bearing on the graph):** ingestion (`connector_ingestion`,
+  `source_ingestion`, `source_events`), `knowledge_graph(_view)`,
+  `graph_gardener`/`gardener_apply`, `graph_lift`/`graph_tree`,
+  `entity_identity`/`entity_resolution`, `evidence_graph_lift`/`_trail`/`_explorer`,
+  `second_opinion`, `metric_collector`, `jira_graph_mapping`/`github_graph_mapping`,
+  and the founder-views generation (`founder_overview`, `sales_view`, `team_view`,
+  `product_view`, `execution_view`, `command_center`, `role_views`), plus `digest`,
+  `telegram_founder_bot`, `declaration_agents`, `data_quality_center`,
+  `project_status_view`, `repository_source_inventory`, `connector_diagnostics`.
+- **Routers:** `app/api/inbox.py` (second-opinion / knowledge-graph / founder-views
+  / source-events / investor / sales / team / execution) and `app/api/digest.py`.
+- These are exactly the **DEC-026 frozen post-MVP surfaces**.
+
+### Implication for the A/B decision
+
+- The graph IS loaded (entities + identity layer both used) — but **only by
+  Lineage 2 (frozen post-MVP)**, not by the MVP spine.
+- `founder_overview` (legacy founder-views, served at `/api/v1/founder/overview`)
+  reads `entities` + `normalized_activity_items`; it is **not** the canonical web
+  dashboard (FOS-011), which is an unwired stub in `web/`.
+- So §6 canonical models map naturally onto **extending Lineage 1** (persist
+  `SourceRecord`/`NormalizedEntity`/`EvidenceRef`/`Repository`/`PullRequest`/`Task`/
+  `Project`/`Briefing` there), with **Lineage 2 marked legacy-to-retire**. This is
+  branch A applied to the spine and yields one canonical line. Branch B
+  ("ratify the existing model") is ambiguous because there are two existing models.
+- This is the "decide consciously which pieces are canonical vs legacy" point.
+  **STOPPED for human decision** (see ASK-2). No schema/model change made.
