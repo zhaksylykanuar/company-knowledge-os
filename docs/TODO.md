@@ -24,12 +24,13 @@ files, no unrelated edits, and focused checks first.
 - FOS-GH-05: done - manual GitHub SyncJob record API added without live sync.
 - FOS-GH-06/FOS-008: done - local GitHub normalization projection remains for manual SyncJobs, and `persist_if_supported=true` writes canonical repository records.
 - FOS-GH-07/FOS-009: done - local GitHub normalization persists supported issue/PR records into canonical `tasks`/`pull_requests`, exposes operational-work read model, and repoints repository inventory to canonical `repositories` before retained `source_events` fallback.
+- FOS-FE-02/FOS-011: done - dashboard surfaces canonical GitHub operational work with issue/task and PR sections, repository labels, and open/all/closed/merged filters.
 - FOS-BRF-01: done - deterministic transient manual Founder Briefing v0 added.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-010/FOS-011 - wire product UI/dashboard surfaces to the canonical GitHub backend path.
+- Next task: FOS-010 - build product GitHub connect/sync controls over the existing backend contracts without live OAuth/provider execution.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

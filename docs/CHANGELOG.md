@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Wired the dashboard to canonical GitHub operational work from
+  `/api/v1/workspaces/{workspace_id}/github/operational-work`, including
+  issue/task and PR sections, repository labels, filters, and loading/empty/error
+  states.
+- Added a lightweight frontend test command for the `web/` shell using
+  TypeScript compilation plus Node's built-in test runner.
 - Fast-forward merged the cleanup/FOS-008/doc-hygiene line into local `main`
   at `ef22360`; `main` is ahead of `origin/main` until an explicit push.
 - Collapsed the current control docs to

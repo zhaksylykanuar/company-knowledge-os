@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 3 / FOS-010/FOS-011. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 3 / FOS-010. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,7 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` (currently CHUNK 3 / FOS-010/FOS-011).
+Next step: follow `../PROGRESS.md` (currently CHUNK 3 / FOS-010).
 
 Definition of Done:
 
@@ -111,23 +111,25 @@ Done:
 - Legacy static `/ui` has been removed; `web/` is the only product frontend
   shell to extend.
 - Company Brain/repo audit read models remain available through backend/API
-  surfaces; product UI wiring is still pending.
+  surfaces; Company Brain product UI wiring is still pending.
 - Minimal Next.js + TypeScript app exists in `web/`.
 - App shell, sidebar, MVP placeholder pages, browser-local operator settings,
   and typed API client foundation exist.
+- Dashboard reads canonical GitHub operational work from the backend and shows
+  issue/task and PR sections with open/all/closed/merged filters.
 - Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
 
-- Backend wiring for the GitHub-first flow.
+- Product GitHub connect/sync controls.
 - Tailwind/shadcn or final product UI system.
 - Login page.
 - Workspace onboarding.
 - Product-grade loading/error/empty states.
 - Browser/product E2E coverage.
 
-Next step: after FOS-009, FOS-FE-02 wires the frontend to the backend
-GitHub-first flow.
+Next step: FOS-010 builds the product GitHub connect/sync controls over the
+existing backend contracts without live OAuth/provider execution.
 
 Definition of Done:
 
@@ -159,6 +161,8 @@ Done:
 - Local GitHub normalization can transform repository inventory into
   founderOS-compatible projection output and, when explicitly requested, persist
   repositories into canonical `source_records`/`repositories` without live sync.
+- Dashboard UI reads canonical GitHub operational work and displays synced
+  issues/tasks plus pull requests from the FOS-009 backend path.
 - Manual Founder Briefing v0 can return a deterministic, transient,
   evidence-aware briefing from local workspace GitHub signals.
 - Local ActionProposal approval foundation can store, approve, and reject
@@ -174,12 +178,13 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Dashboard with GitHub data.
+- Product connect/sync controls that let users create connection/sync records
+  from the frontend.
 - Company Brain over GitHub-first evidence.
-- Product frontend flow for the GitHub-first MVP path.
+- Full product frontend flow for the GitHub-first MVP path.
 
-Next step: FOS-010/FOS-011 product UI/dashboard wiring over the canonical
-GitHub backend path.
+Next step: FOS-010 product GitHub connect/sync controls over existing backend
+contracts.
 
 Definition of Done:
 

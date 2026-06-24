@@ -11,20 +11,20 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 1 — Data Foundation` ✅ закрыт (gate зелёный). Следующая реальная работа спайна — CHUNK 3.
-- **Task:** CHUNK 3 / FOS-010/FOS-011 — продолжить GitHub-first product flow после FOS-009: UI/connectors/dashboard wiring поверх канонического backend path.
-- **State:** ✅ FOS-009 завершён: local GitHub normalization умеет persist GitHub issues → canonical `tasks`, PRs → canonical `pull_requests`, оба через `source_records`; `/github/operational-work` отдаёт open/all/closed/merged read model; `repository_source_inventory` теперь предпочитает canonical `repositories`, а `source_events` остаётся compatibility fallback.
-- **Next action:** CHUNK 3 / FOS-010/FOS-011: подключить product UI/read surfaces к GitHub data. Live provider execution/external writes остаются gated.
+- **Task:** CHUNK 3 / FOS-010 — product GitHub connect/sync controls after FOS-011 dashboard read wiring.
+- **State:** ✅ FOS-011 dashboard read wiring завершён: `web/app/dashboard` now fetches canonical GitHub operational work from `/api/v1/workspaces/{workspace_id}/github/operational-work`, with open/all/closed/merged filters plus loading/empty/error states. Live provider execution/external writes remain gated.
+- **Next action:** CHUNK 3 / FOS-010: build product GitHub connect/sync controls over existing backend contracts without live OAuth/provider execution.
 
 ---
 
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks:  6 / 23   ▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱   26%   (строго DONE)
+Tasks:  7 / 23   ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱   30%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 6** · **PARTIAL = 14** · **MISSING = 3**.
+Разбивка: **DONE = 7** · **PARTIAL = 13** · **MISSING = 3**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
 Для сравнения: `docs/TODO.md` помечает «done» ~15 задач **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook-схемы FOS-000..022 строго готово 5.
@@ -43,7 +43,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | backend tests (`pytest`) | ✅ pass | 2026-06-24 | FOS-009 on `main`: **263 passed / 0 failed / 1 warning** |
 | `ruff` | ✅ pass | 2026-06-24 | FOS-009 on `main`: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-24 | post-merge on `main`: `typecheck`, `lint`, `next build` ok (7 routes) |
+| frontend build | ✅ pass | 2026-06-24 | FOS-011 on `main`: `npm test` 8 passed; `typecheck`, `lint`, `next build` ok (7 routes) |
 | docs navigation | ✅ pass | 2026-06-24 | FOS-009 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-24 | drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про канон |
 | **GitHub E2E (spine)** | ⚠️ backend smoke pass | 2026-06-24 | FOS-009 on `main`: `test_github_first_backend_e2e` 1 passed (спайн цел), но `is_live=false`; нет product UI-flow; страниц `/connectors`,`/brain` нет |
@@ -77,8 +77,8 @@ DONE строго = есть код + проходящий тест/рабочи
 - [~] FOS-007 — GitHub OAuth — нет OAuth start/callback (§7.5); соединение через PAT-bridge, токен шифруется. `tests/test_github_provider_token_connection.py` зелёный
 - [x] FOS-008 — GitHub sync repositories — `normalize-local` при `persist_if_supported=true` пишет canonical `source_records`/`repositories` idempotent-upsert; `persist_if_supported=false` остаётся projection-only. Доказано `tests/test_github_normalization_api.py` + `tests/test_github_first_backend_e2e.py`
 - [x] FOS-009 — GitHub sync issues + PRs — local normalization reads local `cursor_before.local_github` issue/PR records, persists issues as canonical `Task`, PRs as canonical `PullRequest` linked to `Repository`, exposes `/api/v1/workspaces/{workspace_id}/github/operational-work`, and repoints repository inventory to canonical `repositories` before retained `source_events` fallback. No live provider execution.
-- [ ] FOS-010 — Connectors UI page — нет `web/app/connectors/page.tsx`; есть только stub `web/app/github/page.tsx` (41 строка)
-- [~] FOS-011 — Dashboard v0 — backend `app/services/founder_overview.py`; `web/app/dashboard/page.tsx` — stub (62 строки), не подключён к live-данным
+- [~] FOS-010 — Connectors UI page — product connect/sync controls still missing; `web/app/github/page.tsx` remains scoped MVP scaffolding, no live OAuth/provider execution
+- [x] FOS-011 — Dashboard v0 — `web/app/dashboard/page.tsx` fetches canonical GitHub operational work via typed frontend API client, renders issue/task and PR sections, repository labels where present, open/all/closed/merged filters, and loading/empty/error states. No `source_events` direct read and no hardcoded current GitHub work.
 - [~] FOS-012 — Brain entity API + UI — API `app/api/company_brain.py` (`/api/v1/founder/company-brain`); страницы `web/app/brain` нет
 
 ### CHUNK 4 — Briefing MVP
@@ -123,6 +123,7 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-24` — **FOS-011 dashboard GitHub operational work wiring.** `web/app/dashboard` now reads `GET /api/v1/workspaces/{workspace_id}/github/operational-work` through the existing browser-local API base/key/workspace settings. Added typed frontend operational-work API helper, dashboard panel with open/all/closed/merged filters, separate issue/task and PR sections, repository labels, source links, and loading/empty/error states. Frontend tests cover URL building, response parsing, render success/empty/error/loading/filter states, and absence of old `source_events`/placeholder current truth. Checks: `npm test` 8 passed, `npm run typecheck` passed, `npm run lint` passed, `npm run build` passed, FOS-009 backend tests 20 passed, docs navigation 2 passed, `ruff` clean, tracked secret scan clean, full pytest **263 passed / 1 warning**.
 - `2026-06-24` — **FOS-009 canonical GitHub issues/PRs + substrate repoint.** `normalize-local` can persist local GitHub issue records into canonical `Task` rows and PR records into canonical `PullRequest` rows linked to `Repository`, with sanitized `SourceRecord` payloads and idempotent counters. Added backend read model `GET /api/v1/workspaces/{workspace_id}/github/operational-work` for open/all/closed/merged issues+PRs. `repository_source_inventory` now prefers canonical `repositories` for workspace reads; retained `source_events` remains read-only compatibility fallback, not dropped in this feature commit. Checks: focused GitHub/inventory tests 28 passed, docs navigation 2 passed, GitHub-first backend E2E 1 passed, `ruff` clean, tracked secret scan clean, full pytest **263 passed / 1 warning**.
 - `2026-06-24` — **Post-merge main order check + docs alignment.** `feat/platform-part2-computed-repo-brain` fast-forward merged into local `main` (`ef22360`); worktree clean; `main` ahead `origin/main` by 43 commits, push intentionally not done without explicit human command. Rechecked gates on `main`: docs navigation ✅, local markdown links ✅, `ruff` ✅, `pytest 259/0` ✅, web `typecheck/lint/build` ✅, `alembic head/current/upgrade` ✅, `alembic check` expected drift **7 ops on `ingested_events`**. Docs-control cleanup completed in canonical set only: PLAYBOOK(what)+PROGRESS(where)+DECISIONS(why), plus ROADMAP/TODO/POST_MVP/CHANGELOG as planning layer.
 - `2026-06-24` — **Read-only чекап + doc-гигиена (новая сессия).** Ветка `feat/platform-part2` (purge влит, 40 ahead of main / 0 behind), app/ 39 модулей, `canonical_models` + `/api/v1` на месте. Гейт перепрогнан на дереве с FOS-008: alembic head чист, ruff ✅, **pytest 259/0**, drift 6 (`ingested_events`), github-first E2E зелёный → FOS-008 закоммичен (`fc6b55d`). Установлено правило гигиены доков (DEC-031); `EXECUTION_PLAN.md` свёрнут (дубль chunk-map + неиспользуемые driver-промпты, частично устарел vs DEC-028). Канон управления = PLAYBOOK(что)+PROGRESS(где)+DECISIONS(почему). Аномалий нет; substrate `source_events` удержан до FOS-009.

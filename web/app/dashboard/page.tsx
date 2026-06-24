@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWorkPanel";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
 import { readOperatorConfig, resolveApiBaseUrl } from "../../lib/config";
@@ -42,21 +43,22 @@ export default function DashboardPage() {
           value={keyStatus}
         />
         <StatusCard
-          description="Connection, repositories, sync jobs, and normalization."
+          description="Canonical issues and pull requests are loaded below."
           title="GitHub"
-          value="Placeholder"
+          value="Wired"
         />
         <StatusCard
           description="Manual deterministic Founder Briefing v0."
           title="Briefing"
-          value="Placeholder"
+          value="Stub"
         />
         <StatusCard
           description="Proposal, approval, and execution states."
           title="Actions"
-          value="Placeholder"
+          value="Stub"
         />
       </section>
+      <GitHubOperationalWorkPanel />
     </>
   );
 }

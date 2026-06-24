@@ -14,27 +14,27 @@ export default function GitHubPage() {
         <StatusCard
           description="Reads /api/v1/workspaces/{workspace_id}/github/connection-status."
           title="Connection status"
-          value="Placeholder"
+          value="Backend"
         />
         <StatusCard
           description="Reads local repository inventory through the backend."
           title="Repositories"
-          value="Placeholder"
+          value="Backend"
         />
         <StatusCard
           description="Manual SyncJob records are local until worker scope exists."
           title="Sync jobs"
-          value="Placeholder"
+          value="Manual"
         />
         <StatusCard
-          description="Projection mode only; persistent graph upsert is deferred."
+          description="Canonical repository, issue, and PR persistence is visible on the dashboard."
           title="Local normalization"
-          value="Placeholder"
+          value="Canonical"
         />
       </section>
       <EmptyState
-        description="FOS-FE-02 will wire these panels to the existing backend APIs."
-        title="No frontend API calls are wired in this scaffold."
+        description="The dashboard now reads canonical GitHub operational work. These connection and sync controls remain scaffolded until product connect/sync scope."
+        title="GitHub flow controls are still local MVP scaffolding."
       />
     </>
   );

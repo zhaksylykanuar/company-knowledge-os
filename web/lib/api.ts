@@ -3,7 +3,12 @@ import {
   readOperatorConfig,
   resolveApiBaseUrl
 } from "./config";
-import type { ApiErrorPayload, ApiFetchOptions } from "./types";
+import type {
+  ApiErrorPayload,
+  ApiFetchOptions,
+  GitHubOperationalWorkResponse,
+  GitHubOperationalWorkState
+} from "./types";
 
 const API_KEY_HEADER = "X-FounderOS-API-Key";
 
@@ -67,6 +72,34 @@ export async function apiFetch<TResponse>(
   }
 
   return (await response.json()) as TResponse;
+}
+
+type GitHubOperationalWorkRequest = {
+  state?: GitHubOperationalWorkState;
+  limit?: number;
+};
+
+export function buildWorkspaceGitHubOperationalWorkPath(
+  workspaceId: string,
+  request: GitHubOperationalWorkRequest = {}
+): string {
+  const params = new URLSearchParams();
+  params.set("state", request.state ?? "open");
+  params.set("limit", String(request.limit ?? 100));
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/operational-work?${params.toString()}`;
+}
+
+export async function fetchGitHubOperationalWork(
+  workspaceId: string,
+  request: GitHubOperationalWorkRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<GitHubOperationalWorkResponse> {
+  return apiFetch<GitHubOperationalWorkResponse>(
+    buildWorkspaceGitHubOperationalWorkPath(workspaceId, request),
+    options
+  );
 }
 
 export { API_KEY_HEADER };
