@@ -14,6 +14,7 @@ if config.config_file_name is not None:
 
 from app.db.base import Base  # noqa: E402
 import app.db.action_models  # noqa: F401,E402
+import app.db.canonical_models  # noqa: F401,E402
 import app.db.agent_models  # noqa: F401,E402
 import app.db.attention_models  # noqa: F401,E402
 import app.db.declaration_models  # noqa: F401,E402

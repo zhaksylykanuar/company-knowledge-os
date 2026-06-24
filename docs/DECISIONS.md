@@ -345,7 +345,7 @@ Consequences:
 
 **Status — DONE (2026-06-24).** Migrated uniformly: 660 `/v1` → `/api/v1`
 replacements across 65 files (router prefixes, `inbox.py` inline routes,
-`main.py` events mount, link-emitting services, `app/static/founder_ui.html`,
+`main.py` events mount, link-emitting services, the static founder UI page,
 operator scripts, `web/`, and all test request paths). No external provider URL
 contains `/v1`, so none were affected; `/health` and the `/ui` page routes stay
 unversioned. Verified: `ruff` ✅, `pytest` 1809 passed ✅, route check shows no
@@ -451,6 +451,44 @@ Also: removed the literal legacy static-UI path from `docs/DECISIONS.md` and
 Consequence: `pytest` is fully green (1809 passed). The fix is docs-only; no test
 assertion, app code, migration, or workflow was changed.
 
+## DEC-028 - Spine Lineage Is Canonical; Knowledge-Graph Lineage Is Frozen Legacy
+
+Decision (resolves ASK-2, 2026-06-24): the repo has **two parallel data lineages**
+(see `docs/_audit/DOCS_AUDIT.md` → "Load-Bearing Map"). We canonicalize on **Lineage
+1 (the GitHub MVP spine)** and freeze Lineage 2.
+
+- **Canonical = Lineage 1:** `users`/`workspaces`/`memberships`,
+  `integration_connections`, `sync_jobs`, `action_proposals`, `action_executions`,
+  **plus new canonical §6 tables added to this lineage** (this task).
+- **Frozen legacy = Lineage 2:** `entities` (+ `entity_aliases`, `entity_links`,
+  `entity_source_accounts`, merge layer), `source_events`,
+  `normalized_activity_items`, the knowledge-graph/identity services, and the
+  founder-views/digest/inbox/telegram surfaces. **Do not develop. Do not delete
+  now.** Retirement is a separate post-MVP task, taken only after the canonical
+  layer covers what those surfaces need.
+
+Build rules for the canonical layer (FOS-002, incremental — CHUNK 1):
+
+- Add **only the spine-critical §6 subset now**: `SourceRecord` (§6.7),
+  `EvidenceRef` (§6.8), `Repository` (§6.12), `PullRequest` (§6.13), `Task`
+  (§6.11). All uuid-keyed and workspace-scoped, matching the
+  `integration_models`/`action_models` conventions.
+- **No two live lines:** the spine persists ONLY into these new canonical tables.
+  It must not write to `source_events`/`entities`; those stay touched only by
+  frozen Lineage-2 code.
+- **`NormalizedEntity` (§6.9) DEFERRED** — decided from the code: no GitHub-only
+  spine reader needs a generalized entity. `company_brain_preview` (FOS-012 Brain)
+  reads `.local` + `repo_audit` (filesystem), the canonical web dashboard is an
+  unwired stub, and the spine reads `Repository`/`PullRequest`/`Task` directly.
+  Revisit when the canonical `/api/v1/.../brain/entities` API is actually built.
+- **`Project`/`Briefing`/`BriefingItem`/`MessageThread`/`DriveFile`/`Document`/
+  `Goal`/`Insight` deferred** to their chunks; `Person` not built (post-MVP, ASK-1).
+  `Task.project_id`/`assignee_person_id` and `PullRequest.author_person_id` are
+  nullable uuids with no FK yet (forward-compatible).
+- **Generic connector framework (FOS-004/005/006) deferred:** no speculative
+  abstraction now; extract it at the second connector (Jira/Gmail). The shared §6
+  substrate makes that extraction cheap later.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
@@ -460,7 +498,9 @@ These are genuinely ambiguous and are NOT resolved by the playbook alone:
   `NormalizedEntity.entity_type` includes `person`, and `Task.assignee_person_id`
   / `PullRequest.author_person_id` reference a Person that §6 never defines. Is
   the 23rd model an intended standalone `Person`, or is the count off by one?
-- **ASK-2 — Foundation reconciliation strategy.** To close the canonical-naming
+- **ASK-2 — Foundation reconciliation strategy. ✅ RESOLVED → DEC-028** (branch A,
+  narrowed: §6 extends the spine lineage, knowledge-graph lineage frozen legacy).
+  Original framing kept for context: To close the canonical-naming
   gap (DEC-024), do we (a) rename/migrate existing tables to canonical
   (`source_events`→`source_records`, `entities`→`normalized_entities`, add
   `evidence_refs`), or (b) add canonical tables alongside and keep existing ones
