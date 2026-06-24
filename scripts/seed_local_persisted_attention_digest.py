@@ -551,8 +551,8 @@ async def execute_seed(
             "metadata": digest.get("metadata", {}),
         },
         "next_steps": {
-            "persisted_attention_preview_path": "/v1/digest/persisted-attention",
-            "delivery_draft_create_path": "/v1/digest/persisted-attention/delivery-draft",
+            "persisted_attention_preview_path": "/api/v1/digest/persisted-attention",
+            "delivery_draft_create_path": "/api/v1/digest/persisted-attention/delivery-draft",
             "delivery_flow": (
                 "preview digest, create delivery draft, approve, check readiness, "
                 "create delivery intention, review, check gate, then run bounded test send"

@@ -11,7 +11,7 @@ def test_sources_ui_renders_connector_diagnostics_wizard() -> None:
     html = (ROOT / "app" / "static" / "founder_ui.html").read_text(encoding="utf-8")
     for marker in (
         "connectorDiagBlock",
-        "/v1/founder/connectors/diagnostics",
+        "/api/v1/founder/connectors/diagnostics",
         "CONNECTOR_DIAGS",
         "missing env vars (names only)",
         "Setup wizard",

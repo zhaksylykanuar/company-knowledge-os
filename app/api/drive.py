@@ -8,7 +8,7 @@ from app.events.schemas import EventEnvelope
 from app.services.raw_storage import raw_storage_root, safe_path_part, write_json, write_text
 from app.services.source_control import ACTION_BACKFILL, ACTION_PREVIEW_SYNC, request_source_action
 
-router = APIRouter(prefix="/v1/drive", tags=["drive"])
+router = APIRouter(prefix="/api/v1/drive", tags=["drive"])
 
 DRIVE_BACKFILL_DEFAULT_MAX_RESULTS = 10
 DRIVE_BACKFILL_MAX_RESULTS = 50
@@ -117,7 +117,7 @@ async def drive_backfill(
         "live_provider_ack_supplied": confirm_live_provider_execution is not None,
         "allow_production_operation": bool(allow_production_operation),
         "production_ack_supplied": confirm_production_operation is not None,
-        "legacy_route": "/v1/drive/backfill",
+        "legacy_route": "/api/v1/drive/backfill",
     }
     async with AsyncSessionLocal() as session:
         request = await request_source_action(

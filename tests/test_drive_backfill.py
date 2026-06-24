@@ -66,7 +66,7 @@ async def test_drive_backfill_route_records_preview_request_without_connector(
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "request_key": request_key,
                     "max_results": SAFE_DRIVE_LIMIT,
@@ -97,7 +97,7 @@ async def test_drive_backfill_route_records_preview_request_without_connector(
             "live_provider_ack_supplied": False,
             "allow_production_operation": False,
             "production_ack_supplied": False,
-            "legacy_route": "/v1/drive/backfill",
+            "legacy_route": "/api/v1/drive/backfill",
         }
         assert private_folder not in response.text
 
@@ -127,7 +127,7 @@ async def test_drive_backfill_route_maps_persist_to_backfill_without_ack_or_conn
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "request_key": request_key,
                     "max_results": 1,
@@ -161,7 +161,7 @@ async def test_drive_backfill_route_redacts_operator_acks(monkeypatch) -> None:
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "request_key": request_key,
                     "persist": "true",
@@ -194,7 +194,7 @@ async def test_drive_backfill_route_is_idempotent_by_request_key(monkeypatch) ->
     try:
         async with _client() as client:
             first = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "request_key": request_key,
                     "max_results": 1,
@@ -202,7 +202,7 @@ async def test_drive_backfill_route_is_idempotent_by_request_key(monkeypatch) ->
                 },
             )
             second = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "request_key": request_key,
                     "max_results": 1,
@@ -231,7 +231,7 @@ async def test_drive_backfill_route_rejects_invalid_limits_without_request(
     try:
         async with _client() as client:
             zero = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "request_key": f"drive-zero-{marker}",
                     "persist": "false",
@@ -239,7 +239,7 @@ async def test_drive_backfill_route_rejects_invalid_limits_without_request(
                 },
             )
             negative = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "request_key": f"drive-negative-{marker}",
                     "persist": "false",
@@ -247,7 +247,7 @@ async def test_drive_backfill_route_rejects_invalid_limits_without_request(
                 },
             )
             too_large = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "request_key": f"drive-limit-{marker}",
                     "persist": "false",

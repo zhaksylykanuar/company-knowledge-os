@@ -67,14 +67,14 @@ async def test_obsidian_bridge_status_disabled_missing_and_configured(
     await _ensure_tables()
     monkeypatch.setattr(settings, "enable_obsidian_bridge", False)
     async with _client() as client:
-        disabled = await client.get("/v1/knowledge/obsidian/status")
+        disabled = await client.get("/api/v1/knowledge/obsidian/status")
     assert disabled.status_code == 200
     assert disabled.json()["status"] == "disabled"
     assert disabled.json()["vault_path"] is None
 
     _enable_bridge(monkeypatch, None)
     async with _client() as client:
-        missing = await client.get("/v1/knowledge/obsidian/status")
+        missing = await client.get("/api/v1/knowledge/obsidian/status")
     assert missing.status_code == 200
     assert missing.json()["status"] == "missing_path"
     assert (
@@ -85,8 +85,8 @@ async def test_obsidian_bridge_status_disabled_missing_and_configured(
 
     _enable_bridge(monkeypatch, tmp_path)
     async with _client() as client:
-        configured = await client.get("/v1/knowledge/obsidian/status")
-        team = await client.get("/v1/knowledge/obsidian/status", params={"view": "team"})
+        configured = await client.get("/api/v1/knowledge/obsidian/status")
+        team = await client.get("/api/v1/knowledge/obsidian/status", params={"view": "team"})
     assert configured.status_code == 200
     assert configured.json()["status"] == "configured"
     assert configured.json()["vault_path_configured"] is True
@@ -279,12 +279,12 @@ async def test_obsidian_open_uris_and_preview_use_bridge_generator(
     try:
         await _seed_project(marker)
         async with _client() as client:
-            vault = await client.get("/v1/knowledge/obsidian/open-vault")
+            vault = await client.get("/api/v1/knowledge/obsidian/open-vault")
             node = await client.get(
-                "/v1/knowledge/obsidian/open-node/project%3Aproject-alpha"
+                "/api/v1/knowledge/obsidian/open-node/project%3Aproject-alpha"
             )
-            missing = await client.get("/v1/knowledge/obsidian/open-node/missing")
-            preview = await client.post("/v1/knowledge/export/obsidian-preview")
+            missing = await client.get("/api/v1/knowledge/obsidian/open-node/missing")
+            preview = await client.post("/api/v1/knowledge/export/obsidian-preview")
         assert vault.status_code == 200
         assert vault.json()["uri"] == obsidian_open_uri("FounderOS Knowledge Vault")
         assert node.status_code == 200
@@ -336,7 +336,7 @@ def test_obsidian_markdown_sanitizer_removes_secret_like_content() -> None:
 async def test_obsidian_bridge_ui_static_markers_present() -> None:
     html = Path("app/static/founder_ui.html").read_text(encoding="utf-8")
     assert "Obsidian Bridge" in html
-    assert "/v1/knowledge/obsidian/status" in html
-    assert "/v1/knowledge/obsidian/sync" in html
-    assert "/v1/knowledge/obsidian/open-vault" in html
+    assert "/api/v1/knowledge/obsidian/status" in html
+    assert "/api/v1/knowledge/obsidian/sync" in html
+    assert "/api/v1/knowledge/obsidian/open-vault" in html
     assert "Web graph preview fallback / debug" in html

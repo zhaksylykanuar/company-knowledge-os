@@ -207,9 +207,9 @@ async def test_sync_run_creates_receipt_endpoint_and_updates_watermark() -> None
         assert receipt["limit_applied"] == 2
         assert receipt["external_side_effect"] is False
         async with _client() as client:
-            ok = await client.get(f"/v1/founder/source-runs/{row.request_id}/receipt")
+            ok = await client.get(f"/api/v1/founder/source-runs/{row.request_id}/receipt")
             blocked = await client.get(
-                f"/v1/founder/source-runs/{row.request_id}/receipt",
+                f"/api/v1/founder/source-runs/{row.request_id}/receipt",
                 params={"view": "team"},
             )
         assert ok.status_code == 200
@@ -268,7 +268,7 @@ async def test_failed_run_receipt_is_sanitized_and_retry_is_safe() -> None:
         assert "stage18-secret-shaped-token-value" not in blob
         async with _client() as client:
             retry = await client.post(
-                f"/v1/founder/sources/github/retry/{row.request_id}",
+                f"/api/v1/founder/sources/github/retry/{row.request_id}",
                 json={
                     "request_key": f"stage18-retry-{marker}",
                     "requested_by": "founder",
@@ -338,7 +338,7 @@ async def test_completed_request_does_not_rerun_or_retry() -> None:
         assert result["status"] == "unchanged"
         async with _client() as client:
             retry = await client.post(
-                f"/v1/founder/sources/github/retry/{row.request_id}",
+                f"/api/v1/founder/sources/github/retry/{row.request_id}",
                 json={
                     "request_key": f"stage18-complete-retry-{marker}",
                     "requested_by": "founder",

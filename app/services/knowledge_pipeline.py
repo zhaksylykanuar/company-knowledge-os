@@ -79,9 +79,9 @@ async def ingest_text_and_process(
         "evidence_summary": evidence_summary,
         "extracted_items_preview": extracted_items_preview,
         "next_steps": {
-            "search": "GET /v1/knowledge/search?q=<query>",
-            "ask": "POST /v1/knowledge/ask",
-            "attention": "GET /v1/knowledge/attention",
+            "search": "GET /api/v1/knowledge/search?q=<query>",
+            "ask": "POST /api/v1/knowledge/ask",
+            "attention": "GET /api/v1/knowledge/attention",
             "export": (
                 "uv run python scripts/export_obsidian_vault.py "
                 "--refresh-scores --source-document-id "

@@ -348,7 +348,7 @@ async def test_orchestrator_sync_ingests_and_test_does_not_ingest_events() -> No
         assert state.input_watermark is not None
 
         async with _client() as client:
-            dq = await client.get("/v1/founder/data-quality")
+            dq = await client.get("/api/v1/founder/data-quality")
         assert dq.status_code == 200
         dq_blob = json.dumps(dq.json(), sort_keys=True)
         assert "event_payload_redacted" in dq_blob
@@ -384,7 +384,7 @@ async def test_normalization_failure_is_recorded_and_visible_in_data_quality() -
         assert result["normalization_errors"] == 1
 
         async with _client() as client:
-            dq = await client.get("/v1/founder/data-quality")
+            dq = await client.get("/api/v1/founder/data-quality")
         assert dq.status_code == 200
         categories = {issue["category"] for issue in dq.json()["issues"]}
         assert "normalization_failed" in categories
@@ -407,7 +407,7 @@ async def test_source_events_filters_and_role_redaction_for_stage11_events() -> 
             await session.commit()
         async with _client() as client:
             founder = await client.get(
-                "/v1/source-events",
+                "/api/v1/source-events",
                 params={
                     "source_type": "github",
                     "run_id": f"src_run_filter_{marker}",
@@ -416,14 +416,14 @@ async def test_source_events_filters_and_role_redaction_for_stage11_events() -> 
                 },
             )
             team = await client.get(
-                "/v1/source-events",
+                "/api/v1/source-events",
                 params={
                     "source_type": "github",
                     "run_id": f"src_run_filter_{marker}",
                     "view": "team",
                 },
             )
-            investor = await client.get("/v1/source-events", params={"view": "investor"})
+            investor = await client.get("/api/v1/source-events", params={"view": "investor"})
         assert founder.status_code == 200
         assert team.status_code == 200
         assert investor.status_code == 403

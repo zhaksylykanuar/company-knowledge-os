@@ -393,7 +393,7 @@ async def test_source_activity_digest_endpoint_returns_empty_digest(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity",
+            "/api/v1/digest/source-activity",
             params={
                 "start_at": "2120-01-01T00:00:00+00:00",
                 "end_at": "2120-01-02T00:00:00+00:00",
@@ -438,7 +438,7 @@ async def test_source_activity_digest_text_endpoint_returns_empty_plain_text(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity/text",
+            "/api/v1/digest/source-activity/text",
             params={
                 "start_at": "2124-01-01T00:00:00+00:00",
                 "end_at": "2124-01-02T00:00:00+00:00",
@@ -497,7 +497,7 @@ async def test_source_activity_digest_endpoint_filters_events_and_preserves_evid
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/source-activity",
+                "/api/v1/digest/source-activity",
                 params={
                     "start_at": "2121-01-01T00:00:00+00:00",
                     "end_at": "2121-01-02T00:00:00+00:00",
@@ -565,7 +565,7 @@ async def test_source_activity_digest_text_endpoint_filters_events_and_preserves
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/source-activity/text",
+                "/api/v1/digest/source-activity/text",
                 params={
                     "start_at": "2124-02-01T00:00:00+00:00",
                     "end_at": "2124-02-02T00:00:00+00:00",
@@ -622,7 +622,7 @@ async def test_source_activity_digest_text_endpoint_debug_evidence_includes_raw_
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/source-activity/text",
+                "/api/v1/digest/source-activity/text",
                 params={
                     "start_at": "2124-05-01T00:00:00+00:00",
                     "end_at": "2124-05-02T00:00:00+00:00",
@@ -650,7 +650,7 @@ async def test_source_activity_digest_endpoint_debug_triage_sets_metadata(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity",
+            "/api/v1/digest/source-activity",
             params={
                 "start_at": "2124-06-01T00:00:00+00:00",
                 "end_at": "2124-06-02T00:00:00+00:00",
@@ -674,7 +674,7 @@ async def test_source_activity_digest_endpoint_rejects_naive_window(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity",
+            "/api/v1/digest/source-activity",
             params={
                 "start_at": "2122-01-01T00:00:00",
                 "end_at": "2122-01-02T00:00:00+00:00",
@@ -695,7 +695,7 @@ async def test_source_activity_digest_text_endpoint_rejects_naive_window(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity/text",
+            "/api/v1/digest/source-activity/text",
             params={
                 "start_at": "2124-03-01T00:00:00",
                 "end_at": "2124-03-02T00:00:00+00:00",
@@ -716,7 +716,7 @@ async def test_source_activity_digest_endpoint_rejects_invalid_window_order(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity",
+            "/api/v1/digest/source-activity",
             params={
                 "start_at": "2122-01-02T00:00:00+00:00",
                 "end_at": "2122-01-01T00:00:00+00:00",
@@ -737,7 +737,7 @@ async def test_source_activity_digest_text_endpoint_rejects_invalid_window_order
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity/text",
+            "/api/v1/digest/source-activity/text",
             params={
                 "start_at": "2124-03-02T00:00:00+00:00",
                 "end_at": "2124-03-01T00:00:00+00:00",
@@ -758,7 +758,7 @@ async def test_source_activity_digest_endpoint_requires_api_key_when_auth_enable
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity",
+            "/api/v1/digest/source-activity",
             params={
                 "start_at": "2123-01-01T00:00:00+00:00",
                 "end_at": "2123-01-02T00:00:00+00:00",
@@ -780,7 +780,7 @@ async def test_source_activity_digest_text_endpoint_requires_api_key_when_auth_e
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/source-activity/text",
+            "/api/v1/digest/source-activity/text",
             params={
                 "start_at": "2124-04-01T00:00:00+00:00",
                 "end_at": "2124-04-02T00:00:00+00:00",
@@ -803,7 +803,7 @@ async def test_persisted_attention_digest_endpoint_returns_empty_read_model(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/persisted-attention",
+            "/api/v1/digest/persisted-attention",
             params={
                 "start_at": "2199-01-01T00:00:00+00:00",
                 "end_at": "2199-01-02T00:00:00+00:00",
@@ -836,7 +836,7 @@ async def test_persisted_attention_digest_text_endpoint_returns_empty_state(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/persisted-attention/text",
+            "/api/v1/digest/persisted-attention/text",
             params={
                 "start_at": "2199-02-01T00:00:00+00:00",
                 "end_at": "2199-02-02T00:00:00+00:00",
@@ -886,7 +886,7 @@ async def test_persisted_attention_digest_text_endpoint_renders_visible_sections
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/persisted-attention/text",
+                "/api/v1/digest/persisted-attention/text",
                 params={
                     "start_at": "2131-01-01T00:00:00+00:00",
                     "end_at": "2131-01-02T00:00:00+00:00",
@@ -934,7 +934,7 @@ async def test_persisted_attention_digest_endpoint_omits_evidence_refs_by_defaul
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/persisted-attention",
+                "/api/v1/digest/persisted-attention",
                 params={
                     "start_at": "2131-02-01T00:00:00+00:00",
                     "end_at": "2131-02-02T00:00:00+00:00",
@@ -988,7 +988,7 @@ async def test_persisted_attention_digest_endpoint_debug_evidence_filters_safe_r
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/persisted-attention",
+                "/api/v1/digest/persisted-attention",
                 params={
                     "start_at": "2131-03-01T00:00:00+00:00",
                     "end_at": "2131-03-02T00:00:00+00:00",
@@ -1049,7 +1049,7 @@ async def test_persisted_attention_digest_text_endpoint_debug_evidence_is_safe_f
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/persisted-attention/text",
+                "/api/v1/digest/persisted-attention/text",
                 params={
                     "start_at": "2131-04-01T00:00:00+00:00",
                     "end_at": "2131-04-02T00:00:00+00:00",
@@ -1087,7 +1087,7 @@ async def test_persisted_attention_digest_delivery_draft_endpoint_returns_empty_
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params={
                 "start_at": "2131-04-10T00:00:00+00:00",
                 "end_at": "2131-04-11T00:00:00+00:00",
@@ -1159,7 +1159,7 @@ async def test_persisted_attention_digest_delivery_draft_endpoint_renders_visibl
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-04-12T00:00:00+00:00",
                     "end_at": "2131-04-13T00:00:00+00:00",
@@ -1224,7 +1224,7 @@ async def test_persisted_attention_digest_delivery_draft_endpoint_debug_evidence
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-04-14T00:00:00+00:00",
                     "end_at": "2131-04-15T00:00:00+00:00",
@@ -1271,7 +1271,7 @@ async def test_persisted_attention_digest_delivery_draft_endpoint_requires_api_k
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params={
                 "start_at": "2131-04-16T00:00:00+00:00",
                 "end_at": "2131-04-17T00:00:00+00:00",
@@ -1294,14 +1294,14 @@ async def test_persisted_attention_digest_delivery_draft_endpoint_rejects_invali
         base_url="http://test",
     ) as client:
         naive = await client.get(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params={
                 "start_at": "2131-04-18T00:00:00",
                 "end_at": "2131-04-19T00:00:00+00:00",
             },
         )
         reversed_window = await client.get(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params={
                 "start_at": "2131-04-20T00:00:00+00:00",
                 "end_at": "2131-04-19T00:00:00+00:00",
@@ -1334,7 +1334,7 @@ async def test_persisted_attention_digest_delivery_draft_preview_remains_read_on
         base_url="http://test",
     ) as client:
         preview = await client.get(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params=params,
         )
 
@@ -1348,7 +1348,7 @@ async def test_persisted_attention_digest_delivery_draft_preview_remains_read_on
             base_url="http://test",
         ) as client:
             response = await client.get(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params=params,
             )
 
@@ -1382,7 +1382,7 @@ async def test_persisted_attention_digest_delivery_draft_post_persists_empty_dra
         base_url="http://test",
     ) as client:
         preview = await client.get(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params=params,
         )
 
@@ -1396,15 +1396,15 @@ async def test_persisted_attention_digest_delivery_draft_post_persists_empty_dra
             base_url="http://test",
         ) as client:
             created_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params=params,
             )
             repeated_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params=params,
             )
             retrieved_response = await client.get(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}",
             )
 
         assert created_response.status_code == 200
@@ -1488,7 +1488,7 @@ async def test_persisted_attention_digest_delivery_draft_post_persists_sections_
             base_url="http://test",
         ) as client:
             response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-08-05T00:00:00+00:00",
                     "end_at": "2131-08-06T00:00:00+00:00",
@@ -1564,7 +1564,7 @@ async def test_persisted_attention_digest_delivery_draft_post_debug_evidence_is_
             base_url="http://test",
         ) as client:
             response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-08-07T00:00:00+00:00",
                     "end_at": "2131-08-08T00:00:00+00:00",
@@ -1617,48 +1617,48 @@ async def test_persisted_attention_digest_delivery_draft_persisted_endpoints_req
         base_url="http://test",
     ) as client:
         post_response = await client.post(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params={
                 "start_at": "2131-08-09T00:00:00+00:00",
                 "end_at": "2131-08-10T00:00:00+00:00",
             },
         )
         get_response = await client.get(
-            "/v1/digest/delivery-drafts/ddraft_missing",
+            "/api/v1/digest/delivery-drafts/ddraft_missing",
         )
         approve_response = await client.post(
-            "/v1/digest/delivery-drafts/ddraft_missing/approve",
+            "/api/v1/digest/delivery-drafts/ddraft_missing/approve",
             json={"reviewer": "founder"},
         )
         reject_response = await client.post(
-            "/v1/digest/delivery-drafts/ddraft_missing/reject",
+            "/api/v1/digest/delivery-drafts/ddraft_missing/reject",
             json={"reviewer": "founder"},
         )
         status_response = await client.get(
-            "/v1/digest/delivery-drafts/ddraft_missing/approval-status",
+            "/api/v1/digest/delivery-drafts/ddraft_missing/approval-status",
         )
         readiness_response = await client.get(
-            "/v1/digest/delivery-drafts/ddraft_missing/delivery-readiness",
+            "/api/v1/digest/delivery-drafts/ddraft_missing/delivery-readiness",
         )
         intention_post_response = await client.post(
-            "/v1/digest/delivery-drafts/ddraft_missing/delivery-intention",
+            "/api/v1/digest/delivery-drafts/ddraft_missing/delivery-intention",
         )
         intention_get_response = await client.get(
-            "/v1/digest/delivery-intentions/dint_missing",
+            "/api/v1/digest/delivery-intentions/dint_missing",
         )
         telegram_plan_response = await client.get(
-            "/v1/digest/delivery-intentions/dint_missing/telegram-plan",
+            "/api/v1/digest/delivery-intentions/dint_missing/telegram-plan",
         )
         telegram_preflight_response = await client.get(
-            "/v1/digest/delivery-intentions/dint_missing"
+            "/api/v1/digest/delivery-intentions/dint_missing"
             "/telegram-execution-preflight",
         )
         telegram_gate_response = await client.get(
-            "/v1/digest/delivery-intentions/dint_missing"
+            "/api/v1/digest/delivery-intentions/dint_missing"
             "/telegram-execution-gate",
         )
         delivery_result_response = await client.get(
-            "/v1/digest/delivery-results/dres_missing",
+            "/api/v1/digest/delivery-results/dres_missing",
         )
 
     assert post_response.status_code == 401
@@ -1710,7 +1710,7 @@ async def test_persisted_attention_digest_delivery_draft_retrieval_returns_404_f
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/delivery-drafts/ddraft_unknown_fos_061",
+            "/api/v1/digest/delivery-drafts/ddraft_unknown_fos_061",
         )
 
     assert response.status_code == 404
@@ -1728,14 +1728,14 @@ async def test_persisted_attention_digest_delivery_draft_post_rejects_invalid_wi
         base_url="http://test",
     ) as client:
         naive = await client.post(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params={
                 "start_at": "2131-08-11T00:00:00",
                 "end_at": "2131-08-12T00:00:00+00:00",
             },
         )
         reversed_window = await client.post(
-            "/v1/digest/persisted-attention/delivery-draft",
+            "/api/v1/digest/persisted-attention/delivery-draft",
             params={
                 "start_at": "2131-08-13T00:00:00+00:00",
                 "end_at": "2131-08-12T00:00:00+00:00",
@@ -1761,38 +1761,38 @@ async def test_delivery_draft_approval_endpoints_return_404_for_unknown_draft(
         base_url="http://test",
     ) as client:
         approve_response = await client.post(
-            f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+            f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
             json={"reviewer": "founder"},
         )
         reject_response = await client.post(
-            f"/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
+            f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
             json={"reviewer": "founder"},
         )
         status_response = await client.get(
-            f"/v1/digest/delivery-drafts/{delivery_draft_id}/approval-status",
+            f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approval-status",
         )
         readiness_response = await client.get(
-            f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-readiness",
+            f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-readiness",
         )
         intention_post_response = await client.post(
-            f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+            f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
         )
         intention_get_response = await client.get(
-            "/v1/digest/delivery-intentions/dint_unknown_fos_064_api",
+            "/api/v1/digest/delivery-intentions/dint_unknown_fos_064_api",
         )
         telegram_plan_response = await client.get(
-            "/v1/digest/delivery-intentions/dint_unknown_fos_065_api/telegram-plan",
+            "/api/v1/digest/delivery-intentions/dint_unknown_fos_065_api/telegram-plan",
         )
         telegram_preflight_response = await client.get(
-            "/v1/digest/delivery-intentions/dint_unknown_fos_067_api"
+            "/api/v1/digest/delivery-intentions/dint_unknown_fos_067_api"
             "/telegram-execution-preflight",
         )
         telegram_gate_response = await client.get(
-            "/v1/digest/delivery-intentions/dint_unknown_fos_069_api"
+            "/api/v1/digest/delivery-intentions/dint_unknown_fos_069_api"
             "/telegram-execution-gate",
         )
         delivery_result_response = await client.get(
-            "/v1/digest/delivery-results/dres_unknown_fos_068_api",
+            "/api/v1/digest/delivery-results/dres_unknown_fos_068_api",
         )
 
     assert approve_response.status_code == 404
@@ -1868,7 +1868,7 @@ async def test_delivery_draft_approve_endpoint_records_safe_idempotent_decision(
             base_url="http://test",
         ) as client:
             created_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-01T00:00:00+00:00",
                     "end_at": "2131-09-02T00:00:00+00:00",
@@ -1879,18 +1879,18 @@ async def test_delivery_draft_approve_endpoint_records_safe_idempotent_decision(
             created = created_response.json()
             delivery_draft_id = created["delivery_draft_id"]
             approve_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
                 json={
                     "reviewer": "founder",
                     "note": "Approved for human-reviewed delivery.",
                 },
             )
             repeated_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
                 json={"reviewer": "duplicate reviewer"},
             )
             status_response = await client.get(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approval-status",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approval-status",
             )
 
         assert approve_response.status_code == 200
@@ -1967,7 +1967,7 @@ async def test_delivery_draft_reject_endpoint_records_safe_idempotent_decision(
             base_url="http://test",
         ) as client:
             created_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-03T00:00:00+00:00",
                     "end_at": "2131-09-04T00:00:00+00:00",
@@ -1977,14 +1977,14 @@ async def test_delivery_draft_reject_endpoint_records_safe_idempotent_decision(
             created = created_response.json()
             delivery_draft_id = created["delivery_draft_id"]
             reject_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
                 json={
                     "reviewer": "founder",
                     "note": "Needs edits before delivery.",
                 },
             )
             repeated_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/reject",
                 json={"reviewer": "duplicate reviewer"},
             )
 
@@ -2055,21 +2055,21 @@ async def test_delivery_draft_delivery_readiness_endpoint_reports_safe_states(
             base_url="http://test",
         ) as client:
             unapproved_created = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-09T00:00:00+00:00",
                     "end_at": "2131-09-10T00:00:00+00:00",
                 },
             )
             rejected_created = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-10T00:00:00+00:00",
                     "end_at": "2131-09-11T00:00:00+00:00",
                 },
             )
             approved_created = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-11T00:00:00+00:00",
                     "end_at": "2131-09-12T00:00:00+00:00",
@@ -2086,11 +2086,11 @@ async def test_delivery_draft_delivery_readiness_endpoint_reports_safe_states(
             delivery_draft_ids.extend([unapproved_id, rejected_id, approved_id])
 
             reject_response = await client.post(
-                f"/v1/digest/delivery-drafts/{rejected_id}/reject",
+                f"/api/v1/digest/delivery-drafts/{rejected_id}/reject",
                 json={"reviewer": "founder", "note": "Not ready."},
             )
             approve_response = await client.post(
-                f"/v1/digest/delivery-drafts/{approved_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{approved_id}/approve",
                 json={"reviewer": "founder", "note": "Ready for future gate."},
             )
             assert reject_response.status_code == 200
@@ -2103,13 +2103,13 @@ async def test_delivery_draft_delivery_readiness_endpoint_reports_safe_states(
                 for delivery_draft_id in delivery_draft_ids
             }
             unapproved_response = await client.get(
-                f"/v1/digest/delivery-drafts/{unapproved_id}/delivery-readiness",
+                f"/api/v1/digest/delivery-drafts/{unapproved_id}/delivery-readiness",
             )
             rejected_response = await client.get(
-                f"/v1/digest/delivery-drafts/{rejected_id}/delivery-readiness",
+                f"/api/v1/digest/delivery-drafts/{rejected_id}/delivery-readiness",
             )
             approved_response = await client.get(
-                f"/v1/digest/delivery-drafts/{approved_id}/delivery-readiness",
+                f"/api/v1/digest/delivery-drafts/{approved_id}/delivery-readiness",
             )
             after_counts = {
                 delivery_draft_id: await _delivery_draft_api_event_total(
@@ -2207,14 +2207,14 @@ async def test_delivery_intention_endpoint_rejects_not_ready_drafts(
             base_url="http://test",
         ) as client:
             unapproved_created = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-13T00:00:00+00:00",
                     "end_at": "2131-09-14T00:00:00+00:00",
                 },
             )
             rejected_created = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-15T00:00:00+00:00",
                     "end_at": "2131-09-16T00:00:00+00:00",
@@ -2227,16 +2227,16 @@ async def test_delivery_intention_endpoint_rejects_not_ready_drafts(
             delivery_draft_ids.extend([unapproved_id, rejected_id])
 
             reject_response = await client.post(
-                f"/v1/digest/delivery-drafts/{rejected_id}/reject",
+                f"/api/v1/digest/delivery-drafts/{rejected_id}/reject",
                 json={"reviewer": "founder"},
             )
             assert reject_response.status_code == 200
 
             unapproved_intention = await client.post(
-                f"/v1/digest/delivery-drafts/{unapproved_id}/delivery-intention",
+                f"/api/v1/digest/delivery-drafts/{unapproved_id}/delivery-intention",
             )
             rejected_intention = await client.post(
-                f"/v1/digest/delivery-drafts/{rejected_id}/delivery-intention",
+                f"/api/v1/digest/delivery-drafts/{rejected_id}/delivery-intention",
             )
 
         assert unapproved_intention.status_code == 409
@@ -2291,7 +2291,7 @@ async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_rec
             base_url="http://test",
         ) as client:
             created_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-17T00:00:00+00:00",
                     "end_at": "2131-09-18T00:00:00+00:00",
@@ -2303,16 +2303,16 @@ async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_rec
             delivery_draft_id = created_draft["delivery_draft_id"]
 
             approve_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
                 json={"reviewer": "founder", "note": "Ready for intention."},
             )
             assert approve_response.status_code == 200
 
             intention_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
             )
             repeated_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
             )
 
             assert intention_response.status_code == 200
@@ -2322,10 +2322,10 @@ async def test_delivery_intention_endpoint_creates_retrieves_safe_idempotent_rec
             delivery_intention_id = intention["delivery_intention_id"]
 
             retrieved_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}",
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}",
             )
             telegram_plan_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-plan",
             )
 
@@ -2490,7 +2490,7 @@ async def test_delivery_intention_telegram_execution_preflight_endpoint_reports_
             base_url="http://test",
         ) as client:
             created_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-19T00:00:00+00:00",
                     "end_at": "2131-09-20T00:00:00+00:00",
@@ -2502,13 +2502,13 @@ async def test_delivery_intention_telegram_execution_preflight_endpoint_reports_
             delivery_draft_id = created_draft["delivery_draft_id"]
 
             approve_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
                 json={"reviewer": "founder", "note": "Ready for preflight."},
             )
             assert approve_response.status_code == 200
 
             intention_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
             )
             assert intention_response.status_code == 200
             intention = intention_response.json()
@@ -2522,7 +2522,7 @@ async def test_delivery_intention_telegram_execution_preflight_endpoint_reports_
             )
 
             missing_credentials_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-execution-preflight",
             )
             monkeypatch.setattr(
@@ -2536,7 +2536,7 @@ async def test_delivery_intention_telegram_execution_preflight_endpoint_reports_
                 "TELEGRAM_CHAT_ID_TEST_VALUE",
             )
             configured_credentials_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-execution-preflight",
             )
 
@@ -2688,7 +2688,7 @@ async def test_delivery_intention_telegram_execution_gate_endpoint_reports_safe_
             base_url="http://test",
         ) as client:
             created_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-23T00:00:00+00:00",
                     "end_at": "2131-09-24T00:00:00+00:00",
@@ -2700,13 +2700,13 @@ async def test_delivery_intention_telegram_execution_gate_endpoint_reports_safe_
             delivery_draft_id = created_draft["delivery_draft_id"]
 
             approve_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
                 json={"reviewer": "founder", "note": "Ready for gate."},
             )
             assert approve_response.status_code == 200
 
             intention_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
             )
             assert intention_response.status_code == 200
             intention = intention_response.json()
@@ -2721,7 +2721,7 @@ async def test_delivery_intention_telegram_execution_gate_endpoint_reports_safe_
             result_total_before = await _delivery_result_api_event_total()
 
             missing_credentials_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-execution-gate",
             )
             monkeypatch.setattr(
@@ -2735,7 +2735,7 @@ async def test_delivery_intention_telegram_execution_gate_endpoint_reports_safe_
                 "TELEGRAM_CHAT_ID_TEST_VALUE",
             )
             configured_credentials_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-execution-gate",
             )
 
@@ -2901,7 +2901,7 @@ async def test_delivery_result_endpoint_retrieves_safe_read_only_audit_record(
             base_url="http://test",
         ) as client:
             created_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-21T00:00:00+00:00",
                     "end_at": "2131-09-22T00:00:00+00:00",
@@ -2913,13 +2913,13 @@ async def test_delivery_result_endpoint_retrieves_safe_read_only_audit_record(
             delivery_draft_id = created_draft["delivery_draft_id"]
 
             approve_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
                 json={"reviewer": "founder", "note": "Ready for result contract."},
             )
             assert approve_response.status_code == 200
 
             intention_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
             )
             assert intention_response.status_code == 200
             delivery_intention_id = intention_response.json()["delivery_intention_id"]
@@ -2957,7 +2957,7 @@ async def test_delivery_result_endpoint_retrieves_safe_read_only_audit_record(
             base_url="http://test",
         ) as client:
             retrieved_response = await client.get(
-                f"/v1/digest/delivery-results/{delivery_result_id}",
+                f"/api/v1/digest/delivery-results/{delivery_result_id}",
             )
 
         assert retrieved_response.status_code == 200
@@ -3051,7 +3051,7 @@ async def test_delivery_intention_telegram_plan_endpoint_conflicts_on_hash_misma
             base_url="http://test",
         ) as client:
             created_response = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-19T00:00:00+00:00",
                     "end_at": "2131-09-20T00:00:00+00:00",
@@ -3062,13 +3062,13 @@ async def test_delivery_intention_telegram_plan_endpoint_conflicts_on_hash_misma
             delivery_draft_id = created_response.json()["delivery_draft_id"]
 
             approve_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/approve",
                 json={"reviewer": "founder"},
             )
             assert approve_response.status_code == 200
 
             intention_response = await client.post(
-                f"/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
+                f"/api/v1/digest/delivery-drafts/{delivery_draft_id}/delivery-intention",
             )
             assert intention_response.status_code == 200
             delivery_intention_id = intention_response.json()["delivery_intention_id"]
@@ -3091,15 +3091,15 @@ async def test_delivery_intention_telegram_plan_endpoint_conflicts_on_hash_misma
             base_url="http://test",
         ) as client:
             telegram_plan_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-plan",
             )
             telegram_preflight_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-execution-preflight",
             )
             telegram_gate_response = await client.get(
-                f"/v1/digest/delivery-intentions/{delivery_intention_id}"
+                f"/api/v1/digest/delivery-intentions/{delivery_intention_id}"
                 "/telegram-execution-gate",
             )
 
@@ -3129,14 +3129,14 @@ async def test_delivery_draft_decision_endpoints_reject_conflicts(
             base_url="http://test",
         ) as client:
             approved_created = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-05T00:00:00+00:00",
                     "end_at": "2131-09-06T00:00:00+00:00",
                 },
             )
             rejected_created = await client.post(
-                "/v1/digest/persisted-attention/delivery-draft",
+                "/api/v1/digest/persisted-attention/delivery-draft",
                 params={
                     "start_at": "2131-09-07T00:00:00+00:00",
                     "end_at": "2131-09-08T00:00:00+00:00",
@@ -3148,19 +3148,19 @@ async def test_delivery_draft_decision_endpoints_reject_conflicts(
             rejected_id = rejected_created.json()["delivery_draft_id"]
 
             approve_response = await client.post(
-                f"/v1/digest/delivery-drafts/{approved_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{approved_id}/approve",
                 json={"reviewer": "founder"},
             )
             reject_after_approve = await client.post(
-                f"/v1/digest/delivery-drafts/{approved_id}/reject",
+                f"/api/v1/digest/delivery-drafts/{approved_id}/reject",
                 json={"reviewer": "founder"},
             )
             reject_response = await client.post(
-                f"/v1/digest/delivery-drafts/{rejected_id}/reject",
+                f"/api/v1/digest/delivery-drafts/{rejected_id}/reject",
                 json={"reviewer": "founder"},
             )
             approve_after_reject = await client.post(
-                f"/v1/digest/delivery-drafts/{rejected_id}/approve",
+                f"/api/v1/digest/delivery-drafts/{rejected_id}/approve",
                 json={"reviewer": "founder"},
             )
 
@@ -3196,7 +3196,7 @@ async def test_persisted_attention_digest_endpoint_requires_api_key_when_auth_en
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/persisted-attention",
+            "/api/v1/digest/persisted-attention",
             params={
                 "start_at": "2131-05-01T00:00:00+00:00",
                 "end_at": "2131-05-02T00:00:00+00:00",
@@ -3219,7 +3219,7 @@ async def test_persisted_attention_digest_endpoint_rejects_naive_window(
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/persisted-attention",
+            "/api/v1/digest/persisted-attention",
             params={
                 "start_at": "2131-06-01T00:00:00",
                 "end_at": "2131-06-02T00:00:00+00:00",
@@ -3241,7 +3241,7 @@ async def test_persisted_attention_digest_text_endpoint_rejects_invalid_window_o
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/digest/persisted-attention/text",
+            "/api/v1/digest/persisted-attention/text",
             params={
                 "start_at": "2131-07-02T00:00:00+00:00",
                 "end_at": "2131-07-01T00:00:00+00:00",

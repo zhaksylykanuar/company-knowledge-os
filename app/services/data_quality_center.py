@@ -1244,10 +1244,10 @@ async def build_data_quality_center(
             "by_severity": dict(severity),
         },
         "links": {
-            "graph_gardener": "/v1/inbox",
-            "action_center": "/v1/founder/action-center",
-            "inbox": "/v1/inbox",
-            "source_control": "/v1/founder/sources",
-            "evidence_explorer": "/v1/source-events",
+            "graph_gardener": "/api/v1/inbox",
+            "action_center": "/api/v1/founder/action-center",
+            "inbox": "/api/v1/inbox",
+            "source_control": "/api/v1/founder/sources",
+            "evidence_explorer": "/api/v1/source-events",
         },
     }

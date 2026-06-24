@@ -9,7 +9,7 @@ from app.services.knowledge_score_processor import process_knowledge_scores
 from app.services.knowledge_attention import get_attention_dashboard
 from app.services.production_operation_guard import ProductionOperationBlockedError
 
-router = APIRouter(prefix="/v1/knowledge", tags=["knowledge"])
+router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
 
 
 class IngestTextRequest(BaseModel):

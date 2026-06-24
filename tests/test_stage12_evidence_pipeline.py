@@ -460,7 +460,7 @@ async def test_data_quality_action_center_and_tree_surface_pipeline_lineage() ->
         )
 
         async with _client() as client:
-            action_center = await client.get("/v1/founder/action-center")
+            action_center = await client.get("/api/v1/founder/action-center")
         assert action_center.status_code == 200
         action_blob = json.dumps(action_center.json(), sort_keys=True)
         assert "evidence_pipeline" in action_blob

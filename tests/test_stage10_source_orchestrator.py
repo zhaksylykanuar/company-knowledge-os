@@ -568,11 +568,11 @@ async def test_source_runs_endpoint_is_founder_only_and_redacted(monkeypatch) ->
 
         async with _client() as client:
             founder = await client.get(
-                "/v1/founder/source-runs",
+                "/api/v1/founder/source-runs",
                 params={"source_type": "manual_inputs", "limit": 10},
             )
             team = await client.get(
-                "/v1/founder/source-runs",
+                "/api/v1/founder/source-runs",
                 params={"view": "team"},
             )
         assert founder.status_code == 200
@@ -623,11 +623,11 @@ async def test_source_events_can_filter_by_run_id() -> None:
 
         async with _client() as client:
             match = await client.get(
-                "/v1/source-events",
+                "/api/v1/source-events",
                 params={"source_type": "jira", "run_id": f"src_run_{marker}"},
             )
             miss = await client.get(
-                "/v1/source-events",
+                "/api/v1/source-events",
                 params={"source_type": "jira", "run_id": f"src_run_other_{marker}"},
             )
         assert match.status_code == 200
@@ -712,7 +712,7 @@ async def test_data_quality_includes_source_run_lifecycle_issues(monkeypatch) ->
             await session.commit()
 
         async with _client() as client:
-            response = await client.get("/v1/founder/data-quality")
+            response = await client.get("/api/v1/founder/data-quality")
         assert response.status_code == 200
         body = response.json()
         issues = body["issues"]

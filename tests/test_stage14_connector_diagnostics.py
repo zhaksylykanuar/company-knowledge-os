@@ -39,12 +39,12 @@ def _client() -> AsyncClient:
 
 async def test_connector_diagnostics_endpoint_is_founder_only() -> None:
     async with _client() as client:
-        founder = await client.get("/v1/founder/connectors/diagnostics")
+        founder = await client.get("/api/v1/founder/connectors/diagnostics")
         team = await client.get(
-            "/v1/founder/connectors/diagnostics", params={"view": "team"}
+            "/api/v1/founder/connectors/diagnostics", params={"view": "team"}
         )
         investor = await client.get(
-            "/v1/founder/connectors/diagnostics", params={"view": "investor"}
+            "/api/v1/founder/connectors/diagnostics", params={"view": "investor"}
         )
     assert founder.status_code == 200
     assert team.status_code == 403
@@ -53,7 +53,7 @@ async def test_connector_diagnostics_endpoint_is_founder_only() -> None:
 
 async def test_connector_diagnostics_shape_and_security_policy() -> None:
     async with _client() as client:
-        response = await client.get("/v1/founder/connectors/diagnostics")
+        response = await client.get("/api/v1/founder/connectors/diagnostics")
     assert response.status_code == 200
     payload = response.json()
     assert payload["security_policy"] == {

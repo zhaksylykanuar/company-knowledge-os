@@ -501,7 +501,7 @@ var OV_CACHE_META = null;
 // filter. Founder may preview team/investor; team/investor are sandboxed.
 var VIEW = (function(){var v=localStorage.getItem("fos_view");return v==="team"||v==="investor"?v:"founder";})();
 // Local-dev auto-auth: a runtime (session-only) API key picked up from the
-// backend's /v1/dev/browser-config, never persisted to localStorage. A
+// backend's /api/v1/dev/browser-config, never persisted to localStorage. A
 // manual localStorage key always overrides it.
 var RUNTIME_API_KEY = "";
 var DEV_CONFIG = null;
@@ -1414,7 +1414,7 @@ async function openTask(issueKey){
   overlay("ov-task",true);
   $("task-body").innerHTML='<div class="mut">Загружаю задачу…</div>';
   try{
-    var t=await (await api("/v1/founder/execution/tasks/"+encodeURIComponent(issueKey))).json();
+    var t=await (await api("/api/v1/founder/execution/tasks/"+encodeURIComponent(issueKey))).json();
     var h='<p class="h">'+esc(t.issue_key)+(t.owner?' · '+esc(t.owner):' · без владельца')+'</p>';
     if(t.suggested_next_action)h+='<div class="mut" style="margin-bottom:8px">→ '+esc(t.suggested_next_action)+'</div>';
     if(t.related_findings&&t.related_findings.length){
@@ -1487,13 +1487,13 @@ function acRender(){
 }
 document.addEventListener("click",async function(e){
   var r=e.target.closest("[data-acresolve]");
-  if(r){try{await api("/v1/founder/second-opinion/"+r.getAttribute("data-acresolve")+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"resolved"})});loadActions();loadInboxCounts();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
+  if(r){try{await api("/api/v1/founder/second-opinion/"+r.getAttribute("data-acresolve")+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"resolved"})});loadActions();loadInboxCounts();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
   var sn=e.target.closest("[data-acsnooze]");
-  if(sn){try{await api("/v1/founder/second-opinion/"+sn.getAttribute("data-acsnooze")+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});loadActions();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
+  if(sn){try{await api("/api/v1/founder/second-opinion/"+sn.getAttribute("data-acsnooze")+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});loadActions();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
   var rv=e.target.closest("[data-acreview]");
-  if(rv){try{var ref=JSON.parse(rv.getAttribute("data-acreview"));await api("/v1/founder/action-center/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action_ref:ref})});rv.textContent="отмечено ✓";rv.disabled=true;}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
+  if(rv){try{var ref=JSON.parse(rv.getAttribute("data-acreview"));await api("/api/v1/founder/action-center/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action_ref:ref})});rv.textContent="отмечено ✓";rv.disabled=true;}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
   var ow=e.target.closest("[data-acowner]");
-  if(ow){try{var res=await (await api("/v1/founder/action-center/assign-owner-proposal",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_key:ow.getAttribute("data-acowner")})})).json();ow.textContent=res.idempotent?"proposal уже есть ✓":"proposal создан ✓";ow.disabled=true;loadInboxCounts();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
+  if(ow){try{var res=await (await api("/api/v1/founder/action-center/assign-owner-proposal",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({issue_key:ow.getAttribute("data-acowner")})})).json();ow.textContent=res.idempotent?"proposal уже есть ✓":"proposal создан ✓";ow.disabled=true;loadInboxCounts();}catch(err){setMsgEl("ac-msg",String(err.message||err),true);}return;}
 });
 
 function meRender(){
@@ -1543,7 +1543,7 @@ function basisChip(basis){
 }
 async function loadInvestor(){
   $("inv-body").innerHTML='<div class="mut">Загружаю investor view…</div>';
-  try{INVDATA=await (await api("/v1/investor/view")).json();renderInvestor();}
+  try{INVDATA=await (await api("/api/v1/investor/view")).json();renderInvestor();}
   catch(e){$("inv-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 function renderInvestor(){
@@ -1594,9 +1594,9 @@ function renderInvestor(){
 }
 function investorEditor(){
   Promise.all([
-    api("/v1/founder/declarations/company").then(function(r){return r.json();}).catch(function(){return {payload:{}};}),
-    api("/v1/founder/declarations/roadmap").then(function(r){return r.json();}).catch(function(){return {payload:{}};}),
-    api("/v1/founder/declarations/ask").then(function(r){return r.json();}).catch(function(){return {payload:{}};})
+    api("/api/v1/founder/declarations/company").then(function(r){return r.json();}).catch(function(){return {payload:{}};}),
+    api("/api/v1/founder/declarations/roadmap").then(function(r){return r.json();}).catch(function(){return {payload:{}};}),
+    api("/api/v1/founder/declarations/ask").then(function(r){return r.json();}).catch(function(){return {payload:{}};})
   ]).then(function(res){
     var co=(res[0]&&res[0].payload)||{},rd=(res[1]&&res[1].payload)||{},ak=(res[2]&&res[2].payload)||{};
     var rmLines=((rd.items)||[]).map(function(it){return [it.horizon||"30",it.text||""];});
@@ -1622,7 +1622,7 @@ function investorEditor(){
 var WORKSPACE=null;
 async function loadWorkspace(){
   $("tw-body").innerHTML='<div class="mut">Загружаю workspace…</div>';
-  try{WORKSPACE=await (await api("/v1/team/workspace")).json();twRender();}
+  try{WORKSPACE=await (await api("/api/v1/team/workspace")).json();twRender();}
   catch(e){$("tw-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 function twRender(){
@@ -1665,7 +1665,7 @@ async function loadRhythm(){renderRhythmTabs();await loadRhythmTab(ORH_TAB);}
 async function loadRhythmTab(tab){
   ORH_TAB=tab;renderRhythmTabs();
   $("orh-body").innerHTML='<div class="mut">Загружаю…</div>';
-  try{RHYTHM[tab]=await (await api("/v1/operating-rhythm/"+tab)).json();orhRender();}
+  try{RHYTHM[tab]=await (await api("/api/v1/operating-rhythm/"+tab)).json();orhRender();}
   catch(e){$("orh-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 function orhCardList(title,items){var h='<div class="card"><p class="h">'+title+' <span class="mut">'+items.length+'</span></p>';if(items.length)items.forEach(function(f){h+='<div class="item"><span class="badge '+sevB(f.severity)+'">'+esc(f.severity||"")+'</span><div class="t">'+esc(f.summary||"")+'</div></div>';});else h+='<div class="mut">—</div>';return h+'</div>';}
@@ -1733,7 +1733,7 @@ async function loadUpdates(){renderUpdTabs();await loadUpdateDraft(UPD.kind);}
 async function loadUpdateDraft(kind){
   UPD.kind=kind;renderUpdTabs();
   $("upd-body").innerHTML='<div class="mut">Готовлю черновик…</div>';
-  try{UPD.draft=await (await api("/v1/updates/"+kind)).json();updRender();}
+  try{UPD.draft=await (await api("/api/v1/updates/"+kind)).json();updRender();}
   catch(e){$("upd-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 function updRender(){
@@ -1753,7 +1753,7 @@ function updRender(){
   $("upd-body").innerHTML=html;
   $("upd-approve").addEventListener("click",async function(){
     try{
-      var r=await (await api("/v1/updates/"+d.kind+"/approve",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content_hash:d.content_hash})})).json();
+      var r=await (await api("/api/v1/updates/"+d.kind+"/approve",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content_hash:d.content_hash})})).json();
       $("upd-export").style.display="block";
       $("upd-export-text").textContent=r.export_text||"";
       $("upd-approve-msg").textContent=r.idempotent?"уже подтверждено ранее ✓":"подтверждено ✓";
@@ -1816,7 +1816,7 @@ async function loadSharePacks(){
   Object.keys(PACK_TYPE_LABELS).forEach(function(t){gb+='<button data-tip="Нажмите, чтобы выполнить действие FounderOS. Если действие меняет состояние, будет создан audit trail." class="chip" data-spkgen="'+t+'">'+PACK_TYPE_LABELS[t]+'</button>';});
   $("spk-gen").innerHTML=gb;
   try{
-    SHARE_PACKS=await (await api("/v1/share-packs")).json();
+    SHARE_PACKS=await (await api("/api/v1/share-packs")).json();
     spkRender();
     setMsgEl("spk-msg","packs: "+SHARE_PACKS.counts.total,false);
     var pend=(SHARE_PACKS.packs||[]).filter(function(p){return p.status==="draft"||p.status==="pending_approval";}).length;
@@ -1837,18 +1837,18 @@ function showPackPreview(pv){
 }
 document.addEventListener("click",async function(e){
   var gen=e.target.closest("[data-spkgen]");
-  if(gen){try{await api("/v1/share-packs/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pack_type:gen.getAttribute("data-spkgen")})});loadSharePacks();loadNotifCounts();}catch(err){setMsgEl("spk-msg",String(err.message||err),true);}return;}
+  if(gen){try{await api("/api/v1/share-packs/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pack_type:gen.getAttribute("data-spkgen")})});loadSharePacks();loadNotifCounts();}catch(err){setMsgEl("spk-msg",String(err.message||err),true);}return;}
   var tog=e.target.closest("[data-spksectoggle]");
-  if(tog){try{await api("/v1/share-packs/"+encodeURIComponent(tog.getAttribute("data-spksectoggle"))+"/section/include",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section_key:tog.getAttribute("data-seckey"),included:tog.getAttribute("data-inc")==="1"})});loadSharePacks();}catch(err){setMsgEl("spk-msg",String(err.message||err),true);}return;}
+  if(tog){try{await api("/api/v1/share-packs/"+encodeURIComponent(tog.getAttribute("data-spksectoggle"))+"/section/include",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({section_key:tog.getAttribute("data-seckey"),included:tog.getAttribute("data-inc")==="1"})});loadSharePacks();}catch(err){setMsgEl("spk-msg",String(err.message||err),true);}return;}
   var act=e.target.closest("[data-spkact]");
   if(act){
     var a=act.getAttribute("data-spkact"),pid=act.getAttribute("data-spkid");
     try{
-      if(a==="preview"){var pv=await (await api("/v1/share-packs/"+encodeURIComponent(pid)+"/preview")).json();showPackPreview(pv);return;}
+      if(a==="preview"){var pv=await (await api("/api/v1/share-packs/"+encodeURIComponent(pid)+"/preview")).json();showPackPreview(pv);return;}
       var body={};
       if(a==="approve")body={content_hash:act.getAttribute("data-hash")};
       if(a==="revoke")body={reason:prompt("Причина revoke (необязательно):")||null};
-      await api("/v1/share-packs/"+encodeURIComponent(pid)+"/"+a,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      await api("/api/v1/share-packs/"+encodeURIComponent(pid)+"/"+a,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       loadSharePacks();loadNotifCounts();
     }catch(err){setMsgEl("spk-msg",String(err.message||err),true);}
   }
@@ -1879,13 +1879,13 @@ function ntfRender(){
 async function loadNotifications(){
   setMsgEl("ntf-msg","загружаю…",false);
   try{
-    NOTIFS=await (await api("/v1/founder/notification-center")).json();
+    NOTIFS=await (await api("/api/v1/founder/notification-center")).json();
     ntfRender();
     $("nav-ntf-n").textContent=NOTIFS.counts.total?String(NOTIFS.counts.total):"";
     setMsgEl("ntf-msg","уведомлений: "+NOTIFS.counts.total,false);
   }catch(e){setMsgEl("ntf-msg",String(e.message||e),true);}
 }
-async function loadNotifCounts(){try{var d=await (await api("/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
+async function loadNotifCounts(){try{var d=await (await api("/api/v1/founder/notification-center")).json();$("nav-ntf-n").textContent=d.counts.total?String(d.counts.total):"";}catch(e){}}
 
 // --- Source Control Center + Data Quality -------------------------------
 var SOURCES=null,DQ=null,SOURCE_RUN_CACHE={},CONNECTOR_DIAGS={},REAL_CONNECTORS_ENABLED=false,PILOT_INFO=null;
@@ -2076,9 +2076,9 @@ function sourcesRender(){
 async function loadSources(){
   setMsgEl("sources-msg","загружаю источники…",false);
   try{
-    SOURCES=await (await api("/v1/founder/sources")).json();
+    SOURCES=await (await api("/api/v1/founder/sources")).json();
     try{
-      var diag=await (await api("/v1/founder/connectors/diagnostics")).json();
+      var diag=await (await api("/api/v1/founder/connectors/diagnostics")).json();
       CONNECTOR_DIAGS={};
       REAL_CONNECTORS_ENABLED=!!diag.real_execution_enabled;
       PILOT_INFO=diag.pilot||null;
@@ -2097,7 +2097,7 @@ async function loadSources(){
 async function sourceAction(source,action){
   if((action==="backfill"||action==="pause")&&!confirm("Создать безопасный request для "+action+" по источнику "+source+"? Внешний connector сейчас не запустится."))return;
   try{
-    var r=await (await api("/v1/founder/sources/"+encodeURIComponent(source)+"/"+encodeURIComponent(action),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_key:source+"-"+action+"-"+Date.now(),requested_by:"founder"})})).json();
+    var r=await (await api("/api/v1/founder/sources/"+encodeURIComponent(source)+"/"+encodeURIComponent(action),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_key:source+"-"+action+"-"+Date.now(),requested_by:"founder"})})).json();
     setMsgEl("sources-msg","запрос создан: "+action+" · "+r.status+" · "+r.request_id,false);
     loadSources();loadDataQuality();loadCommandCenter();
   }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
@@ -2105,7 +2105,7 @@ async function sourceAction(source,action){
 async function retrySourceRun(source,requestId){
   if(!confirm("Создать безопасный retry request? Внешний connector не будет вызван до запуска operator runner."))return;
   try{
-    var r=await (await api("/v1/founder/sources/"+encodeURIComponent(source)+"/retry/"+encodeURIComponent(requestId),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_key:source+"-retry-"+Date.now(),requested_by:"founder"})})).json();
+    var r=await (await api("/api/v1/founder/sources/"+encodeURIComponent(source)+"/retry/"+encodeURIComponent(requestId),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({request_key:source+"-retry-"+Date.now(),requested_by:"founder"})})).json();
     setMsgEl("sources-msg","retry request создан · "+r.status+" · "+r.request_id,false);
     loadSources();loadDataQuality();loadCommandCenter();
   }catch(e){setMsgEl("sources-msg",String(e.message||e),true);}
@@ -2114,7 +2114,7 @@ async function openSourceEventList(source,status,runId){
   overlay("ov-src",true);
   $("src-body").innerHTML='<div class="mut">Загружаю события источника…</div>';
   try{
-    var url="/v1/source-events?source_type="+encodeURIComponent(source)+"&limit=50";
+    var url="/api/v1/source-events?source_type="+encodeURIComponent(source)+"&limit=50";
     if(status)url+="&status="+encodeURIComponent(status);
     if(runId)url+="&run_id="+encodeURIComponent(runId);
     var d=await (await api(url)).json();
@@ -2134,7 +2134,7 @@ async function openSourceRunDetail(requestId,source){
   try{
     var run=SOURCE_RUN_CACHE[requestId];
     if(!run){
-      var d=await (await api("/v1/founder/source-runs?source_type="+encodeURIComponent(source)+"&limit=100")).json();
+      var d=await (await api("/api/v1/founder/source-runs?source_type="+encodeURIComponent(source)+"&limit=100")).json();
       (d.runs||[]).forEach(function(r){SOURCE_RUN_CACHE[r.request_id]=r;});
       run=SOURCE_RUN_CACHE[requestId];
     }
@@ -2142,7 +2142,7 @@ async function openSourceRunDetail(requestId,source){
     var rs=run.result_summary||{},safe=rs.sanitized_summary||{},ing=safe.ingestion||{},pipe=rs.evidence_pipeline||{};
     var receipt=(run.receipt||rs.receipt||null);
     try{
-      var receiptResp=await api("/v1/founder/source-runs/"+encodeURIComponent(requestId)+"/receipt");
+      var receiptResp=await api("/api/v1/founder/source-runs/"+encodeURIComponent(requestId)+"/receipt");
       var receiptPayload=await receiptResp.json();
       receipt=receiptPayload.receipt||receipt;
       if(receiptPayload.run)SOURCE_RUN_CACHE[requestId]=receiptPayload.run;
@@ -2197,7 +2197,7 @@ async function openSourceRunList(source){
   overlay("ov-src",true);
   $("src-body").innerHTML='<div class="mut">Загружаю запуски источника…</div>';
   try{
-    var d=await (await api("/v1/founder/source-runs?source_type="+encodeURIComponent(source)+"&limit=50")).json();
+    var d=await (await api("/api/v1/founder/source-runs?source_type="+encodeURIComponent(source)+"&limit=50")).json();
     var h='<p class="h">Запуски источника <span class="badge b-mut">'+esc(source)+'</span></p>';
     if(!(d.runs||[]).length)h+='<div class="empty">Запросов и запусков пока нет.</div>';
     (d.runs||[]).forEach(function(run){
@@ -2260,7 +2260,7 @@ function dataQualityRender(){
 async function loadDataQuality(){
   setMsgEl("dq-msg","loading data quality…",false);
   try{
-    DQ=await (await api("/v1/founder/data-quality")).json();
+    DQ=await (await api("/api/v1/founder/data-quality")).json();
     dataQualityRender();
     setMsgEl("dq-msg","updated "+new Date().toLocaleTimeString("ru-RU"),false);
   }catch(e){setMsgEl("dq-msg",String(e.message||e),true);}
@@ -2297,7 +2297,7 @@ async function devBootstrap(){
   // 2. a manual localStorage key always wins — don't fetch dev config.
   if((localStorage.getItem("fos_api_key")||"").trim())return;
   // 3. local dev: ask the backend for the safe browser config (404 elsewhere).
-  try{var r=await fetch("/v1/dev/browser-config");if(r.ok)applyDevConfig(await r.json());}catch(e){}
+  try{var r=await fetch("/api/v1/dev/browser-config");if(r.ok)applyDevConfig(await r.json());}catch(e){}
 }
 function renderDevBadge(){
   var el=$("dev-badge");if(!el)return;
@@ -2402,7 +2402,7 @@ async function loadFeed(){
   });
   $("so-filters").innerHTML=chips;
   try{
-    var url="/v1/founder/second-opinion?status="+SO_STATE.status+(SO_STATE.type?"&finding_type="+SO_STATE.type:"")+"&limit=100";
+    var url="/api/v1/founder/second-opinion?status="+SO_STATE.status+(SO_STATE.type?"&finding_type="+SO_STATE.type:"")+"&limit=100";
     var d=await (await api(url)).json();
     var h="";
     for(var i=0;i<d.findings.length;i++)h+=findingCard(d.findings[i]);
@@ -2419,12 +2419,12 @@ async function loadFeed(){
 function setMsgEl(id,text,err){var el=$(id);el.textContent=text||"";el.classList.toggle("err",!!err);}
 
 // --- Мозг компании (Company Brain preview) ---------------------------------
-// Read-only: data comes from the protected /v1/founder/company-brain/* API,
+// Read-only: data comes from the protected /api/v1/founder/company-brain/* API,
 // which reads the local Stage 22 preview. No raw email, no external writes.
 async function loadCompanyBrain(){
   setMsgEl("cb-msg","Загрузка предпросмотра…");
   try{
-    var d=await (await api("/v1/founder/company-brain/preview")).json();
+    var d=await (await api("/api/v1/founder/company-brain/preview")).json();
     renderCompanyBrain(d);
     setMsgEl("cb-msg","");
   }catch(err){
@@ -2576,7 +2576,7 @@ async function openTrail(key){
   overlay("ov-trail",true);
   $("trail-body").innerHTML='<div class="mut">Загружаю цепочку…</div>';
   try{
-    var t=await (await api("/v1/founder/second-opinion/"+key+"/trail")).json();
+    var t=await (await api("/api/v1/founder/second-opinion/"+key+"/trail")).json();
     var f=t.finding;
     var h='<p class="h">'+esc(f.summary)+' <span class="badge '+(f.severity==="high"?"b-red":f.severity==="low"?"b-mut":"b-amber")+'">'+esc(f.severity)+'</span></p>';
     h+='<div class="dvo"><div><div class="lbl" style="color:var(--blue)">ЗАЯВЛЕНО</div>'+esc(f.declared_state)+'</div>'
@@ -2627,7 +2627,7 @@ async function openSourceEvent(eventId){
   overlay("ov-src",true);
   $("src-body").innerHTML='<div class="mut">Загружаю источник…</div>';
   try{
-    var s=await (await api("/v1/source-events/"+encodeURIComponent(eventId))).json();
+    var s=await (await api("/api/v1/source-events/"+encodeURIComponent(eventId))).json();
     var e=s.event;
     var h='<p class="h">Источник <span class="badge b-mut">'+esc(e.source_system)+'</span></p>';
     h+='<div class="mut" style="margin-bottom:8px">'+esc(e.event_type)+' · '+esc(e.source_object_id||"")+'</div>';
@@ -2659,13 +2659,13 @@ async function soAction(action,key){
   if(action==="trail"){openTrail(key);return;}
   try{
     if(action==="snooze"){
-      await api("/v1/founder/second-opinion/"+key+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});
+      await api("/api/v1/founder/second-opinion/"+key+"/snooze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({days:7})});
     } else if(action==="note"){
       var note=prompt("Заметка к конфликту:");
       if(!note)return;
-      await api("/v1/founder/second-opinion/"+key+"/note",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({note:note})});
+      await api("/api/v1/founder/second-opinion/"+key+"/note",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({note:note})});
     } else {
-      await api("/v1/founder/second-opinion/"+key+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:action})});
+      await api("/api/v1/founder/second-opinion/"+key+"/status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:action})});
     }
     loadFeed();loadInboxCounts();
     if(LAZY_LOADED.ib)loadInbox();
@@ -2698,7 +2698,7 @@ function proposalCard(p){
 async function loadInbox(){
   setMsgEl("ib-msg","загружаю…",false);
   try{
-    var d=await (await api("/v1/inbox")).json();
+    var d=await (await api("/api/v1/inbox")).json();
     var h="";
     var idp=d.identity_proposals||d.proposals||[];
     h+='<p class="h">Предложения по сущностям <span class="mut">'+idp.length+'</span></p>';
@@ -2733,7 +2733,7 @@ async function loadInbox(){
 
 async function loadInboxCounts(){
   try{
-    var d=await (await api("/v1/inbox")).json();
+    var d=await (await api("/api/v1/inbox")).json();
     $("nav-ib-n").textContent=d.counts.total?String(d.counts.total):"";
     $("nav-so-n").textContent=d.counts.findings_open?String(d.counts.findings_open):"";
   }catch(e){}
@@ -2748,7 +2748,7 @@ document.addEventListener("click",async function(e){
   if(pa){
     var reason=pa.getAttribute("data-pact")==="rejected"?(prompt("Причина отклонения (необязательно):")||null):null;
     try{
-      await api("/v1/inbox/proposals/"+pa.getAttribute("data-pid")+"/decision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:pa.getAttribute("data-pact"),reviewer_id:"founder",decision_reason:reason})});
+      await api("/api/v1/inbox/proposals/"+pa.getAttribute("data-pid")+"/decision",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:pa.getAttribute("data-pact"),reviewer_id:"founder",decision_reason:reason})});
       loadInbox();loadInboxCounts();LAZY_LOADED.kt=false;
     }catch(err){setMsgEl("ib-msg",String(err.message||err),true);}
     return;
@@ -2756,7 +2756,7 @@ document.addEventListener("click",async function(e){
   var la=e.target.closest("[data-lact]");
   if(la){
     try{
-      await api("/v1/graph/links/"+la.getAttribute("data-lid")+"/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:la.getAttribute("data-lact"),reviewer_id:"founder"})});
+      await api("/api/v1/graph/links/"+la.getAttribute("data-lid")+"/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({decision:la.getAttribute("data-lact"),reviewer_id:"founder"})});
       loadInbox();loadInboxCounts();LAZY_LOADED.kt=false;
     }catch(err){setMsgEl("ib-msg",String(err.message||err),true);}
   }
@@ -2782,7 +2782,7 @@ function ktEdgeRel(l){return l.relation_type||l.relation;}
 async function loadTree(force){
   $("kt-bridge").innerHTML='<div class="statusline">Загружаю Obsidian Bridge…</div>';
   try{
-    var d=await (await api("/v1/knowledge/obsidian/status")).json();
+    var d=await (await api("/api/v1/knowledge/obsidian/status")).json();
     OBSIDIAN.status=d;
     renderObsidianBridge();
     loadTreeGraphPreview(false);
@@ -2821,7 +2821,7 @@ function renderObsidianBridge(){
 async function obsidianSync(dryRun){
   if(!dryRun&&!confirm("Синхронизировать локальный Obsidian vault? Файлы будут записаны только внутрь настроенного vault path."))return;
   try{
-    var d=await (await api("/v1/knowledge/obsidian/sync?dry_run="+(dryRun?"true":"false"),{method:"POST"})).json();
+    var d=await (await api("/api/v1/knowledge/obsidian/sync?dry_run="+(dryRun?"true":"false"),{method:"POST"})).json();
     OBSIDIAN.lastSync=d;
     await loadTree(false);
   }catch(e){$("kt-bridge").insertAdjacentHTML("afterbegin",'<div class="statusline err">'+esc(String(e.message||e))+'</div>');}
@@ -2840,7 +2840,7 @@ async function loadTreeGraphPreview(force){
     var params=["limit=160","depth="+encodeURIComponent(KT.depth),"include_archived="+(KT.includeArchived?"true":"false"),"min_confidence="+encodeURIComponent(KT.minConfidence||0)];
     if(KT.focus)params.push("focus_node_id="+encodeURIComponent(KT.focus));
     if(KT.query)params.push("q="+encodeURIComponent(KT.query));
-    var d=await (await api("/v1/knowledge/graph?"+params.join("&"))).json();
+    var d=await (await api("/api/v1/knowledge/graph?"+params.join("&"))).json();
     KT.nodes=d.nodes.map(function(n){return Object.assign({x:0,y:0,vx:0,vy:0,degree:0},n);});
     KT.links=d.edges||d.links||[];
     var byId={};
@@ -2952,7 +2952,7 @@ async function ktOpenNode(nodeId){
   ktDraw();
   $("kt-detail").innerHTML='<p class="h">Загружаю заметку…</p>';
   try{
-    var note=await (await api("/v1/knowledge/nodes/"+encodeURIComponent(nodeId))).json();
+    var note=await (await api("/api/v1/knowledge/nodes/"+encodeURIComponent(nodeId))).json();
     var n=note.node||{};
     var h='<p class="h">'+esc(note.title||n.title||nodeId)+' <span class="badge b-mut">'+esc(note.type||n.node_type||"note")+'</span></p>'
       +'<div class="row" style="gap:6px;flex-wrap:wrap"><span class="badge b-mut">fresh '+Math.round((note.freshness||0)*100)+'%</span><span class="badge b-mut">conf '+Number(n.confidence||0).toFixed(2)+'</span><span class="badge b-mut">evidence '+num((note.evidence||{}).evidence_count||0)+'</span></div>'
@@ -2987,7 +2987,7 @@ document.addEventListener("click",function(e){
     var action=obs.getAttribute("data-obsact");
     if(action==="dry"){obsidianSync(true);return;}
     if(action==="sync"){obsidianSync(false);return;}
-    if(action==="open-vault"){obsidianOpen("/v1/knowledge/obsidian/open-vault");return;}
+    if(action==="open-vault"){obsidianOpen("/api/v1/knowledge/obsidian/open-vault");return;}
     if(action==="open-index"){
       var st=OBSIDIAN.status||{};
       if(st.open_index_uri)window.location.href=st.open_index_uri;
@@ -2995,7 +2995,7 @@ document.addEventListener("click",function(e){
     }
   }
   var obsNode=e.target.closest("[data-obsnode]");
-  if(obsNode){obsidianOpen("/v1/knowledge/obsidian/open-node/"+encodeURIComponent(obsNode.getAttribute("data-obsnode")));return;}
+  if(obsNode){obsidianOpen("/api/v1/knowledge/obsidian/open-node/"+encodeURIComponent(obsNode.getAttribute("data-obsnode")));return;}
   var kt=e.target.closest("[data-kttype]");
   if(kt){var t=kt.getAttribute("data-kttype");KT.hidden[t]=!KT.hidden[t];kt.classList.toggle("on",!KT.hidden[t]);ktDraw();return;}
   if(e.target.id==="kt-global"){KT.focus=null;loadTreeGraphPreview(false);return;}
@@ -3013,7 +3013,7 @@ document.addEventListener("change",function(e){
 async function ktExportPreview(){
   $("kt-detail").innerHTML='<p class="h">Building Obsidian preview…</p>';
   try{
-    var d=await (await api("/v1/knowledge/export/obsidian-preview?limit=60",{method:"POST"})).json();
+    var d=await (await api("/api/v1/knowledge/export/obsidian-preview?limit=60",{method:"POST"})).json();
     var h='<p class="h">'+esc(d.vault_name||"FounderOS Knowledge Vault")+' <span class="badge b-green">preview only</span></p>'
       +'<div class="mut">files: '+num((d.files||[]).length)+' · no filesystem write</div>';
     (d.files||[]).slice(0,8).forEach(function(f){
@@ -3027,16 +3027,16 @@ async function ktExportPreview(){
 var DECL={focus:null,hypotheses:null};
 async function loadDeclarations(){
   try{
-    var fr=await (await api("/v1/founder/declarations/focus")).json();
+    var fr=await (await api("/api/v1/founder/declarations/focus")).json();
     DECL.focus=fr.payload&&fr.payload.title?fr.payload:null;
-    var hr=await (await api("/v1/founder/declarations/hypotheses")).json();
+    var hr=await (await api("/api/v1/founder/declarations/hypotheses")).json();
     DECL.hypotheses=hr.payload&&hr.payload.items?hr.payload:null;
     ccRender();stRender();
   }catch(e){}
 }
 async function saveDeclaration(key,payload){
   try{
-    await api("/v1/founder/declarations/"+key,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({payload:payload})});
+    await api("/api/v1/founder/declarations/"+key,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({payload:payload})});
   }catch(e){setMsgEl("topmsg",String(e.message||e),true);}
   renderAll();
 }
@@ -3045,7 +3045,7 @@ async function saveDeclaration(key,payload){
 var CC=null;
 async function loadCommandCenter(){
   try{
-    CC=await (await api("/v1/founder/command-center")).json();
+    CC=await (await api("/api/v1/founder/command-center")).json();
     ccRender();
   }catch(e){}
 }
@@ -3053,7 +3053,7 @@ async function loadCommandCenter(){
 var FINDINGS_BY_TYPE={};
 async function loadFindingsIndex(){
   try{
-    var d=await (await api("/v1/founder/second-opinion?status=open&limit=200")).json();
+    var d=await (await api("/api/v1/founder/second-opinion?status=open&limit=200")).json();
     FINDINGS_BY_TYPE={};
     (d.findings||[]).forEach(function(f){(FINDINGS_BY_TYPE[f.finding_type]=FINDINGS_BY_TYPE[f.finding_type]||[]).push(f);});
     renderAll();
@@ -3070,19 +3070,19 @@ function findingsOfTypes(types){
 var EXEC=null,TEAM=null,PRODUCT=null,ACTIONS=null;
 async function loadExecution(){
   if(!EXEC)$("ta-body").innerHTML='<div class="mut">Загружаю quest log…</div>';
-  try{EXEC=await (await api("/v1/founder/execution")).json();taRender();}catch(e){$("ta-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+  try{EXEC=await (await api("/api/v1/founder/execution")).json();taRender();}catch(e){$("ta-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 async function loadTeam(){
   if(!TEAM)$("te-body").innerHTML='<div class="mut">Загружаю карту нагрузки…</div>';
-  try{TEAM=await (await api("/v1/founder/team-load")).json();teRender();}catch(e){$("te-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
+  try{TEAM=await (await api("/api/v1/founder/team-load")).json();teRender();}catch(e){$("te-body").innerHTML='<div class="statusline err">'+esc(String(e.message||e))+'</div>';}
 }
 async function loadProduct(){
-  try{PRODUCT=await (await api("/v1/founder/product")).json();prRender();}catch(e){}
+  try{PRODUCT=await (await api("/api/v1/founder/product")).json();prRender();}catch(e){}
 }
 async function loadActions(){
   setMsgEl("ac-msg","собираю действия…",false);
   try{
-    ACTIONS=await (await api("/v1/founder/action-center")).json();
+    ACTIONS=await (await api("/api/v1/founder/action-center")).json();
     acRender();
     var bs=ACTIONS.counts.by_source||{};
     setMsgEl("ac-msg","действий: "+ACTIONS.counts.total+" · "+Object.keys(bs).map(function(k){return k+": "+bs[k];}).join(" · "),false);
@@ -3094,7 +3094,7 @@ var SALES=null;
 async function loadSales(){
   setMsgEl("sa-msg","загружаю сигналы…",false);
   try{
-    SALES=await (await api("/v1/founder/sales-signals")).json();
+    SALES=await (await api("/api/v1/founder/sales-signals")).json();
     saRender();
     setMsgEl("sa-msg","аккаунтов: "+SALES.counts.accounts+" · контактов: "+SALES.counts.contacts+" · сигналов: "+SALES.counts.relationship_risks,false);
   }catch(e){setMsgEl("sa-msg",String(e.message||e),true);saRender();}
@@ -3104,7 +3104,7 @@ var DA={};
 var DA_LABEL={ready:"готово",collecting:"копим данные",insufficient:"мало истории",stale:"устарело",no_data:"нет данных"};
 async function loadAvailability(){
   try{
-    var d=await (await api("/v1/founder/data-availability")).json();
+    var d=await (await api("/api/v1/founder/data-availability")).json();
     DA={};
     (d.availability||[]).forEach(function(r){DA[r.metric_key+"|"+r.scope]=r;});
     renderAll();
@@ -3145,7 +3145,7 @@ function daChipAnyScope(metricKey){
 async function loadOverview(){
   $("topmsg").textContent="Обновляю данные…";$("topmsg").classList.remove("err");
   try{
-    var r=await api("/v1/founder/overview");
+    var r=await api("/api/v1/founder/overview");
     OV=await r.json();
     OV_CACHE_META=null;
     localStorage.setItem(CACHE_KEY,JSON.stringify(overviewCacheEnvelope(OV)));
@@ -3180,7 +3180,7 @@ $("digest-open").addEventListener("click",function(){overlay("ov-digest",true);}
 $("digest-load").addEventListener("click",async function(){
   $("digest-text").textContent="Загружаю…";
   try{
-    var r=await api("/v1/founder/status?window_hours="+$("digest-window").value);
+    var r=await api("/api/v1/founder/status?window_hours="+$("digest-window").value);
     $("digest-text").textContent=await r.text();
   }catch(e){$("digest-text").textContent=String(e.message||e);}
 });
@@ -3193,7 +3193,7 @@ $("search-q").addEventListener("input",function(){
   searchTimer=setTimeout(async function(){
     $("search-msg").textContent="ищу…";
     try{
-      var r=await api("/v1/knowledge/search?q="+encodeURIComponent(q)+"&limit=10");
+      var r=await api("/api/v1/knowledge/search?q="+encodeURIComponent(q)+"&limit=10");
       var d=await r.json();
       var res=d.results||[];
       var h="";

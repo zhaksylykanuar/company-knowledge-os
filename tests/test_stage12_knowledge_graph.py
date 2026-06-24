@@ -48,11 +48,11 @@ async def test_knowledge_graph_global_local_filters_and_hidden_count() -> None:
         project_id, _, source_event_id = await _seed_project_graph(marker)
         async with _client() as client:
             global_response = await client.get(
-                "/v1/knowledge/graph",
+                "/api/v1/knowledge/graph",
                 params={"view": "founder", "limit": 80},
             )
             local_response = await client.get(
-                "/v1/knowledge/graph",
+                "/api/v1/knowledge/graph",
                 params={
                     "view": "founder",
                     "focus_node_id": project_id,
@@ -61,7 +61,7 @@ async def test_knowledge_graph_global_local_filters_and_hidden_count() -> None:
                 },
             )
             filtered_response = await client.get(
-                "/v1/knowledge/graph",
+                "/api/v1/knowledge/graph",
                 params={
                     "view": "founder",
                     "node_type": "project",
@@ -71,7 +71,7 @@ async def test_knowledge_graph_global_local_filters_and_hidden_count() -> None:
                 },
             )
             capped_response = await client.get(
-                "/v1/knowledge/graph",
+                "/api/v1/knowledge/graph",
                 params={"view": "founder", "limit": 1},
             )
         assert global_response.status_code == 200
@@ -120,19 +120,19 @@ async def test_knowledge_node_note_redacts_raw_refs_by_view() -> None:
         encoded_project = project_id.replace(":", "%3A")
         async with _client() as client:
             founder_response = await client.get(
-                f"/v1/knowledge/nodes/{encoded_project}",
+                f"/api/v1/knowledge/nodes/{encoded_project}",
                 params={"view": "founder"},
             )
             team_response = await client.get(
-                f"/v1/knowledge/nodes/{encoded_project}",
+                f"/api/v1/knowledge/nodes/{encoded_project}",
                 params={"view": "team"},
             )
             source_response = await client.get(
-                f"/v1/knowledge/nodes/source_event%3A{source_event_id}",
+                f"/api/v1/knowledge/nodes/source_event%3A{source_event_id}",
                 params={"view": "team"},
             )
             investor_source_response = await client.get(
-                f"/v1/knowledge/nodes/source_event%3A{source_event_id}",
+                f"/api/v1/knowledge/nodes/source_event%3A{source_event_id}",
                 params={"view": "investor"},
             )
 
@@ -166,11 +166,11 @@ async def test_obsidian_preview_is_founder_only_markdown_preview_without_file_wr
         await _seed_project_graph(marker)
         async with _client() as client:
             response = await client.post(
-                "/v1/knowledge/export/obsidian-preview",
+                "/api/v1/knowledge/export/obsidian-preview",
                 params={"view": "founder", "limit": 40},
             )
             team_response = await client.post(
-                "/v1/knowledge/export/obsidian-preview",
+                "/api/v1/knowledge/export/obsidian-preview",
                 params={"view": "team", "limit": 40},
             )
         assert response.status_code == 200
@@ -218,11 +218,11 @@ async def test_knowledge_graph_hides_archived_nodes_by_default() -> None:
             await session.commit()
         async with _client() as client:
             hidden_response = await client.get(
-                "/v1/knowledge/graph",
+                "/api/v1/knowledge/graph",
                 params={"view": "founder", "q": marker, "limit": 20},
             )
             visible_response = await client.get(
-                "/v1/knowledge/graph",
+                "/api/v1/knowledge/graph",
                 params={
                     "view": "founder",
                     "q": marker,
@@ -246,8 +246,8 @@ async def test_knowledge_graph_hides_archived_nodes_by_default() -> None:
 
 async def test_stage12_obsidian_ui_static_markers_present() -> None:
     html = Path("app/static/founder_ui.html").read_text(encoding="utf-8")
-    assert "/v1/knowledge/graph" in html
-    assert "/v1/knowledge/nodes/" in html
-    assert "/v1/knowledge/export/obsidian-preview" in html
+    assert "/api/v1/knowledge/graph" in html
+    assert "/api/v1/knowledge/nodes/" in html
+    assert "/api/v1/knowledge/export/obsidian-preview" in html
     assert "Obsidian preview" in html
     assert "local graph" in html

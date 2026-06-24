@@ -74,7 +74,7 @@ async def _cleanup(marker: str) -> None:
 async def test_inbox_requires_auth(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=True)
     async with _client() as client:
-        response = await client.get("/v1/inbox")
+        response = await client.get("/api/v1/inbox")
     assert response.status_code == 401
     assert response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
 
@@ -98,7 +98,7 @@ async def test_inbox_exposes_product_facing_proposal_fields(monkeypatch) -> None
             await session.commit()
 
         async with _client() as client:
-            response = await client.get("/v1/inbox")
+            response = await client.get("/api/v1/inbox")
         assert response.status_code == 200
         data = response.json()
         item = next(p for p in data["proposals"] if p["proposal_id"] == proposal_id)
@@ -150,7 +150,7 @@ async def test_merge_proposal_accept_applies_canonical(monkeypatch) -> None:
 
         async with _client() as client:
             response = await client.post(
-                f"/v1/inbox/proposals/{proposal_id}/decision",
+                f"/api/v1/inbox/proposals/{proposal_id}/decision",
                 json={"decision": "accepted", "reviewer_id": "founder-test"},
             )
             assert response.status_code == 200
@@ -161,7 +161,7 @@ async def test_merge_proposal_accept_applies_canonical(monkeypatch) -> None:
             assert body["applied"]["merges"]["applied"] == 1
 
             repeat = await client.post(
-                f"/v1/inbox/proposals/{proposal_id}/decision",
+                f"/api/v1/inbox/proposals/{proposal_id}/decision",
                 json={"decision": "accepted"},
             )
             assert repeat.status_code == 409
@@ -205,7 +205,7 @@ async def test_second_opinion_feed_and_lifecycle(monkeypatch) -> None:
 
         async with _client() as client:
             feed = await client.get(
-                "/v1/founder/second-opinion",
+                "/api/v1/founder/second-opinion",
                 params={"status": "open", "limit": 200},
             )
             assert feed.status_code == 200
@@ -223,19 +223,19 @@ async def test_second_opinion_feed_and_lifecycle(monkeypatch) -> None:
             assert mine[0]["confidence_hint"]
 
             dismissed = await client.post(
-                f"/v1/founder/second-opinion/{key_a}/status",
+                f"/api/v1/founder/second-opinion/{key_a}/status",
                 json={"status": "dismissed", "note": "ложная тревога"},
             )
             assert dismissed.status_code == 200
 
             snoozed = await client.post(
-                f"/v1/founder/second-opinion/{key_b}/snooze",
+                f"/api/v1/founder/second-opinion/{key_b}/snooze",
                 json={"days": 7},
             )
             assert snoozed.status_code == 200
 
             after = await client.get(
-                "/v1/founder/second-opinion",
+                "/api/v1/founder/second-opinion",
                 params={"status": "open", "limit": 200},
             )
             assert not [
@@ -245,14 +245,14 @@ async def test_second_opinion_feed_and_lifecycle(monkeypatch) -> None:
             ]
 
             noted = await client.post(
-                f"/v1/founder/second-opinion/{key_b}/note",
+                f"/api/v1/founder/second-opinion/{key_b}/note",
                 json={"note": "проверить в пятницу"},
             )
             assert noted.status_code == 200
             assert noted.json()["note"] == "проверить в пятницу"
 
             bad = await client.get(
-                "/v1/founder/second-opinion",
+                "/api/v1/founder/second-opinion",
                 params={"finding_type": "vibes"},
             )
             assert bad.status_code == 400
@@ -284,7 +284,7 @@ async def test_graph_tree_and_disputed_link_review(monkeypatch) -> None:
             await session.commit()
 
         async with _client() as client:
-            tree = await client.get("/v1/graph/tree")
+            tree = await client.get("/api/v1/graph/tree")
             assert tree.status_code == 200
             data = tree.json()
             node_ids = {n["entity_id"] for n in data["nodes"]}
@@ -297,14 +297,14 @@ async def test_graph_tree_and_disputed_link_review(monkeypatch) -> None:
             assert link["disputed"] is True
             assert "freshness" in data["nodes"][0]
 
-            inbox = (await client.get("/v1/inbox")).json()
+            inbox = (await client.get("/api/v1/inbox")).json()
             assert any(
                 item["link_id"] == link["link_id"]
                 for item in inbox["disputed_links"]
             )
 
             review = await client.post(
-                f"/v1/graph/links/{link['link_id']}/review",
+                f"/api/v1/graph/links/{link['link_id']}/review",
                 json={"decision": "confirm", "reviewer_id": "founder-test"},
             )
             assert review.status_code == 200
@@ -313,7 +313,7 @@ async def test_graph_tree_and_disputed_link_review(monkeypatch) -> None:
                 "decision": "confirmed",
             }
 
-            tree_after = (await client.get("/v1/graph/tree")).json()
+            tree_after = (await client.get("/api/v1/graph/tree")).json()
             link_after = next(
                 line
                 for line in tree_after["links"]
@@ -328,7 +328,7 @@ async def test_graph_tree_and_disputed_link_review(monkeypatch) -> None:
 async def test_data_availability_endpoint(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
-        response = await client.get("/v1/founder/data-availability")
+        response = await client.get("/api/v1/founder/data-availability")
     assert response.status_code == 200
     rows = response.json()["availability"]
     if rows:

@@ -102,7 +102,7 @@ async def _cleanup_sync_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -202,7 +202,7 @@ async def test_create_github_sync_job_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"sync_type": "manual"},
             )
@@ -225,7 +225,7 @@ async def test_create_github_sync_job_requires_owner_email_context(monkeypatch) 
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 json={"sync_type": "manual"},
             )
@@ -249,7 +249,7 @@ async def test_owner_can_create_manual_github_sync_job(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={
@@ -311,7 +311,7 @@ async def test_admin_can_create_manual_github_sync_job(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": admin_email},
                 json={"sync_type": "manual"},
@@ -344,7 +344,7 @@ async def test_member_and_viewer_cannot_create_manual_github_sync_job(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": user_email},
                 json={"sync_type": "manual"},
@@ -371,7 +371,7 @@ async def test_create_github_sync_job_rejects_non_github_connection(monkeypatch)
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"sync_type": "manual"},
@@ -393,7 +393,7 @@ async def test_create_github_sync_job_rejects_unknown_connection(monkeypatch) ->
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{uuid4()}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{uuid4()}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"sync_type": "manual"},
@@ -430,7 +430,7 @@ async def test_create_github_sync_job_rejects_non_connected_connection(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"sync_type": "manual"},
@@ -454,7 +454,7 @@ async def test_create_github_sync_job_rejects_non_manual_sync_type(monkeypatch) 
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"sync_type": "initial"},
@@ -493,7 +493,7 @@ async def test_create_github_sync_job_does_not_call_live_or_source_paths(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"sync_type": "manual"},
@@ -549,7 +549,7 @@ async def test_list_github_sync_jobs_returns_only_workspace_github_jobs(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -584,21 +584,21 @@ async def test_sync_job_detail_requires_workspace_access_and_scope(
 
         async with _async_client() as client:
             missing_owner_context = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}",
                 headers=_headers(),
             )
             wrong_owner = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(other_marker)["owner_email"]},
             )
             cross_workspace = await client.get(
-                f"/v1/workspaces/{other['workspace']['id']}/github/sync-jobs/{sync_job_id}",
+                f"/api/v1/workspaces/{other['workspace']['id']}/github/sync-jobs/{sync_job_id}",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(other_marker)["owner_email"]},
             )
             allowed = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -638,12 +638,12 @@ async def test_viewer_can_read_github_sync_jobs(monkeypatch) -> None:
 
         async with _async_client() as client:
             list_response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": viewer_email},
             )
             detail_response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}",
                 headers=_headers(),
                 params={"owner_email": viewer_email},
             )

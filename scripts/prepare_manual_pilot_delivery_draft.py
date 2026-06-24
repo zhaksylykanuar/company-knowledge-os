@@ -187,19 +187,19 @@ def _hidden_low_priority_count(digest: Mapping[str, Any]) -> int:
 def _next_step_commands(delivery_draft_id: str) -> dict[str, str]:
     return {
         "approve_draft": (
-            "curl -sS -X POST '<API_BASE_URL>/v1/digest/delivery-drafts/"
+            "curl -sS -X POST '<API_BASE_URL>/api/v1/digest/delivery-drafts/"
             f"{delivery_draft_id}/approve' "
             "-H '<AUTH_HEADER>: <AUTH_VALUE>' "
             "-H 'Content-Type: application/json' "
             "-d '{\"reviewer\":\"<REVIEWER>\",\"note\":\"<SAFE_NOTE>\"}'"
         ),
         "check_readiness": (
-            "curl -sS '<API_BASE_URL>/v1/digest/delivery-drafts/"
+            "curl -sS '<API_BASE_URL>/api/v1/digest/delivery-drafts/"
             f"{delivery_draft_id}/delivery-readiness' "
             "-H '<AUTH_HEADER>: <AUTH_VALUE>'"
         ),
         "create_delivery_intention": (
-            "curl -sS -X POST '<API_BASE_URL>/v1/digest/delivery-drafts/"
+            "curl -sS -X POST '<API_BASE_URL>/api/v1/digest/delivery-drafts/"
             f"{delivery_draft_id}/delivery-intention' "
             "-H '<AUTH_HEADER>: <AUTH_VALUE>'"
         ),
@@ -212,7 +212,7 @@ def _next_step_commands(delivery_draft_id: str) -> dict[str, str]:
             "--delivery-intention-id <DELIVERY_INTENTION_ID> --format json"
         ),
         "check_execution_gate": (
-            "curl -sS '<API_BASE_URL>/v1/digest/delivery-intentions/"
+            "curl -sS '<API_BASE_URL>/api/v1/digest/delivery-intentions/"
             "<DELIVERY_INTENTION_ID>/telegram-execution-gate' "
             "-H '<AUTH_HEADER>: <AUTH_VALUE>'"
         ),

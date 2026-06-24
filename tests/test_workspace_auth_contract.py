@@ -88,7 +88,7 @@ async def _cleanup_workspace_contract_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, slug_suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, slug_suffix=slug_suffix),
         )
@@ -160,7 +160,7 @@ async def test_bootstrap_rejects_duplicate_workspace_slug(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                "/v1/workspaces/bootstrap",
+                "/api/v1/workspaces/bootstrap",
                 headers=_headers(),
                 json=_bootstrap_payload(marker),
             )
@@ -182,7 +182,7 @@ async def test_workspace_list_returns_owner_workspaces(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.get(
-                "/v1/workspaces",
+                "/api/v1/workspaces",
                 headers=_headers(),
                 params={"owner_email": f"workspace-{marker}@example.test"},
             )
@@ -209,16 +209,16 @@ async def test_workspace_detail_requires_membership_access(monkeypatch) -> None:
 
         async with _async_client() as client:
             missing_owner_context = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}",
+                f"/api/v1/workspaces/{created['workspace']['id']}",
                 headers=_headers(),
             )
             wrong_owner = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}",
+                f"/api/v1/workspaces/{created['workspace']['id']}",
                 headers=_headers(),
                 params={"owner_email": f"workspace-{other_marker}@example.test"},
             )
             allowed = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}",
+                f"/api/v1/workspaces/{created['workspace']['id']}",
                 headers=_headers(),
                 params={"owner_email": f"workspace-{marker}@example.test"},
             )
@@ -265,7 +265,7 @@ async def test_workspace_bootstrap_requires_existing_api_key_guard(monkeypatch) 
     try:
         async with _async_client() as client:
             response = await client.post(
-                "/v1/workspaces/bootstrap",
+                "/api/v1/workspaces/bootstrap",
                 json=_bootstrap_payload(marker),
             )
 
@@ -283,7 +283,7 @@ async def test_workspace_bootstrap_rejects_invalid_email(monkeypatch) -> None:
 
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json={
                 **_bootstrap_payload(marker),

@@ -5,7 +5,7 @@ from app.agents.evidence_validator import validate_evidence
 from app.agents.runner import get_agent_runner
 from app.services.extraction_processor import process_document_chunks
 
-router = APIRouter(prefix="/v1/extraction", tags=["extraction"])
+router = APIRouter(prefix="/api/v1/extraction", tags=["extraction"])
 
 
 class ExtractionDemoRequest(BaseModel):

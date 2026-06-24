@@ -11,7 +11,7 @@ async def test_score_knowledge_endpoint_accepts_source_document_filter() -> None
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/v1/knowledge/score",
+            "/api/v1/knowledge/score",
             json={"source_document_id": source_document_id},
         )
 

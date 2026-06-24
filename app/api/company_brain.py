@@ -21,7 +21,7 @@ from app.services.company_brain_preview import (
 )
 from app.services.repo_audit import load_repo_audit
 
-router = APIRouter(prefix="/v1/founder/company-brain", tags=["company-brain"])
+router = APIRouter(prefix="/api/v1/founder/company-brain", tags=["company-brain"])
 
 
 @router.get("/preview")

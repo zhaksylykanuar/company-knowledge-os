@@ -13,7 +13,7 @@ from app.api.gmail import (
 )
 from app.core.config import settings
 
-router = APIRouter(prefix="/v1/google", tags=["google"])
+router = APIRouter(prefix="/api/v1/google", tags=["google"])
 
 QuerySource = Literal["none", "request", "config"]
 

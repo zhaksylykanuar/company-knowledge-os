@@ -30,7 +30,7 @@ _API_HEADER_NAME_PLACEHOLDER = "__FOS_API_HEADER_NAME__"
 _UI_PAGE_PATH = Path(__file__).resolve().parent.parent / "static" / "founder_ui.html"
 
 page_router = APIRouter(tags=["ui"])
-views_router = APIRouter(prefix="/v1/founder", tags=["founder"])
+views_router = APIRouter(prefix="/api/v1/founder", tags=["founder"])
 
 
 def _configured_api_header_name() -> str:

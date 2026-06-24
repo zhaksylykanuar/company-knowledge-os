@@ -421,7 +421,7 @@ async def test_gmail_backfill_persist_records_source_request_without_connector(
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={"persist": "true", "request_key": request_key},
             )
 
@@ -468,7 +468,7 @@ async def test_drive_backfill_persist_records_source_request_without_connector(
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={"persist": "true", "request_key": request_key},
             )
 

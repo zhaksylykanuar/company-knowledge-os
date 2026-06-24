@@ -12,7 +12,7 @@ export default function GitHubPage() {
       />
       <section className="grid">
         <StatusCard
-          description="Reads /v1/workspaces/{workspace_id}/github/connection-status."
+          description="Reads /api/v1/workspaces/{workspace_id}/github/connection-status."
           title="Connection status"
           value="Placeholder"
         />

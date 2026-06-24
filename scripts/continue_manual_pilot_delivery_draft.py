@@ -158,7 +158,7 @@ def _next_step_commands(delivery_intention_id: str) -> dict[str, str]:
             f"--delivery-intention-id {delivery_intention_id} --format json"
         ),
         "check_execution_gate": (
-            "curl -sS '<API_BASE_URL>/v1/digest/delivery-intentions/"
+            "curl -sS '<API_BASE_URL>/api/v1/digest/delivery-intentions/"
             f"{delivery_intention_id}/telegram-execution-gate' "
             "-H '<AUTH_HEADER>: <AUTH_VALUE>'"
         ),

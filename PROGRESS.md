@@ -35,8 +35,9 @@ DONE строго = есть код + проходящий тест/рабочи
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
 | `alembic upgrade head` | ✅ pass | 2026-06-24 | один head `f5a6b7c8d9e0`, current==head, нет pending |
-| backend tests (`pytest`) | ❌ fail | 2026-06-24 | 1805 passed, **4 failed** (все 4 — doc-contract тесты, не код) |
+| backend tests (`pytest`) | ✅ pass | 2026-06-24 | **1809 passed / 0 failed** (4 doc-contract теста починены, ШАГ A) |
 | `ruff` | ✅ pass | 2026-06-24 | `All checks passed!` (ruff 0.15.16) |
+| API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1` в 65 файлах; нет stray `/v1`; pytest зелёный |
 | frontend build | ✅ pass | 2026-06-24 | `next build` ок (7 routes), `tsc --noEmit` чисто |
 | **GitHub E2E (spine)** | ❌ fail | 2026-06-24 | backend-smoke зелёный, но `is_live=false` (моки); нет UI-flow OAuth→sync→Dashboard/Brain; страниц `/connectors`,`/brain` нет |
 | **full main E2E** | ❌ fail | 2026-06-24 | «approved action → реальный GitHub issue» не доказан (issue-client замокан) |
@@ -105,14 +106,10 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## ⛔ BLOCKERS
 
-- [CHUNK 0] **4 doc-contract теста красные** (правило #8 «зелёное состояние перед выходом»). Все — про docs, не код:
-  repro: `pytest tests/test_ci_workflow_contract.py tests/test_guarded_operations_runbook.py tests/test_jira_operating_model.py tests/test_stage13_local_launch.py`
-  детали: (1) `test_docs_include_quick_and_ci_parity_checks`; (2) `test_guarded_operations_docs_are_linked_from_index`; (3) `test_jira_target_blueprint_keeps_repositories_as_components`; (4) `test_docs_point_to_ui_and_local_vault_not_legacy_static` — падает т.к. `docs/_audit/DOCS_AUDIT.md` упоминает legacy-путь `founder_ui.html`.
-  нужно от человека: ничего — это правки docs (вне scope текущего аудита: чинить нельзя только код). Очистить отдельным docs-коммитом до старта CHUNK 1.
+- ~~[CHUNK 0] 4 doc-contract теста красные~~ — **РЕШЕНО (ШАГ A, 2026-06-24).** Починено doc-side (тесты не ослаблялись): вернул CI-секцию в README, lean `docs/playbook.md`, восстановил `docs/ops/jira-target-blueprint.md`, прилинковал guarded-operations, убрал legacy static-UI путь. pytest 1809/0. Коммит `394df7b`.
 
-- [CHUNK 1] **Фундамент собран «вбок».** Канонические §6-таблицы (SourceRecord, EvidenceRef, NormalizedEntity, Repository, PullRequest, Task, Project, Document, Goal, Insight, Briefing, BriefingItem, MessageThread, DriveFile) не существуют → gate CHUNK 2 недостижим в принципе.
-  repro: `grep -rn '__tablename__' app/db/` — канонических имён нет.
-  нужно от человека: решить ASK-2 (стратегия примирения), см. `docs/DECISIONS.md` DEC-024.
+- [CHUNK 1] **Фундамент собран «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B.** Канонические §6-таблицы (SourceRecord, EvidenceRef, NormalizedEntity, Repository, PullRequest, Task, Project, Briefing и т.д.) не существуют. ШАГ B (shape-equivalence) показал: `source_events`/`entities` **не сводятся переименованием** к §6 (другой grain, Integer vs uuid PK, нет workspace_id, payload в отдельной таблице, identity/graph-слой). Полный анализ — `docs/_audit/DOCS_AUDIT.md` → «Shape-Equivalence Analysis». Rename силой не делал.
+  нужно от человека: дана инструкция — сначала read-only диагностика «что чем нагружено» (нагружен ли entities-граф рабочим спайном), затем ветка A (§6 как единственная модель, старое → legacy) или B (ратифицировать существующую модель через DECISION). См. `docs/DECISIONS.md` ASK-2.
 
 - [SPINE] **GitHub E2E не закрыт по-настоящему.** Backend-smoke зелёный, но `is_live=false`, UI — scaffold. Рефакторинг по §21.4 ещё **запрещён** (gate CHUNK 3 не пройден).
 
@@ -120,5 +117,6 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-24` — **FOS-002 ШАГ A+B + namespace.** ШАГ A: 4 doc-contract теста починены doc-side → pytest 1809/0 (`394df7b`). Namespace `/v1`→`/api/v1` (DEC-023) выполнен: 660 замен в 65 файлах, ruff/pytest/tsc зелёные (`fix(api)` коммит). ШАГ B (shape-equivalence) gate: `source_events`/`entities` **НЕ эквивалентны** §6 по форме → СТОП перед rename, finding в DECISIONS/DOCS_AUDIT (`d757835`). Канонизация данных ждёт решения A/B (диагностика «что чем нагружено» → ветка). Код-модель пока не менялась.
 - `2026-06-24` — **Audit (Prompt A) выполнен.** Сверено с реальным кодом: строго DONE 4/23 (FOS-000/001/003/008), PARTIAL 16, MISSING 3. Gate: alembic ✅, ruff ✅, frontend build ✅, pytest 1805✅/4❌ (doc-contract), GitHub-E2E ❌ (mocked/`is_live=false`), prod ❓. Дрейф зафиксирован в DECISIONS.md (DEC-023..026) и `docs/_audit/DOCS_AUDIT.md`. Канонический namespace = `/api/v1` (код везде `/v1`), канон. имя = `SourceRecord` (код — `source_events`/`entities`), продуктовый фронт = Next.js `web/` (`/ui` — legacy). ASK-1 (23-я модель / Person), ASK-2 (rename vs add-alongside) — человеку.
 - `INIT` — template создан, состояние не проверено. Запусти Prompt A.

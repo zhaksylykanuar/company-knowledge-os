@@ -84,7 +84,7 @@ async def _cleanup_workspace_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -124,7 +124,7 @@ async def test_github_repositories_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
 
@@ -145,7 +145,7 @@ async def test_github_repositories_requires_owner_email_context(monkeypatch) -> 
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
             )
 
@@ -170,7 +170,7 @@ async def test_github_repositories_requires_workspace_access(monkeypatch) -> Non
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(other_marker)["owner_email"]},
             )
@@ -203,7 +203,7 @@ async def test_github_repositories_returns_empty_state_without_local_data(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -269,7 +269,7 @@ async def test_github_repositories_returns_local_inventory_with_filters_and_evid
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={
                     "owner_email": _bootstrap_payload(marker)["owner_email"],
@@ -349,7 +349,7 @@ async def test_github_repositories_preserves_source_event_evidence_refs(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -395,7 +395,7 @@ async def test_github_repositories_makes_no_provider_call_or_connection_write(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )

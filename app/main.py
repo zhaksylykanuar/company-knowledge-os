@@ -27,7 +27,7 @@ protected_api_dependencies = [Depends(require_api_key)]
 app.include_router(health_router, prefix="/health", tags=["health"])
 app.include_router(
     events_router,
-    prefix="/v1/events",
+    prefix="/api/v1/events",
     tags=["events"],
     dependencies=protected_api_dependencies,
 )

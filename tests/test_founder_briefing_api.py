@@ -99,7 +99,7 @@ async def _cleanup_briefing_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -240,7 +240,7 @@ async def test_manual_briefing_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
             )
@@ -261,7 +261,7 @@ async def test_manual_briefing_requires_owner_email_context(monkeypatch) -> None
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 json={},
             )
@@ -300,7 +300,7 @@ async def test_member_and_viewer_can_read_manual_briefing(monkeypatch, role: str
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": user_email},
                 json={},
@@ -333,7 +333,7 @@ async def test_empty_workspace_returns_transient_briefing_with_warnings(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -380,7 +380,7 @@ async def test_manual_briefing_includes_connection_without_token_leak(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -420,7 +420,7 @@ async def test_manual_briefing_preserves_repository_evidence_refs(monkeypatch) -
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"limit": 10},
@@ -460,7 +460,7 @@ async def test_manual_briefing_warns_when_repository_evidence_missing(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -504,7 +504,7 @@ async def test_manual_briefing_includes_sync_job_and_failed_risk(monkeypatch) ->
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -566,7 +566,7 @@ async def test_manual_briefing_reads_normalization_logs_without_mutating_sync_jo
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -638,7 +638,7 @@ async def test_manual_briefing_does_not_call_llm_provider_source_or_mutate_sync_
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},

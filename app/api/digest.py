@@ -43,7 +43,7 @@ from app.services.digest_rendering import (
     render_source_activity_digest_text,
 )
 
-router = APIRouter(prefix="/v1/digest", tags=["digest"])
+router = APIRouter(prefix="/api/v1/digest", tags=["digest"])
 
 
 class DeliveryDraftDecisionRequest(BaseModel):

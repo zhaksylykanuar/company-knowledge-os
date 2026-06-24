@@ -13,7 +13,7 @@ async def test_attention_endpoint_returns_scoring_required_when_no_scores() -> N
         base_url="http://test",
     ) as client:
         response = await client.get(
-            "/v1/knowledge/attention",
+            "/api/v1/knowledge/attention",
             params={
                 "limit": 10,
                 "source_document_id": source_document_id,
@@ -33,4 +33,4 @@ async def test_attention_endpoint_returns_scoring_required_when_no_scores() -> N
     assert body["metadata"]["limit"] == 10
     assert body["metadata"]["scoring_required"] is True
     assert body["metadata"]["scored_item_count"] == 0
-    assert "POST /v1/knowledge/score" in body["summary"]
+    assert "POST /api/v1/knowledge/score" in body["summary"]

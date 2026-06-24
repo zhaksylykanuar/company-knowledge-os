@@ -390,7 +390,7 @@ async def test_evidence_explorer_visibility() -> None:
 async def test_command_center_founder_only(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
-        ok = await client.get("/v1/founder/command-center")
+        ok = await client.get("/api/v1/founder/command-center")
         assert ok.status_code == 200
         body = ok.json()
         assert "startup_health" in body
@@ -404,7 +404,7 @@ async def test_command_center_founder_only(monkeypatch) -> None:
         assert "mrr" not in text
 
         blocked = await client.get(
-            "/v1/founder/command-center", params={"view": "team"}
+            "/api/v1/founder/command-center", params={"view": "team"}
         )
         assert blocked.status_code == 403
 
@@ -412,10 +412,10 @@ async def test_command_center_founder_only(monkeypatch) -> None:
 async def test_source_events_and_agent_runs_guards(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
-        inv = await client.get("/v1/source-events", params={"view": "investor"})
+        inv = await client.get("/api/v1/source-events", params={"view": "investor"})
         assert inv.status_code == 403
-        runs = await client.get("/v1/founder/agent-runs", params={"view": "team"})
+        runs = await client.get("/api/v1/founder/agent-runs", params={"view": "team"})
         assert runs.status_code == 403
-        ok = await client.get("/v1/founder/agent-runs")
+        ok = await client.get("/api/v1/founder/agent-runs")
         assert ok.status_code == 200
         assert "runs" in ok.json()

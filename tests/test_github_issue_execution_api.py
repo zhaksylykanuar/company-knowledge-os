@@ -173,7 +173,7 @@ async def _cleanup_issue_action_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -240,7 +240,7 @@ async def _post_proposal(
 ) -> dict:
     async with _async_client() as client:
         response = await client.post(
-            f"/v1/workspaces/{workspace_id}/actions/proposals",
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals",
             headers=_headers(),
             params={"owner_email": owner_email},
             json=payload if payload is not None else _proposal_payload(),
@@ -256,7 +256,7 @@ async def _approve_proposal(
 ) -> dict:
     async with _async_client() as client:
         response = await client.post(
-            f"/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
             headers=_headers(),
             params={"owner_email": owner_email},
         )
@@ -315,7 +315,7 @@ async def _execute_proposal(
         payload["connection_id"] = str(connection_id)
     async with _async_client() as client:
         return await client.post(
-            f"/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execute",
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execute",
             headers=_headers(),
             params={"owner_email": owner_email},
             json=payload,
@@ -379,7 +379,7 @@ async def test_execute_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/execute",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/execute",
                 params={"owner_email": owner_email},
                 json={
                     "connection_id": str(connection_id),
@@ -406,7 +406,7 @@ async def test_execute_requires_owner_email_context(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/execute",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/execute",
                 headers=_headers(),
                 json={
                     "connection_id": str(connection_id),

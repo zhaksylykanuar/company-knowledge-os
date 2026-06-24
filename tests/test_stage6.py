@@ -90,7 +90,7 @@ async def test_product_view_flags_validated_without_evidence() -> None:
 async def test_team_view_shape_no_ranking(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
-        response = await client.get("/v1/founder/team-load")
+        response = await client.get("/api/v1/founder/team-load")
     assert response.status_code == 200
     body = response.json()
     # Operational risk fields, never a productivity/rank score.
@@ -173,7 +173,7 @@ async def test_action_center_aggregates_and_is_read_only() -> None:
 async def test_execution_view_buckets_and_health(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
-        response = await client.get("/v1/founder/execution")
+        response = await client.get("/api/v1/founder/execution")
     assert response.status_code == 200
     body = response.json()
     for bucket in (
@@ -197,16 +197,16 @@ async def test_execution_team_product_block_investor(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
         for path in (
-            "/v1/founder/execution",
-            "/v1/founder/team-load",
-            "/v1/founder/product",
+            "/api/v1/founder/execution",
+            "/api/v1/founder/team-load",
+            "/api/v1/founder/product",
         ):
             blocked = await client.get(path, params={"view": "investor"})
             assert blocked.status_code == 403, path
         # Action center and task detail are founder-only.
-        ac = await client.get("/v1/founder/action-center", params={"view": "team"})
+        ac = await client.get("/api/v1/founder/action-center", params={"view": "team"})
         assert ac.status_code == 403
         task = await client.get(
-            "/v1/founder/execution/tasks/QS-1", params={"view": "team"}
+            "/api/v1/founder/execution/tasks/QS-1", params={"view": "team"}
         )
         assert task.status_code == 403

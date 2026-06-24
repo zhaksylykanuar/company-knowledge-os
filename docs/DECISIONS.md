@@ -340,11 +340,16 @@ Wrong-namespace files (all of them): `app/main.py` (`/v1/events` mount) and ever
 
 Consequences:
 
-- `/api/v1` is canonical; `/v1` is a drift to remediate in a dedicated future
-  task (single prefix change at router registration), not during this audit.
-- No code is changed now. This decision only fixes the verdict and the source
-  of truth.
+- `/api/v1` is canonical; `/v1` was the drift.
 - New routes must target `/api/v1`.
+
+**Status — DONE (2026-06-24).** Migrated uniformly: 660 `/v1` → `/api/v1`
+replacements across 65 files (router prefixes, `inbox.py` inline routes,
+`main.py` events mount, link-emitting services, `app/static/founder_ui.html`,
+operator scripts, `web/`, and all test request paths). No external provider URL
+contains `/v1`, so none were affected; `/health` and the `/ui` page routes stay
+unversioned. Verified: `ruff` ✅, `pytest` 1809 passed ✅, route check shows no
+stray `/v1`, web `tsc` ✅. Done independently of the FOS-002 data decision (A/B).
 
 ## DEC-024 - Canonical Source/Entity/Evidence Naming Is SourceRecord / NormalizedEntity / EvidenceRef
 

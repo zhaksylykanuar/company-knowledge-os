@@ -183,14 +183,14 @@ def _action_target_id(action_ref: dict[str, Any]) -> str:
     return kind
 
 
-@router.get("/v1/inbox")
+@router.get("/api/v1/inbox")
 async def get_inbox(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
     _require_founder(view)
     async with AsyncSessionLocal() as session:
         return await build_inbox(session)
 
 
-@router.post("/v1/inbox/proposals/{proposal_id}/decision")
+@router.post("/api/v1/inbox/proposals/{proposal_id}/decision")
 async def post_proposal_decision(
     proposal_id: str,
     request: ProposalDecisionRequest,
@@ -219,7 +219,7 @@ async def post_proposal_decision(
     return result
 
 
-@router.get("/v1/founder/second-opinion")
+@router.get("/api/v1/founder/second-opinion")
 async def get_second_opinion_feed(
     status_filter: str | None = Query(default="open", alias="status"),
     finding_type: str | None = Query(default=None),
@@ -266,7 +266,7 @@ async def get_second_opinion_feed(
     }
 
 
-@router.get("/v1/founder/second-opinion/{finding_key:path}/trail")
+@router.get("/api/v1/founder/second-opinion/{finding_key:path}/trail")
 async def get_finding_trail(
     finding_key: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -282,7 +282,7 @@ async def get_finding_trail(
     return trail
 
 
-@router.post("/v1/founder/second-opinion/{finding_key:path}/status")
+@router.post("/api/v1/founder/second-opinion/{finding_key:path}/status")
 async def post_finding_status(
     finding_key: str,
     request: FindingStatusRequest,
@@ -310,7 +310,7 @@ async def post_finding_status(
     return result
 
 
-@router.post("/v1/founder/second-opinion/{finding_key:path}/snooze")
+@router.post("/api/v1/founder/second-opinion/{finding_key:path}/snooze")
 async def post_finding_snooze(
     finding_key: str,
     request: FindingSnoozeRequest,
@@ -332,7 +332,7 @@ async def post_finding_snooze(
     return result
 
 
-@router.post("/v1/founder/second-opinion/{finding_key:path}/note")
+@router.post("/api/v1/founder/second-opinion/{finding_key:path}/note")
 async def post_finding_note(
     finding_key: str,
     request: FindingNoteRequest,
@@ -354,7 +354,7 @@ async def post_finding_note(
     return result
 
 
-@router.get("/v1/graph/tree")
+@router.get("/api/v1/graph/tree")
 async def get_graph_tree(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
     if _validated_view(view) == SCOPE_INVESTOR:
         raise HTTPException(
@@ -365,7 +365,7 @@ async def get_graph_tree(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, 
         return await build_graph_tree(session)
 
 
-@router.get("/v1/knowledge/graph")
+@router.get("/api/v1/knowledge/graph")
 async def get_knowledge_graph(
     view: str = Query(default=SCOPE_FOUNDER),
     focus_node_id: str | None = Query(default=None),
@@ -397,7 +397,7 @@ async def get_knowledge_graph(
         )
 
 
-@router.get("/v1/knowledge/nodes/{node_id:path}")
+@router.get("/api/v1/knowledge/nodes/{node_id:path}")
 async def get_knowledge_node(
     node_id: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -417,7 +417,7 @@ async def get_knowledge_node(
     return result
 
 
-@router.post("/v1/knowledge/export/obsidian-preview")
+@router.post("/api/v1/knowledge/export/obsidian-preview")
 async def post_obsidian_preview(
     view: str = Query(default=SCOPE_FOUNDER),
     limit: int = Query(default=80, ge=1, le=200),
@@ -430,7 +430,7 @@ async def post_obsidian_preview(
         )
 
 
-@router.get("/v1/knowledge/obsidian/status")
+@router.get("/api/v1/knowledge/obsidian/status")
 async def get_obsidian_bridge_status(
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -439,7 +439,7 @@ async def get_obsidian_bridge_status(
         return await build_obsidian_status(session)
 
 
-@router.post("/v1/knowledge/obsidian/sync")
+@router.post("/api/v1/knowledge/obsidian/sync")
 async def post_obsidian_bridge_sync(
     dry_run: bool = Query(default=True),
     requested_by: str = Query(default="founder", max_length=120),
@@ -456,7 +456,7 @@ async def post_obsidian_bridge_sync(
         return result
 
 
-@router.get("/v1/knowledge/obsidian/open-vault")
+@router.get("/api/v1/knowledge/obsidian/open-vault")
 async def get_obsidian_open_vault(
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -470,7 +470,7 @@ async def get_obsidian_open_vault(
     return result
 
 
-@router.get("/v1/knowledge/obsidian/open-node/{node_id:path}")
+@router.get("/api/v1/knowledge/obsidian/open-node/{node_id:path}")
 async def get_obsidian_open_node(
     node_id: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -491,7 +491,7 @@ async def get_obsidian_open_node(
     return result
 
 
-@router.get("/v1/founder/declarations/{key}")
+@router.get("/api/v1/founder/declarations/{key}")
 async def get_founder_declaration(
     key: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -507,7 +507,7 @@ async def get_founder_declaration(
     return declaration or {"key": key, "payload": {}}
 
 
-@router.put("/v1/founder/declarations/{key}")
+@router.put("/api/v1/founder/declarations/{key}")
 async def put_founder_declaration(
     key: str,
     request: DeclarationRequest,
@@ -530,7 +530,7 @@ async def put_founder_declaration(
     return result
 
 
-@router.post("/v1/graph/links/{link_id:path}/review")
+@router.post("/api/v1/graph/links/{link_id:path}/review")
 async def post_link_review(
     link_id: str,
     request: LinkReviewRequest,
@@ -557,7 +557,7 @@ async def post_link_review(
     return result
 
 
-@router.get("/v1/founder/data-availability")
+@router.get("/api/v1/founder/data-availability")
 async def get_data_availability(
     scope: str | None = Query(default=None),
 ) -> dict[str, Any]:
@@ -566,7 +566,7 @@ async def get_data_availability(
     return {"availability": rows}
 
 
-@router.get("/v1/founder/sources")
+@router.get("/api/v1/founder/sources")
 async def get_founder_sources(
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -575,7 +575,7 @@ async def get_founder_sources(
         return await build_source_health(session)
 
 
-@router.post("/v1/founder/sources/{source_type}/{action_type}")
+@router.post("/api/v1/founder/sources/{source_type}/{action_type}")
 async def post_founder_source_action(
     source_type: str,
     action_type: str,
@@ -604,7 +604,7 @@ async def post_founder_source_action(
     return result
 
 
-@router.get("/v1/founder/data-quality")
+@router.get("/api/v1/founder/data-quality")
 async def get_founder_data_quality(
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -613,7 +613,7 @@ async def get_founder_data_quality(
         return await build_data_quality_center(session)
 
 
-@router.get("/v1/founder/connectors/diagnostics")
+@router.get("/api/v1/founder/connectors/diagnostics")
 async def get_founder_connector_diagnostics(
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -622,7 +622,7 @@ async def get_founder_connector_diagnostics(
         return await build_connector_diagnostics(session)
 
 
-@router.get("/v1/founder/source-runs")
+@router.get("/api/v1/founder/source-runs")
 async def get_founder_source_runs(
     source_type: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
@@ -644,7 +644,7 @@ async def get_founder_source_runs(
     return {"runs": runs}
 
 
-@router.get("/v1/founder/source-runs/{request_id}/receipt")
+@router.get("/api/v1/founder/source-runs/{request_id}/receipt")
 async def get_founder_source_run_receipt(
     request_id: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -660,7 +660,7 @@ async def get_founder_source_run_receipt(
     return receipt
 
 
-@router.post("/v1/founder/sources/{source_type}/retry/{request_id}")
+@router.post("/api/v1/founder/sources/{source_type}/retry/{request_id}")
 async def post_founder_source_retry(
     source_type: str,
     request_id: str,
@@ -690,7 +690,7 @@ async def post_founder_source_retry(
     return result
 
 
-@router.get("/v1/source-events")
+@router.get("/api/v1/source-events")
 async def get_source_events(
     source_object_id: str | None = Query(default=None),
     source_system: str | None = Query(default=None),
@@ -723,7 +723,7 @@ async def get_source_events(
     return {"events": events}
 
 
-@router.get("/v1/source-events/{source_event_id}")
+@router.get("/api/v1/source-events/{source_event_id}")
 async def get_source_event_detail(
     source_event_id: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -745,14 +745,14 @@ async def get_source_event_detail(
     return detail
 
 
-@router.get("/v1/founder/command-center")
+@router.get("/api/v1/founder/command-center")
 async def get_command_center(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
     _require_founder(view)
     async with AsyncSessionLocal() as session:
         return await build_command_center(session)
 
 
-@router.get("/v1/founder/sales-signals")
+@router.get("/api/v1/founder/sales-signals")
 async def get_sales_signals(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
     # Account/relationship signals are founder-scoped (communications).
     _require_founder(view)
@@ -760,7 +760,7 @@ async def get_sales_signals(view: str = Query(default=SCOPE_FOUNDER)) -> dict[st
         return await build_sales_signals(session)
 
 
-@router.get("/v1/founder/execution")
+@router.get("/api/v1/founder/execution")
 async def get_execution(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
     if _validated_view(view) == SCOPE_INVESTOR:
         raise HTTPException(
@@ -771,7 +771,7 @@ async def get_execution(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, A
         return await build_execution_view(session)
 
 
-@router.get("/v1/founder/execution/tasks/{issue_key}")
+@router.get("/api/v1/founder/execution/tasks/{issue_key}")
 async def get_task_detail(
     issue_key: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -786,7 +786,7 @@ async def get_task_detail(
     return detail
 
 
-@router.get("/v1/founder/team-load")
+@router.get("/api/v1/founder/team-load")
 async def get_team_load(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
     if _validated_view(view) == SCOPE_INVESTOR:
         raise HTTPException(
@@ -797,7 +797,7 @@ async def get_team_load(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, A
         return await build_team_view(session)
 
 
-@router.get("/v1/founder/product")
+@router.get("/api/v1/founder/product")
 async def get_product(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
     if _validated_view(view) == SCOPE_INVESTOR:
         raise HTTPException(
@@ -808,14 +808,14 @@ async def get_product(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any
         return await build_product_view(session)
 
 
-@router.get("/v1/founder/action-center")
+@router.get("/api/v1/founder/action-center")
 async def get_action_center(view: str = Query(default=SCOPE_FOUNDER)) -> dict[str, Any]:
     _require_founder(view)
     async with AsyncSessionLocal() as session:
         return await build_action_center(session)
 
 
-@router.get("/v1/founder/agent-runs")
+@router.get("/api/v1/founder/agent-runs")
 async def get_agent_runs(
     limit: int = Query(default=20, ge=1, le=100),
     view: str = Query(default=SCOPE_FOUNDER),
@@ -826,7 +826,7 @@ async def get_agent_runs(
     return {"runs": runs}
 
 
-@router.get("/v1/founder/notification-center")
+@router.get("/api/v1/founder/notification-center")
 async def get_notification_center(
     view: str = Query(default=SCOPE_FOUNDER),
 ) -> dict[str, Any]:
@@ -839,7 +839,7 @@ async def get_notification_center(
 # --- Stage 7: role dashboards (backend-redacted per audience) -----------
 
 
-@router.get("/v1/team/workspace")
+@router.get("/api/v1/team/workspace")
 async def get_team_workspace(
     view: str = Query(default=SCOPE_TEAM),
 ) -> dict[str, Any]:
@@ -849,7 +849,7 @@ async def get_team_workspace(
         return await build_team_workspace(session)
 
 
-@router.get("/v1/investor/view")
+@router.get("/api/v1/investor/view")
 async def get_investor_view(
     view: str = Query(default=SCOPE_INVESTOR),
 ) -> dict[str, Any]:
@@ -859,7 +859,7 @@ async def get_investor_view(
         return await build_investor_view(session)
 
 
-@router.get("/v1/operating-rhythm/{cadence}")
+@router.get("/api/v1/operating-rhythm/{cadence}")
 async def get_operating_rhythm(
     cadence: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -884,7 +884,7 @@ async def get_operating_rhythm(
 # --- Stage 7: curated updates (approve before export) -------------------
 
 
-@router.get("/v1/updates/{kind}")
+@router.get("/api/v1/updates/{kind}")
 async def get_update_draft(
     kind: str,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -900,7 +900,7 @@ async def get_update_draft(
         return await build_update_draft(session, kind=kind)
 
 
-@router.post("/v1/updates/{kind}/approve")
+@router.post("/api/v1/updates/{kind}/approve")
 async def post_update_approve(
     kind: str,
     request: UpdateApproveRequest,
@@ -931,7 +931,7 @@ async def post_update_approve(
 # --- Stage 7: Action Center CTAs (safe, audited) ------------------------
 
 
-@router.post("/v1/founder/action-center/review")
+@router.post("/api/v1/founder/action-center/review")
 async def post_action_review(
     request: ActionReviewRequest,
     view: str = Query(default=SCOPE_FOUNDER),
@@ -954,7 +954,7 @@ async def post_action_review(
     return {"reviewed": True, "target_id": target_id}
 
 
-@router.post("/v1/founder/action-center/assign-owner-proposal")
+@router.post("/api/v1/founder/action-center/assign-owner-proposal")
 async def post_assign_owner_proposal(
     request: OwnerAssignmentRequest,
     view: str = Query(default=SCOPE_FOUNDER),

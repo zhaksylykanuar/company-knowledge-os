@@ -17,7 +17,7 @@ from app.db.base import AsyncSessionLocal
 from app.services import share_packs as sp
 from app.services.visibility import SCOPE_FOUNDER, SCOPES
 
-router = APIRouter(prefix="/v1/share-packs", tags=["share-packs"])
+router = APIRouter(prefix="/api/v1/share-packs", tags=["share-packs"])
 
 
 class GeneratePackRequest(BaseModel):

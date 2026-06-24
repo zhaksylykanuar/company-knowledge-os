@@ -58,9 +58,9 @@ def test_ui_contains_sources_and_data_quality_surfaces(monkeypatch) -> None:
         "Sources / Data Control",
         "Качество данных",
         "Источники данных",
-        "/v1/founder/sources",
-        "/v1/founder/data-quality",
-        "/v1/founder/source-runs",
+        "/api/v1/founder/sources",
+        "/api/v1/founder/data-quality",
+        "/api/v1/founder/source-runs",
         "loadSources",
         "loadDataQuality",
         "masked_connection",
@@ -120,7 +120,7 @@ def test_founder_overview_returns_read_model(monkeypatch) -> None:
     monkeypatch.setattr(ui_api, "build_founder_overview", fake_overview)
 
     with TestClient(app) as client:
-        response = client.get("/v1/founder/overview", params={"attention_limit": 7})
+        response = client.get("/api/v1/founder/overview", params={"attention_limit": 7})
 
     assert response.status_code == 200
     assert response.json()["status"]["level"] == "green"
@@ -139,7 +139,7 @@ def test_founder_status_returns_builder_text(monkeypatch) -> None:
 
     with TestClient(app) as client:
         response = client.get(
-            "/v1/founder/status",
+            "/api/v1/founder/status",
             params={"q": "Atlas", "window_hours": 72, "limit": 5},
         )
 
@@ -157,7 +157,7 @@ def test_founder_dev_returns_builder_text(monkeypatch) -> None:
     monkeypatch.setattr(ui_api, "build_dev_reply_text", fake_dev)
 
     with TestClient(app) as client:
-        response = client.get("/v1/founder/dev")
+        response = client.get("/api/v1/founder/dev")
 
     assert response.status_code == 200
     assert response.text == "dev overview text"
@@ -165,7 +165,7 @@ def test_founder_dev_returns_builder_text(monkeypatch) -> None:
 
 @pytest.mark.parametrize(
     "path",
-    ["/v1/founder/overview", "/v1/founder/status", "/v1/founder/dev"],
+    ["/api/v1/founder/overview", "/api/v1/founder/status", "/api/v1/founder/dev"],
 )
 def test_founder_views_reject_missing_key_before_builders(monkeypatch, path: str) -> None:
     _set_auth(monkeypatch, enabled=True, key=SecretStr("test-api-key"))
@@ -190,6 +190,6 @@ def test_founder_status_rejects_out_of_range_window(monkeypatch) -> None:
     )
 
     with TestClient(app) as client:
-        response = client.get("/v1/founder/status", params={"window_hours": 0})
+        response = client.get("/api/v1/founder/status", params={"window_hours": 0})
 
     assert response.status_code == 422

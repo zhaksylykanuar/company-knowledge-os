@@ -69,25 +69,25 @@ async def _cleanup(marker: str) -> None:
 @pytest.mark.parametrize(
     "path,view,expected",
     [
-        ("/v1/team/workspace", "team", 200),
-        ("/v1/team/workspace", "founder", 200),
-        ("/v1/team/workspace", "investor", 403),
-        ("/v1/investor/view", "investor", 200),
-        ("/v1/investor/view", "founder", 200),
-        ("/v1/investor/view", "team", 403),
-        ("/v1/operating-rhythm/weekly", "team", 200),
-        ("/v1/operating-rhythm/weekly", "founder", 200),
-        ("/v1/operating-rhythm/weekly", "investor", 403),
-        ("/v1/operating-rhythm/daily", "team", 200),
-        ("/v1/operating-rhythm/daily", "investor", 403),
-        ("/v1/operating-rhythm/decision", "founder", 200),
-        ("/v1/operating-rhythm/decision", "team", 403),
-        ("/v1/operating-rhythm/decision", "investor", 403),
-        ("/v1/operating-rhythm/bogus", "founder", 400),
-        ("/v1/updates/founder_weekly", "founder", 200),
-        ("/v1/updates/investor_update", "team", 403),
-        ("/v1/updates/bogus", "founder", 400),
-        ("/v1/team/workspace", "ceo", 400),
+        ("/api/v1/team/workspace", "team", 200),
+        ("/api/v1/team/workspace", "founder", 200),
+        ("/api/v1/team/workspace", "investor", 403),
+        ("/api/v1/investor/view", "investor", 200),
+        ("/api/v1/investor/view", "founder", 200),
+        ("/api/v1/investor/view", "team", 403),
+        ("/api/v1/operating-rhythm/weekly", "team", 200),
+        ("/api/v1/operating-rhythm/weekly", "founder", 200),
+        ("/api/v1/operating-rhythm/weekly", "investor", 403),
+        ("/api/v1/operating-rhythm/daily", "team", 200),
+        ("/api/v1/operating-rhythm/daily", "investor", 403),
+        ("/api/v1/operating-rhythm/decision", "founder", 200),
+        ("/api/v1/operating-rhythm/decision", "team", 403),
+        ("/api/v1/operating-rhythm/decision", "investor", 403),
+        ("/api/v1/operating-rhythm/bogus", "founder", 400),
+        ("/api/v1/updates/founder_weekly", "founder", 200),
+        ("/api/v1/updates/investor_update", "team", 403),
+        ("/api/v1/updates/bogus", "founder", 400),
+        ("/api/v1/team/workspace", "ceo", 400),
     ],
 )
 async def test_role_view_gating(monkeypatch, path: str, view: str, expected: int) -> None:
@@ -101,12 +101,12 @@ async def test_action_center_ctas_are_founder_only(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
         review = await client.post(
-            "/v1/founder/action-center/review",
+            "/api/v1/founder/action-center/review",
             params={"view": "team"},
             json={"action_ref": {"kind": "task", "issue_key": "X-1"}},
         )
         owner = await client.post(
-            "/v1/founder/action-center/assign-owner-proposal",
+            "/api/v1/founder/action-center/assign-owner-proposal",
             params={"view": "investor"},
             json={"issue_key": "X-1"},
         )
@@ -302,11 +302,11 @@ async def test_investor_key_risks_exclude_non_investor_findings() -> None:
 @pytest.mark.parametrize(
     "method,path,body",
     [
-        ("post", "/v1/founder/second-opinion/k/status", {"status": "resolved"}),
-        ("post", "/v1/founder/second-opinion/k/snooze", {"days": 7}),
-        ("post", "/v1/founder/second-opinion/k/note", {"note": "x"}),
-        ("post", "/v1/inbox/proposals/p/decision", {"decision": "accepted"}),
-        ("post", "/v1/graph/links/l/review", {"decision": "confirm"}),
+        ("post", "/api/v1/founder/second-opinion/k/status", {"status": "resolved"}),
+        ("post", "/api/v1/founder/second-opinion/k/snooze", {"days": 7}),
+        ("post", "/api/v1/founder/second-opinion/k/note", {"note": "x"}),
+        ("post", "/api/v1/inbox/proposals/p/decision", {"decision": "accepted"}),
+        ("post", "/api/v1/graph/links/l/review", {"decision": "confirm"}),
     ],
 )
 async def test_mutation_endpoints_are_founder_only(
@@ -375,10 +375,10 @@ async def test_team_operating_rhythm_redacts_findings(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
         weekly = await client.get(
-            "/v1/operating-rhythm/weekly", params={"view": "team"}
+            "/api/v1/operating-rhythm/weekly", params={"view": "team"}
         )
         daily = await client.get(
-            "/v1/operating-rhythm/daily", params={"view": "team"}
+            "/api/v1/operating-rhythm/daily", params={"view": "team"}
         )
     assert weekly.status_code == 200 and daily.status_code == 200
     for body in (weekly.json(), daily.json()):
@@ -399,7 +399,7 @@ async def test_action_review_writes_audit(monkeypatch) -> None:
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/founder/action-center/review",
+                "/api/v1/founder/action-center/review",
                 json={
                     "action_ref": {"kind": "task", "issue_key": issue},
                     "note": "looked at it",
@@ -422,11 +422,11 @@ async def test_assign_owner_proposal_is_idempotent(monkeypatch) -> None:
     try:
         async with _client() as client:
             first = await client.post(
-                "/v1/founder/action-center/assign-owner-proposal",
+                "/api/v1/founder/action-center/assign-owner-proposal",
                 json={"issue_key": issue, "suggested_owner": "alice"},
             )
             second = await client.post(
-                "/v1/founder/action-center/assign-owner-proposal",
+                "/api/v1/founder/action-center/assign-owner-proposal",
                 json={"issue_key": issue, "suggested_owner": "alice"},
             )
         assert first.json() == {
@@ -460,21 +460,21 @@ async def test_curated_update_approve_is_idempotent_and_audited(monkeypatch) -> 
         async with _client() as client:
             draft = (
                 await client.get(
-                    f"/v1/updates/{KIND_FOUNDER_WEEKLY}", params={"view": "founder"}
+                    f"/api/v1/updates/{KIND_FOUNDER_WEEKLY}", params={"view": "founder"}
                 )
             ).json()
             content_hash = draft["content_hash"]
             assert draft["requires_approval"] is True and draft["approved"] is False
             first = await client.post(
-                f"/v1/updates/{KIND_FOUNDER_WEEKLY}/approve",
+                f"/api/v1/updates/{KIND_FOUNDER_WEEKLY}/approve",
                 json={"content_hash": content_hash},
             )
             second = await client.post(
-                f"/v1/updates/{KIND_FOUNDER_WEEKLY}/approve",
+                f"/api/v1/updates/{KIND_FOUNDER_WEEKLY}/approve",
                 json={"content_hash": content_hash},
             )
             bad = await client.post(
-                f"/v1/updates/{KIND_FOUNDER_WEEKLY}/approve",
+                f"/api/v1/updates/{KIND_FOUNDER_WEEKLY}/approve",
                 json={"content_hash": "deadbeefdeadbeef"},
             )
         assert first.status_code == 200 and first.json()["idempotent"] is False
@@ -522,10 +522,10 @@ def test_ui_page_wires_role_views(monkeypatch) -> None:
         'data-nav="tw"',
         'data-nav="orh"',
         'data-nav="upd"',
-        "/v1/team/workspace",
-        "/v1/investor/view",
-        "/v1/operating-rhythm/",
-        "/v1/updates/",
+        "/api/v1/team/workspace",
+        "/api/v1/investor/view",
+        "/api/v1/operating-rhythm/",
+        "/api/v1/updates/",
         "data-acreview",
         "data-acowner",
         "почему в группе",

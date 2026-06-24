@@ -13,7 +13,7 @@ from app.services.chunking import chunk_text
 from app.services.raw_storage import raw_storage_root, safe_path_part, sha256_text, write_json
 from app.services.source_control import ACTION_BACKFILL, ACTION_PREVIEW_SYNC, request_source_action
 
-router = APIRouter(prefix="/v1/gmail", tags=["gmail"])
+router = APIRouter(prefix="/api/v1/gmail", tags=["gmail"])
 
 BROAD_GMAIL_BACKFILL_QUERY = "in:inbox OR in:sent"
 GMAIL_BACKFILL_DEFAULT_MAX_RESULTS = 10
@@ -362,7 +362,7 @@ async def gmail_backfill(
         "live_provider_ack_supplied": confirm_live_provider_execution is not None,
         "allow_production_operation": bool(allow_production_operation),
         "production_ack_supplied": confirm_production_operation is not None,
-        "legacy_route": "/v1/gmail/backfill",
+        "legacy_route": "/api/v1/gmail/backfill",
     }
     async with AsyncSessionLocal() as session:
         request = await request_source_action(

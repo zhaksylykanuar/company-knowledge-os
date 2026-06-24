@@ -420,8 +420,8 @@ async def test_approve_rejects_stale_hash() -> None:
 @pytest.mark.parametrize(
     "method,path,body",
     [
-        ("get", "/v1/share-packs", None),
-        ("post", "/v1/share-packs/generate", {"pack_type": "investor_update"}),
+        ("get", "/api/v1/share-packs", None),
+        ("post", "/api/v1/share-packs/generate", {"pack_type": "investor_update"}),
     ],
 )
 async def test_share_pack_endpoints_are_founder_only(
@@ -448,7 +448,7 @@ async def test_share_pack_api_full_flow(monkeypatch) -> None:
         async with _client() as client:
             g = (
                 await client.post(
-                    "/v1/share-packs/generate",
+                    "/api/v1/share-packs/generate",
                     json={"pack_type": "founder_weekly_review"},
                 )
             ).json()
@@ -456,15 +456,15 @@ async def test_share_pack_api_full_flow(monkeypatch) -> None:
             created.append(pid)
             # Export before approval is refused.
             early = await client.post(
-                f"/v1/share-packs/{pid}/export", json={}
+                f"/api/v1/share-packs/{pid}/export", json={}
             )
             assert early.status_code == 409
             approved = await client.post(
-                f"/v1/share-packs/{pid}/approve",
+                f"/api/v1/share-packs/{pid}/approve",
                 json={"content_hash": g["content_hash"]},
             )
             assert approved.status_code == 200
-            exported = await client.post(f"/v1/share-packs/{pid}/export", json={})
+            exported = await client.post(f"/api/v1/share-packs/{pid}/export", json={})
             assert exported.status_code == 200
             assert exported.json()["exported"] is True
     finally:
@@ -483,8 +483,8 @@ def test_ui_wires_share_packs_and_notifications(monkeypatch) -> None:
     for marker in (
         'data-nav="spk"',
         'data-nav="ntf"',
-        "/v1/share-packs",
-        "/v1/founder/notification-center",
+        "/api/v1/share-packs",
+        "/api/v1/founder/notification-center",
         "data-spkgen",
         "data-spkact",
         "Redaction manifest",

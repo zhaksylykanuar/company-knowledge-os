@@ -101,7 +101,7 @@ async def build_notification_center(
                 cta="Разобрать конфликт",
                 cta_ref={"kind": "finding", "finding_key": f["finding_key"]},
                 status=f["status"],
-                trail_link=f"/v1/founder/second-opinion/{f['finding_key']}/trail",
+                trail_link=f"/api/v1/founder/second-opinion/{f['finding_key']}/trail",
             )
         )
 

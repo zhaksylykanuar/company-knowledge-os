@@ -208,7 +208,7 @@ async def test_source_health_counts_and_masks_connector_setup(monkeypatch) -> No
     try:
         await _seed_jira_evidence(marker)
         async with _client() as client:
-            response = await client.get("/v1/founder/sources")
+            response = await client.get("/api/v1/founder/sources")
         assert response.status_code == 200
         body = response.json()
         jira = next(item for item in body["sources"] if item["source_type"] == "jira")
@@ -235,7 +235,7 @@ async def test_drive_source_control_action_is_request_only(monkeypatch) -> None:
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/founder/sources/drive/backfill",
+                "/api/v1/founder/sources/drive/backfill",
                 json={
                     "request_key": f"drive-backfill-{marker}",
                     "input": {"max_results": 1},
@@ -270,23 +270,23 @@ async def test_source_controls_are_audited_idempotent_and_pause_blocks_sync(
     try:
         async with _client() as client:
             first = await client.post(
-                "/v1/founder/sources/jira/sync",
+                "/api/v1/founder/sources/jira/sync",
                 json={"request_key": f"sync-{marker}", "requested_by": "founder"},
             )
             second = await client.post(
-                "/v1/founder/sources/jira/sync",
+                "/api/v1/founder/sources/jira/sync",
                 json={"request_key": f"sync-{marker}", "requested_by": "founder"},
             )
             pause = await client.post(
-                "/v1/founder/sources/jira/pause",
+                "/api/v1/founder/sources/jira/pause",
                 json={"request_key": f"pause-{marker}", "requested_by": "founder"},
             )
             blocked = await client.post(
-                "/v1/founder/sources/jira/backfill",
+                "/api/v1/founder/sources/jira/backfill",
                 json={"request_key": f"backfill-{marker}", "requested_by": "founder"},
             )
             resume = await client.post(
-                "/v1/founder/sources/jira/resume",
+                "/api/v1/founder/sources/jira/resume",
                 json={"request_key": f"resume-{marker}", "requested_by": "founder"},
             )
         assert first.status_code == 200
@@ -320,7 +320,7 @@ async def test_source_controls_are_founder_only(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
         response = await client.post(
-            "/v1/founder/sources/jira/test",
+            "/api/v1/founder/sources/jira/test",
             params={"view": "team"},
             json={"request_key": "team-blocked"},
         )
@@ -335,7 +335,7 @@ async def test_source_control_request_input_is_log_safe(monkeypatch) -> None:
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/founder/sources/manual_inputs/test",
+                "/api/v1/founder/sources/manual_inputs/test",
                 json={
                     "request_key": f"safe-input-{marker}",
                     "input": {
@@ -379,15 +379,15 @@ async def test_source_controls_reject_unknown_source_and_action_without_rows(
     try:
         async with _client() as client:
             unknown_source = await client.post(
-                "/v1/founder/sources/not-a-source/sync",
+                "/api/v1/founder/sources/not-a-source/sync",
                 json={"request_key": f"invalid-source-{marker}"},
             )
             traversal_like = await client.post(
-                "/v1/founder/sources/..jira/sync",
+                "/api/v1/founder/sources/..jira/sync",
                 json={"request_key": f"invalid-traversal-{marker}"},
             )
             unknown_action = await client.post(
-                "/v1/founder/sources/jira/not-an-action",
+                "/api/v1/founder/sources/jira/not-an-action",
                 json={"request_key": f"invalid-action-{marker}"},
             )
         assert unknown_source.status_code == 404
@@ -419,11 +419,11 @@ async def test_source_events_filters_and_redacts_by_role(monkeypatch) -> None:
         await _seed_jira_evidence(marker, event_status="failed")
         async with _client() as client:
             founder = await client.get(
-                "/v1/source-events",
+                "/api/v1/source-events",
                 params={"source_type": "jira", "status": "failed", "limit": 10},
             )
             team = await client.get(
-                "/v1/source-events",
+                "/api/v1/source-events",
                 params={
                     "source_type": "jira",
                     "status": "failed",
@@ -432,7 +432,7 @@ async def test_source_events_filters_and_redacts_by_role(monkeypatch) -> None:
                 },
             )
             investor = await client.get(
-                "/v1/source-events", params={"view": "investor"}
+                "/api/v1/source-events", params={"view": "investor"}
             )
         assert founder.status_code == 200
         founder_event = next(
@@ -530,7 +530,7 @@ async def test_data_quality_center_reports_evidence_based_issues(monkeypatch) ->
             await session.commit()
 
         async with _client() as client:
-            response = await client.get("/v1/founder/data-quality")
+            response = await client.get("/api/v1/founder/data-quality")
         assert response.status_code == 200
         body = response.json()
         categories = {issue["category"] for issue in body["issues"]}

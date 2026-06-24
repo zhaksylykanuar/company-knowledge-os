@@ -73,7 +73,7 @@ async def test_gmail_backfill_route_records_preview_request_without_connector(
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "request_key": request_key,
                     "max_results": SAFE_GMAIL_LIMIT,
@@ -105,7 +105,7 @@ async def test_gmail_backfill_route_records_preview_request_without_connector(
             "live_provider_ack_supplied": False,
             "allow_production_operation": False,
             "production_ack_supplied": False,
-            "legacy_route": "/v1/gmail/backfill",
+            "legacy_route": "/api/v1/gmail/backfill",
         }
         assert private_configured_query not in response.text
 
@@ -134,7 +134,7 @@ async def test_gmail_backfill_route_maps_persist_to_backfill_without_ack_or_conn
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "request_key": request_key,
                     "max_results": 1,
@@ -171,7 +171,7 @@ async def test_gmail_backfill_route_redacts_operator_acks(monkeypatch) -> None:
     try:
         async with _client() as client:
             response = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "request_key": request_key,
                     "persist": "true",
@@ -205,7 +205,7 @@ async def test_gmail_backfill_route_is_idempotent_by_request_key(monkeypatch) ->
     try:
         async with _client() as client:
             first = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "request_key": request_key,
                     "max_results": 1,
@@ -213,7 +213,7 @@ async def test_gmail_backfill_route_is_idempotent_by_request_key(monkeypatch) ->
                 },
             )
             second = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "request_key": request_key,
                     "max_results": 1,
@@ -243,7 +243,7 @@ async def test_gmail_backfill_route_rejects_invalid_explicit_query_before_reques
     try:
         async with _client() as client:
             blank = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "request_key": f"gmail-blank-{marker}",
                     "max_results": 1,
@@ -252,7 +252,7 @@ async def test_gmail_backfill_route_rejects_invalid_explicit_query_before_reques
                 },
             )
             broad = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "request_key": f"gmail-broad-{marker}",
                     "max_results": 1,
@@ -261,7 +261,7 @@ async def test_gmail_backfill_route_rejects_invalid_explicit_query_before_reques
                 },
             )
             too_large = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "request_key": f"gmail-limit-{marker}",
                     "max_results": gmail_api.GMAIL_BACKFILL_MAX_RESULTS + 1,

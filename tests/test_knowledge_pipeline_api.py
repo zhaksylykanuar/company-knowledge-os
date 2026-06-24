@@ -129,7 +129,7 @@ async def test_ingest_text_process_endpoint_processes_manual_text_with_evidence_
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/v1/knowledge/ingest-text-process",
+            "/api/v1/knowledge/ingest-text-process",
             json=_pipeline_payload(f"pipeline-{uuid4().hex}"),
         )
 
@@ -167,9 +167,9 @@ async def test_ingest_text_process_endpoint_processes_manual_text_with_evidence_
             assert item["score"]["attention_score"] > 0
             assert item["score"]["reasons"]
 
-        assert payload["next_steps"]["search"] == "GET /v1/knowledge/search?q=<query>"
-        assert payload["next_steps"]["ask"] == "POST /v1/knowledge/ask"
-        assert payload["next_steps"]["attention"] == "GET /v1/knowledge/attention"
+        assert payload["next_steps"]["search"] == "GET /api/v1/knowledge/search?q=<query>"
+        assert payload["next_steps"]["ask"] == "POST /api/v1/knowledge/ask"
+        assert payload["next_steps"]["attention"] == "GET /api/v1/knowledge/attention"
 
         extracted_entities = await _load_extracted_entities(document_id)
         assert len(extracted_entities) == 3
@@ -197,7 +197,7 @@ async def test_ingest_text_process_endpoint_reports_zero_counts_without_signals(
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/v1/knowledge/ingest-text-process",
+            "/api/v1/knowledge/ingest-text-process",
             json=_pipeline_payload(
                 f"pipeline-empty-{uuid4().hex}",
                 text="Meeting notes only. General context without action signals.",
@@ -238,7 +238,7 @@ async def test_existing_ingest_text_endpoint_remains_unchanged(monkeypatch, tmp_
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(
-            "/v1/knowledge/ingest-text",
+            "/api/v1/knowledge/ingest-text",
             json=_pipeline_payload(f"existing-ingest-{uuid4().hex}"),
         )
 
@@ -271,11 +271,11 @@ async def test_ingest_text_process_endpoint_auth_and_health_behavior(
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         health_response = await client.get("/health")
         missing_key_response = await client.post(
-            "/v1/knowledge/ingest-text-process",
+            "/api/v1/knowledge/ingest-text-process",
             json=_pipeline_payload(f"auth-missing-{uuid4().hex}"),
         )
         valid_key_response = await client.post(
-            "/v1/knowledge/ingest-text-process",
+            "/api/v1/knowledge/ingest-text-process",
             headers={"X-FounderOS-API-Key": "test-api-key"},
             json=_pipeline_payload(f"auth-valid-{uuid4().hex}"),
         )

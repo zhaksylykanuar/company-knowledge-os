@@ -13,7 +13,7 @@ from app.services.founder_briefing_service import (
     generate_manual_founder_briefing,
 )
 
-router = APIRouter(prefix="/v1/workspaces/{workspace_id}/briefings", tags=["briefings"])
+router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/briefings", tags=["briefings"])
 
 
 class FounderBriefingRequest(BaseModel):

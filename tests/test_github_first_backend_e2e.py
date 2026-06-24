@@ -265,7 +265,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
     try:
         async with _async_client() as client:
             bootstrap = await client.post(
-                "/v1/workspaces/bootstrap",
+                "/api/v1/workspaces/bootstrap",
                 headers=_headers(),
                 json=_bootstrap_payload(marker),
             )
@@ -278,7 +278,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert bootstrap_body["membership"]["role"] == "owner"
 
             initial_status = await client.get(
-                f"/v1/workspaces/{workspace_id}/github/connection-status",
+                f"/api/v1/workspaces/{workspace_id}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
@@ -289,7 +289,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert initial_status.json()["is_live"] is False
 
             connection_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/github/connections/provider-token",
+                f"/api/v1/workspaces/{workspace_id}/github/connections/provider-token",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -312,7 +312,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert "fernet:v1:" not in connection_response.text
 
             connected_status = await client.get(
-                f"/v1/workspaces/{workspace_id}/github/connection-status",
+                f"/api/v1/workspaces/{workspace_id}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
@@ -327,7 +327,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert PLAIN_E2E_TOKEN not in connected_status.text
 
             repositories_response = await client.get(
-                f"/v1/workspaces/{workspace_id}/github/repositories",
+                f"/api/v1/workspaces/{workspace_id}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
@@ -345,7 +345,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             )
 
             sync_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{workspace_id}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -366,7 +366,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert sync_job["sync_type"] == "manual"
 
             normalize_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -395,7 +395,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             sync_job_before_briefing = await _stored_sync_job(sync_job_id)
 
             briefing_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/briefings/manual",
+                f"/api/v1/workspaces/{workspace_id}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -426,7 +426,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert sync_job_after_briefing.logs == sync_job_before_briefing.logs
 
             action_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/actions/proposals",
+                f"/api/v1/workspaces/{workspace_id}/actions/proposals",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -460,7 +460,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert await _stored_executions(proposal_id) == []
 
             approve_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
+                f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
@@ -473,7 +473,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
 
             sync_job_count_before_execute = await _count(SyncJob)
             execute_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execute",
+                f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execute",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={

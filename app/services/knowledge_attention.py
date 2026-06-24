@@ -199,7 +199,7 @@ def _summary(items: list[dict[str, Any]]) -> str:
     if not items:
         return (
             "No evidence-backed scored items found. "
-            "Run POST /v1/knowledge/score before using the attention dashboard."
+            "Run POST /api/v1/knowledge/score before using the attention dashboard."
         )
 
     top_item = items[0]

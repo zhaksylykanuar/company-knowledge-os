@@ -109,7 +109,7 @@ def test_google_backfill_preflight_is_protected(monkeypatch) -> None:
 
     with TestClient(app) as client:
         missing = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={
                 "gmail_query": private_markers[3],
                 "gmail_max_results": 1,
@@ -117,7 +117,7 @@ def test_google_backfill_preflight_is_protected(monkeypatch) -> None:
             },
         )
         valid = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={
                 "gmail_query": private_markers[3],
                 "gmail_max_results": 1,
@@ -155,7 +155,7 @@ def test_default_state_reports_gmail_and_drive_disabled_without_connector_calls(
     monkeypatch.setattr(drive_api, "list_ai_inbox_files", fail_list_ai_inbox_files)
 
     with TestClient(app) as client:
-        response = client.get("/v1/google/backfill/preflight")
+        response = client.get("/api/v1/google/backfill/preflight")
 
     assert response.status_code == 200
     body = response.json()
@@ -272,7 +272,7 @@ def test_preflight_does_not_import_connectors_or_expose_private_markers(monkeypa
 
     with TestClient(app) as client:
         response = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={
                 "gmail_query": private_markers[3],
                 "gmail_max_results": 1,
@@ -294,8 +294,8 @@ def test_enabled_gmail_missing_or_blank_query_reports_not_ready(monkeypatch) -> 
     _set_google_backfill(monkeypatch, gmail_enabled=True)
 
     with TestClient(app) as client:
-        missing = client.get("/v1/google/backfill/preflight")
-        blank = client.get("/v1/google/backfill/preflight", params={"gmail_query": "  "})
+        missing = client.get("/api/v1/google/backfill/preflight")
+        blank = client.get("/api/v1/google/backfill/preflight", params={"gmail_query": "  "})
 
     assert missing.status_code == 200
     assert missing.json()["gmail"]["ready"] is False
@@ -313,7 +313,7 @@ def test_enabled_gmail_broad_query_reports_not_ready_without_echoing_query(monke
 
     with TestClient(app) as client:
         response = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={"gmail_query": BROAD_GMAIL_QUERY},
         )
 
@@ -332,7 +332,7 @@ def test_enabled_gmail_safe_query_and_limit_reports_gmail_ready(monkeypatch) -> 
 
     with TestClient(app) as client:
         response = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={"gmail_query": SAFE_GMAIL_QUERY, "gmail_max_results": 7},
         )
 
@@ -354,7 +354,7 @@ def test_enabled_gmail_configured_safe_query_reports_config_source(monkeypatch) 
     _set_google_backfill(monkeypatch, gmail_enabled=True, gmail_query=SAFE_GMAIL_QUERY)
 
     with TestClient(app) as client:
-        response = client.get("/v1/google/backfill/preflight")
+        response = client.get("/api/v1/google/backfill/preflight")
 
     assert response.status_code == 200
     body = response.json()
@@ -367,10 +367,10 @@ def test_gmail_invalid_max_results_are_rejected(monkeypatch) -> None:
     _set_google_backfill(monkeypatch, gmail_enabled=True, gmail_query=SAFE_GMAIL_QUERY)
 
     with TestClient(app) as client:
-        zero = client.get("/v1/google/backfill/preflight", params={"gmail_max_results": 0})
-        negative = client.get("/v1/google/backfill/preflight", params={"gmail_max_results": -1})
+        zero = client.get("/api/v1/google/backfill/preflight", params={"gmail_max_results": 0})
+        negative = client.get("/api/v1/google/backfill/preflight", params={"gmail_max_results": -1})
         too_large = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={"gmail_max_results": gmail_api.GMAIL_BACKFILL_MAX_RESULTS + 1},
         )
 
@@ -383,9 +383,9 @@ def test_enabled_drive_missing_or_blank_folder_boundary_reports_not_ready(monkey
     _set_google_backfill(monkeypatch, drive_enabled=True)
 
     with TestClient(app) as client:
-        missing = client.get("/v1/google/backfill/preflight")
+        missing = client.get("/api/v1/google/backfill/preflight")
         _set_google_backfill(monkeypatch, drive_enabled=True, folder_id="  ")
-        blank = client.get("/v1/google/backfill/preflight")
+        blank = client.get("/api/v1/google/backfill/preflight")
 
     assert missing.status_code == 200
     assert missing.json()["drive"]["ready"] is False
@@ -402,7 +402,7 @@ def test_enabled_drive_folder_boundary_and_limit_reports_drive_ready(monkeypatch
 
     with TestClient(app) as client:
         response = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={"drive_max_results": 7},
         )
 
@@ -422,10 +422,10 @@ def test_drive_invalid_max_results_are_rejected(monkeypatch) -> None:
     _set_google_backfill(monkeypatch, drive_enabled=True, folder_id=DRIVE_FOLDER_ID)
 
     with TestClient(app) as client:
-        zero = client.get("/v1/google/backfill/preflight", params={"drive_max_results": 0})
-        negative = client.get("/v1/google/backfill/preflight", params={"drive_max_results": -1})
+        zero = client.get("/api/v1/google/backfill/preflight", params={"drive_max_results": 0})
+        negative = client.get("/api/v1/google/backfill/preflight", params={"drive_max_results": -1})
         too_large = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={"drive_max_results": drive_api.DRIVE_BACKFILL_MAX_RESULTS + 1},
         )
 
@@ -451,9 +451,9 @@ def test_overall_ready_requires_gmail_and_drive_ready(monkeypatch, tmp_path) -> 
     )
 
     with TestClient(app) as client:
-        gmail_only_blocked = client.get("/v1/google/backfill/preflight")
+        gmail_only_blocked = client.get("/api/v1/google/backfill/preflight")
         both_ready = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={"gmail_query": SAFE_GMAIL_QUERY},
         )
 
@@ -483,7 +483,7 @@ def test_overall_ready_requires_google_credential_file_readiness(monkeypatch, tm
 
     with TestClient(app) as client:
         response = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={"gmail_query": SAFE_GMAIL_QUERY},
         )
 
@@ -517,7 +517,7 @@ def test_google_credential_presence_reports_files_without_echoing_paths_or_conte
     )
 
     with TestClient(app) as client:
-        missing = client.get("/v1/google/backfill/preflight")
+        missing = client.get("/api/v1/google/backfill/preflight")
 
     assert missing.status_code == 200
     missing_body = missing.json()["google_credentials"]
@@ -537,7 +537,7 @@ def test_google_credential_presence_reports_files_without_echoing_paths_or_conte
     drive_token_file.write_text(drive_token_content, encoding="utf-8")
 
     with TestClient(app) as client:
-        present = client.get("/v1/google/backfill/preflight")
+        present = client.get("/api/v1/google/backfill/preflight")
 
     assert present.status_code == 200
     present_body = present.json()["google_credentials"]
@@ -566,7 +566,7 @@ def test_google_credential_preflight_reports_blank_paths_safely(monkeypatch) -> 
     )
 
     with TestClient(app) as client:
-        response = client.get("/v1/google/backfill/preflight")
+        response = client.get("/api/v1/google/backfill/preflight")
 
     assert response.status_code == 200
     credentials = response.json()["google_credentials"]
@@ -609,7 +609,7 @@ def test_response_does_not_echo_private_query_folder_or_token_like_values(
 
     with TestClient(app) as client:
         response = client.get(
-            "/v1/google/backfill/preflight",
+            "/api/v1/google/backfill/preflight",
             params={"gmail_query": private_query},
         )
 

@@ -48,7 +48,7 @@ from app.services.github_sync_job_service import (
 )
 from app.services.secret_encryption import SecretEncryptionError
 
-router = APIRouter(prefix="/v1/workspaces/{workspace_id}/github", tags=["github"])
+router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/github", tags=["github"])
 
 
 class GitHubRepositoryEvidenceRef(BaseModel):

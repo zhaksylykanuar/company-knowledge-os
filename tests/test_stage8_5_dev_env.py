@@ -59,7 +59,7 @@ def _enable_dev(
 async def test_browser_config_local_returns_dev_key(monkeypatch) -> None:
     _enable_dev(monkeypatch)
     async with _client() as client:
-        response = await client.get("/v1/dev/browser-config")
+        response = await client.get("/api/v1/dev/browser-config")
     assert response.status_code == 200
     body = response.json()
     assert set(body) == set(ALLOWED_KEYS)
@@ -73,7 +73,7 @@ async def test_browser_config_local_returns_dev_key(monkeypatch) -> None:
 async def test_browser_config_is_not_cacheable(monkeypatch) -> None:
     _enable_dev(monkeypatch)
     async with _client() as client:
-        response = await client.get("/v1/dev/browser-config")
+        response = await client.get("/api/v1/dev/browser-config")
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["Pragma"] == "no-cache"
@@ -82,14 +82,14 @@ async def test_browser_config_is_not_cacheable(monkeypatch) -> None:
 async def test_browser_config_disabled_is_not_found(monkeypatch) -> None:
     _enable_dev(monkeypatch, enabled=False)
     async with _client() as client:
-        response = await client.get("/v1/dev/browser-config")
+        response = await client.get("/api/v1/dev/browser-config")
     assert response.status_code == 404
 
 
 async def test_browser_config_non_local_is_not_found(monkeypatch) -> None:
     _enable_dev(monkeypatch, app_env="production")
     async with _client() as client:
-        response = await client.get("/v1/dev/browser-config")
+        response = await client.get("/api/v1/dev/browser-config")
     assert response.status_code == 404
 
 
@@ -98,7 +98,7 @@ async def test_browser_config_never_leaks_external_secrets(monkeypatch) -> None:
     for field, value in _SECRET_FIELDS.items():
         monkeypatch.setattr(settings, field, value)
     async with _client() as client:
-        response = await client.get("/v1/dev/browser-config")
+        response = await client.get("/api/v1/dev/browser-config")
     assert response.status_code == 200
     blob = json.dumps(response.json()).lower()
     for term in _FORBIDDEN:
@@ -193,11 +193,11 @@ async def test_dev_key_authenticates_protected_endpoint(monkeypatch) -> None:
     monkeypatch.setattr(auth_settings, "api_auth_header_name", "X-FounderOS-API-Key")
     async with _client() as client:
         ok = await client.get(
-            "/v1/founder/command-center",
+            "/api/v1/founder/command-center",
             headers={"X-FounderOS-API-Key": "local-dev-key"},
         )
         bad = await client.get(
-            "/v1/founder/command-center",
+            "/api/v1/founder/command-center",
             headers={"X-FounderOS-API-Key": "not-the-dev-key"},
         )
     assert ok.status_code == 200
@@ -233,7 +233,7 @@ def test_ui_wires_dev_bootstrap() -> None:
     for marker in (
         'id="dev-badge"',
         "devBootstrap",
-        "/v1/dev/browser-config",
+        "/api/v1/dev/browser-config",
         "LOCAL DEV",
         "effectiveApiKey",
         "RUNTIME_API_KEY",

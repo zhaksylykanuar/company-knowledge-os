@@ -264,7 +264,7 @@ async def test_second_opinion_feed_view_redaction_via_api(monkeypatch) -> None:
         async with _client() as client:
             # Investor view: only the investor-scoped item, curated fields.
             inv = await client.get(
-                "/v1/founder/second-opinion",
+                "/api/v1/founder/second-opinion",
                 params={"status": "open", "limit": 200, "view": "investor"},
             )
             assert inv.status_code == 200
@@ -278,7 +278,7 @@ async def test_second_opinion_feed_view_redaction_via_api(monkeypatch) -> None:
 
             # Team view: sees the team item, no source_refs leaked.
             team = await client.get(
-                "/v1/founder/second-opinion",
+                "/api/v1/founder/second-opinion",
                 params={"status": "open", "limit": 200, "view": "team"},
             )
             team_findings = [
@@ -291,7 +291,7 @@ async def test_second_opinion_feed_view_redaction_via_api(monkeypatch) -> None:
 
             # Founder view: both, full fidelity.
             founder = await client.get(
-                "/v1/founder/second-opinion",
+                "/api/v1/founder/second-opinion",
                 params={"status": "open", "limit": 200, "view": "founder"},
             )
             founder_keys = {
@@ -303,7 +303,7 @@ async def test_second_opinion_feed_view_redaction_via_api(monkeypatch) -> None:
 
             # Unknown view is rejected.
             bad = await client.get(
-                "/v1/founder/second-opinion", params={"view": "ceo"}
+                "/api/v1/founder/second-opinion", params={"view": "ceo"}
             )
             assert bad.status_code == 400
     finally:
@@ -315,13 +315,13 @@ async def test_trail_and_inbox_require_founder_view(monkeypatch) -> None:
     async with _client() as client:
         # Trail (raw evidence) is founder-only.
         trail = await client.get(
-            "/v1/founder/second-opinion/anything/trail",
+            "/api/v1/founder/second-opinion/anything/trail",
             params={"view": "team"},
         )
         assert trail.status_code == 403
         # Inbox is founder-only.
-        inbox = await client.get("/v1/inbox", params={"view": "investor"})
+        inbox = await client.get("/api/v1/inbox", params={"view": "investor"})
         assert inbox.status_code == 403
         # Graph tree is blocked for investors.
-        tree = await client.get("/v1/graph/tree", params={"view": "investor"})
+        tree = await client.get("/api/v1/graph/tree", params={"view": "investor"})
         assert tree.status_code == 403

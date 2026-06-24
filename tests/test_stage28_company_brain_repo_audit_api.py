@@ -65,7 +65,7 @@ async def test_company_brain_repo_audit_api_shape(
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/v1/founder/company-brain/repo-audit")
+        response = await client.get("/api/v1/founder/company-brain/repo-audit")
 
     assert response.status_code == 200
     body = response.json()
@@ -105,7 +105,7 @@ async def test_company_brain_preview_includes_computed_repo_audit(
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/v1/founder/company-brain/preview")
+        response = await client.get("/api/v1/founder/company-brain/preview")
 
     assert response.status_code == 200
     body = response.json()
@@ -126,7 +126,7 @@ async def test_company_brain_repo_audit_requires_api_key_when_auth_enabled(
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/v1/founder/company-brain/repo-audit")
+        response = await client.get("/api/v1/founder/company-brain/repo-audit")
 
     assert response.status_code == 401
     assert response.json() == {"detail": API_AUTH_FAILURE_DETAIL}

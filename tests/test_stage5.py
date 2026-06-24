@@ -239,11 +239,11 @@ async def test_sales_view_builds_accounts_no_finance() -> None:
 async def test_sales_signals_endpoint_founder_only(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
-        ok = await client.get("/v1/founder/sales-signals")
+        ok = await client.get("/api/v1/founder/sales-signals")
         assert ok.status_code == 200
         assert "accounts" in ok.json()
         blocked = await client.get(
-            "/v1/founder/sales-signals", params={"view": "team"}
+            "/api/v1/founder/sales-signals", params={"view": "team"}
         )
         assert blocked.status_code == 403
 
@@ -353,7 +353,7 @@ async def test_command_center_next_actions_preserve_evidence_provenance(
 async def test_command_center_has_unassigned_bucket(monkeypatch) -> None:
     _set_auth(monkeypatch, enabled=False)
     async with _client() as client:
-        response = await client.get("/v1/founder/command-center")
+        response = await client.get("/api/v1/founder/command-center")
     assert response.status_code == 200
     team = response.json()["team"]
     assert "unassigned" in team

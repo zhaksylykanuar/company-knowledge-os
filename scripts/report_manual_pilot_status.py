@@ -550,7 +550,7 @@ def _next_step_commands(
             f"--limit {query.limit}{debug_arg} --format json"
         ),
         "approve_draft": (
-            "curl -sS -X POST '<API_BASE_URL>/v1/digest/delivery-drafts/"
+            "curl -sS -X POST '<API_BASE_URL>/api/v1/digest/delivery-drafts/"
             f"{delivery_draft_id}/approve' "
             "-H '<AUTH_HEADER>: <AUTH_VALUE>' "
             "-H 'Content-Type: application/json' "
@@ -571,7 +571,7 @@ def _next_step_commands(
             f"--delivery-intention-id {delivery_intention_id} --format json"
         ),
         "check_execution_gate": (
-            "curl -sS '<API_BASE_URL>/v1/digest/delivery-intentions/"
+            "curl -sS '<API_BASE_URL>/api/v1/digest/delivery-intentions/"
             f"{delivery_intention_id}/telegram-execution-gate' "
             "-H '<AUTH_HEADER>: <AUTH_VALUE>'"
         ),

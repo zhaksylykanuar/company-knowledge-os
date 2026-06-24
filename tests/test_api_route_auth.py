@@ -16,59 +16,59 @@ from app.main import app
 
 
 PROTECTED_ROUTE_METHODS = {
-    ("/v1/events", "POST"),
-    ("/v1/drive/backfill", "POST"),
-    ("/v1/gmail/backfill", "POST"),
-    ("/v1/google/backfill/preflight", "GET"),
-    ("/v1/knowledge/ingest-text", "POST"),
-    ("/v1/knowledge/ingest-text-process", "POST"),
-    ("/v1/knowledge/score", "POST"),
-    ("/v1/knowledge/search", "GET"),
-    ("/v1/knowledge/ask", "POST"),
-    ("/v1/knowledge/attention", "GET"),
-    ("/v1/extraction/demo", "POST"),
-    ("/v1/extraction/process-document", "POST"),
-    ("/v1/digest/source-activity", "GET"),
-    ("/v1/digest/source-activity/text", "GET"),
-    ("/v1/founder/overview", "GET"),
-    ("/v1/founder/status", "GET"),
-    ("/v1/founder/dev", "GET"),
-    ("/v1/inbox", "GET"),
-    ("/v1/inbox/proposals/{proposal_id}/decision", "POST"),
-    ("/v1/founder/second-opinion", "GET"),
-    ("/v1/founder/second-opinion/{finding_key:path}/trail", "GET"),
-    ("/v1/founder/second-opinion/{finding_key:path}/status", "POST"),
-    ("/v1/founder/second-opinion/{finding_key:path}/snooze", "POST"),
-    ("/v1/founder/second-opinion/{finding_key:path}/note", "POST"),
-    ("/v1/graph/tree", "GET"),
-    ("/v1/knowledge/graph", "GET"),
-    ("/v1/knowledge/nodes/{node_id:path}", "GET"),
-    ("/v1/knowledge/export/obsidian-preview", "POST"),
-    ("/v1/knowledge/obsidian/status", "GET"),
-    ("/v1/knowledge/obsidian/sync", "POST"),
-    ("/v1/knowledge/obsidian/open-vault", "GET"),
-    ("/v1/knowledge/obsidian/open-node/{node_id:path}", "GET"),
-    ("/v1/graph/links/{link_id:path}/review", "POST"),
-    ("/v1/workspaces", "GET"),
-    ("/v1/workspaces/bootstrap", "POST"),
-    ("/v1/workspaces/{workspace_id}", "GET"),
-    ("/v1/founder/data-availability", "GET"),
-    ("/v1/founder/sources", "GET"),
-    ("/v1/founder/sources/{source_type}/{action_type}", "POST"),
-    ("/v1/founder/data-quality", "GET"),
-    ("/v1/founder/source-runs", "GET"),
-    ("/v1/founder/declarations/{key}", "GET"),
-    ("/v1/founder/declarations/{key}", "PUT"),
-    ("/v1/source-events", "GET"),
-    ("/v1/source-events/{source_event_id}", "GET"),
-    ("/v1/founder/command-center", "GET"),
-    ("/v1/founder/agent-runs", "GET"),
-    ("/v1/founder/sales-signals", "GET"),
-    ("/v1/founder/execution", "GET"),
-    ("/v1/founder/execution/tasks/{issue_key}", "GET"),
-    ("/v1/founder/team-load", "GET"),
-    ("/v1/founder/product", "GET"),
-    ("/v1/founder/action-center", "GET"),
+    ("/api/v1/events", "POST"),
+    ("/api/v1/drive/backfill", "POST"),
+    ("/api/v1/gmail/backfill", "POST"),
+    ("/api/v1/google/backfill/preflight", "GET"),
+    ("/api/v1/knowledge/ingest-text", "POST"),
+    ("/api/v1/knowledge/ingest-text-process", "POST"),
+    ("/api/v1/knowledge/score", "POST"),
+    ("/api/v1/knowledge/search", "GET"),
+    ("/api/v1/knowledge/ask", "POST"),
+    ("/api/v1/knowledge/attention", "GET"),
+    ("/api/v1/extraction/demo", "POST"),
+    ("/api/v1/extraction/process-document", "POST"),
+    ("/api/v1/digest/source-activity", "GET"),
+    ("/api/v1/digest/source-activity/text", "GET"),
+    ("/api/v1/founder/overview", "GET"),
+    ("/api/v1/founder/status", "GET"),
+    ("/api/v1/founder/dev", "GET"),
+    ("/api/v1/inbox", "GET"),
+    ("/api/v1/inbox/proposals/{proposal_id}/decision", "POST"),
+    ("/api/v1/founder/second-opinion", "GET"),
+    ("/api/v1/founder/second-opinion/{finding_key:path}/trail", "GET"),
+    ("/api/v1/founder/second-opinion/{finding_key:path}/status", "POST"),
+    ("/api/v1/founder/second-opinion/{finding_key:path}/snooze", "POST"),
+    ("/api/v1/founder/second-opinion/{finding_key:path}/note", "POST"),
+    ("/api/v1/graph/tree", "GET"),
+    ("/api/v1/knowledge/graph", "GET"),
+    ("/api/v1/knowledge/nodes/{node_id:path}", "GET"),
+    ("/api/v1/knowledge/export/obsidian-preview", "POST"),
+    ("/api/v1/knowledge/obsidian/status", "GET"),
+    ("/api/v1/knowledge/obsidian/sync", "POST"),
+    ("/api/v1/knowledge/obsidian/open-vault", "GET"),
+    ("/api/v1/knowledge/obsidian/open-node/{node_id:path}", "GET"),
+    ("/api/v1/graph/links/{link_id:path}/review", "POST"),
+    ("/api/v1/workspaces", "GET"),
+    ("/api/v1/workspaces/bootstrap", "POST"),
+    ("/api/v1/workspaces/{workspace_id}", "GET"),
+    ("/api/v1/founder/data-availability", "GET"),
+    ("/api/v1/founder/sources", "GET"),
+    ("/api/v1/founder/sources/{source_type}/{action_type}", "POST"),
+    ("/api/v1/founder/data-quality", "GET"),
+    ("/api/v1/founder/source-runs", "GET"),
+    ("/api/v1/founder/declarations/{key}", "GET"),
+    ("/api/v1/founder/declarations/{key}", "PUT"),
+    ("/api/v1/source-events", "GET"),
+    ("/api/v1/source-events/{source_event_id}", "GET"),
+    ("/api/v1/founder/command-center", "GET"),
+    ("/api/v1/founder/agent-runs", "GET"),
+    ("/api/v1/founder/sales-signals", "GET"),
+    ("/api/v1/founder/execution", "GET"),
+    ("/api/v1/founder/execution/tasks/{issue_key}", "GET"),
+    ("/api/v1/founder/team-load", "GET"),
+    ("/api/v1/founder/product", "GET"),
+    ("/api/v1/founder/action-center", "GET"),
 }
 
 
@@ -89,7 +89,7 @@ def _demo_payload() -> dict[str, str]:
 
 def _post_demo(client: TestClient, *, key: str | None = None):
     headers = {"X-FounderOS-API-Key": key} if key is not None else None
-    return client.post("/v1/extraction/demo", json=_demo_payload(), headers=headers)
+    return client.post("/api/v1/extraction/demo", json=_demo_payload(), headers=headers)
 
 
 def _async_client() -> AsyncClient:
@@ -259,7 +259,7 @@ def test_google_backfill_routes_reject_unauthenticated_before_connector_paths(
 
     with TestClient(app) as client:
         gmail_response = client.post(
-            "/v1/gmail/backfill",
+            "/api/v1/gmail/backfill",
             params={
                 "persist": "false",
                 "max_results": 1,
@@ -267,7 +267,7 @@ def test_google_backfill_routes_reject_unauthenticated_before_connector_paths(
             },
         )
         drive_response = client.post(
-            "/v1/drive/backfill",
+            "/api/v1/drive/backfill",
             params={"persist": "false", "max_results": 1},
         )
 
@@ -319,7 +319,7 @@ async def test_google_backfill_routes_record_source_requests_when_disabled_befor
     try:
         async with _async_client() as client:
             gmail_response = await client.post(
-                "/v1/gmail/backfill",
+                "/api/v1/gmail/backfill",
                 params={
                     "persist": "false",
                     "max_results": 1,
@@ -329,7 +329,7 @@ async def test_google_backfill_routes_record_source_requests_when_disabled_befor
                 headers=headers,
             )
             drive_response = await client.post(
-                "/v1/drive/backfill",
+                "/api/v1/drive/backfill",
                 params={
                     "persist": "false",
                     "max_results": 1,
