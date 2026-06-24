@@ -2,6 +2,20 @@
 
 ## 2026-06-24
 
+### Added
+
+- Added `POST /api/v1/workspaces/{workspace_id}/github/local-sync` as a compact
+  product backend wrapper over existing manual SyncJob + local normalization
+  behavior; it persists through the canonical local path and does not start live
+  provider execution.
+- Added dashboard GitHub local-sync controls that read connection status, show
+  missing/unsupported/loading/error/success states, report normalized
+  repository/issue/PR counts, and refresh canonical operational work after a
+  successful local sync.
+- Added backend and frontend tests for the local-sync control path, including
+  no-live-provider flags, no-connection handling, idempotence, URL building,
+  POST payload shape, and honest no-OAuth UI states.
+
 ### Changed
 
 - Wired the dashboard to canonical GitHub operational work from

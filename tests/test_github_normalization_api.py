@@ -1170,6 +1170,141 @@ async def test_github_operational_work_read_model_filters_open_state(monkeypatch
         await _cleanup_normalization_fixture(marker)
 
 
+async def test_owner_can_run_product_local_sync_controls_path(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_normalization_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repo_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        connection_id = await _seed_connection(workspace_id)
+        source_event_count_before = await _count(SourceEvent)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/local-sync",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["capability_mode"] == "local_normalization"
+        assert body["is_live"] is False
+        assert body["provider_sync_started"] is False
+        assert body["local_normalization_performed"] is True
+        assert body["persistence_mode"] == "canonical"
+        assert body["status"] == "partial"
+        assert body["message"] == (
+            "Local GitHub data normalized into canonical backend state."
+        )
+        assert body["counts"] == {"repositories": 1, "issues": 0, "pull_requests": 0}
+        assert body["sync_job"]["records_seen"] == 1
+        assert body["sync_job"]["records_created"] == 1
+        assert body["sync_job"]["records_updated"] == 0
+        assert any("issues were not available" in warning for warning in body["warnings"])
+        assert any("pull requests were not available" in warning for warning in body["warnings"])
+
+        stored = await _stored_sync_job(body["sync_job"]["id"])
+        assert stored.connection_id == connection_id
+        assert stored.cursor_before is None
+        assert stored.cursor_after["persistence_mode"] == "canonical"
+        assert stored.logs[0]["note"] == "manual sync job record only"
+        assert stored.logs[0]["notes"] == "product local GitHub sync control"
+        assert stored.logs[-1]["local_normalization"]["provider_sync_started"] is False
+
+        source_record, repository = await _stored_canonical_repo_rows(
+            workspace_id,
+            "qtwin-io/founderos-api",
+        )
+        assert source_record.sync_job_id == stored.id
+        assert repository.full_name == "qtwin-io/founderos-api"
+        assert await _count(SourceEvent) == source_event_count_before
+        assert not Path("app/services/source_control.py").exists()
+    finally:
+        await _cleanup_normalization_fixture(marker)
+
+
+async def test_product_local_sync_requires_connected_github_record(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_normalization_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/local-sync",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={},
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "github connected connection record required for local sync"
+        }
+    finally:
+        await _cleanup_normalization_fixture(marker)
+
+
+async def test_product_local_sync_is_idempotent(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_normalization_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repo_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        await _seed_connection(workspace_id)
+
+        async with _async_client() as client:
+            first = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/local-sync",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={"include_issues": False, "include_pull_requests": False},
+            )
+            second = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/local-sync",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={"include_issues": False, "include_pull_requests": False},
+            )
+
+        assert first.status_code == 200, first.text
+        assert second.status_code == 200, second.text
+        assert first.json()["sync_job"]["records_created"] == 1
+        assert first.json()["sync_job"]["records_updated"] == 0
+        assert second.json()["sync_job"]["records_created"] == 0
+        assert second.json()["sync_job"]["records_updated"] == 1
+        assert await _count_workspace(SourceRecord, workspace_id) == 1
+        assert await _count_workspace(Repository, workspace_id) == 1
+    finally:
+        await _cleanup_normalization_fixture(marker)
+
+
 async def test_normalize_local_does_not_call_live_source_or_graph_paths(
     monkeypatch,
 ) -> None:

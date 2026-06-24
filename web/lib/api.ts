@@ -6,6 +6,9 @@ import {
 import type {
   ApiErrorPayload,
   ApiFetchOptions,
+  GitHubConnectionStatusResponse,
+  GitHubLocalSyncRequest,
+  GitHubLocalSyncResponse,
   GitHubOperationalWorkResponse,
   GitHubOperationalWorkState
 } from "./types";
@@ -99,6 +102,45 @@ export async function fetchGitHubOperationalWork(
   return apiFetch<GitHubOperationalWorkResponse>(
     buildWorkspaceGitHubOperationalWorkPath(workspaceId, request),
     options
+  );
+}
+
+export function buildWorkspaceGitHubConnectionStatusPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/connection-status`;
+}
+
+export async function fetchGitHubConnectionStatus(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubConnectionStatusResponse> {
+  return apiFetch<GitHubConnectionStatusResponse>(
+    buildWorkspaceGitHubConnectionStatusPath(workspaceId),
+    options
+  );
+}
+
+export function buildWorkspaceGitHubLocalSyncPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/github/local-sync`;
+}
+
+export async function runGitHubLocalSync(
+  workspaceId: string,
+  request: GitHubLocalSyncRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<GitHubLocalSyncResponse> {
+  return apiFetch<GitHubLocalSyncResponse>(
+    buildWorkspaceGitHubLocalSyncPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        include_repositories: request.include_repositories ?? true,
+        include_issues: request.include_issues ?? true,
+        include_pull_requests: request.include_pull_requests ?? true
+      }),
+      method: "POST"
+    }
   );
 }
 

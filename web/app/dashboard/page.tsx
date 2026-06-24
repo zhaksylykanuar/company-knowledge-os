@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWorkPanel";
+import { GitHubSyncControls } from "../../components/GitHubSyncControls";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
 import { readOperatorConfig, resolveApiBaseUrl } from "../../lib/config";
@@ -10,6 +11,7 @@ import type { OperatorConfig } from "../../lib/types";
 
 export default function DashboardPage() {
   const [config, setConfig] = useState<OperatorConfig | null>(null);
+  const [operationalWorkRefresh, setOperationalWorkRefresh] = useState(0);
 
   useEffect(() => {
     setConfig(readOperatorConfig());
@@ -43,7 +45,7 @@ export default function DashboardPage() {
           value={keyStatus}
         />
         <StatusCard
-          description="Canonical issues and pull requests are loaded below."
+          description="Local sync controls and canonical work are loaded below."
           title="GitHub"
           value="Wired"
         />
@@ -58,7 +60,10 @@ export default function DashboardPage() {
           value="Stub"
         />
       </section>
-      <GitHubOperationalWorkPanel />
+      <GitHubSyncControls
+        onSyncComplete={() => setOperationalWorkRefresh((current) => current + 1)}
+      />
+      <GitHubOperationalWorkPanel refreshSignal={operationalWorkRefresh} />
     </>
   );
 }

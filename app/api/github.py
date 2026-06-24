@@ -14,6 +14,7 @@ from app.api.workspace_auth import (
 )
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN
+from app.db.integration_models import INTEGRATION_CONNECTION_STATUS_CONNECTED
 from app.services.github_connection_service import (
     GITHUB_PROVIDER_TOKEN_WARNING,
     GitHubProviderTokenConnectionInput,
@@ -285,6 +286,27 @@ class GitHubNormalizationResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class GitHubLocalSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    include_repositories: bool = True
+    include_issues: bool = True
+    include_pull_requests: bool = True
+
+
+class GitHubLocalSyncResponse(BaseModel):
+    sync_job: GitHubNormalizationSyncJobRead
+    counts: GitHubNormalizationCountsRead
+    status: str
+    message: str
+    capability_mode: str
+    is_live: bool
+    provider_sync_started: bool
+    local_normalization_performed: bool
+    persistence_mode: str
+    warnings: list[str] = Field(default_factory=list)
+
+
 class GitHubOperationalIssueRead(BaseModel):
     id: UUID
     external_id: str | None = None
@@ -496,6 +518,120 @@ async def list_github_sync_job_records(
         provider="github",
         is_live=False,
         warnings=[],
+    )
+
+
+@router.post("/local-sync", response_model=GitHubLocalSyncResponse)
+async def run_github_local_sync(
+    workspace_id: UUID,
+    payload: GitHubLocalSyncRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubLocalSyncResponse:
+    async with AsyncSessionLocal() as session:
+        try:
+            connections = await list_github_connections(
+                session,
+                workspace_id=workspace_id,
+            )
+            connection = next(
+                (
+                    candidate
+                    for candidate in connections
+                    if candidate["status"] == INTEGRATION_CONNECTION_STATUS_CONNECTED
+                ),
+                None,
+            )
+            if connection is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="github connected connection record required for local sync",
+                )
+
+            sync_job = await create_manual_github_sync_job(
+                session,
+                workspace_id=workspace_id,
+                connection_id=connection["id"],
+                payload=GitHubManualSyncJobInput(
+                    cursor_before=None,
+                    notes="product local GitHub sync control",
+                    requested_by=access.actor.auth_mode,
+                ),
+            )
+            result = await normalize_github_sync_job_local(
+                session,
+                workspace_id=workspace_id,
+                sync_job_id=sync_job["id"],
+                options=GitHubNormalizationOptions(
+                    include_repositories=payload.include_repositories,
+                    include_issues=payload.include_issues,
+                    include_pull_requests=payload.include_pull_requests,
+                    persist_if_supported=True,
+                ),
+            )
+            await session.commit()
+        except HTTPException:
+            await session.rollback()
+            raise
+        except GitHubSyncJobError as exc:
+            await session.rollback()
+            if exc.detail == GITHUB_SYNC_JOB_CONNECTION_NOT_FOUND:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=exc.detail,
+                ) from exc
+            if exc.detail == GITHUB_SYNC_JOB_CONNECTION_NOT_CONNECTED:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=exc.detail,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+        except GitHubNormalizationError as exc:
+            await session.rollback()
+            if exc.detail == GITHUB_NORMALIZATION_JOB_NOT_FOUND:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=exc.detail,
+                ) from exc
+            if exc.detail == GITHUB_NORMALIZATION_JOB_NOT_QUEUED:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=exc.detail,
+                ) from exc
+            if exc.detail in {
+                GITHUB_NORMALIZATION_JOB_NOT_GITHUB,
+                GITHUB_NORMALIZATION_JOB_NOT_MANUAL,
+                GITHUB_NORMALIZATION_PERSISTENCE_DEFERRED,
+            }:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=exc.detail,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+
+    counts = GitHubNormalizationCountsRead.model_validate(result["counts"])
+    records_count = counts.repositories + counts.issues + counts.pull_requests
+    message = (
+        "Local GitHub data normalized into canonical backend state."
+        if records_count > 0
+        else "No supported local GitHub data was available to normalize."
+    )
+    return GitHubLocalSyncResponse(
+        sync_job=GitHubNormalizationSyncJobRead.model_validate(result["sync_job"]),
+        counts=counts,
+        status=result["sync_job"]["status"],
+        message=message,
+        capability_mode="local_normalization",
+        is_live=False,
+        provider_sync_started=False,
+        local_normalization_performed=True,
+        persistence_mode=result["persistence_mode"],
+        warnings=result["warnings"],
     )
 
 

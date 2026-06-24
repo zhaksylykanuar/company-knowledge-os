@@ -182,6 +182,11 @@ input {
   gap: 16px;
 }
 
+.github-sync-controls {
+  display: grid;
+  gap: 16px;
+}
+
 .work-columns {
   display: grid;
   gap: 16px;
@@ -307,6 +312,10 @@ input {
   border-radius: var(--radius);
   color: var(--warning);
   padding: 14px 16px;
+}
+
+.callout p {
+  margin: 8px 0;
 }
 
 .form {

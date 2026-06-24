@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 3 / FOS-010. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 3 / FOS-012. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,7 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` (currently CHUNK 3 / FOS-010).
+Next step: follow `../PROGRESS.md` (currently CHUNK 3 / FOS-012).
 
 Definition of Done:
 
@@ -57,7 +57,7 @@ Missing:
   spine proves the need.
 - Person ambiguity remains open as ASK-1.
 
-Next step: product GitHub UI/dashboard wiring; physical substrate drop remains a
+Next step: Company Brain UI over GitHub-first evidence; physical substrate drop remains a
 later migration/cleanup task.
 
 Definition of Done:
@@ -89,9 +89,9 @@ Missing:
 - Full GitHub OAuth/product connect flow.
 - Live GitHub sync/product OAuth execution path.
 - Persistent briefing models and evidence drawer workflow.
-- Product dashboard/brain wiring.
+- Company Brain product UI wiring.
 
-Next step: continue the GitHub-first product flow through UI/dashboard wiring.
+Next step: continue the GitHub-first product flow through Company Brain UI wiring.
 
 Definition of Done:
 
@@ -103,8 +103,9 @@ Definition of Done:
 
 ## Phase 3 - Frontend Core
 
-Current status: minimal master frontend shell exists, but the product flow is
-not wired yet.
+Current status: minimal master frontend shell exists; dashboard GitHub read and
+local-sync controls are wired, while Company Brain/briefing/action UI surfaces
+remain incomplete.
 
 Done:
 
@@ -117,19 +118,21 @@ Done:
   and typed API client foundation exist.
 - Dashboard reads canonical GitHub operational work from the backend and shows
   issue/task and PR sections with open/all/closed/merged filters.
+- Dashboard exposes honest GitHub local-sync controls over existing backend
+  contracts and does not claim live OAuth/provider execution.
 - Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
 
-- Product GitHub connect/sync controls.
+- Company Brain UI over GitHub-first evidence.
 - Tailwind/shadcn or final product UI system.
 - Login page.
 - Workspace onboarding.
 - Product-grade loading/error/empty states.
 - Browser/product E2E coverage.
 
-Next step: FOS-010 builds the product GitHub connect/sync controls over the
-existing backend contracts without live OAuth/provider execution.
+Next step: FOS-012 wires Company Brain UI over GitHub-first canonical
+evidence/read models.
 
 Definition of Done:
 
@@ -161,6 +164,9 @@ Done:
 - Local GitHub normalization can transform repository inventory into
   founderOS-compatible projection output and, when explicitly requested, persist
   repositories into canonical `source_records`/`repositories` without live sync.
+- Product dashboard controls can run the supported local GitHub normalization
+  path, show missing/unsupported/error/success states, and refresh canonical
+  operational work after success.
 - Dashboard UI reads canonical GitHub operational work and displays synced
   issues/tasks plus pull requests from the FOS-009 backend path.
 - Manual Founder Briefing v0 can return a deterministic, transient,
@@ -178,13 +184,10 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Product connect/sync controls that let users create connection/sync records
-  from the frontend.
 - Company Brain over GitHub-first evidence.
 - Full product frontend flow for the GitHub-first MVP path.
 
-Next step: FOS-010 product GitHub connect/sync controls over existing backend
-contracts.
+Next step: FOS-012 Company Brain UI over GitHub-first evidence.
 
 Definition of Done:
 

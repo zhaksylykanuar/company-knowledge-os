@@ -25,6 +25,10 @@ const stateOptions: { value: GitHubOperationalWorkState; label: string }[] = [
 
 type PanelStatus = "loading" | "ready" | "empty" | "error" | "missing";
 
+type GitHubOperationalWorkPanelProps = {
+  refreshSignal?: number;
+};
+
 type GitHubOperationalWorkPanelViewProps = {
   data: GitHubOperationalWorkResponse | null;
   error: string | null;
@@ -34,7 +38,9 @@ type GitHubOperationalWorkPanelViewProps = {
   status: PanelStatus;
 };
 
-export function GitHubOperationalWorkPanel() {
+export function GitHubOperationalWorkPanel({
+  refreshSignal = 0
+}: GitHubOperationalWorkPanelProps) {
   const [config, setConfig] = useState<OperatorConfig | null>(null);
   const [data, setData] = useState<GitHubOperationalWorkResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +94,7 @@ export function GitHubOperationalWorkPanel() {
     return () => {
       cancelled = true;
     };
-  }, [config, reloadKey, selectedState]);
+  }, [config, refreshSignal, reloadKey, selectedState]);
 
   return (
     <GitHubOperationalWorkPanelView
