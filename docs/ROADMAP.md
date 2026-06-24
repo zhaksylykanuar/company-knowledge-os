@@ -4,32 +4,31 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current documentation phase is CHUNK 0 - Audit & Docs consolidation. Product
-execution resumes from `../PROGRESS.md` after the docs source-of-truth set is
-clean and links are verified.
+The current execution pointer is `../PROGRESS.md`: CHUNK 3 / FOS-009. Docs
+consolidation is complete; this roadmap is planning context, not the live task
+source.
 
 ## Phase 0 - Project Setup
 
-Current status: partially done.
+Current status: done.
 
 Done:
 
 - Documentation inventory was captured in `docs/_audit/DOCS_AUDIT.md`.
-- The canonical root trio was added.
-- Old doc generations are being archived instead of deleted.
-- Required docs set is being completed with `docs/CHANGELOG.md`.
+- Canonical control docs are in place and navigated from `docs/README.md`.
+- Historical duplicate docs were removed in DEC-029/DEC-031 cleanup; recovery is
+  through git history / tag `pre-purge-20260624`.
+- `docs/CHANGELOG.md` exists.
 
 Missing:
 
-- Link verification after archive moves.
-- Final docs-only consolidation commit.
+- None for the current MVP path.
 
-Next step: complete docs consolidation, then run the next execution step from
-`../PROGRESS.md`.
+Next step: follow `../PROGRESS.md` (currently CHUNK 3 / FOS-009).
 
 Definition of Done:
 
-- Root canonical trio exists.
+- Current control docs exist.
 - `docs/DECISIONS.md`, `docs/ROADMAP.md`, `docs/TODO.md`,
   `docs/POST_MVP.md`, and `docs/CHANGELOG.md` exist.
 - `docs/README.md` is the current docs entry.
@@ -38,26 +37,27 @@ Definition of Done:
 
 ## Phase 1 - Database / Core Models
 
-Current status: partially done.
+Current status: spine-subset done; remaining canonical models are chunk-scoped.
 
 Done:
 
-- Raw/event/source/evidence/attention/graph/audit-adjacent persistence exists.
-- Existing migrations are present and were at head/current in the audit
-  environment.
+- Canonical `User`, `Workspace`, `Membership`, `IntegrationConnection`,
+  `SyncJob`, `SourceRecord`, `EvidenceRef`, `Repository`, `PullRequest`, `Task`,
+  `ActionProposal`, and `ActionExecution` foundations exist.
+- Existing migrations are at one Alembic head/current: `e1a2b3c4d5f6`.
 - Evidence refs are a repository invariant.
+- `source_events` / `normalized_activity_items` / `ingested_events` are retained
+  temporary substrate until FOS-009.
 
 Missing:
 
-- Canonical User, Workspace, Membership.
-- Canonical IntegrationConnection and SyncJob.
-- Canonical SourceRecord alignment.
-- Briefing and BriefingItem.
-- ActionProposal and ActionExecution.
-- Explicit model reconciliation between existing implementation and master
-  playbook.
+- Persistent `Briefing` / `BriefingItem`.
+- `NormalizedEntity` and related generalized entity tables after the GitHub
+  spine proves the need.
+- Person ambiguity remains open as ASK-1.
 
-Next step: FOS-DB-01 data-model reconciliation spec.
+Next step: FOS-009 repository-substrate retirement/repointing and issues/PR
+persistence where supported.
 
 Definition of Done:
 
@@ -68,26 +68,27 @@ Definition of Done:
 
 ## Phase 2 - Backend Core
 
-Current status: partly implemented and currently the closest confirmed phase.
+Current status: backend spine is green for local/mocked flow; product/live flow
+is still incomplete.
 
 Done:
 
 - FastAPI app with modular routes and services.
-- Provider execution guards and write-action guard foundations.
-- Deterministic extraction, scoring, attention, source control, and Company
-  Brain read models.
+- Workspace/operator auth helpers, identity foundation, GitHub connection,
+  repository read, manual sync job, local normalization, canonical repository
+  persistence, briefing v0, action approval, and guarded mocked GitHub issue
+  execution.
+- Company Brain repo-audit read model remains available.
 - LLM paths are gated/off by default.
 
 Missing:
 
-- Workspace-aware auth contract and route-level access model.
-- Canonical connector service around IntegrationConnection.
-- Canonical sync service around SyncJob.
-- Canonical action service around ActionProposal/ActionExecution.
-- Briefing service aligned to master MVP.
+- Full GitHub OAuth/product connect flow.
+- Live GitHub sync and persistent issues/PR path.
+- Persistent briefing models and evidence drawer workflow.
+- Product dashboard/brain wiring.
 
-Next step: after FOS-DB-01 through FOS-DB-03, define FOS-BE-01
-workspace-aware auth.
+Next step: FOS-009, then continue the GitHub-first product flow.
 
 Definition of Done:
 
@@ -122,7 +123,8 @@ Missing:
 - Product-grade loading/error/empty states.
 - Browser/product E2E coverage.
 
-Next step: FOS-FE-02 wire frontend to the existing backend GitHub-first flow.
+Next step: after FOS-009, FOS-FE-02 wires the frontend to the backend
+GitHub-first flow.
 
 Definition of Done:
 
@@ -227,7 +229,6 @@ Done:
 
 Missing:
 
-- Frontend checks.
 - Browser/product GitHub-first E2E tests.
 - Briefing validation tests aligned to master MVP.
 - Action approval tests aligned to canonical ActionProposal.

@@ -109,21 +109,24 @@ contract yet. The workspace bootstrap route is operator-protected and MVP-only.
 New workspace-aware routes must check `Membership` for access; operator access
 requires explicit owner context until session-based user auth is introduced.
 
-## DEC-013 - GitHub MVP Path Uses Hybrid Source Control Bridge
+## DEC-013 - GitHub MVP Path Uses Hybrid Repository Bridge
 
-Decision: use a hybrid staged GitHub path for the MVP. Existing Source Control,
-repository source inventory, and repo audit remain the bridge/read substrate.
-The canonical product path for GitHub connection and sync is
-`IntegrationConnection` plus `SyncJob`.
+Decision: use a hybrid staged GitHub path for the MVP. The canonical product
+path for GitHub connection and sync is `IntegrationConnection` plus `SyncJob`.
+Repository source inventory and repo audit remain temporary local read substrate
+until FOS-009.
 
-Rationale: existing GitHub/source-control code is guarded, tested, and useful,
-but it is not yet the master-playbook OAuth product flow. Starting with a
-workspace-scoped repository read API validates the source/evidence layer before
-OAuth, sync jobs, and approved writes are added.
+Rationale: the first MVP slice needs a small, testable path before the full
+master-playbook OAuth product flow. Starting with a workspace-scoped repository
+read API validates the source/evidence layer before OAuth, sync jobs, and
+approved writes are fully productized. DEC-029 later removed the old
+`source_control` implementation; DEC-030 keeps only the temporary repository
+read substrate until FOS-009.
 
 Consequences:
 
-- Do not rewrite `source_control` now.
+- Do not restore or extend `source_control`; use the canonical GitHub services
+  and retained repository inventory substrate until FOS-009.
 - Do not add GitHub OAuth before the workspace-scoped repository read API.
 - Do not expose tokens or raw provider payloads.
 - Do not make live provider calls without explicit approval.
@@ -291,10 +294,13 @@ Consequences:
 
 ## DEC-021 - Canonical Documentation Set
 
-Decision: the current documentation source of truth is the root canonical trio:
-`founderOS_MASTER_PLAYBOOK.md`, `EXECUTION_PLAN.md`, and `PROGRESS.md`, plus the
-required control docs in `docs/`: `README.md`, `DECISIONS.md`, `ROADMAP.md`,
-`TODO.md`, `POST_MVP.md`, and `CHANGELOG.md`.
+Decision: the current documentation source of truth is the control set:
+`founderOS_MASTER_PLAYBOOK.md`, `PROGRESS.md`, and `docs/DECISIONS.md`, plus the
+planning/navigation docs in `docs/`: `README.md`, `ROADMAP.md`, `TODO.md`,
+`POST_MVP.md`, and `CHANGELOG.md`.
+
+Status: amended by DEC-031. `EXECUTION_PLAN.md` and `docs/_archive/**` are no
+longer part of the current documentation set.
 
 Rationale: older playbook, vision, audit, backlog, and ledger documents came
 from several rebuild generations and conflicted with the incoming master
@@ -303,8 +309,8 @@ playbook's MVP order.
 Consequences:
 
 - `docs/README.md` is the single current docs navigation entry.
-- `docs/index.md` remains only as a compatibility pointer for older tooling.
-- Archived docs under `docs/_archive/` are traceability only.
+- Deleted historical docs are traceability through git history / tag
+  `pre-purge-20260624`, not through a live archive tree.
 - Supporting feature/runbook docs must describe current repo behavior or clearly
   mark post-MVP/frozen status; they do not override the root playbook.
 
@@ -320,7 +326,7 @@ human-approved actions.
 
 Consequences:
 
-- New work follows `EXECUTION_PLAN.md` chunk order.
+- New work follows the chunk order and live next-task pointer in `PROGRESS.md`.
 - Telegram, digest, broad second-opinion graph expansion, Jira rebuild/write
   planning, and share/investor surfaces stay frozen/post-MVP unless explicitly
   pulled into a scoped task.
@@ -407,25 +413,18 @@ Consequences:
 
 Decision: backend surfaces that were built before the GitHub-first E2E is green
 are explicitly out of current scope (no-go) and must not be developed further,
-per master playbook §3.3/§3.4 and EXECUTION_PLAN iron rules #5/#6. This makes
-DEC-006/DEC-022 concrete against the code that actually exists.
+per master playbook §3.3/§3.4. This makes DEC-006/DEC-022 concrete against the
+code that existed at audit time.
 
-Out-of-scope code present in the repo (do not extend): Telegram delivery/bot
-(`telegram_delivery.py`, `telegram_founder_bot.py`), digests
-(`app/api/digest.py`, `digest_*`), share packs (`app/api/share_packs.py`,
-`share_packs.py`), second-opinion graph (`second_opinion*.py`), role/sales/
-product/team/execution views (`role_views.py`, `sales_view.py`,
-`product_view.py`, `team_view.py`, `execution_view.py`), Jira write planning
-(`jira_write_readiness.py`, `jira_creation_dry_run.py`, `jira_operating_model.py`),
-attention/triage agents, meeting agents, knowledge QA/scoring, Obsidian export,
-and operating-rhythm/command-center surfaces.
+Status: DEC-029 removed the Lineage-2/post-MVP implementation bulk. Remaining
+post-MVP ideas live in `docs/POST_MVP.md`; do not restore deleted Telegram,
+digest, share-pack, second-opinion, broad Jira/Drive/Gmail, Obsidian, or
+knowledge-graph/RAG code unless a later scoped decision pulls it back.
 
 Consequences:
 
-- These remain frozen and untouched (no deletion now — DEC-011). New ideas go to
-  `docs/POST_MVP.md`, not into code.
-- Effort goes to the spine: canonical data foundation (CHUNK 1) → connector
-  framework (CHUNK 2) → GitHub UI E2E (CHUNK 3).
+- New ideas go to `docs/POST_MVP.md`, not into code.
+- Effort goes to the spine in `PROGRESS.md`, currently CHUNK 3 / FOS-009.
 
 ## DEC-027 - Operational Doc Contracts Are Restored, Not Tests Weakened
 
@@ -513,7 +512,7 @@ Removed:
   status/extraction tables. The migration is intentionally irreversible.
 - **Tests (~150)** of the deleted code, plus negative-guard lines trimmed from the
   9 spine API tests (all positive spine assertions kept).
-- **Scripts (55)** that imported deleted modules; **docs**: `docs/_archive/**`,
+- **Scripts (55)** that imported deleted modules; **docs**:
   `docs/features/*`, `docs/runbooks/*`, `docs/ops/*`, `docs/security/*`,
   `docs/decisions/*`, and stray standalone docs (architecture, data-model,
   dev-env, obsidian-bridge, operator_runtime_setup, source-connectors, playbook,
@@ -521,7 +520,7 @@ Removed:
 
 Kept: canonical spine + `canonical_models` + identity/integration/action/audit
 models + the temporary substrate (DEC-030), the canonical doc set
-(`founderOS_MASTER_PLAYBOOK.md`, `EXECUTION_PLAN.md`, `PROGRESS.md`,
+(`founderOS_MASTER_PLAYBOOK.md`, `PROGRESS.md`,
 `docs/{README,DECISIONS,ROADMAP,TODO,POST_MVP,CHANGELOG}.md`, `docs/_audit/*`),
 `CLAUDE.md`/`AGENTS.md`/`SECURITY_BASELINE.md`, and the Next.js `web/` shell.
 
@@ -587,7 +586,8 @@ canonical control trio is **PLAYBOOK + PROGRESS + DECISIONS**.
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
 
 - **ASK-1 — The "23 models" count and the missing `Person` entity.** §6 defines
-  22 entity sections (6.2–6.23); EXECUTION_PLAN/FOS-002 say "23 модели". §6.9
+  22 entity sections (6.2–6.23); the historical EXECUTION_PLAN/FOS-002 wording
+  said "23 модели". §6.9
   `NormalizedEntity.entity_type` includes `person`, and `Task.assignee_person_id`
   / `PullRequest.author_person_id` reference a Person that §6 never defines. Is
   the 23rd model an intended standalone `Person`, or is the count off by one?

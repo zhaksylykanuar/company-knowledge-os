@@ -89,15 +89,17 @@ Current posture: defer.
 
 Reason: explicitly outside MVP.
 
-### Archived digital-twin / Telegram / Jira rebuild generations
+### Historical digital-twin / Telegram / Jira rebuild generations
 
-Current posture: archived for traceability under `docs/_archive/`. Do not use
-the archived playbooks, vision docs, Telegram/manual-pilot ledgers, Jira rebuild
-plans, or agent stubs as current implementation prompts.
+Current posture: removed from the live docs tree; recover through git history /
+tag `pre-purge-20260624` only when a scoped future task needs the material. Do
+not use the historical playbooks, vision docs, Telegram/manual-pilot ledgers,
+Jira rebuild plans, or agent stubs as current implementation prompts.
 
-Reason: the root master playbook and execution plan now define the canonical MVP
-line. These older generations may contain useful future ideas, but they must be
-reintroduced only through a scoped task and a fresh decision.
+Reason: the root master playbook plus `PROGRESS.md` / `docs/DECISIONS.md` now
+define the canonical MVP line. These older generations may contain useful future
+ideas, but they must be reintroduced only through a scoped task and a fresh
+decision.
 
 ## Parking Lot Rules
 

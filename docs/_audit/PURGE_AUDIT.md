@@ -132,7 +132,7 @@ tests (these were just restored in this branch for the doc-contract gate).
 
 ## Docs DELETE candidates (pending #4)
 
-Keep (canon): `founderOS_MASTER_PLAYBOOK.md`, `EXECUTION_PLAN.md`, `PROGRESS.md`,
+Keep (canon): `founderOS_MASTER_PLAYBOOK.md`, `PROGRESS.md`,
 `docs/{README,DECISIONS,ROADMAP,TODO,POST_MVP,CHANGELOG}.md`, `docs/_audit/*`.
 Delete candidates: `docs/_archive/**` (entire), `docs/architecture.md`,
 `docs/data-model.md`, `docs/decisions/*`, `docs/dev-env.md`, `docs/features/*`,

@@ -8,8 +8,11 @@ files, no unrelated edits, and focused checks first.
 
 ## Current Checkpoint
 
-- Docs consolidation active: canonical trio added, audit report committed, and
-  old documentation generations are being archived under `docs/_archive/`.
+- Docs consolidation complete: current control docs are
+  `founderOS_MASTER_PLAYBOOK.md`, `PROGRESS.md`, `docs/DECISIONS.md`,
+  `docs/README.md`, `docs/ROADMAP.md`, `docs/TODO.md`, `docs/POST_MVP.md`, and
+  `docs/CHANGELOG.md`; deleted historical docs are recoverable from git history
+  / tag `pre-purge-20260624`.
 - FOS-AUD-04: done - docs/test hygiene unblocked before DB work.
 - FOS-DB-02: done - User, Workspace, and Membership identity foundation added.
 - FOS-DB-03: done - IntegrationConnection and SyncJob foundation added.
@@ -29,12 +32,13 @@ files, no unrelated edits, and focused checks first.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
+Status: done / historical.
+
 Goal: make the current dirty tree reviewable before any new implementation.
 
 Likely files:
 
 - `docs/_audit/DOCS_AUDIT.md`
-- `docs/_archive/MANIFEST.md`
 - Canonical docs only; no application code edits.
 
 Acceptance criteria:
@@ -51,14 +55,16 @@ Checks to run:
 
 ## FOS-DB-01 - Data-model reconciliation spec
 
+Status: done via DEC-028, DEC-030, and `docs/_audit/DOCS_AUDIT.md`; no
+standalone `docs/data-model.md` remains after DEC-029/DEC-031 cleanup.
+
 Goal: map the current DB model to the canonical master playbook model before
 creating migrations.
 
 Likely files:
 
-- `docs/data-model.md`
 - `docs/DECISIONS.md`
-- Possibly a new docs-only reconciliation note.
+- `docs/_audit/DOCS_AUDIT.md`
 
 Acceptance criteria:
 

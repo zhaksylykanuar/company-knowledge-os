@@ -11,6 +11,10 @@ dedicated HTML/test artifact are removed; `source_events` /
 `normalized_activity_items` / `ingested_events` remain intentionally retained
 until FOS-009.
 
+Post-DEC-031 correction (2026-06-24): `EXECUTION_PLAN.md` and
+`docs/_archive/**` are no longer part of the current control set. Mentions below
+describe the pre-purge audit path unless explicitly marked current.
+
 ## Scope And Inputs
 
 Canonical incoming files found and read:
@@ -231,7 +235,6 @@ Code is not changed by this documentation consolidation.
 After consolidation, the intended canonical set is:
 
 - `founderOS_MASTER_PLAYBOOK.md`
-- `EXECUTION_PLAN.md`
 - `PROGRESS.md`
 - `AGENTS.md`
 - `CLAUDE.md`
@@ -242,11 +245,15 @@ After consolidation, the intended canonical set is:
 - `docs/POST_MVP.md`
 - `docs/CHANGELOG.md`
 
-Supporting current-truth docs may remain under `docs/features/`,
-`docs/runbooks/`, and `docs/security/` only when they are explicitly subordinate
-to the canonical set and do not claim to be the product source of truth.
+Post DEC-029/DEC-031, the supporting `docs/features/`, `docs/runbooks/`, and
+`docs/security/` trees no longer remain in the live docs set. Future supporting
+docs should be introduced only through a scoped task and must stay subordinate
+to the canonical set.
 
 ## To Archive
+
+Historical plan: resolved by DEC-029/DEC-031. The live archive tree was removed;
+recover deleted material from git history / tag `pre-purge-20260624` if needed.
 
 Primary archive candidates:
 
