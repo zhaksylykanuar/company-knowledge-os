@@ -142,8 +142,39 @@ Delete candidates: `docs/_archive/**` (entire), `docs/architecture.md`,
 instruction files to review: `AGENTS.md`, `CLAUDE.md`, `SECURITY_BASELINE.md`
 (CLAUDE.md is repo guidance — likely KEEP; flag in #4 decision).
 
+## SHARED-ASK #5 — spine TESTS depend on legacy modules (found during test mapping)
+
+The spine's own API tests import legacy modules slated for deletion:
+- `tests/test_github_first_backend_e2e.py` (the critical spine E2E),
+  `test_action_proposals_api.py`, `test_founder_briefing_api.py`,
+  `test_github_connection_contract.py`, `test_github_provider_token_connection.py`,
+  `test_github_repositories_api.py`, `test_github_sync_jobs_api.py`,
+  `test_github_normalization_api.py`, `test_github_issue_execution_api.py`
+  import `app.connectors.github` and/or `app.services.source_control`
+  (and some import `app.db.graph_models` / `app.db.source_control_models`).
+- Usage is mostly **negative guards**: `monkeypatch.setattr(source_control_service,
+  "request_source_action", fail_source_action)` and
+  `monkeypatch.setattr(github_connector, "list_repository_events", fail_live_connector)`
+  asserting the canonical path does **not** call legacy. The spine **runtime**
+  does not import these (confirmed).
+
+Footprint if kept: `closure({connectors.github, source_control})` = **17 modules**,
+including legacy model files `agent_models`, `declaration_models`,
+`second_opinion_models`, `share_pack_models`, `source_control_models`,
+`source_models` — keeping them blocks dropping those 6 tables.
+
+- Question: (a) delete `connectors.github` + `source_control` + orphaned subtree
+  and **surgically trim the moot negative-guard lines** from the ~9 spine test
+  files (all positive spine assertions kept) — full purge, but edits spine tests;
+  or (b) **keep** `connectors.github` + `source_control` (+17-module subtree, 6
+  legacy tables not dropped) so spine tests stay untouched.
+
+This conflicts with the "do not touch spine tests" rule, so it is escalated, not
+guessed.
+
 ## Status
 
-ФАЗА 1 complete. SHARED set is **non-empty** (#1, #2 are real spine couplings;
-#3, #4 are mixed-file/test entanglements). Per ФАЗА 2, **STOP before any deletion**
-pending human decisions on #1–#4. No files deleted, no tables dropped.
+ФАЗА 1 complete. SHARED set is **non-empty** (#1, #2, #5 are real spine
+couplings; #3, #4 are mixed-file/doc-test entanglements). Per ФАЗА 2, **STOP
+before any deletion** pending human decisions on #1–#5. No files deleted, no
+tables dropped. Recovery tag `pre-purge-20260624`.
