@@ -305,3 +305,69 @@ Planned merge targets:
    `docs/_archive/MANIFEST.md`.
 5. Update links from root `README.md` and agent instructions.
 6. Verify internal links and that `git diff` is docs-only.
+
+---
+
+## Code Reality vs FOS (audit 2026-06-24)
+
+Verdict rubric: **DONE** = code + passing test/working endpoint meeting the FOS
+acceptance criteria. **PARTIAL** = code exists but acceptance/canonical shape not
+met. **MISSING** = no implementation under the canonical contract. Gate runs this
+date: `alembic upgrade head` ✅ (head `f5a6b7c8d9e0`) · `ruff` ✅ · frontend
+`next build` + `tsc` ✅ · `pytest` 1805 passed / 4 failed (doc-contract tests).
+
+| FOS | Title | Status | Evidence (one line) |
+|---|---|---|---|
+| FOS-000 | Repo baseline audit | DONE | This audit; no code changed; PROGRESS/DECISIONS/_audit updated |
+| FOS-001 | Project docs | DONE | `docs/{DECISIONS,ROADMAP,TODO,POST_MVP,CHANGELOG}.md` exist (4 doc-contract tests still red) |
+| FOS-002 | Core DB models (22 §6) | PARTIAL | 8/22 canonical present; `tests/test_integration_models.py` green; 14 canonical tables absent |
+| FOS-003 | Encryption utility | DONE | `app/services/secret_encryption.py` (Fernet); roundtrip in `tests/test_github_provider_token_connection.py` |
+| FOS-004 | Connector base interface | MISSING | No `app/connectors/base.py` with ProviderClient/SyncResult/ProviderError contract |
+| FOS-005 | Sync service | PARTIAL | No generic `sync_service.py`/SourceRecord; per-provider `app/services/github_sync_job_service.py` |
+| FOS-006 | Normalization service | PARTIAL | No generic `normalization_service.py`/NormalizedEntity/EvidenceRef; `github_normalization_service.py` projects dicts |
+| FOS-007 | GitHub OAuth | PARTIAL | No OAuth start/callback (§7.5); PAT-bridge connection, token encrypted; `tests/test_github_provider_token_connection.py` green |
+| FOS-008 | GitHub sync repositories | DONE | `app/services/github_sync_job_service.py` + `/v1/.../github/repositories`; `tests/test_github_first_backend_e2e.py` (repos count==1) |
+| FOS-009 | GitHub sync issues + PRs | PARTIAL | PR projection only; issues empty with warning (`github_normalization_service.py:26-27`) |
+| FOS-010 | Connectors UI page | MISSING | No `web/app/connectors/page.tsx`; only stub `web/app/github/page.tsx` |
+| FOS-011 | Dashboard v0 | PARTIAL | `app/services/founder_overview.py`; `web/app/dashboard/page.tsx` stub, not wired to live data |
+| FOS-012 | Brain entity API + UI | PARTIAL | `app/api/company_brain.py` exists; no `web/app/brain` page |
+| FOS-013 | Briefing backend | PARTIAL | `founder_briefing_service.py` deterministic/transient (no LLM, no Briefing rows); `tests/test_founder_briefing_api.py` green |
+| FOS-014 | Briefing UI | MISSING | `web/app/briefings/page.tsx` 23-line stub; no evidence drawer |
+| FOS-015 | Action proposal API | PARTIAL | `app/api/actions.py` approve/reject/execute + models + migration; `tests/test_action_proposals_api.py` green; no async worker |
+| FOS-016 | GitHub create-issue action | PARTIAL | `github_issue_execution_service.py` + `tests/test_github_issue_execution_api.py` green; issue client mocked (no real write) |
+| FOS-017 | Jira connector minimal | PARTIAL | `app/connectors/jira.py` + discovery/mapping; no `web/app/jira`; not in canonical Brain |
+| FOS-018 | Gmail connector minimal | PARTIAL | `app/connectors/gmail.py` + gmail models + `app/api/gmail.py`; no `web/app/gmail` |
+| FOS-019 | Drive connector minimal | PARTIAL | `app/connectors/google_drive.py` + `app/api/drive.py`; no `web/app/drive` |
+| FOS-020 | Documents module | PARTIAL | `source_documents` (RAG) only; no canonical `Document` CRUD (§7.11); no `web/app/documents` |
+| FOS-021 | Repo Audit UI | PARTIAL | `app/services/repo_audit.py` exists; no `web/app/repo-audit` page |
+| FOS-022 | Smoke tests | PARTIAL | Backend `test_github_first_backend_e2e.py` + `test_external_connector_readonly_smoke.py` green; no `make smoke`/Makefile/prod smoke |
+
+Totals: **DONE 4 · PARTIAL 16 · MISSING 3** (= 23). Strict progress 4/23 (17%).
+
+Note on TODO drift: `docs/TODO.md` tracks a parallel scheme
+(`FOS-AUD/DB/GH/BRF/ACT/E2E/FE-*`) with ~15 entries marked "done", which reads as
+a near-complete backend MVP. Against the playbook's `FOS-000..022` that maps to
+mostly PARTIAL backend work, not DONE.
+
+Canonical model coverage (§6, 22 entities): present under canonical names = User,
+Workspace, Membership, IntegrationConnection, SyncJob, ActionProposal,
+ActionExecution, AuditLog (8). Absent as canonical tables (14) = SourceRecord,
+EvidenceRef, NormalizedEntity, Project, Task, Repository, PullRequest,
+MessageThread, DriveFile, Document, Goal, Insight, Briefing, BriefingItem.
+
+Canonical frontend pages (§8): present (stubs) = `/dashboard`, `/github`,
+`/briefings`, `/actions`, `/settings`. Absent = `/login`, `/connectors`,
+`/brain`, `/jira`, `/gmail`, `/drive`, `/documents`, `/repo-audit`.
+
+## Drift Resolved (audit 2026-06-24)
+
+Decisions recorded in `docs/DECISIONS.md` (DEC-023..026) and ASK-1/ASK-2. No code,
+migrations, tests, or config were changed.
+
+| Drift | Verdict (playbook ref) | Where the conflict lives |
+|---|---|---|
+| API namespace `/v1` vs `/api/v1` | Canonical = `/api/v1` (§7.1) → **DEC-023**. `/api/v1` used nowhere; `/v1` everywhere | `app/main.py` + all `app/api/*.py` prefixes + `web/app/github/page.tsx` |
+| SourceRecord vs source/event tables | Canonical = `SourceRecord`/`NormalizedEntity`/`EvidenceRef` (§6.7/6.9/6.8) → **DEC-024** | `app/db/event_models.py` (`source_events`), `graph_models.py` (`entities`), `source_models.py`, `models.py`; `EvidenceRef` only a Pydantic schema |
+| Static `/ui` vs Next.js `web/` | Product frontend = Next.js `web/` (§8); legacy `founder_ui.html` (`/ui`) retired later → **DEC-025** (refines DEC-004/020) | `app/static/` page + `ui_page_router` in `app/main.py` vs `web/app/*` |
+| Post-MVP surfaces built before GitHub E2E | No-go / out of scope (§3.3/3.4, EXECUTION_PLAN #5/#6) → **DEC-026** (concretizes DEC-006/022) | telegram/digest/share-pack/second-opinion/role-view/jira-write/attention/meeting/knowledge-QA services in `app/services/` |
+| Genuinely ambiguous | Not decided → **ASK-1** (23rd model / missing `Person`), **ASK-2** (rename-migrate vs add-alongside foundation strategy) | §6 defines 22; `assignee_person_id`/`author_person_id` imply undefined Person |

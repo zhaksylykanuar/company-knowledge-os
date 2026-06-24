@@ -323,3 +323,117 @@ Consequences:
   pulled into a scoped task.
 - If a supporting doc conflicts with the master playbook, record the conflict
   here before implementation.
+
+## DEC-023 - Canonical API Namespace Is `/api/v1`
+
+Decision: the canonical REST base path is `/api/v1` per master playbook §7.1.
+
+Drift found (2026-06-24 audit): every router currently mounts under `/v1`, not
+`/api/v1`. There is **zero** usage of `/api/v1` anywhere in `app/` or `web/`.
+
+Wrong-namespace files (all of them): `app/main.py` (`/v1/events` mount) and every
+`app/api/*.py` declaring a prefix — `digest.py`, `ui.py`, `company_brain.py`,
+`gmail.py`, `google.py`, `extraction.py`, `actions.py`, `share_packs.py`,
+`briefings.py`, `drive.py`, `dev.py`, `github.py`, `workspaces.py`,
+`knowledge.py`. The Next.js shell also references the wrong path
+(`web/app/github/page.tsx`: "Reads /v1/workspaces/...").
+
+Consequences:
+
+- `/api/v1` is canonical; `/v1` is a drift to remediate in a dedicated future
+  task (single prefix change at router registration), not during this audit.
+- No code is changed now. This decision only fixes the verdict and the source
+  of truth.
+- New routes must target `/api/v1`.
+
+## DEC-024 - Canonical Source/Entity/Evidence Naming Is SourceRecord / NormalizedEntity / EvidenceRef
+
+Decision: canonical persistence names follow master playbook §6.7/§6.9/§6.8:
+`SourceRecord` (`source_records`), `NormalizedEntity` (`normalized_entities`),
+and `EvidenceRef` (`evidence_refs`).
+
+Drift found (2026-06-24 audit): none of these canonical tables exist. The repo
+instead persists raw source data as `source_events` (`SourceEvent`),
+`source_documents` (`SourceDocument`), and `ingested_events`; entities live in
+`entities` (`EntityRecord`, knowledge-graph shape, different schema); and
+`EvidenceRef` exists only as a Pydantic schema (`app/agents/schemas.py`) plus
+denormalized `evidence_refs` JSON arrays inside many services — not a table.
+Canonical `Briefing`/`BriefingItem`/`Repository`/`PullRequest`/`Task`/`Project`/
+`Document`/`Goal`/`Insight`/`MessageThread`/`DriveFile` tables are likewise
+absent. This is why the CHUNK 2 gate (mock connector → SourceRecord +
+NormalizedEntity + EvidenceRef) is currently impossible.
+
+Conflict locations: `app/db/event_models.py` (`source_events`,
+`normalized_activity_items`), `app/db/graph_models.py` (`entities`),
+`app/db/source_models.py` (`source_documents`), `app/db/models.py`
+(`ingested_events`); projections in `app/services/github_normalization_service.py`.
+
+Consequences:
+
+- Canonical names per §6 are the target. Existing tables are compatibility
+  substrate (consistent with DEC-013/DEC-015), not the canonical contract.
+- How to converge is a real fork → see ASK-2 below. Do not silently keep two
+  parallel schemas as the source of truth.
+- No schema/code change during this audit.
+
+## DEC-025 - Next.js `web/` Is The Product Frontend; Static `/ui` Is Legacy
+
+Decision: per master playbook §8, the product frontend is the Next.js app in
+`web/`. The static `app/static/founder_ui.html` page served at the `/ui` route is
+**legacy/operator-only** and is marked for later removal once `web/` reaches
+parity.
+
+Drift note: this refines DEC-004/DEC-020. `/ui` stays available for current
+local/operator workflows (evidence review, source diagnostics, Company Brain
+preview, guarded ops), but it is not the MVP product surface and must not be
+extended. New product UI work goes only into `web/`.
+
+Consequences:
+
+- `web/` owns canonical pages (`/login`, `/dashboard`, `/connectors`, `/github`,
+  `/jira`, `/gmail`, `/drive`, `/documents`, `/brain`, `/briefings`, `/actions`,
+  `/repo-audit`, `/settings`). Currently only `dashboard`, `github`, `briefings`,
+  `actions`, `settings` exist as stubs.
+- `/ui` is retired (not deleted) — removal is a post-spine cleanup task.
+- No code change now.
+
+## DEC-026 - Out-Of-Order Post-MVP Surfaces Are No-Go Until GitHub-First E2E
+
+Decision: backend surfaces that were built before the GitHub-first E2E is green
+are explicitly out of current scope (no-go) and must not be developed further,
+per master playbook §3.3/§3.4 and EXECUTION_PLAN iron rules #5/#6. This makes
+DEC-006/DEC-022 concrete against the code that actually exists.
+
+Out-of-scope code present in the repo (do not extend): Telegram delivery/bot
+(`telegram_delivery.py`, `telegram_founder_bot.py`), digests
+(`app/api/digest.py`, `digest_*`), share packs (`app/api/share_packs.py`,
+`share_packs.py`), second-opinion graph (`second_opinion*.py`), role/sales/
+product/team/execution views (`role_views.py`, `sales_view.py`,
+`product_view.py`, `team_view.py`, `execution_view.py`), Jira write planning
+(`jira_write_readiness.py`, `jira_creation_dry_run.py`, `jira_operating_model.py`),
+attention/triage agents, meeting agents, knowledge QA/scoring, Obsidian export,
+and operating-rhythm/command-center surfaces.
+
+Consequences:
+
+- These remain frozen and untouched (no deletion now — DEC-011). New ideas go to
+  `docs/POST_MVP.md`, not into code.
+- Effort goes to the spine: canonical data foundation (CHUNK 1) → connector
+  framework (CHUNK 2) → GitHub UI E2E (CHUNK 3).
+
+## ASK - Open Questions For The Human (not decided)
+
+These are genuinely ambiguous and are NOT resolved by the playbook alone:
+
+- **ASK-1 — The "23 models" count and the missing `Person` entity.** §6 defines
+  22 entity sections (6.2–6.23); EXECUTION_PLAN/FOS-002 say "23 модели". §6.9
+  `NormalizedEntity.entity_type` includes `person`, and `Task.assignee_person_id`
+  / `PullRequest.author_person_id` reference a Person that §6 never defines. Is
+  the 23rd model an intended standalone `Person`, or is the count off by one?
+- **ASK-2 — Foundation reconciliation strategy.** To close the canonical-naming
+  gap (DEC-024), do we (a) rename/migrate existing tables to canonical
+  (`source_events`→`source_records`, `entities`→`normalized_entities`, add
+  `evidence_refs`), or (b) add canonical tables alongside and keep existing ones
+  as compatibility substrate (extends DEC-013/DEC-015 projection mode)? This
+  decision gates all of CHUNK 1–3 and the spine; it should be made before more
+  FOS-002 work.
