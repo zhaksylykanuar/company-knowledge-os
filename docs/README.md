@@ -7,13 +7,12 @@ After the Lineage-2 purge (DEC-029), the documentation is the canonical set only
 
 1. [`../founderOS_MASTER_PLAYBOOK.md`](../founderOS_MASTER_PLAYBOOK.md) -
    canonical product, MVP scope, data model, API, frontend, AI, security, test,
-   deploy, and backlog source of truth.
-2. [`../EXECUTION_PLAN.md`](../EXECUTION_PLAN.md) - orchestration order, chunk
-   gates, and driver prompts.
-3. [`../PROGRESS.md`](../PROGRESS.md) - live state and next task pointer.
-4. [`DECISIONS.md`](DECISIONS.md) - durable repo decisions and explicit
-   conflict resolutions.
-5. [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md),
+   deploy, and backlog source of truth (**what** to build).
+2. [`../PROGRESS.md`](../PROGRESS.md) - live state and next task pointer
+   (**where** we are).
+3. [`DECISIONS.md`](DECISIONS.md) - durable repo decisions and explicit
+   conflict resolutions (**why**).
+4. [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md),
    [`POST_MVP.md`](POST_MVP.md), and [`CHANGELOG.md`](CHANGELOG.md) - working
    planning layer.
 

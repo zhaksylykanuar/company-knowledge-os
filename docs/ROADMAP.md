@@ -1,7 +1,8 @@
 # FounderOS Roadmap
 
-Status: roadmap is subordinate to the root canonical trio:
-`../founderOS_MASTER_PLAYBOOK.md`, `../EXECUTION_PLAN.md`, and `../PROGRESS.md`.
+Status: roadmap is subordinate to the canonical control trio:
+`../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
+`DECISIONS.md` (why).
 
 The current documentation phase is CHUNK 0 - Audit & Docs consolidation. Product
 execution resumes from `../PROGRESS.md` after the docs source-of-truth set is

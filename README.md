@@ -1,18 +1,18 @@
 # company-knowledge-os (FounderOS)
 
 FounderOS is an evidence-backed operating layer for a founder and small team.
-The canonical MVP is now defined by the root playbook and execution plan: one
-web product, one backend, connected company sources, Company Brain, Founder
-Briefing, evidence for every AI claim, and human-approved external actions.
+The canonical MVP is defined by the root playbook: one web product, one backend,
+connected company sources, Company Brain, Founder Briefing, evidence for every AI
+claim, and human-approved external actions.
 
 ## Current Source Of Truth
 
-Read in this order:
+Read in this order (control trio = what / where / why):
 
-1. [`founderOS_MASTER_PLAYBOOK.md`](founderOS_MASTER_PLAYBOOK.md)
-2. [`EXECUTION_PLAN.md`](EXECUTION_PLAN.md)
-3. [`PROGRESS.md`](PROGRESS.md)
-4. [`docs/README.md`](docs/README.md)
+1. [`founderOS_MASTER_PLAYBOOK.md`](founderOS_MASTER_PLAYBOOK.md) — what to build.
+2. [`PROGRESS.md`](PROGRESS.md) — where we are (live state).
+3. [`docs/DECISIONS.md`](docs/DECISIONS.md) — why (decision history).
+4. [`docs/README.md`](docs/README.md) — docs index.
 
 ## Status
 
