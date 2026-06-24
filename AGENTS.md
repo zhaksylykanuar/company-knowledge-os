@@ -4,7 +4,7 @@ Operational rules for Codex and other AI agents working in FounderOS.
 
 ## Start Here
 
-- Read `docs/index.md`, this file, and `CLAUDE.md` before making changes.
+- Read `docs/README.md`, this file, and `CLAUDE.md` before making changes.
 - Use targeted inspection with `rg`, `find`, and specific files.
 - Do not scan the whole repo unless the task explicitly requires it.
 - Check `git status --short` before edits and do not overwrite unrelated work.

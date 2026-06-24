@@ -172,22 +172,3 @@ def test_renovate_tracks_uv_python_dependencies_without_action_duplicates() -> N
     assert package_rule["matchDatasources"] == ["pypi"]
     assert package_rule["minimumReleaseAge"] == "3 days"
     assert "github-actions" not in json.dumps(renovate)
-
-
-def test_docs_include_quick_and_ci_parity_checks() -> None:
-    readme = _text("README.md")
-    playbook = _text("docs/playbook.md")
-
-    assert "Quick local checks" in readme
-    assert "CI parity before opening a PR" in readme
-    assert "Dependency automation" in readme
-    assert "Renovate" in readme
-    assert "uv.lock" in readme
-    assert "OpenSSF Scorecard" in readme
-    assert "Dependency Review" in readme
-    assert "uv Dependency Submission" in readme
-    assert "uv.lock transitive coverage" in readme
-    assert "manual SHA rotation" in readme
-    assert "uv sync --frozen" in readme
-    assert "uv run alembic upgrade head" in readme
-    assert "tracked-secret scan" in playbook

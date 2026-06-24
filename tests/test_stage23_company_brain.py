@@ -238,7 +238,7 @@ def test_second_opinion_loader_shape(tmp_path: Path) -> None:
 
 async def test_api_preview_endpoint_shape() -> None:
     async with _client() as client:
-        resp = await client.get("/v1/founder/company-brain/preview")
+        resp = await client.get("/api/v1/founder/company-brain/preview")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "local_preview_only"
@@ -253,7 +253,7 @@ async def test_api_second_opinion_returns_eight_cards() -> None:
     if not _has_real_preview():
         return
     async with _client() as client:
-        resp = await client.get("/v1/founder/company-brain/second-opinion")
+        resp = await client.get("/api/v1/founder/company-brain/second-opinion")
     assert resp.status_code == 200
     feed = resp.json()["second_opinion_feed"]
     assert len(feed) == 8
@@ -262,9 +262,9 @@ async def test_api_second_opinion_returns_eight_cards() -> None:
 
 async def test_api_people_and_unresolved_endpoints() -> None:
     async with _client() as client:
-        people_resp = await client.get("/v1/founder/company-brain/people")
+        people_resp = await client.get("/api/v1/founder/company-brain/people")
         unresolved_resp = await client.get(
-            "/v1/founder/company-brain/unresolved-questions"
+            "/api/v1/founder/company-brain/unresolved-questions"
         )
     assert people_resp.status_code == 200
     assert unresolved_resp.status_code == 200

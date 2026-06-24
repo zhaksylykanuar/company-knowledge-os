@@ -9,12 +9,10 @@ from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
 import app.api.github as github_api
-import app.connectors.github as github_connector
 import app.services.founder_briefing_service as founder_briefing_service
 import app.services.github_issue_execution_service as github_issue_execution_service
 import app.services.github_normalization_service as github_normalization_service
 import app.services.github_repository_read_service as github_repository_read_service
-import app.services.source_control as source_control_service
 from app.api.auth import settings
 from app.db.action_models import (
     ACTION_EXECUTION_STATUS_SUCCEEDED,
@@ -224,22 +222,7 @@ def _install_no_live_call_guards(monkeypatch, issue_calls: list[dict]) -> None:
             "token": PLAIN_E2E_TOKEN,
         }
 
-    async def fail_source_action(*_args, **_kwargs):
-        raise AssertionError("source_control should not run in backend e2e smoke")
-
-    def fail_live_connector(*_args, **_kwargs):
-        raise AssertionError("live provider connector should not run in backend e2e smoke")
-
     monkeypatch.setattr(github_issue_execution_service, "create_issue", fake_create_issue)
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_source_action)
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_live_connector)
-    monkeypatch.setattr(github_connector, "fetch_issue_events", fail_live_connector)
-    monkeypatch.setattr(github_connector, "fetch_pull_request_events", fail_live_connector)
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_live_connector,
-    )
 
     original_import = builtins.__import__
 
@@ -265,7 +248,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
     try:
         async with _async_client() as client:
             bootstrap = await client.post(
-                "/v1/workspaces/bootstrap",
+                "/api/v1/workspaces/bootstrap",
                 headers=_headers(),
                 json=_bootstrap_payload(marker),
             )
@@ -278,7 +261,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert bootstrap_body["membership"]["role"] == "owner"
 
             initial_status = await client.get(
-                f"/v1/workspaces/{workspace_id}/github/connection-status",
+                f"/api/v1/workspaces/{workspace_id}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
@@ -289,7 +272,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert initial_status.json()["is_live"] is False
 
             connection_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/github/connections/provider-token",
+                f"/api/v1/workspaces/{workspace_id}/github/connections/provider-token",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -312,7 +295,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert "fernet:v1:" not in connection_response.text
 
             connected_status = await client.get(
-                f"/v1/workspaces/{workspace_id}/github/connection-status",
+                f"/api/v1/workspaces/{workspace_id}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
@@ -327,7 +310,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert PLAIN_E2E_TOKEN not in connected_status.text
 
             repositories_response = await client.get(
-                f"/v1/workspaces/{workspace_id}/github/repositories",
+                f"/api/v1/workspaces/{workspace_id}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
@@ -345,7 +328,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             )
 
             sync_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/github/connections/{connection_id}/sync-jobs",
+                f"/api/v1/workspaces/{workspace_id}/github/connections/{connection_id}/sync-jobs",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -366,7 +349,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert sync_job["sync_type"] == "manual"
 
             normalize_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -395,7 +378,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             sync_job_before_briefing = await _stored_sync_job(sync_job_id)
 
             briefing_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/briefings/manual",
+                f"/api/v1/workspaces/{workspace_id}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -426,7 +409,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert sync_job_after_briefing.logs == sync_job_before_briefing.logs
 
             action_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/actions/proposals",
+                f"/api/v1/workspaces/{workspace_id}/actions/proposals",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
@@ -460,7 +443,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             assert await _stored_executions(proposal_id) == []
 
             approve_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
+                f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
@@ -473,7 +456,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
 
             sync_job_count_before_execute = await _count(SyncJob)
             execute_response = await client.post(
-                f"/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execute",
+                f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execute",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={

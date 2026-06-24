@@ -89,6 +89,16 @@ Current posture: defer.
 
 Reason: explicitly outside MVP.
 
+### Archived digital-twin / Telegram / Jira rebuild generations
+
+Current posture: archived for traceability under `docs/_archive/`. Do not use
+the archived playbooks, vision docs, Telegram/manual-pilot ledgers, Jira rebuild
+plans, or agent stubs as current implementation prompts.
+
+Reason: the root master playbook and execution plan now define the canonical MVP
+line. These older generations may contain useful future ideas, but they must be
+reintroduced only through a scoped task and a fresh decision.
+
 ## Parking Lot Rules
 
 - Do not delete working code just because it is post-MVP.
@@ -96,4 +106,3 @@ Reason: explicitly outside MVP.
 - Do not expand frozen surfaces without a new task and explicit approval.
 - Any future expansion must preserve evidence_refs, human approval for writes,
   no raw secrets, and source-of-truth boundaries.
-

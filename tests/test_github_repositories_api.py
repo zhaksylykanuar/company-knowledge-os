@@ -5,7 +5,6 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-import app.connectors.github as github_connector
 import app.services.github_repository_read_service as github_repository_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
@@ -84,7 +83,7 @@ async def _cleanup_workspace_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -124,7 +123,7 @@ async def test_github_repositories_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
 
@@ -145,7 +144,7 @@ async def test_github_repositories_requires_owner_email_context(monkeypatch) -> 
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
             )
 
@@ -170,7 +169,7 @@ async def test_github_repositories_requires_workspace_access(monkeypatch) -> Non
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(other_marker)["owner_email"]},
             )
@@ -203,7 +202,7 @@ async def test_github_repositories_returns_empty_state_without_local_data(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -269,7 +268,7 @@ async def test_github_repositories_returns_local_inventory_with_filters_and_evid
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={
                     "owner_email": _bootstrap_payload(marker)["owner_email"],
@@ -349,7 +348,7 @@ async def test_github_repositories_preserves_source_event_evidence_refs(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -369,16 +368,6 @@ async def test_github_repositories_makes_no_provider_call_or_connection_write(
     _set_auth(monkeypatch)
     await _cleanup_workspace_fixture(marker)
 
-    def fail_provider_call(*_args, **_kwargs):
-        raise AssertionError("provider call should not be made")
-
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_provider_call,
-    )
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_provider_call)
-
     async def fake_inventory(**_kwargs):
         return _inventory_payload([])
 
@@ -395,7 +384,7 @@ async def test_github_repositories_makes_no_provider_call_or_connection_write(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/repositories",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )

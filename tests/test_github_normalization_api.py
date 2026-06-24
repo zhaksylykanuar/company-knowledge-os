@@ -8,13 +8,10 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-import app.connectors.github as github_connector
 import app.services.github_repository_read_service as github_repository_read_service
-import app.services.source_control as source_control_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
 from app.db.event_models import SourceEvent
-from app.db.graph_models import EntityRecord
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_ADMIN,
     MEMBERSHIP_ROLE_MEMBER,
@@ -35,7 +32,6 @@ from app.db.integration_models import (
     IntegrationConnection,
     SyncJob,
 )
-from app.db.source_control_models import SourceRunRequest
 from app.main import app
 from app.services.github_repository_read_service import GitHubRepositoryListResult
 from app.services.repository_source_inventory import INVENTORY_DISCOVERY_SNAPSHOT
@@ -106,7 +102,7 @@ async def _cleanup_normalization_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -248,7 +244,7 @@ async def test_normalize_local_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
             )
@@ -271,7 +267,7 @@ async def test_normalize_local_requires_owner_email_context(monkeypatch) -> None
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 json={},
             )
@@ -305,7 +301,7 @@ async def test_owner_can_run_local_normalization_projection(monkeypatch) -> None
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -386,7 +382,7 @@ async def test_admin_can_run_local_normalization(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": admin_email},
                 json={"include_issues": False, "include_pull_requests": False},
@@ -420,7 +416,7 @@ async def test_member_and_viewer_cannot_run_local_normalization(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": user_email},
                 json={},
@@ -447,13 +443,13 @@ async def test_normalize_local_rejects_unknown_and_cross_workspace_jobs(monkeypa
 
         async with _async_client() as client:
             unknown = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{uuid4()}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{uuid4()}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
             )
             cross_workspace = await client.post(
-                f"/v1/workspaces/{other['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{other['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(other_marker)["owner_email"]},
                 json={},
@@ -501,19 +497,19 @@ async def test_normalize_local_rejects_non_github_non_manual_and_succeeded_jobs(
 
         async with _async_client() as client:
             non_github = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{non_github_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{non_github_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
             )
             non_manual = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{non_manual_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{non_manual_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
             )
             succeeded = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{succeeded_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{succeeded_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -550,7 +546,7 @@ async def test_normalize_local_empty_inventory_returns_warning(monkeypatch) -> N
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -578,7 +574,7 @@ async def test_normalize_local_rejects_deferred_persistence(monkeypatch) -> None
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"persist_if_supported": True},
@@ -602,16 +598,6 @@ async def test_normalize_local_does_not_call_live_source_or_graph_paths(
     _set_auth(monkeypatch)
     await _cleanup_normalization_fixture(marker)
 
-    def fail_live_call(*_args, **_kwargs):
-        raise AssertionError("live/source action should not be called")
-
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_live_call,
-    )
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_live_call)
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_live_call)
 
     async def fake_repository_read(**_kwargs):
         return _repository_result([_repo_payload()])
@@ -627,12 +613,10 @@ async def test_normalize_local_does_not_call_live_source_or_graph_paths(
         connection_id = await _seed_connection(created["workspace"]["id"])
         sync_job_id = await _seed_sync_job(created["workspace"]["id"], connection_id)
         source_event_count_before = await _count(SourceEvent)
-        source_run_request_count_before = await _count(SourceRunRequest)
-        entity_count_before = await _count(EntityRecord)
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/sync-jobs/{sync_job_id}/normalize-local",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -641,8 +625,6 @@ async def test_normalize_local_does_not_call_live_source_or_graph_paths(
         assert response.status_code == 200
         assert response.json()["provider_sync_started"] is False
         assert await _count(SourceEvent) == source_event_count_before
-        assert await _count(SourceRunRequest) == source_run_request_count_before
-        assert await _count(EntityRecord) == entity_count_before
     finally:
         await _cleanup_normalization_fixture(marker)
 

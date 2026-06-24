@@ -9,9 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-import app.connectors.github as github_connector
 import app.services.github_repository_read_service as github_repository_read_service
-import app.services.source_control as source_control_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import (
@@ -99,7 +97,7 @@ async def _cleanup_briefing_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -240,7 +238,7 @@ async def test_manual_briefing_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
             )
@@ -261,7 +259,7 @@ async def test_manual_briefing_requires_owner_email_context(monkeypatch) -> None
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 json={},
             )
@@ -300,7 +298,7 @@ async def test_member_and_viewer_can_read_manual_briefing(monkeypatch, role: str
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": user_email},
                 json={},
@@ -333,7 +331,7 @@ async def test_empty_workspace_returns_transient_briefing_with_warnings(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -380,7 +378,7 @@ async def test_manual_briefing_includes_connection_without_token_leak(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -420,7 +418,7 @@ async def test_manual_briefing_preserves_repository_evidence_refs(monkeypatch) -
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={"limit": 10},
@@ -460,7 +458,7 @@ async def test_manual_briefing_warns_when_repository_evidence_missing(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -504,7 +502,7 @@ async def test_manual_briefing_includes_sync_job_and_failed_risk(monkeypatch) ->
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -566,7 +564,7 @@ async def test_manual_briefing_reads_normalization_logs_without_mutating_sync_jo
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},
@@ -596,16 +594,6 @@ async def test_manual_briefing_does_not_call_llm_provider_source_or_mutate_sync_
     _set_auth(monkeypatch)
     await _cleanup_briefing_fixture(marker)
 
-    def fail_live_call(*_args, **_kwargs):
-        raise AssertionError("live/source action should not be called")
-
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_live_call,
-    )
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_live_call)
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_live_call)
 
     original_import = builtins.__import__
 
@@ -638,7 +626,7 @@ async def test_manual_briefing_does_not_call_llm_provider_source_or_mutate_sync_
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json={},

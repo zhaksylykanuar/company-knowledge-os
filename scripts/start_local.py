@@ -6,8 +6,8 @@ This script makes the local happy path "run one command and it works":
 1. Bootstrap the gitignored ``.local/`` workspace and ``.env.local`` managed
    block (idempotent; existing local secrets are preserved).
 2. Run ``alembic upgrade head`` against the configured local database.
-3. Start uvicorn on ``127.0.0.1:8765`` and print where to open the UI and
-   where the Obsidian vault lives.
+3. Start uvicorn on ``127.0.0.1:8765`` and print where to open the app and
+   where the local workspace lives.
 
 If the port is already taken the script prints a clear instruction and exits
 without killing any process.
@@ -31,7 +31,7 @@ from scripts.bootstrap_local_workspace import (  # noqa: E402
 
 HOST = "127.0.0.1"
 PORT = 8765
-UI_URL = f"http://{HOST}:{PORT}/ui"
+APP_URL = f"http://{HOST}:{PORT}/"
 VAULT_RELATIVE = f".local/obsidian/{VAULT_NAME}"
 
 
@@ -61,7 +61,7 @@ def build_uvicorn_command(host: str = HOST, port: int = PORT) -> list[str]:
 def occupied_port_message(host: str = HOST, port: int = PORT) -> str:
     return (
         f"Port {port} is already in use. FounderOS may already be running — "
-        f"open http://{host}:{port}/ui\n"
+        f"open http://{host}:{port}/\n"
         f"To inspect the process: lsof -nP -iTCP:{port} -sTCP:LISTEN\n"
         "FounderOS did not stop any process."
     )
@@ -73,13 +73,10 @@ def _print_ready(workspace: Path) -> None:
     except ValueError:
         workspace_label = str(workspace)
     print("FounderOS local runtime is ready.", flush=True)
-    print(f"  Open UI:        {UI_URL}", flush=True)
+    print(f"  Open app:       {APP_URL}", flush=True)
     print(f"  Obsidian vault: {VAULT_RELATIVE}", flush=True)
     print(f"  Workspace:      {workspace_label}", flush=True)
-    print(
-        "  In the UI: Knowledge tree -> Dry Run -> Sync Now -> Open Vault in Obsidian",
-        flush=True,
-    )
+    print("  Product UI shell lives in web/; backend API is under /api/v1.", flush=True)
 
 
 def main() -> int:

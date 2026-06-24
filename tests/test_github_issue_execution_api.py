@@ -9,7 +9,6 @@ from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
 import app.services.github_issue_execution_service as github_issue_execution_service
-import app.services.source_control as source_control_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.action_models import (
     ACTION_CREATED_BY_USER,
@@ -173,7 +172,7 @@ async def _cleanup_issue_action_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -240,7 +239,7 @@ async def _post_proposal(
 ) -> dict:
     async with _async_client() as client:
         response = await client.post(
-            f"/v1/workspaces/{workspace_id}/actions/proposals",
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals",
             headers=_headers(),
             params={"owner_email": owner_email},
             json=payload if payload is not None else _proposal_payload(),
@@ -256,7 +255,7 @@ async def _approve_proposal(
 ) -> dict:
     async with _async_client() as client:
         response = await client.post(
-            f"/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
             headers=_headers(),
             params={"owner_email": owner_email},
         )
@@ -315,7 +314,7 @@ async def _execute_proposal(
         payload["connection_id"] = str(connection_id)
     async with _async_client() as client:
         return await client.post(
-            f"/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execute",
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execute",
             headers=_headers(),
             params={"owner_email": owner_email},
             json=payload,
@@ -379,7 +378,7 @@ async def test_execute_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/execute",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/execute",
                 params={"owner_email": owner_email},
                 json={
                     "connection_id": str(connection_id),
@@ -406,7 +405,7 @@ async def test_execute_requires_owner_email_context(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/execute",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/execute",
                 headers=_headers(),
                 json={
                     "connection_id": str(connection_id),
@@ -812,37 +811,6 @@ async def test_already_executed_proposal_cannot_execute_again(monkeypatch) -> No
         assert second.status_code == 409
         assert second.json() == {"detail": "action proposal already executed"}
         assert len(calls) == 1
-    finally:
-        await _cleanup_issue_action_fixture(marker)
-
-
-async def test_execute_does_not_call_source_control(monkeypatch) -> None:
-    marker = uuid4().hex
-    _set_auth(monkeypatch)
-    calls: list[dict] = []
-    _mock_successful_github_issue(monkeypatch, calls)
-    await _cleanup_issue_action_fixture(marker)
-
-    async def fail_source_action(*_args, **_kwargs):
-        raise AssertionError("source_control should not be called")
-
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_source_action)
-
-    try:
-        created = await _bootstrap_workspace(marker)
-        owner_email = _bootstrap_payload(marker)["owner_email"]
-        proposal = await _create_approved_proposal(created["workspace"]["id"], owner_email)
-        connection_id = await _create_connection(created["workspace"]["id"])
-
-        response = await _execute_proposal(
-            created["workspace"]["id"],
-            proposal["id"],
-            owner_email,
-            connection_id=connection_id,
-        )
-
-        assert response.status_code == 200
-        assert calls
     finally:
         await _cleanup_issue_action_fixture(marker)
 

@@ -1,11 +1,11 @@
 # FounderOS Roadmap
 
-Status: roadmap aligned to `founderOS_MASTER_PLAYBOOK.md` after the repo
-alignment audit.
+Status: roadmap is subordinate to the root canonical trio:
+`../founderOS_MASTER_PLAYBOOK.md`, `../EXECUTION_PLAN.md`, and `../PROGRESS.md`.
 
-The current project phase is approximately Phase 2 - Backend Core. The next
-practical step is not new feature work; it is checkpoint/scope split of the
-current dirty tree.
+The current documentation phase is CHUNK 0 - Audit & Docs consolidation. Product
+execution resumes from `../PROGRESS.md` after the docs source-of-truth set is
+clean and links are verified.
 
 ## Phase 0 - Project Setup
 
@@ -13,26 +13,25 @@ Current status: partially done.
 
 Done:
 
-- Repo alignment audit completed.
-- Baseline checks from the audit were recorded.
-- Alignment docs are now being added.
-- Existing backend test/lint/migration checks were green during audit.
+- Documentation inventory was captured in `docs/_audit/DOCS_AUDIT.md`.
+- The canonical root trio was added.
+- Old doc generations are being archived instead of deleted.
+- Required docs set is being completed with `docs/CHANGELOG.md`.
 
 Missing:
 
-- Current dirty tree is not checkpointed or split by scope.
-- Decision docs and roadmap need to be treated as the working coordination
-  layer.
+- Link verification after archive moves.
+- Final docs-only consolidation commit.
 
-Next step: finish FOS-AUD-02, then checkpoint a docs-only alignment commit or
-otherwise isolate the six audit docs from the pre-existing dirty tree.
+Next step: complete docs consolidation, then run the next execution step from
+`../PROGRESS.md`.
 
 Definition of Done:
 
-- `docs/ALIGNMENT_AUDIT.md`, `docs/DECISIONS.md`, `docs/ROADMAP.md`,
-  `docs/TODO.md`, `docs/POST_MVP.md`, and
-  `docs/CURRENT_DIRTY_TREE_PLAN.md` exist.
-- Dirty tree plan is explicit.
+- Root canonical trio exists.
+- `docs/DECISIONS.md`, `docs/ROADMAP.md`, `docs/TODO.md`,
+  `docs/POST_MVP.md`, and `docs/CHANGELOG.md` exist.
+- `docs/README.md` is the current docs entry.
 - `git diff --check` passes.
 - Docs tests pass if available.
 
@@ -104,8 +103,10 @@ not wired yet.
 
 Done:
 
-- Static `/ui` exists and is useful for local/operator workflows.
-- Company Brain/repo audit and source/data views are visible in local UI.
+- Legacy static `/ui` has been removed; `web/` is the only product frontend
+  shell to extend.
+- Company Brain/repo audit read models remain available through backend/API
+  surfaces; product UI wiring is still pending.
 - Minimal Next.js + TypeScript app exists in `web/`.
 - App shell, sidebar, MVP placeholder pages, browser-local operator settings,
   and typed API client foundation exist.

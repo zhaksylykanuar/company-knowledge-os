@@ -6,7 +6,6 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
-import app.connectors.github as github_connector
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import Membership, User, Workspace
@@ -88,7 +87,7 @@ async def _cleanup_connection_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -148,7 +147,7 @@ async def test_github_connections_requires_api_key(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections",
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
 
@@ -169,7 +168,7 @@ async def test_github_connections_require_owner_email_context(monkeypatch) -> No
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections",
                 headers=_headers(),
             )
 
@@ -193,12 +192,12 @@ async def test_github_connection_status_empty_workspace_is_local_bridge_only(
 
         async with _async_client() as client:
             list_response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
             status_response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connection-status",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -243,7 +242,7 @@ async def test_github_connections_list_returns_only_github_and_redacts_tokens(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -286,17 +285,17 @@ async def test_github_connection_detail_is_workspace_scoped_and_redacted(
 
         async with _async_client() as client:
             wrong_owner = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(other_marker)["owner_email"]},
             )
             missing_connection = await client.get(
-                f"/v1/workspaces/{other['workspace']['id']}/github/connections/{connection_id}",
+                f"/api/v1/workspaces/{other['workspace']['id']}/github/connections/{connection_id}",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(other_marker)["owner_email"]},
             )
             allowed = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/{connection_id}",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -323,7 +322,7 @@ async def test_github_connection_status_connected_with_token(monkeypatch) -> Non
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connection-status",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -358,7 +357,7 @@ async def test_github_connection_status_warns_when_connected_record_has_no_token
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connection-status",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -395,7 +394,7 @@ async def test_github_connection_status_maps_non_connected_statuses(
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connection-status",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
@@ -418,16 +417,6 @@ async def test_github_connection_contract_makes_no_provider_call_or_sync_job(
     _set_auth(monkeypatch)
     await _cleanup_connection_fixture(marker)
 
-    def fail_provider_call(*_args, **_kwargs):
-        raise AssertionError("provider call should not be made")
-
-    monkeypatch.setattr(
-        github_connector,
-        "fetch_org_repository_inventory_summary",
-        fail_provider_call,
-    )
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_provider_call)
-
     try:
         created = await _bootstrap_workspace(marker)
         await _seed_connection(created["workspace"]["id"])
@@ -435,12 +424,12 @@ async def test_github_connection_contract_makes_no_provider_call_or_sync_job(
 
         async with _async_client() as client:
             list_response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connections",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
             status_response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/github/connection-status",
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connection-status",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )

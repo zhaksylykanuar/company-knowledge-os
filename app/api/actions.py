@@ -40,7 +40,7 @@ from app.services.github_issue_execution_service import (
     execute_approved_github_issue_action,
 )
 
-router = APIRouter(prefix="/v1/workspaces/{workspace_id}/actions", tags=["actions"])
+router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/actions", tags=["actions"])
 
 
 class ActionProposalCreateRequest(BaseModel):

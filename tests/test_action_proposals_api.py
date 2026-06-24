@@ -8,8 +8,6 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select, text
 
-import app.connectors.github as github_connector
-import app.services.source_control as source_control_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.action_models import (
     ACTION_PROPOSAL_STATUS_APPROVED,
@@ -136,7 +134,7 @@ async def _cleanup_action_fixture(marker: str) -> None:
 async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
     async with _async_client() as client:
         response = await client.post(
-            "/v1/workspaces/bootstrap",
+            "/api/v1/workspaces/bootstrap",
             headers=_headers(),
             json=_bootstrap_payload(marker, suffix=suffix),
         )
@@ -175,7 +173,7 @@ async def _post_proposal(
 ) -> dict:
     async with _async_client() as client:
         response = await client.post(
-            f"/v1/workspaces/{workspace_id}/actions/proposals",
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals",
             headers=_headers(),
             params={"owner_email": owner_email},
             json=payload if payload is not None else _proposal_payload(),
@@ -218,7 +216,7 @@ async def test_create_proposal_requires_api_key(monkeypatch) -> None:
         created = await _bootstrap_workspace(marker)
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals",
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json=_proposal_payload(),
             )
@@ -238,7 +236,7 @@ async def test_create_proposal_requires_owner_email_context(monkeypatch) -> None
         created = await _bootstrap_workspace(marker)
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals",
                 headers=_headers(),
                 json=_proposal_payload(),
             )
@@ -300,7 +298,7 @@ async def test_viewer_cannot_create_proposal(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals",
                 headers=_headers(),
                 params={"owner_email": viewer_email},
                 json=_proposal_payload(),
@@ -356,7 +354,7 @@ async def test_create_proposal_rejects_invalid_payloads(
         created = await _bootstrap_workspace(marker)
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals",
                 headers=_headers(),
                 params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
                 json=payload,
@@ -397,7 +395,7 @@ async def test_list_filters_and_workspace_scoping(monkeypatch) -> None:
 
         async with _async_client() as client:
             response = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals",
                 headers=_headers(),
                 params={
                     "owner_email": owner_email,
@@ -433,12 +431,12 @@ async def test_detail_rejects_cross_workspace_access(monkeypatch) -> None:
 
         async with _async_client() as client:
             allowed = await client.get(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
             cross_workspace = await client.get(
-                f"/v1/workspaces/{other['workspace']['id']}/actions/proposals/{proposal['id']}",
+                f"/api/v1/workspaces/{other['workspace']['id']}/actions/proposals/{proposal['id']}",
                 headers=_headers(),
                 params={"owner_email": other_owner_email},
             )
@@ -479,7 +477,7 @@ async def test_owner_admin_can_approve_without_execution(
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": actor_email},
             )
@@ -516,7 +514,7 @@ async def test_member_viewer_cannot_approve(monkeypatch, role: str) -> None:
 
         async with _async_client() as client:
             response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": actor_email},
             )
@@ -544,29 +542,29 @@ async def test_approve_reject_invalid_transitions_fail(monkeypatch) -> None:
 
         async with _async_client() as client:
             approve_once = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/approve",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
             approve_twice = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/approve",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
             )
             reject_once = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{rejected['id']}/reject",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{rejected['id']}/reject",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={"reason": "Not needed"},
             )
             reject_twice = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{rejected['id']}/reject",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{rejected['id']}/reject",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={"reason": "Still not needed"},
             )
             reject_approved = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/reject",
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/reject",
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={"reason": "Too late"},
@@ -582,40 +580,6 @@ async def test_approve_reject_invalid_transitions_fail(monkeypatch) -> None:
         assert reject_once.json()["proposal"]["rejection_reason"] == "Not needed"
         assert reject_twice.status_code == 409
         assert reject_approved.status_code == 409
-    finally:
-        await _cleanup_action_fixture(marker)
-
-
-async def test_action_proposal_api_does_not_call_providers_or_source_control(
-    monkeypatch,
-) -> None:
-    marker = uuid4().hex
-    _set_auth(monkeypatch)
-    await _cleanup_action_fixture(marker)
-
-    async def fail_source_action(*_args, **_kwargs):
-        raise AssertionError("source_control should not be called")
-
-    def fail_github_events(*_args, **_kwargs):
-        raise AssertionError("github connector should not be called")
-
-    monkeypatch.setattr(source_control_service, "request_source_action", fail_source_action)
-    monkeypatch.setattr(github_connector, "list_repository_events", fail_github_events)
-
-    try:
-        created = await _bootstrap_workspace(marker)
-        owner_email = _bootstrap_payload(marker)["owner_email"]
-        proposal = await _post_proposal(created["workspace"]["id"], owner_email)
-
-        async with _async_client() as client:
-            response = await client.post(
-                f"/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
-                headers=_headers(),
-                params={"owner_email": owner_email},
-            )
-
-        assert response.status_code == 200
-        assert response.json()["execution_started"] is False
     finally:
         await _cleanup_action_fixture(marker)
 

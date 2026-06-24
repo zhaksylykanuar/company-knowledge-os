@@ -182,23 +182,3 @@ def test_repository_portfolio_onboarding_plan_is_non_executing() -> None:
     assert plan["no_source_of_truth_mutation"] is True
     assert plan["scheduler_execution"] == "disabled"
     _assert_public_safe(plan)
-
-
-def test_repository_portfolio_docs_frame_legacy_seed_as_planning_metadata() -> None:
-    docs = "\n".join(
-        (
-            REPO_ROOT / "docs" / path
-        ).read_text(encoding="utf-8")
-        for path in (
-            "runbooks/guarded-operations.md",
-            "runbooks/jira-operating-model.md",
-            "data-model.md",
-            "features/attention.md",
-            "features/telegram-digest.md",
-        )
-    )
-
-    assert "qtwin-io" in docs
-    assert "planning metadata" in docs
-    assert "future canonical owner is the legacy" not in docs.casefold()
-    assert "legacy account is the future canonical" not in docs.casefold()

@@ -25,7 +25,7 @@ from app.services.identity_service import (
 )
 
 
-router = APIRouter(prefix="/v1/workspaces", tags=["workspaces"])
+router = APIRouter(prefix="/api/v1/workspaces", tags=["workspaces"])
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 

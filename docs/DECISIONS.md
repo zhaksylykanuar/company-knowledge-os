@@ -30,13 +30,13 @@ backend foundation.
 
 Reason: this matches the master playbook and the existing repository.
 
-## DEC-004 - Current Static `/ui` Remains Local/Operator UI
+## DEC-004 - Static `/ui` Local/Operator UI (Superseded)
 
-Decision: keep the current static `/ui` as a local/operator interface.
+Decision: originally keep the static `/ui` as a local/operator interface.
 
-Implication: do not delete it and do not treat it as the final product frontend.
-It is useful for local evidence review, source diagnostics, Company Brain
-preview, and guarded operator flows.
+Superseded by DEC-029 and FOS-PURGE-01: the static `/ui` router and its
+dedicated HTML artifact are now removed. The product frontend is `web/`; do not
+restore or extend `/ui`.
 
 ## DEC-005 - Next.js Web App Comes Later As A Separate Slice
 
@@ -268,8 +268,8 @@ Consequences:
 ## DEC-020 - Frontend Shell Starts As Separate Next.js App
 
 Decision: FOS-FE-01 starts the product frontend as a separate `web/` Next.js
-and TypeScript app while keeping the existing static `/ui` as the local/operator
-interface.
+and TypeScript app. At the time of this decision the existing static `/ui`
+remained local/operator-only; DEC-029 and FOS-PURGE-01 later removed it.
 
 Rationale: the backend GitHub-first path is now covered, but the product UI
 needs a clean shell before wiring live backend panels. A separate `web/` app
@@ -279,9 +279,304 @@ Consequences:
 
 - `web/` owns the new App Shell, sidebar, placeholder MVP pages, API client, and
   browser-local operator settings.
-- Static `/ui` remains available for current local/operator workflows until a
-  deliberate replacement is scoped.
+- Static `/ui` is no longer available; local startup points to the backend root,
+  and product UI work remains in `web/`.
 - The frontend MVP uses local operator API key configuration through
   `X-FounderOS-API-Key`; production session login is deferred.
 - FOS-FE-01 does not add OAuth, provider calls, backend routes, migrations, or
   browser E2E tests.
+
+## DEC-021 - Canonical Documentation Set
+
+Decision: the current documentation source of truth is the root canonical trio:
+`founderOS_MASTER_PLAYBOOK.md`, `EXECUTION_PLAN.md`, and `PROGRESS.md`, plus the
+required control docs in `docs/`: `README.md`, `DECISIONS.md`, `ROADMAP.md`,
+`TODO.md`, `POST_MVP.md`, and `CHANGELOG.md`.
+
+Rationale: older playbook, vision, audit, backlog, and ledger documents came
+from several rebuild generations and conflicted with the incoming master
+playbook's MVP order.
+
+Consequences:
+
+- `docs/README.md` is the single current docs navigation entry.
+- `docs/index.md` remains only as a compatibility pointer for older tooling.
+- Archived docs under `docs/_archive/` are traceability only.
+- Supporting feature/runbook docs must describe current repo behavior or clearly
+  mark post-MVP/frozen status; they do not override the root playbook.
+
+## DEC-022 - Archived Playbooks And Ledgers Are Not Current Scope
+
+Decision: archived docs from the v2 playbook, digital-twin playbook, vision,
+Telegram/manual-pilot, Jira rebuild, and historical FOS ledger generations do
+not define current MVP scope.
+
+Rationale: the incoming master playbook fixes the MVP spine around
+GitHub-first UI flow, evidence-backed Company Brain, Founder Briefing, and
+human-approved actions.
+
+Consequences:
+
+- New work follows `EXECUTION_PLAN.md` chunk order.
+- Telegram, digest, broad second-opinion graph expansion, Jira rebuild/write
+  planning, and share/investor surfaces stay frozen/post-MVP unless explicitly
+  pulled into a scoped task.
+- If a supporting doc conflicts with the master playbook, record the conflict
+  here before implementation.
+
+## DEC-023 - Canonical API Namespace Is `/api/v1`
+
+Decision: the canonical REST base path is `/api/v1` per master playbook §7.1.
+
+Drift found (2026-06-24 audit): every router currently mounts under `/v1`, not
+`/api/v1`. There is **zero** usage of `/api/v1` anywhere in `app/` or `web/`.
+
+Wrong-namespace files (all of them): `app/main.py` (`/v1/events` mount) and every
+`app/api/*.py` declaring a prefix — `digest.py`, `ui.py`, `company_brain.py`,
+`gmail.py`, `google.py`, `extraction.py`, `actions.py`, `share_packs.py`,
+`briefings.py`, `drive.py`, `dev.py`, `github.py`, `workspaces.py`,
+`knowledge.py`. The Next.js shell also referenced the old workspace path.
+
+Consequences:
+
+- `/api/v1` is canonical; `/v1` was the drift.
+- New routes must target `/api/v1`.
+
+**Status — DONE (2026-06-24).** Migrated uniformly: 660 `/v1` → `/api/v1`
+replacements across 65 files (router prefixes, `inbox.py` inline routes,
+`main.py` events mount, link-emitting services, the former static founder UI
+page, operator scripts, `web/`, and all test request paths). No external
+provider URL contains `/v1`, so none were affected; `/health` stays unversioned.
+FOS-PURGE-01 later removed the legacy `/ui` file/test. Verified: `ruff` ✅,
+`pytest` 1809 passed ✅, route check shows no active stray `/v1`, web `tsc` ✅.
+Done independently of the FOS-002 data decision (A/B).
+
+## DEC-024 - Canonical Source/Entity/Evidence Naming Is SourceRecord / NormalizedEntity / EvidenceRef
+
+Decision: canonical persistence names follow master playbook §6.7/§6.9/§6.8:
+`SourceRecord` (`source_records`), `NormalizedEntity` (`normalized_entities`),
+and `EvidenceRef` (`evidence_refs`).
+
+Drift found (2026-06-24 audit): none of these canonical tables exist. The repo
+instead persists raw source data as `source_events` (`SourceEvent`),
+`source_documents` (`SourceDocument`), and `ingested_events`; entities live in
+`entities` (`EntityRecord`, knowledge-graph shape, different schema); and
+`EvidenceRef` exists only as a Pydantic schema (`app/agents/schemas.py`) plus
+denormalized `evidence_refs` JSON arrays inside many services — not a table.
+Canonical `Briefing`/`BriefingItem`/`Repository`/`PullRequest`/`Task`/`Project`/
+`Document`/`Goal`/`Insight`/`MessageThread`/`DriveFile` tables are likewise
+absent. This is why the CHUNK 2 gate (mock connector → SourceRecord +
+NormalizedEntity + EvidenceRef) is currently impossible.
+
+Conflict locations: `app/db/event_models.py` (`source_events`,
+`normalized_activity_items`), `app/db/graph_models.py` (`entities`),
+`app/db/source_models.py` (`source_documents`), `app/db/models.py`
+(`ingested_events`); projections in `app/services/github_normalization_service.py`.
+
+Consequences:
+
+- Canonical names per §6 are the target. Existing tables are compatibility
+  substrate (consistent with DEC-013/DEC-015), not the canonical contract.
+- How to converge is a real fork → see ASK-2 below. Do not silently keep two
+  parallel schemas as the source of truth.
+- No schema/code change during this audit.
+
+## DEC-025 - Next.js `web/` Is The Product Frontend; Static `/ui` Removed
+
+Decision: per master playbook §8, the product frontend is the Next.js app in
+`web/`. The former static founder UI page, previously served at `/ui`, is
+removed and must not be restored.
+
+Drift note: this supersedes DEC-004/DEC-020. New product UI work goes only into
+`web/`; local/operator helpers should not point users to `/ui`.
+
+Consequences:
+
+- `web/` owns canonical pages (`/login`, `/dashboard`, `/connectors`, `/github`,
+  `/jira`, `/gmail`, `/drive`, `/documents`, `/brain`, `/briefings`, `/actions`,
+  `/repo-audit`, `/settings`). Currently only `dashboard`, `github`, `briefings`,
+  `actions`, `settings` exist as stubs.
+- `/ui` is retired and deleted by FOS-PURGE-01.
+- `scripts/start_local.py` opens the backend root and notes that product UI
+  lives in `web/`.
+
+## DEC-026 - Out-Of-Order Post-MVP Surfaces Are No-Go Until GitHub-First E2E
+
+Decision: backend surfaces that were built before the GitHub-first E2E is green
+are explicitly out of current scope (no-go) and must not be developed further,
+per master playbook §3.3/§3.4 and EXECUTION_PLAN iron rules #5/#6. This makes
+DEC-006/DEC-022 concrete against the code that actually exists.
+
+Out-of-scope code present in the repo (do not extend): Telegram delivery/bot
+(`telegram_delivery.py`, `telegram_founder_bot.py`), digests
+(`app/api/digest.py`, `digest_*`), share packs (`app/api/share_packs.py`,
+`share_packs.py`), second-opinion graph (`second_opinion*.py`), role/sales/
+product/team/execution views (`role_views.py`, `sales_view.py`,
+`product_view.py`, `team_view.py`, `execution_view.py`), Jira write planning
+(`jira_write_readiness.py`, `jira_creation_dry_run.py`, `jira_operating_model.py`),
+attention/triage agents, meeting agents, knowledge QA/scoring, Obsidian export,
+and operating-rhythm/command-center surfaces.
+
+Consequences:
+
+- These remain frozen and untouched (no deletion now — DEC-011). New ideas go to
+  `docs/POST_MVP.md`, not into code.
+- Effort goes to the spine: canonical data foundation (CHUNK 1) → connector
+  framework (CHUNK 2) → GitHub UI E2E (CHUNK 3).
+
+## DEC-027 - Operational Doc Contracts Are Restored, Not Tests Weakened
+
+Decision: doc-contract tests broken by the docs consolidation are fixed on the
+**docs** side, not by weakening the tests. The consolidation archived/slimmed docs
+that encode live operational invariants without updating their tests.
+
+Restored / re-created (current supporting docs per DEC-021, distinct from the
+archived v2 product playbook/vision per DEC-022):
+
+- `docs/playbook.md` — new lean **dev/CI** playbook (gates, secret hygiene, supply
+  chain). Not the archived v2 product playbook.
+- `docs/ops/jira-target-blueprint.md` — restored Jira target design (repos stay
+  components, not projects — see DEC-007). Archive copy kept for history.
+- Root `README.md` — restored the "Development & CI" / dependency-automation
+  section (CI parity, Renovate, Scorecard, Dependency Review, uv Dependency
+  Submission).
+- `docs/index.md` — links the guarded-operations runbook, dev/CI playbook, and
+  Jira blueprint.
+
+Also: removed the literal legacy static-UI path from `docs/DECISIONS.md` and
+`docs/_audit/DOCS_AUDIT.md` so no doc points users to the obsolete static page.
+
+Consequence: `pytest` is fully green (1809 passed). The fix is docs-only; no test
+assertion, app code, migration, or workflow was changed.
+
+## DEC-028 - Spine Lineage Is Canonical; Knowledge-Graph Lineage Is Frozen Legacy
+
+Decision (resolves ASK-2, 2026-06-24): the repo has **two parallel data lineages**
+(see `docs/_audit/DOCS_AUDIT.md` → "Load-Bearing Map"). We canonicalize on **Lineage
+1 (the GitHub MVP spine)** and freeze Lineage 2.
+
+- **Canonical = Lineage 1:** `users`/`workspaces`/`memberships`,
+  `integration_connections`, `sync_jobs`, `action_proposals`, `action_executions`,
+  **plus new canonical §6 tables added to this lineage** (this task).
+- **Frozen legacy = Lineage 2:** `entities` (+ `entity_aliases`, `entity_links`,
+  `entity_source_accounts`, merge layer), `source_events`,
+  `normalized_activity_items`, the knowledge-graph/identity services, and the
+  founder-views/digest/inbox/telegram surfaces. **Do not develop. Do not delete
+  now.** Retirement is a separate post-MVP task, taken only after the canonical
+  layer covers what those surfaces need.
+
+Build rules for the canonical layer (FOS-002, incremental — CHUNK 1):
+
+- Add **only the spine-critical §6 subset now**: `SourceRecord` (§6.7),
+  `EvidenceRef` (§6.8), `Repository` (§6.12), `PullRequest` (§6.13), `Task`
+  (§6.11). All uuid-keyed and workspace-scoped, matching the
+  `integration_models`/`action_models` conventions.
+- **No two live lines:** the spine persists ONLY into these new canonical tables.
+  It must not write to `source_events`/`entities`; those stay touched only by
+  frozen Lineage-2 code.
+- **`NormalizedEntity` (§6.9) DEFERRED** — decided from the code: no GitHub-only
+  spine reader needs a generalized entity. `company_brain_preview` (FOS-012 Brain)
+  reads `.local` + `repo_audit` (filesystem), the canonical web dashboard is an
+  unwired stub, and the spine reads `Repository`/`PullRequest`/`Task` directly.
+  Revisit when the canonical `/api/v1/.../brain/entities` API is actually built.
+- **`Project`/`Briefing`/`BriefingItem`/`MessageThread`/`DriveFile`/`Document`/
+  `Goal`/`Insight` deferred** to their chunks; `Person` not built (post-MVP, ASK-1).
+  `Task.project_id`/`assignee_person_id` and `PullRequest.author_person_id` are
+  nullable uuids with no FK yet (forward-compatible).
+- **Generic connector framework (FOS-004/005/006) deferred:** no speculative
+  abstraction now; extract it at the second connector (Jira/Gmail). The shared §6
+  substrate makes that extraction cheap later.
+
+## DEC-029 - Lineage-2 Is Purged (Code, Tables, Docs)
+
+Decision (2026-06-24, branch `chore/purge-legacy`): the frozen Lineage-2
+generation is removed from the repo, leaving only the canonical GitHub spine
+(Lineage 1) + canonical §6 tables (DEC-028). Classification proof and full lists
+are in `docs/_audit/PURGE_AUDIT.md` (import-graph closure from canonical roots).
+
+Removed:
+
+- **Code (~139 modules):** the entities graph + identity satellites
+  (`graph_models`, `entity_*`), knowledge-graph/RAG (`knowledge_*`, `chunking`,
+  `extraction_processor`, `agents/*`), digest/inbox/telegram/founder-views,
+  gmail/drive/google/events/extraction/share-packs connectors+routers,
+  second-opinion, attention, jira, obsidian, declarations, status,
+  source-control + discovery, the legacy connector layer
+  (`connectors.github`, `source_control`), the legacy guard machinery, and the
+  static `/ui` router plus its final leftover HTML artifact removed by
+  FOS-PURGE-01.
+- **Tables (27, migration `e1a2b3c4d5f6`):** the entities graph + the
+  knowledge/gmail/attention/second-opinion/share-pack/source-control/declaration/
+  status/extraction tables. The migration is intentionally irreversible.
+- **Tests (~150)** of the deleted code, plus negative-guard lines trimmed from the
+  9 spine API tests (all positive spine assertions kept).
+- **Scripts (55)** that imported deleted modules; **docs**: `docs/_archive/**`,
+  `docs/features/*`, `docs/runbooks/*`, `docs/ops/*`, `docs/security/*`,
+  `docs/decisions/*`, and stray standalone docs (architecture, data-model,
+  dev-env, obsidian-bridge, operator_runtime_setup, source-connectors, playbook,
+  github-integration-decision, index).
+
+Kept: canonical spine + `canonical_models` + identity/integration/action/audit
+models + the temporary substrate (DEC-030), the canonical doc set
+(`founderOS_MASTER_PLAYBOOK.md`, `EXECUTION_PLAN.md`, `PROGRESS.md`,
+`docs/{README,DECISIONS,ROADMAP,TODO,POST_MVP,CHANGELOG}.md`, `docs/_audit/*`),
+`CLAUDE.md`/`AGENTS.md`/`SECURITY_BASELINE.md`, and the Next.js `web/` shell.
+
+Verification: app boots; `alembic upgrade head` clean; `alembic check` has
+expected retained-substrate drift. Current FOS-PURGE-01 check reports 7
+operations, all on `ingested_events`; this remains intentionally unfixed until
+FOS-009. `ruff` clean; full pytest is 258 passed after deleting the 9 static UI
+artifact tests (github-first E2E green → spine intact); web `tsc`/`build` clean.
+
+Recovery: git tag **`pre-purge-20260624`** is the full restore point. Recover any
+file with `git restore --source pre-purge-20260624 -- <path>`. Historical
+migrations are retained.
+
+Supersession: **supersedes DEC-025** — the static `/ui` is retired and the
+leftover static HTML/test were removed in FOS-PURGE-01; the product frontend is
+`web/`. **Partially supersedes DEC-021** —
+`docs/index.md` and the supporting/feature/runbook docs are removed; the
+canonical set + `docs/_audit/*` remain the documentation.
+
+## DEC-030 - source_events Is Temporary Substrate, Retires In FOS-009
+
+Decision: `source_events`, `normalized_activity_items`, and `ingested_events`
+(`app/db/event_models.py` + `IngestedEvent`), plus the
+`repository_source_inventory` / `repository_portfolio` bridge, are **retained as a
+temporary read-substrate**, not permanent canon. The canonical Brain/Repo-Audit
+(`company_brain_preview` → `repo_audit` → `repository_portfolio` →
+`repository_source_inventory`) reads `source_events` today, so dropping it now
+would break the spine.
+
+Retirement plan (FOS-009): when GitHub sync persists into the canonical
+`repositories`/`source_records` tables AND `repository_source_inventory` is
+repointed to read those instead of `source_events`, drop `source_events`,
+`normalized_activity_items`, and `ingested_events`. The goal remains a single
+lineage; this substrate simply dies one planned step later.
+
+## ASK - Open Questions For The Human (not decided)
+
+These are genuinely ambiguous and are NOT resolved by the playbook alone:
+
+- **ASK-1 — The "23 models" count and the missing `Person` entity.** §6 defines
+  22 entity sections (6.2–6.23); EXECUTION_PLAN/FOS-002 say "23 модели". §6.9
+  `NormalizedEntity.entity_type` includes `person`, and `Task.assignee_person_id`
+  / `PullRequest.author_person_id` reference a Person that §6 never defines. Is
+  the 23rd model an intended standalone `Person`, or is the count off by one?
+- **ASK-2 — Foundation reconciliation strategy. ✅ RESOLVED → DEC-028** (branch A,
+  narrowed: §6 extends the spine lineage, knowledge-graph lineage frozen legacy).
+  Original framing kept for context: To close the canonical-naming
+  gap (DEC-024), do we (a) rename/migrate existing tables to canonical
+  (`source_events`→`source_records`, `entities`→`normalized_entities`, add
+  `evidence_refs`), or (b) add canonical tables alongside and keep existing ones
+  as compatibility substrate (extends DEC-013/DEC-015 projection mode)? This
+  decision gates all of CHUNK 1–3 and the spine; it should be made before more
+  FOS-002 work.
+  **Shape-equivalence finding (2026-06-24, FOS-002 ШАГ B):** option (a) is **not
+  viable by rename** — `source_events` and `entities` are not shape-equivalent to
+  §6 `SourceRecord`/`NormalizedEntity` (different grain, Integer vs uuid PK, no
+  `workspace_id` tenancy anywhere, payload in a separate `ingested_events` table,
+  plus an identity/graph layer). Full comparison tables in
+  `docs/_audit/DOCS_AUDIT.md` → "Shape-Equivalence Analysis". A forced rename would
+  be destructive. Awaiting human go/no-go on option (b) add-alongside before any
+  schema change.

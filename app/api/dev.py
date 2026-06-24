@@ -13,7 +13,7 @@ from app.services.browser_config import (
     sanitize_browser_config,
 )
 
-router = APIRouter(prefix="/v1/dev", tags=["dev"])
+router = APIRouter(prefix="/api/v1/dev", tags=["dev"])
 
 
 @router.get("/browser-config")
