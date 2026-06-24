@@ -1,5 +1,25 @@
 # FounderOS Changelog
 
+## 2026-06-25
+
+### Added
+
+- Added typed frontend helpers for local ActionProposal list, create, approve,
+  and reject routes under
+  `/api/v1/workspaces/{workspace_id}/actions/proposals`.
+- Added `ActionProposalsPanel` for product local approval workflow: proposal
+  list, manual local proposal creation, local approve/reject buttons, status
+  summary, proposal audit timestamps, backend warnings, and evidence drawer
+  links.
+- Added frontend tests for action proposal URL/body construction, local
+  approve/reject calls, unsupported transition errors, loading/missing/empty/
+  unsupported/error states, evidence refs, and no external-write claims.
+
+### Changed
+
+- Wired `web/app/dashboard` and `web/app/actions` to the local ActionProposal
+  approval workflow while keeping external execution disabled in the UI.
+
 ## 2026-06-24
 
 ### Added

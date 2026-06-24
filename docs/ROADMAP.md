@@ -183,6 +183,8 @@ Done:
   inspect returned evidence refs in a frontend evidence drawer.
 - Local ActionProposal approval foundation can store, approve, and reject
   workspace-scoped proposals without external execution.
+- Product dashboard and `/actions` page can list, create, approve, and reject
+  local ActionProposal records with evidence refs and no external execution.
 - Approved GitHub issue proposals can execute through the guarded backend path
   with local `ActionExecution` tracking.
 - Backend E2E smoke coverage exercises the GitHub-first path from workspace
@@ -194,10 +196,10 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- ActionProposal approval UI over the existing local proposal APIs.
-- Full product frontend flow for approval/action and final GitHub-first MVP path.
+- Product execution/audit surface over the guarded GitHub issue execution path.
+- Full product frontend flow for final GitHub-first MVP external-write proof.
 
-Next step: FOS-015 approval/action UI over the local ActionProposal path.
+Next step: FOS-016 guarded GitHub issue execution/audit path.
 
 Definition of Done:
 

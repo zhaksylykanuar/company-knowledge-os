@@ -4,6 +4,11 @@ import {
   resolveApiBaseUrl
 } from "./config";
 import type {
+  ActionProposalCreateRequest,
+  ActionProposalListRequest,
+  ActionProposalListResponse,
+  ActionProposalMutationResponse,
+  ActionProposalRejectRequest,
   ApiErrorPayload,
   ApiFetchOptions,
   CompanyBrainResponse,
@@ -142,6 +147,120 @@ export async function generateManualFounderBriefing(
         include_sync_jobs: request.include_sync_jobs ?? true,
         include_repository_inventory: request.include_repository_inventory ?? true,
         limit: request.limit ?? 20
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export function buildWorkspaceActionProposalsPath(
+  workspaceId: string,
+  request: ActionProposalListRequest = {}
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(request.limit ?? 50));
+  if (request.status) {
+    params.set("status", request.status);
+  }
+  if (request.target_provider) {
+    params.set("target_provider", request.target_provider);
+  }
+  if (request.action_type) {
+    params.set("action_type", request.action_type);
+  }
+  return `${buildWorkspaceActionProposalsCollectionPath(
+    workspaceId
+  )}?${params.toString()}`;
+}
+
+export function buildWorkspaceActionProposalsCollectionPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/actions/proposals`;
+}
+
+export function buildWorkspaceActionProposalPath(
+  workspaceId: string,
+  proposalId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/actions/proposals/${encodeURIComponent(proposalId)}`;
+}
+
+export function buildWorkspaceActionProposalApprovePath(
+  workspaceId: string,
+  proposalId: string
+): string {
+  return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/approve`;
+}
+
+export function buildWorkspaceActionProposalRejectPath(
+  workspaceId: string,
+  proposalId: string
+): string {
+  return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/reject`;
+}
+
+export async function fetchActionProposals(
+  workspaceId: string,
+  request: ActionProposalListRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalListResponse> {
+  return apiFetch<ActionProposalListResponse>(
+    buildWorkspaceActionProposalsPath(workspaceId, request),
+    options
+  );
+}
+
+export async function createActionProposal(
+  workspaceId: string,
+  request: ActionProposalCreateRequest,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalMutationResponse> {
+  return apiFetch<ActionProposalMutationResponse>(
+    buildWorkspaceActionProposalsCollectionPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        briefing_item_id: request.briefing_item_id ?? null,
+        target_provider: request.target_provider,
+        action_type: request.action_type,
+        title: request.title,
+        description: request.description ?? null,
+        payload: request.payload ?? {},
+        evidence_refs: request.evidence_refs ?? [],
+        created_by: request.created_by ?? "user"
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function approveActionProposal(
+  workspaceId: string,
+  proposalId: string,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalMutationResponse> {
+  return apiFetch<ActionProposalMutationResponse>(
+    buildWorkspaceActionProposalApprovePath(workspaceId, proposalId),
+    {
+      ...options,
+      method: "POST"
+    }
+  );
+}
+
+export async function rejectActionProposal(
+  workspaceId: string,
+  proposalId: string,
+  request: ActionProposalRejectRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalMutationResponse> {
+  return apiFetch<ActionProposalMutationResponse>(
+    buildWorkspaceActionProposalRejectPath(workspaceId, proposalId),
+    {
+      ...options,
+      body: JSON.stringify({
+        reason: request.reason ?? null
       }),
       method: "POST"
     }

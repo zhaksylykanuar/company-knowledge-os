@@ -39,7 +39,9 @@ a {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -193,6 +195,11 @@ input {
 }
 
 .briefing-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.action-proposals {
   display: grid;
   gap: 16px;
 }
@@ -368,10 +375,17 @@ input {
   font-weight: 650;
 }
 
-.field input {
+.field input,
+.field select,
+.field textarea {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 12px;
+}
+
+.field textarea {
+  min-height: 96px;
+  resize: vertical;
 }
 
 .actions-row {
@@ -410,6 +424,12 @@ input {
 
 .meta-list li {
   list-style: none;
+}
+
+.success-text {
+  color: var(--accent-text);
+  font-weight: 700;
+  margin: 0;
 }
 
 @media (max-width: 760px) {

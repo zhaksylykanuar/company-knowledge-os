@@ -138,6 +138,80 @@ export type FounderBriefingResponse = {
   };
 };
 
+export type ActionProposalStatus =
+  | "approved"
+  | "executed"
+  | "failed"
+  | "proposed"
+  | "rejected";
+
+export type ActionTargetProvider = "github" | "internal";
+
+export type ActionProposalType = "create_github_issue" | "internal_todo";
+
+export type ActionProposalEvidenceRef = BriefingEvidenceRef;
+
+export type ActionProposalCreateRequest = {
+  briefing_item_id?: string | null;
+  target_provider: ActionTargetProvider;
+  action_type: ActionProposalType;
+  title: string;
+  description?: string | null;
+  payload?: Record<string, unknown>;
+  evidence_refs?: ActionProposalEvidenceRef[];
+  created_by?: "ai" | "system" | "user";
+};
+
+export type ActionProposal = {
+  id: string;
+  workspace_id: string;
+  briefing_item_id: string | null;
+  target_provider: ActionTargetProvider | string;
+  action_type: ActionProposalType | string;
+  title: string;
+  description: string | null;
+  payload: Record<string, unknown>;
+  status: ActionProposalStatus | string;
+  evidence_refs: ActionProposalEvidenceRef[];
+  created_by: string;
+  created_by_user_id: string | null;
+  approved_by_user_id: string | null;
+  approved_at: string | null;
+  rejected_by_user_id: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  is_live: boolean;
+  execution_started: boolean;
+  warnings: string[];
+};
+
+export type ActionProposalListRequest = {
+  status?: ActionProposalStatus | string;
+  target_provider?: ActionTargetProvider | string;
+  action_type?: ActionProposalType | string;
+  limit?: number;
+};
+
+export type ActionProposalListResponse = {
+  proposals: ActionProposal[];
+  count: number;
+  is_live: boolean;
+  warnings: string[];
+};
+
+export type ActionProposalMutationResponse = {
+  proposal: ActionProposal;
+  is_live: boolean;
+  execution_started: boolean;
+  warnings: string[];
+};
+
+export type ActionProposalRejectRequest = {
+  reason?: string | null;
+};
+
 export type GitHubConnectionStatusResponse = {
   provider: string;
   status: string;

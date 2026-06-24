@@ -31,9 +31,10 @@ files, no unrelated edits, and focused checks first.
 - FOS-014: done - dashboard and `/briefings` surface the deterministic manual Founder Briefing with returned evidence refs in a frontend evidence drawer.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
+- FOS-015: done - dashboard and `/actions` surface local ActionProposal list/create/approve/reject with evidence refs and no external execution.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-015 - surface the local ActionProposal approval path in the product UI without external execution.
+- Next task: FOS-016 - productize the guarded GitHub issue execution/audit path or keep it disabled until explicit human live-write approval.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

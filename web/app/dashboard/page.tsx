@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { ActionProposalsPanel } from "../../components/ActionProposalsPanel";
 import { BriefingPanel } from "../../components/BriefingPanel";
 import { CompanyBrainPanel } from "../../components/CompanyBrainPanel";
 import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWorkPanel";
@@ -59,7 +60,7 @@ export default function DashboardPage() {
         <StatusCard
           description="Proposal, approval, and execution states."
           title="Actions"
-          value="Stub"
+          value="Local approval"
         />
       </section>
       <GitHubSyncControls
@@ -67,6 +68,7 @@ export default function DashboardPage() {
       />
       <CompanyBrainPanel refreshSignal={operationalWorkRefresh} />
       <BriefingPanel />
+      <ActionProposalsPanel />
       <GitHubOperationalWorkPanel refreshSignal={operationalWorkRefresh} />
     </>
   );
