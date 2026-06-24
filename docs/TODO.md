@@ -32,9 +32,10 @@ files, no unrelated edits, and focused checks first.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
 - FOS-015: done - dashboard and `/actions` surface local ActionProposal list/create/approve/reject with evidence refs and no external execution.
+- FOS-016: done - product execution preview/audit surface shows dry-run GitHub issue readiness, blocks live execute when `enable_write_actions=false`, and requires backend capability plus explicit confirmation before live writes.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-016 - productize the guarded GitHub issue execution/audit path or keep it disabled until explicit human live-write approval.
+- Next task: human-gated live GitHub issue write proof behind explicit config/confirmation, or dedicated audit hardening if live-write approval is not granted yet.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -499,3 +500,29 @@ Checks to run:
 - Focused execution/action/GitHub tests.
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `UV_NO_SYNC=1 uv run pytest -q`
+
+## FOS-016 - Product guarded execution preview/audit surface
+
+Status: done.
+
+Goal: make approved local GitHub issue proposals inspectable in the product
+before any external write path can be called.
+
+Acceptance criteria:
+
+- Product UI can request a dry-run execution preview for an approved proposal.
+- Preview validates state/action/payload and does not call GitHub.
+- UI shows execution eligibility, preview details, audit/status history, and
+  missing-evidence warnings without inventing refs.
+- `/execute` is blocked when `enable_write_actions=false`.
+- Live execution UI requires backend capability, connection id, and explicit
+  confirmation.
+- No raw provider payload dumps are shown in the product.
+
+Checks to run:
+
+- Focused action/proposal/execution tests.
+- Frontend action execution tests.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `UV_NO_SYNC=1 uv run pytest -q`
+- `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build`.

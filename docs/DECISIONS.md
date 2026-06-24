@@ -250,6 +250,10 @@ Consequences:
   are never returned by API responses.
 - Execution creates `ActionExecution` rows and updates proposal status to
   `executed` or `failed`.
+- FOS-016 adds a dry-run execution preview/product surface that validates the
+  proposal and returns execution readiness without calling GitHub.
+- The execute route is additionally blocked when `enable_write_actions=false`;
+  tests that exercise mocked writes must opt into this runtime capability.
 - No background execution, Source Control execution, OAuth flow, or Jira/Gmail/
   Drive execution is introduced in this step.
 

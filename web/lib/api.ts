@@ -4,6 +4,9 @@ import {
   resolveApiBaseUrl
 } from "./config";
 import type {
+  ActionExecutionPreviewResponse,
+  ActionExecutionResponse,
+  ActionProposalExecuteRequest,
   ActionProposalCreateRequest,
   ActionProposalListRequest,
   ActionProposalListResponse,
@@ -200,6 +203,23 @@ export function buildWorkspaceActionProposalRejectPath(
   return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/reject`;
 }
 
+export function buildWorkspaceActionProposalExecutionPreviewPath(
+  workspaceId: string,
+  proposalId: string
+): string {
+  return `${buildWorkspaceActionProposalPath(
+    workspaceId,
+    proposalId
+  )}/execution-preview`;
+}
+
+export function buildWorkspaceActionProposalExecutePath(
+  workspaceId: string,
+  proposalId: string
+): string {
+  return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/execute`;
+}
+
 export async function fetchActionProposals(
   workspaceId: string,
   request: ActionProposalListRequest = {},
@@ -261,6 +281,37 @@ export async function rejectActionProposal(
       ...options,
       body: JSON.stringify({
         reason: request.reason ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function fetchActionExecutionPreview(
+  workspaceId: string,
+  proposalId: string,
+  options: ApiFetchOptions = {}
+): Promise<ActionExecutionPreviewResponse> {
+  return apiFetch<ActionExecutionPreviewResponse>(
+    buildWorkspaceActionProposalExecutionPreviewPath(workspaceId, proposalId),
+    options
+  );
+}
+
+export async function executeActionProposal(
+  workspaceId: string,
+  proposalId: string,
+  request: ActionProposalExecuteRequest,
+  options: ApiFetchOptions = {}
+): Promise<ActionExecutionResponse> {
+  return apiFetch<ActionExecutionResponse>(
+    buildWorkspaceActionProposalExecutePath(workspaceId, proposalId),
+    {
+      ...options,
+      body: JSON.stringify({
+        connection_id: request.connection_id,
+        confirm_external_write: request.confirm_external_write,
+        idempotency_key: request.idempotency_key ?? null
       }),
       method: "POST"
     }

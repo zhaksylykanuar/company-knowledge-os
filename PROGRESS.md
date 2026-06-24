@@ -11,23 +11,23 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 5 — Action Approval`.
-- **Task:** CHUNK 5 / FOS-015 — product UI for local ActionProposal approval path.
-- **State:** ✅ FOS-015 завершён: `web/app/dashboard` and `web/app/actions` surface local ActionProposal list/create/approve/reject over existing `/api/v1/workspaces/{workspace_id}/actions/proposals` contracts. Approval/rejection are local only; the UI does not call execute or perform external writes.
-- **Next action:** CHUNK 5 / FOS-016: productize the guarded GitHub issue execution/audit path with explicit external-write confirmation, or keep it disabled until human live-write approval.
+- **Task:** CHUNK 5 / FOS-016 — guarded GitHub issue execution preview/audit surface.
+- **State:** ✅ FOS-016 завершён: backend exposes dry-run execution preview for approved GitHub issue proposals, `/execute` is now blocked when `enable_write_actions=false`, and `web/app/actions` shows preview, eligibility, fallback audit/status history, no-evidence warnings, and explicit confirmation UI only when backend capabilities allow live writes.
+- **Next action:** human-gated live GitHub issue write proof behind explicit config/confirmation, or dedicated audit hardening if live-write approval is not granted yet.
 
 ---
 
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks: 11 / 23   ▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱   48%   (строго DONE)
+Tasks: 12 / 23   ▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱   52%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 11** · **PARTIAL = 10** · **MISSING = 2**.
+Разбивка: **DONE = 12** · **PARTIAL = 9** · **MISSING = 2**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
-Для сравнения: `docs/TODO.md` помечает «done» ~19 задач **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook-схемы FOS-000..022 строго готово 11.
+Для сравнения: `docs/TODO.md` помечает «done» ~20 задач **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook-схемы FOS-000..022 строго готово 12.
 
 **Легенда статусов задачи:** `[ ]` todo · `[~]` in progress/partial · `[x]` done · `[!]` blocked
 
@@ -40,14 +40,14 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic upgrade head` | ✅ pass | 2026-06-24 | post-merge on `main`: one head `e1a2b3c4d5f6`, current==head |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-25 | FOS-015 on `main`: **268 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-25 | FOS-015 on `main`: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-06-25 | FOS-016 on `main`: **271 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-06-25 | FOS-016 on `main`: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-25 | FOS-015 on `main`: `npm test` 48 passed; `typecheck`, `lint`, `next build` ok (7 routes) |
-| docs navigation | ✅ pass | 2026-06-25 | FOS-015 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
+| frontend build | ✅ pass | 2026-06-25 | FOS-016 on `main`: `npm test` 56 passed; `next build`, then `typecheck`/`lint` ok (7 routes) |
+| docs navigation | ✅ pass | 2026-06-25 | FOS-016 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-24 | drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про канон |
-| **GitHub E2E (spine)** | ⚠️ backend smoke pass | 2026-06-24 | FOS-009 on `main`: `test_github_first_backend_e2e` 1 passed (спайн цел), но `is_live=false`; product UI now covers local sync/dashboard/Company Brain/briefing/local approval, while real external writes are still open |
-| **full main E2E** | ❌ fail | 2026-06-24 | «approved action → реальный GitHub issue» не доказан (issue-client замокан) |
+| **GitHub E2E (spine)** | ⚠️ backend smoke pass | 2026-06-25 | Full pytest includes `test_github_first_backend_e2e`; product UI now covers local sync/dashboard/Company Brain/briefing/local approval/guarded execution preview, while real external writes remain human-gated |
+| **full main E2E** | ❌ fail | 2026-06-25 | «approved action → реальный GitHub issue» не доказан живым provider call; issue-client remains mocked and live writes are blocked unless explicitly enabled |
 | prod smoke | ❓ unknown | — | деплой не выполнялся; Makefile/`make smoke` отсутствует |
 
 Статусы: ✅ pass · ❌ fail · ❓ unknown
@@ -89,7 +89,7 @@ DONE строго = есть код + проходящий тест/рабочи
 ### CHUNK 5 — Action Approval 🎯 full main E2E
 *Gate: approved action создаёт реальный GitHub issue.*
 - [x] FOS-015 — Action proposal API + UI — `app/api/actions.py` (create/list/get/approve/reject/execute) + модели ActionProposal/ActionExecution + миграция `f5a6b7c8d9e0`; `web/components/ActionProposalsPanel.tsx` wires product list/create/approve/reject, evidence drawer, local audit timestamps, and explicit no-external-execution copy. UI does **not** call execute.
-- [~] FOS-016 — GitHub create-issue action — `app/services/github_issue_execution_service.py` + `github_issue_client.py`; `tests/test_github_issue_execution_api.py` зелёный, но GitHub-клиент замокан (нет реального external write)
+- [x] FOS-016 — GitHub create-issue execution preview/audit — `app/api/actions.py` exposes `/execution-preview` for local approved GitHub issue proposals, preserves evidence refs without inventing them, reports eligibility/capabilities/audit fallback, and blocks `/execute` when `enable_write_actions=false`. `web/components/ActionExecutionControls.tsx` surfaces preview-only state, external-write disabled copy, confirmation UI only when backend says live writes are enabled, and no raw provider payload dumps. GitHub client remains mocked in tests; real external-write proof is still human-gated.
 
 ### CHUNK 6 — Remaining Connectors
 *Gate: Jira / Gmail / Drive / Documents видны в Brain.*
@@ -117,12 +117,13 @@ DONE строго = есть код + проходящий тест/рабочи
 
 - ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). `source_events` repointed to compatibility fallback in FOS-009 (DEC-030); physical drop remains a later migration/cleanup task, not this feature path.
 
-- [SPINE] **GitHub E2E не закрыт по-настоящему.** Backend-smoke зелёный, но `is_live=false`; product UI now covers dashboard/local-sync/Company Brain/briefing/local approval, while live OAuth/provider execution and real external GitHub writes are still missing. Рефакторинг по §21.4 ещё **запрещён** (gate CHUNK 3 не пройден).
+- [SPINE] **GitHub E2E не закрыт живым provider write.** Backend-smoke зелёный with mocked issue client; product UI now covers dashboard/local-sync/Company Brain/briefing/local approval/guarded execution preview. Live OAuth/provider sync and a real external GitHub write proof are still missing and require explicit human approval/config. Рефакторинг по §21.4 ещё **запрещён** (gate CHUNK 3 не пройден).
 
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-25` — **FOS-016 guarded execution preview/audit surface.** Added `GET /api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execution-preview` for dry-run GitHub issue execution readiness over approved local `ActionProposal` records. The preview validates proposal state/action/payload, returns provider/action/repository/title/body/labels/assignees, preserves backend evidence refs, exposes capabilities, and never calls GitHub. `/execute` now rejects with `external execution is disabled` when `enable_write_actions=false`; mocked execution tests explicitly opt into write capability. `web/app/actions` and dashboard action panels now show `ActionExecutionControls` with preview-only copy, external-write disabled state, no-evidence warnings, audit/status events, and explicit connection+confirmation UI only if backend capabilities enable live writes. No live provider call, OAuth, AI/LLM, source_events UI read, or raw provider payload dump was added. Checks: `git diff --check` passed, action/proposal execution backend tests **50 passed**, full pytest **271 passed / 1 warning**, `ruff` clean, `npm test` **56 passed**, `npm run build` passed, `npm run typecheck` passed after build-generated Next types, `npm run lint` passed after build-generated Next types, docs navigation **2 passed**, tracked secret scan clean.
 - `2026-06-25` — **FOS-015 local ActionProposal approval UI.** `web/app/dashboard` and `web/app/actions` now surface the existing local ActionProposal backend contracts: list/create local proposals, approve locally, reject locally, show status counts, proposal target details, audit timestamps, backend warnings, and evidence refs through `EvidenceDrawer`. Added typed frontend API helpers for `/api/v1/workspaces/{workspace_id}/actions/proposals` list/create/approve/reject. The UI intentionally does not call `/execute`, does not claim GitHub writes occurred, and does not read retained `source_events`. Checks: `git diff --check` passed, ActionProposal backend tests **22 passed**, Founder Briefing backend tests **12 passed**, Company Brain backend tests **2 passed**, GitHub normalization/inventory tests **23 passed**, docs navigation **2 passed**, `ruff` clean, tracked secret scan clean, full pytest **268 passed / 1 warning**, `npm test` **48 passed**, `npm run typecheck` passed, `npm run lint` passed, `npm run build` passed.
 - `2026-06-24` — **FOS-014 briefing UI + evidence drawer.** `web/app/dashboard` and `web/app/briefings` now surface the existing deterministic manual Founder Briefing backend through `POST /api/v1/workspaces/{workspace_id}/briefings/manual`. Added typed frontend API helpers, `BriefingPanel`, and `EvidenceDrawer` for loading/missing/empty/unsupported/error/success states, returned item/signals/warnings rendering, evidence ref inspection, source links only when provided, and explicit no-live-provider/no-AI/no-action-execution copy. No backend route/schema change; retained `source_events` is not a primary UI path. Checks: `git diff --check` passed, Founder Briefing backend tests **12 passed**, Company Brain backend tests **2 passed**, GitHub normalization/inventory tests **23 passed**, docs navigation **2 passed**, `ruff` clean, tracked secret scan clean, full pytest **268 passed / 1 warning**, `npm test` **38 passed**, `npm run typecheck` passed, `npm run lint` passed, `npm run build` passed.
 - `2026-06-24` — **FOS-012 Company Brain GitHub evidence state.** Added workspace-scoped `GET /api/v1/workspaces/{workspace_id}/company-brain` over canonical GitHub `Repository`/`Task`/`PullRequest` rows and `SourceRecord` source refs. It returns deterministic summary counts, repositories, open issue/task highlights, open PRs, recent work, evidence/source refs, and explicit capabilities (`local_sync=true`, live OAuth/provider sync/AI briefing false). `web/app/dashboard` now shows a Company Brain panel between local sync controls and operational work details, with loading/missing/empty/error states and evidence/source rendering. Retained `source_events` is not a primary read path. Checks: `git diff --check` passed, new Company Brain backend tests **2 passed**, GitHub normalization/inventory tests **23 passed**, docs navigation **2 passed**, `ruff` clean, tracked secret scan clean, full pytest **268 passed / 1 warning**, `npm test` **26 passed**, `npm run typecheck` passed, `npm run lint` passed, `npm run build` passed.

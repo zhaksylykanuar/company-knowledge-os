@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added dry-run GitHub issue execution preview endpoint at
+  `/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execution-preview`.
+- Added typed frontend helpers for action execution preview and explicit execute
+  requests under the existing workspace action proposal namespace.
+- Added `ActionExecutionControls` for preview-only execution readiness, external
+  execution disabled state, missing-evidence warnings, fallback audit/status
+  history, and explicit connection+confirmation UI when backend capabilities
+  allow live writes.
+- Added backend/frontend tests for execution preview URL/body contracts,
+  disabled execution capability, confirmation gating, audit visibility, and no
+  raw provider payload rendering.
 - Added typed frontend helpers for local ActionProposal list, create, approve,
   and reject routes under
   `/api/v1/workspaces/{workspace_id}/actions/proposals`.
@@ -17,6 +28,10 @@
 
 ### Changed
 
+- Blocked `/execute` when `enable_write_actions=false`, so approval and preview
+  cannot silently cross into live provider writes in default environments.
+- Wired `web/app/actions` and dashboard action panels to the guarded execution
+  preview surface while keeping live writes capability-gated.
 - Wired `web/app/dashboard` and `web/app/actions` to the local ActionProposal
   approval workflow while keeping external execution disabled in the UI.
 

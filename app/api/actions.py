@@ -7,10 +7,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.config import settings
 from app.api.workspace_auth import (
     WorkspaceAccess,
     require_workspace_access,
     require_workspace_role,
+)
+from app.db.action_models import (
+    ACTION_PROPOSAL_STATUS_APPROVED,
+    ACTION_TARGET_PROVIDER_GITHUB,
+    ACTION_TYPE_CREATE_GITHUB_ISSUE,
 )
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN, MEMBERSHIP_ROLE_MEMBER
@@ -32,15 +38,26 @@ from app.services.action_proposal_service import (
 )
 from app.services.github_issue_execution_service import (
     GITHUB_ISSUE_EXECUTION_CONNECTION_NOT_FOUND,
+    GITHUB_ISSUE_EXECUTION_PROPOSAL_NOT_APPROVED,
+    GITHUB_ISSUE_EXECUTION_UNSUPPORTED_ACTION,
     GitHubIssueExecutionConflictError,
     GitHubIssueExecutionError,
     GitHubIssueExecutionInput,
     GitHubIssueExecutionNotFoundError,
     GitHubIssueProviderExecutionError,
     execute_approved_github_issue_action,
+    validate_github_issue_payload,
 )
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/actions", tags=["actions"])
+
+ACTION_EXECUTION_DISABLED_DETAIL = "external execution is disabled"
+ACTION_EXECUTION_PREVIEW_WARNING = (
+    "Execution preview is dry-run only and does not call GitHub."
+)
+ACTION_EXECUTION_NO_EVIDENCE_WARNING = (
+    "Proposal has no evidence refs; preview preserves that absence."
+)
 
 
 class ActionProposalCreateRequest(BaseModel):
@@ -130,6 +147,45 @@ class ActionExecutionResponse(BaseModel):
     is_live: bool
     external_write_performed: bool
     provider: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ActionExecutionCapabilitiesRead(BaseModel):
+    dry_run: bool
+    local_approval: bool
+    external_execution: bool
+    live_provider_write: bool
+    requires_confirmation: bool
+
+
+class GitHubIssueExecutionPreviewRead(BaseModel):
+    provider: str
+    action: str
+    repository: str
+    title: str
+    body: str | None = None
+    labels: list[str] = Field(default_factory=list)
+    assignees: list[str] = Field(default_factory=list)
+    evidence_refs: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ActionExecutionAuditEventRead(BaseModel):
+    id: str
+    event: str
+    actor: str
+    created_at: datetime
+    message: str
+
+
+class ActionExecutionPreviewResponse(BaseModel):
+    workspace_id: UUID
+    proposal_id: UUID
+    status: str
+    mode: str
+    message: str
+    capabilities: ActionExecutionCapabilitiesRead
+    preview: GitHubIssueExecutionPreviewRead | None = None
+    audit: list[ActionExecutionAuditEventRead] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -303,6 +359,30 @@ async def reject_action_proposal_endpoint(
     )
 
 
+@router.get(
+    "/proposals/{proposal_id}/execution-preview",
+    response_model=ActionExecutionPreviewResponse,
+)
+async def preview_action_proposal_execution_endpoint(
+    workspace_id: UUID,
+    proposal_id: UUID,
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> ActionExecutionPreviewResponse:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        proposal = await get_action_proposal(
+            session,
+            workspace_id=workspace_id,
+            proposal_id=proposal_id,
+        )
+    if proposal is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ACTION_PROPOSAL_NOT_FOUND,
+        )
+    return _execution_preview_response(proposal)
+
+
 @router.post(
     "/proposals/{proposal_id}/execute",
     response_model=ActionExecutionResponse,
@@ -314,6 +394,11 @@ async def execute_action_proposal_endpoint(
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
 ) -> ActionExecutionResponse:
     _ = access
+    if not settings.enable_write_actions:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ACTION_EXECUTION_DISABLED_DETAIL,
+        )
     async with AsyncSessionLocal() as session:
         try:
             result = await execute_approved_github_issue_action(
@@ -354,6 +439,133 @@ async def execute_action_proposal_endpoint(
                 detail=exc.detail,
             ) from exc
     return ActionExecutionResponse.model_validate(result)
+
+
+def _execution_preview_response(proposal: Any) -> ActionExecutionPreviewResponse:
+    is_external_enabled = bool(settings.enable_write_actions)
+    warnings = [ACTION_EXECUTION_PREVIEW_WARNING]
+    if not proposal.evidence_refs:
+        warnings.append(ACTION_EXECUTION_NO_EVIDENCE_WARNING)
+
+    capabilities = _execution_capabilities(
+        dry_run=False,
+        external_execution_enabled=is_external_enabled,
+    )
+    mode = "dry_run" if is_external_enabled else "external_disabled"
+    if proposal.status != ACTION_PROPOSAL_STATUS_APPROVED:
+        return ActionExecutionPreviewResponse(
+            workspace_id=proposal.workspace_id,
+            proposal_id=proposal.id,
+            status="not_approved",
+            mode=mode,
+            message=GITHUB_ISSUE_EXECUTION_PROPOSAL_NOT_APPROVED,
+            capabilities=capabilities,
+            audit=_proposal_audit_events(proposal),
+            warnings=warnings,
+        )
+    if (
+        proposal.target_provider != ACTION_TARGET_PROVIDER_GITHUB
+        or proposal.action_type != ACTION_TYPE_CREATE_GITHUB_ISSUE
+    ):
+        return ActionExecutionPreviewResponse(
+            workspace_id=proposal.workspace_id,
+            proposal_id=proposal.id,
+            status="unsupported",
+            mode=mode,
+            message=GITHUB_ISSUE_EXECUTION_UNSUPPORTED_ACTION,
+            capabilities=capabilities,
+            audit=_proposal_audit_events(proposal),
+            warnings=warnings,
+        )
+
+    try:
+        issue_payload = validate_github_issue_payload(proposal.payload or {})
+    except GitHubIssueExecutionError as exc:
+        return ActionExecutionPreviewResponse(
+            workspace_id=proposal.workspace_id,
+            proposal_id=proposal.id,
+            status="blocked",
+            mode=mode,
+            message=exc.detail,
+            capabilities=capabilities,
+            audit=_proposal_audit_events(proposal),
+            warnings=warnings,
+        )
+
+    return ActionExecutionPreviewResponse(
+        workspace_id=proposal.workspace_id,
+        proposal_id=proposal.id,
+        status="preview_ready",
+        mode=mode,
+        message=(
+            "Preview ready. Live GitHub write requires explicit confirmation."
+            if is_external_enabled
+            else "Preview ready. External execution is disabled in this environment."
+        ),
+        capabilities=_execution_capabilities(
+            dry_run=True,
+            external_execution_enabled=is_external_enabled,
+        ),
+        preview=GitHubIssueExecutionPreviewRead(
+            provider=ACTION_TARGET_PROVIDER_GITHUB,
+            action=ACTION_TYPE_CREATE_GITHUB_ISSUE,
+            repository=issue_payload.repository_full_name,
+            title=issue_payload.title,
+            body=issue_payload.body,
+            labels=issue_payload.labels,
+            assignees=issue_payload.assignees,
+            evidence_refs=proposal.evidence_refs or [],
+        ),
+        audit=_proposal_audit_events(proposal),
+        warnings=warnings,
+    )
+
+
+def _execution_capabilities(
+    *,
+    dry_run: bool,
+    external_execution_enabled: bool,
+) -> ActionExecutionCapabilitiesRead:
+    return ActionExecutionCapabilitiesRead(
+        dry_run=dry_run,
+        local_approval=True,
+        external_execution=external_execution_enabled,
+        live_provider_write=external_execution_enabled,
+        requires_confirmation=True,
+    )
+
+
+def _proposal_audit_events(proposal: Any) -> list[ActionExecutionAuditEventRead]:
+    events = [
+        ActionExecutionAuditEventRead(
+            id=f"{proposal.id}:created",
+            event="proposal_created",
+            actor=proposal.created_by,
+            created_at=proposal.created_at,
+            message="Local action proposal was created.",
+        )
+    ]
+    if proposal.approved_at is not None:
+        events.append(
+            ActionExecutionAuditEventRead(
+                id=f"{proposal.id}:approved",
+                event="proposal_approved",
+                actor="workspace_admin",
+                created_at=proposal.approved_at,
+                message="Proposal was approved locally. No external write was run.",
+            )
+        )
+    if proposal.rejected_at is not None:
+        events.append(
+            ActionExecutionAuditEventRead(
+                id=f"{proposal.id}:rejected",
+                event="proposal_rejected",
+                actor="workspace_admin",
+                created_at=proposal.rejected_at,
+                message="Proposal was rejected locally. No external write was run.",
+            )
+        )
+    return events
 
 
 def _mutation_response(

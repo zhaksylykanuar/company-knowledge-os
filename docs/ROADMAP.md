@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 4 / FOS-014. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / post-FOS-016. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -91,10 +91,12 @@ Missing:
 
 - Full GitHub OAuth/product connect flow.
 - Live GitHub sync/product OAuth execution path.
-- Persistent briefing models and evidence drawer workflow.
+- Persistent briefing models.
+- Human-approved live GitHub write proof behind explicit runtime config and
+  confirmation.
 
-Next step: continue the GitHub-first product flow through briefing UI/evidence
-drawer wiring.
+Next step: follow `../PROGRESS.md` for the human-gated live-write proof or
+audit hardening path.
 
 Definition of Done:
 
@@ -106,9 +108,8 @@ Definition of Done:
 
 ## Phase 3 - Frontend Core
 
-Current status: minimal master frontend shell exists; dashboard GitHub read,
-local-sync controls, and Company Brain state are wired, while briefing/action UI
-surfaces remain incomplete.
+Current status: minimal master frontend shell exists and the GitHub-first
+dashboard/briefing/action surfaces are wired through guarded local contracts.
 
 Done:
 
@@ -125,19 +126,22 @@ Done:
   contracts and does not claim live OAuth/provider execution.
 - Dashboard surfaces deterministic Company Brain state with summary counts,
   repositories, open issue/PR highlights, recent work, and source refs.
+- Dashboard and `/briefings` surface deterministic manual briefing with returned
+  evidence refs in a frontend evidence drawer.
+- Dashboard and `/actions` surface local ActionProposal list/create/approve/
+  reject plus guarded execution preview/audit controls.
 - Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
 
-- Briefing UI + evidence drawer.
 - Tailwind/shadcn or final product UI system.
 - Login page.
 - Workspace onboarding.
-- Product-grade loading/error/empty states.
 - Browser/product E2E coverage.
+- Live external write proof in product mode.
 
-Next step: FOS-014 wires the briefing UI and evidence drawer over the existing
-deterministic manual briefing backend.
+Next step: harden the live-write proof or audit trail only after explicit human
+approval for that path.
 
 Definition of Done:
 
@@ -149,8 +153,8 @@ Definition of Done:
 
 ## Phase 4 - GitHub-First E2E
 
-Current status: backend smoke path covered; frontend/product flow still
-missing.
+Current status: guarded local product flow is covered through execution preview;
+live external-write proof is still missing.
 
 Done:
 
@@ -187,6 +191,9 @@ Done:
   local ActionProposal records with evidence refs and no external execution.
 - Approved GitHub issue proposals can execute through the guarded backend path
   with local `ActionExecution` tracking.
+- Product dashboard and `/actions` page can preview approved GitHub issue
+  execution readiness, inspect fallback audit/status history, and keep live
+  execution disabled unless backend capability explicitly enables it.
 - Backend E2E smoke coverage exercises the GitHub-first path from workspace
   bootstrap through mocked approved issue execution.
 
@@ -196,10 +203,11 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Product execution/audit surface over the guarded GitHub issue execution path.
 - Full product frontend flow for final GitHub-first MVP external-write proof.
+- Real GitHub issue write proof behind explicit human approval/runtime config.
 
-Next step: FOS-016 guarded GitHub issue execution/audit path.
+Next step: human-gated live GitHub issue write proof, or dedicated audit
+hardening if live writes stay disabled.
 
 Definition of Done:
 

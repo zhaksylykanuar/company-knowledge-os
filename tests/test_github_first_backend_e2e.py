@@ -40,6 +40,7 @@ def _set_auth(monkeypatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(settings, "api_auth_key", SecretStr("test-api-key"))
     monkeypatch.setattr(settings, "secret_encryption_key", SecretStr("test-encryption-key"))
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
+    monkeypatch.setattr(settings, "enable_write_actions", True)
 
 
 def _async_client() -> AsyncClient:

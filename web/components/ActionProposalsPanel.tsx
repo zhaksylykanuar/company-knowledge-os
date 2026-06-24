@@ -17,6 +17,7 @@ import type {
   ActionTargetProvider,
   OperatorConfig
 } from "../lib/types";
+import { ActionExecutionControls } from "./ActionExecutionControls";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { EvidenceDrawer } from "./EvidenceDrawer";
@@ -47,6 +48,7 @@ type ActionProposalsPanelViewProps = {
     value: string
   ) => void;
   onReject?: (proposalId: string) => void;
+  onRefreshProposals?: () => void;
   onRetry?: () => void;
   onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
   pendingMutation: PendingMutation;
@@ -215,6 +217,7 @@ export function ActionProposalsPanel() {
       onCreate={submitCreate}
       onCreateFormChange={updateCreateForm}
       onReject={reject}
+      onRefreshProposals={() => setReloadKey((current) => current + 1)}
       onRetry={() => setReloadKey((current) => current + 1)}
       onSelectEvidence={(evidence, title) => {
         setSelectedEvidence(evidence);
@@ -238,6 +241,7 @@ export function ActionProposalsPanelView({
   onCreate,
   onCreateFormChange,
   onReject,
+  onRefreshProposals,
   onRetry,
   onSelectEvidence,
   pendingMutation,
@@ -346,6 +350,7 @@ export function ActionProposalsPanelView({
             <ProposalList
               onApprove={onApprove}
               onReject={onReject}
+              onRefreshProposals={onRefreshProposals}
               onSelectEvidence={onSelectEvidence}
               pendingMutation={pendingMutation}
               proposals={proposals}
@@ -456,12 +461,14 @@ function ActionProposalCreateForm({
 function ProposalList({
   onApprove,
   onReject,
+  onRefreshProposals,
   onSelectEvidence,
   pendingMutation,
   proposals
 }: {
   onApprove?: (proposalId: string) => void;
   onReject?: (proposalId: string) => void;
+  onRefreshProposals?: () => void;
   onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
   pendingMutation: PendingMutation;
   proposals: ActionProposal[];
@@ -515,6 +522,10 @@ function ProposalList({
               onApprove={onApprove}
               onReject={onReject}
               pendingMutation={pendingMutation}
+              proposal={proposal}
+            />
+            <ActionExecutionControls
+              onRefresh={onRefreshProposals}
               proposal={proposal}
             />
             {proposal.warnings.length > 0 ? (

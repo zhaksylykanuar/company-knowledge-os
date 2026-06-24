@@ -60,6 +60,7 @@ def _set_auth(monkeypatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(settings, "api_auth_key", SecretStr("test-api-key"))
     monkeypatch.setattr(settings, "secret_encryption_key", SecretStr("test-encryption-key"))
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
+    monkeypatch.setattr(settings, "enable_write_actions", True)
 
 
 def _async_client() -> AsyncClient:
@@ -321,6 +322,19 @@ async def _execute_proposal(
         )
 
 
+async def _preview_execution(
+    workspace_id: str,
+    proposal_id: str | UUID,
+    owner_email: str,
+):
+    async with _async_client() as client:
+        return await client.get(
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/execution-preview",
+            headers=_headers(),
+            params={"owner_email": owner_email},
+        )
+
+
 async def _stored_proposal(proposal_id: str | UUID) -> ActionProposal:
     async with AsyncSessionLocal() as session:
         proposal = await session.scalar(
@@ -363,6 +377,108 @@ def _mock_successful_github_issue(monkeypatch, calls: list[dict]) -> None:
         }
 
     monkeypatch.setattr(github_issue_execution_service, "create_issue", fake_create_issue)
+
+
+async def test_execution_preview_is_dry_run_when_external_writes_disabled(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(settings, "enable_write_actions", False)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(created["workspace"]["id"], owner_email)
+
+        response = await _preview_execution(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["status"] == "preview_ready"
+        assert body["mode"] == "external_disabled"
+        assert body["capabilities"] == {
+            "dry_run": True,
+            "local_approval": True,
+            "external_execution": False,
+            "live_provider_write": False,
+            "requires_confirmation": True,
+        }
+        assert body["preview"]["provider"] == "github"
+        assert body["preview"]["action"] == "create_github_issue"
+        assert body["preview"]["repository"] == "qtwin-io/founderos-api"
+        assert body["preview"]["title"] == "FounderOS follow-up"
+        assert body["preview"]["evidence_refs"][0]["ref"] == "qtwin-io/founderos-api"
+        assert body["audit"][0]["event"] == "proposal_created"
+        assert body["audit"][1]["event"] == "proposal_approved"
+        assert body["warnings"] == [
+            "Execution preview is dry-run only and does not call GitHub."
+        ]
+        assert await _stored_executions(proposal["id"]) == []
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_execution_preview_blocks_not_approved_proposal(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal_id = await _seed_proposal(
+            created["workspace"]["id"],
+            status=ACTION_PROPOSAL_STATUS_PROPOSED,
+        )
+
+        response = await _preview_execution(
+            created["workspace"]["id"],
+            proposal_id,
+            owner_email,
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["status"] == "not_approved"
+        assert body["preview"] is None
+        assert body["capabilities"]["dry_run"] is False
+        assert body["message"] == "action proposal is not approved"
+        assert "Proposal has no evidence refs" in body["warnings"][1]
+        assert await _stored_executions(proposal_id) == []
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_execute_rejects_when_write_actions_disabled(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(settings, "enable_write_actions", False)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(created["workspace"]["id"], owner_email)
+        connection_id = await _create_connection(created["workspace"]["id"])
+
+        response = await _execute_proposal(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": "external execution is disabled"}
+        assert await _stored_executions(proposal["id"]) == []
+    finally:
+        await _cleanup_issue_action_fixture(marker)
 
 
 async def test_execute_requires_api_key(monkeypatch) -> None:

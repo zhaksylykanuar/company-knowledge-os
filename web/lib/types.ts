@@ -212,6 +212,81 @@ export type ActionProposalRejectRequest = {
   reason?: string | null;
 };
 
+export type ActionExecutionPreviewStatus =
+  | "blocked"
+  | "executed"
+  | "failed"
+  | "not_approved"
+  | "preview_ready"
+  | "unsupported";
+
+export type ActionExecutionMode = "dry_run" | "external_disabled" | "external_write";
+
+export type ActionExecutionCapabilities = {
+  dry_run: boolean;
+  local_approval: boolean;
+  external_execution: boolean;
+  live_provider_write: boolean;
+  requires_confirmation: boolean;
+};
+
+export type GitHubIssueExecutionPreview = {
+  provider: string;
+  action: string;
+  repository: string;
+  title: string;
+  body: string | null;
+  labels: string[];
+  assignees: string[];
+  evidence_refs: ActionProposalEvidenceRef[];
+};
+
+export type ActionExecutionAuditEvent = {
+  id: string;
+  event: string;
+  actor: string;
+  created_at: string;
+  message: string;
+};
+
+export type ActionExecutionPreviewResponse = {
+  workspace_id: string;
+  proposal_id: string;
+  status: ActionExecutionPreviewStatus | string;
+  mode: ActionExecutionMode | string;
+  message: string;
+  capabilities: ActionExecutionCapabilities;
+  preview: GitHubIssueExecutionPreview | null;
+  audit: ActionExecutionAuditEvent[];
+  warnings: string[];
+};
+
+export type ActionProposalExecuteRequest = {
+  connection_id: string;
+  confirm_external_write: boolean;
+  idempotency_key?: string | null;
+};
+
+export type ActionExecutionResponse = {
+  proposal: {
+    id: string;
+    status: string;
+  };
+  execution: {
+    id: string;
+    status: string;
+    external_id: string | null;
+    provider_response: Record<string, unknown>;
+    error_message: string | null;
+    started_at: string;
+    finished_at: string | null;
+  };
+  is_live: boolean;
+  external_write_performed: boolean;
+  provider: string;
+  warnings: string[];
+};
+
 export type GitHubConnectionStatusResponse = {
   provider: string;
   status: string;
