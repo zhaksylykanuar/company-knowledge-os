@@ -192,6 +192,11 @@ input {
   gap: 16px;
 }
 
+.briefing-panel {
+  display: grid;
+  gap: 16px;
+}
+
 .work-columns {
   display: grid;
   gap: 16px;
@@ -258,6 +263,15 @@ input {
 .source-link {
   color: var(--accent-text);
   font-weight: 700;
+}
+
+.evidence-drawer {
+  align-self: start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 14px;
+  padding: 14px;
 }
 
 .source-ref-list {

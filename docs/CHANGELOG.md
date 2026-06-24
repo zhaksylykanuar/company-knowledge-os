@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added typed frontend helpers for the manual deterministic Founder Briefing
+  endpoint at `/api/v1/workspaces/{workspace_id}/briefings/manual`.
+- Added `BriefingPanel` and `EvidenceDrawer` to render manual briefing
+  sections, returned evidence refs, source links only when provided, and
+  explicit no-live-provider/no-AI/no-action-execution boundaries.
+- Added frontend tests for briefing URL/body construction, loading/missing/
+  empty/unsupported/error/success states, evidence buttons, evidence drawer
+  details, and avoidance of fake briefing/source data.
 - Added `GET /api/v1/workspaces/{workspace_id}/company-brain`, a read-only
   deterministic Company Brain endpoint over canonical GitHub repositories,
   issue/task records, pull requests, and `SourceRecord` source refs.
@@ -27,6 +35,8 @@
 
 ### Changed
 
+- Wired the dashboard and `/briefings` page to generate the existing manual
+  deterministic Founder Briefing and inspect returned evidence refs.
 - Wired the dashboard to canonical GitHub operational work from
   `/api/v1/workspaces/{workspace_id}/github/operational-work`, including
   issue/task and PR sections, repository labels, filters, and loading/empty/error

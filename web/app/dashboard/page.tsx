@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { BriefingPanel } from "../../components/BriefingPanel";
 import { CompanyBrainPanel } from "../../components/CompanyBrainPanel";
 import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWorkPanel";
 import { GitHubSyncControls } from "../../components/GitHubSyncControls";
@@ -53,7 +54,7 @@ export default function DashboardPage() {
         <StatusCard
           description="Manual deterministic Founder Briefing v0."
           title="Briefing"
-          value="Stub"
+          value="Wired"
         />
         <StatusCard
           description="Proposal, approval, and execution states."
@@ -65,6 +66,7 @@ export default function DashboardPage() {
         onSyncComplete={() => setOperationalWorkRefresh((current) => current + 1)}
       />
       <CompanyBrainPanel refreshSignal={operationalWorkRefresh} />
+      <BriefingPanel />
       <GitHubOperationalWorkPanel refreshSignal={operationalWorkRefresh} />
     </>
   );

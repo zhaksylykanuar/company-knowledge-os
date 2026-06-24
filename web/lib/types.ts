@@ -87,6 +87,57 @@ export type CompanyBrainResponse = {
   warnings: string[];
 };
 
+export type FounderBriefingRequest = {
+  focus?: string[];
+  include_github?: boolean;
+  include_connections?: boolean;
+  include_sync_jobs?: boolean;
+  include_repository_inventory?: boolean;
+  limit?: number;
+};
+
+export type BriefingEvidenceRef = {
+  kind: string;
+  source: string;
+  ref: string;
+  url: string | null;
+};
+
+export type FounderBriefingItem = {
+  id: string;
+  category: string;
+  title: string;
+  summary: string;
+  severity: string;
+  confidence: number;
+  evidence_refs: BriefingEvidenceRef[];
+  related_entities: string[];
+  recommended_next_step: string | null;
+  warnings: string[];
+};
+
+export type FounderBriefingResponse = {
+  briefing: {
+    title: string;
+    summary: string;
+    generated_at: string;
+    workspace_id: string;
+    is_live: boolean;
+    llm_used: boolean;
+    persistence: "transient" | string;
+    items: FounderBriefingItem[];
+    signals: {
+      github: {
+        connection_status: string;
+        repository_count: number;
+        queued_sync_jobs: number;
+        latest_sync_job_status: string | null;
+      };
+    };
+    warnings: string[];
+  };
+};
+
 export type GitHubConnectionStatusResponse = {
   provider: string;
   status: string;

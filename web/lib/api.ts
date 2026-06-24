@@ -7,6 +7,8 @@ import type {
   ApiErrorPayload,
   ApiFetchOptions,
   CompanyBrainResponse,
+  FounderBriefingRequest,
+  FounderBriefingResponse,
   GitHubConnectionStatusResponse,
   GitHubLocalSyncRequest,
   GitHubLocalSyncResponse,
@@ -117,6 +119,32 @@ export async function fetchCompanyBrain(
   return apiFetch<CompanyBrainResponse>(
     buildWorkspaceCompanyBrainPath(workspaceId),
     options
+  );
+}
+
+export function buildWorkspaceManualBriefingPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/briefings/manual`;
+}
+
+export async function generateManualFounderBriefing(
+  workspaceId: string,
+  request: FounderBriefingRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<FounderBriefingResponse> {
+  return apiFetch<FounderBriefingResponse>(
+    buildWorkspaceManualBriefingPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        focus: request.focus ?? ["github", "sync", "repositories"],
+        include_github: request.include_github ?? true,
+        include_connections: request.include_connections ?? true,
+        include_sync_jobs: request.include_sync_jobs ?? true,
+        include_repository_inventory: request.include_repository_inventory ?? true,
+        limit: request.limit ?? 20
+      }),
+      method: "POST"
+    }
   );
 }
 

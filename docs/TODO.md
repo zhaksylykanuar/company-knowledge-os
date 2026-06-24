@@ -28,11 +28,12 @@ files, no unrelated edits, and focused checks first.
 - FOS-FE-02/FOS-011: done - dashboard surfaces canonical GitHub operational work with issue/task and PR sections, repository labels, and open/all/closed/merged filters.
 - FOS-012: done - dashboard surfaces deterministic Company Brain state from canonical GitHub repositories/tasks/PRs with source refs and explicit no-live-provider/no-AI capabilities.
 - FOS-BRF-01: done - deterministic transient manual Founder Briefing v0 added.
+- FOS-014: done - dashboard and `/briefings` surface the deterministic manual Founder Briefing with returned evidence refs in a frontend evidence drawer.
 - FOS-ACT-01: done - local ActionProposal approval API foundation added without execution.
 - FOS-ACT-02: done - approved GitHub issue proposals can execute through a guarded endpoint.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-014 - wire briefing UI and evidence drawer over the deterministic manual briefing backend.
+- Next task: FOS-015 - surface the local ActionProposal approval path in the product UI without external execution.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

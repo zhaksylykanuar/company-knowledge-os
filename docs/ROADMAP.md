@@ -179,6 +179,8 @@ Done:
   `source_events` as primary truth.
 - Manual Founder Briefing v0 can return a deterministic, transient,
   evidence-aware briefing from local workspace GitHub signals.
+- Product dashboard and `/briefings` page can generate that manual briefing and
+  inspect returned evidence refs in a frontend evidence drawer.
 - Local ActionProposal approval foundation can store, approve, and reject
   workspace-scoped proposals without external execution.
 - Approved GitHub issue proposals can execute through the guarded backend path
@@ -192,10 +194,10 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Briefing UI + evidence drawer over GitHub-first evidence.
-- Full product frontend flow for the GitHub-first MVP path.
+- ActionProposal approval UI over the existing local proposal APIs.
+- Full product frontend flow for approval/action and final GitHub-first MVP path.
 
-Next step: FOS-014 briefing UI + evidence drawer.
+Next step: FOS-015 approval/action UI over the local ActionProposal path.
 
 Definition of Done:
 

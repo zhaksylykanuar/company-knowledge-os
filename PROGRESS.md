@@ -10,24 +10,24 @@
 
 ## ▶ СЕЙЧАС
 
-- **Chunk:** `CHUNK 1 — Data Foundation` ✅ закрыт (gate зелёный). Следующая реальная работа спайна — CHUNK 3.
-- **Task:** CHUNK 3 / FOS-012 — Company Brain UI over GitHub-first canonical evidence/read models.
-- **State:** ✅ FOS-012 Company Brain read surface завершён: `GET /api/v1/workspaces/{workspace_id}/company-brain` reads canonical GitHub repositories/tasks/PRs + `SourceRecord` refs, and `web/app/dashboard` now shows deterministic evidence-backed Company Brain state. No live GitHub/provider/AI execution.
-- **Next action:** CHUNK 4 / FOS-014: wire the briefing UI and evidence drawer over the existing deterministic manual briefing backend.
+- **Chunk:** `CHUNK 4 — Briefing MVP`.
+- **Task:** CHUNK 4 / FOS-014 — Briefing UI + evidence drawer over deterministic manual briefing backend.
+- **State:** ✅ FOS-014 завершён: `web/app/dashboard` and `web/app/briefings` can generate the existing manual deterministic Founder Briefing through `POST /api/v1/workspaces/{workspace_id}/briefings/manual`, render returned items/warnings/signals, and inspect provided evidence refs in a frontend evidence drawer. No live GitHub/provider/AI/action execution.
+- **Next action:** CHUNK 5 / FOS-015: surface the local ActionProposal approval path in product UI without external execution.
 
 ---
 
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks:  9 / 23   ▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱   39%   (строго DONE)
+Tasks: 10 / 23   ▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱   43%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 9** · **PARTIAL = 11** · **MISSING = 3**.
+Разбивка: **DONE = 10** · **PARTIAL = 11** · **MISSING = 2**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
-Для сравнения: `docs/TODO.md` помечает «done» ~17 задач **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook-схемы FOS-000..022 строго готово 9.
+Для сравнения: `docs/TODO.md` помечает «done» ~18 задач **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook-схемы FOS-000..022 строго готово 10.
 
 **Легенда статусов задачи:** `[ ]` todo · `[~]` in progress/partial · `[x]` done · `[!]` blocked
 
@@ -40,13 +40,13 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic upgrade head` | ✅ pass | 2026-06-24 | post-merge on `main`: one head `e1a2b3c4d5f6`, current==head |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-24 | FOS-012 on `main`: **268 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-24 | FOS-009 on `main`: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-06-24 | FOS-014 on `main`: **268 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-06-24 | FOS-014 on `main`: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-24 | FOS-012 on `main`: `npm test` 26 passed; `typecheck`, `lint`, `next build` ok (7 routes) |
-| docs navigation | ✅ pass | 2026-06-24 | FOS-009 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
+| frontend build | ✅ pass | 2026-06-24 | FOS-014 on `main`: `npm test` 38 passed; `typecheck`, `lint`, `next build` ok (7 routes) |
+| docs navigation | ✅ pass | 2026-06-24 | FOS-014 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-24 | drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про канон |
-| **GitHub E2E (spine)** | ⚠️ backend smoke pass | 2026-06-24 | FOS-009 on `main`: `test_github_first_backend_e2e` 1 passed (спайн цел), но `is_live=false`; нет product UI-flow; страниц `/connectors`,`/brain` нет |
+| **GitHub E2E (spine)** | ⚠️ backend smoke pass | 2026-06-24 | FOS-009 on `main`: `test_github_first_backend_e2e` 1 passed (спайн цел), но `is_live=false`; product UI now covers local sync/dashboard/Company Brain/briefing, while approval/action UI and real external writes are still open |
 | **full main E2E** | ❌ fail | 2026-06-24 | «approved action → реальный GitHub issue» не доказан (issue-client замокан) |
 | prod smoke | ❓ unknown | — | деплой не выполнялся; Makefile/`make smoke` отсутствует |
 
@@ -84,7 +84,7 @@ DONE строго = есть код + проходящий тест/рабочи
 ### CHUNK 4 — Briefing MVP
 *Gate: пользователь генерирует briefing с evidence drawer.*
 - [~] FOS-013 — Briefing backend — `app/services/founder_briefing_service.py` детерминированный, transient (`BRIEFING_PERSISTENCE_TRANSIENT`), без LLM и без таблиц Briefing/BriefingItem. `tests/test_founder_briefing_api.py` зелёный
-- [ ] FOS-014 — Briefing UI + evidence drawer — `web/app/briefings/page.tsx` — stub (23 строки), drawer нет
+- [x] FOS-014 — Briefing UI + evidence drawer — `web/components/BriefingPanel.tsx` + `EvidenceDrawer.tsx`; `web/app/dashboard` and `web/app/briefings` call the deterministic manual briefing endpoint, render returned briefing items/signals/warnings, and show provided evidence refs without inventing facts
 
 ### CHUNK 5 — Action Approval 🎯 full main E2E
 *Gate: approved action создаёт реальный GitHub issue.*
@@ -117,12 +117,13 @@ DONE строго = есть код + проходящий тест/рабочи
 
 - ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). `source_events` repointed to compatibility fallback in FOS-009 (DEC-030); physical drop remains a later migration/cleanup task, not this feature path.
 
-- [SPINE] **GitHub E2E не закрыт по-настоящему.** Backend-smoke зелёный, но `is_live=false`; product UI now covers dashboard/local-sync/Company Brain, while live OAuth/provider execution and real external GitHub writes are still missing. Рефакторинг по §21.4 ещё **запрещён** (gate CHUNK 3 не пройден).
+- [SPINE] **GitHub E2E не закрыт по-настоящему.** Backend-smoke зелёный, но `is_live=false`; product UI now covers dashboard/local-sync/Company Brain/briefing, while approval/action UI, live OAuth/provider execution, and real external GitHub writes are still missing. Рефакторинг по §21.4 ещё **запрещён** (gate CHUNK 3 не пройден).
 
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-24` — **FOS-014 briefing UI + evidence drawer.** `web/app/dashboard` and `web/app/briefings` now surface the existing deterministic manual Founder Briefing backend through `POST /api/v1/workspaces/{workspace_id}/briefings/manual`. Added typed frontend API helpers, `BriefingPanel`, and `EvidenceDrawer` for loading/missing/empty/unsupported/error/success states, returned item/signals/warnings rendering, evidence ref inspection, source links only when provided, and explicit no-live-provider/no-AI/no-action-execution copy. No backend route/schema change; retained `source_events` is not a primary UI path. Checks: `git diff --check` passed, Founder Briefing backend tests **12 passed**, Company Brain backend tests **2 passed**, GitHub normalization/inventory tests **23 passed**, docs navigation **2 passed**, `ruff` clean, tracked secret scan clean, full pytest **268 passed / 1 warning**, `npm test` **38 passed**, `npm run typecheck` passed, `npm run lint` passed, `npm run build` passed.
 - `2026-06-24` — **FOS-012 Company Brain GitHub evidence state.** Added workspace-scoped `GET /api/v1/workspaces/{workspace_id}/company-brain` over canonical GitHub `Repository`/`Task`/`PullRequest` rows and `SourceRecord` source refs. It returns deterministic summary counts, repositories, open issue/task highlights, open PRs, recent work, evidence/source refs, and explicit capabilities (`local_sync=true`, live OAuth/provider sync/AI briefing false). `web/app/dashboard` now shows a Company Brain panel between local sync controls and operational work details, with loading/missing/empty/error states and evidence/source rendering. Retained `source_events` is not a primary read path. Checks: `git diff --check` passed, new Company Brain backend tests **2 passed**, GitHub normalization/inventory tests **23 passed**, docs navigation **2 passed**, `ruff` clean, tracked secret scan clean, full pytest **268 passed / 1 warning**, `npm test` **26 passed**, `npm run typecheck` passed, `npm run lint` passed, `npm run build` passed.
 - `2026-06-24` — **FOS-010 product GitHub local-sync controls.** Added `POST /api/v1/workspaces/{workspace_id}/github/local-sync` as an explicit local-normalization wrapper over existing manual SyncJob + `normalize-local` behavior; it does not start live provider execution and returns compact status/counts/warnings. `web/app/dashboard` now shows connection/local-sync state, honest no-live-OAuth copy, missing/unsupported/error/success states, and refreshes the canonical operational-work panel after successful local sync. Tests added for backend route success/no-connection/idempotence/no-live path and frontend URL/action/render states. Checks: `git diff --check` passed, GitHub normalization/inventory tests **23 passed**, docs navigation **2 passed**, `ruff` clean, tracked secret scan clean, full pytest **266 passed / 1 warning**, `npm test` **17 passed**, `npm run typecheck` passed, `npm run lint` passed, `npm run build` passed.
 - `2026-06-24` — **FOS-011 dashboard GitHub operational work wiring.** `web/app/dashboard` now reads `GET /api/v1/workspaces/{workspace_id}/github/operational-work` through the existing browser-local API base/key/workspace settings. Added typed frontend operational-work API helper, dashboard panel with open/all/closed/merged filters, separate issue/task and PR sections, repository labels, source links, and loading/empty/error states. Frontend tests cover URL building, response parsing, render success/empty/error/loading/filter states, and absence of old `source_events`/placeholder current truth. Checks: `npm test` 8 passed, `npm run typecheck` passed, `npm run lint` passed, `npm run build` passed, FOS-009 backend tests 20 passed, docs navigation 2 passed, `ruff` clean, tracked secret scan clean, full pytest **263 passed / 1 warning**.
