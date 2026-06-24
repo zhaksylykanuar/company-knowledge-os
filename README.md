@@ -14,9 +14,6 @@ Read in this order:
 3. [`PROGRESS.md`](PROGRESS.md)
 4. [`docs/README.md`](docs/README.md)
 
-The docs archive under [`docs/_archive/`](docs/_archive/) is reversible history,
-not current product truth.
-
 ## Status
 
 - Backend: FastAPI, SQLAlchemy async, Alembic, Postgres, Redis, Pydantic.
@@ -51,8 +48,6 @@ npm run lint
 ```
 
 ## Development & CI
-
-See [`docs/playbook.md`](docs/playbook.md) for the dev/CI playbook.
 
 ### Quick local checks
 
