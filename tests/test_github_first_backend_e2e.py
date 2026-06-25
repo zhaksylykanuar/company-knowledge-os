@@ -42,6 +42,11 @@ def _set_auth(monkeypatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(settings, "secret_encryption_key", SecretStr("test-encryption-key"))
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
     monkeypatch.setattr(settings, "enable_write_actions", True)
+    monkeypatch.setattr(
+        settings,
+        "github_write_allowed_repos",
+        FAKE_REPOSITORY_FULL_NAME,
+    )
 
 
 def _async_client() -> AsyncClient:

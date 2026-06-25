@@ -9,11 +9,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.action_models import (
     ACTION_EXECUTION_EVENT_BLOCKED,
     ACTION_EXECUTION_EVENT_CONFIRMATION_RECEIVED,
     ACTION_EXECUTION_EVENT_DUPLICATE_RETURNED_EXISTING_RECEIPT,
     ACTION_EXECUTION_EVENT_FAILED,
+    ACTION_EXECUTION_EVENT_REPOSITORY_NOT_ALLOWED,
     ACTION_EXECUTION_EVENT_STARTED,
     ACTION_EXECUTION_EVENT_STATUS_BLOCKED,
     ACTION_EXECUTION_EVENT_STATUS_RECORDED,
@@ -54,6 +56,12 @@ GITHUB_ISSUE_EXECUTION_TOKEN_MISSING = "github connection has no encrypted acces
 GITHUB_ISSUE_EXECUTION_TOKEN_UNAVAILABLE = "github token could not be decrypted"
 GITHUB_ISSUE_EXECUTION_EVIDENCE_REQUIRED = (
     "evidence_refs are required for live execution"
+)
+GITHUB_ISSUE_EXECUTION_ALLOWED_REPOS_REQUIRED = (
+    "github write allowed repos are not configured"
+)
+GITHUB_ISSUE_EXECUTION_REPOSITORY_NOT_ALLOWED = (
+    "github repository is not allowed for live execution"
 )
 GITHUB_ISSUE_EXECUTION_DUPLICATE_RECEIPT = (
     "existing successful execution receipt returned; no external write occurred"
@@ -141,6 +149,7 @@ async def execute_approved_github_issue_action(
         _validate_proposal_for_execution(proposal)
         issue_payload = validate_github_issue_payload(proposal.payload or {})
         _validate_evidence_for_live_execution(proposal)
+        _validate_repository_allowlist(issue_payload)
         connection = await _get_connection_or_raise(
             session,
             workspace_id=workspace_id,
@@ -381,6 +390,38 @@ def _validate_evidence_for_live_execution(proposal: ActionProposal) -> None:
         raise GitHubIssueExecutionConflictError(GITHUB_ISSUE_EXECUTION_EVIDENCE_REQUIRED)
 
 
+def _validate_repository_allowlist(issue_payload: GitHubIssuePayload) -> None:
+    allowed_repositories = _github_write_allowed_repositories()
+    if not allowed_repositories:
+        raise GitHubIssueExecutionConflictError(
+            GITHUB_ISSUE_EXECUTION_ALLOWED_REPOS_REQUIRED
+        )
+    if _normalize_repository_full_name(
+        issue_payload.repository_full_name
+    ) not in allowed_repositories:
+        raise GitHubIssueExecutionConflictError(
+            GITHUB_ISSUE_EXECUTION_REPOSITORY_NOT_ALLOWED
+        )
+
+
+def _github_write_allowed_repositories() -> set[str]:
+    raw_value = settings.github_write_allowed_repos
+    if not raw_value:
+        return set()
+
+    repositories: set[str] = set()
+    for chunk in raw_value.replace(";", ",").replace("\n", ",").split(","):
+        for item in chunk.split():
+            normalized = _normalize_repository_full_name(item)
+            if _looks_like_repository_full_name(normalized):
+                repositories.add(normalized)
+    return repositories
+
+
+def _normalize_repository_full_name(value: str) -> str:
+    return value.strip().casefold()
+
+
 async def _get_connection_or_raise(
     session: AsyncSession,
     *,
@@ -562,7 +603,15 @@ async def _append_blocked_execution_event(
     await _append_execution_audit_event(
         session,
         proposal=proposal,
-        event_type=ACTION_EXECUTION_EVENT_BLOCKED,
+        event_type=(
+            ACTION_EXECUTION_EVENT_REPOSITORY_NOT_ALLOWED
+            if detail
+            in {
+                GITHUB_ISSUE_EXECUTION_ALLOWED_REPOS_REQUIRED,
+                GITHUB_ISSUE_EXECUTION_REPOSITORY_NOT_ALLOWED,
+            }
+            else ACTION_EXECUTION_EVENT_BLOCKED
+        ),
         status=(
             ACTION_EXECUTION_EVENT_STATUS_UNSUPPORTED
             if detail == GITHUB_ISSUE_EXECUTION_UNSUPPORTED_ACTION
@@ -574,7 +623,10 @@ async def _append_blocked_execution_event(
         reason=_error_code_from_detail(detail),
         error_code=_error_code_from_detail(detail),
         error_message=detail,
-        event_metadata={"proposal_status": proposal.status},
+        event_metadata={
+            "proposal_status": proposal.status,
+            **_repository_metadata(proposal),
+        },
     )
 
 
@@ -649,3 +701,12 @@ def _error_code_from_detail(detail: str) -> str:
     normalized = detail.strip().casefold()
     safe = "".join(char if char.isalnum() else "_" for char in normalized)
     return "_".join(part for part in safe.split("_") if part)[:120] or "blocked"
+
+
+def _repository_metadata(proposal: ActionProposal) -> dict[str, str]:
+    if not isinstance(proposal.payload, Mapping):
+        return {}
+    repository_full_name = proposal.payload.get("repository_full_name")
+    if not isinstance(repository_full_name, str) or not repository_full_name.strip():
+        return {}
+    return {"repository_full_name": repository_full_name.strip()[:255]}

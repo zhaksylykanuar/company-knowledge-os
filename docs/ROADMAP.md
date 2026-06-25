@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / post-FOS-018. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-019A.2. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,8 +24,9 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for the separately approved manual live
-GitHub issue smoke test, or keep live writes disabled.
+Next step: follow `../PROGRESS.md` to create/grant access to the approved smoke
+repository `azhaks-cpo/founderos-smoke`, prepare the local candidate up to
+preview/audit, then separately approve any live execute.
 
 Definition of Done:
 
@@ -145,9 +146,13 @@ Missing:
 - Workspace onboarding.
 - Browser/product E2E coverage.
 - Manual live external write smoke proof in product mode.
+- Private smoke repository `azhaks-cpo/founderos-smoke` still needs to exist and
+  be accessible before the live issue proof; broad token scope is not accepted
+  as the write safety boundary.
 
-Next step: run the separately approved live GitHub issue smoke proof, or keep
-live writes disabled.
+Next step: prepare the allowlisted smoke candidate only after the approved smoke
+repo exists, then run the separately approved live GitHub issue smoke proof or
+keep live writes disabled.
 
 Definition of Done:
 
@@ -217,10 +222,12 @@ Missing:
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
 - Manual real GitHub issue smoke proof behind explicit human approval/runtime
-  config/test repository target.
+  config and explicit repository allowlist. The current approved target is
+  `azhaks-cpo/founderos-smoke`; no real issue has been created.
 
-Next step: run the separately approved manual live GitHub issue smoke test, or
-keep live writes disabled.
+Next step: create/grant access to `azhaks-cpo/founderos-smoke`, rerun candidate
+preparation to preview/audit only, then request separate human approval for live
+execute.
 
 Definition of Done:
 

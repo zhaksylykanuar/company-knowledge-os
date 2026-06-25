@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added a non-secret live GitHub write repository allowlist for approved issue
+  execution: `FOS_GITHUB_WRITE_ALLOWED_REPOS`, with `FOS_GITHUB_SMOKE_REPO` as
+  a single-repository alias.
+- Added durable `execution_repository_not_allowed` audit events for missing or
+  non-matching write allowlists before any token decrypt or provider call.
 - Added gated live GitHub issue execution behavior over the existing approved
   `ActionProposal` executor: runtime write capability, explicit confirmation,
   valid GitHub payload/connection, evidence refs, duplicate receipt return, and
@@ -45,6 +50,12 @@
 
 ### Changed
 
+- Live GitHub issue execution now blocks unless the target repository is
+  explicitly allowlisted; broad token scope and variable names such as
+  `READONLY` are not trusted as safety boundaries.
+- Bounded setup checked `azhaks-cpo/founderos-smoke`; GitHub returned 403 on
+  private repo creation, so no smoke candidate was prepared and no real issue
+  was created.
 - Live GitHub issue execution remains disabled by default and was not manually
   smoke-tested; automated checks use mocked provider/client boundaries only.
 - Repeated execute on an already-succeeded proposal now returns the existing

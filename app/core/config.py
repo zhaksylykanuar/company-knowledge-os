@@ -47,6 +47,13 @@ class Settings(BaseSettings):
 
     enable_llm: bool = False
     enable_write_actions: bool = False
+    github_write_allowed_repos: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "FOS_GITHUB_WRITE_ALLOWED_REPOS",
+            "FOS_GITHUB_SMOKE_REPO",
+        ),
+    )
     enable_obsidian_export: bool = True
     require_approval_for_writes: bool = True
     enable_obsidian_bridge: bool = Field(

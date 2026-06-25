@@ -14,6 +14,7 @@ from app.db.action_models import (
     ACTION_CREATED_BY_USER,
     ACTION_EXECUTION_STATUS_FAILED,
     ACTION_EXECUTION_STATUS_SUCCEEDED,
+    ACTION_EXECUTION_EVENT_REPOSITORY_NOT_ALLOWED,
     ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_PROPOSAL_STATUS_EXECUTED,
     ACTION_PROPOSAL_STATUS_FAILED,
@@ -62,6 +63,7 @@ def _set_auth(monkeypatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(settings, "secret_encryption_key", SecretStr("test-encryption-key"))
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
     monkeypatch.setattr(settings, "enable_write_actions", True)
+    monkeypatch.setattr(settings, "github_write_allowed_repos", "qtwin-io/founderos-api")
 
 
 def _async_client() -> AsyncClient:
@@ -398,6 +400,7 @@ def _execution_event_sort_key(event: ActionExecutionEvent) -> tuple:
         "execution_confirmation_missing": 20,
         "execution_confirmation_received_but_disabled": 21,
         "execution_blocked": 22,
+        "execution_repository_not_allowed": 23,
         "execution_confirmation_received": 30,
         "execution_started": 40,
         "execution_succeeded": 50,
@@ -616,6 +619,133 @@ async def test_execute_rejects_when_write_actions_disabled(monkeypatch) -> None:
         )
         assert events[0].confirmation_received is True
         assert events[0].external_execution_enabled is False
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+@pytest.mark.parametrize("allowlist_value", [None, "", "   "])
+async def test_execute_rejects_when_github_write_allowlist_missing(
+    monkeypatch,
+    allowlist_value: str | None,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(settings, "github_write_allowed_repos", allowlist_value)
+    calls: list[dict] = []
+    _mock_successful_github_issue(monkeypatch, calls)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(created["workspace"]["id"], owner_email)
+        connection_id = await _create_connection(created["workspace"]["id"])
+
+        response = await _execute_proposal(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "github write allowed repos are not configured"
+        }
+        assert calls == []
+        assert await _stored_executions(proposal["id"]) == []
+        events = await _stored_execution_events(proposal["id"])
+        assert len(events) == 1
+        assert events[0].event_type == ACTION_EXECUTION_EVENT_REPOSITORY_NOT_ALLOWED
+        assert events[0].error_code == "github_write_allowed_repos_are_not_configured"
+        assert events[0].event_metadata["repository_full_name"] == (
+            "qtwin-io/founderos-api"
+        )
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_execute_rejects_github_issue_repo_not_in_write_allowlist(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(
+        settings,
+        "github_write_allowed_repos",
+        "azhaks-cpo/founderos-smoke",
+    )
+    calls: list[dict] = []
+    _mock_successful_github_issue(monkeypatch, calls)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(created["workspace"]["id"], owner_email)
+        connection_id = await _create_connection(created["workspace"]["id"])
+
+        response = await _execute_proposal(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "github repository is not allowed for live execution"
+        }
+        assert calls == []
+        assert await _stored_executions(proposal["id"]) == []
+        events = await _stored_execution_events(proposal["id"])
+        assert len(events) == 1
+        assert events[0].event_type == ACTION_EXECUTION_EVENT_REPOSITORY_NOT_ALLOWED
+        assert events[0].error_code == (
+            "github_repository_is_not_allowed_for_live_execution"
+        )
+        assert events[0].event_metadata["repository_full_name"] == (
+            "qtwin-io/founderos-api"
+        )
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_execute_allows_github_issue_repo_in_write_allowlist(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(
+        settings,
+        "github_write_allowed_repos",
+        "azhaks-cpo/founderos-smoke, qtwin-io/founderos-api",
+    )
+    calls: list[dict] = []
+    _mock_successful_github_issue(monkeypatch, calls)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(created["workspace"]["id"], owner_email)
+        connection_id = await _create_connection(created["workspace"]["id"])
+
+        response = await _execute_proposal(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert response.status_code == 200, response.text
+        assert calls[0]["repository_full_name"] == "qtwin-io/founderos-api"
+        events = await _stored_execution_events(proposal["id"])
+        assert [event.event_type for event in events] == [
+            "execution_confirmation_received",
+            "execution_started",
+            "execution_succeeded",
+        ]
     finally:
         await _cleanup_issue_action_fixture(marker)
 

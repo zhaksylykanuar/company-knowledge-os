@@ -45,6 +45,7 @@ ACTION_EXECUTION_EVENT_STARTED = "execution_started"
 ACTION_EXECUTION_EVENT_SUCCEEDED = "execution_succeeded"
 ACTION_EXECUTION_EVENT_FAILED = "execution_failed"
 ACTION_EXECUTION_EVENT_BLOCKED = "execution_blocked"
+ACTION_EXECUTION_EVENT_REPOSITORY_NOT_ALLOWED = "execution_repository_not_allowed"
 ACTION_EXECUTION_EVENT_DUPLICATE_RETURNED_EXISTING_RECEIPT = (
     "execution_duplicate_returned_existing_receipt"
 )

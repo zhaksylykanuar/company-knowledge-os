@@ -187,6 +187,7 @@ def _event_order_case():
             "execution_confirmation_missing": 20,
             "execution_confirmation_received_but_disabled": 21,
             "execution_blocked": 22,
+            "execution_repository_not_allowed": 23,
             "execution_confirmation_received": 30,
             "execution_started": 40,
             "execution_succeeded": 50,

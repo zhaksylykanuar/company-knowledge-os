@@ -34,10 +34,11 @@ files, no unrelated edits, and focused checks first.
 - FOS-015: done - dashboard and `/actions` surface local ActionProposal list/create/approve/reject with evidence refs and no external execution.
 - FOS-016: done - product execution preview/audit surface shows dry-run GitHub issue readiness, blocks live execute when `enable_write_actions=false`, and requires backend capability plus explicit confirmation before live writes.
 - FOS-017: done - execution preview and blocked execute paths persist proposal-scoped audit events and expose a local execution receipt/readiness model.
-- FOS-018: done - approved GitHub issue execution code path is gated by runtime config, explicit confirmation, evidence refs, idempotent receipt, and durable audit; automated tests mock the provider and no manual live smoke has run.
+- FOS-018: done - approved GitHub issue execution code path is gated by runtime config, explicit confirmation, evidence refs, explicit GitHub write repository allowlist, idempotent receipt, and durable audit; automated tests mock the provider and no manual live smoke has run.
+- FOS-019A.2: code gate done / smoke candidate blocked - live GitHub issue writes are limited to `FOS_GITHUB_WRITE_ALLOWED_REPOS` / `FOS_GITHUB_SMOKE_REPO`; broad token scope and variable names are not trusted. Bounded setup for `azhaks-cpo/founderos-smoke` could not create the missing private repo because GitHub returned 403.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: run the separately approved manual live GitHub issue smoke test against a human-approved test repo/connection/config, or keep live writes disabled.
+- Next task: create/grant access to `azhaks-cpo/founderos-smoke`, rerun smoke candidate preparation up to preview/audit, then run the separately approved manual live GitHub issue smoke test or keep live writes disabled.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -574,6 +575,10 @@ Acceptance criteria:
 - Proposal must be approved, target GitHub issue creation, have a valid
   repository/title payload, have a connected GitHub connection, and include
   evidence refs for live execution.
+- Target repository must be present in the explicit non-secret write allowlist
+  (`FOS_GITHUB_WRITE_ALLOWED_REPOS`, or `FOS_GITHUB_SMOKE_REPO` for the single
+  smoke target). Broad token scope and variable names such as `READONLY` are not
+  trusted as safety boundaries.
 - Successful mocked execution persists an `ActionExecution` receipt and
   `execution_succeeded` audit event.
 - Provider failure persists failed receipt/audit without leaking tokens/raw
@@ -584,6 +589,9 @@ Acceptance criteria:
   requires explicit confirmation, and renders external issue id/url only from
   backend success.
 - Automated tests mock the provider boundary; no real live write is run.
+- FOS-019A.2 checked the approved smoke repo target
+  `azhaks-cpo/founderos-smoke`; repo creation was blocked with 403, so the live
+  smoke candidate was not prepared and no real issue was created.
 
 Checks to run:
 

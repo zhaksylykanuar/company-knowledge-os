@@ -619,6 +619,31 @@ Consequences:
   must not say a GitHub issue/comment/PR was created unless the backend returns
   a real executed provider result.
 
+## DEC-033 - Live GitHub Writes Require Explicit Repository Allowlist
+
+Decision (2026-06-25): even when `enable_write_actions=true` and an approved
+GitHub issue `ActionProposal` has explicit confirmation, live GitHub issue
+execution is allowed only for repositories listed in the non-secret write
+allowlist (`FOS_GITHUB_WRITE_ALLOWED_REPOS`, or `FOS_GITHUB_SMOKE_REPO` for the
+single approved smoke target).
+
+Rationale: local env tokens may have broader scopes than the current smoke
+test needs, and variable names such as `READONLY` are not permission boundaries.
+The final safety boundary must be explicit target scoping before token decrypt
+or provider execution.
+
+Consequences:
+
+- Missing or non-matching repository allowlists block execution with a clear 409
+  before token decrypt/provider calls.
+- Blocked allowlist cases record durable `execution_repository_not_allowed`
+  audit events.
+- Tests may opt into mocked provider execution only by setting an explicit
+  allowed repository.
+- The approved live smoke target is `azhaks-cpo/founderos-smoke`; FOS-019A.2
+  did not create a GitHub issue, and the candidate setup remains blocked until
+  that private repository exists or the token has permission to create it.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
