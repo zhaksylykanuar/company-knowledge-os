@@ -6,7 +6,8 @@ from collections.abc import Mapping
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.action_models import ActionExecutionEvent
@@ -59,8 +60,19 @@ async def append_execution_event(
         error_code=_optional_text(error_code, limit=120),
         error_message=_optional_text(error_message, limit=500),
     )
-    session.add(event)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            session.add(event)
+            await session.flush()
+    except IntegrityError:
+        existing = await session.scalar(
+            select(ActionExecutionEvent).where(
+                ActionExecutionEvent.idempotency_key == idempotency_key
+            )
+        )
+        if existing is not None:
+            return existing
+        raise
     await session.refresh(event)
     return event
 
@@ -76,7 +88,11 @@ async def list_execution_events(
             select(ActionExecutionEvent)
             .where(ActionExecutionEvent.workspace_id == workspace_id)
             .where(ActionExecutionEvent.action_proposal_id == action_proposal_id)
-            .order_by(ActionExecutionEvent.created_at.asc(), ActionExecutionEvent.id.asc())
+            .order_by(
+                ActionExecutionEvent.created_at.asc(),
+                _event_order_case(),
+                ActionExecutionEvent.id.asc(),
+            )
         )
     ).scalars()
     return list(rows)
@@ -111,6 +127,7 @@ def execution_event_idempotency_key(
     external_execution_enabled: bool,
     confirmation_received: bool,
     preview_hash: str | None = None,
+    reason: str | None = None,
 ) -> str:
     basis = {
         "action_proposal_id": str(action_proposal_id),
@@ -118,6 +135,7 @@ def execution_event_idempotency_key(
         "event_type": event_type,
         "external_execution_enabled": external_execution_enabled,
         "preview_hash": preview_hash,
+        "reason": reason,
         "workspace_id": str(workspace_id),
     }
     digest = stable_digest(basis)
@@ -158,3 +176,23 @@ def _optional_text(value: str | None, *, limit: int) -> str | None:
 
 def _safe_text(value: str | None, *, fallback: str, limit: int) -> str:
     return _optional_text(value, limit=limit) or fallback[:limit]
+
+
+def _event_order_case():
+    return case(
+        {
+            "execution_preview_generated": 10,
+            "execution_preview_blocked": 11,
+            "execution_unsupported": 12,
+            "execution_confirmation_missing": 20,
+            "execution_confirmation_received_but_disabled": 21,
+            "execution_blocked": 22,
+            "execution_confirmation_received": 30,
+            "execution_started": 40,
+            "execution_succeeded": 50,
+            "execution_failed": 51,
+            "execution_duplicate_returned_existing_receipt": 60,
+        },
+        value=ActionExecutionEvent.event_type,
+        else_=100,
+    )

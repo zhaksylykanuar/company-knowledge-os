@@ -387,7 +387,24 @@ async def _stored_execution_events(proposal_id: str | UUID) -> list[ActionExecut
                 )
             )
         ).scalars()
-        return list(rows)
+        return sorted(list(rows), key=_execution_event_sort_key)
+
+
+def _execution_event_sort_key(event: ActionExecutionEvent) -> tuple:
+    order = {
+        "execution_preview_generated": 10,
+        "execution_preview_blocked": 11,
+        "execution_unsupported": 12,
+        "execution_confirmation_missing": 20,
+        "execution_confirmation_received_but_disabled": 21,
+        "execution_blocked": 22,
+        "execution_confirmation_received": 30,
+        "execution_started": 40,
+        "execution_succeeded": 50,
+        "execution_failed": 51,
+        "execution_duplicate_returned_existing_receipt": 60,
+    }
+    return (event.created_at, order.get(event.event_type, 100), str(event.id))
 
 
 async def _count(model: type) -> int:
@@ -552,12 +569,18 @@ async def test_audit_endpoint_returns_empty_trail_for_proposal_without_events(
         assert body["receipt"] == {
             "provider": None,
             "action": None,
+            "status": None,
             "external_execution_enabled": False,
             "confirmation_received": False,
             "external_result_id": None,
             "external_result_url": None,
             "external_write_performed": False,
             "provider_result": "none",
+            "error_code": None,
+            "error_message": None,
+            "idempotency_key": None,
+            "created_at": None,
+            "updated_at": None,
         }
     finally:
         await _cleanup_issue_action_fixture(marker)
@@ -694,12 +717,48 @@ async def test_owner_admin_can_execute_approved_github_issue(
         assert body["execution"]["provider_response"]["number"] == 42
         assert "body" not in body["execution"]["provider_response"]
         assert "token" not in body["execution"]["provider_response"]
+        assert body["receipt"]["provider"] == INTEGRATION_PROVIDER_GITHUB
+        assert body["receipt"]["action"] == ACTION_TYPE_CREATE_GITHUB_ISSUE
+        assert body["receipt"]["status"] == ACTION_EXECUTION_STATUS_SUCCEEDED
+        assert body["receipt"]["external_result_id"] == "42"
+        assert (
+            body["receipt"]["external_result_url"]
+            == "https://github.com/qtwin-io/founderos-api/issues/42"
+        )
+        assert body["receipt"]["external_write_performed"] is True
+        assert body["receipt"]["provider_result"] == "succeeded"
+        assert body["receipt"]["idempotency_key"] == "issue-action-test"
         assert PLAIN_EXECUTION_TOKEN not in response.text
         assert body["is_live"] is True
         assert body["external_write_performed"] is True
         assert body["provider"] == INTEGRATION_PROVIDER_GITHUB
         assert calls[0]["repository_full_name"] == "qtwin-io/founderos-api"
         assert await _count(ActionExecution) >= 1
+        events = await _stored_execution_events(proposal["id"])
+        assert [event.event_type for event in events] == [
+            "execution_confirmation_received",
+            "execution_started",
+            "execution_succeeded",
+        ]
+        assert events[-1].external_result_id == "42"
+        assert (
+            events[-1].external_result_url
+            == "https://github.com/qtwin-io/founderos-api/issues/42"
+        )
+        audit_response = await _get_audit(
+            created["workspace"]["id"],
+            proposal["id"],
+            actor_email,
+        )
+        assert audit_response.status_code == 200, audit_response.text
+        audit = audit_response.json()
+        assert [event["event_type"] for event in audit["events"]] == [
+            "execution_confirmation_received",
+            "execution_started",
+            "execution_succeeded",
+        ]
+        assert audit["receipt"]["status"] == ACTION_EXECUTION_STATUS_SUCCEEDED
+        assert audit["receipt"]["provider_result"] == "succeeded"
     finally:
         await _cleanup_issue_action_fixture(marker)
 
@@ -835,6 +894,48 @@ async def test_execute_rejects_invalid_issue_payload(
         assert response.status_code == 400
         assert response.json() == {"detail": expected_detail}
         assert await _stored_executions(proposal_id) == []
+        events = await _stored_execution_events(proposal_id)
+        assert len(events) == 1
+        assert events[0].event_type == "execution_blocked"
+        assert events[0].error_message == expected_detail
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_execute_rejects_missing_evidence_refs_before_live_write(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_issue_action_fixture(marker)
+
+    async def fail_create_issue(**_kwargs):
+        raise AssertionError("GitHub client should not be called")
+
+    monkeypatch.setattr(github_issue_execution_service, "create_issue", fail_create_issue)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal_id = await _seed_proposal(created["workspace"]["id"])
+        connection_id = await _create_connection(created["workspace"]["id"])
+
+        response = await _execute_proposal(
+            created["workspace"]["id"],
+            proposal_id,
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": "evidence_refs are required for live execution"
+        }
+        assert await _stored_executions(proposal_id) == []
+        events = await _stored_execution_events(proposal_id)
+        assert len(events) == 1
+        assert events[0].event_type == "execution_blocked"
+        assert events[0].error_code == "evidence_refs_are_required_for_live_execution"
     finally:
         await _cleanup_issue_action_fixture(marker)
 
@@ -884,6 +985,11 @@ async def test_execute_rejects_invalid_proposal_state_or_action(
 
         assert response.status_code == expected_status
         assert response.json() == {"detail": expected_detail}
+        assert await _stored_executions(proposal_id) == []
+        events = await _stored_execution_events(proposal_id)
+        assert len(events) == 1
+        assert events[0].event_type == "execution_blocked"
+        assert events[0].error_message == expected_detail
     finally:
         await _cleanup_issue_action_fixture(marker)
 
@@ -1015,6 +1121,15 @@ async def test_provider_failure_creates_failed_execution_without_token_leak(
         assert executions[0].status == ACTION_EXECUTION_STATUS_FAILED
         assert executions[0].error_message == "github issue creation failed"
         assert PLAIN_EXECUTION_TOKEN not in str(executions[0].provider_response)
+        events = await _stored_execution_events(proposal["id"])
+        assert [event.event_type for event in events] == [
+            "execution_confirmation_received",
+            "execution_started",
+            "execution_failed",
+        ]
+        assert events[-1].error_code == "provider_execution_failed"
+        assert events[-1].error_message == "github issue creation failed"
+        assert PLAIN_EXECUTION_TOKEN not in str(events[-1].event_metadata)
     finally:
         await _cleanup_issue_action_fixture(marker)
 
@@ -1046,9 +1161,22 @@ async def test_already_executed_proposal_cannot_execute_again(monkeypatch) -> No
         )
 
         assert first.status_code == 200
-        assert second.status_code == 409
-        assert second.json() == {"detail": "action proposal already executed"}
+        assert second.status_code == 200
+        body = second.json()
+        assert body["proposal"]["status"] == ACTION_PROPOSAL_STATUS_EXECUTED
+        assert body["execution"]["status"] == ACTION_EXECUTION_STATUS_SUCCEEDED
+        assert body["receipt"]["provider_result"] == "succeeded"
+        assert body["warnings"] == [
+            "existing successful execution receipt returned; no external write occurred"
+        ]
         assert len(calls) == 1
+        events = await _stored_execution_events(proposal["id"])
+        assert [event.event_type for event in events] == [
+            "execution_confirmation_received",
+            "execution_started",
+            "execution_succeeded",
+            "execution_duplicate_returned_existing_receipt",
+        ]
     finally:
         await _cleanup_issue_action_fixture(marker)
 

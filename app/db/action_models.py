@@ -40,6 +40,14 @@ ACTION_EXECUTION_EVENT_CONFIRMATION_MISSING = "execution_confirmation_missing"
 ACTION_EXECUTION_EVENT_CONFIRMATION_RECEIVED_BUT_DISABLED = (
     "execution_confirmation_received_but_disabled"
 )
+ACTION_EXECUTION_EVENT_CONFIRMATION_RECEIVED = "execution_confirmation_received"
+ACTION_EXECUTION_EVENT_STARTED = "execution_started"
+ACTION_EXECUTION_EVENT_SUCCEEDED = "execution_succeeded"
+ACTION_EXECUTION_EVENT_FAILED = "execution_failed"
+ACTION_EXECUTION_EVENT_BLOCKED = "execution_blocked"
+ACTION_EXECUTION_EVENT_DUPLICATE_RETURNED_EXISTING_RECEIPT = (
+    "execution_duplicate_returned_existing_receipt"
+)
 
 
 class ActionProposal(Base):

@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / post-FOS-017. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / post-FOS-018. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,7 +24,8 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for the human-gated live GitHub issue write proof.
+Next step: follow `../PROGRESS.md` for the separately approved manual live
+GitHub issue smoke test, or keep live writes disabled.
 
 Definition of Done:
 
@@ -93,10 +94,10 @@ Missing:
 - Full GitHub OAuth/product connect flow.
 - Live GitHub sync/product OAuth execution path.
 - Persistent briefing models.
-- Human-approved live GitHub write proof behind explicit runtime config and
-  confirmation.
+- Manual live GitHub write smoke proof behind explicit human approval, runtime
+  config, and test repository target.
 
-Next step: follow `../PROGRESS.md` for the human-gated live-write proof.
+Next step: follow `../PROGRESS.md` for the manual live-write smoke proof.
 
 Definition of Done:
 
@@ -132,6 +133,9 @@ Done:
   reject plus guarded execution preview/audit controls.
 - `/actions` renders persisted execution audit events and local receipt/readiness
   state for preview and blocked execution attempts.
+- `/actions` exposes live GitHub issue execution controls only when backend
+  capabilities enable them, requires explicit confirmation, and renders external
+  issue receipt links only from backend success.
 - Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
@@ -140,10 +144,10 @@ Missing:
 - Login page.
 - Workspace onboarding.
 - Browser/product E2E coverage.
-- Live external write proof in product mode.
+- Manual live external write smoke proof in product mode.
 
-Next step: human-gated live GitHub issue write proof behind explicit config and
-confirmation.
+Next step: run the separately approved live GitHub issue smoke proof, or keep
+live writes disabled.
 
 Definition of Done:
 
@@ -155,8 +159,10 @@ Definition of Done:
 
 ## Phase 4 - GitHub-First E2E
 
-Current status: guarded local product flow is covered through execution preview;
-live external-write proof is still missing.
+Current status: guarded product flow includes the live GitHub issue execution
+code path behind runtime config, explicit confirmation, evidence policy,
+idempotent receipt, and durable audit. Automated tests use mocked provider
+execution; manual live external-write smoke is still missing.
 
 Done:
 
@@ -197,6 +203,10 @@ Done:
   execution readiness, inspect persisted proposal-scoped audit events and local
   receipt/readiness state, and keep live execution disabled unless backend
   capability explicitly enables it.
+- Approved GitHub issue proposals can reach the existing GitHub issue executor
+  only after strict gates pass; successful mocked execution records
+  `ActionExecution` receipt plus durable success audit, and duplicate execute
+  returns the existing receipt without another provider call.
 - Backend E2E smoke coverage exercises the GitHub-first path from workspace
   bootstrap through mocked approved issue execution.
 
@@ -206,11 +216,11 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Full product frontend flow for final GitHub-first MVP external-write proof.
-- Real GitHub issue write proof behind explicit human approval/runtime config.
+- Manual real GitHub issue smoke proof behind explicit human approval/runtime
+  config/test repository target.
 
-Next step: human-gated live GitHub issue write proof behind explicit runtime
-config and confirmation.
+Next step: run the separately approved manual live GitHub issue smoke test, or
+keep live writes disabled.
 
 Definition of Done:
 

@@ -34,9 +34,10 @@ files, no unrelated edits, and focused checks first.
 - FOS-015: done - dashboard and `/actions` surface local ActionProposal list/create/approve/reject with evidence refs and no external execution.
 - FOS-016: done - product execution preview/audit surface shows dry-run GitHub issue readiness, blocks live execute when `enable_write_actions=false`, and requires backend capability plus explicit confirmation before live writes.
 - FOS-017: done - execution preview and blocked execute paths persist proposal-scoped audit events and expose a local execution receipt/readiness model.
+- FOS-018: done - approved GitHub issue execution code path is gated by runtime config, explicit confirmation, evidence refs, idempotent receipt, and durable audit; automated tests mock the provider and no manual live smoke has run.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: human-gated live GitHub issue write proof behind explicit config/confirmation, now that persistent audit is green.
+- Next task: run the separately approved manual live GitHub issue smoke test against a human-approved test repo/connection/config, or keep live writes disabled.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -554,6 +555,40 @@ Checks to run:
 - Focused action/proposal/execution/audit tests.
 - Alembic heads/current/upgrade/check, allowing only documented retained
   substrate drift.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `UV_NO_SYNC=1 uv run pytest -q`
+- `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`.
+
+## FOS-018 - Human-gated live GitHub issue execution path
+
+Status: done / implemented behind gates; manual live smoke not run.
+
+Goal: allow an approved local GitHub issue `ActionProposal` to reach the
+existing GitHub issue executor only after strict runtime, confirmation,
+evidence, idempotency, and audit gates pass.
+
+Acceptance criteria:
+
+- `enable_write_actions=false` still blocks execution and records audit.
+- `confirm_external_write=true` is required.
+- Proposal must be approved, target GitHub issue creation, have a valid
+  repository/title payload, have a connected GitHub connection, and include
+  evidence refs for live execution.
+- Successful mocked execution persists an `ActionExecution` receipt and
+  `execution_succeeded` audit event.
+- Provider failure persists failed receipt/audit without leaking tokens/raw
+  payloads.
+- Repeated execute returns the existing successful receipt and does not call the
+  provider again.
+- Product UI shows live execution controls only when backend capabilities allow,
+  requires explicit confirmation, and renders external issue id/url only from
+  backend success.
+- Automated tests mock the provider boundary; no real live write is run.
+
+Checks to run:
+
+- Focused action/proposal/execution tests.
+- GitHub-first backend E2E.
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `UV_NO_SYNC=1 uv run pytest -q`
 - `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`.

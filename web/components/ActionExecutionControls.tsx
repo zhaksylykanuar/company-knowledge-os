@@ -107,9 +107,14 @@ export function ActionExecutionControls({
         confirm_external_write: true
       });
       setExecuteResult(response);
+      setReceipt(response.receipt);
       await refreshAudit(config.workspaceId);
       setSuccessMessage(
-        response.external_write_performed
+        response.warnings.some((warning) => warning.includes("existing successful"))
+          ? "Existing execution receipt returned. No additional external write occurred."
+          : response.external_write_performed && response.receipt.provider_result === "succeeded"
+            ? "GitHub issue created. Execution receipt recorded."
+            : response.external_write_performed
           ? "Backend reported an external execution result."
           : "Execution request completed without an external write."
       );
@@ -180,6 +185,16 @@ export function ActionExecutionControlsView({
       : preview && preview.audit.length > 0
         ? preview.audit
         : fallbackAuditEvents(proposal);
+  const displayedReceipt = executeResult?.receipt ?? receipt;
+  const duplicateReceiptReturned = Boolean(
+    executeResult?.warnings.some((warning) => warning.includes("existing successful"))
+  );
+  const createdGitHubIssue = Boolean(
+    executeResult &&
+      !duplicateReceiptReturned &&
+      executeResult.external_write_performed &&
+      executeResult.receipt.provider_result === "succeeded"
+  );
   const evidenceCount = preview?.preview?.evidence_refs.length ?? proposal.evidence_refs.length;
 
   return (
@@ -259,8 +274,8 @@ export function ActionExecutionControlsView({
           {externalExecutionEnabled ? (
             <div className="form" aria-label="Live execution confirmation">
               <p className="muted">
-                Live GitHub write requires explicit confirmation and a connected
-                GitHub connection ID.
+                This will create a real GitHub issue. Requires explicit
+                confirmation and a connected GitHub connection ID.
               </p>
               <div className="field">
                 <label htmlFor={`execution-connection-${proposal.id}`}>Connection ID</label>
@@ -295,20 +310,62 @@ export function ActionExecutionControlsView({
         </div>
       ) : null}
 
-      {receipt ? (
+      {displayedReceipt ? (
         <dl className="work-meta" aria-label="Execution receipt">
           <div>
+            <dt>Provider</dt>
+            <dd>{displayedReceipt.provider ?? "none"}</dd>
+          </div>
+          <div>
+            <dt>Action</dt>
+            <dd>{displayedReceipt.action ?? "none"}</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{displayedReceipt.status ?? "none"}</dd>
+          </div>
+          <div>
             <dt>Provider result</dt>
-            <dd>{receipt.provider_result}</dd>
+            <dd>{displayedReceipt.provider_result}</dd>
           </div>
           <div>
             <dt>External write</dt>
-            <dd>{receipt.external_write_performed ? "reported by backend" : "none"}</dd>
+            <dd>
+              {displayedReceipt.external_write_performed
+                ? "reported by backend"
+                : "none"}
+            </dd>
           </div>
           <div>
             <dt>Confirmation</dt>
-            <dd>{receipt.confirmation_received ? "received" : "not received"}</dd>
+            <dd>{displayedReceipt.confirmation_received ? "received" : "not received"}</dd>
           </div>
+          {displayedReceipt.external_result_id ? (
+            <div>
+              <dt>External issue</dt>
+              <dd>{displayedReceipt.external_result_id}</dd>
+            </div>
+          ) : null}
+          {displayedReceipt.external_result_url ? (
+            <div>
+              <dt>External URL</dt>
+              <dd>
+                <a
+                  href={displayedReceipt.external_result_url}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Open GitHub issue
+                </a>
+              </dd>
+            </div>
+          ) : null}
+          {displayedReceipt.error_message ? (
+            <div>
+              <dt>Error</dt>
+              <dd>{displayedReceipt.error_message}</dd>
+            </div>
+          ) : null}
         </dl>
       ) : null}
 
@@ -329,6 +386,9 @@ export function ActionExecutionControlsView({
             </div>
           ) : null}
         </dl>
+      ) : null}
+      {createdGitHubIssue ? (
+        <p className="success-text">GitHub issue created. Execution receipt recorded.</p>
       ) : null}
 
       {displayedAuditEvents.length > 0 ? (

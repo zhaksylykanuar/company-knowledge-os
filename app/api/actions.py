@@ -156,9 +156,27 @@ class ActionExecutionRead(BaseModel):
     finished_at: datetime | None = None
 
 
+class ActionExecutionReceiptRead(BaseModel):
+    provider: str | None = None
+    action: str | None = None
+    status: str | None = None
+    external_execution_enabled: bool = False
+    confirmation_received: bool = False
+    external_result_id: str | None = None
+    external_result_url: str | None = None
+    external_write_performed: bool = False
+    provider_result: str = "none"
+    error_code: str | None = None
+    error_message: str | None = None
+    idempotency_key: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class ActionExecutionResponse(BaseModel):
     proposal: ExecutedActionProposalRead
     execution: ActionExecutionRead
+    receipt: ActionExecutionReceiptRead
     is_live: bool
     external_write_performed: bool
     provider: str
@@ -213,17 +231,6 @@ class ActionExecutionPreviewResponse(BaseModel):
     preview: GitHubIssueExecutionPreviewRead | None = None
     audit: list[ActionExecutionAuditEventRead] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
-
-
-class ActionExecutionReceiptRead(BaseModel):
-    provider: str | None = None
-    action: str | None = None
-    external_execution_enabled: bool = False
-    confirmation_received: bool = False
-    external_result_id: str | None = None
-    external_result_url: str | None = None
-    external_write_performed: bool = False
-    provider_result: str = "none"
 
 
 class ActionExecutionAuditResponse(BaseModel):
@@ -547,7 +554,7 @@ async def execute_action_proposal_endpoint(
             )
             await session.commit()
         except GitHubIssueExecutionNotFoundError as exc:
-            await session.rollback()
+            await session.commit()
             status_code = (
                 status.HTTP_404_NOT_FOUND
                 if exc.detail == GITHUB_ISSUE_EXECUTION_CONNECTION_NOT_FOUND
@@ -555,7 +562,7 @@ async def execute_action_proposal_endpoint(
             )
             raise HTTPException(status_code=status_code, detail=exc.detail) from exc
         except GitHubIssueExecutionConflictError as exc:
-            await session.rollback()
+            await session.commit()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=exc.detail,
@@ -567,7 +574,7 @@ async def execute_action_proposal_endpoint(
                 detail=exc.detail,
             ) from exc
         except GitHubIssueExecutionError as exc:
-            await session.rollback()
+            await session.commit()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=exc.detail,
@@ -638,6 +645,7 @@ async def _record_execute_block_event(
             event_type=event_type,
             external_execution_enabled=external_execution_enabled,
             confirmation_received=confirmation_received,
+            reason=error_code,
         ),
         provider=proposal.target_provider,
         action=proposal.action_type,
@@ -754,16 +762,42 @@ def _receipt_from_events(events: list[Any]) -> ActionExecutionReceiptRead:
     if not events:
         return ActionExecutionReceiptRead()
     latest = events[-1]
-    has_external_result = bool(latest.external_result_id or latest.external_result_url)
+    receipt_event = next(
+        (
+            event
+            for event in reversed(events)
+            if event.external_result_id
+            or event.external_result_url
+            or event.error_code
+            or event.error_message
+        ),
+        latest,
+    )
+    has_external_result = bool(
+        receipt_event.external_result_id or receipt_event.external_result_url
+    )
+    provider_result = "none"
+    status_value: str | None = None
+    if has_external_result:
+        provider_result = "succeeded"
+        status_value = "succeeded"
+    elif receipt_event.error_code or receipt_event.error_message:
+        provider_result = "failed"
+        status_value = "failed"
     return ActionExecutionReceiptRead(
-        provider=latest.provider,
-        action=latest.action,
-        external_execution_enabled=latest.external_execution_enabled,
-        confirmation_received=latest.confirmation_received,
-        external_result_id=latest.external_result_id,
-        external_result_url=latest.external_result_url,
+        provider=receipt_event.provider,
+        action=receipt_event.action,
+        status=status_value,
+        external_execution_enabled=receipt_event.external_execution_enabled,
+        confirmation_received=receipt_event.confirmation_received,
+        external_result_id=receipt_event.external_result_id,
+        external_result_url=receipt_event.external_result_url,
         external_write_performed=has_external_result,
-        provider_result="available" if has_external_result else "none",
+        provider_result=provider_result,
+        error_code=receipt_event.error_code,
+        error_message=receipt_event.error_message,
+        created_at=receipt_event.created_at,
+        updated_at=receipt_event.created_at,
     )
 
 

@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added gated live GitHub issue execution behavior over the existing approved
+  `ActionProposal` executor: runtime write capability, explicit confirmation,
+  valid GitHub payload/connection, evidence refs, duplicate receipt return, and
+  mocked-provider tests.
+- Added durable execution attempt audit events for confirmation received,
+  execution start, success, failure, block, and duplicate receipt return.
+- Added frontend receipt rendering for successful external issue id/url and
+  explicit live-write confirmation copy in `ActionExecutionControls`.
 - Added proposal-scoped `action_execution_events` plus migration
   `a2b3c4d5e6f7` for durable, sanitized execution preview/blocked-attempt audit
   records.
@@ -37,6 +45,10 @@
 
 ### Changed
 
+- Live GitHub issue execution remains disabled by default and was not manually
+  smoke-tested; automated checks use mocked provider/client boundaries only.
+- Repeated execute on an already-succeeded proposal now returns the existing
+  receipt without calling the provider again.
 - Preview and blocked execute paths now record/reuse local audit events without
   calling GitHub or overloading `ActionExecution`, legacy `audit_logs`, or
   retained `source_events`.

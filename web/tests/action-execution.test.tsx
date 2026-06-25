@@ -97,12 +97,35 @@ function auditEvent(
 const emptyReceipt: ActionExecutionReceipt = {
   action: "create_github_issue",
   confirmation_received: false,
+  created_at: null,
+  error_code: null,
+  error_message: null,
   external_execution_enabled: false,
   external_result_id: null,
   external_result_url: null,
   external_write_performed: false,
+  idempotency_key: null,
   provider: "github",
-  provider_result: "none"
+  provider_result: "none",
+  status: null,
+  updated_at: null
+};
+
+const successfulReceipt: ActionExecutionReceipt = {
+  action: "create_github_issue",
+  confirmation_received: true,
+  created_at: "2026-06-25T01:06:00+06:00",
+  error_code: null,
+  error_message: null,
+  external_execution_enabled: true,
+  external_result_id: "42",
+  external_result_url: "https://github.com/qtwin-io/founderos-api/issues/42",
+  external_write_performed: true,
+  idempotency_key: "issue-action-test",
+  provider: "github",
+  provider_result: "succeeded",
+  status: "succeeded",
+  updated_at: "2026-06-25T01:06:00+06:00"
 };
 
 const disabledPreview: ActionExecutionPreviewResponse = {
@@ -263,6 +286,7 @@ test("posts execute request only through explicit execute client", async () => {
       status: "executed"
     },
     provider: "github",
+    receipt: successfulReceipt,
     warnings: []
   };
   const originalFetch = globalThis.fetch;
@@ -386,7 +410,8 @@ test("requires explicit confirmation before enabled live execution button", () =
     onExecute: () => undefined,
     preview: enabledPreview
   });
-  assert.match(disabledHtml, /Live GitHub write requires explicit confirmation/);
+  assert.match(disabledHtml, /This will create a real GitHub issue/);
+  assert.match(disabledHtml, /Requires explicit confirmation/);
   assert.match(disabledHtml, /I confirm this may write to GitHub/);
   assert.match(disabledHtml, /disabled=""/);
 
@@ -418,12 +443,46 @@ test("renders execute result without raw provider response dump", () => {
         status: "executed"
       },
       provider: "github",
+      receipt: successfulReceipt,
       warnings: []
     },
     preview: enabledPreview
   });
   assert.match(html, /Execution status/);
   assert.match(html, /External write performed/);
+  assert.match(html, /Execution receipt/);
+  assert.match(html, /GitHub issue created/);
+  assert.match(html, /Open GitHub issue/);
+  assert.match(html, /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/);
   assert.doesNotMatch(html, /raw body is not rendered/);
   assert.doesNotMatch(html, /provider_response/);
+});
+
+test("renders blocked execute audit without external-write claim", () => {
+  const html = renderControls({
+    auditEvents: [
+      auditEvent({
+        error_code: "evidence_refs_are_required_for_live_execution",
+        error_message: "evidence_refs are required for live execution",
+        event: "execution_blocked",
+        event_type: "execution_blocked",
+        message:
+          "Execution blocked: evidence_refs are required for live execution. No external write occurred.",
+        status: "blocked"
+      })
+    ],
+    error: "evidence_refs are required for live execution",
+    preview: enabledPreview,
+    receipt: {
+      ...emptyReceipt,
+      confirmation_received: true,
+      error_code: "evidence_refs_are_required_for_live_execution",
+      error_message: "evidence_refs are required for live execution",
+      status: "failed"
+    }
+  });
+  assert.match(html, /evidence_refs are required for live execution/);
+  assert.match(html, /No external write occurred/);
+  assert.match(html, /execution_blocked/);
+  assert.doesNotMatch(html, /GitHub issue created/);
 });

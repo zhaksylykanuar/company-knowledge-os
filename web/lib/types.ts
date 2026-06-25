@@ -263,12 +263,18 @@ export type ActionExecutionAuditEvent = {
 export type ActionExecutionReceipt = {
   provider: string | null;
   action: string | null;
+  status: string | null;
   external_execution_enabled: boolean;
   confirmation_received: boolean;
   external_result_id: string | null;
   external_result_url: string | null;
   external_write_performed: boolean;
   provider_result: string;
+  error_code: string | null;
+  error_message: string | null;
+  idempotency_key: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type ActionProposalAuditResponse = {
@@ -310,6 +316,7 @@ export type ActionExecutionResponse = {
     started_at: string;
     finished_at: string | null;
   };
+  receipt: ActionExecutionReceipt;
   is_live: boolean;
   external_write_performed: boolean;
   provider: string;
