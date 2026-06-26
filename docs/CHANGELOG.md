@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added FOS-025C frontend/full-stack deploy-readiness CI gates. The CI workflow
+  now has separate backend and frontend jobs: backend keeps the existing secret
+  scan, dependency sync, ruff, Alembic upgrade, and full pytest gates while
+  explicitly running docs/smoke/CORS/CI contract tests; frontend runs `npm ci`,
+  `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint` from
+  `web/`.
+- Added CI deploy-readiness contract tests that assert frontend gates exist and
+  the workflow does not include live smoke, selected repository sync,
+  ActionProposal execute, provider-token setup, or provider secret usage.
+
 - Added the FOS-025B private-beta deploy/smoke foundation: explicit backend
   CORS settings, placeholder-only env template, read-only private-beta smoke
   script, `make smoke`, and local/private-beta run documentation.

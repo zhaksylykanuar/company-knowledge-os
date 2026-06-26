@@ -56,7 +56,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
 - FOS-025B: done - first private-beta deploy/smoke foundation added: explicit backend CORS config, placeholder-only env contract, read-only smoke script, `make smoke`, and local/private-beta docs; no deploy and no external writes.
-- Next task: FOS-025C frontend/full-stack deploy-readiness gates in CI, then a real private-beta deploy runbook.
+- FOS-025C: done - CI now enforces backend docs/smoke/CORS/CI contract tests and frontend `npm test`, build, typecheck, and lint gates without provider calls or external writes.
+- Next task: concrete private-beta deploy runbook/config path, then human-approved deployed smoke when ready.
 
 
 ## FOS-025B - Private-beta deploy/smoke foundation
@@ -99,22 +100,54 @@ Checks to run:
 
 ## FOS-025C - Frontend/full-stack deploy-readiness gates
 
-Status: todo.
+Status: done.
 
 Goal: make deploy-readiness checks enforceable in CI before private-beta deploy.
 
-Likely files:
+Implemented:
 
-- `.github/workflows/ci.yml`
-- frontend package/install cache config
-- smoke/docs contract tests as needed
+- Split `.github/workflows/ci.yml` into clear backend and frontend jobs.
+- Backend CI preserves tracked-secret scan, `uv sync --frozen`, ruff, Alembic
+  upgrade, and full pytest.
+- Backend CI now explicitly runs docs navigation plus private-beta smoke, CORS,
+  and CI deploy-readiness contract tests before the full suite.
+- Frontend CI runs `npm ci`, `npm test`, `npm run build`,
+  `npm run typecheck`, and `npm run lint` from `web/`.
+- Added `tests/test_ci_deploy_readiness.py` to assert frontend gates exist and
+  CI does not contain forbidden live smoke, selected sync, execute, or provider
+  secret usage.
+
+Safety contract:
+
+- CI does not call `make smoke` or a live backend.
+- CI does not require provider tokens or GitHub provider secrets.
+- CI does not call ActionProposal execute, selected repository sync,
+  provider-token setup, local-sync, normalize-local, post-execution-result sync,
+  or provider write endpoints.
+
+Checks to run:
+
+- `git diff --check`
+- `bash scripts/check_no_secrets.sh --tracked`
+- `UV_NO_SYNC=1 uv run ruff check . --no-cache`
+- `UV_NO_SYNC=1 uv run pytest -q tests/test_ci_deploy_readiness.py -p no:cacheprovider`
+- `UV_NO_SYNC=1 uv run pytest -q -p no:cacheprovider`
+- `cd web && npm test && npm run build && npm run typecheck && npm run lint`
+
+## FOS-025D - Private-beta deploy runbook/config path
+
+Status: todo.
+
+Goal: define the concrete no-surprises private-beta deploy path before any
+deployment is attempted.
 
 Acceptance criteria:
 
-- CI runs frontend typecheck/build/lint/test or an explicitly scoped equivalent.
-- Backend CI still runs migrations, ruff, pytest, and tracked-secret scan.
-- No provider calls or external writes occur in CI.
-- Docs describe CI parity accurately.
+- Hosting target/process model is explicit for backend, frontend, Postgres, and
+  Redis.
+- Migration, backup, rollback, env-name setup, domain, CORS, and smoke steps are
+  documented.
+- No deploy is performed until a human explicitly approves.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

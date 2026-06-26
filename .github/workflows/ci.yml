@@ -13,7 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  checks:
+  backend:
+    name: Backend checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -63,9 +64,54 @@ jobs:
       - name: Apply migrations
         run: uv run alembic upgrade head
 
+      - name: Docs and smoke contract tests
+        run: >-
+          uv run pytest -q
+          tests/test_docs_navigation_integrity.py
+          tests/test_private_beta_smoke.py
+          tests/test_cors_config.py
+          tests/test_ci_deploy_readiness.py
+
       - name: Tests
         run: uv run pytest -q
 
       - name: Prune uv cache
         if: always()
         run: uv cache prune --ci
+
+  frontend:
+    name: Frontend deploy-readiness checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Frontend tests
+        working-directory: web
+        run: npm test
+
+      - name: Frontend build
+        working-directory: web
+        run: npm run build
+
+      - name: Frontend typecheck
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Frontend lint
+        working-directory: web
+        run: npm run lint

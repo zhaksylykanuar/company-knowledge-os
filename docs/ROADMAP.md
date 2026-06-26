@@ -4,9 +4,9 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 8 / FOS-025C after
-FOS-025B deploy/smoke foundation. Docs consolidation is complete; this roadmap
-is planning context, not the live task source.
+The current execution pointer is `../PROGRESS.md`: CHUNK 8 / FOS-025D after
+FOS-025C frontend/full-stack deploy-readiness CI gates. Docs consolidation is
+complete; this roadmap is planning context, not the live task source.
 
 ## Phase 0 - Project Setup
 
@@ -24,7 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for FOS-025C frontend/full-stack deploy-readiness gates.
+Next step: follow `../PROGRESS.md` for the concrete private-beta deploy runbook/config path.
 
 Definition of Done:
 
@@ -280,11 +280,12 @@ Done:
   external provider execution.
 - FOS-025B added a read-only private-beta smoke script plus `make smoke` for
   health/auth/workspace/read-model checks without provider writes.
+- FOS-025C added frontend deploy-readiness gates to CI: `npm test`, build,
+  typecheck, and lint, plus backend docs/smoke/CORS/CI contract tests.
 
 Missing:
 
 - Browser/product GitHub-first E2E tests.
-- Frontend checks in CI.
 - Deployed/full-stack smoke run.
 - Manual QA checklist for MVP.
 
@@ -310,6 +311,8 @@ Done:
 - Backend CI shape exists.
 - FOS-025B added an explicit private-beta env-name contract, backend CORS
   config, placeholder-only `.env.example`, and read-only `make smoke`.
+- FOS-025C added a CI frontend deploy-readiness job and explicit offline
+  docs/smoke/CORS/CI contract checks.
 
 Missing:
 
@@ -318,13 +321,14 @@ Missing:
 - Backend service.
 - Worker service.
 - Frontend service.
+- Concrete private-beta deploy runbook/config path.
 - Production auth/session decision.
 - GitHub OAuth/onboarding path.
 - Deployed smoke run.
 - Domain/health checks.
 
-Next step: add frontend/full-stack deploy-readiness gates to CI, then write the
-real private-beta deploy runbook before deploying.
+Next step: write the real private-beta deploy runbook/config path before
+deploying.
 
 Definition of Done:
 

@@ -20,13 +20,17 @@ The app starts on the Next.js default port unless you pass a port to `next dev`.
 The backend must allow the frontend origin through `FOUNDEROS_CORS_ALLOWED_ORIGINS`
 when the browser calls a separately hosted API.
 
-## Build
+## Build and deploy-readiness checks
 
 ```bash
-npm run typecheck
+npm test
 npm run build
+npm run typecheck
 npm run lint
 ```
+
+These commands are enforced by the repository CI deploy-readiness workflow. They
+do not require provider credentials or live backend/provider calls.
 
 ## Environment
 

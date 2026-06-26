@@ -164,13 +164,14 @@ npm run lint
 
 ### CI parity before opening a PR
 
-`.github/workflows/ci.yml` runs `uv sync --frozen`, `uv run alembic upgrade head`,
-ruff, pytest, and the tracked-secret scan against a pinned Postgres image. All
-actions are pinned by full commit SHA. Running the backend commands above
-reproduces CI locally.
-
-Frontend checks are currently run manually; adding them to CI remains a follow-up
-deploy-readiness chunk.
+`.github/workflows/ci.yml` runs backend gates (`uv sync --frozen`,
+`uv run alembic upgrade head`, ruff, pytest, docs/smoke contract tests, and the
+tracked-secret scan) against a pinned Postgres image. It also runs frontend
+deploy-readiness gates from `web/`: `npm test`, `npm run build`,
+`npm run typecheck`, and `npm run lint`. All GitHub Actions are pinned by full
+commit SHA. Running the backend and frontend commands above reproduces CI
+locally. CI smoke/deploy checks are offline/read-only and do not call providers,
+selected repository sync, or external-write endpoints.
 
 ### Dependency automation
 

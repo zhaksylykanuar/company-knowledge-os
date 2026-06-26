@@ -11,27 +11,26 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 8 — Testing Gate + Deploy`.
-- **Task:** FOS-025B — private-beta deploy/smoke foundation.
-- **State:** ✅ First deploy foundation exists without deploying: explicit backend
-  CORS config, placeholder-only env contract, read-only private-beta smoke
-  script, `make smoke`, local full-stack docs, and smoke/config/docs tests. The
-  smoke path checks health/auth/workspace/read models and deterministic briefing
-  only; it must not call ActionProposal execute, selected repository sync,
-  provider-token setup, local-sync, normalize-local, post-execution-result sync,
-  or provider write endpoints.
-- **Next action:** FOS-025C — add frontend/full-stack deploy-readiness gates to
-  CI and continue toward a real private-beta deploy runbook.
+- **Task:** FOS-025C — frontend/full-stack deploy-readiness CI gates.
+- **State:** ✅ CI now enforces deploy-readiness gates for both backend and
+  frontend. Backend CI still runs the tracked-secret scan, Python setup,
+  `uv sync --frozen`, ruff, Alembic upgrade, docs/smoke/CORS/CI contract tests,
+  and full pytest against pinned Postgres. A separate frontend job runs `npm ci`,
+  `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint` from
+  `web/` with pinned GitHub Actions and no provider secrets.
+- **Next action:** write the concrete private-beta deploy runbook/config path,
+  then perform a human-approved deployed smoke only when ready.
 
 ---
 
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks: 18 / 25   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱   71%   (строго DONE)
+Tasks: 19 / 26   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱   71%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 18** · **PARTIAL = 6** · **MISSING = 1**.
+Разбивка: **DONE = 19** · **PARTIAL = 6** · **MISSING = 1**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
 Для сравнения: `docs/TODO.md` помечает «done» ~22 задачи **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook/main-path схемы строго готово 14.
@@ -50,7 +49,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | backend tests (`pytest`) | ✅ pass | 2026-06-26 | FOS-023 on `main`: **287 passed / 0 failed / 1 warning** |
 | `ruff` | ✅ pass | 2026-06-26 | FOS-023 on `main`: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-26 | FOS-024 on `main`: `npm test` 79 passed; `next build`, `typecheck`/`lint` ok (7 routes) |
+| frontend build | ✅ pass | 2026-06-26 | FOS-025C on `main`: local `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint` passed; CI frontend job added |
 | docs navigation | ✅ pass | 2026-06-26 | FOS-023 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-25 | FOS-018: drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про execution gate |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
@@ -119,8 +118,9 @@ DONE строго = есть код + проходящий тест/рабочи
 ### CHUNK 8 — Testing Gate + Deploy
 *Gate: launch gate зелёный; production URL работает; первый E2E в проде.*
 - [x] FOS-025B — Deploy/smoke foundation — explicit backend CORS config, placeholder-only env contract, read-only private-beta smoke script, `make smoke`, local full-stack/private-beta smoke docs, and focused smoke/config/docs tests. No deploy and no external writes.
+- [x] FOS-025C — Frontend/full-stack deploy-readiness CI gates — `.github/workflows/ci.yml` now has separate backend and frontend jobs; backend gates are preserved and add explicit docs/smoke/CORS/CI contract tests; frontend gates run `npm ci`, `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`; CI contains no provider secrets, live smoke command, selected sync, or execute calls.
 - [~] FOS-SMOKE-01 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; FOS-025B added `make smoke` + read-only private-beta smoke script; deployed/full-stack smoke is still not run
-- [~] FOS-T — Full tests + frontend build — pytest 259/0 (чекап 2026-06-24); web build ✅
+- [x] FOS-T — Full tests + frontend build — FOS-025C local gate: backend full pytest 297 passed / 1 warning; frontend `npm test`, build, typecheck, and lint passed; CI now enforces both backend and frontend gates
 - [ ] FOS-D — Deploy (Railway) — не выполнялся
 
 ---
@@ -140,6 +140,16 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-26` — **FOS-025C frontend/full-stack deploy-readiness CI gates.**
+  Extended `.github/workflows/ci.yml` into separate backend and frontend jobs.
+  Backend CI keeps the secret scan, `uv sync --frozen`, ruff, Alembic upgrade,
+  and full pytest, plus explicit docs/smoke/CORS/CI contract tests. Frontend CI
+  runs `npm ci`, `npm test`, `npm run build`, `npm run typecheck`, and
+  `npm run lint` from `web/` using pinned actions and no provider secrets. Added
+  CI deploy-readiness contract tests proving frontend gates exist and forbidden
+  execute/selected-sync/live-smoke/provider-secret strings are absent. No deploy,
+  external writes, GitHub issue/PR changes, or push were performed.
 
 - `2026-06-26` — **FOS-025B private-beta deploy/smoke foundation.** Added
   explicit backend CORS settings with local-safe defaults, a read-only

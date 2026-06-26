@@ -729,6 +729,32 @@ Consequences:
 - This does not deploy FounderOS and does not replace the future production auth,
   GitHub OAuth/onboarding, backup, deploy, and post-deploy runbook work.
 
+
+## DEC-037 - CI Deploy-Readiness Gates Are Offline And Provider-Free
+
+Decision (2026-06-26): CI deploy-readiness gates include both backend and
+frontend checks, but they remain offline/provider-free. Backend CI may run local
+Postgres migrations, lint, docs/smoke/CORS/CI contract tests, and full pytest.
+Frontend CI may run package install, tests, build, typecheck, and lint. CI must
+not call live smoke, provider APIs, selected repository sync, ActionProposal
+execute, provider-token setup, or external-write endpoints.
+
+Rationale: FOS-025B created the local private-beta smoke foundation; FOS-025C
+turns frontend/full-stack readiness into an enforced gate without depending on
+live credentials or causing side effects. Live provider smoke remains a separate
+human-approved operation after deployment.
+
+Consequences:
+
+- `.github/workflows/ci.yml` has separate backend and frontend jobs.
+- Frontend `npm test`, build, typecheck, and lint are required deploy-readiness
+  gates.
+- CI contract tests must fail if forbidden live/write/sync commands are added to
+  CI.
+- No real provider token, API key, encrypted secret, or credential value belongs
+  in workflow files.
+- Passing CI does not mean the app has been deployed or live-provider-smoked.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
