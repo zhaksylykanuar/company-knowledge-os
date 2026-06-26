@@ -4,6 +4,27 @@
 
 ### Changed
 
+- Added read-only selected repository sync controls to the product dashboard
+  (`SelectedRepositorySyncControls`) near the existing GitHub sync, Company
+  Brain, and operational work panels.
+- The controls discover the GitHub connection id from the existing
+  connection-status endpoint instead of hardcoding it, validate an explicit
+  `owner/repo` repository name client-side (non-empty, single slash, no
+  spaces), and call the existing selected issue and PR sync endpoints
+  read-only, one explicit allowlisted repository at a time.
+- Added typed frontend API helpers `syncSelectedRepositoryIssues`,
+  `syncSelectedRepositoryPullRequests`, and a combined
+  `syncSelectedRepositoryGitHubWork`, plus request/response types for selected
+  issue and PR sync.
+- The controls render missing-settings, missing-connection, invalid-input,
+  per-action loading, success summaries (repositories synced; issues
+  synced/open/closed; PRs synced/open/closed/merged; skipped PR-shaped issue
+  records), backend allowlist/permission/generic errors, and empty/no-records
+  states; they show explicit read-only / no-external-write copy and avoid raw
+  JSON and private identifiers.
+- A successful selected sync refreshes the Company Brain and GitHub operational
+  work panels through the existing dashboard refresh signal; no backend
+  contract change was required and no GitHub write is performed.
 - Added read-only selected repository pull request sync under the GitHub
   workspace namespace:
   `/api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync`.

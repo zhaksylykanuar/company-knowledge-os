@@ -204,6 +204,11 @@ textarea {
   gap: 16px;
 }
 
+.selected-repository-sync {
+  display: grid;
+  gap: 16px;
+}
+
 .work-columns {
   display: grid;
   gap: 16px;
@@ -429,6 +434,12 @@ textarea {
 .success-text {
   color: var(--accent-text);
   font-weight: 700;
+  margin: 0;
+}
+
+.error-text {
+  color: var(--danger);
+  font-weight: 650;
   margin: 0;
 }
 

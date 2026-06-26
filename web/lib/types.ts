@@ -411,3 +411,107 @@ export type GitHubOperationalWorkResponse = {
   is_live: boolean;
   warnings: string[];
 };
+
+export type GitHubSelectedIssueSyncState = "open" | "closed" | "all";
+
+export type GitHubSelectedPullRequestSyncState =
+  | "open"
+  | "closed"
+  | "merged"
+  | "all";
+
+export type GitHubSelectedIssueSyncRequest = {
+  connection_id: string;
+  repositories: string[];
+  states?: GitHubSelectedIssueSyncState[];
+};
+
+export type GitHubSelectedPullRequestSyncRequest = {
+  connection_id: string;
+  repositories: string[];
+  states?: GitHubSelectedPullRequestSyncState[];
+};
+
+export type GitHubSelectedSyncCapabilities = {
+  read_only_sync: boolean;
+  external_writes: boolean;
+};
+
+export type GitHubSelectedSyncJob = {
+  id: string;
+  status: string;
+  records_seen: number;
+  records_created: number;
+  records_updated: number;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type GitHubSelectedSyncCounts = {
+  repositories: number;
+  issues: number;
+  pull_requests: number;
+};
+
+export type GitHubSelectedIssueSyncRepositorySummary = {
+  full_name: string;
+  synced_issues: number;
+  open_issues: number;
+  closed_issues: number;
+  skipped_pull_requests: number;
+};
+
+export type GitHubSelectedIssueSyncTotals = {
+  repositories: number;
+  issues: number;
+  open_issues: number;
+  closed_issues: number;
+  skipped_pull_requests: number;
+};
+
+export type GitHubSelectedIssueSyncResponse = {
+  workspace_id: string;
+  repositories: GitHubSelectedIssueSyncRepositorySummary[];
+  totals: GitHubSelectedIssueSyncTotals;
+  sync_job: GitHubSelectedSyncJob;
+  counts: GitHubSelectedSyncCounts;
+  capabilities: GitHubSelectedSyncCapabilities;
+  is_live: boolean;
+  provider_sync_started: boolean;
+  external_write_performed: boolean;
+  warnings: string[];
+};
+
+export type GitHubSelectedPullRequestSyncRepositorySummary = {
+  full_name: string;
+  synced_pull_requests: number;
+  open_pull_requests: number;
+  closed_pull_requests: number;
+  merged_pull_requests: number;
+};
+
+export type GitHubSelectedPullRequestSyncTotals = {
+  repositories: number;
+  pull_requests: number;
+  open_pull_requests: number;
+  closed_pull_requests: number;
+  merged_pull_requests: number;
+};
+
+export type GitHubSelectedPullRequestSyncResponse = {
+  workspace_id: string;
+  repositories: GitHubSelectedPullRequestSyncRepositorySummary[];
+  totals: GitHubSelectedPullRequestSyncTotals;
+  sync_job: GitHubSelectedSyncJob;
+  counts: GitHubSelectedSyncCounts;
+  capabilities: GitHubSelectedSyncCapabilities;
+  is_live: boolean;
+  provider_sync_started: boolean;
+  external_write_performed: boolean;
+  warnings: string[];
+};
+
+export type GitHubSelectedRepositorySyncResult = {
+  issues: GitHubSelectedIssueSyncResponse | null;
+  pull_requests: GitHubSelectedPullRequestSyncResponse | null;
+};

@@ -8,6 +8,7 @@ import { CompanyBrainPanel } from "../../components/CompanyBrainPanel";
 import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWorkPanel";
 import { GitHubSyncControls } from "../../components/GitHubSyncControls";
 import { PageHeader } from "../../components/PageHeader";
+import { SelectedRepositorySyncControls } from "../../components/SelectedRepositorySyncControls";
 import { StatusCard } from "../../components/StatusCard";
 import { readOperatorConfig, resolveApiBaseUrl } from "../../lib/config";
 import type { OperatorConfig } from "../../lib/types";
@@ -64,6 +65,9 @@ export default function DashboardPage() {
         />
       </section>
       <GitHubSyncControls
+        onSyncComplete={() => setOperationalWorkRefresh((current) => current + 1)}
+      />
+      <SelectedRepositorySyncControls
         onSyncComplete={() => setOperationalWorkRefresh((current) => current + 1)}
       />
       <CompanyBrainPanel refreshSignal={operationalWorkRefresh} />

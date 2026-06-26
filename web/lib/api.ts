@@ -22,7 +22,12 @@ import type {
   GitHubLocalSyncRequest,
   GitHubLocalSyncResponse,
   GitHubOperationalWorkResponse,
-  GitHubOperationalWorkState
+  GitHubOperationalWorkState,
+  GitHubSelectedIssueSyncRequest,
+  GitHubSelectedIssueSyncResponse,
+  GitHubSelectedPullRequestSyncRequest,
+  GitHubSelectedPullRequestSyncResponse,
+  GitHubSelectedRepositorySyncResult
 } from "./types";
 
 const API_KEY_HEADER = "X-FounderOS-API-Key";
@@ -374,6 +379,97 @@ export async function runGitHubLocalSync(
       method: "POST"
     }
   );
+}
+
+export function buildWorkspaceGitHubSelectedIssueSyncPath(
+  workspaceId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/repositories/issues/sync`;
+}
+
+export function buildWorkspaceGitHubSelectedPullRequestSyncPath(
+  workspaceId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/repositories/pull-requests/sync`;
+}
+
+export async function syncSelectedRepositoryIssues(
+  workspaceId: string,
+  request: GitHubSelectedIssueSyncRequest,
+  options: ApiFetchOptions = {}
+): Promise<GitHubSelectedIssueSyncResponse> {
+  const body: Record<string, unknown> = {
+    connection_id: request.connection_id,
+    repositories: request.repositories
+  };
+  if (request.states && request.states.length > 0) {
+    body.states = request.states;
+  }
+  return apiFetch<GitHubSelectedIssueSyncResponse>(
+    buildWorkspaceGitHubSelectedIssueSyncPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(body),
+      method: "POST"
+    }
+  );
+}
+
+export async function syncSelectedRepositoryPullRequests(
+  workspaceId: string,
+  request: GitHubSelectedPullRequestSyncRequest,
+  options: ApiFetchOptions = {}
+): Promise<GitHubSelectedPullRequestSyncResponse> {
+  const body: Record<string, unknown> = {
+    connection_id: request.connection_id,
+    repositories: request.repositories
+  };
+  if (request.states && request.states.length > 0) {
+    body.states = request.states;
+  }
+  return apiFetch<GitHubSelectedPullRequestSyncResponse>(
+    buildWorkspaceGitHubSelectedPullRequestSyncPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(body),
+      method: "POST"
+    }
+  );
+}
+
+export async function syncSelectedRepositoryGitHubWork(
+  workspaceId: string,
+  request: {
+    connection_id: string;
+    repositories: string[];
+    issueStates?: GitHubSelectedIssueSyncRequest["states"];
+    pullRequestStates?: GitHubSelectedPullRequestSyncRequest["states"];
+  },
+  options: ApiFetchOptions = {}
+): Promise<GitHubSelectedRepositorySyncResult> {
+  const issues = await syncSelectedRepositoryIssues(
+    workspaceId,
+    {
+      connection_id: request.connection_id,
+      repositories: request.repositories,
+      states: request.issueStates
+    },
+    options
+  );
+  const pullRequests = await syncSelectedRepositoryPullRequests(
+    workspaceId,
+    {
+      connection_id: request.connection_id,
+      repositories: request.repositories,
+      states: request.pullRequestStates
+    },
+    options
+  );
+  return { issues, pull_requests: pullRequests };
 }
 
 export { API_KEY_HEADER };

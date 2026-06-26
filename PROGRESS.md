@@ -11,27 +11,31 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 5 — Action Approval`.
-- **Task:** CHUNK 5 / FOS-023 — selected repository pull request sync.
-- **State:** ✅ Selected repository PR sync is implemented and verified with
-  mocked read-only provider calls for the approved repository scope. The new
-  endpoint fetches PRs only for explicitly allowlisted repositories, normalizes
-  selected PRs through canonical `SourceRecord`/`PullRequest` plus repository
-  records, preserves open/closed/merged state, avoids duplicate repository rows
-  after selected issue sync, de-dupes PR read models by repository+number, and
-  keeps external writes out of the path.
-- **Next action:** FOS-024 selected repository sync UI controls, or broaden
-  selected issue+PR sync only after the human approves additional repositories.
+- **Task:** CHUNK 5 / FOS-024 — selected repository sync UI controls.
+- **State:** ✅ Selected repository read-only sync controls are exposed in the
+  product frontend. The new `SelectedRepositorySyncControls` dashboard panel
+  discovers the GitHub connection id from the existing connection-status
+  endpoint (never hardcoded), validates explicit `owner/repo` input, and calls
+  the existing selected issue and PR sync endpoints read-only. It renders
+  missing-settings, missing-connection, invalid-input, per-action loading,
+  success summaries (repositories/issues/PRs incl. skipped PR-shaped issue
+  records), allowlist/permission/generic backend errors, and empty/no-records
+  states without raw JSON or private IDs, and refreshes Company Brain plus
+  operational work after a successful sync.
+- **Next action:** Either broaden selected issue+PR sync to multiple
+  allowlisted repositories from the UI (after the human approves additional
+  repositories) or move to production/deploy readiness.
 
 ---
 
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks: 16 / 24   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱   67%   (строго DONE)
+Tasks: 17 / 24   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱   71%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 16** · **PARTIAL = 7** · **MISSING = 1**.
+Разбивка: **DONE = 17** · **PARTIAL = 6** · **MISSING = 1**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
 Для сравнения: `docs/TODO.md` помечает «done» ~22 задачи **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook/main-path схемы строго готово 14.
@@ -50,7 +54,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | backend tests (`pytest`) | ✅ pass | 2026-06-26 | FOS-023 on `main`: **287 passed / 0 failed / 1 warning** |
 | `ruff` | ✅ pass | 2026-06-26 | FOS-023 on `main`: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-25 | FOS-018 on `main`: `npm test` 60 passed; `next build`, then `typecheck`/`lint` ok (7 routes) |
+| frontend build | ✅ pass | 2026-06-26 | FOS-024 on `main`: `npm test` 79 passed; `next build`, `typecheck`/`lint` ok (7 routes) |
 | docs navigation | ✅ pass | 2026-06-26 | FOS-023 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-25 | FOS-018: drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про execution gate |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
@@ -139,6 +143,34 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-26` — **FOS-024 selected repository sync UI controls.** Exposed the
+  existing read-only selected repository issue and PR sync backends in the
+  product frontend. Added typed API helpers (`syncSelectedRepositoryIssues`,
+  `syncSelectedRepositoryPullRequests`, optional combined
+  `syncSelectedRepositoryGitHubWork`) plus request/response types, and a new
+  `SelectedRepositorySyncControls` dashboard panel near the existing GitHub
+  sync/Company Brain/operational-work panels. The panel discovers the GitHub
+  `connection_id` from the existing connection-status endpoint (never
+  hardcoded), validates explicit `owner/repo` input client-side (non-empty, one
+  slash, no spaces), syncs one explicit allowlisted repository at a time, and
+  never offers "sync all org repos". It covers missing-settings,
+  missing-connection, invalid-input, per-action loading (issues / PRs / both),
+  success summaries (repositories synced; issues synced/open/closed; PRs
+  synced/open/closed/merged; skipped PR-shaped issue records), allowlist
+  (`Repository is not allowlisted for selected sync.`), permission, generic
+  error, and empty/no-records states. The UI states read-only / no external
+  writes, renders no raw JSON or private IDs/secrets, and refreshes Company
+  Brain plus operational work after a successful sync via the existing dashboard
+  refresh counter. No backend contract change was needed. No external GitHub
+  write was performed. Checks: `git diff --check` passed, selected-sync tests
+  **6 passed**, GitHub normalization/inventory **23 passed**, action/execution
+  regression **60 passed**, Company Brain + briefing + backend E2E **15
+  passed**, docs navigation **2 passed**, full pytest **287 passed / 1
+  warning**, `ruff` clean, tracked secret scan clean; frontend `npm test` **79
+  passed**, `npm run build` passed, `npm run typecheck` passed, `npm run lint`
+  passed. Next: multi-repo selected sync from the UI (after the human approves
+  additional repositories) or production/deploy readiness.
 
 - `2026-06-26` — **FOS-023 selected repository PR sync.** Added a
   read-only selected repository PR sync endpoint:

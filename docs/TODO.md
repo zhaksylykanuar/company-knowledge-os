@@ -46,10 +46,18 @@ files, no unrelated edits, and focused checks first.
   repositories, normalizes open/closed/merged PRs into canonical records,
   avoids duplicate repository rows after selected issue sync, de-dupes PR read
   models by repository+number, and performs no external writes.
+- FOS-024: done - product dashboard exposes read-only selected repository
+  issue and PR sync controls that discover the GitHub connection id from the
+  existing connection-status endpoint, validate explicit `owner/repo` input,
+  call the existing selected sync endpoints, render loading/success/allowlist/
+  permission/error/empty states without raw JSON or private IDs, and refresh
+  Company Brain plus operational work after a successful sync; no backend
+  contract change and no external writes.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-024 selected repository sync UI controls, or broaden selected
-  issue+PR sync only after the human approves additional repositories.
+- Next task: FOS-025 multi-repo selected sync from the UI (only after the human
+  approves additional allowlisted repositories), or move to production/deploy
+  readiness.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

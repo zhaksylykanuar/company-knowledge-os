@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-024. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-025. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,9 +24,9 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for FOS-024 selected repository sync UI
-controls, or broaden selected issue+PR sync only after the human approves
-additional repositories.
+Next step: follow `../PROGRESS.md` for FOS-025 multi-repo selected sync from the
+UI (after the human approves additional repositories) or production/deploy
+readiness.
 
 Definition of Done:
 
@@ -101,9 +101,9 @@ Missing:
 - Persistent briefing models.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
-- UI controls for selected repository issue+PR sync.
 
-Next step: follow `../PROGRESS.md` for selected repository sync UI controls.
+Next step: follow `../PROGRESS.md`; selected repository sync UI controls are now
+exposed in the product dashboard (FOS-024).
 
 Definition of Done:
 
@@ -152,11 +152,12 @@ Missing:
 - Browser/product E2E coverage.
 - The first human-gated live external write proof has been read back into
   canonical product state and closed after explicit human approval.
-- Selected repository issue and PR sync are backend-only and still need product
-  UI controls.
+- Selected repository issue and PR sync now have read-only product UI controls
+  in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
+  allowlisted repository at a time without external writes.
 
-Next step: build selected repository sync UI controls without adding external
-writes.
+Next step: extend selected sync UI to multiple allowlisted repositories without
+adding external writes (after explicit human approval of additional repos).
 
 Definition of Done:
 
@@ -225,11 +226,12 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Product UI controls for selected repository issue+PR sync. External issue/PR
-  URLs and local workspace/proposal/connection/evidence identifiers are
-  intentionally omitted from public docs.
+- Multi-repository selected sync from the product UI beyond one explicit
+  repository at a time. External issue/PR URLs and local workspace/proposal/
+  connection/evidence identifiers are intentionally omitted from public docs.
 
-Next step: build FOS-024 selected repository sync UI controls.
+Next step: read-only product UI controls for selected repository issue+PR sync
+shipped in FOS-024; extend to multi-repository selected sync next.
 
 Definition of Done:
 
