@@ -48,6 +48,14 @@ from app.services.github_selected_issue_sync_service import (
     GitHubSelectedIssueSyncProviderReadError,
     sync_selected_repository_issues,
 )
+from app.services.github_selected_pr_sync_service import (
+    GitHubSelectedPRSyncConflictError,
+    GitHubSelectedPRSyncError,
+    GitHubSelectedPRSyncInput,
+    GitHubSelectedPRSyncNotFoundError,
+    GitHubSelectedPRSyncProviderReadError,
+    sync_selected_repository_pull_requests,
+)
 from app.services.github_sync_job_service import (
     GITHUB_SYNC_JOB_CONNECTION_NOT_CONNECTED,
     GITHUB_SYNC_JOB_CONNECTION_NOT_FOUND,
@@ -351,6 +359,51 @@ class GitHubSelectedIssueSyncResponse(BaseModel):
     sync_job: GitHubNormalizationSyncJobRead
     counts: GitHubNormalizationCountsRead
     capabilities: GitHubSelectedIssueSyncCapabilitiesRead
+    is_live: bool
+    provider_sync_started: bool
+    external_write_performed: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubSelectedPullRequestSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    connection_id: UUID
+    repositories: list[str] = Field(min_length=1, max_length=20)
+    states: list[str] = Field(
+        default_factory=lambda: ["open", "closed", "merged"],
+        max_length=4,
+    )
+
+
+class GitHubSelectedPullRequestSyncRepositoryRead(BaseModel):
+    full_name: str
+    synced_pull_requests: int
+    open_pull_requests: int
+    closed_pull_requests: int
+    merged_pull_requests: int
+
+
+class GitHubSelectedPullRequestSyncTotalsRead(BaseModel):
+    repositories: int
+    pull_requests: int
+    open_pull_requests: int
+    closed_pull_requests: int
+    merged_pull_requests: int
+
+
+class GitHubSelectedPullRequestSyncCapabilitiesRead(BaseModel):
+    read_only_sync: bool
+    external_writes: bool
+
+
+class GitHubSelectedPullRequestSyncResponse(BaseModel):
+    workspace_id: UUID
+    repositories: list[GitHubSelectedPullRequestSyncRepositoryRead]
+    totals: GitHubSelectedPullRequestSyncTotalsRead
+    sync_job: GitHubNormalizationSyncJobRead
+    counts: GitHubNormalizationCountsRead
+    capabilities: GitHubSelectedPullRequestSyncCapabilitiesRead
     is_live: bool
     provider_sync_started: bool
     external_write_performed: bool
@@ -732,6 +785,55 @@ async def run_selected_repository_issue_sync(
                 detail=exc.detail,
             ) from exc
     return GitHubSelectedIssueSyncResponse.model_validate(result)
+
+
+@router.post(
+    "/repositories/pull-requests/sync",
+    response_model=GitHubSelectedPullRequestSyncResponse,
+)
+async def run_selected_repository_pull_request_sync(
+    workspace_id: UUID,
+    payload: GitHubSelectedPullRequestSyncRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubSelectedPullRequestSyncResponse:
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await sync_selected_repository_pull_requests(
+                session,
+                workspace_id=workspace_id,
+                input_payload=GitHubSelectedPRSyncInput(
+                    connection_id=payload.connection_id,
+                    repositories=payload.repositories,
+                    states=payload.states,
+                ),
+                requested_by=access.actor.auth_mode,
+            )
+            await session.commit()
+        except GitHubSelectedPRSyncNotFoundError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.detail,
+            ) from exc
+        except GitHubSelectedPRSyncConflictError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except GitHubSelectedPRSyncProviderReadError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=exc.detail,
+            ) from exc
+        except GitHubSelectedPRSyncError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubSelectedPullRequestSyncResponse.model_validate(result)
 
 
 @router.post(

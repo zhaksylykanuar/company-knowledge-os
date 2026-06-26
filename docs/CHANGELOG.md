@@ -4,6 +4,20 @@
 
 ### Changed
 
+- Added read-only selected repository pull request sync under the GitHub
+  workspace namespace:
+  `/api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync`.
+- Selected PR sync requires the explicit read-sync repository allowlist before
+  token decrypt/provider reads, fetches only selected repositories with a
+  read-only GitHub pulls client, and normalizes open/closed/merged PRs into
+  canonical `SourceRecord` + `PullRequest` records through the existing GitHub
+  normalization path.
+- Selected PR sync keeps repository identity stable after selected issue sync,
+  so the same `owner/repo` repository row is reused instead of creating a
+  duplicate; PR read models also de-dupe by repository and PR number.
+- Selected PR sync is covered with read-only provider mocks for the approved
+  repository scope and performs no GitHub issue, PR, comment, merge, close, or
+  other provider write.
 - Added read-only selected repository issue sync under the GitHub workspace
   namespace:
   `/api/v1/workspaces/{workspace_id}/github/repositories/issues/sync`.

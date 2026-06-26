@@ -109,7 +109,7 @@ async def _github_pull_requests(
         select(PullRequest)
         .where(PullRequest.workspace_id == workspace_id)
         .order_by(PullRequest.updated_at_source.desc().nullslast(), PullRequest.created_at.desc())
-        .limit(limit)
+        .limit(max(limit * 3, limit))
     )
     if state != "all":
         statement = statement.where(PullRequest.state == state)
@@ -125,7 +125,18 @@ async def _github_pull_requests(
                 )
             ).scalars()
         }
-    return [_pull_request_payload(row, repositories.get(row.repository_id)) for row in rows]
+    pull_requests: list[dict[str, Any]] = []
+    seen_pull_request_keys: set[str] = set()
+    for row in rows:
+        repository = repositories.get(row.repository_id)
+        pull_request_key = _pull_request_identity_key(row, repository)
+        if pull_request_key in seen_pull_request_keys:
+            continue
+        seen_pull_request_keys.add(pull_request_key)
+        pull_requests.append(_pull_request_payload(row, repository))
+        if len(pull_requests) >= limit:
+            break
+    return pull_requests
 
 
 def _is_github_issue(task: Task) -> bool:
@@ -192,6 +203,21 @@ def _pull_request_payload(
             else {}
         ),
     }
+
+
+def _pull_request_identity_key(
+    pull_request: PullRequest,
+    repository: Repository | None,
+) -> str:
+    metadata = (
+        pull_request.pr_metadata if isinstance(pull_request.pr_metadata, Mapping) else {}
+    )
+    repository_full_name = (
+        repository.full_name if repository else _safe_text(metadata.get("repository_full_name"))
+    )
+    if repository_full_name and pull_request.number is not None:
+        return f"{repository_full_name}#pull/{pull_request.number}"
+    return pull_request.external_id or str(pull_request.id)
 
 
 def _safe_text(value: Any) -> str | None:

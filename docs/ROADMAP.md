@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-023. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-024. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,9 +24,9 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for FOS-023 selected repository PR sync, or
-broaden selected issue sync only after the human approves additional
-repositories.
+Next step: follow `../PROGRESS.md` for FOS-024 selected repository sync UI
+controls, or broaden selected issue+PR sync only after the human approves
+additional repositories.
 
 Definition of Done:
 
@@ -89,6 +89,8 @@ Done:
   `/api/v1/workspaces/{workspace_id}/company-brain`.
 - Selected repository issue sync exists for explicitly allowlisted repositories:
   `/api/v1/workspaces/{workspace_id}/github/repositories/issues/sync`.
+- Selected repository PR sync exists for explicitly allowlisted repositories:
+  `/api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync`.
 - Company Brain repo-audit read model remains available.
 - LLM paths are gated/off by default.
 
@@ -97,11 +99,11 @@ Missing:
 - Full GitHub OAuth/product connect flow.
 - Live GitHub OAuth/product sync execution path.
 - Persistent briefing models.
-- Selected repository PR sync.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
+- UI controls for selected repository issue+PR sync.
 
-Next step: follow `../PROGRESS.md` for selected repository PR sync.
+Next step: follow `../PROGRESS.md` for selected repository sync UI controls.
 
 Definition of Done:
 
@@ -150,10 +152,11 @@ Missing:
 - Browser/product E2E coverage.
 - The first human-gated live external write proof has been read back into
   canonical product state and closed after explicit human approval.
-- Broader selected-repository issue sync remains to be built after the smoke
-  cleanup loop.
+- Selected repository issue and PR sync are backend-only and still need product
+  UI controls.
 
-Next step: build selected repository issue sync without adding external writes.
+Next step: build selected repository sync UI controls without adding external
+writes.
 
 Definition of Done:
 
@@ -222,12 +225,11 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Broader selected-repository issue sync after the manual real GitHub issue
-  smoke proof and cleanup. External issue URL/id and local workspace/proposal/
-  connection/evidence identifiers are intentionally omitted from public docs.
+- Product UI controls for selected repository issue+PR sync. External issue/PR
+  URLs and local workspace/proposal/connection/evidence identifiers are
+  intentionally omitted from public docs.
 
-Next step: run FOS-022 selected repository issue sync against explicitly
-approved repositories only.
+Next step: build FOS-024 selected repository sync UI controls.
 
 Definition of Done:
 

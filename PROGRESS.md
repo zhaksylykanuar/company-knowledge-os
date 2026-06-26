@@ -11,29 +11,27 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 5 — Action Approval`.
-- **Task:** CHUNK 5 / FOS-022 — selected repository issue sync.
-- **State:** ✅ Selected repository issue sync is implemented and verified for the
-  approved smoke repository. The new read-only endpoint fetches issues only for
-  explicitly allowlisted repositories, skips PR-shaped issue API records,
-  normalizes selected issues through canonical `SourceRecord`/`Task` plus
-  repository records, and keeps external writes out of the path. Live
-  verification read the approved smoke repository only: one closed issue synced,
-  open issue count stayed 0, Company Brain sees one closed issue, deterministic
-  briefing remains evidence-backed, and ActionExecution receipt counts stayed
-  unchanged.
-- **Next action:** FOS-023 selected repository PR sync, or broaden selected issue
-  sync only after the human approves additional repositories.
+- **Task:** CHUNK 5 / FOS-023 — selected repository pull request sync.
+- **State:** ✅ Selected repository PR sync is implemented and verified with
+  mocked read-only provider calls for the approved repository scope. The new
+  endpoint fetches PRs only for explicitly allowlisted repositories, normalizes
+  selected PRs through canonical `SourceRecord`/`PullRequest` plus repository
+  records, preserves open/closed/merged state, avoids duplicate repository rows
+  after selected issue sync, de-dupes PR read models by repository+number, and
+  keeps external writes out of the path.
+- **Next action:** FOS-024 selected repository sync UI controls, or broaden
+  selected issue+PR sync only after the human approves additional repositories.
 
 ---
 
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks: 15 / 23   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱   65%   (строго DONE)
+Tasks: 16 / 24   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱   67%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 15** · **PARTIAL = 7** · **MISSING = 1**.
+Разбивка: **DONE = 16** · **PARTIAL = 7** · **MISSING = 1**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
 Для сравнения: `docs/TODO.md` помечает «done» ~22 задачи **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook/main-path схемы строго готово 14.
@@ -49,14 +47,14 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic upgrade head` | ✅ pass | 2026-06-25 | FOS-018 on `main`: one head `a2b3c4d5e6f7`, current==head |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-26 | FOS-022 on `main`: **284 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-26 | FOS-022 on `main`: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-06-26 | FOS-023 on `main`: **287 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-06-26 | FOS-023 on `main`: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
 | frontend build | ✅ pass | 2026-06-25 | FOS-018 on `main`: `npm test` 60 passed; `next build`, then `typecheck`/`lint` ok (7 routes) |
-| docs navigation | ✅ pass | 2026-06-26 | FOS-022 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
+| docs navigation | ✅ pass | 2026-06-26 | FOS-023 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-25 | FOS-018: drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про execution gate |
-| **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only |
-| **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync» verified; execution count stayed single and no extra issues were created |
+| **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
+| **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
 | prod smoke | ❓ unknown | — | деплой не выполнялся; Makefile/`make smoke` отсутствует |
 
 Статусы: ✅ pass · ❌ fail · ❓ unknown
@@ -104,6 +102,7 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] FOS-020 — Post-execution sync verification — `POST /api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/sync-execution-result` validates the executed/succeeded GitHub issue receipt, uses an encrypted GitHub connection for read-only issue fetch, creates a local manual SyncJob, and reuses canonical GitHub normalization to upsert `SourceRecord` + `Task`. Verified against the smoke issue: operational work and Company Brain see the synced issue; deterministic briefing reflects the normalization item; execution rows remain single and no provider write is called.
 - [x] FOS-021 — Smoke issue closeout / closed-state sync — after explicit human approval, closed exactly the existing approved smoke issue and nothing else. Closed state was read back and synced through the FOS-020 path; canonical `Task` is closed, operational open work no longer includes it, closed operational work does include it, Company Brain open issues=0/closed issues=1, deterministic briefing remains evidence-backed, and ActionExecution receipt count stayed single.
 - [x] FOS-022 — Selected repository issue sync — `POST /api/v1/workspaces/{workspace_id}/github/repositories/issues/sync` reads issues only from explicit read-sync allowlisted repositories, uses encrypted GitHub connection access for provider reads, creates a manual SyncJob, normalizes selected issues into canonical `SourceRecord`/`Task` + repository records, skips PR-shaped issue API records, preserves open/closed state, and keeps external writes disabled. Verified live against the approved smoke repository only; no `/execute` call and no new GitHub issue/write.
+- [x] FOS-023 — Selected repository PR sync — `POST /api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync` reads PRs only from explicit read-sync allowlisted repositories, validates allowlist before token decrypt/provider reads, creates a manual SyncJob, normalizes selected PRs into canonical `SourceRecord`/`PullRequest` + repository records, preserves open/closed/merged state, avoids duplicate repository rows after selected issue sync, de-dupes PR read models by repository+number, and keeps external writes disabled. Verified with read-only provider mocks for the approved repository scope; no `/execute` call and no GitHub write.
 
 ### CHUNK 6 — Remaining Connectors
 *Gate: Jira / Gmail / Drive / Documents видны в Brain.*
@@ -131,14 +130,36 @@ DONE строго = есть код + проходящий тест/рабочи
 
 - ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). `source_events` repointed to compatibility fallback in FOS-009 (DEC-030); physical drop remains a later migration/cleanup task, not this feature path.
 
-- [SPINE] **Selected repository PR sync is next.** The live write/read-back/
-  cleanup loop and selected repository issue sync are verified for the approved
-  smoke repository. Live OAuth/provider sync remains outside this path; broader
-  multi-repository sync still requires explicit human-approved repository scope.
+- [SPINE] **Selected repository sync UI controls are next.** The live
+  write/read-back/cleanup loop, selected repository issue sync, and selected
+  repository PR sync backend path are verified for the approved scope. Live
+  OAuth/provider sync remains outside this path; broader multi-repository sync
+  still requires explicit human-approved repository scope.
 
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-26` — **FOS-023 selected repository PR sync.** Added a
+  read-only selected repository PR sync endpoint:
+  `POST /api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync`.
+  The path requires an explicit read-sync allowlist (`FOS_GITHUB_SYNC_ALLOWED_REPOS`
+  or existing selected GitHub repo config), validates selected repositories
+  before token decrypt/provider calls, fetches GitHub pull requests read-only,
+  creates a local manual SyncJob, and reuses canonical GitHub normalization to
+  upsert repository `SourceRecord`/`Repository` plus PR `SourceRecord`/
+  `PullRequest` rows. Selected PR sync preserves open/closed/merged state, uses
+  repository+number identities for PR read-model de-dupe, keeps repository
+  identity stable after selected issue sync so duplicate repository rows are not
+  created, and performs no issue/PR/comment/merge/close/provider write. Verified
+  with read-only provider mocks for the approved repository scope. Checks:
+  focused selected PR sync tests **3 passed**, GitHub normalization/inventory/
+  selected-sync tests **29 passed**, Company Brain + briefing + backend E2E
+  tests **15 passed**, action/proposal tests **60 passed**, docs navigation
+  **2 passed**, full pytest **287 passed / 1 warning**, `ruff` clean, tracked
+  secret scan clean. Next: FOS-024 selected repository sync UI controls, or
+  broader selected issue+PR sync only after the human approves additional
+  repositories.
 
 - `2026-06-26` — **FOS-022 selected repository issue sync.** Added a
   read-only selected repository issue sync endpoint:

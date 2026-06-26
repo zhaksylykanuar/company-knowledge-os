@@ -42,10 +42,14 @@ files, no unrelated edits, and focused checks first.
   allowlisted repositories, normalizes open/closed issues into canonical
   records, skips PR-shaped issue API records, and was verified against the
   approved smoke repository without external writes.
+- FOS-023: done - selected repository PR sync reads only explicitly allowlisted
+  repositories, normalizes open/closed/merged PRs into canonical records,
+  avoids duplicate repository rows after selected issue sync, de-dupes PR read
+  models by repository+number, and performs no external writes.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-023 selected repository PR sync, or broaden selected issue sync
-  only after the human approves additional repositories.
+- Next task: FOS-024 selected repository sync UI controls, or broaden selected
+  issue+PR sync only after the human approves additional repositories.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -719,30 +723,44 @@ Checks to run:
 
 ## FOS-023 - Selected repository PR sync
 
-Status: next.
+Status: done.
 
 Goal: extend the selected repository read-sync pattern to pull requests for
 explicitly approved repositories only.
 
-Acceptance criteria:
+Implemented:
 
-- The target repository set is explicit and human-approved.
-- Sync reads PRs from selected repositories without creating, updating, merging,
-  closing, commenting on, or otherwise writing GitHub content.
-- The same read-sync allowlist policy applies before token decrypt/provider
+- Added `POST /api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync`.
+- Added a read-only GitHub pull request client using only GET requests.
+- Added selected repository PR sync over explicit read-sync allowlists.
+- The endpoint validates selected repositories before token decrypt/provider
+  calls, creates a local manual SyncJob, and reuses canonical GitHub
+  normalization.
+- Selected PR sync upserts canonical `SourceRecord` + `PullRequest` rows plus
+  repository records, preserves open/closed/merged state, avoids duplicate
+  repository rows after selected issue sync, and de-dupes PR read models by
+  repository+number.
+- No GitHub issue/PR/comment/merge/close/provider write is part of this path.
+
+Acceptance criteria status:
+
+- Done - the target repository set is explicit and human-approved.
+- Done - sync reads PRs from selected repositories without creating, updating,
+  merging, closing, commenting on, or otherwise writing GitHub content.
+- Done - the same read-sync allowlist policy applies before token decrypt/provider
   calls.
-- Canonical `SourceRecord` + `PullRequest` upserts remain idempotent.
-- Operational work and Company Brain reflect selected repository PR state.
-- Issue and PR records are not double-counted if GitHub APIs expose overlapping
-  shapes.
-- Private PR URLs and local IDs remain out of public docs.
+- Done - canonical `SourceRecord` + `PullRequest` upserts remain idempotent.
+- Done - operational work and Company Brain reflect selected repository PR state.
+- Done - issue and PR records are not double-counted in read models when
+  overlapping/historical identifiers exist.
+- Done - private PR URLs and local IDs remain out of public docs.
 
-Checks to run:
+Checks run:
 
-- Focused GitHub selected PR sync tests.
-- Existing GitHub normalization/inventory tests.
-- Company Brain and briefing tests if read models change.
-- Docs navigation test if docs change.
-- `UV_NO_SYNC=1 uv run ruff check .`
-- `UV_NO_SYNC=1 uv run pytest -q`
-- `bash scripts/check_no_secrets.sh --tracked`
+- Done - focused GitHub selected PR sync tests.
+- Done - existing GitHub normalization/inventory/selected issue sync tests.
+- Done - Company Brain, briefing, backend E2E, action/proposal tests.
+- Done - docs navigation test.
+- Done - `UV_NO_SYNC=1 uv run ruff check . --no-cache`.
+- Done - `UV_NO_SYNC=1 uv run pytest -q -p no:cacheprovider`.
+- Done - `bash scripts/check_no_secrets.sh --tracked`.

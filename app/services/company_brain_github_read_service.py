@@ -175,7 +175,7 @@ async def _pull_requests(
     session: AsyncSession,
     workspace_id: UUID,
 ) -> list[PullRequest]:
-    return list(
+    rows = list(
         (
             await session.execute(
                 select(PullRequest)
@@ -187,6 +187,15 @@ async def _pull_requests(
             )
         ).scalars()
     )
+    pull_requests: list[PullRequest] = []
+    seen_pull_request_keys: set[str] = set()
+    for pull_request in rows:
+        pull_request_key = _pull_request_identity_key(pull_request)
+        if pull_request_key in seen_pull_request_keys:
+            continue
+        seen_pull_request_keys.add(pull_request_key)
+        pull_requests.append(pull_request)
+    return pull_requests
 
 
 async def _source_records_by_external_id(
@@ -278,6 +287,16 @@ def _merged_pull_requests(pull_requests: list[PullRequest]) -> list[PullRequest]
         for pull_request in pull_requests
         if pull_request.state == PULL_REQUEST_STATE_MERGED
     ]
+
+
+def _pull_request_identity_key(pull_request: PullRequest) -> str:
+    metadata = (
+        pull_request.pr_metadata if isinstance(pull_request.pr_metadata, Mapping) else {}
+    )
+    repository_full_name = _safe_text(metadata.get("repository_full_name"))
+    if repository_full_name and pull_request.number is not None:
+        return f"{repository_full_name}#pull/{pull_request.number}"
+    return pull_request.external_id or str(pull_request.id)
 
 
 def _repository_payload(

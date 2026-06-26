@@ -575,11 +575,18 @@ async def _upsert_repository(
     repo: Mapping[str, Any],
     external_id: str,
 ) -> tuple[Repository, bool]:
+    full_name = _repository_full_name(repo)
     repository = await session.scalar(
         select(Repository)
         .where(Repository.workspace_id == sync_job.workspace_id)
         .where(Repository.external_id == external_id)
     )
+    if repository is None:
+        repository = await session.scalar(
+            select(Repository)
+            .where(Repository.workspace_id == sync_job.workspace_id)
+            .where(Repository.full_name == full_name)
+        )
     created = repository is None
     if repository is None:
         repository = Repository(
@@ -587,13 +594,14 @@ async def _upsert_repository(
             provider=SOURCE_RECORD_PROVIDER_GITHUB,
             external_id=external_id,
             name=_repository_name(repo),
-            full_name=_repository_full_name(repo),
+            full_name=full_name,
         )
         session.add(repository)
 
     repository.provider = SOURCE_RECORD_PROVIDER_GITHUB
+    repository.external_id = external_id
     repository.name = _repository_name(repo)
-    repository.full_name = _repository_full_name(repo)
+    repository.full_name = full_name
     repository.default_branch = _safe_text(repo.get("default_branch"))
     repository.visibility = _repository_visibility(repo.get("visibility"))
     repository.archived = bool(repo.get("archived"))
@@ -1080,6 +1088,7 @@ def _safe_source(value: Any) -> str:
         "source_control",
         "github_connector",
         "selected_repository_issue_sync",
+        "selected_repository_pr_sync",
     }:
         return text
     return "unknown"
