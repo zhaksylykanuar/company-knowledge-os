@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Closed the approved smoke issue after explicit human approval and verified the
+  closed state through the existing post-execution sync path.
+- Closed-state sync updated canonical GitHub work records so operational work no
+  longer counts the smoke issue as open, Company Brain sees the closed issue,
+  and deterministic briefing remains evidence-backed.
+- No additional GitHub issues were created and no comments, PRs, releases,
+  labels, assignees, titles, bodies, repository settings, or other repositories
+  were modified.
 - Added a read-only post-execution sync route for executed GitHub issue
   `ActionProposal` receipts:
   `/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/sync-execution-result`.

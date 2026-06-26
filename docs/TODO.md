@@ -37,9 +37,10 @@ files, no unrelated edits, and focused checks first.
 - FOS-018: done - approved GitHub issue execution code path is gated by runtime config, explicit confirmation, evidence refs, explicit GitHub write repository allowlist, idempotent receipt, and durable audit; automated tests mock the provider.
 - FOS-019B: done - manual live GitHub issue smoke succeeded against an approved private smoke repository; exactly one issue was created through the gated `ActionProposal` execution path; receipt and audit are stored locally; external issue URL/id are intentionally omitted from public docs; no other repositories were modified.
 - FOS-020: done - post-execution sync read the smoke issue back with safe read-only GitHub access, persisted it through canonical GitHub normalization, verified operational work + Company Brain + deterministic briefing visibility, and kept external execution idempotent.
+- FOS-021: done - the approved smoke issue was closed after explicit human approval, closed-state sync was verified into canonical records/read models, and no additional GitHub issues or other repository changes were made.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-021 smoke issue closeout/cleanup with explicit human approval. After cleanup, broaden GitHub sync from a single executed issue to selected repository issue sync.
+- Next task: FOS-022 selected repository issue sync over the approved smoke repository or other explicitly approved selected repositories.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -648,23 +649,58 @@ Checks to run:
 
 ## FOS-021 - Smoke issue closeout / cleanup
 
-Status: next / requires explicit human approval.
+Status: done.
 
 Goal: close out the private smoke issue created during FOS-019B only after the
 post-execution sync loop has been verified.
 
-Acceptance criteria:
+Acceptance criteria status:
 
-- Human explicitly approves whether to close, comment, label, or leave the
-  private smoke issue open.
-- No cleanup action runs without a separate confirmation.
-- If cleanup is approved, the action is recorded in local audit/status without
-  leaking private issue URL/id or local identifiers into public docs.
-- No other repositories are modified.
+- Done - human explicitly approved closing exactly the existing smoke issue.
+- Done - exactly one external GitHub write occurred: close the approved smoke
+  issue.
+- Done - no new issue, comment, PR, release, repo setting change, label,
+  assignee, title, body, or other repository content was modified.
+- Done - closed state synced back through canonical GitHub normalization.
+- Done - operational work no longer counts the issue as open and can see it in
+  closed/all views.
+- Done - Company Brain reports zero open issues and one closed issue for the
+  smoke workspace state.
+- Done - deterministic briefing remains evidence-backed through normalization
+  evidence and does not invent closed-issue claims.
+- Done - ActionExecution receipt count stayed single; `/execute` was not called.
+- Done - public docs omit private issue URL/id and local identifiers.
 
 Checks to run:
 
 - Targeted action/execution tests if any cleanup code path changes.
 - Docs navigation test if docs change.
 - `UV_NO_SYNC=1 uv run ruff check .`
+- `bash scripts/check_no_secrets.sh --tracked`
+
+## FOS-022 - Selected repository issue sync
+
+Status: next.
+
+Goal: broaden the proven single executed-issue read-back path into a selected
+repository issue sync path for approved repositories only.
+
+Acceptance criteria:
+
+- The target repository set is explicit and human-approved.
+- Sync reads issues from selected repositories without creating, closing,
+  commenting on, or otherwise writing GitHub content.
+- Canonical `SourceRecord` + `Task` upserts remain idempotent.
+- Operational work and Company Brain reflect selected repository issue state.
+- Briefing references selected repository sync only through returned
+  evidence-backed records.
+- Private issue URLs and local IDs remain out of public docs.
+
+Checks to run:
+
+- Focused GitHub sync/normalization tests.
+- Company Brain and briefing tests if read models change.
+- Docs navigation test if docs change.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `UV_NO_SYNC=1 uv run pytest -q`
 - `bash scripts/check_no_secrets.sh --tracked`

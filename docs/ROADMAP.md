@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-021. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-022. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,9 +24,9 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for FOS-021 smoke issue closeout/cleanup
-with explicit human approval; after cleanup, broaden GitHub sync from a single
-executed issue to selected repository issue sync.
+Next step: follow `../PROGRESS.md` for FOS-022 selected repository issue sync
+over the approved smoke repository or other explicitly approved selected
+repositories.
 
 Definition of Done:
 
@@ -96,9 +96,9 @@ Missing:
 - Live GitHub sync/product OAuth execution path.
 - Persistent briefing models.
 - Broader selected-repository issue sync beyond the single executed issue
-  read-back path.
+  read-back and cleanup path.
 
-Next step: follow `../PROGRESS.md` for explicit smoke issue closeout/cleanup.
+Next step: follow `../PROGRESS.md` for selected repository issue sync.
 
 Definition of Done:
 
@@ -146,12 +146,11 @@ Missing:
 - Workspace onboarding.
 - Browser/product E2E coverage.
 - The first human-gated live external write proof has been read back into
-  canonical product state.
+  canonical product state and closed after explicit human approval.
 - Broader selected-repository issue sync remains to be built after the smoke
-  cleanup decision.
+  cleanup loop.
 
-Next step: close out or leave open the private smoke issue only after explicit
-human approval.
+Next step: build selected repository issue sync without adding external writes.
 
 Definition of Done:
 
@@ -221,11 +220,11 @@ Missing:
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
 - Broader selected-repository issue sync after the manual real GitHub issue
-  smoke proof. External issue URL/id and local workspace/proposal/connection/
-  evidence identifiers are intentionally omitted from public docs.
+  smoke proof and cleanup. External issue URL/id and local workspace/proposal/
+  connection/evidence identifiers are intentionally omitted from public docs.
 
-Next step: run FOS-021 smoke issue closeout/cleanup only after explicit human
-approval; no close/comment/update happens automatically.
+Next step: run FOS-022 selected repository issue sync against explicitly
+approved repositories only.
 
 Definition of Done:
 
