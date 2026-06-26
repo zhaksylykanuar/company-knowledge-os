@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added `docs/deploy/railway-private-beta.md`, selecting the Railway-only
+  split-service private-beta dry-run target implied by the master playbook. The
+  plan maps backend API, frontend web, managed Postgres, managed/deferred Redis,
+  service commands, domain/CORS/API-base, env names, migration dry run, smoke
+  dry run, rollback dry run, operator checklist, and later live-provider-smoke
+  approval boundaries without provisioning or deploying.
+- Added placeholder-only Railway backend, frontend, and smoke env templates under
+  `docs/deploy/templates/`, plus hosting-doc safety tests for required sections,
+  placeholder-only values, no secret-shaped values, no auto-deploy workflows,
+  and no provider-write/sync commands.
+
 - Added `docs/deploy/private-beta.md`, a manual private-beta deploy runbook for
   the split backend API process, frontend web process, managed Postgres, and
   managed/deferred Redis model. The runbook documents backend/frontend commands,

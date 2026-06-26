@@ -19,6 +19,7 @@ After the Lineage-2 purge (DEC-029), the documentation is the canonical set only
 ## Deploy Runbooks
 
 - [`deploy/private-beta.md`](deploy/private-beta.md) - manual private-beta deployment, migration, rollback, CORS, env-name, and smoke procedure.
+- [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md) - concrete Railway split-service dry-run plan and placeholder env templates.
 
 ## Required Control Docs
 

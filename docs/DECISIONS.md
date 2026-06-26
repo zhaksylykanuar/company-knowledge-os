@@ -784,6 +784,35 @@ Consequences:
   does not prove live provider writes, GitHub OAuth, production auth, or LLM
   behavior.
 
+
+## DEC-039 - Railway Is The Private-Beta Hosting Dry-Run Target
+
+Decision (2026-06-26): the concrete private-beta hosting dry-run target is a
+manual Railway-only split-service baseline: backend API service, frontend web
+service, managed Postgres, and managed/deferred Redis. The target mapping is
+documented as dry-run preparation only and does not create resources, deploy, or
+add auto-deploy workflows.
+
+Rationale: the master playbook already names Railway as the MVP deployment
+target, and the current repo has no competing Render/Fly/Vercel/Docker
+production config. A single-vendor split-service plan is the smallest concrete
+path that matches the current backend/frontend architecture while preserving the
+manual, smoke-gated, provider-write-disabled policy from DEC-038.
+
+Consequences:
+
+- `docs/deploy/railway-private-beta.md` is the target-specific dry-run plan.
+- `docs/deploy/templates/` may contain placeholder-only env templates, but never
+  real cloud project IDs, domains, database URLs, API keys, tokens, encrypted
+  secrets, or credential values.
+- Railway setup remains manual and requires future human approval before any
+  project, service, database, domain, or deploy is created.
+- No auto-deploy-on-push workflow is allowed by this decision.
+- Redis is documented as managed/deferred until an approved worker/job runtime
+  makes it mandatory.
+- Live provider smoke remains separate, explicitly approved, allowlisted, and
+  disabled again after the bounded test.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

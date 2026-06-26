@@ -57,7 +57,7 @@ directly.
 
 ## Private-beta notes
 
-See [`../docs/deploy/private-beta.md`](../docs/deploy/private-beta.md) for the manual split-service deploy runbook.
+See [`../docs/deploy/private-beta.md`](../docs/deploy/private-beta.md) for the manual split-service deploy runbook and [`../docs/deploy/railway-private-beta.md`](../docs/deploy/railway-private-beta.md) for the current Railway dry-run target map.
 
 The current frontend is still an operator/private-beta shell. Before broader
 private beta, production auth/session handling and GitHub onboarding must replace

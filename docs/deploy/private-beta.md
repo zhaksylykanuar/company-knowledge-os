@@ -4,6 +4,10 @@ Status: **manual runbook only**. This document defines the first concrete
 private-beta deployment path. It does not deploy FounderOS, does not add an
 auto-deploy workflow, and does not authorize provider writes.
 
+## Target-specific dry-run plan
+
+The current concrete hosting target recommendation is the Railway-only split-service path in [`railway-private-beta.md`](railway-private-beta.md). Use that document for service mapping, placeholder env templates, domain/CORS mapping, migration dry run, smoke dry run, and rollback dry run.
+
 ## Deployment model
 
 Use a simple split deployment for the private beta:

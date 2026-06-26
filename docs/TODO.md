@@ -58,7 +58,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-025B: done - first private-beta deploy/smoke foundation added: explicit backend CORS config, placeholder-only env contract, read-only smoke script, `make smoke`, and local/private-beta docs; no deploy and no external writes.
 - FOS-025C: done - CI now enforces backend docs/smoke/CORS/CI contract tests and frontend `npm test`, build, typecheck, and lint gates without provider calls or external writes.
 - FOS-025D: done - manual private-beta deploy runbook/config path added under `docs/deploy/private-beta.md`; no deploy, no auto-deploy workflow, and no provider writes.
-- Next task: choose/prepare actual hosting target for a human-approved dry deploy rehearsal, or harden production auth/GitHub onboarding before deploy.
+- FOS-025E: done - Railway private-beta hosting dry-run plan and placeholder-only env templates added; no deploy, provisioning, or external writes.
+- Next task: human-approved manual hosting setup/dry deploy rehearsal, or production auth/GitHub onboarding hardening before deploy.
 
 
 ## FOS-025B - Private-beta deploy/smoke foundation
@@ -168,17 +169,46 @@ Safety contract:
 
 ## FOS-025E - Hosting target dry-run preparation
 
-Status: todo.
+Status: done.
 
 Goal: prepare the actual private-beta hosting target using the runbook without
 performing an unapproved deployment.
 
+Implemented:
+
+- Selected the Railway-only split-service private-beta baseline implied by the
+  master playbook.
+- Added `docs/deploy/railway-private-beta.md`.
+- Added placeholder-only env templates for backend, frontend, and smoke under
+  `docs/deploy/templates/`.
+- Documented backend API, frontend web, managed Postgres, managed/deferred Redis,
+  service commands, domain/CORS/API-base mapping, env names, migration dry run,
+  smoke dry run, rollback dry run, operator checklist, and later live provider
+  smoke approval boundaries.
+- Added `tests/test_private_beta_hosting_docs.py` to keep the hosting plan and
+  templates safe.
+
+Safety contract:
+
+- No Railway project is created.
+- No Postgres or Redis service is provisioned.
+- No deploy is performed.
+- No automatic deploy workflow is added.
+- All templates remain placeholder-only.
+
+## FOS-025F - Manual hosting setup/dry deploy rehearsal
+
+Status: todo.
+
+Goal: with explicit human approval, use the FOS-025D/E runbooks to perform a
+manual hosting setup or dry deploy rehearsal.
+
 Acceptance criteria:
 
-- Target platform and service mapping are chosen explicitly.
-- Required manual setup checklist exists for backend, frontend, Postgres, Redis,
-  domains, env names, and smoke.
-- Human approval is required before any deploy or external write.
+- Human approval is captured before provisioning or deployment.
+- Secrets remain in the hosting platform secret/env manager only.
+- Provider writes remain disabled by default.
+- Read-only smoke passes before any live provider smoke is considered.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

@@ -4,8 +4,8 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 8 / FOS-025E after
-FOS-025D private-beta deploy runbook/config path. Docs consolidation is complete;
+The current execution pointer is `../PROGRESS.md`: CHUNK 8 / FOS-025F after
+FOS-025E Railway hosting dry-run preparation. Docs consolidation is complete;
 this roadmap is planning context, not the live task source.
 
 ## Phase 0 - Project Setup
@@ -24,7 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for private-beta hosting target dry-run preparation or production auth/GitHub onboarding hardening.
+Next step: follow `../PROGRESS.md` for human-approved manual hosting setup/dry deploy rehearsal, or production auth/GitHub onboarding hardening before deploy.
 
 Definition of Done:
 
@@ -316,21 +316,23 @@ Done:
 - FOS-025D added `docs/deploy/private-beta.md`, a manual split-service deploy
   runbook with migration, backup, rollback, CORS/API-base, env-name, and smoke
   procedures.
+- FOS-025E selected the Railway-only split-service dry-run target and added
+  `docs/deploy/railway-private-beta.md` plus placeholder-only env templates.
 
 Missing:
 
-- Railway project.
+- Provisioned Railway project.
 - Production Postgres/Redis binding.
-- Backend service.
-- Worker service.
-- Frontend service.
+- Running backend service.
+- Worker service if/when queue runtime exists.
+- Running frontend service.
 - Production auth/session decision.
 - GitHub OAuth/onboarding path.
 - Deployed smoke run.
 - Domain/health checks.
 
-Next step: choose/prepare the actual hosting target or harden production auth and
-GitHub onboarding before deploying.
+Next step: perform a human-approved manual hosting setup/dry deploy rehearsal or
+harden production auth and GitHub onboarding before deploying.
 
 Definition of Done:
 
