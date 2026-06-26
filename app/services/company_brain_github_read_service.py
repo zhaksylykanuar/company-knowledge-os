@@ -157,7 +157,17 @@ async def _github_issue_tasks(
             .order_by(Task.source_updated_at.desc().nullslast(), Task.updated_at.desc())
         )
     ).scalars()
-    return [task for task in rows if _is_github_issue(task)]
+    tasks: list[Task] = []
+    seen_issue_keys: set[str] = set()
+    for task in rows:
+        if not _is_github_issue(task):
+            continue
+        issue_key = _issue_identity_key(task)
+        if issue_key in seen_issue_keys:
+            continue
+        seen_issue_keys.add(issue_key)
+        tasks.append(task)
+    return tasks
 
 
 async def _pull_requests(
@@ -241,6 +251,17 @@ def _open_issues(tasks: list[Task]) -> list[Task]:
 
 def _closed_issues(tasks: list[Task]) -> list[Task]:
     return [task for task in tasks if task.status == "closed"]
+
+
+def _issue_identity_key(task: Task) -> str:
+    metadata = task.task_metadata if isinstance(task.task_metadata, Mapping) else {}
+    repository_full_name = _safe_text(metadata.get("repository_full_name"))
+    number = _safe_int(metadata.get("number"))
+    if repository_full_name and number is not None:
+        return f"{repository_full_name}#issue/{number}"
+    if task.external_id:
+        return task.external_id
+    return str(task.id)
 
 
 def _open_pull_requests(pull_requests: list[PullRequest]) -> list[PullRequest]:

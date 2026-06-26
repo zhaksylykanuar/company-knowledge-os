@@ -81,6 +81,65 @@ async def get_issue(
     return data
 
 
+async def list_issues(
+    *,
+    access_token: str,
+    repository_full_name: str,
+    state: str = "all",
+    per_page: int = 100,
+    max_pages: int = 10,
+) -> list[dict[str, Any]]:
+    if state not in {"open", "closed", "all"}:
+        raise GitHubIssueClientError("github issue read request failed: invalid state")
+    if per_page < 1 or per_page > 100:
+        raise GitHubIssueClientError("github issue read request failed: invalid page size")
+    if max_pages < 1:
+        raise GitHubIssueClientError("github issue read request failed: invalid page limit")
+
+    url = f"{GITHUB_API_BASE_URL}/repos/{repository_full_name}/issues"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "founderOS",
+    }
+    issues: list[dict[str, Any]] = []
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for page in range(1, max_pages + 1):
+                response = await client.get(
+                    url,
+                    headers=headers,
+                    params={
+                        "state": state,
+                        "per_page": per_page,
+                        "page": page,
+                    },
+                )
+                if response.status_code < 200 or response.status_code >= 300:
+                    detail = _safe_response_detail(response)
+                    raise GitHubIssueClientError(
+                        detail.replace(
+                            "github issue request",
+                            "github issue read request",
+                        )
+                    )
+                data = response.json()
+                if not isinstance(data, list):
+                    raise GitHubIssueClientError(
+                        "github issue read response was not a list"
+                    )
+                page_items = [item for item in data if isinstance(item, Mapping)]
+                issues.extend(dict(item) for item in page_items)
+                if len(data) < per_page:
+                    return issues
+    except GitHubIssueClientError:
+        raise
+    except httpx.HTTPError as exc:
+        raise GitHubIssueClientError("github issue read request failed") from exc
+
+    raise GitHubIssueClientError("github issue read request failed: pagination limit reached")
+
+
 def _safe_response_detail(response: httpx.Response) -> str:
     try:
         data = response.json()

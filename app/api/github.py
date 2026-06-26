@@ -40,6 +40,14 @@ from app.services.github_repository_read_service import (
     GitHubRepositoryFilters,
     list_workspace_github_repositories,
 )
+from app.services.github_selected_issue_sync_service import (
+    GitHubSelectedIssueSyncConflictError,
+    GitHubSelectedIssueSyncError,
+    GitHubSelectedIssueSyncInput,
+    GitHubSelectedIssueSyncNotFoundError,
+    GitHubSelectedIssueSyncProviderReadError,
+    sync_selected_repository_issues,
+)
 from app.services.github_sync_job_service import (
     GITHUB_SYNC_JOB_CONNECTION_NOT_CONNECTED,
     GITHUB_SYNC_JOB_CONNECTION_NOT_FOUND,
@@ -304,6 +312,48 @@ class GitHubLocalSyncResponse(BaseModel):
     provider_sync_started: bool
     local_normalization_performed: bool
     persistence_mode: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubSelectedIssueSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    connection_id: UUID
+    repositories: list[str] = Field(min_length=1, max_length=20)
+    states: list[str] = Field(default_factory=lambda: ["open", "closed"], max_length=3)
+
+
+class GitHubSelectedIssueSyncRepositoryRead(BaseModel):
+    full_name: str
+    synced_issues: int
+    open_issues: int
+    closed_issues: int
+    skipped_pull_requests: int
+
+
+class GitHubSelectedIssueSyncTotalsRead(BaseModel):
+    repositories: int
+    issues: int
+    open_issues: int
+    closed_issues: int
+    skipped_pull_requests: int
+
+
+class GitHubSelectedIssueSyncCapabilitiesRead(BaseModel):
+    read_only_sync: bool
+    external_writes: bool
+
+
+class GitHubSelectedIssueSyncResponse(BaseModel):
+    workspace_id: UUID
+    repositories: list[GitHubSelectedIssueSyncRepositoryRead]
+    totals: GitHubSelectedIssueSyncTotalsRead
+    sync_job: GitHubNormalizationSyncJobRead
+    counts: GitHubNormalizationCountsRead
+    capabilities: GitHubSelectedIssueSyncCapabilitiesRead
+    is_live: bool
+    provider_sync_started: bool
+    external_write_performed: bool
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -633,6 +683,55 @@ async def run_github_local_sync(
         persistence_mode=result["persistence_mode"],
         warnings=result["warnings"],
     )
+
+
+@router.post(
+    "/repositories/issues/sync",
+    response_model=GitHubSelectedIssueSyncResponse,
+)
+async def run_selected_repository_issue_sync(
+    workspace_id: UUID,
+    payload: GitHubSelectedIssueSyncRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubSelectedIssueSyncResponse:
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await sync_selected_repository_issues(
+                session,
+                workspace_id=workspace_id,
+                input_payload=GitHubSelectedIssueSyncInput(
+                    connection_id=payload.connection_id,
+                    repositories=payload.repositories,
+                    states=payload.states,
+                ),
+                requested_by=access.actor.auth_mode,
+            )
+            await session.commit()
+        except GitHubSelectedIssueSyncNotFoundError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.detail,
+            ) from exc
+        except GitHubSelectedIssueSyncConflictError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except GitHubSelectedIssueSyncProviderReadError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=exc.detail,
+            ) from exc
+        except GitHubSelectedIssueSyncError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubSelectedIssueSyncResponse.model_validate(result)
 
 
 @router.post(

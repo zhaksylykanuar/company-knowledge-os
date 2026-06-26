@@ -38,9 +38,14 @@ files, no unrelated edits, and focused checks first.
 - FOS-019B: done - manual live GitHub issue smoke succeeded against an approved private smoke repository; exactly one issue was created through the gated `ActionProposal` execution path; receipt and audit are stored locally; external issue URL/id are intentionally omitted from public docs; no other repositories were modified.
 - FOS-020: done - post-execution sync read the smoke issue back with safe read-only GitHub access, persisted it through canonical GitHub normalization, verified operational work + Company Brain + deterministic briefing visibility, and kept external execution idempotent.
 - FOS-021: done - the approved smoke issue was closed after explicit human approval, closed-state sync was verified into canonical records/read models, and no additional GitHub issues or other repository changes were made.
+- FOS-022: done - selected repository issue sync reads only explicitly
+  allowlisted repositories, normalizes open/closed issues into canonical
+  records, skips PR-shaped issue API records, and was verified against the
+  approved smoke repository without external writes.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-022 selected repository issue sync over the approved smoke repository or other explicitly approved selected repositories.
+- Next task: FOS-023 selected repository PR sync, or broaden selected issue sync
+  only after the human approves additional repositories.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -680,25 +685,62 @@ Checks to run:
 
 ## FOS-022 - Selected repository issue sync
 
-Status: next.
+Status: done.
 
 Goal: broaden the proven single executed-issue read-back path into a selected
 repository issue sync path for approved repositories only.
 
 Acceptance criteria:
 
-- The target repository set is explicit and human-approved.
-- Sync reads issues from selected repositories without creating, closing,
+- Done - the target repository set is explicit and human-approved.
+- Done - sync reads issues from selected repositories without creating, closing,
   commenting on, or otherwise writing GitHub content.
-- Canonical `SourceRecord` + `Task` upserts remain idempotent.
-- Operational work and Company Brain reflect selected repository issue state.
-- Briefing references selected repository sync only through returned
+- Done - a separate read-sync allowlist blocks non-approved repositories before
+  token decrypt/provider calls.
+- Done - canonical `SourceRecord` + `Task` upserts remain idempotent, and
+  product read models de-dupe alternate historical issue identifiers by
+  repository+number.
+- Done - operational work and Company Brain reflect selected repository issue
+  state.
+- Done - briefing references selected repository sync only through returned
   evidence-backed records.
-- Private issue URLs and local IDs remain out of public docs.
+- Done - PR-shaped issue API records are skipped instead of being double-counted
+  as issues.
+- Done - private issue URLs and local IDs remain out of public docs.
 
 Checks to run:
 
-- Focused GitHub sync/normalization tests.
+- Done - focused selected repository issue sync tests.
+- Done - GitHub normalization/inventory, action/proposal, Company Brain,
+  briefing, and backend E2E tests.
+- Done - live read-only verification against the approved smoke repository only.
+- Final task closeout checks: `git diff --check`, docs navigation, full pytest,
+  `ruff`, and tracked secret scan.
+
+## FOS-023 - Selected repository PR sync
+
+Status: next.
+
+Goal: extend the selected repository read-sync pattern to pull requests for
+explicitly approved repositories only.
+
+Acceptance criteria:
+
+- The target repository set is explicit and human-approved.
+- Sync reads PRs from selected repositories without creating, updating, merging,
+  closing, commenting on, or otherwise writing GitHub content.
+- The same read-sync allowlist policy applies before token decrypt/provider
+  calls.
+- Canonical `SourceRecord` + `PullRequest` upserts remain idempotent.
+- Operational work and Company Brain reflect selected repository PR state.
+- Issue and PR records are not double-counted if GitHub APIs expose overlapping
+  shapes.
+- Private PR URLs and local IDs remain out of public docs.
+
+Checks to run:
+
+- Focused GitHub selected PR sync tests.
+- Existing GitHub normalization/inventory tests.
 - Company Brain and briefing tests if read models change.
 - Docs navigation test if docs change.
 - `UV_NO_SYNC=1 uv run ruff check .`

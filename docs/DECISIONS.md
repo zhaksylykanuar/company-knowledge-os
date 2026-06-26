@@ -672,6 +672,33 @@ Consequences:
 - Broader repository issue sync is a later chunk; FOS-020 proves only the
   executed issue read-back loop.
 
+## DEC-035 - Selected GitHub Read Sync Requires Explicit Repository Allowlist
+
+Decision (2026-06-26): selected repository GitHub read sync is allowed only for
+repositories listed in an explicit non-secret read-sync allowlist
+(`FOS_GITHUB_SYNC_ALLOWED_REPOS`, with existing selected GitHub repo config as a
+compatibility fallback). This read allowlist is separate from the live write
+allowlist.
+
+Rationale: read-only sync can still expose private repository metadata and
+issue state. Broad organization sync must not happen by default or because a
+token has broad scope.
+
+Consequences:
+
+- Missing or non-matching read-sync allowlists block before token decrypt or
+  provider reads.
+- Selected issue sync may fetch and normalize only explicitly approved
+  repositories.
+- Selected issue sync must not create, update, close, comment on, or otherwise
+  write GitHub content.
+- GitHub issue API records that are actually pull requests are skipped or routed
+  through a dedicated PR path in a later chunk; they are not double-counted as
+  issues.
+- Public docs may say selected sync was verified against an approved smoke
+  repository, but must omit private issue URLs and local workspace/connection/
+  proposal/source/evidence identifiers.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

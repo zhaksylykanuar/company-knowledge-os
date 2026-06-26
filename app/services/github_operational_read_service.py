@@ -73,14 +73,23 @@ async def _github_issues(
             select(Task)
             .where(Task.workspace_id == workspace_id)
             .where(Task.source_provider == TASK_PROVIDER_GITHUB)
-            .order_by(Task.updated_at.desc(), Task.created_at.desc())
+            .order_by(
+                Task.source_updated_at.desc().nullslast(),
+                Task.updated_at.desc(),
+                Task.created_at.desc(),
+            )
             .limit(max(limit * 3, limit))
         )
     ).scalars()
     issues: list[dict[str, Any]] = []
+    seen_issue_keys: set[str] = set()
     for row in rows:
         if not _is_github_issue(row):
             continue
+        issue_key = _issue_identity_key(row)
+        if issue_key in seen_issue_keys:
+            continue
+        seen_issue_keys.add(issue_key)
         if not _issue_state_matches(row.status, state):
             continue
         issues.append(_issue_payload(row))
@@ -147,6 +156,17 @@ def _issue_payload(task: Task) -> dict[str, Any]:
         "source_updated_at": task.source_updated_at,
         "metadata": _safe_metadata(metadata),
     }
+
+
+def _issue_identity_key(task: Task) -> str:
+    metadata = task.task_metadata if isinstance(task.task_metadata, Mapping) else {}
+    repository_full_name = _safe_text(metadata.get("repository_full_name"))
+    number = _safe_int(metadata.get("number"))
+    if repository_full_name and number is not None:
+        return f"{repository_full_name}#issue/{number}"
+    if task.external_id:
+        return task.external_id
+    return str(task.id)
 
 
 def _pull_request_payload(

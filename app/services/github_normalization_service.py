@@ -133,22 +133,29 @@ async def normalize_github_sync_job_local(
         if options.persist_if_supported
         else GITHUB_NORMALIZATION_PROJECTION_WARNING
     ]
+    local_records = _local_github_records(sync_job)
     repositories: list[dict[str, Any]] = []
     if options.include_repositories:
-        repository_result = await github_repository_read_service.list_workspace_github_repositories(
-            session=session,
-            workspace_id=workspace_id,
-            filters=github_repository_read_service.GitHubRepositoryFilters(limit=100),
-        )
-        repositories = [
-            build_normalized_repository(repository)
-            for repository in repository_result.repositories
-        ]
-        warnings.extend(repository_result.warnings)
+        local_repositories = local_records["repositories"]
+        if local_repositories:
+            repositories = [
+                build_normalized_repository(repository)
+                for repository in local_repositories
+            ]
+        else:
+            repository_result = await github_repository_read_service.list_workspace_github_repositories(
+                session=session,
+                workspace_id=workspace_id,
+                filters=github_repository_read_service.GitHubRepositoryFilters(limit=100),
+            )
+            repositories = [
+                build_normalized_repository(repository)
+                for repository in repository_result.repositories
+            ]
+            warnings.extend(repository_result.warnings)
         if not repositories:
             warnings.append(GITHUB_NORMALIZATION_NO_LOCAL_REPOSITORIES_WARNING)
 
-    local_records = _local_github_records(sync_job)
     issues: list[dict[str, Any]] = []
     pull_requests: list[dict[str, Any]] = []
     if options.include_issues:
@@ -726,6 +733,11 @@ def _local_github_records(sync_job: SyncJob) -> dict[str, list[Mapping[str, Any]
     github = cursor.get("github") if isinstance(cursor.get("github"), Mapping) else {}
     candidates = (local, github, cursor)
     return {
+        "repositories": _first_record_list(
+            candidates,
+            "repositories",
+            "github_repositories",
+        ),
         "issues": _first_record_list(candidates, "issues", "github_issues"),
         "pull_requests": _first_record_list(
             candidates,
@@ -1062,7 +1074,13 @@ def _safe_visibility(value: Any) -> str:
 
 def _safe_source(value: Any) -> str:
     text = _safe_text(value)
-    if text in {"repo_audit", "repository_inventory", "source_control", "github_connector"}:
+    if text in {
+        "repo_audit",
+        "repository_inventory",
+        "source_control",
+        "github_connector",
+        "selected_repository_issue_sync",
+    }:
         return text
     return "unknown"
 

@@ -4,6 +4,20 @@
 
 ### Changed
 
+- Added read-only selected repository issue sync under the GitHub workspace
+  namespace:
+  `/api/v1/workspaces/{workspace_id}/github/repositories/issues/sync`.
+- Selected issue sync requires an explicit read-sync repository allowlist before
+  token decrypt/provider reads, fetches only selected repositories, skips
+  PR-shaped issue API records, and normalizes open/closed issues into canonical
+  `SourceRecord` + `Task` records through the existing GitHub normalization
+  path.
+- Product GitHub issue read models now de-dupe alternate historical issue
+  identifiers by repository and issue number so a real issue is not double
+  counted in operational work or Company Brain.
+- Selected issue sync was verified read-only against the approved smoke
+  repository: one closed issue synced, open count stayed zero, ActionExecution
+  receipt counts stayed unchanged, and no new GitHub writes occurred.
 - Closed the approved smoke issue after explicit human approval and verified the
   closed state through the existing post-execution sync path.
 - Closed-state sync updated canonical GitHub work records so operational work no

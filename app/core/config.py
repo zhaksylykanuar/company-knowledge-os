@@ -54,6 +54,10 @@ class Settings(BaseSettings):
             "FOS_GITHUB_SMOKE_REPO",
         ),
     )
+    github_sync_allowed_repos: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOS_GITHUB_SYNC_ALLOWED_REPOS"),
+    )
     enable_obsidian_export: bool = True
     require_approval_for_writes: bool = True
     enable_obsidian_bridge: bool = Field(

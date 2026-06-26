@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-022. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-023. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,8 +24,8 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for FOS-022 selected repository issue sync
-over the approved smoke repository or other explicitly approved selected
+Next step: follow `../PROGRESS.md` for FOS-023 selected repository PR sync, or
+broaden selected issue sync only after the human approves additional
 repositories.
 
 Definition of Done:
@@ -87,18 +87,21 @@ Done:
 - Workspace-scoped Company Brain read model exists for deterministic canonical
   GitHub repository/work/evidence state:
   `/api/v1/workspaces/{workspace_id}/company-brain`.
+- Selected repository issue sync exists for explicitly allowlisted repositories:
+  `/api/v1/workspaces/{workspace_id}/github/repositories/issues/sync`.
 - Company Brain repo-audit read model remains available.
 - LLM paths are gated/off by default.
 
 Missing:
 
 - Full GitHub OAuth/product connect flow.
-- Live GitHub sync/product OAuth execution path.
+- Live GitHub OAuth/product sync execution path.
 - Persistent briefing models.
-- Broader selected-repository issue sync beyond the single executed issue
-  read-back and cleanup path.
+- Selected repository PR sync.
+- Broader multi-repository issue/PR sync beyond explicitly approved repository
+  scope.
 
-Next step: follow `../PROGRESS.md` for selected repository issue sync.
+Next step: follow `../PROGRESS.md` for selected repository PR sync.
 
 Definition of Done:
 
