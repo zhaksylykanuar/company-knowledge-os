@@ -49,6 +49,9 @@ ACTION_EXECUTION_EVENT_REPOSITORY_NOT_ALLOWED = "execution_repository_not_allowe
 ACTION_EXECUTION_EVENT_DUPLICATE_RETURNED_EXISTING_RECEIPT = (
     "execution_duplicate_returned_existing_receipt"
 )
+ACTION_EXECUTION_EVENT_RESULT_SYNC_STARTED = "execution_result_sync_started"
+ACTION_EXECUTION_EVENT_RESULT_SYNCED = "execution_result_synced"
+ACTION_EXECUTION_EVENT_RESULT_SYNC_FAILED = "execution_result_sync_failed"
 
 
 class ActionProposal(Base):

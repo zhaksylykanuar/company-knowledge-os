@@ -647,6 +647,31 @@ Consequences:
   approved private smoke repository; local receipt and audit remain the source
   of truth for the private execution details.
 
+## DEC-034 - Executed Provider Results Sync Back Through Read-Only Canonical Normalization
+
+Decision (2026-06-26): post-execution provider receipt sync is a read-only
+provider-read path that validates an executed/succeeded `ActionProposal`
+receipt, fetches only the specific provider result referenced by that receipt,
+creates a local manual SyncJob, and reuses canonical GitHub normalization to
+upsert product read records.
+
+Rationale: the product needs a closed loop from local approval to provider
+write proof and back into canonical FounderOS state, but this must not become a
+second execution path or a generic provider framework.
+
+Consequences:
+
+- Syncing an executed GitHub issue result must not call `/execute`, create a
+  second issue, close/comment/update the issue, or perform any provider write.
+- The sync path writes local canonical records (`SourceRecord` + `Task`) and
+  audit events only.
+- Retained `source_events` is not the primary path for post-execution sync.
+- Private issue URL/id and local workspace/proposal/connection/evidence IDs are
+  omitted from public docs; local receipt/audit/DB rows remain the source of
+  truth for private details.
+- Broader repository issue sync is a later chunk; FOS-020 proves only the
+  executed issue read-back loop.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

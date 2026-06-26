@@ -63,6 +63,14 @@ from app.services.github_issue_execution_service import (
     execute_approved_github_issue_action,
     validate_github_issue_payload,
 )
+from app.services.github_execution_result_sync_service import (
+    GitHubExecutionResultSyncConflictError,
+    GitHubExecutionResultSyncError,
+    GitHubExecutionResultSyncInput,
+    GitHubExecutionResultSyncNotFoundError,
+    GitHubExecutionResultSyncProviderReadError,
+    sync_github_issue_execution_result,
+)
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/actions", tags=["actions"])
 
@@ -100,6 +108,12 @@ class ActionProposalExecuteRequest(BaseModel):
     connection_id: UUID
     confirm_external_write: bool = False
     idempotency_key: str | None = Field(default=None, max_length=255)
+
+
+class ActionProposalExecutionResultSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    connection_id: UUID | None = None
 
 
 class ActionProposalRead(BaseModel):
@@ -238,6 +252,43 @@ class ActionExecutionAuditResponse(BaseModel):
     proposal_id: UUID
     events: list[ActionExecutionAuditEventRead]
     receipt: ActionExecutionReceiptRead
+
+
+class ActionExecutionResultSyncIssueRead(BaseModel):
+    number: int
+    state: str | None = None
+    title: str | None = None
+
+
+class ActionExecutionResultSyncJobRead(BaseModel):
+    id: UUID
+    status: str
+    records_seen: int
+    records_created: int
+    records_updated: int
+
+
+class ActionExecutionResultCanonicalRead(BaseModel):
+    task_id: UUID | None = None
+    source_record_id: UUID | None = None
+    external_id: str | None = None
+    evidence_refs_count: int = 0
+
+
+class ActionExecutionResultSyncResponse(BaseModel):
+    workspace_id: UUID
+    proposal_id: UUID
+    synced: bool
+    status: str
+    provider: str
+    action: str
+    repository: str
+    issue: ActionExecutionResultSyncIssueRead
+    sync_job: ActionExecutionResultSyncJobRead
+    canonical: ActionExecutionResultCanonicalRead
+    counts: dict[str, int] = Field(default_factory=dict)
+    audit: list[ActionExecutionAuditEventRead] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 @router.post(
@@ -480,6 +531,55 @@ async def get_action_proposal_audit_endpoint(
         events=_audit_event_reads(events),
         receipt=_receipt_from_events(events),
     )
+
+
+@router.post(
+    "/proposals/{proposal_id}/sync-execution-result",
+    response_model=ActionExecutionResultSyncResponse,
+)
+async def sync_action_proposal_execution_result_endpoint(
+    workspace_id: UUID,
+    proposal_id: UUID,
+    payload: ActionProposalExecutionResultSyncRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> ActionExecutionResultSyncResponse:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await sync_github_issue_execution_result(
+                session,
+                workspace_id=workspace_id,
+                proposal_id=proposal_id,
+                input_payload=GitHubExecutionResultSyncInput(
+                    connection_id=payload.connection_id,
+                ),
+            )
+            await session.commit()
+        except GitHubExecutionResultSyncNotFoundError as exc:
+            await session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.detail,
+            ) from exc
+        except GitHubExecutionResultSyncConflictError as exc:
+            await session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except GitHubExecutionResultSyncProviderReadError as exc:
+            await session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=exc.detail,
+            ) from exc
+        except GitHubExecutionResultSyncError as exc:
+            await session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return ActionExecutionResultSyncResponse.model_validate(result)
 
 
 @router.post(
@@ -766,6 +866,7 @@ def _receipt_from_events(events: list[Any]) -> ActionExecutionReceiptRead:
         (
             event
             for event in reversed(events)
+            if not str(event.event_type).startswith("execution_result_sync_")
             if event.external_result_id
             or event.external_result_url
             or event.error_code

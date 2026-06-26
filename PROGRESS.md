@@ -11,9 +11,9 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 5 — Action Approval`.
-- **Task:** CHUNK 5 / FOS-019B — human-approved live GitHub issue smoke proof.
-- **State:** ✅ Manual live GitHub issue smoke succeeded against an approved private smoke repository. Exactly one GitHub issue was created through the gated `ActionProposal` execution path; receipt and durable audit are stored locally; external issue URL/id are intentionally omitted from public docs; no other repositories were modified; no push was performed.
-- **Next action:** FOS-020 post-execution sync verification: sync the created smoke issue back into canonical records, verify dashboard/Company Brain/briefing visibility, and verify idempotency/no duplicate execution remains true.
+- **Task:** CHUNK 5 / FOS-020 — post-execution sync verification.
+- **State:** ✅ Post-execution sync verified for the gated live GitHub smoke issue. The created issue was read back with safe read-only GitHub access, synced into canonical GitHub work records (`SourceRecord` + `Task`), visible through operational work and Company Brain, and reflected by the deterministic briefing via normalization evidence. The original execution receipt remains single/idempotent; no duplicate external execution occurred.
+- **Next action:** FOS-021 smoke issue closeout/cleanup with explicit human approval; after cleanup, broaden GitHub sync from a single executed issue to selected repository issue sync.
 
 ---
 
@@ -40,14 +40,14 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic upgrade head` | ✅ pass | 2026-06-25 | FOS-018 on `main`: one head `a2b3c4d5e6f7`, current==head |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-25 | FOS-018 on `main`: **273 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-25 | FOS-018 on `main`: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-06-26 | FOS-020 on `main`: **281 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-06-26 | FOS-020 on `main`: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
 | frontend build | ✅ pass | 2026-06-25 | FOS-018 on `main`: `npm test` 60 passed; `next build`, then `typecheck`/`lint` ok (7 routes) |
-| docs navigation | ✅ pass | 2026-06-25 | FOS-018 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
+| docs navigation | ✅ pass | 2026-06-26 | FOS-020 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-25 | FOS-018: drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про execution gate |
-| **GitHub E2E (spine)** | ✅ live write proof pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue through the gated `ActionProposal` path against an approved private smoke repository; local receipt/audit persisted; no other repositories modified |
-| **full main E2E** | ⚠️ post-sync verification pending | 2026-06-26 | «approved action → реальный GitHub issue» is proven by FOS-019B; FOS-020 still needs to sync the created smoke issue back into canonical records and verify product read surfaces see it without duplicate execution |
+| **GitHub E2E (spine)** | ✅ closed-loop pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue through the gated `ActionProposal` path; FOS-020 read it back safely and synced it into canonical GitHub work records |
+| **full main E2E** | ✅ pass | 2026-06-26 | «approved action → реальный GitHub issue → canonical sync → product read models» verified; operational work + Company Brain see the synced issue, briefing reflects the normalization evidence, and execution count stayed single |
 | prod smoke | ❓ unknown | — | деплой не выполнялся; Makefile/`make smoke` отсутствует |
 
 Статусы: ✅ pass · ❌ fail · ❓ unknown
@@ -92,13 +92,14 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] FOS-016 — GitHub create-issue execution preview/audit — `app/api/actions.py` exposes `/execution-preview` for local approved GitHub issue proposals, preserves evidence refs without inventing them, reports eligibility/capabilities/audit fallback, and blocks `/execute` when `enable_write_actions=false`. `web/components/ActionExecutionControls.tsx` surfaces preview-only state, external-write disabled copy, confirmation UI only when backend says live writes are enabled, and no raw provider payload dumps. GitHub client remains mocked in tests; real external-write proof is still human-gated.
 - [x] FOS-017 — Execution audit/receipt hardening — new proposal-scoped `ActionExecutionEvent` model/table + migration `a2b3c4d5e6f7`, idempotent audit append/list service, `/audit` read endpoint, persisted preview/blocked-execute events, and local execution receipt. `web/components/ActionExecutionControls.tsx` reads durable audit events, keeps timestamp fallback when empty, refreshes audit after preview/blocked execute, and continues to state that no external write occurred.
 - [x] FOS-018 — Human-gated GitHub issue write path — existing `github_issue_execution_service` can call the GitHub issue client only after `enable_write_actions=true`, approved proposal, supported GitHub issue action, valid payload/connection, non-empty evidence refs, explicit confirmation, target repository in the explicit GitHub write allowlist (`FOS_GITHUB_WRITE_ALLOWED_REPOS` / `FOS_GITHUB_SMOKE_REPO`), and no existing successful receipt. Success/failure/duplicate/block paths persist `ActionExecution` receipts and `ActionExecutionEvent` audit events; duplicate execute returns the existing receipt without another provider call. `web/components/ActionExecutionControls.tsx` shows live execution controls only when backend capabilities allow them, requires explicit confirmation, and renders external issue receipt/link only after backend success. Automated tests still mock provider calls; FOS-019B proved the manual live smoke with exactly one issue against an approved private smoke repository.
+- [x] FOS-020 — Post-execution sync verification — `POST /api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/sync-execution-result` validates the executed/succeeded GitHub issue receipt, uses an encrypted GitHub connection for read-only issue fetch, creates a local manual SyncJob, and reuses canonical GitHub normalization to upsert `SourceRecord` + `Task`. Verified against the smoke issue: operational work and Company Brain see the synced issue; deterministic briefing reflects the normalization item; execution rows remain single and no provider write is called.
 
 ### CHUNK 6 — Remaining Connectors
 *Gate: Jira / Gmail / Drive / Documents видны в Brain.*
 - [~] FOS-JIRA-01 — Jira connector minimal — `app/connectors/jira.py` + `jira_discovery`/`jira_graph_mapping`; нет `web/app/jira`, не в каноническом Brain
 - [~] FOS-GMAIL-01 — Gmail connector minimal — `app/connectors/gmail.py` + gmail-модели + `app/api/gmail.py`; нет `web/app/gmail`
 - [~] FOS-019 — Drive connector minimal — `app/connectors/google_drive.py` + `app/api/drive.py`; нет `web/app/drive`
-- [~] FOS-020 — Documents module — есть `source_documents` (RAG-ingestion), но нет канонического Document CRUD (`body_markdown`, §7.11) и `web/app/documents`
+- [~] FOS-DOC-01 — Documents module — есть `source_documents` (RAG-ingestion), но нет канонического Document CRUD (`body_markdown`, §7.11) и `web/app/documents`
 
 ### CHUNK 7 — Polish + Repo Audit UI
 *Gate: нет dead-end состояний; repo audit виден в UI.*
@@ -119,11 +120,13 @@ DONE строго = есть код + проходящий тест/рабочи
 
 - ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). `source_events` repointed to compatibility fallback in FOS-009 (DEC-030); physical drop remains a later migration/cleanup task, not this feature path.
 
-- [SPINE] **Post-execution sync verification pending.** The human-approved live GitHub issue smoke is proven by FOS-019B, but the created smoke issue still needs to be synced back into canonical records and verified through dashboard/Company Brain/briefing read surfaces. Live OAuth/provider sync remains outside this path. Рефакторинг по §21.4 ещё **запрещён** until post-execution sync/read verification is complete.
+- [SPINE] **Smoke issue cleanup still requires explicit human approval.** The live write/read-back loop is verified, but the private smoke issue remains intentionally open. Do not close/comment/update it without a separate human-approved cleanup chunk. Live OAuth/provider sync remains outside this path; broad selected-repository issue sync is still a future product chunk.
 
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-26` — **FOS-020 post-execution sync verification.** Added a read-only post-execution sync path for executed GitHub issue `ActionProposal` receipts: `POST /api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/sync-execution-result`. The route validates executed/succeeded receipt state, reads exactly the provider issue through the encrypted GitHub connection, writes no GitHub content, creates a local manual SyncJob, and reuses canonical GitHub normalization to upsert `SourceRecord` + `Task`. Live verification read the approved smoke issue back into canonical records; operational work and Company Brain see it, deterministic briefing reflects the normalization evidence, and execution count stayed single. Private issue URL and local workspace/proposal/connection/evidence IDs are intentionally omitted from public docs. Checks: `git diff --check` passed, targeted backend suite **98 passed**, full pytest **281 passed / 1 warning**, docs navigation **2 passed**, `ruff` clean, tracked secret scan clean. Next: explicit smoke issue closeout/cleanup approval, then broader selected-repository issue sync.
 
 - `2026-06-26` — **FOS-019B manual live GitHub issue smoke proof.** Manual live GitHub issue smoke succeeded against an approved private smoke repository. Exactly one GitHub issue was created through the gated `ActionProposal` execution path after runtime capability, explicit confirmation, evidence, allowlist, and idempotency gates. Receipt and durable audit are stored locally (`execution_preview_generated`, `execution_confirmation_received`, `execution_started`, `execution_succeeded`). External issue URL/id and local workspace/proposal/connection/evidence IDs are intentionally omitted from public docs. No other repositories were modified and no push was performed. Next: FOS-020 post-execution sync verification.
 

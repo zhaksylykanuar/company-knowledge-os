@@ -9,6 +9,7 @@ from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
 import app.services.github_issue_execution_service as github_issue_execution_service
+import app.services.github_execution_result_sync_service as github_execution_result_sync_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.action_models import (
     ACTION_CREATED_BY_USER,
@@ -28,6 +29,7 @@ from app.db.action_models import (
     ActionProposal,
 )
 from app.db.base import AsyncSessionLocal
+from app.db.canonical_models import SourceRecord, Task
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_ADMIN,
     MEMBERSHIP_ROLE_MEMBER,
@@ -45,6 +47,7 @@ from app.db.integration_models import (
     INTEGRATION_PROVIDER_GITHUB,
     INTEGRATION_PROVIDER_JIRA,
     IntegrationConnection,
+    SyncJob,
 )
 from app.main import app
 from app.services.github_issue_client import GitHubIssueClientError
@@ -75,7 +78,11 @@ def _block_live_github_issue_client(monkeypatch):
     async def fail_create_issue(**_kwargs):
         raise AssertionError("GitHub issue client must be mocked in tests")
 
+    async def fail_get_issue(**_kwargs):
+        raise AssertionError("GitHub issue read client must be mocked in tests")
+
     monkeypatch.setattr(github_issue_execution_service, "create_issue", fail_create_issue)
+    monkeypatch.setattr(github_execution_result_sync_service, "get_issue", fail_get_issue)
 
 
 def _bootstrap_payload(marker: str, *, suffix: str = "") -> dict[str, str]:
@@ -156,6 +163,15 @@ async def _cleanup_issue_action_fixture(marker: str) -> None:
                         ActionExecution.action_proposal_id.in_(proposal_ids)
                     )
                 )
+            await session.execute(
+                delete(Task).where(Task.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
+                delete(SourceRecord).where(SourceRecord.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
+                delete(SyncJob).where(SyncJob.workspace_id.in_(workspace_ids))
+            )
             await session.execute(
                 delete(ActionProposal).where(
                     ActionProposal.workspace_id.in_(workspace_ids)
@@ -356,6 +372,25 @@ async def _get_audit(
         )
 
 
+async def _sync_execution_result(
+    workspace_id: str,
+    proposal_id: str | UUID,
+    owner_email: str,
+    *,
+    connection_id: UUID | None = None,
+):
+    payload: dict[str, str] = {}
+    if connection_id is not None:
+        payload["connection_id"] = str(connection_id)
+    async with _async_client() as client:
+        return await client.post(
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/sync-execution-result",
+            headers=_headers(),
+            params={"owner_email": owner_email},
+            json=payload,
+        )
+
+
 async def _stored_proposal(proposal_id: str | UUID) -> ActionProposal:
     async with AsyncSessionLocal() as session:
         proposal = await session.scalar(
@@ -406,6 +441,9 @@ def _execution_event_sort_key(event: ActionExecutionEvent) -> tuple:
         "execution_succeeded": 50,
         "execution_failed": 51,
         "execution_duplicate_returned_existing_receipt": 60,
+        "execution_result_sync_started": 70,
+        "execution_result_synced": 71,
+        "execution_result_sync_failed": 72,
     }
     return (event.created_at, order.get(event.event_type, 100), str(event.id))
 
@@ -431,6 +469,28 @@ def _mock_successful_github_issue(monkeypatch, calls: list[dict]) -> None:
         }
 
     monkeypatch.setattr(github_issue_execution_service, "create_issue", fake_create_issue)
+
+
+def _mock_read_github_issue(monkeypatch, calls: list[dict]) -> None:
+    async def fake_get_issue(**kwargs):
+        calls.append(kwargs)
+        assert kwargs["access_token"] == PLAIN_EXECUTION_TOKEN
+        assert kwargs["repository_full_name"] == "qtwin-io/founderos-api"
+        assert kwargs["issue_number"] == 42
+        return {
+            "id": 987654,
+            "number": 42,
+            "html_url": "https://github.com/qtwin-io/founderos-api/issues/42",
+            "url": "https://api.github.com/repos/qtwin-io/founderos-api/issues/42",
+            "state": "open",
+            "title": "FounderOS follow-up",
+            "body": "private body should not be stored in canonical sync payload",
+            "created_at": "2026-06-26T01:00:00Z",
+            "updated_at": "2026-06-26T01:05:00Z",
+            "token": PLAIN_EXECUTION_TOKEN,
+        }
+
+    monkeypatch.setattr(github_execution_result_sync_service, "get_issue", fake_get_issue)
 
 
 async def test_execution_preview_is_dry_run_when_external_writes_disabled(
@@ -889,6 +949,272 @@ async def test_owner_admin_can_execute_approved_github_issue(
         ]
         assert audit["receipt"]["status"] == ACTION_EXECUTION_STATUS_SUCCEEDED
         assert audit["receipt"]["provider_result"] == "succeeded"
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_sync_execution_result_reads_issue_into_product_state(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    write_calls: list[dict] = []
+    read_calls: list[dict] = []
+    _mock_successful_github_issue(monkeypatch, write_calls)
+    _mock_read_github_issue(monkeypatch, read_calls)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(workspace_id, owner_email)
+        connection_id = await _create_connection(workspace_id)
+
+        executed = await _execute_proposal(
+            workspace_id,
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+        assert executed.status_code == 200, executed.text
+
+        synced = await _sync_execution_result(
+            workspace_id,
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert synced.status_code == 200, synced.text
+        body = synced.json()
+        assert body["synced"] is True
+        assert body["status"] == "synced"
+        assert body["provider"] == INTEGRATION_PROVIDER_GITHUB
+        assert body["action"] == ACTION_TYPE_CREATE_GITHUB_ISSUE
+        assert body["repository"] == "qtwin-io/founderos-api"
+        assert body["issue"]["number"] == 42
+        assert body["issue"]["state"] == "open"
+        assert body["canonical"]["task_id"] is not None
+        assert body["canonical"]["source_record_id"] is not None
+        assert body["canonical"]["evidence_refs_count"] == 1
+        assert body["counts"]["issues"] == 1
+        assert "No external write occurred during sync." in body["warnings"]
+        assert PLAIN_EXECUTION_TOKEN not in synced.text
+        assert "private body should not be stored" not in synced.text
+        assert len(write_calls) == 1
+        assert len(read_calls) == 1
+
+        async with AsyncSessionLocal() as session:
+            task_count = await session.scalar(
+                select(func.count())
+                .select_from(Task)
+                .where(Task.workspace_id == UUID(workspace_id))
+            )
+            source_record_count = await session.scalar(
+                select(func.count())
+                .select_from(SourceRecord)
+                .where(SourceRecord.workspace_id == UUID(workspace_id))
+            )
+            task = await session.scalar(
+                select(Task)
+                .where(Task.workspace_id == UUID(workspace_id))
+                .where(Task.source_provider == INTEGRATION_PROVIDER_GITHUB)
+            )
+            source_record = await session.scalar(
+                select(SourceRecord)
+                .where(SourceRecord.workspace_id == UUID(workspace_id))
+                .where(SourceRecord.provider == INTEGRATION_PROVIDER_GITHUB)
+            )
+        assert task_count == 1
+        assert source_record_count == 1
+        assert task is not None
+        assert task.task_metadata["github_object_type"] == "issue"
+        assert task.task_metadata["number"] == 42
+        assert task.task_metadata["repository_full_name"] == "qtwin-io/founderos-api"
+        assert source_record is not None
+        assert PLAIN_EXECUTION_TOKEN not in str(source_record.payload)
+        assert "private body should not be stored" not in str(source_record.payload)
+
+        async with _async_client() as client:
+            operational = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/operational-work",
+                headers=_headers(),
+                params={"owner_email": owner_email, "state": "open"},
+            )
+            company_brain = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/company-brain",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+            briefing = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={"include_repository_inventory": False},
+            )
+
+        assert operational.status_code == 200, operational.text
+        operational_body = operational.json()
+        assert operational_body["counts"]["issues"] == 1
+        assert operational_body["issues"][0]["number"] == 42
+        assert operational_body["issues"][0]["repository_full_name"] == (
+            "qtwin-io/founderos-api"
+        )
+
+        assert company_brain.status_code == 200, company_brain.text
+        brain = company_brain.json()
+        assert brain["summary"]["open_issues"] == 1
+        assert brain["work"]["issues"][0]["number"] == 42
+        assert brain["work"]["issues"][0]["source_refs"]
+
+        assert briefing.status_code == 200, briefing.text
+        briefing_body = briefing.json()["briefing"]
+        assert briefing_body["signals"]["github"]["latest_sync_job_status"] == "succeeded"
+        normalization_item = next(
+            item
+            for item in briefing_body["items"]
+            if item["id"] == "github-normalization"
+        )
+        assert "issues=1" in normalization_item["summary"]
+        assert normalization_item["evidence_refs"]
+
+        repeated = await _sync_execution_result(
+            workspace_id,
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+        assert repeated.status_code == 200, repeated.text
+        assert len(write_calls) == 1
+        assert len(read_calls) == 2
+        async with AsyncSessionLocal() as session:
+            assert (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(Task)
+                    .where(Task.workspace_id == UUID(workspace_id))
+                )
+                == 1
+            )
+            assert (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(SourceRecord)
+                    .where(SourceRecord.workspace_id == UUID(workspace_id))
+                )
+                == 1
+            )
+
+        audit_response = await _get_audit(workspace_id, proposal["id"], owner_email)
+        assert audit_response.status_code == 200, audit_response.text
+        event_types = [event["event_type"] for event in audit_response.json()["events"]]
+        assert event_types == [
+            "execution_confirmation_received",
+            "execution_started",
+            "execution_succeeded",
+            "execution_result_sync_started",
+            "execution_result_synced",
+        ]
+        assert audit_response.json()["receipt"]["status"] == ACTION_EXECUTION_STATUS_SUCCEEDED
+        assert audit_response.json()["receipt"]["external_write_performed"] is True
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_sync_execution_result_requires_executed_successful_proposal(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(workspace_id, owner_email)
+        connection_id = await _create_connection(workspace_id)
+
+        response = await _sync_execution_result(
+            workspace_id,
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": "action proposal is not executed"}
+
+        executed_without_receipt = await _seed_proposal(
+            workspace_id,
+            status=ACTION_PROPOSAL_STATUS_EXECUTED,
+        )
+        receipt_response = await _sync_execution_result(
+            workspace_id,
+            executed_without_receipt,
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert receipt_response.status_code == 409
+        assert receipt_response.json() == {
+            "detail": "successful execution receipt is required"
+        }
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_sync_execution_result_records_read_failure_without_write(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    write_calls: list[dict] = []
+    _mock_successful_github_issue(monkeypatch, write_calls)
+
+    async def fail_get_issue(**_kwargs):
+        raise GitHubIssueClientError("github issue read request failed: not found")
+
+    monkeypatch.setattr(github_execution_result_sync_service, "get_issue", fail_get_issue)
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(workspace_id, owner_email)
+        connection_id = await _create_connection(workspace_id)
+
+        executed = await _execute_proposal(
+            workspace_id,
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+        assert executed.status_code == 200, executed.text
+
+        response = await _sync_execution_result(
+            workspace_id,
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert response.status_code == 502
+        assert response.json() == {"detail": "github issue read failed"}
+        assert len(write_calls) == 1
+        events = await _stored_execution_events(proposal["id"])
+        assert [event.event_type for event in events] == [
+            "execution_confirmation_received",
+            "execution_started",
+            "execution_succeeded",
+            "execution_result_sync_started",
+            "execution_result_sync_failed",
+        ]
+        assert events[-1].error_code == "provider_read_failed"
+        assert PLAIN_EXECUTION_TOKEN not in events[-1].message
+        assert PLAIN_EXECUTION_TOKEN not in str(events[-1].event_metadata)
     finally:
         await _cleanup_issue_action_fixture(marker)
 

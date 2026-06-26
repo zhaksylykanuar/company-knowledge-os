@@ -4,12 +4,23 @@
 
 ### Changed
 
+- Added a read-only post-execution sync route for executed GitHub issue
+  `ActionProposal` receipts:
+  `/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/sync-execution-result`.
+- The post-execution sync path validates an executed/succeeded receipt, reads
+  the provider issue through the encrypted GitHub connection, creates a local
+  manual SyncJob, and reuses canonical GitHub normalization to upsert
+  `SourceRecord` + `Task`.
+- Post-execution sync was verified for the gated live GitHub smoke issue:
+  operational work and Company Brain see the synced issue, deterministic
+  briefing reflects the normalization evidence, and no duplicate external
+  execution occurred.
 - Manual live GitHub issue smoke succeeded through the gated `ActionProposal`
   execution path against an approved private smoke repository.
 - Exactly one GitHub issue was created; receipt and durable audit are stored
   locally; external issue URL/id are intentionally omitted from public docs.
-- No other repositories were modified, and the next step is FOS-020
-  post-execution sync verification.
+- No other repositories were modified, and the next step is explicit smoke issue
+  closeout/cleanup approval.
 
 ## 2026-06-25
 

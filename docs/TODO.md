@@ -36,9 +36,10 @@ files, no unrelated edits, and focused checks first.
 - FOS-017: done - execution preview and blocked execute paths persist proposal-scoped audit events and expose a local execution receipt/readiness model.
 - FOS-018: done - approved GitHub issue execution code path is gated by runtime config, explicit confirmation, evidence refs, explicit GitHub write repository allowlist, idempotent receipt, and durable audit; automated tests mock the provider.
 - FOS-019B: done - manual live GitHub issue smoke succeeded against an approved private smoke repository; exactly one issue was created through the gated `ActionProposal` execution path; receipt and audit are stored locally; external issue URL/id are intentionally omitted from public docs; no other repositories were modified.
+- FOS-020: done - post-execution sync read the smoke issue back with safe read-only GitHub access, persisted it through canonical GitHub normalization, verified operational work + Company Brain + deterministic briefing visibility, and kept external execution idempotent.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-020 post-execution sync verification - sync the created smoke issue back into canonical records, verify dashboard/Company Brain/briefing can see it, and verify idempotency/no duplicate execution remains true.
+- Next task: FOS-021 smoke issue closeout/cleanup with explicit human approval. After cleanup, broaden GitHub sync from a single executed issue to selected repository issue sync.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -605,22 +606,36 @@ Checks to run:
 
 ## FOS-020 - Post-execution sync verification
 
-Status: next.
+Status: done.
 
 Goal: verify the successfully created smoke issue can flow back into the
 canonical GitHub-first read path without causing duplicate execution.
 
-Acceptance criteria:
+Implemented:
 
-- Sync the created smoke issue back into canonical records through the supported
+- Added `POST /api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/sync-execution-result`.
+- The endpoint validates an executed/succeeded GitHub issue proposal receipt,
+  reads the provider issue through the encrypted GitHub connection, creates a
+  local manual SyncJob, and reuses canonical GitHub normalization.
+- The sync path upserts canonical `SourceRecord` + `Task`, not retained
+  `source_events`.
+- Sync audit events record `execution_result_sync_started` and
+  `execution_result_synced`.
+- No GitHub write, issue close, comment, PR, release, repo setting, OAuth, or
+  LLM call is part of this path.
+
+Acceptance criteria status:
+
+- Done - synced the created smoke issue back into canonical records through the supported
   GitHub/local sync path.
-- Dashboard operational work can see the synced issue from canonical records.
-- Company Brain can see the synced issue from canonical records/source refs.
-- Briefing can include or reference the synced issue only through returned
-  evidence-backed records.
-- The original executed proposal remains idempotent: repeated execute returns
-  the existing receipt and does not create another GitHub issue.
-- Public docs continue to omit private issue URL/id and local workspace/
+- Done - operational work can see the synced issue from canonical records.
+- Done - Company Brain can see the synced issue from canonical records/source
+  refs.
+- Done - deterministic briefing reflects the sync through returned
+  normalization evidence; issue-specific briefing text is not invented.
+- Done - the original executed proposal remains idempotent; execution row count
+  stayed single and no duplicate external execution occurred.
+- Done - public docs continue to omit private issue URL/id and local workspace/
   proposal/connection/evidence identifiers.
 
 Checks to run:
@@ -630,3 +645,26 @@ Checks to run:
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `UV_NO_SYNC=1 uv run pytest -q`
 - `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`.
+
+## FOS-021 - Smoke issue closeout / cleanup
+
+Status: next / requires explicit human approval.
+
+Goal: close out the private smoke issue created during FOS-019B only after the
+post-execution sync loop has been verified.
+
+Acceptance criteria:
+
+- Human explicitly approves whether to close, comment, label, or leave the
+  private smoke issue open.
+- No cleanup action runs without a separate confirmation.
+- If cleanup is approved, the action is recorded in local audit/status without
+  leaking private issue URL/id or local identifiers into public docs.
+- No other repositories are modified.
+
+Checks to run:
+
+- Targeted action/execution tests if any cleanup code path changes.
+- Docs navigation test if docs change.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `bash scripts/check_no_secrets.sh --tracked`

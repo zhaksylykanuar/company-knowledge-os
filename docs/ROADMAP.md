@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-020. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-021. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,9 +24,9 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for FOS-020 post-execution sync
-verification: sync the created smoke issue back into canonical records, verify
-dashboard/Company Brain/briefing visibility, and verify no duplicate execution.
+Next step: follow `../PROGRESS.md` for FOS-021 smoke issue closeout/cleanup
+with explicit human approval; after cleanup, broaden GitHub sync from a single
+executed issue to selected repository issue sync.
 
 Definition of Done:
 
@@ -95,11 +95,10 @@ Missing:
 - Full GitHub OAuth/product connect flow.
 - Live GitHub sync/product OAuth execution path.
 - Persistent briefing models.
-- Post-execution sync verification after the first human-gated live GitHub issue
-  write proof.
+- Broader selected-repository issue sync beyond the single executed issue
+  read-back path.
 
-Next step: follow `../PROGRESS.md` for FOS-020 post-execution sync
-verification.
+Next step: follow `../PROGRESS.md` for explicit smoke issue closeout/cleanup.
 
 Definition of Done:
 
@@ -146,12 +145,13 @@ Missing:
 - Login page.
 - Workspace onboarding.
 - Browser/product E2E coverage.
-- Post-execution sync/read verification after the first human-gated live
-  external write proof.
+- The first human-gated live external write proof has been read back into
+  canonical product state.
+- Broader selected-repository issue sync remains to be built after the smoke
+  cleanup decision.
 
-Next step: sync the created smoke issue back into canonical records, verify
-dashboard/Company Brain/briefing can see it, and verify repeated execute remains
-idempotent.
+Next step: close out or leave open the private smoke issue only after explicit
+human approval.
 
 Definition of Done:
 
@@ -220,12 +220,12 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Post-execution sync/read verification after the manual real GitHub issue smoke
-  proof. External issue URL/id and local workspace/proposal/connection/evidence
-  identifiers are intentionally omitted from public docs.
+- Broader selected-repository issue sync after the manual real GitHub issue
+  smoke proof. External issue URL/id and local workspace/proposal/connection/
+  evidence identifiers are intentionally omitted from public docs.
 
-Next step: run FOS-020 post-execution sync verification and keep the smoke issue
-open until that verification completes.
+Next step: run FOS-021 smoke issue closeout/cleanup only after explicit human
+approval; no close/comment/update happens automatically.
 
 Definition of Done:
 
