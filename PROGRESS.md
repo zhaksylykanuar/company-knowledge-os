@@ -11,26 +11,28 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 8 — Testing Gate + Deploy`.
-- **Task:** FOS-025C — frontend/full-stack deploy-readiness CI gates.
-- **State:** ✅ CI now enforces deploy-readiness gates for both backend and
-  frontend. Backend CI still runs the tracked-secret scan, Python setup,
-  `uv sync --frozen`, ruff, Alembic upgrade, docs/smoke/CORS/CI contract tests,
-  and full pytest against pinned Postgres. A separate frontend job runs `npm ci`,
-  `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint` from
-  `web/` with pinned GitHub Actions and no provider secrets.
-- **Next action:** write the concrete private-beta deploy runbook/config path,
-  then perform a human-approved deployed smoke only when ready.
+- **Task:** FOS-025D — concrete private-beta deploy runbook/config path.
+- **State:** ✅ Manual private-beta deploy runbook exists at
+  `docs/deploy/private-beta.md`. It defines the split backend/frontend process
+  model, managed Postgres/Redis expectations, backend/frontend commands,
+  env-name contract, CORS/API-base setup, migration verification, backup and
+  rollback policy, GitHub connection boundaries, and read-only post-deploy smoke
+  procedure. It adds no auto-deploy workflow, no cloud-provider secrets, and no
+  deploy execution.
+- **Next action:** pick/prepare the actual hosting target and perform a
+  human-approved dry deploy rehearsal or continue with production auth/GitHub
+  onboarding hardening before deploy.
 
 ---
 
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks: 19 / 26   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱   71%   (строго DONE)
+Tasks: 20 / 27   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱   71%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 19** · **PARTIAL = 6** · **MISSING = 1**.
+Разбивка: **DONE = 20** · **PARTIAL = 6** · **MISSING = 1**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
 Для сравнения: `docs/TODO.md` помечает «done» ~22 задачи **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook/main-path схемы строго готово 14.
@@ -119,6 +121,7 @@ DONE строго = есть код + проходящий тест/рабочи
 *Gate: launch gate зелёный; production URL работает; первый E2E в проде.*
 - [x] FOS-025B — Deploy/smoke foundation — explicit backend CORS config, placeholder-only env contract, read-only private-beta smoke script, `make smoke`, local full-stack/private-beta smoke docs, and focused smoke/config/docs tests. No deploy and no external writes.
 - [x] FOS-025C — Frontend/full-stack deploy-readiness CI gates — `.github/workflows/ci.yml` now has separate backend and frontend jobs; backend gates are preserved and add explicit docs/smoke/CORS/CI contract tests; frontend gates run `npm ci`, `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`; CI contains no provider secrets, live smoke command, selected sync, or execute calls.
+- [x] FOS-025D — Private-beta deploy runbook/config path — `docs/deploy/private-beta.md` documents the manual split backend/frontend deploy model, managed Postgres/Redis, backend/frontend runtime commands, migration verification, backup/rollback, env names, CORS/API-base setup, GitHub connection limits, and read-only post-deploy smoke procedure. No deploy config that auto-deploys, no cloud secrets, and no deployment was added.
 - [~] FOS-SMOKE-01 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; FOS-025B added `make smoke` + read-only private-beta smoke script; deployed/full-stack smoke is still not run
 - [x] FOS-T — Full tests + frontend build — FOS-025C local gate: backend full pytest 297 passed / 1 warning; frontend `npm test`, build, typecheck, and lint passed; CI now enforces both backend and frontend gates
 - [ ] FOS-D — Deploy (Railway) — не выполнялся
@@ -140,6 +143,18 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-26` — **FOS-025D private-beta deploy runbook/config path.**
+  Added `docs/deploy/private-beta.md` and linked it from README/docs/web docs.
+  The runbook chooses a manual split deployment baseline (backend API process,
+  frontend web process, managed Postgres, managed/deferred Redis), documents
+  backend/frontend install/build/start commands, migration head/current
+  verification, database backup and restore-as-rollback policy, exact env names,
+  CORS/API-base setup, GitHub connection boundaries, and read-only post-deploy
+  `make smoke`. Added deploy-doc safety tests that verify required env names,
+  smoke/read-only boundaries, no secret-shaped values, and no auto-deploy
+  workflow. No deploy, external writes, provider calls, GitHub issue/PR changes,
+  or push were performed.
 
 - `2026-06-26` — **FOS-025C frontend/full-stack deploy-readiness CI gates.**
   Extended `.github/workflows/ci.yml` into separate backend and frontend jobs.

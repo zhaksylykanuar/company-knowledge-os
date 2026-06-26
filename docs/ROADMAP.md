@@ -4,9 +4,9 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 8 / FOS-025D after
-FOS-025C frontend/full-stack deploy-readiness CI gates. Docs consolidation is
-complete; this roadmap is planning context, not the live task source.
+The current execution pointer is `../PROGRESS.md`: CHUNK 8 / FOS-025E after
+FOS-025D private-beta deploy runbook/config path. Docs consolidation is complete;
+this roadmap is planning context, not the live task source.
 
 ## Phase 0 - Project Setup
 
@@ -24,7 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for the concrete private-beta deploy runbook/config path.
+Next step: follow `../PROGRESS.md` for private-beta hosting target dry-run preparation or production auth/GitHub onboarding hardening.
 
 Definition of Done:
 
@@ -313,6 +313,9 @@ Done:
   config, placeholder-only `.env.example`, and read-only `make smoke`.
 - FOS-025C added a CI frontend deploy-readiness job and explicit offline
   docs/smoke/CORS/CI contract checks.
+- FOS-025D added `docs/deploy/private-beta.md`, a manual split-service deploy
+  runbook with migration, backup, rollback, CORS/API-base, env-name, and smoke
+  procedures.
 
 Missing:
 
@@ -321,14 +324,13 @@ Missing:
 - Backend service.
 - Worker service.
 - Frontend service.
-- Concrete private-beta deploy runbook/config path.
 - Production auth/session decision.
 - GitHub OAuth/onboarding path.
 - Deployed smoke run.
 - Domain/health checks.
 
-Next step: write the real private-beta deploy runbook/config path before
-deploying.
+Next step: choose/prepare the actual hosting target or harden production auth and
+GitHub onboarding before deploying.
 
 Definition of Done:
 

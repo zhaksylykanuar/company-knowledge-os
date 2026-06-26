@@ -80,9 +80,12 @@ For product pages to load, the browser Settings page needs:
 
 ## Private-beta deployment foundation
 
-FOS-025B adds the first deploy foundation only; it does **not** deploy the app.
-A private-beta deploy still needs a hosting target, DB/Redis bindings, production
-auth decisions, provider onboarding, backups, and a real deployed smoke run.
+The concrete manual private-beta deployment path is documented in
+[`docs/deploy/private-beta.md`](docs/deploy/private-beta.md). It defines the
+backend API process, frontend web process, managed Postgres/Redis expectations,
+migration/backup/rollback procedure, CORS/API-base setup, and read-only
+post-deploy smoke command. It does **not** deploy the app or add an automatic
+deploy workflow.
 
 Minimum backend env names for a private-beta candidate:
 

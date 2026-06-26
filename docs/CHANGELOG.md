@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added `docs/deploy/private-beta.md`, a manual private-beta deploy runbook for
+  the split backend API process, frontend web process, managed Postgres, and
+  managed/deferred Redis model. The runbook documents backend/frontend commands,
+  migration verification, backup and rollback policy, required env names,
+  CORS/API-base setup, GitHub connection boundaries, and read-only post-deploy
+  smoke.
+- Added deploy-doc safety tests covering required env names, required commands,
+  DB/migration/rollback documentation, read-only smoke/provider-write
+  boundaries, absence of secret-shaped values, and absence of auto-deploy
+  workflow commands.
+
 - Added FOS-025C frontend/full-stack deploy-readiness CI gates. The CI workflow
   now has separate backend and frontend jobs: backend keeps the existing secret
   scan, dependency sync, ruff, Alembic upgrade, and full pytest gates while

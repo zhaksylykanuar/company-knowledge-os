@@ -16,6 +16,10 @@ After the Lineage-2 purge (DEC-029), the documentation is the canonical set only
    [`POST_MVP.md`](POST_MVP.md), and [`CHANGELOG.md`](CHANGELOG.md) - working
    planning layer.
 
+## Deploy Runbooks
+
+- [`deploy/private-beta.md`](deploy/private-beta.md) - manual private-beta deployment, migration, rollback, CORS, env-name, and smoke procedure.
+
 ## Required Control Docs
 
 - [`DECISIONS.md`](DECISIONS.md)

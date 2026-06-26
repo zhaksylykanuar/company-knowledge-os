@@ -57,7 +57,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
 - FOS-025B: done - first private-beta deploy/smoke foundation added: explicit backend CORS config, placeholder-only env contract, read-only smoke script, `make smoke`, and local/private-beta docs; no deploy and no external writes.
 - FOS-025C: done - CI now enforces backend docs/smoke/CORS/CI contract tests and frontend `npm test`, build, typecheck, and lint gates without provider calls or external writes.
-- Next task: concrete private-beta deploy runbook/config path, then human-approved deployed smoke when ready.
+- FOS-025D: done - manual private-beta deploy runbook/config path added under `docs/deploy/private-beta.md`; no deploy, no auto-deploy workflow, and no provider writes.
+- Next task: choose/prepare actual hosting target for a human-approved dry deploy rehearsal, or harden production auth/GitHub onboarding before deploy.
 
 
 ## FOS-025B - Private-beta deploy/smoke foundation
@@ -136,18 +137,48 @@ Checks to run:
 
 ## FOS-025D - Private-beta deploy runbook/config path
 
-Status: todo.
+Status: done.
 
 Goal: define the concrete no-surprises private-beta deploy path before any
 deployment is attempted.
 
+Implemented:
+
+- Added `docs/deploy/private-beta.md`.
+- Documented the split backend API process, frontend web process, managed
+  Postgres, and managed/deferred Redis model.
+- Documented backend install, migration, start, health, env-name, CORS, API auth,
+  GitHub connection, and provider-write-disabled requirements.
+- Documented frontend install, build, start, API-base, browser Settings, and
+  private-beta limitations.
+- Documented migration head/current verification, backup-before-migration, and
+  restore-from-backup rollback policy.
+- Documented read-only post-deploy `make smoke` and what it must not call.
+- Added deploy docs tests for env names, required commands, DB/rollback content,
+  read-only smoke boundaries, secret-shaped values, and absence of auto-deploy
+  workflow commands.
+
+Safety contract:
+
+- No deploy is performed by this task.
+- No automatic deploy workflow is added.
+- No cloud-provider secret/config value is added.
+- Provider writes remain disabled by default and live provider smoke remains
+  human-approved only.
+
+## FOS-025E - Hosting target dry-run preparation
+
+Status: todo.
+
+Goal: prepare the actual private-beta hosting target using the runbook without
+performing an unapproved deployment.
+
 Acceptance criteria:
 
-- Hosting target/process model is explicit for backend, frontend, Postgres, and
-  Redis.
-- Migration, backup, rollback, env-name setup, domain, CORS, and smoke steps are
-  documented.
-- No deploy is performed until a human explicitly approves.
+- Target platform and service mapping are chosen explicitly.
+- Required manual setup checklist exists for backend, frontend, Postgres, Redis,
+  domains, env names, and smoke.
+- Human approval is required before any deploy or external write.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

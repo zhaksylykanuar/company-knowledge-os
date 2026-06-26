@@ -755,6 +755,35 @@ Consequences:
   in workflow files.
 - Passing CI does not mean the app has been deployed or live-provider-smoked.
 
+
+## DEC-038 - Private-Beta Deploy Runbook Is Manual, Smoke-Gated, And Write-Disabled
+
+Decision (2026-06-26): the private-beta deployment path is documented as a
+manual split-service runbook, not as an automatic deploy workflow. The baseline
+uses a backend API process, a frontend web process, managed Postgres, and
+managed/deferred Redis. Provider writes remain disabled by default, and the
+post-deploy smoke gate uses the existing read-only smoke script.
+
+Rationale: FOS-025A through FOS-025C made local runtime, smoke, and CI readiness
+credible, but an automatic cloud deploy would be premature without production
+auth, GitHub OAuth/onboarding, backup/restore confirmation, and human approval.
+A manual runbook gives the team a concrete path without creating side effects.
+
+Consequences:
+
+- No GitHub Actions workflow may auto-deploy FounderOS without a future explicit
+  approval task.
+- Deploy docs may mention env variable names and placeholder labels only; no real
+  secret, token, database URL, encrypted secret, or credential value belongs in
+  docs or config templates.
+- `ENABLE_WRITE_ACTIONS` stays disabled for private-beta deploy unless a human
+  explicitly approves a bounded live-write smoke with allowlists and rollback.
+- Database backup is the rollback boundary for migrations, including historical
+  irreversible migrations.
+- Passing `make smoke` after deploy proves only read-only/private-beta wiring; it
+  does not prove live provider writes, GitHub OAuth, production auth, or LLM
+  behavior.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
