@@ -34,11 +34,11 @@ files, no unrelated edits, and focused checks first.
 - FOS-015: done - dashboard and `/actions` surface local ActionProposal list/create/approve/reject with evidence refs and no external execution.
 - FOS-016: done - product execution preview/audit surface shows dry-run GitHub issue readiness, blocks live execute when `enable_write_actions=false`, and requires backend capability plus explicit confirmation before live writes.
 - FOS-017: done - execution preview and blocked execute paths persist proposal-scoped audit events and expose a local execution receipt/readiness model.
-- FOS-018: done - approved GitHub issue execution code path is gated by runtime config, explicit confirmation, evidence refs, explicit GitHub write repository allowlist, idempotent receipt, and durable audit; automated tests mock the provider and no manual live smoke has run.
-- FOS-019A.2: code gate done / smoke candidate blocked - live GitHub issue writes are limited to `FOS_GITHUB_WRITE_ALLOWED_REPOS` / `FOS_GITHUB_SMOKE_REPO`; broad token scope and variable names are not trusted. Bounded setup for `azhaks-cpo/founderos-smoke` could not create the missing private repo because GitHub returned 403.
+- FOS-018: done - approved GitHub issue execution code path is gated by runtime config, explicit confirmation, evidence refs, explicit GitHub write repository allowlist, idempotent receipt, and durable audit; automated tests mock the provider.
+- FOS-019B: done - manual live GitHub issue smoke succeeded against an approved private smoke repository; exactly one issue was created through the gated `ActionProposal` execution path; receipt and audit are stored locally; external issue URL/id are intentionally omitted from public docs; no other repositories were modified.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: create/grant access to `azhaks-cpo/founderos-smoke`, rerun smoke candidate preparation up to preview/audit, then run the separately approved manual live GitHub issue smoke test or keep live writes disabled.
+- Next task: FOS-020 post-execution sync verification - sync the created smoke issue back into canonical records, verify dashboard/Company Brain/briefing can see it, and verify idempotency/no duplicate execution remains true.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 
@@ -562,7 +562,8 @@ Checks to run:
 
 ## FOS-018 - Human-gated live GitHub issue execution path
 
-Status: done / implemented behind gates; manual live smoke not run.
+Status: done / implemented behind gates; manual live smoke later succeeded in
+FOS-019B.
 
 Goal: allow an approved local GitHub issue `ActionProposal` to reach the
 existing GitHub issue executor only after strict runtime, confirmation,
@@ -588,15 +589,44 @@ Acceptance criteria:
 - Product UI shows live execution controls only when backend capabilities allow,
   requires explicit confirmation, and renders external issue id/url only from
   backend success.
-- Automated tests mock the provider boundary; no real live write is run.
-- FOS-019A.2 checked the approved smoke repo target
-  `azhaks-cpo/founderos-smoke`; repo creation was blocked with 403, so the live
-  smoke candidate was not prepared and no real issue was created.
+- Automated tests mock the provider boundary.
+- FOS-019B manually proved the path against an approved private smoke
+  repository: exactly one GitHub issue was created, receipt/audit are stored
+  locally, external issue URL/id are omitted from public docs, and no other
+  repositories were modified.
 
 Checks to run:
 
 - Focused action/proposal/execution tests.
 - GitHub-first backend E2E.
+- `UV_NO_SYNC=1 uv run ruff check .`
+- `UV_NO_SYNC=1 uv run pytest -q`
+- `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`.
+
+## FOS-020 - Post-execution sync verification
+
+Status: next.
+
+Goal: verify the successfully created smoke issue can flow back into the
+canonical GitHub-first read path without causing duplicate execution.
+
+Acceptance criteria:
+
+- Sync the created smoke issue back into canonical records through the supported
+  GitHub/local sync path.
+- Dashboard operational work can see the synced issue from canonical records.
+- Company Brain can see the synced issue from canonical records/source refs.
+- Briefing can include or reference the synced issue only through returned
+  evidence-backed records.
+- The original executed proposal remains idempotent: repeated execute returns
+  the existing receipt and does not create another GitHub issue.
+- Public docs continue to omit private issue URL/id and local workspace/
+  proposal/connection/evidence identifiers.
+
+Checks to run:
+
+- Focused GitHub sync/normalization and action execution idempotency tests.
+- Docs navigation test if docs change.
 - `UV_NO_SYNC=1 uv run ruff check .`
 - `UV_NO_SYNC=1 uv run pytest -q`
 - `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`.

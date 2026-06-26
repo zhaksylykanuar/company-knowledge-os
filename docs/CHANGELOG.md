@@ -1,5 +1,16 @@
 # FounderOS Changelog
 
+## 2026-06-26
+
+### Changed
+
+- Manual live GitHub issue smoke succeeded through the gated `ActionProposal`
+  execution path against an approved private smoke repository.
+- Exactly one GitHub issue was created; receipt and durable audit are stored
+  locally; external issue URL/id are intentionally omitted from public docs.
+- No other repositories were modified, and the next step is FOS-020
+  post-execution sync verification.
+
 ## 2026-06-25
 
 ### Added
@@ -53,9 +64,9 @@
 - Live GitHub issue execution now blocks unless the target repository is
   explicitly allowlisted; broad token scope and variable names such as
   `READONLY` are not trusted as safety boundaries.
-- Bounded setup checked `azhaks-cpo/founderos-smoke`; GitHub returned 403 on
-  private repo creation, so no smoke candidate was prepared and no real issue
-  was created.
+- Earlier bounded setup against an approved private smoke repository target was
+  blocked by GitHub permissions, so no smoke candidate was prepared in that run
+  and no real issue was created then.
 - Live GitHub issue execution remains disabled by default and was not manually
   smoke-tested; automated checks use mocked provider/client boundaries only.
 - Repeated execute on an already-succeeded proposal now returns the existing

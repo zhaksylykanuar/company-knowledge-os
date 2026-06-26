@@ -4,7 +4,7 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-019A.2. Docs
+The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-020. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -24,9 +24,9 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` to create/grant access to the approved smoke
-repository `azhaks-cpo/founderos-smoke`, prepare the local candidate up to
-preview/audit, then separately approve any live execute.
+Next step: follow `../PROGRESS.md` for FOS-020 post-execution sync
+verification: sync the created smoke issue back into canonical records, verify
+dashboard/Company Brain/briefing visibility, and verify no duplicate execution.
 
 Definition of Done:
 
@@ -95,10 +95,11 @@ Missing:
 - Full GitHub OAuth/product connect flow.
 - Live GitHub sync/product OAuth execution path.
 - Persistent briefing models.
-- Manual live GitHub write smoke proof behind explicit human approval, runtime
-  config, and test repository target.
+- Post-execution sync verification after the first human-gated live GitHub issue
+  write proof.
 
-Next step: follow `../PROGRESS.md` for the manual live-write smoke proof.
+Next step: follow `../PROGRESS.md` for FOS-020 post-execution sync
+verification.
 
 Definition of Done:
 
@@ -145,14 +146,12 @@ Missing:
 - Login page.
 - Workspace onboarding.
 - Browser/product E2E coverage.
-- Manual live external write smoke proof in product mode.
-- Private smoke repository `azhaks-cpo/founderos-smoke` still needs to exist and
-  be accessible before the live issue proof; broad token scope is not accepted
-  as the write safety boundary.
+- Post-execution sync/read verification after the first human-gated live
+  external write proof.
 
-Next step: prepare the allowlisted smoke candidate only after the approved smoke
-repo exists, then run the separately approved live GitHub issue smoke proof or
-keep live writes disabled.
+Next step: sync the created smoke issue back into canonical records, verify
+dashboard/Company Brain/briefing can see it, and verify repeated execute remains
+idempotent.
 
 Definition of Done:
 
@@ -221,13 +220,12 @@ Missing:
 - Actual GitHub sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
-- Manual real GitHub issue smoke proof behind explicit human approval/runtime
-  config and explicit repository allowlist. The current approved target is
-  `azhaks-cpo/founderos-smoke`; no real issue has been created.
+- Post-execution sync/read verification after the manual real GitHub issue smoke
+  proof. External issue URL/id and local workspace/proposal/connection/evidence
+  identifiers are intentionally omitted from public docs.
 
-Next step: create/grant access to `azhaks-cpo/founderos-smoke`, rerun candidate
-preparation to preview/audit only, then request separate human approval for live
-execute.
+Next step: run FOS-020 post-execution sync verification and keep the smoke issue
+open until that verification completes.
 
 Definition of Done:
 

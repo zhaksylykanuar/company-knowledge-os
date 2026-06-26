@@ -640,9 +640,12 @@ Consequences:
   audit events.
 - Tests may opt into mocked provider execution only by setting an explicit
   allowed repository.
-- The approved live smoke target is `azhaks-cpo/founderos-smoke`; FOS-019A.2
-  did not create a GitHub issue, and the candidate setup remains blocked until
-  that private repository exists or the token has permission to create it.
+- The approved live smoke target is a private repository; concrete repository
+  details, external issue URL/id, and local workspace/proposal/connection/
+  evidence identifiers are intentionally omitted from public docs.
+- FOS-019B later proved the gated path with exactly one issue against that
+  approved private smoke repository; local receipt and audit remain the source
+  of truth for the private execution details.
 
 ## ASK - Open Questions For The Human (not decided)
 
