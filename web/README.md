@@ -1,6 +1,6 @@
 # founderOS Web
 
-Minimal Next.js shell for the founderOS MVP backend flow.
+Minimal Next.js shell for the FounderOS MVP backend flow.
 
 ## Install
 
@@ -10,11 +10,15 @@ npm install
 
 ## Run locally
 
+Start the backend first from the repository root, then run the frontend:
+
 ```bash
 npm run dev
 ```
 
 The app starts on the Next.js default port unless you pass a port to `next dev`.
+The backend must allow the frontend origin through `FOUNDEROS_CORS_ALLOWED_ORIGINS`
+when the browser calls a separately hosted API.
 
 ## Build
 
@@ -29,19 +33,26 @@ npm run lint
 Optional public backend base URL:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_API_BASE_URL=<backend-public-base-url>
 ```
 
-If the variable is not set, the frontend defaults to `http://localhost:8000`.
-Local operator settings entered in the Settings page can override this value in
-the browser.
+If `NEXT_PUBLIC_API_BASE_URL` is not set, the frontend uses its built-in local
+fallback. Local operator settings entered in the Settings page can override this
+value in the browser.
 
 ## Local operator settings
 
 The operator API key, owner email, workspace ID, and API base URL are entered in
 the browser Settings page and stored in browser local storage for local MVP use.
-Do not commit secrets, API keys, provider tokens, or local environment files.
+Do not commit secrets, API keys, provider tokens, local environment files, or
+copied Settings values.
 
-The API key is sent to the backend with the existing `X-FounderOS-API-Key`
+The API key is sent to the backend with the configured `API_AUTH_HEADER_NAME`
 header. The frontend never calls GitHub, Jira, Gmail, Drive, or other providers
 directly.
+
+## Private-beta notes
+
+The current frontend is still an operator/private-beta shell. Before broader
+private beta, production auth/session handling and GitHub onboarding must replace
+browser-local operator key entry.

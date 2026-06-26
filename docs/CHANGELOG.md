@@ -2,6 +2,18 @@
 
 ## 2026-06-26
 
+### Added
+
+- Added the FOS-025B private-beta deploy/smoke foundation: explicit backend
+  CORS settings, placeholder-only env template, read-only private-beta smoke
+  script, `make smoke`, and local/private-beta run documentation.
+- The smoke script checks only safe health/auth/workspace/read-model endpoints
+  plus deterministic manual briefing generation, and forbids ActionProposal
+  execute, selected repository sync, provider-token setup, local-sync,
+  normalize-local, post-execution-result sync, and provider write endpoints.
+- Added focused tests for CORS config, smoke endpoint safety, no API-key output,
+  placeholder-only env examples, and docs env-name coverage.
+
 ### Changed
 
 - Added read-only selected repository sync controls to the product dashboard

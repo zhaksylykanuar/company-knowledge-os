@@ -1,4 +1,5 @@
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
 from app.api.auth import require_api_key
@@ -9,8 +10,24 @@ from app.api.github import router as github_router
 from app.api.health import router as health_router
 from app.api.workspace_company_brain import router as workspace_company_brain_router
 from app.api.workspaces import router as workspaces_router
+from app.core.config import resolved_cors_allowed_origins, settings
 
 app = FastAPI(title="Company Knowledge & Decision OS", version="0.1.0")
+
+cors_allowed_origins = resolved_cors_allowed_origins(settings)
+if cors_allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_allowed_origins,
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=[
+            "Accept",
+            "Content-Type",
+            settings.api_auth_header_name,
+        ],
+        max_age=600,
+    )
 
 protected_api_dependencies = [Depends(require_api_key)]
 

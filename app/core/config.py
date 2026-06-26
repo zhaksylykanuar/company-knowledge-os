@@ -4,8 +4,49 @@ from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+LOCAL_CORS_ALLOWED_ORIGINS = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+)
+
+
 def _default_local_workspace_path() -> str:
     return str(Path(__file__).resolve().parents[2] / ".local")
+
+
+def _split_csv_config(value: str | None) -> list[str]:
+    if value is None:
+        return []
+    return [
+        item.strip()
+        for chunk in value.replace("\n", ",").split(",")
+        for item in [chunk.strip()]
+        if item
+    ]
+
+
+def _normalize_cors_origin(value: str) -> str | None:
+    origin = value.strip().rstrip("/")
+    if not origin or origin == "*":
+        return None
+    if not (origin.startswith("http://") or origin.startswith("https://")):
+        return None
+    return origin
+
+
+def resolved_cors_allowed_origins(config: "Settings") -> list[str]:
+    configured = [
+        normalized
+        for item in _split_csv_config(config.cors_allowed_origins)
+        for normalized in [_normalize_cors_origin(item)]
+        if normalized is not None
+    ]
+    if configured:
+        return configured
+
+    if config.app_env.strip().casefold() == "local":
+        return list(LOCAL_CORS_ALLOWED_ORIGINS)
+    return []
 
 
 class Settings(BaseSettings):
@@ -125,6 +166,20 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("FOUNDEROS_SECRET_ENCRYPTION_KEY"),
     )
     api_auth_header_name: str = "X-FounderOS-API-Key"
+    cors_allowed_origins: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_CORS_ALLOWED_ORIGINS",
+            "CORS_ORIGINS",
+        ),
+    )
+    cors_allow_credentials: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_CORS_ALLOW_CREDENTIALS",
+            "CORS_ALLOW_CREDENTIALS",
+        ),
+    )
 
     openai_api_key: str | None = Field(
         default=None,

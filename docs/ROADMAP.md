@@ -4,9 +4,9 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 5 / FOS-025. Docs
-consolidation is complete; this roadmap is planning context, not the live task
-source.
+The current execution pointer is `../PROGRESS.md`: CHUNK 8 / FOS-025C after
+FOS-025B deploy/smoke foundation. Docs consolidation is complete; this roadmap
+is planning context, not the live task source.
 
 ## Phase 0 - Project Setup
 
@@ -24,9 +24,7 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for FOS-025 multi-repo selected sync from the
-UI (after the human approves additional repositories) or production/deploy
-readiness.
+Next step: follow `../PROGRESS.md` for FOS-025C frontend/full-stack deploy-readiness gates.
 
 Definition of Done:
 
@@ -280,12 +278,14 @@ Done:
 - Guard/evidence tests exist.
 - GitHub-first backend E2E smoke test covers the local API path with mocked
   external provider execution.
+- FOS-025B added a read-only private-beta smoke script plus `make smoke` for
+  health/auth/workspace/read-model checks without provider writes.
 
 Missing:
 
 - Browser/product GitHub-first E2E tests.
-- Briefing validation tests aligned to master MVP.
-- Action approval tests aligned to canonical ActionProposal.
+- Frontend checks in CI.
+- Deployed/full-stack smoke run.
 - Manual QA checklist for MVP.
 
 Next step: add focused tests with each implementation slice; do not add broad
@@ -301,13 +301,15 @@ Definition of Done:
 
 ## Phase 7 - Deployment
 
-Current status: partial/local only.
+Current status: deploy foundation exists; no deploy has run.
 
 Done:
 
 - Local dev startup path exists.
 - Docker Compose Postgres/Redis exists.
-- CI shape exists in the dirty tree.
+- Backend CI shape exists.
+- FOS-025B added an explicit private-beta env-name contract, backend CORS
+  config, placeholder-only `.env.example`, and read-only `make smoke`.
 
 Missing:
 
@@ -316,11 +318,13 @@ Missing:
 - Backend service.
 - Worker service.
 - Frontend service.
-- Production env var contract.
-- Deployment smoke tests.
+- Production auth/session decision.
+- GitHub OAuth/onboarding path.
+- Deployed smoke run.
 - Domain/health checks.
 
-Next step: defer until Phases 1-4 are aligned enough for a deployable MVP.
+Next step: add frontend/full-stack deploy-readiness gates to CI, then write the
+real private-beta deploy runbook before deploying.
 
 Definition of Done:
 

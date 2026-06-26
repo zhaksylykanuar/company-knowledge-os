@@ -55,9 +55,66 @@ files, no unrelated edits, and focused checks first.
   contract change and no external writes.
 - FOS-E2E-01: done - GitHub-first backend E2E smoke flow covered with local mocks.
 - FOS-FE-01: done - minimal Next.js MVP shell scaffolded in `web/`.
-- Next task: FOS-025 multi-repo selected sync from the UI (only after the human
-  approves additional allowlisted repositories), or move to production/deploy
-  readiness.
+- FOS-025B: done - first private-beta deploy/smoke foundation added: explicit backend CORS config, placeholder-only env contract, read-only smoke script, `make smoke`, and local/private-beta docs; no deploy and no external writes.
+- Next task: FOS-025C frontend/full-stack deploy-readiness gates in CI, then a real private-beta deploy runbook.
+
+
+## FOS-025B - Private-beta deploy/smoke foundation
+
+Status: done.
+
+Goal: create the first production/private-beta deploy foundation without
+deploying and without external writes.
+
+Implemented:
+
+- Explicit backend CORS config with local-safe defaults and exact-origin
+  production env contract.
+- Read-only private-beta smoke script under `scripts/smoke_private_beta.py`.
+- `make smoke` target.
+- Placeholder-only `.env.example` covering backend, frontend, CORS, GitHub
+  scopes, and smoke env names.
+- README and web README local full-stack/private-beta smoke guidance.
+- Focused tests for CORS config, smoke endpoint safety, no API-key output, env
+  placeholder contract, and docs env-name coverage.
+
+Safety contract:
+
+- The smoke script must not call ActionProposal execute, selected repository
+  issue sync, selected repository PR sync, provider-token setup, local-sync,
+  normalize-local, post-execution-result sync, or provider write endpoints.
+- The smoke script reports step names and HTTP status only; it must not print API
+  keys, env values, raw response bodies, provider payloads, tokens, encrypted
+  secrets, or credential fields.
+
+Checks to run:
+
+- `git diff --check`
+- `bash scripts/check_no_secrets.sh --tracked`
+- `UV_NO_SYNC=1 uv run ruff check . --no-cache`
+- `UV_NO_SYNC=1 uv run pytest -q tests/test_docs_navigation_integrity.py -p no:cacheprovider`
+- `UV_NO_SYNC=1 uv run pytest -q tests/test_private_beta_smoke.py tests/test_cors_config.py -p no:cacheprovider`
+- `UV_NO_SYNC=1 uv run pytest -q -p no:cacheprovider`
+- `cd web && npm run typecheck && npm run build && npm run lint`
+
+## FOS-025C - Frontend/full-stack deploy-readiness gates
+
+Status: todo.
+
+Goal: make deploy-readiness checks enforceable in CI before private-beta deploy.
+
+Likely files:
+
+- `.github/workflows/ci.yml`
+- frontend package/install cache config
+- smoke/docs contract tests as needed
+
+Acceptance criteria:
+
+- CI runs frontend typecheck/build/lint/test or an explicitly scoped equivalent.
+- Backend CI still runs migrations, ruff, pytest, and tracked-secret scan.
+- No provider calls or external writes occur in CI.
+- Docs describe CI parity accurately.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

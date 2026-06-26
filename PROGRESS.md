@@ -10,32 +10,28 @@
 
 ## ▶ СЕЙЧАС
 
-- **Chunk:** `CHUNK 5 — Action Approval`.
-- **Task:** CHUNK 5 / FOS-024 — selected repository sync UI controls.
-- **State:** ✅ Selected repository read-only sync controls are exposed in the
-  product frontend. The new `SelectedRepositorySyncControls` dashboard panel
-  discovers the GitHub connection id from the existing connection-status
-  endpoint (never hardcoded), validates explicit `owner/repo` input, and calls
-  the existing selected issue and PR sync endpoints read-only. It renders
-  missing-settings, missing-connection, invalid-input, per-action loading,
-  success summaries (repositories/issues/PRs incl. skipped PR-shaped issue
-  records), allowlist/permission/generic backend errors, and empty/no-records
-  states without raw JSON or private IDs, and refreshes Company Brain plus
-  operational work after a successful sync.
-- **Next action:** Either broaden selected issue+PR sync to multiple
-  allowlisted repositories from the UI (after the human approves additional
-  repositories) or move to production/deploy readiness.
+- **Chunk:** `CHUNK 8 — Testing Gate + Deploy`.
+- **Task:** FOS-025B — private-beta deploy/smoke foundation.
+- **State:** ✅ First deploy foundation exists without deploying: explicit backend
+  CORS config, placeholder-only env contract, read-only private-beta smoke
+  script, `make smoke`, local full-stack docs, and smoke/config/docs tests. The
+  smoke path checks health/auth/workspace/read models and deterministic briefing
+  only; it must not call ActionProposal execute, selected repository sync,
+  provider-token setup, local-sync, normalize-local, post-execution-result sync,
+  or provider write endpoints.
+- **Next action:** FOS-025C — add frontend/full-stack deploy-readiness gates to
+  CI and continue toward a real private-beta deploy runbook.
 
 ---
 
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks: 17 / 24   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱   71%   (строго DONE)
+Tasks: 18 / 25   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱   71%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 17** · **PARTIAL = 6** · **MISSING = 1**.
+Разбивка: **DONE = 18** · **PARTIAL = 6** · **MISSING = 1**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
 Для сравнения: `docs/TODO.md` помечает «done» ~22 задачи **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook/main-path схемы строго готово 14.
@@ -59,7 +55,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-25 | FOS-018: drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про execution gate |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
-| prod smoke | ❓ unknown | — | деплой не выполнялся; Makefile/`make smoke` отсутствует |
+| prod smoke | ⚠️ local command only | 2026-06-26 | FOS-025B added `make smoke` and a read-only private-beta smoke script; no deploy smoke has run |
 
 Статусы: ✅ pass · ❌ fail · ❓ unknown
 
@@ -122,7 +118,8 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ### CHUNK 8 — Testing Gate + Deploy
 *Gate: launch gate зелёный; production URL работает; первый E2E в проде.*
-- [~] FOS-SMOKE-01 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; нет `make smoke`/Makefile и full-stack/prod smoke
+- [x] FOS-025B — Deploy/smoke foundation — explicit backend CORS config, placeholder-only env contract, read-only private-beta smoke script, `make smoke`, local full-stack/private-beta smoke docs, and focused smoke/config/docs tests. No deploy and no external writes.
+- [~] FOS-SMOKE-01 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; FOS-025B added `make smoke` + read-only private-beta smoke script; deployed/full-stack smoke is still not run
 - [~] FOS-T — Full tests + frontend build — pytest 259/0 (чекап 2026-06-24); web build ✅
 - [ ] FOS-D — Deploy (Railway) — не выполнялся
 
@@ -143,6 +140,15 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-26` — **FOS-025B private-beta deploy/smoke foundation.** Added
+  explicit backend CORS settings with local-safe defaults, a read-only
+  private-beta smoke script, `make smoke`, placeholder-only `.env.example`,
+  local full-stack/private-beta docs, and smoke/config/docs tests. The smoke
+  policy forbids ActionProposal execute, selected repository sync, provider-token
+  setup, local-sync, normalize-local, post-execution-result sync, provider write
+  endpoints, raw response dumps, and secret/env value printing. No deploy, no
+  external writes, no GitHub issue/PR changes, and no push were performed.
 
 - `2026-06-26` — **FOS-024 selected repository sync UI controls.** Exposed the
   existing read-only selected repository issue and PR sync backends in the

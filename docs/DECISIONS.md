@@ -699,6 +699,36 @@ Consequences:
   repository, but must omit private issue URLs and local workspace/connection/
   proposal/source/evidence identifiers.
 
+
+## DEC-036 - Private-Beta Smoke Is Read-Only And CORS Is Explicit
+
+Decision (2026-06-26): the first deploy/private-beta foundation uses explicit
+backend CORS configuration and a smoke command that is read-only or deterministic
+local-only. CORS origins are configured by env-name contract and default only to
+local frontend origins when `APP_ENV` is local; production must configure exact
+allowed origins.
+
+Rationale: FOS-025A found that the GitHub-first loop is live-proven locally, but
+private beta was blocked by missing deploy smoke, incomplete frontend/backend
+connection policy, and no production CORS contract. The first smoke path must
+prove deploy wiring without creating provider side effects.
+
+Consequences:
+
+- `make smoke` runs the private-beta smoke script and must not call
+  ActionProposal execute, selected repository sync, provider-token setup,
+  local-sync, normalize-local, post-execution-result sync, or provider write
+  endpoints.
+- Smoke output reports step names and HTTP status only; it must not print API
+  keys, environment values, response bodies, provider payloads, tokens, encrypted
+  secrets, or credential fields.
+- Deterministic manual briefing generation is allowed in smoke because it reads
+  existing workspace state and does not call providers, LLMs, or external writes.
+- Production CORS must list exact frontend origins through explicit env names;
+  wildcard origins are ignored by the config resolver.
+- This does not deploy FounderOS and does not replace the future production auth,
+  GitHub OAuth/onboarding, backup, deploy, and post-deploy runbook work.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
