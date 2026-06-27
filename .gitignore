@@ -8,6 +8,7 @@ connectors.env
 local.env
 secrets.env
 .local/
+.railway/
 .env.operator
 .env.local
 .env.runtime
