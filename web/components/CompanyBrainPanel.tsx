@@ -14,6 +14,7 @@ import type {
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
+import { SourceLink } from "./SourceLink";
 import { StatusCard } from "./StatusCard";
 
 type PanelStatus = "loading" | "ready" | "empty" | "error" | "missing";
@@ -221,9 +222,7 @@ function RepositorySection({
             </dl>
             <SourceRefList refs={repository.source_refs} />
             {repository.source_url ? (
-              <a className="source-link" href={repository.source_url} rel="noreferrer" target="_blank">
-                Open source
-              </a>
+              <SourceLink url={repository.source_url}>Open source</SourceLink>
             ) : null}
           </article>
         ))}
@@ -268,9 +267,7 @@ function BrainWorkSection({
             </dl>
             <SourceRefList refs={item.source_refs} />
             {item.source_url ? (
-              <a className="source-link" href={item.source_url} rel="noreferrer" target="_blank">
-                Open source
-              </a>
+              <SourceLink url={item.source_url}>Open source</SourceLink>
             ) : null}
           </article>
         ))}
@@ -317,13 +314,7 @@ function SourceRefList({ refs }: { refs: CompanyBrainSourceRef[] }) {
     <ul className="source-ref-list">
       {refs.map((ref) => (
         <li key={ref.id}>
-          {ref.url ? (
-            <a className="source-link" href={ref.url} rel="noreferrer" target="_blank">
-              {ref.label}
-            </a>
-          ) : (
-            <span>{ref.label}</span>
-          )}
+          <SourceLink url={ref.url}>{ref.label}</SourceLink>
           <span className="muted"> {ref.kind}</span>
         </li>
       ))}

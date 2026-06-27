@@ -193,7 +193,7 @@ selected repository sync, or external-write endpoints.
 ```text
 app/            FastAPI app, services, connectors, db models
 web/            Next.js product shell
-docs/           canonical docs index, decisions, roadmap, runbooks, features
+docs/           canonical docs index, decisions, roadmap, changelog, deploy guides
 scripts/        local operator, smoke, and diagnostic CLIs
 tests/          pytest suite
 migrations/     Alembic migrations

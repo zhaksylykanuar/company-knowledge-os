@@ -11,17 +11,20 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 8 — Testing Gate + Deploy`.
-- **Task:** FOS-026C — private-beta workspace context + full read-only deployed smoke.
-- **State:** ✅ Minimal private-beta workspace/owner context was bootstrapped in
-  the deployed Railway database through the supported operator workspace
-  bootstrap API. Full deployed read-only smoke passed across health, API auth,
-  workspace read, GitHub connection status read, Company Brain read,
-  operational work read, and deterministic transient briefing generation.
-  Provider writes, LLM, real connectors, selected repo live sync, and
-  ActionProposal execute remained disabled/not called. Secret values and
-  operational IDs are intentionally omitted.
-- **Next action:** harden private-beta onboarding/auth and decide the next
-  human-approved GitHub connection path before broader private-beta use.
+- **Task:** FOS-027B1 — private-beta blocker hardening pass 1 (fail-closed auth,
+  safe external href rendering, stale deterministic-doc cleanup).
+- **State:** ✅ API auth is now fail-closed outside local: a startup guard
+  (`enforce_fail_closed_auth`, wired into the FastAPI lifespan) aborts boot when
+  a non-local `APP_ENV` runs with auth disabled or without a configured key.
+  Untrusted server-provided URLs render through a shared `safeHref`/`SourceLink`
+  pair so only http(s) links are clickable (`javascript:`/`data:`/`vbscript:`/
+  malformed values render as non-clickable text). Stale `app/agents` bytecode
+  was removed and CLAUDE.md / SECURITY_BASELINE.md / README.md references to
+  deleted LLM/agent code and a deleted boundary doc were reconciled. Backend
+  pytest, ruff, and full frontend test/build/typecheck/lint are green. No
+  deploy, no push, no provider writes; secret values are not printed.
+- **Next action:** FOS-027B2 — add the missing unique constraint on canonical
+  `tasks` and make the task upsert idempotent (duplicate-Task-rows blocker).
 
 ---
 
@@ -127,6 +130,7 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] FOS-026C — Private-beta workspace context + full deployed smoke — minimal workspace/owner context was bootstrapped through the supported operator API, then full read-only deployed smoke passed across workspace, GitHub connection status, Company Brain, operational work, and deterministic transient briefing checks. No provider writes, selected repo live sync, ActionProposal execute, or LLM calls.
 - [x] FOS-SMOKE-01 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; FOS-025B added `make smoke` + read-only private-beta smoke script; FOS-026C proved the deployed Railway read-only smoke path with minimal private-beta workspace context.
 - [x] FOS-T — Full tests + frontend build — FOS-025C local gate: backend full pytest 297 passed / 1 warning; frontend `npm test`, build, typecheck, and lint passed; CI now enforces both backend and frontend gates
+- [x] FOS-027B1 — Private-beta blocker hardening pass 1 — API auth is fail-closed outside local via a startup guard; untrusted server-provided URLs render through `safeHref`/`SourceLink` (http(s)-only); stale `app/agents` bytecode and deleted-LLM/agent/boundary-doc references were reconciled. Backend pytest/ruff and frontend test/build/typecheck/lint green. No deploy, push, or provider writes.
 - [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth/GitHub onboarding/custom-domain hardening remains before broader beta.
 
 ---
@@ -146,6 +150,19 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-27` — **FOS-027B1 private-beta blocker hardening pass 1.** Made API
+  auth fail-closed outside local: `enforce_fail_closed_auth` (FastAPI lifespan)
+  aborts startup when a non-local `APP_ENV` runs with auth disabled or without a
+  configured key; the `api_auth_enabled=false` default is kept for local dev.
+  Added a shared frontend `safeHref` helper + `SourceLink` component so
+  untrusted server-provided URLs (evidence/source URLs, `external_result_url`)
+  are clickable only for http(s); `javascript:`/`data:`/`vbscript:`/malformed
+  render as non-clickable text. Removed stale `app/agents` bytecode and
+  reconciled CLAUDE.md / SECURITY_BASELINE.md / README.md references to deleted
+  LLM/agent code and a deleted boundary doc. Checks: backend `pytest`/`ruff`
+  green, frontend `npm test` (86) / build / typecheck / lint green. No deploy,
+  no push, no Railway change, no provider writes; secrets not printed.
 
 - `2026-06-27` — **FOS-026C private-beta workspace context + full read-only deployed smoke.**
   Bootstrapped the minimal private-beta workspace/owner context in the deployed

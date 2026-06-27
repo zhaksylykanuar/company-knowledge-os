@@ -1,8 +1,11 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
-from app.api.auth import require_api_key
+from app.api.auth import enforce_fail_closed_auth, require_api_key
 from app.api.briefings import router as briefings_router
 from app.api.company_brain import router as company_brain_router
 from app.api.dev import router as dev_router
@@ -12,7 +15,19 @@ from app.api.workspace_company_brain import router as workspace_company_brain_ro
 from app.api.workspaces import router as workspaces_router
 from app.core.config import resolved_cors_allowed_origins, settings
 
-app = FastAPI(title="Company Knowledge & Decision OS", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # Fail loudly at startup if a non-local deployment is not fail-closed.
+    enforce_fail_closed_auth(settings)
+    yield
+
+
+app = FastAPI(
+    title="Company Knowledge & Decision OS",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
 cors_allowed_origins = resolved_cors_allowed_origins(settings)
 if cors_allowed_origins:

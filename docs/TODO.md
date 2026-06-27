@@ -61,7 +61,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-025E: done - Railway private-beta hosting dry-run plan and placeholder-only env templates added; no deploy, provisioning, or external writes.
 - FOS-026B: done - Railway rehearsal project/backend/frontend/Postgres created; deployments healthy; migrations at head; health/auth-only deployed smoke passed with provider writes, LLM, and real connectors disabled.
 - FOS-026C: done - minimal private-beta workspace/owner context bootstrapped through the supported operator API; full read-only deployed smoke passed with provider writes, selected repo live sync, ActionProposal execute, LLM, and real connectors disabled/not called.
-- Next task: harden private-beta onboarding/auth and decide the next human-approved GitHub connection path before broader private-beta use.
+- FOS-027B1: done - private-beta blocker hardening pass 1: API auth is fail-closed outside local (startup guard), untrusted server URLs render through `safeHref`/`SourceLink` (http(s)-only), and stale `app/agents` bytecode plus deleted-LLM/agent/boundary doc references were reconciled. No deploy, push, or provider writes.
+- Next task: FOS-027B2 - Task uniqueness / idempotent task upsert migration (add the missing unique constraint on canonical `tasks` and convert the upsert to be idempotent; addresses the duplicate-Task-rows blocker from the audit).
 
 
 ## FOS-025B - Private-beta deploy/smoke foundation

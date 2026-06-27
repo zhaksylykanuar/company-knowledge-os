@@ -325,6 +325,11 @@ Done:
 - FOS-026C bootstrapped the minimal private-beta workspace/owner context and
   passed full read-only deployed smoke with provider writes, selected repo live
   sync, ActionProposal execute, LLM, and real connectors disabled/not called.
+- FOS-027B1 hardened two private-beta blockers: API auth is now fail-closed
+  outside local (startup aborts when a non-local `APP_ENV` runs without auth or
+  a key), and untrusted server-provided URLs render through `safeHref`/
+  `SourceLink` so only http(s) links are clickable (`javascript:`/`data:`
+  values are rendered as text).
 
 Missing:
 

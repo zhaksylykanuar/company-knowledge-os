@@ -813,6 +813,31 @@ Consequences:
 - Live provider smoke remains separate, explicitly approved, allowlisted, and
   disabled again after the bounded test.
 
+## DEC-040 - API Auth Is Fail-Closed Outside Local
+
+Decision (2026-06-27): the backend must not run fail-open in a hosted
+environment. `enforce_fail_closed_auth` runs at startup (FastAPI lifespan) and
+aborts boot when `APP_ENV` is non-local (anything other than
+local/dev/development/test/testing) and either `API_AUTH_ENABLED` is false or no
+API key (`API_AUTH_KEY` / `FOUNDEROS_API_KEYS`) is configured. The default of
+`api_auth_enabled=false` is retained so local developer workflows keep working
+without a key.
+
+Rationale: the app uses a single all-powerful operator identity, so a single
+forgotten auth flag in a hosted deploy would expose the full operator surface to
+anonymous callers. Making that misconfiguration a loud startup failure — rather
+than relying on operator memory — is the smallest durable guardrail. Flipping
+the default `api_auth_enabled` to true was rejected because it would break the
+documented non-breaking local default and force a key on local dev; the startup
+guard closes the security hole without that cost.
+
+Consequences:
+
+- Non-local deploys must set `API_AUTH_ENABLED=true` plus a configured key, or
+  the service refuses to start.
+- Auth may remain disabled only when `APP_ENV` is local/dev/test.
+- Startup errors reference env-var names only, never key values.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

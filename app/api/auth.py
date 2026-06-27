@@ -13,6 +13,15 @@ API_AUTH_FAILURE_DETAIL = "API authentication failed"
 AUTH_MODE_OPERATOR_API_KEY = "operator_api_key"
 AUTH_MODE_SESSION = "session"
 
+# Environments where running with API auth disabled is an accepted developer
+# convenience. Any other environment (private beta, staging, production, ...)
+# must boot fail-closed or startup is aborted — see enforce_fail_closed_auth.
+LOCAL_LIKE_APP_ENVS = frozenset({"local", "dev", "development", "test", "testing"})
+
+
+class FailClosedAuthError(RuntimeError):
+    """Raised at startup when a non-local environment is not fail-closed."""
+
 
 @dataclass(frozen=True)
 class CurrentActor:
@@ -132,3 +141,50 @@ async def require_operator_or_user(
     if not actor.is_operator and actor.user_id is None:
         _reject_api_auth()
     return actor
+
+
+def _normalized_app_env(config: object) -> str:
+    app_env = getattr(config, "app_env", "") or ""
+    return app_env.strip().casefold() if isinstance(app_env, str) else ""
+
+
+def is_local_like_env(config: object) -> bool:
+    """True when the environment may run with API auth disabled (local/dev)."""
+
+    return _normalized_app_env(config) in LOCAL_LIKE_APP_ENVS
+
+
+def _has_configured_api_key(config: object) -> bool:
+    if _configured_key(config):  # primary api_auth_key
+        return True
+    raw = getattr(config, "api_keys", None)
+    return isinstance(raw, str) and any(part.strip() for part in raw.split(","))
+
+
+def enforce_fail_closed_auth(config: object) -> None:
+    """Abort startup when a non-local environment would run fail-open.
+
+    Local-like environments (APP_ENV=local/dev/test) may keep auth disabled
+    for developer convenience. Every other environment must boot with auth
+    enabled and at least one configured key; otherwise a single forgotten
+    flag would expose the full operator surface to anonymous callers.
+
+    Only env-var names are surfaced in the error — never secret values — so a
+    misconfiguration is actionable without leaking key material.
+    """
+
+    if is_local_like_env(config):
+        return
+    if not getattr(config, "api_auth_enabled", False):
+        raise FailClosedAuthError(
+            "Refusing to start: API authentication is disabled in a non-local "
+            "environment. Set APP_ENV=local for local development, or enable "
+            "auth by setting API_AUTH_ENABLED and configuring API_AUTH_KEY "
+            "(or FOUNDEROS_API_KEYS) before deploying."
+        )
+    if not _has_configured_api_key(config):
+        raise FailClosedAuthError(
+            "Refusing to start: API authentication is enabled in a non-local "
+            "environment but no API key is configured. Set API_AUTH_KEY or "
+            "FOUNDEROS_API_KEYS before deploying."
+        )

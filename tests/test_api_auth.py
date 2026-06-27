@@ -5,7 +5,12 @@ from fastapi.testclient import TestClient
 import pytest
 from pydantic import SecretStr
 
-from app.api.auth import API_AUTH_FAILURE_DETAIL, build_require_api_key
+from app.api.auth import (
+    API_AUTH_FAILURE_DETAIL,
+    FailClosedAuthError,
+    build_require_api_key,
+    enforce_fail_closed_auth,
+)
 from app.core.config import Settings
 from app.main import app as production_app
 
@@ -166,3 +171,75 @@ def test_health_remains_public_until_route_wiring_ticket() -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+# --- Fail-closed auth posture for non-local deployments --------------------
+
+
+def test_fail_closed_allows_local_with_auth_disabled() -> None:
+    config = Settings(app_env="local", api_auth_enabled=False, _env_file=None)
+
+    # Local developer convenience: disabled auth must remain a valid startup.
+    enforce_fail_closed_auth(config)
+
+
+def test_fail_closed_allows_dev_with_auth_disabled() -> None:
+    config = Settings(app_env="dev", api_auth_enabled=False, _env_file=None)
+
+    enforce_fail_closed_auth(config)
+
+
+def test_fail_closed_rejects_non_local_with_auth_disabled() -> None:
+    config = Settings(app_env="production", api_auth_enabled=False, _env_file=None)
+
+    with pytest.raises(FailClosedAuthError):
+        enforce_fail_closed_auth(config)
+
+
+def test_fail_closed_rejects_non_local_when_enabled_without_key() -> None:
+    config = Settings(
+        app_env="production",
+        api_auth_enabled=True,
+        api_auth_key=None,
+        api_keys=None,
+        _env_file=None,
+    )
+
+    with pytest.raises(FailClosedAuthError):
+        enforce_fail_closed_auth(config)
+
+
+def test_fail_closed_allows_non_local_when_enabled_with_primary_key() -> None:
+    config = Settings(
+        app_env="production",
+        api_auth_enabled=True,
+        api_auth_key=SecretStr("configured-operator-key"),
+        _env_file=None,
+    )
+
+    enforce_fail_closed_auth(config)
+
+
+def test_fail_closed_allows_non_local_when_enabled_with_api_keys_list() -> None:
+    config = Settings(
+        app_env="production",
+        api_auth_enabled=True,
+        api_auth_key=None,
+        api_keys="configured-operator-key",
+        _env_file=None,
+    )
+
+    enforce_fail_closed_auth(config)
+
+
+def test_fail_closed_error_names_env_vars_and_hides_values() -> None:
+    config = Settings(app_env="production", api_auth_enabled=False, _env_file=None)
+
+    with pytest.raises(FailClosedAuthError) as exc_info:
+        enforce_fail_closed_auth(config)
+
+    message = str(exc_info.value)
+    assert "API_AUTH_ENABLED" in message
+    assert "API_AUTH_KEY" in message
+    # The error must reference variable names only, never any key material.
+    assert "configured-operator-key" not in message

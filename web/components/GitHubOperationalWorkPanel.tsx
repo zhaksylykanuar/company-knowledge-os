@@ -11,6 +11,7 @@ import type {
   GitHubOperationalWorkState,
   OperatorConfig
 } from "../lib/types";
+import { SourceLink } from "./SourceLink";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
@@ -253,9 +254,7 @@ function WorkSection({ emptyText, items, title, type }: WorkSectionProps) {
               ) : null}
             </dl>
             {item.source_url ? (
-              <a className="source-link" href={item.source_url} rel="noreferrer" target="_blank">
-                Open source
-              </a>
+              <SourceLink url={item.source_url}>Open source</SourceLink>
             ) : null}
           </article>
         ))}

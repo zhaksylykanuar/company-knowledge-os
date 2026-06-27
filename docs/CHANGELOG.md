@@ -1,5 +1,18 @@
 ## 2026-06-27
 
+### Security
+
+- FOS-027B1 — private-beta blocker hardening pass 1. Made API auth fail-closed
+  outside local: `enforce_fail_closed_auth` aborts backend startup when a
+  non-local `APP_ENV` runs with auth disabled or without a configured API key
+  (env-var names only in errors, never values). Added a shared frontend
+  `safeHref` helper plus a `SourceLink` component so untrusted, server-provided
+  URLs (evidence/source URLs, `external_result_url`) render as anchors only for
+  http(s); `javascript:`/`data:`/`vbscript:`/malformed values render as
+  non-clickable text. Removed stale `app/agents` bytecode and reconciled
+  CLAUDE.md / SECURITY_BASELINE.md / README.md references to deleted LLM/agent
+  code and a deleted boundary doc. No deploy, no push, no provider writes.
+
 ### Changed
 
 - Bootstrapped the minimal private-beta workspace/owner context in the deployed

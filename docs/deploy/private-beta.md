@@ -81,6 +81,15 @@ Optional only when the corresponding feature is intentionally enabled:
 - `FOUNDEROS_OBSIDIAN_VAULT_PATH`
 - `FOUNDEROS_OBSIDIAN_SYNC_MODE`
 
+Fail-closed auth posture:
+
+- The backend refuses to start when `APP_ENV` is non-local (e.g.
+  `production`/`private-beta`) and `API_AUTH_ENABLED` is unset/false, or when
+  auth is enabled but neither `API_AUTH_KEY` nor `FOUNDEROS_API_KEYS` is
+  configured. Disabling auth is only permitted when `APP_ENV` is
+  local/dev/test. This makes a forgotten auth flag a loud startup failure
+  rather than a silent fail-open exposure.
+
 Private-beta default policy:
 
 - ENABLE_WRITE_ACTIONS remains disabled unless a human explicitly approves a

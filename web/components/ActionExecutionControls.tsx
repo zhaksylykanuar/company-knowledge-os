@@ -15,6 +15,7 @@ import type {
   ActionExecutionResponse,
   ActionProposal
 } from "../lib/types";
+import { SourceLink } from "./SourceLink";
 
 type ActionExecutionControlsProps = {
   onRefresh?: () => void;
@@ -350,13 +351,9 @@ export function ActionExecutionControlsView({
             <div>
               <dt>External URL</dt>
               <dd>
-                <a
-                  href={displayedReceipt.external_result_url}
-                  rel="noreferrer"
-                  target="_blank"
-                >
+                <SourceLink url={displayedReceipt.external_result_url}>
                   Open GitHub issue
-                </a>
+                </SourceLink>
               </dd>
             </div>
           ) : null}

@@ -4,8 +4,11 @@ AI, token, and extraction workflow rules for FounderOS.
 
 ## Status
 
-- LLM extraction: partial
-- Deterministic extraction: implemented
+- LLM extraction: not implemented — there is no in-repo LLM/agent extraction
+  pipeline today; ingestion/extraction is deterministic-only. The LLM rules
+  below are forward-looking guardrails for if/when an LLM path is reintroduced.
+- Deterministic extraction: implemented (deterministic projections: Company
+  Brain, manual Founder Briefing, GitHub normalization).
 - LLM write actions: disallowed unless a future explicit approval workflow exists
 - Direct LLM mutation of production data: disallowed
 

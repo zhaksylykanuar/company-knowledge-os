@@ -1,4 +1,5 @@
 import type { BriefingEvidenceRef } from "../lib/types";
+import { SourceLink } from "./SourceLink";
 
 type EvidenceDrawerProps = {
   evidence: BriefingEvidenceRef | null;
@@ -55,9 +56,7 @@ export function EvidenceDrawer({
       )}
 
       {evidence?.url ? (
-        <a className="source-link" href={evidence.url} rel="noreferrer" target="_blank">
-          Open source
-        </a>
+        <SourceLink url={evidence.url}>Open source</SourceLink>
       ) : null}
     </aside>
   );

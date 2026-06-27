@@ -11,9 +11,9 @@ Prompt injection, token leakage, accidental write, duplicate retries, unsupporte
 
 ## Controls
 Read-only scopes first, backend-only tokens, raw storage, evidence validation,
-idempotency, selected protected API routes, write/action approval guard,
-planned webhook signature validation when webhook routes exist, append-only
-audit logs.
+idempotency, selected protected API routes, fail-closed API auth in non-local
+environments, write/action approval guard, planned webhook signature validation
+when webhook routes exist, append-only audit logs.
 
 ## CI / Supply Chain Baseline
 
@@ -25,8 +25,12 @@ dependency changes. Local-only `.env`, `secrets/`, `raw_storage/`,
 `obsidian_vault/`, and `operator_outputs/` paths must not be tracked.
 
 ## API boundary status
-`docs/security/api-boundary.md` is the current boundary contract. Endpoint-level
-auth is implemented for selected protected API routes in `app/main.py`.
+The boundary contract lives in code: `app/main.py` registers the protected API
+routers behind `require_api_key`, and `app/api/auth.py` enforces it. Endpoint-level
+auth is implemented for selected protected API routes. Auth is fail-closed
+outside local/dev: `enforce_fail_closed_auth` aborts startup when a non-local
+`APP_ENV` runs with auth disabled or without a configured API key, so a forgotten
+flag is a loud startup failure rather than a silent fail-open exposure.
 Write/action approval enforcement exists as a guard for future external writes.
 Rate limiting and webhook signature validation remain planned because public
 exposure and webhook routes are not in the current runtime.
