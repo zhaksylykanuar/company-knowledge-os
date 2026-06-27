@@ -2,6 +2,14 @@
 
 ### Changed
 
+- Bootstrapped the minimal private-beta workspace/owner context in the deployed
+  Railway database through the supported operator workspace bootstrap API, then
+  ran the full read-only deployed smoke successfully across health/auth,
+  workspace read, GitHub connection status read, Company Brain read,
+  operational work read, and deterministic transient briefing generation.
+  Provider writes, selected repo live sync, ActionProposal execute, LLM, and
+  real connectors remained disabled/not called; secret values and operational
+  IDs are intentionally omitted.
 - Ran the authenticated Railway private-beta setup/rehearsal: created the
   rehearsal project with backend, frontend, and managed Postgres services; Redis
   was skipped. Backend/frontend deployments reached success, Railway Postgres was
@@ -12,10 +20,10 @@
   runtime `DATABASE_URL` must use the `postgresql+asyncpg` driver form while
   local operator migrations use the public Postgres URL only inside the
   subprocess environment.
-- Workspace-scoped deployed smoke remains blocked pending approved private-beta
-  workspace/owner context. Provider writes, LLM, real connectors, selected repo
-  sync, and ActionProposal execute remained disabled/not called. Secret values
-  are intentionally omitted.
+- The earlier workspace-scoped deployed-smoke blocker was resolved by FOS-026C
+  using the supported operator bootstrap API. Provider writes, LLM, real
+  connectors, selected repo live sync, and ActionProposal execute remained
+  disabled/not called. Secret values are intentionally omitted.
 
 # FounderOS Changelog
 

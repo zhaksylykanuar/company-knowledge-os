@@ -59,8 +59,9 @@ files, no unrelated edits, and focused checks first.
 - FOS-025C: done - CI now enforces backend docs/smoke/CORS/CI contract tests and frontend `npm test`, build, typecheck, and lint gates without provider calls or external writes.
 - FOS-025D: done - manual private-beta deploy runbook/config path added under `docs/deploy/private-beta.md`; no deploy, no auto-deploy workflow, and no provider writes.
 - FOS-025E: done - Railway private-beta hosting dry-run plan and placeholder-only env templates added; no deploy, provisioning, or external writes.
-- FOS-026B: partial/done - Railway rehearsal project/backend/frontend/Postgres created; deployments healthy; migrations at head; health/auth-only deployed smoke passed; workspace-scoped smoke awaits approved workspace context.
-- Next task: approve/bootstrap minimal private-beta workspace context for workspace-scoped read-only smoke, or harden production auth/GitHub onboarding before broader beta.
+- FOS-026B: done - Railway rehearsal project/backend/frontend/Postgres created; deployments healthy; migrations at head; health/auth-only deployed smoke passed with provider writes, LLM, and real connectors disabled.
+- FOS-026C: done - minimal private-beta workspace/owner context bootstrapped through the supported operator API; full read-only deployed smoke passed with provider writes, selected repo live sync, ActionProposal execute, LLM, and real connectors disabled/not called.
+- Next task: harden private-beta onboarding/auth and decide the next human-approved GitHub connection path before broader private-beta use.
 
 
 ## FOS-025B - Private-beta deploy/smoke foundation
@@ -214,10 +215,28 @@ Acceptance criteria:
 
 ## FOS-026C - Private-beta workspace context for workspace-scoped smoke
 
-Status: todo.
+Status: done.
 
 Goal: create or identify the minimal private-beta workspace/owner context needed
 for workspace-scoped read-only deployed smoke.
+
+Implemented:
+
+- Bootstrapped the minimal private-beta workspace/owner context in the deployed
+  Railway database through the supported operator workspace bootstrap API.
+- Reused the existing operator API-key auth boundary; no new auth system was
+  invented and no direct DB edit was used.
+- Ran full read-only deployed smoke across health/auth, workspace read, GitHub
+  connection status read, Company Brain read, operational work read, and
+  deterministic transient briefing generation.
+
+Safety contract:
+
+- No provider write endpoints were called.
+- No selected repository issue/PR live sync was called.
+- No ActionProposal execute call was made.
+- `ENABLE_WRITE_ACTIONS`, `ENABLE_LLM`, and real connectors remained disabled.
+- Secret values and operational IDs are intentionally omitted from docs.
 
 Acceptance criteria:
 

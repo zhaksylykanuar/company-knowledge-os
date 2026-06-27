@@ -302,7 +302,9 @@ Definition of Done:
 
 ## Phase 7 - Deployment
 
-Current status: deploy foundation exists; no deploy has run.
+Current status: private-beta Railway rehearsal environment exists and deployed
+read-only smoke passes; broader beta still needs production auth/GitHub
+onboarding/custom-domain hardening.
 
 Done:
 
@@ -318,21 +320,22 @@ Done:
   procedures.
 - FOS-025E selected the Railway-only split-service dry-run target and added
   `docs/deploy/railway-private-beta.md` plus placeholder-only env templates.
+- FOS-026B created the Railway rehearsal project with backend, frontend, and
+  managed Postgres; Redis remained deferred.
+- FOS-026C bootstrapped the minimal private-beta workspace/owner context and
+  passed full read-only deployed smoke with provider writes, selected repo live
+  sync, ActionProposal execute, LLM, and real connectors disabled/not called.
 
 Missing:
 
-- Provisioned Railway project.
-- Production Postgres/Redis binding.
-- Running backend service.
-- Worker service if/when queue runtime exists.
-- Running frontend service.
 - Production auth/session decision.
-- GitHub OAuth/onboarding path.
-- Deployed smoke run.
-- Domain/health checks.
+- GitHub OAuth/onboarding path for private-beta users.
+- Custom domain decision and setup.
+- Worker service if/when queue runtime exists.
+- Broader beta monitoring/alerting and backup verification.
 
-Next step: perform a human-approved manual hosting setup/dry deploy rehearsal or
-harden production auth and GitHub onboarding before deploying.
+Next step: harden production auth/GitHub onboarding and private-beta operator
+handoff before broader beta use.
 
 Definition of Done:
 

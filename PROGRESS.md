@@ -11,17 +11,17 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** `CHUNK 8 — Testing Gate + Deploy`.
-- **Task:** FOS-026B — authenticated Railway private-beta setup/rehearsal.
-- **State:** ⚠️ Railway rehearsal environment was created (project, backend,
-  frontend, managed Postgres; Redis skipped), backend/frontend deployments are
-  healthy, Alembic migrated the Railway Postgres to head, and read-only deployed
-  health/auth smoke passed. Full workspace-scoped smoke is still blocked because
-  no private-beta workspace/owner context exists yet and creating it would be a
-  separate app-data write. Provider writes, LLM, and real connectors remained
-  disabled. Secret values are intentionally omitted.
-- **Next action:** approve/bootstrap minimal private-beta workspace context for
-  workspace-scoped read-only smoke, or harden production auth/GitHub onboarding
-  before broader beta.
+- **Task:** FOS-026C — private-beta workspace context + full read-only deployed smoke.
+- **State:** ✅ Minimal private-beta workspace/owner context was bootstrapped in
+  the deployed Railway database through the supported operator workspace
+  bootstrap API. Full deployed read-only smoke passed across health, API auth,
+  workspace read, GitHub connection status read, Company Brain read,
+  operational work read, and deterministic transient briefing generation.
+  Provider writes, LLM, real connectors, selected repo live sync, and
+  ActionProposal execute remained disabled/not called. Secret values and
+  operational IDs are intentionally omitted.
+- **Next action:** harden private-beta onboarding/auth and decide the next
+  human-approved GitHub connection path before broader private-beta use.
 
 ---
 
@@ -56,7 +56,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-25 | FOS-018: drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про execution gate |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
-| prod smoke | ⚠️ local command only | 2026-06-26 | FOS-025B added `make smoke` and a read-only private-beta smoke script; no deploy smoke has run |
+| prod smoke | ✅ pass | 2026-06-27 | FOS-026C: deployed Railway read-only smoke passed with minimal private-beta workspace/owner context; no provider writes, LLM calls, selected repo sync, or ActionProposal execute |
 
 Статусы: ✅ pass · ❌ fail · ❓ unknown
 
@@ -123,10 +123,11 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] FOS-025C — Frontend/full-stack deploy-readiness CI gates — `.github/workflows/ci.yml` now has separate backend and frontend jobs; backend gates are preserved and add explicit docs/smoke/CORS/CI contract tests; frontend gates run `npm ci`, `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint`; CI contains no provider secrets, live smoke command, selected sync, or execute calls.
 - [x] FOS-025D — Private-beta deploy runbook/config path — `docs/deploy/private-beta.md` documents the manual split backend/frontend deploy model, managed Postgres/Redis, backend/frontend runtime commands, migration verification, backup/rollback, env names, CORS/API-base setup, GitHub connection limits, and read-only post-deploy smoke procedure. No deploy config that auto-deploys, no cloud secrets, and no deployment was added.
 - [x] FOS-025E — Railway hosting target dry-run plan — `docs/deploy/railway-private-beta.md` maps the concrete Railway-only split-service target (backend API, frontend web, managed Postgres, managed/deferred Redis), commands, env names, domain/CORS/API-base, migration, smoke, rollback, operator checklist, and later live-provider-smoke approval boundaries; placeholder-only backend/frontend/smoke env templates and hosting-doc safety tests were added. No provisioning or deploy.
-- [x] FOS-026B — Railway private-beta rehearsal — Railway project/backend/frontend/Postgres were provisioned; backend/frontend deployments reached success; Alembic migrated Postgres to head; deployed health/auth-only read-only smoke passed; workspace-scoped smoke remains blocked pending approved private-beta workspace context. No provider writes, LLM calls, selected sync, or ActionProposal execute.
-- [~] FOS-SMOKE-01 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; FOS-025B added `make smoke` + read-only private-beta smoke script; deployed/full-stack smoke is still not run
+- [x] FOS-026B — Railway private-beta rehearsal — Railway project/backend/frontend/Postgres were provisioned; backend/frontend deployments reached success; Alembic migrated Postgres to head; deployed health/auth-only read-only smoke passed. No provider writes, LLM calls, selected sync, or ActionProposal execute.
+- [x] FOS-026C — Private-beta workspace context + full deployed smoke — minimal workspace/owner context was bootstrapped through the supported operator API, then full read-only deployed smoke passed across workspace, GitHub connection status, Company Brain, operational work, and deterministic transient briefing checks. No provider writes, selected repo live sync, ActionProposal execute, or LLM calls.
+- [x] FOS-SMOKE-01 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; FOS-025B added `make smoke` + read-only private-beta smoke script; FOS-026C proved the deployed Railway read-only smoke path with minimal private-beta workspace context.
 - [x] FOS-T — Full tests + frontend build — FOS-025C local gate: backend full pytest 297 passed / 1 warning; frontend `npm test`, build, typecheck, and lint passed; CI now enforces both backend and frontend gates
-- [ ] FOS-D — Deploy (Railway) — не выполнялся
+- [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth/GitHub onboarding/custom-domain hardening remains before broader beta.
 
 ---
 
@@ -146,6 +147,14 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-27` — **FOS-026C private-beta workspace context + full read-only deployed smoke.**
+  Bootstrapped the minimal private-beta workspace/owner context in the deployed
+  Railway database through the supported operator workspace bootstrap API. Full
+  read-only deployed smoke passed across health/auth, workspace read, GitHub
+  connection status read, Company Brain read, operational work read, and
+  deterministic transient briefing generation. Provider writes, selected repo
+  live sync, ActionProposal execute, LLM, and real connectors remained disabled
+  or uncalled. Secret values and operational IDs are intentionally omitted.
 - `2026-06-27` — **FOS-026B authenticated Railway private-beta setup/rehearsal.**
   Created the Railway rehearsal project with backend, frontend, and managed
   Postgres services; Redis was skipped. Configured backend/frontend env through
