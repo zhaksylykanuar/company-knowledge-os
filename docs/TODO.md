@@ -59,7 +59,8 @@ files, no unrelated edits, and focused checks first.
 - FOS-025C: done - CI now enforces backend docs/smoke/CORS/CI contract tests and frontend `npm test`, build, typecheck, and lint gates without provider calls or external writes.
 - FOS-025D: done - manual private-beta deploy runbook/config path added under `docs/deploy/private-beta.md`; no deploy, no auto-deploy workflow, and no provider writes.
 - FOS-025E: done - Railway private-beta hosting dry-run plan and placeholder-only env templates added; no deploy, provisioning, or external writes.
-- Next task: human-approved manual hosting setup/dry deploy rehearsal, or production auth/GitHub onboarding hardening before deploy.
+- FOS-026B: partial/done - Railway rehearsal project/backend/frontend/Postgres created; deployments healthy; migrations at head; health/auth-only deployed smoke passed; workspace-scoped smoke awaits approved workspace context.
+- Next task: approve/bootstrap minimal private-beta workspace context for workspace-scoped read-only smoke, or harden production auth/GitHub onboarding before broader beta.
 
 
 ## FOS-025B - Private-beta deploy/smoke foundation
@@ -209,6 +210,22 @@ Acceptance criteria:
 - Secrets remain in the hosting platform secret/env manager only.
 - Provider writes remain disabled by default.
 - Read-only smoke passes before any live provider smoke is considered.
+
+
+## FOS-026C - Private-beta workspace context for workspace-scoped smoke
+
+Status: todo.
+
+Goal: create or identify the minimal private-beta workspace/owner context needed
+for workspace-scoped read-only deployed smoke.
+
+Acceptance criteria:
+
+- Human approves any app-data write needed to bootstrap workspace context.
+- No provider writes, ActionProposal execute, selected repo sync, or live LLM call.
+- Smoke runs the workspace read, GitHub connection-status read, Company Brain
+  read, operational work read, and deterministic briefing steps with secrets
+  omitted from output.
 
 ## FOS-AUD-02 - Checkpoint/scope split current dirty tree
 

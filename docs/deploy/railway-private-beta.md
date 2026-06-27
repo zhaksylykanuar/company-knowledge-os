@@ -25,8 +25,8 @@ manager.
 
 | Service | Source path | Build/install command | Start command | Required |
 |---|---|---|---|---|
-| Backend API | repository root | `uv sync --frozen` | `uv run uvicorn app.main:app --host 0.0.0.0 --port <platform-port>` | Yes |
-| Frontend web | `web/` | `npm ci && npm run build` | `npm run start -- --port <platform-port>` | Yes |
+| Backend API | repository root | `uv sync --frozen` / `RAILPACK_BUILD_CMD` | `uv run uvicorn app.main:app --host 0.0.0.0 --port <platform-port>` / `RAILPACK_START_CMD` | Yes |
+| Frontend web | `web/` | `npm ci && npm run build` / `RAILPACK_BUILD_CMD` | `npm run start -- --port <platform-port>` / `RAILPACK_START_CMD` | Yes |
 | Postgres | managed database | platform-managed | platform-managed | Yes |
 | Redis | managed database/cache | platform-managed | platform-managed | Optional/deferred |
 
@@ -69,6 +69,8 @@ Backend service settings:
 - **Migration command:** `uv run alembic upgrade head` after backup and before
   traffic.
 - **Start command:** `uv run uvicorn app.main:app --host 0.0.0.0 --port <platform-port>`.
+- **Railpack variables:** set `RAILPACK_BUILD_CMD` and `RAILPACK_START_CMD`; the rehearsal showed current Railway Railpack may not honor legacy Nixpacks command variables.
+- **Database URL runtime:** set `DATABASE_URL` to a `postgresql+asyncpg` Railway reference for the managed Postgres service so the app boots with the async driver.
 - **Health check:** `GET <backend-public-origin>/health`.
 
 Backend env names:
@@ -109,6 +111,7 @@ Frontend service settings:
 - **Root directory:** `web/`.
 - **Install/build command:** `npm ci && npm run build`.
 - **Start command:** `npm run start -- --port <platform-port>`.
+- **Railpack variables:** set `RAILPACK_BUILD_CMD` and `RAILPACK_START_CMD` for the frontend service as well.
 - **Public API base:** `NEXT_PUBLIC_API_BASE_URL` points at the backend public
   origin.
 
@@ -150,6 +153,7 @@ Dry-run mapping:
 - Railway managed Postgres service provides the value for `DATABASE_URL`.
 - The backend service receives `DATABASE_URL` through the hosting secret/env
   manager.
+- For app runtime, use the `postgresql+asyncpg` driver form in `DATABASE_URL`; for an operator-run local migration against Railway Postgres, use the public Postgres URL only inside the subprocess environment and never print it.
 - Alembic reads the configured `DATABASE_URL` through `migrations/env.py`.
 - A database backup is required before the first private-beta migration.
 - Restore-from-backup is the rollback boundary for data-impacting migration
@@ -195,6 +199,8 @@ uv run alembic current
 
 Known retained-substrate Alembic drift remains a tracked cleanup topic. Do not
 perform ad-hoc schema edits during private-beta setup.
+
+Rehearsal note: `railway run` executes locally with values from the linked Railway environment, so private Railway database hostnames may not resolve from the operator machine. Use the public Postgres connection only for the local Alembic subprocess, keep it out of logs, and keep backend runtime on the private Railway reference.
 
 ## Smoke dry run
 

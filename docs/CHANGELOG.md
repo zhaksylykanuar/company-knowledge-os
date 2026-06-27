@@ -1,3 +1,22 @@
+## 2026-06-27
+
+### Changed
+
+- Ran the authenticated Railway private-beta setup/rehearsal: created the
+  rehearsal project with backend, frontend, and managed Postgres services; Redis
+  was skipped. Backend/frontend deployments reached success, Railway Postgres was
+  migrated to Alembic head, backend health/frontend load/CORS/API auth behavior
+  were verified, and read-only deployed smoke passed in health/auth-only mode.
+- Updated the Railway runbook/templates with rehearsal findings: current Railway
+  Railpack requires `RAILPACK_BUILD_CMD`/`RAILPACK_START_CMD`, and backend
+  runtime `DATABASE_URL` must use the `postgresql+asyncpg` driver form while
+  local operator migrations use the public Postgres URL only inside the
+  subprocess environment.
+- Workspace-scoped deployed smoke remains blocked pending approved private-beta
+  workspace/owner context. Provider writes, LLM, real connectors, selected repo
+  sync, and ActionProposal execute remained disabled/not called. Secret values
+  are intentionally omitted.
+
 # FounderOS Changelog
 
 ## 2026-06-26
