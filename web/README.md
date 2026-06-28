@@ -17,8 +17,11 @@ npm run dev
 ```
 
 The app starts on the Next.js default port unless you pass a port to `next dev`.
-The backend must allow the frontend origin through `FOUNDEROS_CORS_ALLOWED_ORIGINS`
-when the browser calls a separately hosted API.
+The browser talks to the backend **same-origin**: `web/next.config.mjs` proxies
+`/api/*` and `/health` to the backend (see Environment below), so the session
+cookie stays first-party and no browser CORS is needed for the normal path.
+(`FOUNDEROS_CORS_ALLOWED_ORIGINS` only matters if the browser is pointed at a
+separately hosted API instead of the proxy.)
 
 ## Build and deploy-readiness checks
 
@@ -34,31 +37,45 @@ do not require provider credentials or live backend/provider calls.
 
 ## Environment
 
-Optional public backend base URL:
+The frontend proxies `/api/*` and `/health` to the backend so the session cookie
+is first-party. Configure the proxy target (server-only):
+
+```bash
+FOUNDEROS_API_PROXY_TARGET=<backend-internal-base-url>
+```
+
+It falls back to `NEXT_PUBLIC_API_BASE_URL`, then to `http://localhost:8000` if
+neither is set:
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=<backend-public-base-url>
 ```
 
-If `NEXT_PUBLIC_API_BASE_URL` is not set, the frontend uses its built-in local
-fallback. Local operator settings entered in the Settings page can override this
-value in the browser.
+## Authentication
 
-## Local operator settings
+The app is gated behind email+password login on server-side sessions:
 
-The operator API key, owner email, workspace ID, and API base URL are entered in
-the browser Settings page and stored in browser local storage for local MVP use.
-Do not commit secrets, API keys, provider tokens, local environment files, or
-copied Settings values.
+- A `/login` page calls `POST /api/v1/auth/login`; an `AuthGate` redirects
+  unauthenticated users to `/login`.
+- The session is an httpOnly first-party cookie (set by the backend); the
+  workspace is derived from the session, not entered in the browser.
+- The Settings page is an account / change-password page
+  (`POST /api/v1/auth/change-password`), not an operator-key/owner-email config
+  page. Provision the founder account from the repository root with
+  `scripts/create_admin_user.py` (see the root README).
 
-The API key is sent to the backend with the configured `API_AUTH_HEADER_NAME`
-header. The frontend never calls GitHub, Jira, Gmail, Drive, or other providers
-directly.
+The browser sends no operator API key and no owner email; the operator API key is
+for server/CI/admin tooling only. The frontend never calls GitHub, Jira, Gmail,
+Drive, or other providers directly. Do not commit secrets, API keys, provider
+tokens, or local environment files.
+
+All user-facing copy is centralized in `web/lib/messages.ts` (Russian).
 
 ## Private-beta notes
 
 See [`../docs/deploy/private-beta.md`](../docs/deploy/private-beta.md) for the manual split-service deploy runbook and [`../docs/deploy/railway-private-beta.md`](../docs/deploy/railway-private-beta.md) for the current Railway dry-run target map.
 
-The current frontend is still an operator/private-beta shell. Before broader
-private beta, production auth/session handling and GitHub onboarding must replace
-browser-local operator key entry.
+The frontend is a private-beta shell. Production auth/session handling is now in
+place (email+password login on server-side sessions); the remaining gaps before
+broader private beta are GitHub onboarding and the first production deploy of the
+auth phase.

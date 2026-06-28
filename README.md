@@ -22,9 +22,13 @@ Read in this order (control trio = what / where / why):
 - Current implemented foundations include evidence-backed ingestion/extraction,
   source events, Company Brain preview/repo audit, workspace/GitHub/action
   backend foundations, guarded execution boundaries, and a broad pytest suite.
-- The canonical product gap remains production/private-beta hardening: concrete
-  deploy target wiring, production auth, GitHub OAuth/onboarding, and a deployed
-  smoke run.
+- Founder login is built: email+password on server-side, revocable sessions
+  (Argon2id, httpOnly first-party cookie via a same-origin proxy, DB login
+  throttle). The operator API key remains for server/CI/admin tooling. See
+  step 4 below to provision the founder account.
+- The canonical product gap remains production/private-beta hardening: the first
+  production deploy of the auth phase, GitHub OAuth/onboarding, persistent
+  briefing + LLM pipeline, and multi-user provisioning.
 
 ## Local full-stack run path
 
@@ -62,27 +66,20 @@ npm install
 npm run dev
 ```
 
-Set `NEXT_PUBLIC_API_BASE_URL` for the frontend build/runtime, or enter the API
-base URL in the browser Settings page. The Settings page also stores the local
-operator API key, owner email, and workspace ID in browser local storage for the
-current local/operator MVP.
+The dev server proxies `/api/*` and `/health` to the backend, so the session
+cookie stays first-party. Configure the proxy target with
+`FOUNDEROS_API_PROXY_TARGET` (falls back to `NEXT_PUBLIC_API_BASE_URL`, then
+`http://localhost:8000`). Then open the app and sign in at `/login` with the
+founder account created in step 4.
 
-### 4. Bootstrap/check workspace context
+### 4. Create the founder login user (email+password)
 
-The backend exposes `/api/v1/workspaces/bootstrap` for operator workspace setup.
-For product pages to load, the browser Settings page needs:
-
-- `NEXT_PUBLIC_API_BASE_URL` or an API base URL override.
-- `API_AUTH_HEADER_NAME` as the backend API-key header name.
-- An operator API key accepted by `API_AUTH_KEY` or `FOUNDEROS_API_KEYS`.
-- An owner email for operator workspace access.
-- A workspace ID returned by the workspace bootstrap/list/read API.
-
-### 5. Create the founder login user (email+password)
-
-Provision the single admin/founder account for browser login. The password is
-read from an env var and is never printed or committed; re-running updates the
-password idempotently (the email is unique, so no duplicate user is created):
+Provision the single admin/founder account for browser login. The command also
+ensures the founder's workspace, so no operator key, owner email, or workspace ID
+is entered in the browser — the workspace is derived from the session. The
+password is read from an env var and is never printed or committed; re-running
+updates the password idempotently (the email is unique, so no duplicate user is
+created):
 
 ```bash
 FOUNDEROS_ADMIN_EMAIL=founder@example.com \
@@ -91,8 +88,11 @@ UV_NO_SYNC=1 uv run python scripts/create_admin_user.py
 ```
 
 Optional: `FOUNDEROS_ADMIN_NAME`, `FOUNDEROS_ADMIN_WORKSPACE_NAME`,
-`FOUNDEROS_ADMIN_WORKSPACE_SLUG`. The founder then logs in through the web
-`/login` page; the operator API key stays for machine/admin/CI only.
+`FOUNDEROS_ADMIN_WORKSPACE_SLUG`. The founder then logs in at the web `/login`
+page.
+
+The operator API key and the `/api/v1/workspaces/bootstrap` endpoint remain for
+machine/CI/admin tooling only; they are not part of the founder browser login.
 
 ## Private-beta deployment foundation
 
@@ -123,8 +123,12 @@ Minimum backend env names for a private-beta candidate:
 - `FOS_GITHUB_WRITE_ALLOWED_REPOS`
 - `FOS_GITHUB_SYNC_ALLOWED_REPOS`
 
-Minimum frontend env name:
+Minimum frontend env names:
 
+- `FOUNDEROS_API_PROXY_TARGET` — server-only backend URL the Next.js app proxies
+  `/api/*` and `/health` to, so the session cookie stays first-party
+  (same-origin). Falls back to `NEXT_PUBLIC_API_BASE_URL`, then
+  `http://localhost:8000`.
 - `NEXT_PUBLIC_API_BASE_URL`
 
 Private-beta smoke env names:

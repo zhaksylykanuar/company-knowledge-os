@@ -104,12 +104,17 @@ Private-beta default policy:
 
 Configure these on the frontend service:
 
+- `FOUNDEROS_API_PROXY_TARGET` — server-only backend URL the Next.js app proxies
+  `/api/*` and `/health` to, so the session cookie stays first-party. Falls back
+  to `NEXT_PUBLIC_API_BASE_URL`, then `http://localhost:8000`.
 - `NEXT_PUBLIC_API_BASE_URL`
 
-The frontend still uses browser-local operator settings for the current
-private-beta shell: API base URL override, operator API key, owner email, and
-workspace ID. This is acceptable only for a narrow private beta. Broader beta
-requires production auth/session work.
+Production auth/session is now built: users sign in at `/login` with
+email+password on a server-side session cookie (Argon2id, httpOnly, first-party
+via the same-origin proxy). The browser sends no operator API key, owner email,
+or workspace ID; the workspace is derived from the session. Provision the founder
+account with `scripts/create_admin_user.py` (see the root README). The operator
+API key remains for machine/CI/admin tooling only.
 
 ## Backend deployment procedure
 
@@ -176,9 +181,10 @@ backend deploy command.
    npm run start -- --port <frontend-port>
    ```
 
-6. Verify the frontend page loads, then configure browser-local Settings with
-   the private-beta API base URL, operator API key, owner email, and workspace
-   ID.
+6. Verify the frontend page loads, then sign in at `/login` with the founder
+   account provisioned via `scripts/create_admin_user.py`. The session cookie is
+   first-party through the same-origin proxy; no browser-local operator key,
+   owner email, or workspace ID is entered.
 
 ## Postgres and Redis requirements
 
@@ -229,8 +235,9 @@ Rollback policy:
 - If migration has not been applied, redeploy the previous app commit.
 - If migration has been applied and smoke fails, prefer restore-from-backup for
   data-impacting failures; do not guess a downgrade path.
-- Some historical migrations are intentionally irreversible. Treat database
-  backup as the rollback boundary.
+- Some migrations are intentionally irreversible — notably `f7b8c9d0e1a2`
+  (canonical-task dedupe), which DELETEs duplicate provider-keyed task rows
+  before adding the unique index. Treat database backup as the rollback boundary.
 - The known retained-substrate Alembic drift is tracked separately and is not a
   reason to run ad-hoc schema edits during private-beta deploy.
 
@@ -243,9 +250,12 @@ Configure exact origins only:
 - browser-allowed frontend origins in `FOUNDEROS_CORS_ALLOWED_ORIGINS`;
 - credential behavior in `FOUNDEROS_CORS_ALLOW_CREDENTIALS`.
 
-Do not use wildcard CORS. The backend resolver ignores wildcard origins. If the
-frontend cannot call the backend, check `FOUNDEROS_CORS_ALLOWED_ORIGINS`,
-`NEXT_PUBLIC_API_BASE_URL`, and the browser Settings API base URL first.
+Do not use wildcard CORS. The backend resolver ignores wildcard origins. Because
+the frontend proxies `/api/*` same-origin, browser CORS is not exercised on the
+normal path; `FOUNDEROS_CORS_ALLOWED_ORIGINS` matters only if the browser is
+pointed directly at a separately hosted API. If the frontend cannot reach the
+backend, check `FOUNDEROS_API_PROXY_TARGET` (or `NEXT_PUBLIC_API_BASE_URL`) and
+`FOUNDEROS_CORS_ALLOWED_ORIGINS` first.
 
 ## GitHub connection setup
 
@@ -324,7 +334,7 @@ This runbook does not:
 - deploy FounderOS;
 - add an automatic deploy workflow;
 - choose or store cloud-provider secrets;
-- implement production auth/session handling;
-- implement GitHub OAuth;
+- implement GitHub OAuth/onboarding (production auth/session login is already
+  built; this runbook just deploys it);
 - run live provider smoke;
 - authorize provider writes.

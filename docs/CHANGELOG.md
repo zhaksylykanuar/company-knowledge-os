@@ -1,3 +1,62 @@
+## 2026-06-28
+
+### Added
+
+- Email+password founder login on server-side, revocable sessions. Added
+  `password_service` (Argon2id), `session_service` plus a `sessions` table (the
+  DB stores only the sha256 hash of the cookie token), and the auth endpoints
+  `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`,
+  and `POST /api/v1/auth/change-password` (the last revokes other sessions). New
+  `require_session` dependency and a `get_current_actor` resolver that accepts
+  either a session cookie (preferred) or the operator API key.
+- DB-backed login brute-force throttle (`login_attempts` table): after a
+  configured number of failures an email is locked for a configured window;
+  known and unknown emails throttle identically and the API returns a generic
+  error. Tunable via `FOUNDEROS_LOGIN_MAX_FAILED_ATTEMPTS` /
+  `FOUNDEROS_LOGIN_LOCKOUT_MINUTES`.
+- Idempotent admin provisioning command `scripts/create_admin_user.py` (seeds the
+  single founder/admin user from `FOUNDEROS_ADMIN_*` env vars; re-running updates
+  the password without creating a duplicate).
+- Same-origin Next.js proxy so the session cookie stays first-party across the
+  split frontend/backend deploy: `web/next.config.mjs` rewrites `/api/*` and
+  `/health` to `FOUNDEROS_API_PROXY_TARGET` (falls back to
+  `NEXT_PUBLIC_API_BASE_URL`).
+- A `/login` page, `AuthGate`, session client (`web/lib/auth.ts` /
+  `web/lib/session.ts`), and a Settings→account / change-password page.
+- Canonical-task uniqueness: a partial unique index
+  `uq_tasks_workspace_provider_external_id` (`workspace_id`, `source_provider`,
+  `external_id` where `external_id IS NOT NULL`) plus dedupe migration
+  `f7b8c9d0e1a2`.
+- Central Russian UI message catalog `web/lib/messages.ts`.
+
+### Changed
+
+- GitHub normalization upserts (`Task`, `PullRequest`, `SourceRecord`,
+  `Repository`) are now idempotent via PostgreSQL `INSERT ... ON CONFLICT DO
+  UPDATE`, fixing duplicate rows on re-sync. `Task.updated_at` is documented as a
+  "last synced" marker (bumped every sync); user-facing recency uses
+  `source_updated_at`.
+- The frontend no longer uses browser operator-key/owner-email config
+  (`web/lib/config.ts` removed); workspace is derived from the session, and
+  browser requests carry neither the operator key nor `owner_email`.
+- Connector-token encryption now fails closed outside local/dev unless a
+  dedicated `FOUNDEROS_SECRET_ENCRYPTION_KEY` is set (no longer reuses the API
+  auth key as encryption material outside local).
+- Public health split: `GET /health` is a minimal no-auth liveness probe; env
+  and feature-flag detail moved to `GET /health/detail` behind the operator key.
+- Account-active state reuses `User.status` (`active`/`disabled`); no `is_active`
+  boolean was added.
+- `ingested_events` Alembic drift reconciled (migration `a8c9d0e1f2b3`, indexes
+  and constraints only — no data change). New single Alembic head:
+  `c0e1f2a3b4d5`.
+- Decisions recorded as DEC-041…DEC-047 in `docs/DECISIONS.md`.
+
+### Safety
+
+- The DB stores only session-token hashes; passwords are Argon2id-hashed and
+  never returned. The admin-provisioning command never prints the password. No
+  external provider writes, deploy, or push were part of this phase.
+
 ## 2026-06-27
 
 ### Security

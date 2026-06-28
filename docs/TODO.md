@@ -62,7 +62,44 @@ files, no unrelated edits, and focused checks first.
 - FOS-026B: done - Railway rehearsal project/backend/frontend/Postgres created; deployments healthy; migrations at head; health/auth-only deployed smoke passed with provider writes, LLM, and real connectors disabled.
 - FOS-026C: done - minimal private-beta workspace/owner context bootstrapped through the supported operator API; full read-only deployed smoke passed with provider writes, selected repo live sync, ActionProposal execute, LLM, and real connectors disabled/not called.
 - FOS-027B1: done - private-beta blocker hardening pass 1: API auth is fail-closed outside local (startup guard), untrusted server URLs render through `safeHref`/`SourceLink` (http(s)-only), and stale `app/agents` bytecode plus deleted-LLM/agent/boundary doc references were reconciled. No deploy, push, or provider writes.
-- Next task: FOS-027B2 - Task uniqueness / idempotent task upsert migration (add the missing unique constraint on canonical `tasks` and convert the upsert to be idempotent; addresses the duplicate-Task-rows blocker from the audit).
+- FOS-027B2: done - canonical `tasks` got a partial unique index
+  `uq_tasks_workspace_provider_external_id` (`workspace_id, source_provider,
+  external_id` where `external_id IS NOT NULL`) plus dedupe migration
+  `f7b8c9d0e1a2`, and the GitHub-issue→`Task` upsert is now an idempotent
+  `ON CONFLICT DO UPDATE`. Closes the duplicate-Task-rows blocker.
+- Sync-layer hardening (post-FOS-027B2): done - idempotent `ON CONFLICT` upserts
+  for `PullRequest`/`SourceRecord`/`Repository`; `ingested_events` alembic drift
+  reconciled (migration `a8c9d0e1f2b3`, indexes/constraints only); secret
+  encryption is fail-closed outside local (`FOUNDEROS_SECRET_ENCRYPTION_KEY`
+  required); public health split into a no-auth `/health` liveness probe and an
+  operator-gated `/health/detail`. New single alembic head: `c0e1f2a3b4d5`.
+- Auth phase (email+password, server-side sessions): done - `password_service`
+  (Argon2id), `session_service` + `sessions` table (stores only the sha256 token
+  hash), `/api/v1/auth/login|logout|me|change-password`, `require_session` +
+  `get_current_actor` (session-or-operator resolver), DB login brute-force
+  throttle (`login_attempts`), same-origin Next.js proxy for a first-party
+  cookie (`FOUNDEROS_API_PROXY_TARGET`), frontend migrated off
+  operator-key/owner-email to the session (`web/lib/config.ts` removed),
+  Settings→account/change-password page, and idempotent admin provisioning via
+  `scripts/create_admin_user.py`. Single founder today, multi-user-capable. See
+  DEC-041…DEC-047.
+- Russian UI localization: done - all user-facing copy centralized in
+  `web/lib/messages.ts` (no i18n framework). See DEC-045.
+- Next tasks (real features behind login): persistent `Briefing`/`BriefingItem`
+  model + LLM briefing pipeline; GitHub OAuth / product connect + live sync;
+  multi-user / teammate provisioning beyond the single founder; first production
+  deploy of the auth phase to Railway. Much of the product UI beyond auth is
+  still scaffolding wired to deterministic local contracts — stay honest about
+  that.
+- Known debt (Repository sync concurrency): `Repository` idempotency uses an
+  app-level cross-path dedupe (SELECT by `external_id`, then by `full_name`)
+  before a race-safe `ON CONFLICT` insert, but the DB unique constraint is only
+  on (`workspace_id`, `external_id`). A different `external_id` with the same
+  `full_name` could pass the `full_name` SELECT in two concurrent syncs and
+  duplicate the repository row. Ref `app/services/github_normalization_service.py`.
+  The durable fix is a DB-level guard (e.g. a unique index on
+  (`workspace_id`, `full_name`)) — a code/migration change, not done in this
+  docs pass. Noted in DEC-046.
 
 
 ## FOS-025B - Private-beta deploy/smoke foundation
@@ -153,8 +190,8 @@ Implemented:
   Postgres, and managed/deferred Redis model.
 - Documented backend install, migration, start, health, env-name, CORS, API auth,
   GitHub connection, and provider-write-disabled requirements.
-- Documented frontend install, build, start, API-base, browser Settings, and
-  private-beta limitations.
+- Documented frontend install, build, start, API-base/proxy, login/session
+  flow, and private-beta limitations.
 - Documented migration head/current verification, backup-before-migration, and
   restore-from-backup rollback policy.
 - Documented read-only post-deploy `make smoke` and what it must not call.
@@ -623,7 +660,10 @@ Likely files:
 Acceptance criteria:
 
 - Settings-driven API calls use `X-FounderOS-API-Key`, `owner_email`, and
-  `workspace_id` from browser-local operator config.
+  `workspace_id` from browser-local operator config. **(Superseded by the auth
+  phase / DEC-043: this browser-local operator config was removed; the frontend
+  now derives the workspace from the session and sends no operator key/owner
+  email.)**
 - Dashboard/GitHub/Briefings/Actions pages read existing backend APIs.
 - External write execution remains disabled or separately confirmed.
 - No OAuth, provider calls, backend route changes, or migrations are added.

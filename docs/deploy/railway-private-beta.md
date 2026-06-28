@@ -112,21 +112,21 @@ Frontend service settings:
 - **Install/build command:** `npm ci && npm run build`.
 - **Start command:** `npm run start -- --port <platform-port>`.
 - **Railpack variables:** set `RAILPACK_BUILD_CMD` and `RAILPACK_START_CMD` for the frontend service as well.
-- **Public API base:** `NEXT_PUBLIC_API_BASE_URL` points at the backend public
-  origin.
+- **Proxy target:** `FOUNDEROS_API_PROXY_TARGET` (server-only) points the
+  same-origin `/api/*` and `/health` proxy at the backend; falls back to
+  `NEXT_PUBLIC_API_BASE_URL`, then `http://localhost:8000`.
 
 Frontend env names:
 
+- `FOUNDEROS_API_PROXY_TARGET`
 - `NEXT_PUBLIC_API_BASE_URL`
 
-Current private-beta UX still requires browser-local Settings:
-
-- API base URL or default from `NEXT_PUBLIC_API_BASE_URL`;
-- operator API key;
-- owner email;
-- workspace ID.
-
-Production auth/session and GitHub OAuth/onboarding remain later hardening work.
+Production auth/session is now built: users sign in at `/login` with
+email+password on a server-side session cookie (first-party via the same-origin
+proxy). The browser sends no operator API key, owner email, or workspace ID; the
+workspace is derived from the session, and the founder account is provisioned via
+`scripts/create_admin_user.py`. GitHub OAuth/onboarding remains later hardening
+work.
 
 ## Domain, CORS, and API-base mapping
 
@@ -140,9 +140,11 @@ Use placeholder domains in planning only:
 - backend `FOUNDEROS_CORS_ALLOW_CREDENTIALS`: configured only when the auth model
   requires credentialed browser requests.
 
-Do not use wildcard CORS. If browser API calls fail after deploy, verify the
-frontend domain, backend domain, `NEXT_PUBLIC_API_BASE_URL`, browser Settings API
-base URL, and `FOUNDEROS_CORS_ALLOWED_ORIGINS` before changing code.
+Do not use wildcard CORS. The frontend proxies `/api/*` same-origin, so browser
+CORS is not exercised on the normal path. If browser API calls fail after deploy,
+verify the frontend domain, backend domain, `FOUNDEROS_API_PROXY_TARGET` (or
+`NEXT_PUBLIC_API_BASE_URL`), and `FOUNDEROS_CORS_ALLOWED_ORIGINS` before changing
+code.
 
 ## Postgres path
 
@@ -236,8 +238,10 @@ Rollback choices:
    restore from backup if data-impacting, and record the failed step without
    secret values.
 
-Do not rely on Alembic downgrade for private-beta rollback. Historical migrations
-include irreversible operations.
+Do not rely on Alembic downgrade for private-beta rollback. Some migrations are
+irreversible — notably `f7b8c9d0e1a2` (canonical-task dedupe), which DELETEs
+duplicate provider-keyed task rows before adding the unique index. Restore from
+backup instead.
 
 ## Later live provider smoke
 

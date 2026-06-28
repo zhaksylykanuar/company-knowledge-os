@@ -16,22 +16,29 @@
 Сегодня в коде реализован детерминированный, evidence-first спайн:
 
 - единый backend FastAPI на канонических путях `/api/v1`; `web/` (Next.js) —
-  единственный фронтенд (статический `/ui` удалён);
-- private-beta операторская аутентификация по API-ключу (fail-closed вне
-  local/dev);
+  единственный фронтенд (статический `/ui` удалён), с русским UI через
+  центральный каталог сообщений `web/lib/messages.ts`;
+- продуктовый логин **email+password на серверных сессиях** (Argon2id, httpOnly
+  first-party cookie через same-origin прокси, DB-throttle перебора): эндпоинты
+  `/api/v1/auth/login|logout|me|change-password`, страница `/login`, аккаунт в
+  Settings; операторская аутентификация по API-ключу сохраняется для
+  server/CI/админ-скриптов и сосуществует с сессией (fail-closed вне local/dev);
 - GitHub через provider-token connection: read-only нормализация
-  репозиториев / issues / PR в канонические таблицы, Company Brain и ручной
-  evidence-брифинг, плюс human-approved guarded write-back одного GitHub issue;
+  репозиториев / issues / PR в канонические таблицы (идемпотентный `ON CONFLICT`
+  upsert), Company Brain и ручной evidence-брифинг, плюс human-approved guarded
+  write-back одного GitHub issue;
 - детерминированные проекции без LLM: брифинги/extraction считаются из локальных
   данных и несут `evidence_refs`.
 
 Ещё **не** реализовано (остаётся видением этого плана, а не текущим кодом):
 
-- GitHub OAuth start/callback/connect и продуктовый login/session;
+- GitHub OAuth start/callback/connect и живая продуктовая синхронизация;
 - персистентные briefing-модели и LLM-брифинг-пайплайн;
 - продуктовые пути Jira / Gmail / Drive / Documents;
-- отдельные страницы (`/login`, `/connectors`, ...), rate limiting, webhook-
-  подписи, русская локализация UI.
+- мультиюзер/онбординг (сейчас один основатель, заводится через
+  `scripts/create_admin_user.py`);
+- остальные страницы (`/connectors`, `/jira`, `/gmail`, ...), rate limiting,
+  webhook-подписи.
 
 ---
 

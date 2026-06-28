@@ -4,9 +4,11 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 8 / FOS-025F after
-FOS-025E Railway hosting dry-run preparation. Docs consolidation is complete;
-this roadmap is planning context, not the live task source.
+The current execution pointer is `../PROGRESS.md`: CHUNK 8 hardening is closed
+(FOS-027B2 + sync-layer idempotency) and an email+password / server-side-session
+login phase has landed locally; the next horizon is real product features behind
+login. Docs consolidation is complete; this roadmap is planning context, not the
+live task source.
 
 ## Phase 0 - Project Setup
 
@@ -45,7 +47,15 @@ Done:
   `SyncJob`, `SourceRecord`, `EvidenceRef`, `Repository`, `PullRequest`, `Task`,
   `ActionProposal`, `ActionExecution`, and proposal-scoped
   `ActionExecutionEvent` audit foundations exist.
-- Existing migrations are at one Alembic head/current: `a2b3c4d5e6f7`.
+- Auth/session foundations exist: a `sessions` table (ORM `UserSession`, stores
+  only the sha256 token hash) and a `login_attempts` brute-force throttle table;
+  account-active state reuses `User.status` (no `is_active`).
+- Canonical `tasks` now have a partial unique index
+  `uq_tasks_workspace_provider_external_id` and idempotent `ON CONFLICT` upserts
+  across the GitHub sync path.
+- Existing migrations are at one Alembic head/current: `c0e1f2a3b4d5` (after the
+  task-uniqueness, `ingested_events`-drift, `sessions`, and `login_attempts`
+  migrations).
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
   compatibility substrate; FOS-009 repointed workspace repository reads to
@@ -90,6 +100,10 @@ Done:
 - Selected repository PR sync exists for explicitly allowlisted repositories:
   `/api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync`.
 - Company Brain repo-audit read model remains available.
+- Email+password login on server-side sessions exists:
+  `POST /api/v1/auth/login|logout`, `GET /api/v1/auth/me`,
+  `POST /api/v1/auth/change-password`, with `require_session` /
+  `get_current_actor` (session-or-operator-key) auth and a DB login throttle.
 - LLM paths are gated/off by default.
 
 Missing:
@@ -97,6 +111,7 @@ Missing:
 - Full GitHub OAuth/product connect flow.
 - Live GitHub OAuth/product sync execution path.
 - Persistent briefing models.
+- Multi-user / teammate provisioning beyond the single seeded founder.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
 
@@ -113,18 +128,27 @@ Definition of Done:
 
 ## Phase 3 - Frontend Core
 
-Current status: minimal master frontend shell exists and the GitHub-first
-dashboard/briefing/action surfaces are wired through guarded local contracts.
+Current status: the `web/` shell is now gated behind a `/login` page and a
+server-side session; the GitHub-first dashboard/briefing/action surfaces are
+wired through guarded local contracts and workspace is derived from the session.
+User-facing copy is Russian via a central message catalog.
 
 Done:
 
 - Legacy static `/ui` has been removed; `web/` is the only product frontend
   shell to extend.
+- A `/login` page (`web/app/login/page.tsx`) plus an `AuthGate` redirect, a
+  session client (`web/lib/auth.ts`/`session.ts`), and a Settings→account /
+  change-password page gate the app behind email+password login; the old
+  operator-key/owner-email browser config (`web/lib/config.ts`) was removed and
+  workspace is derived from the session.
+- All user-facing copy is centralized in `web/lib/messages.ts` (Russian; no i18n
+  framework).
 - Company Brain has a product dashboard panel backed by canonical GitHub
   repositories/tasks/PRs and source refs.
 - Minimal Next.js + TypeScript app exists in `web/`.
-- App shell, sidebar, MVP placeholder pages, browser-local operator settings,
-  and typed API client foundation exist.
+- App shell, sidebar, MVP placeholder pages, session-derived workspace context,
+  and a typed API client foundation exist.
 - Dashboard reads canonical GitHub operational work from the backend and shows
   issue/task and PR sections with open/all/closed/merged filters.
 - Dashboard exposes honest GitHub local-sync controls over existing backend
@@ -145,8 +169,8 @@ Done:
 Missing:
 
 - Tailwind/shadcn or final product UI system.
-- Login page.
-- Workspace onboarding.
+- Self-serve workspace onboarding / multi-user invite (today the single founder
+  is seeded via `scripts/create_admin_user.py`).
 - Browser/product E2E coverage.
 - The first human-gated live external write proof has been read back into
   canonical product state and closed after explicit human approval.
@@ -330,10 +354,15 @@ Done:
   a key), and untrusted server-provided URLs render through `safeHref`/
   `SourceLink` so only http(s) links are clickable (`javascript:`/`data:`
   values are rendered as text).
+- Production auth is decided and built: email+password login on server-side,
+  revocable sessions (httpOnly first-party cookie via a same-origin proxy,
+  Argon2id, DB login throttle). Secret encryption is fail-closed outside local
+  (`FOUNDEROS_SECRET_ENCRYPTION_KEY`).
 
 Missing:
 
-- Production auth/session decision.
+- First production deploy of the auth phase (the Railway rehearsal predates it);
+  founder account provisioning + `FOUNDEROS_API_PROXY_TARGET` wiring in prod.
 - GitHub OAuth/onboarding path for private-beta users.
 - Custom domain decision and setup.
 - Worker service if/when queue runtime exists.

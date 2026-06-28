@@ -100,6 +100,11 @@ deleted. Delete candidates are limited to clearly generated/local artifacts.
 
 ## DEC-012 - Workspace Auth Starts As Operator-Compatible Contract
 
+Status: superseded by DEC-041/DEC-043 — the founder web app now has
+email+password session login; the operator API key coexists for
+machine/CI/admin use. The "no public password login or session UI yet" stance
+below is historical.
+
 Decision: keep the current API-key/operator auth boundary while adding
 workspace-aware backend helpers on top of `User`, `Workspace`, and
 `Membership`.
@@ -279,6 +284,12 @@ Consequences:
 - Browser/product E2E remains a later frontend task.
 
 ## DEC-020 - Frontend Shell Starts As Separate Next.js App
+
+Status: partially superseded by DEC-042/DEC-043 — the `web/lib/config.ts`
+browser-local operator settings were removed; the frontend now derives the
+workspace from the session and sends no operator key/owner email. The
+"browser-local operator settings" / "production session login is deferred"
+consequences below are historical.
 
 Decision: FOS-FE-01 starts the product frontend as a separate `web/` Next.js
 and TypeScript app. At the time of this decision the existing static `/ui`
@@ -837,6 +848,168 @@ Consequences:
   the service refuses to start.
 - Auth may remain disabled only when `APP_ENV` is local/dev/test.
 - Startup errors reference env-var names only, never key values.
+
+## DEC-041 - Founder Login Uses Server-Side Revocable Sessions, Not JWT
+
+Decision (2026-06-28): the email+password web login uses server-side sessions,
+not stateless JWTs. `password_service` hashes passwords with **Argon2id**
+(argon2-cffi default params). `session_service` mints a high-entropy random
+token (`secrets.token_urlsafe(32)`), stores **only its sha256 hash** in the
+`sessions` table (ORM class `UserSession`), and returns the raw token to the
+caller solely to set an **httpOnly** cookie. `POST /api/v1/auth/login|logout`,
+`GET /api/v1/auth/me`, and `POST /api/v1/auth/change-password` are the auth
+surface; `require_session` is the session dependency.
+
+Rationale: server-side sessions are individually revocable (logout,
+change-password revokes other sessions, future admin "sign out everywhere")
+without a token-blocklist; a stolen DB row cannot be replayed because only the
+hash is stored, and an httpOnly cookie keeps the token out of JS. A stateless
+JWT would have been simpler to mint but not revocable and harder to keep out of
+the browser safely.
+
+Consequences:
+
+- The raw session token never persists; the DB stores only `token_hash`.
+- Validation hashes the incoming cookie token and matches it to `token_hash`,
+  rejecting unknown/revoked/expired rows.
+- Session lifetime/cookie are env-tunable: `FOUNDEROS_SESSION_TTL_DAYS` (14),
+  `FOUNDEROS_SESSION_COOKIE_NAME` (`founderos_session`),
+  `FOUNDEROS_SESSION_COOKIE_SAMESITE` (`lax`). The cookie's `Secure` flag is
+  driven by `APP_ENV` (set unless the env is local/dev/test).
+- Password hashes are never returned by any API; login returns a generic error.
+
+## DEC-042 - First-Party Session Cookie via Same-Origin Proxy (Not SameSite=None)
+
+Decision (2026-06-28): the frontend and backend deploy as two Railway origins,
+but the session cookie stays **first-party**. The Next.js app proxies `/api/*`
+(and `/health`) to the backend via `rewrites()` in `web/next.config.mjs`, so the
+browser only ever talks to the frontend origin and the cookie is same-origin.
+The proxy target is `FOUNDEROS_API_PROXY_TARGET` (server-only; falls back to
+`NEXT_PUBLIC_API_BASE_URL`, then `http://localhost:8000`).
+
+Rationale: a cross-site `SameSite=None` cookie would be required if the browser
+called the backend origin directly, which is more exposed (CSRF surface,
+third-party-cookie restrictions). Routing through a same-origin proxy lets the
+cookie remain `SameSite=Lax` and first-party with no cross-site exposure.
+
+Consequences:
+
+- The browser sends no operator API key and no `owner_email`; `apiFetch` is
+  always same-origin with `credentials: "include"`.
+- `FOUNDEROS_API_PROXY_TARGET` must point at the backend in any split deploy.
+- Cookie stays `SameSite=Lax`; `SameSite=None` is intentionally avoided.
+
+## DEC-043 - Session Auth Coexists With Operator API-Key Auth
+
+Decision (2026-06-28): the new session auth does not replace the operator
+API-key boundary; they coexist. `get_current_actor` resolves a request from
+**either** a valid session cookie (preferred) **or** the operator API key
+(`require_api_key`). The operator key is for server/CI/admin tooling
+(`scripts/`, smoke, bootstrap); humans use the web login.
+
+Rationale: the operator key is still the right boundary for headless tooling and
+existing operator routes, while interactive users should not hold a
+broad operator key. One resolver keeps both paths first-class without forking
+every route. This supersedes the "no public password login yet" stance of
+DEC-012 for the founder-facing web app.
+
+Consequences:
+
+- Endpoints can require a session (`require_session`), the operator key
+  (`require_api_key`), or either actor (`get_current_actor`).
+- The operator key is no longer the only authenticated identity; it remains
+  valid for machine/admin/CI use only.
+- Fail-closed operator-auth posture (DEC-040) is unchanged.
+
+## DEC-044 - Account-Active State Reuses User.status (No New is_active)
+
+Decision (2026-06-28): "is this account allowed to log in" reuses the existing
+`User.status` column (`active` / `disabled`, guarded by a CHECK constraint)
+rather than adding a new `is_active` boolean. The `sessions` migration relies on
+`User.status` / `User.password_hash` already existing, so the users table did
+not change.
+
+Rationale: a second active/disabled flag would be redundant and could drift out
+of sync with `status`. One canonical column avoids ambiguity.
+
+Consequences:
+
+- Disabling an account is `status = 'disabled'`; no boolean to keep in sync.
+- New code must read `User.status`, not invent an `is_active` field.
+
+## DEC-045 - Russian UI via a Single Message Catalog (No i18n Framework)
+
+Decision (2026-06-28): all user-facing frontend copy lives in one central
+catalog, `web/lib/messages.ts` (a const `M` map of Russian strings plus `T`
+interpolation helpers). No i18n framework (next-intl, react-i18next, etc.) is
+introduced.
+
+Rationale: the product is founder-facing and Russian-first (see the
+founder-facing-russian rule); a single catalog gives one place to edit copy and
+keeps components free of inline strings. A full i18n framework is unjustified
+overhead for one locale — and if a second language is ever needed, it is a small
+addition (swap the catalog for a keyed lookup) rather than a rewrite.
+
+Consequences:
+
+- Components import from `messages.ts`; no inline user-facing strings.
+- Adding a second locale = a second keyed catalog, not a framework migration.
+
+## DEC-046 - Canonical Task Uniqueness, Idempotent Upserts, and "Last Synced" updated_at
+
+Decision (2026-06-28): canonical `tasks` enforce identity with a **partial
+unique index** `uq_tasks_workspace_provider_external_id` over
+(`workspace_id`, `source_provider`, `external_id`) scoped to
+`external_id IS NOT NULL` (manual/internal NULL-external_id tasks are exempt).
+GitHub normalization upserts `Task`/`PullRequest`/`SourceRecord`/`Repository`
+with PostgreSQL `INSERT ... ON CONFLICT DO UPDATE` so re-syncs are idempotent.
+`Task.updated_at` is a **"last synced" marker** — bumped on every sync write —
+while user-facing recency comes from `source_updated_at`.
+
+Rationale: re-running a sync was creating duplicate `Task` rows. A DB-enforced
+identity plus race-safe `ON CONFLICT` upsert makes the spine idempotent under
+retries/concurrency. `updated_at` is bumped unconditionally because the sync
+cannot cheaply diff a record for "did anything change" — the source payload is
+stored in a JSON column, and JSON has no Postgres equality operator to gate the
+write on — so `updated_at` reflects sync activity, not content change, and is
+only a secondary `ORDER BY` tiebreak.
+
+Consequences:
+
+- Duplicate provider-keyed task rows are deleted in migration `f7b8c9d0e1a2`
+  (irreversible DELETE) before the unique index is created.
+- Repository idempotency additionally uses app-level cross-path dedup
+  (external_id then full_name) ahead of the race-safe `ON CONFLICT` insert.
+  Known debt: the full_name path is a SELECT, not a DB constraint (the unique
+  constraint is only on `workspace_id`+`external_id`), so a different
+  `external_id` with the same `full_name` could still duplicate under
+  concurrency. Tracked in `docs/TODO.md`; the durable fix is a DB-level guard.
+- Do not treat `Task.updated_at` as a content-change timestamp; use
+  `source_updated_at` for user-facing recency.
+
+## DEC-047 - Dedicated Secret-Encryption Key Required Outside Local
+
+Decision (2026-06-28): connector-token encryption requires a dedicated
+`FOUNDEROS_SECRET_ENCRYPTION_KEY` whenever `APP_ENV` is non-local. Outside
+local/dev, if the dedicated key is unset the backend **fails closed** rather
+than reusing the API auth key as encryption material. Local/dev may fall back to
+the API auth key as a convenience; if even that is absent it still errors.
+
+Rationale: reusing the API auth key as encryption material couples two
+unrelated secrets — rotating the auth key would silently invalidate stored
+tokens, and one leaked value would compromise both. A dedicated key with a loud
+non-local failure is the smallest durable guardrail. This mirrors the
+fail-closed auth posture of DEC-040.
+
+Consequences:
+
+- Non-local deploys must set `FOUNDEROS_SECRET_ENCRYPTION_KEY` or refuse to
+  decrypt/encrypt tokens.
+- Rotating the key invalidates previously stored encrypted tokens (documented in
+  `.env.example`).
+- The public health endpoint was also split this phase: `GET /health` returns a
+  minimal no-auth liveness probe, while env/feature-flag detail moved to
+  `GET /health/detail` behind the operator key.
 
 ## ASK - Open Questions For The Human (not decided)
 

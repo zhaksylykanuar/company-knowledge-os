@@ -2,29 +2,57 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая ветка `main`; cleanup/FOS-008/doc hygiene fast-forward merged locally
-> into `main` at `ef22360`. Remote publish is still pending until a human
-> explicitly asks to push.
+> Текущая ветка `main`; `main` опережает `origin/main` на 18 локальных коммитов
+> (sync-layer hardening + auth-фаза + русский UI поверх запушенного `82fb52f`).
+> Remote publish всё ещё ждёт, пока человек явно не попросит запушить.
 
 ---
 
 ## ▶ СЕЙЧАС
 
-- **Chunk:** `CHUNK 8 — Testing Gate + Deploy`.
-- **Task:** FOS-027B1 — private-beta blocker hardening pass 1 (fail-closed auth,
-  safe external href rendering, stale deterministic-doc cleanup).
-- **State:** ✅ API auth is now fail-closed outside local: a startup guard
-  (`enforce_fail_closed_auth`, wired into the FastAPI lifespan) aborts boot when
-  a non-local `APP_ENV` runs with auth disabled or without a configured key.
-  Untrusted server-provided URLs render through a shared `safeHref`/`SourceLink`
-  pair so only http(s) links are clickable (`javascript:`/`data:`/`vbscript:`/
-  malformed values render as non-clickable text). Stale `app/agents` bytecode
-  was removed and CLAUDE.md / SECURITY_BASELINE.md / README.md references to
-  deleted LLM/agent code and a deleted boundary doc were reconciled. Backend
-  pytest, ruff, and full frontend test/build/typecheck/lint are green. No
-  deploy, no push, no provider writes; secret values are not printed.
-- **Next action:** FOS-027B2 — add the missing unique constraint on canonical
-  `tasks` and make the task upsert idempotent (duplicate-Task-rows blocker).
+- **Chunk:** `CHUNK 8 — Testing Gate + Deploy` закрыт по hardening-части;
+  следующий горизонт — реальные продуктовые фичи **за** логином.
+- **Что сделано (локальная серия из 18 коммитов поверх `82fb52f`, ещё не в `origin/main`):**
+  - **Sync-layer hardening (FOS-027B2 → далее):** в канонические `tasks` добавлен
+    partial unique index `uq_tasks_workspace_provider_external_id`
+    (`workspace_id, source_provider, external_id` при `external_id IS NOT NULL`;
+    ручные задачи с NULL `external_id` не ограничиваются), дедуп существующих
+    дублей в миграции `f7b8c9d0e1a2`, и идемпотентный `ON CONFLICT` upsert для
+    `Task` / `PullRequest` / `SourceRecord` / `Repository` в
+    `github_normalization_service`. Дрейф alembic по `ingested_events` сведён
+    отдельной миграцией `a8c9d0e1f2b3` (только индексы/ограничения, без данных).
+    `Task.updated_at` задокументирован как маркер «последней синхронизации»
+    (bump на каждый sync), а пользовательская свежесть берётся из
+    `source_updated_at`. Усилено шифрование секретов:
+    `FOUNDEROS_SECRET_ENCRYPTION_KEY` обязателен вне local — иначе fail-closed,
+    без переиспользования API-ключа как материала шифрования. Публичный health
+    разделён: `GET /health` — минимальный liveness без auth, `GET /health/detail`
+    (флаги app/env/write/llm) — за операторским ключом.
+  - **Auth-фаза (email+password, серверные сессии; сейчас один основатель,
+    архитектура многопользовательская):** `password_service` (Argon2id),
+    `session_service` + таблица `sessions` (в БД хранится только sha256-хэш
+    токена, сырой токен только в cookie), эндпоинты
+    `/api/v1/auth/login|logout|me|change-password`, зависимость `require_session`
+    и резолвер `get_current_actor` (сессия-ИЛИ-операторский ключ; сессия в
+    приоритете), DB-throttle логина от перебора (`login_attempts`, по умолчанию
+    5 попыток / блок 15 мин, generic 401 без раскрытия существования email),
+    same-origin Next.js-прокси для first-party cookie
+    (`FOUNDEROS_API_PROXY_TARGET`), фронтенд полностью переведён с
+    operator-key/owner-email на сессию (`web/lib/config.ts` удалён, workspace
+    берётся из сессии), страница Settings → аккаунт/смена пароля, админ
+    создаётся идемпотентно через `scripts/create_admin_user.py`.
+  - **Русский UI:** вся пользовательская копия вынесена в центральный каталог
+    сообщений `web/lib/messages.ts` (без i18n-фреймворка).
+- **Текущее состояние:** детерминированный evidence-first спайн + продуктовый
+  логин (email+password, серверные сессии) поверх него; операторский API-ключ
+  остаётся для server/CI/админ-скриптов. Один alembic head — `c0e1f2a3b4d5`.
+- **Дальше (реальные фичи за логином):** персистентная модель `Briefing` +
+  LLM-пайплайн; GitHub OAuth / продуктовый connect и живая синхронизация;
+  провижининг второго пользователя/тиммейта (мультиюзер); первый прод-деплой на
+  Railway.
+- **Примечание:** это был docs-only проход сверки документации с кодом/git —
+  тесты в этом проходе заново не прогонялись; зелёные проверки относятся к
+  моменту коммитов соответствующих фаз.
 
 ---
 
@@ -48,7 +76,7 @@ DONE строго = есть код + проходящий тест/рабочи
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ pass | 2026-06-25 | FOS-018 on `main`: one head `a2b3c4d5e6f7`, current==head |
+| `alembic upgrade head` | ✅ single head | 2026-06-28 | Auth/sync-hardening migrations added (`f7b8c9d0e1a2` task-uniqueness → `a8c9d0e1f2b3` ingested_events drift → `b9d0e1f2a3c4` sessions → `c0e1f2a3b4d5` login_attempts). Один линейный head `c0e1f2a3b4d5` (проверено по цепочке `down_revision`; в docs-only проходе не переприменялось) |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
 | backend tests (`pytest`) | ✅ pass | 2026-06-26 | FOS-023 on `main`: **287 passed / 0 failed / 1 warning** |
@@ -56,7 +84,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
 | frontend build | ✅ pass | 2026-06-26 | FOS-025C on `main`: local `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint` passed; CI frontend job added |
 | docs navigation | ✅ pass | 2026-06-26 | FOS-023 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
-| `alembic check` (retained substrate) | ⚠️ expected drift | 2026-06-25 | FOS-018: drift **7 operations**, all on `ingested_events`; retained-substrate physical cleanup is later migration work / DEC-030; НЕ про execution gate |
+| `alembic check` (retained substrate) | ✅ reconciled | 2026-06-28 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3` (индексы/ограничения приведены к ORM `IngestedEvent`, без изменения данных). В docs-only проходе `alembic check` заново не запускался |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
 | prod smoke | ✅ pass | 2026-06-27 | FOS-026C: deployed Railway read-only smoke passed with minimal private-beta workspace/owner context; no provider writes, LLM calls, selected repo sync, or ActionProposal execute |
@@ -131,7 +159,11 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] FOS-SMOKE-01 — Smoke tests — backend `tests/test_github_first_backend_e2e.py` + `tests/test_external_connector_readonly_smoke.py` зелёные; FOS-025B added `make smoke` + read-only private-beta smoke script; FOS-026C proved the deployed Railway read-only smoke path with minimal private-beta workspace context.
 - [x] FOS-T — Full tests + frontend build — FOS-025C local gate: backend full pytest 297 passed / 1 warning; frontend `npm test`, build, typecheck, and lint passed; CI now enforces both backend and frontend gates
 - [x] FOS-027B1 — Private-beta blocker hardening pass 1 — API auth is fail-closed outside local via a startup guard; untrusted server-provided URLs render through `safeHref`/`SourceLink` (http(s)-only); stale `app/agents` bytecode and deleted-LLM/agent/boundary-doc references were reconciled. Backend pytest/ruff and frontend test/build/typecheck/lint green. No deploy, push, or provider writes.
-- [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth/GitHub onboarding/custom-domain hardening remains before broader beta.
+- [x] FOS-027B2 — Task uniqueness + idempotent task upsert — partial unique index `uq_tasks_workspace_provider_external_id` (`workspace_id, source_provider, external_id` where `external_id IS NOT NULL`) + dedupe migration `f7b8c9d0e1a2`; the GitHub-issue→`Task` upsert in `github_normalization_service` is now `ON CONFLICT DO UPDATE` (index-matched), bumping `updated_at` per "last synced" semantics. Closes the duplicate-Task-rows blocker.
+- [x] Sync-layer idempotency + hardening (post-FOS-027B2) — idempotent `ON CONFLICT` upserts for `PullRequest`/`SourceRecord`/`Repository`; `ingested_events` alembic drift reconciled (migration `a8c9d0e1f2b3`, indexes/constraints only); secret-encryption fail-closed outside local (`FOUNDEROS_SECRET_ENCRYPTION_KEY` required); public health split (`/health` liveness public, `/health/detail` behind operator key).
+- [x] Auth phase (email+password, server-side sessions) — `password_service` (Argon2id), `session_service` + `sessions` table (stores only the sha256 token hash), `/api/v1/auth/login|logout|me|change-password`, `require_session` + `get_current_actor` (session-or-operator resolver), DB login brute-force throttle (`login_attempts`), same-origin Next.js proxy for a first-party cookie (`FOUNDEROS_API_PROXY_TARGET`), frontend migrated off operator-key/owner-email to the session (`web/lib/config.ts` removed), Settings→account page, admin seeded via `scripts/create_admin_user.py`. Single founder now, multi-user-capable. No FOS id (feat(auth)/feat(web) commits). See DEC-041…DEC-047.
+- [x] Russian UI localization — all user-facing copy centralized in `web/lib/messages.ts` (no i18n framework; second language is a small addition). See DEC-045.
+- [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth is now built (email+password sessions), but GitHub OAuth onboarding/custom-domain hardening and the first production deploy of the auth phase remain before broader beta.
 
 ---
 
@@ -151,6 +183,40 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-28` — **Docs reconciliation (docs-only).** Сверил канонические доки с
+  реальным кодом/git после auth-фазы: 18 локальных коммитов поверх `82fb52f`
+  (последний в `origin/main`) не были отражены в трекинг-доках, т.к. промпты
+  фазы запрещали трогать доки. Обновлены `PROGRESS.md`, `docs/TODO.md`,
+  `docs/DECISIONS.md` (DEC-041…DEC-047), `docs/ROADMAP.md`, `docs/CHANGELOG.md`,
+  `founderOS_MASTER_PLAYBOOK.md` (status-блок), `README.md`, `.env.example`
+  (+`FOUNDEROS_API_PROXY_TARGET`), `SECURITY_BASELINE.md`. Никакого кода:
+  `app/` / `web/` / `migrations/` не тронуты; факты проверены по коду
+  (эндпоинты, таблицы, миграции, env-переменные) и git-истории, ничего не
+  выдумано. Тесты в этом проходе заново не прогонялись. Стейл-claim, который
+  чинили: ROADMAP «Missing: Login page» и «Missing: Production auth/session
+  decision» — логин/сессии теперь построены.
+- `2026-06-28` — **Auth-фаза + русский UI (feat(auth)/feat(web)).** Реализован
+  продуктовый логин email+password на серверных сессиях: `password_service`
+  (Argon2id), `session_service` + таблица `sessions` (в БД только sha256-хэш
+  токена), эндпоинты `/api/v1/auth/login|logout|me|change-password`,
+  `require_session` + `get_current_actor` (сессия-ИЛИ-операторский ключ),
+  DB-throttle логина (`login_attempts`, по умолчанию 5/15 мин), same-origin
+  Next.js-прокси для first-party cookie (`FOUNDEROS_API_PROXY_TARGET`).
+  Фронтенд переведён с operator-key/owner-email на сессию (`web/lib/config.ts`
+  удалён, workspace из сессии), Settings → аккаунт/смена пароля, админ —
+  `scripts/create_admin_user.py` (идемпотентно). Вся UI-копия вынесена в
+  `web/lib/messages.ts` (русский, без i18n-фреймворка). Один основатель сейчас,
+  архитектура многопользовательская. Решения зафиксированы в DEC-041…DEC-047.
+- `2026-06-28` — **Sync-layer hardening (FOS-027B2 + далее).** Канонические
+  `tasks` получили partial unique index
+  `uq_tasks_workspace_provider_external_id` + дедуп-миграцию `f7b8c9d0e1a2`;
+  upsert issue→`Task` стал идемпотентным `ON CONFLICT`, как и
+  `PullRequest`/`SourceRecord`/`Repository`. Дрейф `ingested_events` сведён
+  миграцией `a8c9d0e1f2b3` (индексы/ограничения, без данных). `Task.updated_at`
+  задокументирован как «последняя синхронизация». Шифрование секретов
+  fail-closed вне local (`FOUNDEROS_SECRET_ENCRYPTION_KEY`). Health разделён на
+  публичный liveness и операторский `/health/detail`. Один alembic head —
+  `c0e1f2a3b4d5`.
 - `2026-06-27` — **FOS-027B1 private-beta blocker hardening pass 1.** Made API
   auth fail-closed outside local: `enforce_fail_closed_auth` (FastAPI lifespan)
   aborts startup when a non-local `APP_ENV` runs with auth disabled or without a

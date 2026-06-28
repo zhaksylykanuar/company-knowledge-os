@@ -90,6 +90,11 @@ Current frontend map observed:
 - `web/lib/api.ts` uses `X-FounderOS-API-Key`, `owner_email`, and browser-local
   operator settings.
 
+> Note (auth phase): superseded — this is the audit-time snapshot.
+> `web/lib/config.ts` and the browser-local operator settings were removed;
+> `web/lib/api.ts` is now same-origin (session cookie, no operator key/owner
+> email), and the frontend is gated behind email+password login (DEC-043).
+
 ## Mapping Against Incoming Playbook
 
 The incoming `founderOS_MASTER_PLAYBOOK.md` wins over all older repo playbooks,
