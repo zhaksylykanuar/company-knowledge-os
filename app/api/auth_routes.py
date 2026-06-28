@@ -17,6 +17,11 @@ from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import USER_STATUS_ACTIVE, User
 from app.services.identity_service import get_user_by_email, list_workspaces_for_user
+from app.services.login_throttle_service import (
+    locked_until as login_locked_until,
+    record_failure as record_login_failure,
+    reset as reset_login_throttle,
+)
 from app.services.password_service import hash_password, verify_password
 from app.services.session_service import (
     create_session,
@@ -27,6 +32,7 @@ from app.services.session_service import (
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 GENERIC_LOGIN_FAILURE = "invalid email or password"
+LOGIN_LOCKED_FAILURE = "too many failed login attempts; try again later"
 WRONG_CURRENT_PASSWORD = "current password is incorrect"
 
 
@@ -86,6 +92,14 @@ async def _workspaces_payload(user_id: UUID) -> list[dict]:
 @router.post("/login")
 async def login(payload: LoginRequest, request: Request, response: Response) -> dict:
     async with AsyncSessionLocal() as session:
+        # Brute-force throttle: refuse while locked (same response for known and
+        # unknown emails, so lockout never reveals account existence).
+        if await login_locked_until(session, payload.email) is not None:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=LOGIN_LOCKED_FAILURE,
+            )
+
         user = await get_user_by_email(session, email=payload.email)
         password_ok = (
             user is not None
@@ -93,16 +107,20 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
             and verify_password(payload.password, user.password_hash)
         )
         if not user or not password_ok:
+            await record_login_failure(session, payload.email)
+            await session.commit()
             # Generic failure: never reveal whether the email exists.
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail=GENERIC_LOGIN_FAILURE
             )
+
         raw_token, _session_row = await create_session(
             session,
             user.id,
             user_agent=request.headers.get("user-agent"),
             ip_address=_client_ip(request),
         )
+        await reset_login_throttle(session, payload.email)
         user_payload = _user_payload(user)
         await session.commit()
 

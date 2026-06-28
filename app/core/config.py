@@ -186,6 +186,16 @@ class Settings(BaseSettings):
         default="lax",
         validation_alias=AliasChoices("FOUNDEROS_SESSION_COOKIE_SAMESITE"),
     )
+    # Login brute-force throttle: lock an email after N consecutive failures
+    # for a cooldown window. DB-backed (login_attempts).
+    login_max_failed_attempts: int = Field(
+        default=5,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_MAX_FAILED_ATTEMPTS"),
+    )
+    login_lockout_minutes: int = Field(
+        default=15,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_LOCKOUT_MINUTES"),
+    )
 
     cors_allowed_origins: str | None = Field(
         default=None,

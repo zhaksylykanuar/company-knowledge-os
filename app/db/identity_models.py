@@ -1,7 +1,14 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -115,6 +122,34 @@ class UserSession(Base):
     )
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class LoginAttempt(Base):
+    """Per-email login throttle state (brute-force protection).
+
+    Keyed on the submitted email — existing OR not — so known and unknown
+    accounts throttle identically and a locked response never reveals whether
+    the account exists. DB-backed so it survives restarts and is testable.
+    """
+
+    __tablename__ = "login_attempts"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    failed_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Membership(Base):
