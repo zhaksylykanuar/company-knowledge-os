@@ -6,6 +6,7 @@ import {
   fetchGitHubConnectionStatus,
   runGitHubLocalSync
 } from "../lib/api";
+import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   GitHubConnectionStatusResponse,
@@ -64,7 +65,7 @@ export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) 
           return;
         }
         setConnectionStatus(null);
-        setError(caught instanceof Error ? caught.message : "Request failed");
+        setError(caught instanceof Error ? caught.message : M.common.requestFailed);
         setStatus("error");
       });
 
@@ -86,7 +87,7 @@ export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) 
       setStatus("success");
       onSyncComplete?.();
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : "Request failed");
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       setStatus("error");
     }
   }
@@ -118,69 +119,69 @@ export function GitHubSyncControlsView({
     <section className="panel github-sync-controls" aria-labelledby="github-sync-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">GitHub</span>
-          <h2 id="github-sync-title">Local sync controls</h2>
+          <span className="eyebrow">{M.githubSync.eyebrow}</span>
+          <h2 id="github-sync-title">{M.githubSync.title}</h2>
         </div>
-        <span className="badge">No live provider</span>
+        <span className="badge">{M.githubSync.badgeNoLiveProvider}</span>
       </div>
 
-      {status === "loading" ? <LoadingState label="Loading GitHub connection state" /> : null}
+      {status === "loading" ? <LoadingState label={M.githubSync.loading} /> : null}
 
       {status === "missing" ? (
         <EmptyState
-          description="Your account has no workspace yet, so there is nothing to sync."
-          title="No workspace available"
+          description={M.githubSync.noWorkspaceDescription}
+          title={M.common.noWorkspaceTitle}
         />
       ) : null}
 
       {status === "error" && !connectionStatus ? (
         <>
           <ErrorState
-            description={error ?? "The dashboard could not load GitHub sync state."}
-            title="GitHub sync state unavailable"
+            description={error ?? M.githubSync.stateUnavailableDescription}
+            title={M.githubSync.stateUnavailableTitle}
           />
           <button className="button secondary" onClick={onRetry} type="button">
-            Retry
+            {M.common.retry}
           </button>
         </>
       ) : null}
 
       {connectionStatus ? (
         <>
-          <section className="grid" aria-label="GitHub local sync status">
+          <section className="grid" aria-label={M.githubSync.title}>
             <StatusCard
               description={connectionDescription(connectionStatus)}
-              title="Connection record"
-              value={connectionStatus.has_connection_record ? connectionStatus.status : "Missing"}
+              title={M.githubSync.connectionRecordTitle}
+              value={connectionStatus.has_connection_record ? connectionStatus.status : M.githubSync.connectionRecordMissing}
             />
             <StatusCard
-              description="Live OAuth and provider execution are not enabled from this UI."
-              title="Execution mode"
-              value="Local only"
+              description={M.githubSync.executionModeDescription}
+              title={M.githubSync.executionModeTitle}
+              value={M.githubSync.executionModeValue}
             />
             <StatusCard
-              description={`Repository read source: ${connectionStatus.repository_read_source}.`}
-              title="Repository source"
-              value={connectionStatus.repository_read_available ? "Available" : "Unavailable"}
+              description={T.repoReadSource(connectionStatus.repository_read_source)}
+              title={M.githubSync.repoSourceTitle}
+              value={connectionStatus.repository_read_available ? M.githubSync.repoSourceAvailable : M.githubSync.repoSourceUnavailable}
             />
           </section>
 
           {!connectionStatus.has_connection_record ? (
             <EmptyState
-              description="Live OAuth is not enabled yet. This control can normalize local GitHub data after a backend GitHub connection record exists."
-              title="GitHub connection record required"
+              description={M.githubSync.connectionRequiredDescription}
+              title={M.githubSync.connectionRequiredTitle}
             />
           ) : null}
 
           {connectionStatus.has_connection_record && connectionStatus.status !== "connected" ? (
             <EmptyState
-              description={`The backend record is ${connectionStatus.status}. Local normalization requires a connected GitHub record.`}
-              title="GitHub connection record is not ready"
+              description={T.connectionNotReady(connectionStatus.status)}
+              title={M.githubSync.connectionNotReadyTitle}
             />
           ) : null}
 
           {connectionStatus.warnings.length > 0 ? (
-            <ul className="meta-list" aria-label="GitHub sync warnings">
+            <ul className="meta-list" aria-label={M.githubSync.title}>
               {connectionStatus.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
@@ -194,26 +195,30 @@ export function GitHubSyncControlsView({
               onClick={onSync}
               type="button"
             >
-              {isSyncing ? "Running local sync" : "Run local GitHub sync"}
+              {isSyncing ? M.githubSync.runningSync : M.githubSync.runSync}
             </button>
             <button className="button secondary" onClick={onRetry} type="button">
-              Refresh status
+              {M.common.refreshStatus}
             </button>
           </div>
 
           {status === "error" ? (
             <ErrorState
-              description={error ?? "The local GitHub sync request failed."}
-              title="Local GitHub sync failed"
+              description={error ?? M.githubSync.syncFailedDescription}
+              title={M.githubSync.syncFailedTitle}
             />
           ) : null}
 
           {result ? (
-            <section className="callout" aria-label="GitHub local sync result">
+            <section className="callout" aria-label={M.githubSync.title}>
               <strong>{result.message}</strong>
               <p>
-                {result.counts.repositories} repositories, {result.counts.issues} issues/tasks, and{" "}
-                {result.counts.pull_requests} pull requests normalized. Status: {result.status}.
+                {T.syncResultCounts(
+                  result.counts.repositories,
+                  result.counts.issues,
+                  result.counts.pull_requests,
+                  result.status
+                )}
               </p>
               {result.warnings.length > 0 ? (
                 <ul className="meta-list">
@@ -232,10 +237,10 @@ export function GitHubSyncControlsView({
 
 function connectionDescription(status: GitHubConnectionStatusResponse): string {
   if (!status.has_connection_record) {
-    return "No backend GitHub connection record exists for this workspace.";
+    return M.githubSync.noConnectionRecord;
   }
   if (status.display_name) {
     return status.display_name;
   }
-  return "Backend GitHub connection record found.";
+  return M.githubSync.connectionRecordFound;
 }

@@ -11,6 +11,7 @@ import {
   fetchActionProposalAudit,
   fetchActionExecutionPreview
 } from "../lib/api";
+import { M, T } from "../lib/messages";
 import type {
   ActionExecutionAuditEvent,
   ActionExecutionPreviewResponse,
@@ -335,8 +336,8 @@ test("posts execute request only through explicit execute client", async () => {
 
 test("renders not-approved execution state without execute controls", () => {
   const html = renderControls({ proposal: proposedProposal });
-  assert.match(html, /Approve locally before previewing execution readiness/);
-  assert.doesNotMatch(html, /Execute with confirmation/);
+  assert.ok(html.includes(M.actionExecution.approveFirst));
+  assert.ok(!html.includes(M.actionExecution.execute));
 });
 
 test("renders approved previewable state and dry-run preview details", () => {
@@ -344,18 +345,18 @@ test("renders approved previewable state and dry-run preview details", () => {
     onPreview: () => undefined,
     preview: disabledPreview
   });
-  assert.match(html, /Execution preview/);
-  assert.match(html, /Preview execution/);
+  assert.ok(html.includes(M.actionExecution.previewTitle));
+  assert.ok(html.includes(M.actionExecution.preview));
   assert.match(html, /preview_ready/);
-  assert.match(html, /Preview only\. This will not write to GitHub/);
+  assert.ok(html.includes(M.actionExecution.previewOnly));
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /FounderOS follow-up/);
-  assert.match(html, /External execution disabled in this environment/);
+  assert.ok(html.includes(M.actionExecution.externalDisabled));
   assert.match(html, /execution_preview_generated/);
-  assert.match(html, /Audit event recorded locally/);
-  assert.match(html, /Evidence refs attached: 1/);
+  assert.ok(html.includes(M.actionExecution.auditRecorded));
+  assert.ok(html.includes(T.evidenceAttached(1)));
   assert.doesNotMatch(html, /source_events/);
-  assert.doesNotMatch(html, /Created GitHub issue/i);
+  assert.ok(!html.includes(M.actionExecution.createdIssue));
 });
 
 test("renders persisted audit events and local receipt", () => {
@@ -372,12 +373,12 @@ test("renders persisted audit events and local receipt", () => {
     preview: disabledPreview,
     receipt: emptyReceipt
   });
-  assert.match(html, /Execution receipt/);
-  assert.match(html, /Provider result/);
+  assert.ok(html.includes(M.actionExecution.receiptLabel));
+  assert.ok(html.includes(M.actionExecution.receiptProviderResult));
   assert.match(html, /none/);
   assert.match(html, /execution_confirmation_received_but_disabled/);
-  assert.match(html, /No external write occurred/);
-  assert.match(html, /Audit event recorded locally/);
+  assert.ok(html.includes(M.actionExecution.auditNoExternalWrite));
+  assert.ok(html.includes(M.actionExecution.auditRecorded));
 });
 
 test("falls back to proposal status timestamps when audit trail is empty", () => {
@@ -406,7 +407,7 @@ test("renders missing evidence warning without fabricating source refs", () => {
       evidence_refs: []
     }
   });
-  assert.match(html, /No evidence refs returned/);
+  assert.ok(html.includes(M.actionExecution.noEvidence));
 });
 
 test("requires explicit confirmation before enabled live execution button", () => {
@@ -416,9 +417,8 @@ test("requires explicit confirmation before enabled live execution button", () =
     onExecute: () => undefined,
     preview: enabledPreview
   });
-  assert.match(disabledHtml, /This will create a real GitHub issue/);
-  assert.match(disabledHtml, /Requires explicit confirmation/);
-  assert.match(disabledHtml, /I confirm this may write to GitHub/);
+  assert.ok(disabledHtml.includes(M.actionExecution.liveWarning));
+  assert.ok(disabledHtml.includes(M.actionExecution.confirmCheckbox));
   assert.match(disabledHtml, /disabled=""/);
 
   const enabledHtml = renderControls({
@@ -427,7 +427,7 @@ test("requires explicit confirmation before enabled live execution button", () =
     onExecute: () => undefined,
     preview: enabledPreview
   });
-  assert.match(enabledHtml, /Execute with confirmation/);
+  assert.ok(enabledHtml.includes(M.actionExecution.execute));
 });
 
 test("renders execute result without raw provider response dump", () => {
@@ -454,11 +454,11 @@ test("renders execute result without raw provider response dump", () => {
     },
     preview: enabledPreview
   });
-  assert.match(html, /Execution status/);
-  assert.match(html, /External write performed/);
-  assert.match(html, /Execution receipt/);
-  assert.match(html, /GitHub issue created/);
-  assert.match(html, /Open GitHub issue/);
+  assert.ok(html.includes(M.actionExecution.resultStatus));
+  assert.ok(html.includes(M.actionExecution.resultExternalWrite));
+  assert.ok(html.includes(M.actionExecution.receiptLabel));
+  assert.ok(html.includes(M.actionExecution.createdIssue));
+  assert.ok(html.includes(M.actionExecution.openGithubIssue));
   assert.match(html, /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/);
   assert.doesNotMatch(html, /raw body is not rendered/);
   assert.doesNotMatch(html, /provider_response/);
@@ -488,7 +488,7 @@ test("renders blocked execute audit without external-write claim", () => {
     }
   });
   assert.match(html, /evidence_refs are required for live execution/);
-  assert.match(html, /No external write occurred/);
+  assert.ok(html.includes(M.actionExecution.auditNoExternalWrite));
   assert.match(html, /execution_blocked/);
-  assert.doesNotMatch(html, /GitHub issue created/);
+  assert.ok(!html.includes(M.actionExecution.createdIssue));
 });

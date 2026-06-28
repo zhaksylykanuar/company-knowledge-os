@@ -1,40 +1,41 @@
 import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
+import { M } from "../../lib/messages";
 
 export default function GitHubPage() {
   return (
     <>
       <PageHeader
-        eyebrow="GitHub"
-        title="GitHub backend flow"
-        description="Workspace-scoped MVP panels for the existing backend contracts."
+        eyebrow={M.githubPage.eyebrow}
+        title={M.githubPage.title}
+        description={M.githubPage.description}
       />
       <section className="grid">
         <StatusCard
-          description="Reads /api/v1/workspaces/{workspace_id}/github/connection-status."
-          title="Connection status"
-          value="Backend"
+          description={M.githubPage.connectionDescription}
+          title={M.githubPage.connectionTitle}
+          value={M.githubPage.connectionValue}
         />
         <StatusCard
-          description="Reads local repository inventory through the backend."
-          title="Repositories"
-          value="Backend"
+          description={M.githubPage.reposDescription}
+          title={M.githubPage.reposTitle}
+          value={M.githubPage.reposValue}
         />
         <StatusCard
-          description="Manual SyncJob records are local until worker scope exists."
-          title="Sync jobs"
-          value="Manual"
+          description={M.githubPage.syncJobsDescription}
+          title={M.githubPage.syncJobsTitle}
+          value={M.githubPage.syncJobsValue}
         />
         <StatusCard
-          description="Canonical repository, issue, and PR persistence is visible on the dashboard."
-          title="Local normalization"
-          value="Canonical"
+          description={M.githubPage.normalizationDescription}
+          title={M.githubPage.normalizationTitle}
+          value={M.githubPage.normalizationValue}
         />
       </section>
       <EmptyState
-        description="The dashboard now reads canonical GitHub operational work. These connection and sync controls remain scaffolded until product connect/sync scope."
-        title="GitHub flow controls are still local MVP scaffolding."
+        description={M.githubPage.scaffoldDescription}
+        title={M.githubPage.scaffoldTitle}
       />
     </>
   );

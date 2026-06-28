@@ -10,6 +10,7 @@ import { GitHubSyncControls } from "../../components/GitHubSyncControls";
 import { PageHeader } from "../../components/PageHeader";
 import { SelectedRepositorySyncControls } from "../../components/SelectedRepositorySyncControls";
 import { StatusCard } from "../../components/StatusCard";
+import { M } from "../../lib/messages";
 import { useSession } from "../../lib/session";
 
 export default function DashboardPage() {
@@ -20,35 +21,35 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Dashboard"
-        title="MVP status"
-        description="Signed-in view of the backend flow and the GitHub-first MVP surfaces."
+        eyebrow={M.dashboard.eyebrow}
+        title={M.dashboard.title}
+        description={M.dashboard.description}
       />
       <section className="grid">
         <StatusCard
-          description="Same-origin API authenticated by your session cookie."
-          title="Backend API"
-          value="Connected"
+          description={M.dashboard.backendDescription}
+          title={M.dashboard.backendTitle}
+          value={M.dashboard.backendValue}
         />
         <StatusCard
-          description={workspace ? workspace.name : "No workspace for this account yet."}
-          title="Workspace"
-          value={workspace ? "Active" : "None"}
+          description={workspace ? workspace.name : M.dashboard.workspaceNoneDescription}
+          title={M.dashboard.workspaceTitle}
+          value={workspace ? M.dashboard.workspaceActive : M.dashboard.workspaceNone}
         />
         <StatusCard
-          description="Local sync controls, Company Brain, and canonical work are loaded below."
-          title="GitHub"
-          value="Wired"
+          description={M.dashboard.githubDescription}
+          title={M.dashboard.githubTitle}
+          value={M.dashboard.githubValue}
         />
         <StatusCard
-          description="Manual deterministic Founder Briefing v0."
-          title="Briefing"
-          value="Wired"
+          description={M.dashboard.briefingDescription}
+          title={M.dashboard.briefingTitle}
+          value={M.dashboard.briefingValue}
         />
         <StatusCard
-          description="Proposal, approval, and execution states."
-          title="Actions"
-          value="Local approval"
+          description={M.dashboard.actionsDescription}
+          title={M.dashboard.actionsTitle}
+          value={M.dashboard.actionsValue}
         />
       </section>
       <GitHubSyncControls

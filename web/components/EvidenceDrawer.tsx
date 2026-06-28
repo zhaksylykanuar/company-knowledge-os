@@ -1,3 +1,4 @@
+import { M } from "../lib/messages";
 import type { BriefingEvidenceRef } from "../lib/types";
 import { SourceLink } from "./SourceLink";
 
@@ -16,12 +17,12 @@ export function EvidenceDrawer({
     <aside className="evidence-drawer" aria-labelledby="evidence-drawer-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">Evidence</span>
-          <h2 id="evidence-drawer-title">Source detail</h2>
+          <span className="eyebrow">{M.evidence.eyebrow}</span>
+          <h2 id="evidence-drawer-title">{M.evidence.title}</h2>
         </div>
         {onClose ? (
           <button className="button secondary" onClick={onClose} type="button">
-            Close
+            {M.common.close}
           </button>
         ) : null}
       </div>
@@ -29,34 +30,32 @@ export function EvidenceDrawer({
       {evidence ? (
         <dl className="work-meta">
           <div>
-            <dt>Label</dt>
-            <dd>{evidence.ref || itemTitle || "Unknown source"}</dd>
+            <dt>{M.evidence.label}</dt>
+            <dd>{evidence.ref || itemTitle || M.evidence.unknownSource}</dd>
           </div>
           <div>
-            <dt>Source</dt>
-            <dd>{evidence.source || "unknown"}</dd>
+            <dt>{M.evidence.source}</dt>
+            <dd>{evidence.source || M.common.unknown}</dd>
           </div>
           <div>
-            <dt>Kind</dt>
-            <dd>{evidence.kind || "unknown"}</dd>
+            <dt>{M.evidence.kind}</dt>
+            <dd>{evidence.kind || M.common.unknown}</dd>
           </div>
           <div>
-            <dt>Record</dt>
-            <dd>{evidence.ref || "No record id returned"}</dd>
+            <dt>{M.evidence.record}</dt>
+            <dd>{evidence.ref || M.evidence.noRecordId}</dd>
           </div>
           <div>
-            <dt>Snippet</dt>
-            <dd>No snippet returned by backend.</dd>
+            <dt>{M.evidence.snippet}</dt>
+            <dd>{M.evidence.noSnippet}</dd>
           </div>
         </dl>
       ) : (
-        <p className="muted">
-          Select an evidence ref to inspect provider, source, record, and URL details.
-        </p>
+        <p className="muted">{M.evidence.placeholder}</p>
       )}
 
       {evidence?.url ? (
-        <SourceLink url={evidence.url}>Open source</SourceLink>
+        <SourceLink url={evidence.url}>{M.common.openSource}</SourceLink>
       ) : null}
     </aside>
   );

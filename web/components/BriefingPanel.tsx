@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { generateManualFounderBriefing } from "../lib/api";
+import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   BriefingEvidenceRef,
@@ -63,7 +64,7 @@ export function BriefingPanel() {
       setData(payload);
       setStatus(payload.briefing.items.length > 0 ? "success" : "empty");
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : "Request failed");
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       setStatus("error");
     }
   }
@@ -107,8 +108,8 @@ export function BriefingPanelView({
     <section className="panel briefing-panel" aria-labelledby="briefing-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">Briefing</span>
-          <h2 id="briefing-title">Manual Founder Briefing</h2>
+          <span className="eyebrow">{M.briefingPanel.eyebrow}</span>
+          <h2 id="briefing-title">{M.briefingPanel.title}</h2>
         </div>
         <button
           className="button"
@@ -116,80 +117,77 @@ export function BriefingPanelView({
           onClick={onGenerate}
           type="button"
         >
-          {isGenerating ? "Generating briefing" : briefing ? "Refresh briefing" : "Generate briefing"}
+          {isGenerating
+            ? M.briefingPanel.generating
+            : briefing
+              ? M.briefingPanel.refresh
+              : M.briefingPanel.generate}
         </button>
       </div>
 
-      {status === "loading" ? <LoadingState label="Generating deterministic briefing" /> : null}
+      {status === "loading" ? <LoadingState label={M.briefingPanel.loadingDeterministic} /> : null}
 
       {status === "missing" ? (
         <EmptyState
-          description="Your account has no workspace yet, so there is nothing to brief on."
-          title="No workspace available"
+          description={M.briefingPanel.noWorkspaceDescription}
+          title={M.common.noWorkspaceTitle}
         />
       ) : null}
 
       {status === "unsupported" ? (
         <EmptyState
-          description="The backend did not report a supported manual deterministic briefing capability."
-          title="Manual briefing unsupported"
+          description={M.briefingPanel.unsupportedDescription}
+          title={M.briefingPanel.unsupportedTitle}
         />
       ) : null}
 
       {status === "error" ? (
         <>
           <ErrorState
-            description={error ?? "The manual briefing request failed."}
-            title="Briefing unavailable"
+            description={error ?? M.briefingPanel.unavailableDescription}
+            title={M.briefingPanel.unavailableTitle}
           />
           <button className="button secondary" onClick={onRetry} type="button">
-            Retry
+            {M.common.retry}
           </button>
         </>
       ) : null}
 
       {status === "empty" && !briefing ? (
         <EmptyState
-          description="Use the generate button to request the deterministic manual briefing from existing workspace records."
-          title="No briefing loaded"
+          description={M.briefingPanel.noBriefingDescription}
+          title={M.briefingPanel.noBriefingTitle}
         />
       ) : null}
 
       {briefing && status !== "error" && status !== "missing" ? (
         <>
-          <p className="muted">
-            Manual deterministic briefing from evidence-backed company records.
-            AI generation, live provider sync, and action execution are not used.
-          </p>
-          <section className="grid" aria-label="Briefing summary">
+          <p className="muted">{M.briefingPanel.intro}</p>
+          <section className="grid" aria-label={M.briefingPanel.summaryLabel}>
             <StatusCard
-              description="GitHub repositories in the deterministic briefing signals."
-              title="Repositories"
+              description={M.briefingPanel.reposDescription}
+              title={M.briefingPanel.reposTitle}
               value={String(briefing.signals.github.repository_count)}
             />
             <StatusCard
-              description="Queued local GitHub sync jobs."
-              title="Queued sync jobs"
+              description={M.briefingPanel.queuedDescription}
+              title={M.briefingPanel.queuedTitle}
               value={String(briefing.signals.github.queued_sync_jobs)}
             />
             <StatusCard
-              description="Latest local GitHub sync job status."
-              title="Latest sync"
-              value={briefing.signals.github.latest_sync_job_status ?? "None"}
+              description={M.briefingPanel.latestSyncDescription}
+              title={M.briefingPanel.latestSyncTitle}
+              value={briefing.signals.github.latest_sync_job_status ?? M.briefingPanel.latestSyncNone}
             />
             <StatusCard
-              description="Briefing mode."
-              title="AI / persistence"
-              value={briefing.llm_used ? "AI" : briefing.persistence}
+              description={M.briefingPanel.aiDescription}
+              title={M.briefingPanel.aiTitle}
+              value={briefing.llm_used ? M.briefingPanel.aiValue : briefing.persistence}
             />
           </section>
-          <section className="callout" aria-label="Briefing capability boundary">
-            <strong>Current capability mode</strong>
-            <p>
-              Manual deterministic briefing. AI briefing: {briefing.llm_used ? "enabled" : "not enabled"}.
-              Live provider sync: {briefing.is_live ? "enabled" : "not enabled"}.
-              External actions: not executed here.
-            </p>
+          <section className="callout" aria-label={M.briefingPanel.capabilityTitle}>
+            <strong>{M.briefingPanel.capabilityTitle}</strong>
+            <p>{T.briefingCapability(briefing.llm_used, briefing.is_live)}</p>
           </section>
           <section className="work-columns">
             <BriefingItemSection
@@ -203,7 +201,7 @@ export function BriefingPanelView({
             />
           </section>
           {briefing.warnings.length > 0 ? (
-            <ul className="meta-list" aria-label="Briefing warnings">
+            <ul className="meta-list" aria-label={M.common.warnings}>
               {briefing.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
@@ -223,10 +221,10 @@ function BriefingItemSection({
   onSelectEvidence?: (evidence: BriefingEvidenceRef, itemTitle: string) => void;
 }) {
   return (
-    <section className="work-section" aria-label="Briefing items">
-      <h3>Briefing items</h3>
+    <section className="work-section" aria-label={M.briefingPanel.itemsSectionTitle}>
+      <h3>{M.briefingPanel.itemsSectionTitle}</h3>
       {items.length === 0 ? (
-        <p className="muted">No briefing items returned by the backend.</p>
+        <p className="muted">{M.briefingPanel.noItems}</p>
       ) : null}
       <div className="work-list">
         {items.map((item) => (
@@ -238,16 +236,16 @@ function BriefingItemSection({
             <p className="muted">{item.summary}</p>
             <dl className="work-meta">
               <div>
-                <dt>Severity</dt>
+                <dt>{M.briefingPanel.metaSeverity}</dt>
                 <dd>{item.severity}</dd>
               </div>
               <div>
-                <dt>Confidence</dt>
-                <dd>{Math.round(item.confidence * 100)}%</dd>
+                <dt>{M.briefingPanel.metaConfidence}</dt>
+                <dd>{T.confidencePercent(item.confidence)}</dd>
               </div>
               <div>
-                <dt>Recommended next step</dt>
-                <dd>{item.recommended_next_step ?? "No next step returned"}</dd>
+                <dt>{M.briefingPanel.metaNextStep}</dt>
+                <dd>{item.recommended_next_step ?? M.briefingPanel.noNextStep}</dd>
               </div>
             </dl>
             <EvidenceButtons
@@ -256,7 +254,7 @@ function BriefingItemSection({
               onSelectEvidence={onSelectEvidence}
             />
             {item.related_entities.length > 0 ? (
-              <p className="muted">Related: {item.related_entities.join(", ")}</p>
+              <p className="muted">{T.related(item.related_entities.join(", "))}</p>
             ) : null}
             {item.warnings.length > 0 ? (
               <ul className="meta-list">
@@ -282,14 +280,10 @@ function EvidenceButtons({
   onSelectEvidence?: (evidence: BriefingEvidenceRef, itemTitle: string) => void;
 }) {
   if (evidenceRefs.length === 0) {
-    return (
-      <p className="muted">
-        Deterministic system fact; no separate evidence ref returned.
-      </p>
-    );
+    return <p className="muted">{M.briefingPanel.noEvidenceRef}</p>;
   }
   return (
-    <div className="actions-row" aria-label={`Evidence for ${itemTitle}`}>
+    <div className="actions-row" aria-label={T.evidenceFor(itemTitle)}>
       {evidenceRefs.map((evidence) => (
         <button
           className="button secondary"
@@ -297,7 +291,7 @@ function EvidenceButtons({
           onClick={() => onSelectEvidence?.(evidence, itemTitle)}
           type="button"
         >
-          Evidence: {evidence.ref}
+          {T.evidenceButton(evidence.ref)}
         </button>
       ))}
     </div>

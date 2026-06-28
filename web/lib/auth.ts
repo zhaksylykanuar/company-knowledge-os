@@ -22,8 +22,10 @@ export type MeResponse = {
   workspaces: AuthWorkspace[];
 };
 
-const GENERIC_LOGIN_ERROR = "Invalid email or password.";
-const LOCKED_LOGIN_ERROR = "Too many failed attempts. Try again later.";
+import { M } from "./messages";
+
+const GENERIC_LOGIN_ERROR = M.auth.loginFailedGeneric;
+const LOCKED_LOGIN_ERROR = M.auth.loginFailedLocked;
 
 export class LoginError extends Error {}
 

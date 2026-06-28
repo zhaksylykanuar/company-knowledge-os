@@ -7,6 +7,7 @@ import {
   buildWorkspaceCompanyBrainPath,
   fetchCompanyBrain
 } from "../lib/api";
+import { M } from "../lib/messages";
 import type { CompanyBrainResponse } from "../lib/types";
 import { CompanyBrainPanelView } from "../components/CompanyBrainPanel";
 
@@ -207,20 +208,20 @@ test("fetches and parses Company Brain payloads", async () => {
 
 test("renders loading state", () => {
   const html = renderPanel({ data: null, status: "loading" });
-  assert.match(html, /Loading Company Brain/);
+  assert.ok(html.includes(M.companyBrain.loading));
 });
 
 test("renders no-workspace state without any operator-key gate", () => {
   const html = renderPanel({ data: null, status: "missing" });
-  assert.match(html, /No workspace available/);
+  assert.ok(html.includes(M.common.noWorkspaceTitle));
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /owner email/);
 });
 
 test("renders empty state", () => {
   const html = renderPanel({ data: emptyBrain, status: "empty" });
-  assert.match(html, /No Company Brain data yet/);
-  assert.match(html, /No canonical GitHub records are synced yet/);
+  assert.ok(html.includes(M.companyBrain.emptyTitle));
+  assert.ok(html.includes(M.companyBrain.emptyDescription));
 });
 
 test("renders backend error state with retry", () => {
@@ -230,17 +231,17 @@ test("renders backend error state with retry", () => {
     onRetry: () => undefined,
     status: "error"
   });
-  assert.match(html, /Company Brain unavailable/);
+  assert.ok(html.includes(M.companyBrain.unavailableTitle));
   assert.match(html, /backend unavailable/);
-  assert.match(html, /Retry/);
+  assert.ok(html.includes(M.common.retry));
 });
 
 test("renders summary counts, repositories, issues, and PRs", () => {
   const html = renderPanel();
-  assert.match(html, /Evidence-backed GitHub state/);
-  assert.match(html, /Repositories/);
-  assert.match(html, /Open issues/);
-  assert.match(html, /Open PRs/);
+  assert.ok(html.includes(M.companyBrain.title));
+  assert.ok(html.includes(M.companyBrain.reposTitle));
+  assert.ok(html.includes(M.companyBrain.openIssuesTitle));
+  assert.ok(html.includes(M.companyBrain.openPrsTitle));
   assert.match(html, /1 \/ 1/);
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /Investigate issue 42/);
@@ -250,11 +251,11 @@ test("renders summary counts, repositories, issues, and PRs", () => {
 
 test("renders evidence and source refs without fake company facts", () => {
   const html = renderPanel();
-  assert.match(html, /Evidence \/ sources/);
+  assert.ok(html.includes(M.companyBrain.evidenceSection));
   assert.match(html, /repo-snapshot-1/);
   assert.match(html, /qtwin-io\/founderos-api#issue\/42/);
   assert.match(html, /github_issue/);
-  assert.match(html, /Canonical synced record; no separate source ref returned/);
+  assert.ok(html.includes(M.companyBrain.noSourceRef));
   assert.doesNotMatch(html, /source_events/);
   assert.doesNotMatch(html, /AI knows/);
   assert.doesNotMatch(html, /strategic priority/);
@@ -262,8 +263,8 @@ test("renders evidence and source refs without fake company facts", () => {
 
 test("renders deterministic capability boundary", () => {
   const html = renderPanel();
-  assert.match(html, /Deterministic/);
-  assert.match(html, /Live OAuth: not enabled/);
-  assert.match(html, /Provider sync: not enabled/);
-  assert.match(html, /AI briefing: not enabled/);
+  assert.ok(html.includes(M.companyBrain.badgeDeterministic));
+  assert.match(html, /Живой OAuth: не включено/);
+  assert.match(html, /Синхронизация провайдера: не включено/);
+  assert.match(html, /Сводка ИИ: не включено/);
 });

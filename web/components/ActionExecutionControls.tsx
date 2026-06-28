@@ -7,6 +7,7 @@ import {
   fetchActionProposalAudit,
   fetchActionExecutionPreview
 } from "../lib/api";
+import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   ActionExecutionAuditEvent,
@@ -64,7 +65,7 @@ export function ActionExecutionControls({
 
   async function previewExecution() {
     if (!workspaceId) {
-      setError("Your account has no workspace, so preview is unavailable.");
+      setError(M.actionExecution.noWorkspacePreview);
       return;
     }
 
@@ -76,9 +77,9 @@ export function ActionExecutionControls({
       setPreview(response);
       setAuditEvents(response.audit);
       await refreshAudit(workspaceId);
-      setSuccessMessage("Execution preview loaded. No external write was performed.");
+      setSuccessMessage(M.actionExecution.previewLoaded);
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : "Request failed");
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
     } finally {
       setIsPreviewPending(false);
     }
@@ -86,15 +87,15 @@ export function ActionExecutionControls({
 
   async function executeWithConfirmation() {
     if (!workspaceId) {
-      setError("Your account has no workspace, so execution is unavailable.");
+      setError(M.actionExecution.noWorkspaceExecute);
       return;
     }
     if (!preview?.capabilities.external_execution || !preview.capabilities.live_provider_write) {
-      setError("External execution is disabled in this environment.");
+      setError(M.actionExecution.externalDisabledError);
       return;
     }
     if (!confirmationChecked || !connectionId.trim()) {
-      setError("Connection ID and explicit confirmation are required before execution.");
+      setError(M.actionExecution.confirmRequired);
       return;
     }
 
@@ -111,16 +112,16 @@ export function ActionExecutionControls({
       await refreshAudit(workspaceId);
       setSuccessMessage(
         response.warnings.some((warning) => warning.includes("existing successful"))
-          ? "Existing execution receipt returned. No additional external write occurred."
+          ? M.actionExecution.successExisting
           : response.external_write_performed && response.receipt.provider_result === "succeeded"
-            ? "GitHub issue created. Execution receipt recorded."
+            ? M.actionExecution.createdIssue
             : response.external_write_performed
-          ? "Backend reported an external execution result."
-          : "Execution request completed without an external write."
+          ? M.actionExecution.successExternalResult
+          : M.actionExecution.successNoWrite
       );
       onRefresh?.();
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : "Request failed");
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       try {
         await refreshAudit(workspaceId);
       } catch {
@@ -198,15 +199,12 @@ export function ActionExecutionControlsView({
   const evidenceCount = preview?.preview?.evidence_refs.length ?? proposal.evidence_refs.length;
 
   return (
-    <section className="callout" aria-label={`Execution controls for ${proposal.title}`}>
-      <strong>Execution preview</strong>
-      <p>
-        Approval does not execute provider writes. Use preview to inspect the
-        guarded GitHub issue action before any live write path is considered.
-      </p>
+    <section className="callout" aria-label={T.executionControlsFor(proposal.title)}>
+      <strong>{M.actionExecution.previewTitle}</strong>
+      <p>{M.actionExecution.previewIntro}</p>
 
       {!isApproved ? (
-        <p className="muted">Approve locally before previewing execution readiness.</p>
+        <p className="muted">{M.actionExecution.approveFirst}</p>
       ) : (
         <button
           className="button secondary"
@@ -214,7 +212,7 @@ export function ActionExecutionControlsView({
           onClick={onPreview}
           type="button"
         >
-          {isPreviewPending ? "Preparing preview" : "Preview execution"}
+          {isPreviewPending ? M.actionExecution.preparingPreview : M.actionExecution.preview}
         </button>
       )}
 
@@ -225,64 +223,58 @@ export function ActionExecutionControlsView({
         <div className="work-item-main">
           <span className="badge">{preview.status}</span>
           <p className="muted">{preview.message}</p>
-          <p className="muted">Preview only. This will not write to GitHub.</p>
+          <p className="muted">{M.actionExecution.previewOnly}</p>
 
           {preview.preview ? (
             <dl className="work-meta">
               <div>
-                <dt>Provider</dt>
+                <dt>{M.actionExecution.metaProvider}</dt>
                 <dd>{preview.preview.provider}</dd>
               </div>
               <div>
-                <dt>Action</dt>
+                <dt>{M.actionExecution.metaAction}</dt>
                 <dd>{preview.preview.action}</dd>
               </div>
               <div>
-                <dt>Repository</dt>
+                <dt>{M.actionExecution.metaRepository}</dt>
                 <dd>{preview.preview.repository}</dd>
               </div>
               <div>
-                <dt>Issue title</dt>
+                <dt>{M.actionExecution.metaIssueTitle}</dt>
                 <dd>{preview.preview.title}</dd>
               </div>
               {preview.preview.body ? (
                 <div>
-                  <dt>Issue body</dt>
+                  <dt>{M.actionExecution.metaIssueBody}</dt>
                   <dd>{preview.preview.body}</dd>
                 </div>
               ) : null}
               <div>
-                <dt>Labels</dt>
+                <dt>{M.actionExecution.metaLabels}</dt>
                 <dd>{formatList(preview.preview.labels)}</dd>
               </div>
               <div>
-                <dt>Assignees</dt>
+                <dt>{M.actionExecution.metaAssignees}</dt>
                 <dd>{formatList(preview.preview.assignees)}</dd>
               </div>
             </dl>
           ) : null}
 
           {evidenceCount === 0 ? (
-            <p className="muted">
-              No evidence refs returned for this proposal. The UI does not
-              fabricate source refs.
-            </p>
+            <p className="muted">{M.actionExecution.noEvidence}</p>
           ) : (
-            <p className="muted">Evidence refs attached: {evidenceCount}</p>
+            <p className="muted">{T.evidenceAttached(evidenceCount)}</p>
           )}
 
           {externalExecutionEnabled ? (
-            <div className="form" aria-label="Live execution confirmation">
-              <p className="muted">
-                This will create a real GitHub issue. Requires explicit
-                confirmation and a connected GitHub connection ID.
-              </p>
+            <div className="form" aria-label={M.actionExecution.liveLabel}>
+              <p className="muted">{M.actionExecution.liveWarning}</p>
               <div className="field">
-                <label htmlFor={`execution-connection-${proposal.id}`}>Connection ID</label>
+                <label htmlFor={`execution-connection-${proposal.id}`}>{M.actionExecution.connectionIdLabel}</label>
                 <input
                   id={`execution-connection-${proposal.id}`}
                   onChange={(event) => onConnectionIdChange?.(event.target.value)}
-                  placeholder="GitHub IntegrationConnection ID"
+                  placeholder={M.actionExecution.connectionIdPlaceholder}
                   value={connectionId}
                 />
               </div>
@@ -293,7 +285,7 @@ export function ActionExecutionControlsView({
                   onChange={(event) => onConfirmationChange?.(event.target.checked)}
                   type="checkbox"
                 />
-                I confirm this may write to GitHub.
+                {M.actionExecution.confirmCheckbox}
               </label>
               <button
                 className="button"
@@ -301,64 +293,64 @@ export function ActionExecutionControlsView({
                 onClick={onExecute}
                 type="button"
               >
-                {isExecutePending ? "Executing with confirmation" : "Execute with confirmation"}
+                {isExecutePending ? M.actionExecution.executing : M.actionExecution.execute}
               </button>
             </div>
           ) : (
-            <p className="muted">External execution disabled in this environment.</p>
+            <p className="muted">{M.actionExecution.externalDisabled}</p>
           )}
         </div>
       ) : null}
 
       {displayedReceipt ? (
-        <dl className="work-meta" aria-label="Execution receipt">
+        <dl className="work-meta" aria-label={M.actionExecution.receiptLabel}>
           <div>
-            <dt>Provider</dt>
-            <dd>{displayedReceipt.provider ?? "none"}</dd>
+            <dt>{M.actionExecution.metaProvider}</dt>
+            <dd>{displayedReceipt.provider ?? M.common.none}</dd>
           </div>
           <div>
-            <dt>Action</dt>
-            <dd>{displayedReceipt.action ?? "none"}</dd>
+            <dt>{M.actionExecution.metaAction}</dt>
+            <dd>{displayedReceipt.action ?? M.common.none}</dd>
           </div>
           <div>
-            <dt>Status</dt>
-            <dd>{displayedReceipt.status ?? "none"}</dd>
+            <dt>{M.actionExecution.receiptStatus}</dt>
+            <dd>{displayedReceipt.status ?? M.common.none}</dd>
           </div>
           <div>
-            <dt>Provider result</dt>
+            <dt>{M.actionExecution.receiptProviderResult}</dt>
             <dd>{displayedReceipt.provider_result}</dd>
           </div>
           <div>
-            <dt>External write</dt>
+            <dt>{M.actionExecution.receiptExternalWrite}</dt>
             <dd>
               {displayedReceipt.external_write_performed
-                ? "reported by backend"
-                : "none"}
+                ? M.actionsPanel.executionReported
+                : M.common.none}
             </dd>
           </div>
           <div>
-            <dt>Confirmation</dt>
-            <dd>{displayedReceipt.confirmation_received ? "received" : "not received"}</dd>
+            <dt>{M.actionExecution.receiptConfirmation}</dt>
+            <dd>{displayedReceipt.confirmation_received ? M.actionExecution.confirmationReceived : M.actionExecution.confirmationNotReceived}</dd>
           </div>
           {displayedReceipt.external_result_id ? (
             <div>
-              <dt>External issue</dt>
+              <dt>{M.actionExecution.receiptExternalIssue}</dt>
               <dd>{displayedReceipt.external_result_id}</dd>
             </div>
           ) : null}
           {displayedReceipt.external_result_url ? (
             <div>
-              <dt>External URL</dt>
+              <dt>{M.actionExecution.receiptExternalUrl}</dt>
               <dd>
                 <SourceLink url={displayedReceipt.external_result_url}>
-                  Open GitHub issue
+                  {M.actionExecution.openGithubIssue}
                 </SourceLink>
               </dd>
             </div>
           ) : null}
           {displayedReceipt.error_message ? (
             <div>
-              <dt>Error</dt>
+              <dt>{M.actionExecution.receiptError}</dt>
               <dd>{displayedReceipt.error_message}</dd>
             </div>
           ) : null}
@@ -366,37 +358,37 @@ export function ActionExecutionControlsView({
       ) : null}
 
       {executeResult ? (
-        <dl className="work-meta" aria-label="Execution result">
+        <dl className="work-meta" aria-label={M.actionExecution.resultLabel}>
           <div>
-            <dt>Execution status</dt>
+            <dt>{M.actionExecution.resultStatus}</dt>
             <dd>{executeResult.execution.status}</dd>
           </div>
           <div>
-            <dt>External write performed</dt>
-            <dd>{executeResult.external_write_performed ? "yes" : "no"}</dd>
+            <dt>{M.actionExecution.resultExternalWrite}</dt>
+            <dd>{executeResult.external_write_performed ? M.actionExecution.yes : M.actionExecution.no}</dd>
           </div>
           {executeResult.execution.external_id ? (
             <div>
-              <dt>External id</dt>
+              <dt>{M.actionExecution.resultExternalId}</dt>
               <dd>{executeResult.execution.external_id}</dd>
             </div>
           ) : null}
         </dl>
       ) : null}
       {createdGitHubIssue ? (
-        <p className="success-text">GitHub issue created. Execution receipt recorded.</p>
+        <p className="success-text">{M.actionExecution.createdIssue}</p>
       ) : null}
 
       {displayedAuditEvents.length > 0 ? (
-        <ul className="meta-list" aria-label={`Execution audit for ${proposal.title}`}>
+        <ul className="meta-list" aria-label={T.executionAuditFor(proposal.title)}>
           {displayedAuditEvents.map((event) => (
             <li key={event.id}>
               {event.event_type}: {event.message} ({event.created_at})
               {event.status === "blocked" || event.external_result_id === null
-                ? " No external write occurred."
+                ? M.actionExecution.auditNoExternalWrite
                 : ""}
               {event.event_type.startsWith("execution_")
-                ? " Audit event recorded locally."
+                ? M.actionExecution.auditRecorded
                 : ""}
             </li>
           ))}
@@ -404,7 +396,7 @@ export function ActionExecutionControlsView({
       ) : null}
 
       {preview?.warnings.length ? (
-        <ul className="meta-list" aria-label={`Execution warnings for ${proposal.title}`}>
+        <ul className="meta-list" aria-label={T.evidenceWarningsFor(proposal.title)}>
           {preview.warnings.map((warning) => (
             <li key={warning}>{warning}</li>
           ))}
@@ -421,7 +413,7 @@ function fallbackAuditEvents(proposal: ActionProposal): ActionExecutionAuditEven
       createdAt: proposal.created_at,
       eventType: "proposal_created",
       id: `${proposal.id}:created`,
-      message: "Local action proposal was created."
+      message: M.actionExecution.fallbackCreated
     })
   ];
   if (proposal.approved_at) {
@@ -431,7 +423,7 @@ function fallbackAuditEvents(proposal: ActionProposal): ActionExecutionAuditEven
         createdAt: proposal.approved_at,
         eventType: "proposal_approved",
         id: `${proposal.id}:approved`,
-        message: "Proposal was approved locally. No external write was run."
+        message: M.actionExecution.fallbackApproved
       })
     );
   }
@@ -442,7 +434,7 @@ function fallbackAuditEvents(proposal: ActionProposal): ActionExecutionAuditEven
         createdAt: proposal.rejected_at,
         eventType: "proposal_rejected",
         id: `${proposal.id}:rejected`,
-        message: "Proposal was rejected locally. No external write was run."
+        message: M.actionExecution.fallbackRejected
       })
     );
   }

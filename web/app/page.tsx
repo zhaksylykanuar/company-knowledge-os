@@ -2,49 +2,25 @@ import Link from "next/link";
 
 import { PageHeader } from "../components/PageHeader";
 import { StatusCard } from "../components/StatusCard";
+import { M } from "../lib/messages";
 
 const destinations = [
-  {
-    href: "/dashboard",
-    title: "Dashboard",
-    value: "MVP",
-    description: "Workspace, GitHub, briefing, action, and backend status."
-  },
-  {
-    href: "/github",
-    title: "GitHub",
-    value: "Flow",
-    description: "Connection, repositories, sync jobs, and local normalization."
-  },
-  {
-    href: "/briefings",
-    title: "Briefings",
-    value: "Manual",
-    description: "Deterministic Founder Briefing v0 surface."
-  },
-  {
-    href: "/actions",
-    title: "Actions",
-    value: "Approval",
-    description: "Proposal states and the human-approved write boundary."
-  },
-  {
-    href: "/settings",
-    title: "Settings",
-    value: "Account",
-    description: "Your signed-in account, sign out, and change password."
-  }
+  { href: "/dashboard", ...M.home.cards.dashboard },
+  { href: "/github", ...M.home.cards.github },
+  { href: "/briefings", ...M.home.cards.briefings },
+  { href: "/actions", ...M.home.cards.actions },
+  { href: "/settings", ...M.home.cards.settings }
 ];
 
 export default function HomePage() {
   return (
     <>
       <PageHeader
-        eyebrow="founderOS"
-        title="MVP frontend shell"
-        description="A minimal Next.js shell for the backend GitHub-first MVP path."
+        eyebrow={M.home.eyebrow}
+        title={M.home.title}
+        description={M.home.description}
       />
-      <section className="grid" aria-label="MVP sections">
+      <section className="grid" aria-label={M.home.title}>
         {destinations.map((destination) => (
           <Link href={destination.href} key={destination.href}>
             <StatusCard

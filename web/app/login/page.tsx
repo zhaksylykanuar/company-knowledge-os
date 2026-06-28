@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { LoginError, login } from "../../lib/auth";
+import { M } from "../../lib/messages";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,18 +22,18 @@ export default function LoginPage() {
       await login(email, password);
       router.replace("/");
     } catch (err) {
-      setError(err instanceof LoginError ? err.message : "Login failed.");
+      setError(err instanceof LoginError ? err.message : M.auth.loginFailedUnknown);
       setPending(false);
     }
   }
 
   return (
     <main className="login-view">
-      <form className="login-card" onSubmit={onSubmit} aria-label="Sign in">
-        <h1>founderOS</h1>
-        <p className="muted">Sign in to continue.</p>
+      <form className="login-card" onSubmit={onSubmit} aria-label={M.auth.signIn}>
+        <h1>{M.auth.title}</h1>
+        <p className="muted">{M.auth.subtitle}</p>
         <label>
-          Email
+          {M.auth.email}
           <input
             type="email"
             name="email"
@@ -43,7 +44,7 @@ export default function LoginPage() {
           />
         </label>
         <label>
-          Password
+          {M.auth.password}
           <input
             type="password"
             name="password"
@@ -59,7 +60,7 @@ export default function LoginPage() {
           </p>
         ) : null}
         <button type="submit" disabled={pending}>
-          {pending ? "Signing in…" : "Sign in"}
+          {pending ? M.auth.signingIn : M.auth.signIn}
         </button>
       </form>
     </main>

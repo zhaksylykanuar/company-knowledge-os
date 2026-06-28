@@ -8,6 +8,7 @@ import {
   fetchActionProposals,
   rejectActionProposal
 } from "../lib/api";
+import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   ActionProposal,
@@ -104,7 +105,7 @@ export function ActionProposalsPanel() {
           return;
         }
         setData(null);
-        setError(caught instanceof Error ? caught.message : "Request failed");
+        setError(caught instanceof Error ? caught.message : M.common.requestFailed);
         setStatus("error");
       });
 
@@ -128,7 +129,7 @@ export function ActionProposalsPanel() {
     }
     const request = buildCreateRequest(createForm);
     if (!request) {
-      setError("Title and repository are required for a local GitHub issue proposal.");
+      setError(M.actionsPanel.createError);
       setStatus("error");
       return;
     }
@@ -141,9 +142,9 @@ export function ActionProposalsPanel() {
       setData((current) => mergeCreatedProposal(current, response.proposal, response.warnings));
       setStatus("ready");
       setCreateForm(DEFAULT_CREATE_FORM);
-      setSuccessMessage("Local proposal created. External execution is disabled here.");
+      setSuccessMessage(M.actionsPanel.createSuccess);
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : "Request failed");
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       setStatus("error");
     } finally {
       setPendingMutation(null);
@@ -163,9 +164,9 @@ export function ActionProposalsPanel() {
       const response = await approveActionProposal(workspaceId, proposalId);
       setData((current) => mergeUpdatedProposal(current, response.proposal, response.warnings));
       setStatus("ready");
-      setSuccessMessage("Approved locally. External execution is not enabled in this UI.");
+      setSuccessMessage(M.actionsPanel.approveSuccess);
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : "Request failed");
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       setStatus("error");
     } finally {
       setPendingMutation(null);
@@ -183,13 +184,13 @@ export function ActionProposalsPanel() {
     setPendingMutation(`reject:${proposalId}`);
     try {
       const response = await rejectActionProposal(workspaceId, proposalId, {
-        reason: "Rejected locally from product UI."
+        reason: M.actionsPanel.rejectReason
       });
       setData((current) => mergeUpdatedProposal(current, response.proposal, response.warnings));
       setStatus("ready");
-      setSuccessMessage("Rejected locally. Evidence and proposal history remain stored.");
+      setSuccessMessage(M.actionsPanel.rejectSuccess);
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : "Request failed");
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       setStatus("error");
     } finally {
       setPendingMutation(null);
@@ -249,23 +250,17 @@ export function ActionProposalsPanelView({
     <section className="panel action-proposals" aria-labelledby="action-proposals-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">Actions</span>
-          <h2 id="action-proposals-title">Action Proposals</h2>
+          <span className="eyebrow">{M.actionsPanel.eyebrow}</span>
+          <h2 id="action-proposals-title">{M.actionsPanel.title}</h2>
         </div>
-        <span className="badge">Local approval</span>
+        <span className="badge">{M.actionsPanel.badgeLocalApproval}</span>
       </div>
 
-      <p className="muted">
-        Local approval workflow. Approval records a human decision; this product
-        surface does not execute provider writes.
-      </p>
+      <p className="muted">{M.actionsPanel.intro}</p>
 
-      <section className="callout" aria-label="Action proposal capability boundary">
-        <strong>Current capability mode</strong>
-        <p>
-          Local approval: available. External execution: disabled in this UI.
-          Live provider writes: not started here. AI generation: not used here.
-        </p>
+      <section className="callout" aria-label={M.actionsPanel.capabilityTitle}>
+        <strong>{M.actionsPanel.capabilityTitle}</strong>
+        <p>{T.actionsCapability()}</p>
       </section>
 
       <ActionProposalCreateForm
@@ -278,62 +273,62 @@ export function ActionProposalsPanelView({
 
       {successMessage ? <p className="success-text">{successMessage}</p> : null}
 
-      {status === "loading" ? <LoadingState label="Loading action proposals" /> : null}
+      {status === "loading" ? <LoadingState label={M.actionsPanel.loading} /> : null}
 
       {status === "missing" ? (
         <EmptyState
-          description="Your account has no workspace yet, so there are no proposals to show."
-          title="No workspace available"
+          description={M.actionsPanel.noWorkspaceDescription}
+          title={M.common.noWorkspaceTitle}
         />
       ) : null}
 
       {status === "unsupported" ? (
         <EmptyState
-          description="The backend did not report a supported local ActionProposal capability."
-          title="Action proposals unsupported"
+          description={M.actionsPanel.unsupportedDescription}
+          title={M.actionsPanel.unsupportedTitle}
         />
       ) : null}
 
       {status === "error" ? (
         <>
           <ErrorState
-            description={error ?? "The action proposal request failed."}
-            title="Action proposals unavailable"
+            description={error ?? M.actionsPanel.unavailableDescription}
+            title={M.actionsPanel.unavailableTitle}
           />
           <button className="button secondary" onClick={onRetry} type="button">
-            Retry
+            {M.common.retry}
           </button>
         </>
       ) : null}
 
       {status === "empty" ? (
         <EmptyState
-          description="No local action proposals have been created for this workspace yet."
-          title="No action proposals yet"
+          description={M.actionsPanel.emptyDescription}
+          title={M.actionsPanel.emptyTitle}
         />
       ) : null}
 
       {data && status !== "loading" && status !== "missing" && status !== "error" ? (
         <>
-          <section className="grid" aria-label="Action proposal summary">
+          <section className="grid" aria-label={M.actionsPanel.summaryLabel}>
             <StatusCard
-              description="Local proposals awaiting review."
-              title="Proposed"
+              description={M.actionsPanel.proposedDescription}
+              title={M.actionsPanel.proposedTitle}
               value={String(countByStatus(proposals, "proposed"))}
             />
             <StatusCard
-              description="Human-approved local proposals; not executed by this UI."
-              title="Approved"
+              description={M.actionsPanel.approvedDescription}
+              title={M.actionsPanel.approvedTitle}
               value={String(countByStatus(proposals, "approved"))}
             />
             <StatusCard
-              description="Locally rejected proposals."
-              title="Rejected"
+              description={M.actionsPanel.rejectedDescription}
+              title={M.actionsPanel.rejectedTitle}
               value={String(countByStatus(proposals, "rejected"))}
             />
             <StatusCard
-              description="Backend list count."
-              title="Total"
+              description={M.actionsPanel.totalDescription}
+              title={M.actionsPanel.totalTitle}
               value={String(data.count)}
             />
           </section>
@@ -355,7 +350,7 @@ export function ActionProposalsPanelView({
           </section>
 
           {data.warnings.length > 0 ? (
-            <ul className="meta-list" aria-label="Action proposal warnings">
+            <ul className="meta-list" aria-label={M.common.warnings}>
               {data.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
@@ -385,67 +380,64 @@ function ActionProposalCreateForm({
   return (
     <form className="form proposal-form" onSubmit={onSubmit}>
       <div className="field">
-        <label htmlFor="proposal-kind">Proposal type</label>
+        <label htmlFor="proposal-kind">{M.actionCreate.typeLabel}</label>
         <select
           id="proposal-kind"
           onChange={(event) => onChange?.("proposalKind", event.target.value)}
           value={form.proposalKind}
         >
-          <option value="github_issue">GitHub issue proposal</option>
-          <option value="internal_todo">Internal todo proposal</option>
+          <option value="github_issue">{M.actionCreate.typeGithubIssue}</option>
+          <option value="internal_todo">{M.actionCreate.typeInternalTodo}</option>
         </select>
       </div>
       <div className="field">
-        <label htmlFor="proposal-title">Title</label>
+        <label htmlFor="proposal-title">{M.actionCreate.titleLabel}</label>
         <input
           id="proposal-title"
           maxLength={500}
           onChange={(event) => onChange?.("title", event.target.value)}
-          placeholder="Describe the local action proposal"
+          placeholder={M.actionCreate.titlePlaceholder}
           required
           value={form.title}
         />
       </div>
       <div className="field">
-        <label htmlFor="proposal-description">Description</label>
+        <label htmlFor="proposal-description">{M.actionCreate.descriptionLabel}</label>
         <textarea
           id="proposal-description"
           maxLength={5000}
           onChange={(event) => onChange?.("description", event.target.value)}
-          placeholder="Why this proposal exists and what evidence should be reviewed"
+          placeholder={M.actionCreate.descriptionPlaceholder}
           value={form.description}
         />
       </div>
       {isGitHubIssue ? (
         <>
           <div className="field">
-            <label htmlFor="proposal-repository">Repository</label>
+            <label htmlFor="proposal-repository">{M.actionCreate.repositoryLabel}</label>
             <input
               id="proposal-repository"
               onChange={(event) => onChange?.("repositoryFullName", event.target.value)}
-              placeholder="owner/repository"
+              placeholder={M.actionCreate.repositoryPlaceholder}
               required
               value={form.repositoryFullName}
             />
           </div>
           <div className="field">
-            <label htmlFor="proposal-issue-body">Issue body</label>
+            <label htmlFor="proposal-issue-body">{M.actionCreate.issueBodyLabel}</label>
             <textarea
               id="proposal-issue-body"
               onChange={(event) => onChange?.("issueBody", event.target.value)}
-              placeholder="Body for the proposed future GitHub issue"
+              placeholder={M.actionCreate.issueBodyPlaceholder}
               value={form.issueBody}
             />
           </div>
         </>
       ) : null}
       <button className="button" disabled={submitDisabled || isPending} type="submit">
-        {isPending ? "Creating local proposal" : "Create local proposal"}
+        {isPending ? M.actionCreate.submitting : M.actionCreate.submit}
       </button>
-      <p className="muted">
-        Creating a proposal stores local review state only. It does not create a
-        GitHub issue or call a live provider.
-      </p>
+      <p className="muted">{M.actionCreate.note}</p>
     </form>
   );
 }
@@ -466,10 +458,10 @@ function ProposalList({
   proposals: ActionProposal[];
 }) {
   return (
-    <section className="work-section" aria-label="Local action proposal list">
-      <h3>Local proposals</h3>
+    <section className="work-section" aria-label={M.actionsPanel.listTitle}>
+      <h3>{M.actionsPanel.listTitle}</h3>
       {proposals.length === 0 ? (
-        <p className="muted">No proposals returned by the backend.</p>
+        <p className="muted">{M.actionsPanel.noProposals}</p>
       ) : null}
       <div className="work-list">
         {proposals.map((proposal) => (
@@ -483,23 +475,23 @@ function ProposalList({
             ) : null}
             <dl className="work-meta">
               <div>
-                <dt>Target</dt>
+                <dt>{M.actionsPanel.metaTarget}</dt>
                 <dd>{proposal.target_provider}</dd>
               </div>
               <div>
-                <dt>Action</dt>
+                <dt>{M.actionsPanel.metaAction}</dt>
                 <dd>{actionLabel(proposal.action_type)}</dd>
               </div>
               <div>
-                <dt>Status</dt>
+                <dt>{M.actionsPanel.metaStatus}</dt>
                 <dd>{proposal.status}</dd>
               </div>
               <div>
-                <dt>Execution</dt>
+                <dt>{M.actionsPanel.metaExecution}</dt>
                 <dd>
                   {proposal.execution_started
-                    ? "reported by backend"
-                    : "not executed by this UI"}
+                    ? M.actionsPanel.executionReported
+                    : M.actionsPanel.executionNotExecuted}
                 </dd>
               </div>
             </dl>
@@ -540,30 +532,26 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
   const note = payloadString(proposal.payload, "note");
 
   if (!repository && !issueTitle && !note) {
-    return (
-      <p className="muted">
-        No target repository, issue title, or internal note returned.
-      </p>
-    );
+    return <p className="muted">{M.actionsPanel.payloadNone}</p>;
   }
 
   return (
     <dl className="work-meta">
       {repository ? (
         <div>
-          <dt>Repository</dt>
+          <dt>{M.actionsPanel.payloadRepository}</dt>
           <dd>{repository}</dd>
         </div>
       ) : null}
       {issueTitle ? (
         <div>
-          <dt>Target record</dt>
+          <dt>{M.actionsPanel.payloadTargetRecord}</dt>
           <dd>{issueTitle}</dd>
         </div>
       ) : null}
       {note ? (
         <div>
-          <dt>Internal note</dt>
+          <dt>{M.actionsPanel.payloadInternalNote}</dt>
           <dd>{note}</dd>
         </div>
       ) : null}
@@ -575,28 +563,28 @@ function ProposalAuditDetails({ proposal }: { proposal: ActionProposal }) {
   return (
     <dl className="work-meta">
       <div>
-        <dt>Created</dt>
+        <dt>{M.actionsPanel.metaCreated}</dt>
         <dd>{proposal.created_at}</dd>
       </div>
       <div>
-        <dt>Updated</dt>
+        <dt>{M.actionsPanel.metaUpdated}</dt>
         <dd>{proposal.updated_at}</dd>
       </div>
       {proposal.approved_at ? (
         <div>
-          <dt>Approved locally</dt>
+          <dt>{M.actionsPanel.metaApprovedAt}</dt>
           <dd>{proposal.approved_at}</dd>
         </div>
       ) : null}
       {proposal.rejected_at ? (
         <div>
-          <dt>Rejected locally</dt>
+          <dt>{M.actionsPanel.metaRejectedAt}</dt>
           <dd>{proposal.rejected_at}</dd>
         </div>
       ) : null}
       {proposal.rejection_reason ? (
         <div>
-          <dt>Rejection reason</dt>
+          <dt>{M.actionsPanel.metaRejectionReason}</dt>
           <dd>{proposal.rejection_reason}</dd>
         </div>
       ) : null}
@@ -614,15 +602,11 @@ function ActionEvidenceButtons({
   proposalTitle: string;
 }) {
   if (evidenceRefs.length === 0) {
-    return (
-      <p className="muted">
-        No evidence refs returned by backend for this proposal.
-      </p>
-    );
+    return <p className="muted">{M.actionsPanel.noEvidenceRefs}</p>;
   }
 
   return (
-    <div className="actions-row" aria-label={`Evidence for ${proposalTitle}`}>
+    <div className="actions-row" aria-label={T.evidenceFor(proposalTitle)}>
       {evidenceRefs.map((evidence, index) => (
         <button
           className="button secondary"
@@ -630,7 +614,7 @@ function ActionEvidenceButtons({
           onClick={() => onSelectEvidence?.(evidence, proposalTitle)}
           type="button"
         >
-          Evidence: {evidence.ref}
+          {T.evidenceButton(evidence.ref)}
         </button>
       ))}
     </div>
@@ -649,21 +633,13 @@ function ProposalActions({
   proposal: ActionProposal;
 }) {
   if (proposal.status === "approved") {
-    return (
-      <p className="muted">
-        Approved locally. External execution is disabled in this UI.
-      </p>
-    );
+    return <p className="muted">{M.actionsPanel.actionsApprovedNote}</p>;
   }
   if (proposal.status === "rejected") {
-    return <p className="muted">Rejected locally. No external action was run.</p>;
+    return <p className="muted">{M.actionsPanel.actionsRejectedNote}</p>;
   }
   if (proposal.status !== "proposed") {
-    return (
-      <p className="muted">
-        Status returned by backend. This UI did not execute provider work.
-      </p>
-    );
+    return <p className="muted">{M.actionsPanel.actionsOtherNote}</p>;
   }
 
   const approvePending = pendingMutation === `approve:${proposal.id}`;
@@ -676,7 +652,7 @@ function ProposalActions({
         onClick={() => onApprove?.(proposal.id)}
         type="button"
       >
-        {approvePending ? "Approving locally" : "Approve locally"}
+        {approvePending ? M.actionsPanel.approving : M.actionsPanel.approve}
       </button>
       <button
         className="button secondary"
@@ -684,7 +660,7 @@ function ProposalActions({
         onClick={() => onReject?.(proposal.id)}
         type="button"
       >
-        {rejectPending ? "Rejecting locally" : "Reject locally"}
+        {rejectPending ? M.actionsPanel.rejecting : M.actionsPanel.reject}
       </button>
     </div>
   );
@@ -784,10 +760,10 @@ function countByStatus(proposals: ActionProposal[], status: string): number {
 
 function actionLabel(actionType: string): string {
   if (actionType === "create_github_issue") {
-    return "Create GitHub issue";
+    return M.actionsPanel.actionLabelCreateIssue;
   }
   if (actionType === "internal_todo") {
-    return "Internal todo";
+    return M.actionsPanel.actionLabelInternalTodo;
   }
   return actionType;
 }

@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { changePassword, logout } from "../../lib/auth";
+import { M } from "../../lib/messages";
 import { useSession } from "../../lib/session";
 
 export default function SettingsPage() {
@@ -24,11 +25,11 @@ export default function SettingsPage() {
     setPending(true);
     try {
       await changePassword(currentPassword, newPassword);
-      setMessage("Password changed. Your other devices were signed out.");
+      setMessage(M.settings.changeSuccess);
       setCurrentPassword("");
       setNewPassword("");
     } catch {
-      setError("Could not change the password. Check your current password.");
+      setError(M.settings.changeError);
     } finally {
       setPending(false);
     }
@@ -42,25 +43,25 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Account"
-        title="Your account"
-        description="You are signed in with a session cookie. No operator API key is used in the browser."
+        eyebrow={M.settings.eyebrow}
+        title={M.settings.title}
+        description={M.settings.description}
       />
       <section className="panel">
         <ul className="meta-list">
-          <li>Signed in as: {session?.user.email ?? "…"}</li>
-          <li>Workspace: {session?.workspaces[0]?.name ?? "None"}</li>
+          <li>{M.settings.signedInAs} {session?.user.email ?? "…"}</li>
+          <li>{M.settings.workspace} {session?.workspaces[0]?.name ?? M.settings.workspaceNone}</li>
         </ul>
         <div className="actions-row">
           <button className="button secondary" type="button" onClick={onSignOut}>
-            Sign out
+            {M.common.signOut}
           </button>
         </div>
       </section>
       <form className="form panel" onSubmit={onChangePassword}>
-        <h2>Change password</h2>
+        <h2>{M.settings.changePasswordTitle}</h2>
         <div className="field">
-          <label htmlFor="current-password">Current password</label>
+          <label htmlFor="current-password">{M.settings.currentPassword}</label>
           <input
             autoComplete="current-password"
             id="current-password"
@@ -71,7 +72,7 @@ export default function SettingsPage() {
           />
         </div>
         <div className="field">
-          <label htmlFor="new-password">New password</label>
+          <label htmlFor="new-password">{M.settings.newPassword}</label>
           <input
             autoComplete="new-password"
             id="new-password"
@@ -89,7 +90,7 @@ export default function SettingsPage() {
         ) : null}
         <div className="actions-row">
           <button className="button" disabled={pending} type="submit">
-            {pending ? "Changing…" : "Change password"}
+            {pending ? M.settings.changing : M.settings.changePassword}
           </button>
         </div>
       </form>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchGitHubOperationalWork } from "../lib/api";
+import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   GitHubOperationalIssue,
@@ -17,10 +18,10 @@ import { LoadingState } from "./LoadingState";
 import { StatusCard } from "./StatusCard";
 
 const stateOptions: { value: GitHubOperationalWorkState; label: string }[] = [
-  { value: "open", label: "Open" },
-  { value: "all", label: "All" },
-  { value: "closed", label: "Closed" },
-  { value: "merged", label: "Merged" }
+  { value: "open", label: M.githubWork.stateOpen },
+  { value: "all", label: M.githubWork.stateAll },
+  { value: "closed", label: M.githubWork.stateClosed },
+  { value: "merged", label: M.githubWork.stateMerged }
 ];
 
 type PanelStatus = "loading" | "ready" | "empty" | "error" | "missing";
@@ -80,7 +81,7 @@ export function GitHubOperationalWorkPanel({
           return;
         }
         setData(null);
-        setError(caught instanceof Error ? caught.message : "Request failed");
+        setError(caught instanceof Error ? caught.message : M.common.requestFailed);
         setStatus("error");
       });
 
@@ -113,10 +114,10 @@ export function GitHubOperationalWorkPanelView({
     <section className="panel operational-work" aria-labelledby="github-work-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">GitHub</span>
-          <h2 id="github-work-title">Operational work</h2>
+          <span className="eyebrow">{M.githubWork.eyebrow}</span>
+          <h2 id="github-work-title">{M.githubWork.title}</h2>
         </div>
-        <div className="segmented" aria-label="GitHub work state">
+        <div className="segmented" aria-label={M.githubWork.stateLabel}>
           {stateOptions.map((option) => (
             <button
               aria-pressed={selectedState === option.value}
@@ -133,59 +134,59 @@ export function GitHubOperationalWorkPanelView({
         </div>
       </div>
 
-      {status === "loading" ? <LoadingState label="Loading GitHub work" /> : null}
+      {status === "loading" ? <LoadingState label={M.githubWork.loading} /> : null}
 
       {status === "missing" ? (
         <EmptyState
-          description="Your account has no workspace yet, so there is no GitHub work to show."
-          title="No workspace available"
+          description={M.githubWork.noWorkspaceDescription}
+          title={M.common.noWorkspaceTitle}
         />
       ) : null}
 
       {status === "error" ? (
         <>
           <ErrorState
-            description={error ?? "The dashboard could not load GitHub work."}
-            title="GitHub operational work unavailable"
+            description={error ?? M.githubWork.unavailableDescription}
+            title={M.githubWork.unavailableTitle}
           />
           <button className="button secondary" onClick={onRetry} type="button">
-            Retry
+            {M.common.retry}
           </button>
         </>
       ) : null}
 
       {status === "empty" ? (
         <EmptyState
-          description="Run local GitHub normalization with canonical persistence to populate issues and pull requests."
-          title="No GitHub operational work synced yet"
+          description={M.githubWork.emptyDescription}
+          title={M.githubWork.emptyTitle}
         />
       ) : null}
 
       {data && status !== "loading" && status !== "error" && status !== "missing" ? (
         <>
-          <section className="grid" aria-label="GitHub operational work counts">
+          <section className="grid" aria-label={M.githubWork.title}>
             <StatusCard
-              description={`${stateLabel(selectedState)} GitHub issue/task records from the canonical backend path.`}
-              title="Issues / tasks"
+              description={T.workIssuesDescription(stateLabel(selectedState))}
+              title={M.githubWork.issuesTitle}
               value={String(data.counts.issues)}
             />
             <StatusCard
-              description={`${stateLabel(selectedState)} pull requests linked to repositories where available.`}
-              title="Pull requests"
+              description={T.workPullRequestsDescription(stateLabel(selectedState))}
+              title={M.githubWork.pullRequestsTitle}
               value={String(data.counts.pull_requests)}
             />
           </section>
           <div className="work-columns">
             <WorkSection
-              emptyText="No issue/task records for this filter."
+              emptyText={M.githubWork.noIssuesForFilter}
               items={data.issues}
-              title="Issues / tasks"
+              title={M.githubWork.issuesTitle}
               type="issue"
             />
             <WorkSection
-              emptyText="No pull requests for this filter."
+              emptyText={M.githubWork.noPullRequestsForFilter}
               items={data.pull_requests}
-              title="Pull requests"
+              title={M.githubWork.pullRequestsTitle}
               type="pull_request"
             />
           </div>
@@ -218,25 +219,25 @@ function WorkSection({ emptyText, items, title, type }: WorkSectionProps) {
         {items.map((item) => (
           <article className="work-item" key={item.id}>
             <div className="work-item-main">
-              <span className="badge">{type === "issue" ? "Issue" : "PR"}</span>
+              <span className="badge">{type === "issue" ? M.githubWork.badgeIssue : M.githubWork.badgePr}</span>
               <h4>{item.title}</h4>
             </div>
             <dl className="work-meta">
               <div>
-                <dt>Repository</dt>
+                <dt>{M.githubWork.metaRepository}</dt>
                 <dd>{repositoryLabel(item)}</dd>
               </div>
               <div>
-                <dt>State</dt>
-                <dd>{item.state ?? "unknown"}</dd>
+                <dt>{M.githubWork.metaState}</dt>
+                <dd>{item.state ?? M.common.unknown}</dd>
               </div>
               <div>
-                <dt>Reference</dt>
+                <dt>{M.githubWork.metaReference}</dt>
                 <dd>{referenceLabel(item)}</dd>
               </div>
               {timestampLabel(item) ? (
                 <div>
-                  <dt>Updated</dt>
+                  <dt>{M.githubWork.metaUpdated}</dt>
                   <dd>
                     <time dateTime={timestampLabel(item) ?? undefined}>
                       {formatSourceTimestamp(timestampLabel(item))}
@@ -246,7 +247,7 @@ function WorkSection({ emptyText, items, title, type }: WorkSectionProps) {
               ) : null}
             </dl>
             {item.source_url ? (
-              <SourceLink url={item.source_url}>Open source</SourceLink>
+              <SourceLink url={item.source_url}>{M.common.openSource}</SourceLink>
             ) : null}
           </article>
         ))}
@@ -261,7 +262,7 @@ function repositoryLabel(
   return (
     item.repository_full_name ||
     item.repository_external_id ||
-    "Repository unavailable"
+    M.githubWork.repositoryUnavailable
   );
 }
 
@@ -271,7 +272,7 @@ function referenceLabel(
   if (typeof item.number === "number") {
     return `#${item.number}`;
   }
-  return item.external_id || "No external id";
+  return item.external_id || M.githubWork.noExternalId;
 }
 
 function timestampLabel(
@@ -285,14 +286,17 @@ function timestampLabel(
 
 export function formatSourceTimestamp(value: string | null): string {
   if (!value) {
-    return "Unknown";
+    return M.githubWork.timestampUnknown;
   }
   return value.replace("T", " ").replace("+00:00", " UTC").replace("Z", " UTC");
 }
 
 function stateLabel(state: GitHubOperationalWorkState): string {
-  if (state === "all") {
-    return "All";
-  }
-  return state.charAt(0).toUpperCase() + state.slice(1);
+  const labels: Record<GitHubOperationalWorkState, string> = {
+    open: M.githubWork.stateOpen,
+    closed: M.githubWork.stateClosed,
+    merged: M.githubWork.stateMerged,
+    all: M.githubWork.stateAll
+  };
+  return labels[state];
 }

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import type { MeResponse } from "../lib/auth";
 import { fetchMe, logout } from "../lib/auth";
+import { M } from "../lib/messages";
 import { SessionContext } from "../lib/session";
 import { Sidebar } from "./Sidebar";
 
@@ -47,7 +48,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (!resolved || me === null) {
     return (
       <div className="auth-loading" aria-busy="true">
-        Loading…
+        {M.common.loading}…
       </div>
     );
   }
@@ -66,7 +67,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <div className="topbar">
             <span className="topbar-user">{me.user.email}</span>
             <button type="button" className="logout-button" onClick={onLogout}>
-              Sign out
+              {M.common.signOut}
             </button>
           </div>
           <div className="content">{children}</div>

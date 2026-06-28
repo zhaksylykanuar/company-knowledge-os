@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchCompanyBrain } from "../lib/api";
+import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   CompanyBrainRepository,
@@ -60,7 +61,7 @@ export function CompanyBrainPanel({ refreshSignal = 0 }: CompanyBrainPanelProps)
           return;
         }
         setData(null);
-        setError(caught instanceof Error ? caught.message : "Request failed");
+        setError(caught instanceof Error ? caught.message : M.common.requestFailed);
         setStatus("error");
       });
 
@@ -89,90 +90,87 @@ export function CompanyBrainPanelView({
     <section className="panel company-brain" aria-labelledby="company-brain-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">Company Brain</span>
-          <h2 id="company-brain-title">Evidence-backed GitHub state</h2>
+          <span className="eyebrow">{M.companyBrain.eyebrow}</span>
+          <h2 id="company-brain-title">{M.companyBrain.title}</h2>
         </div>
-        <span className="badge">Deterministic</span>
+        <span className="badge">{M.companyBrain.badgeDeterministic}</span>
       </div>
 
-      {status === "loading" ? <LoadingState label="Loading Company Brain" /> : null}
+      {status === "loading" ? <LoadingState label={M.companyBrain.loading} /> : null}
 
       {status === "missing" ? (
         <EmptyState
-          description="Your account has no workspace yet, so there is no Company Brain to show."
-          title="No workspace available"
+          description={M.companyBrain.noWorkspaceDescription}
+          title={M.common.noWorkspaceTitle}
         />
       ) : null}
 
       {status === "error" ? (
         <>
           <ErrorState
-            description={error ?? "The dashboard could not load Company Brain state."}
-            title="Company Brain unavailable"
+            description={error ?? M.companyBrain.unavailableDescription}
+            title={M.companyBrain.unavailableTitle}
           />
           <button className="button secondary" onClick={onRetry} type="button">
-            Retry
+            {M.common.retry}
           </button>
         </>
       ) : null}
 
       {status === "empty" ? (
         <EmptyState
-          description="No canonical GitHub records are synced yet. Run local GitHub sync, then return here for the evidence-backed state."
-          title="No Company Brain data yet"
+          description={M.companyBrain.emptyDescription}
+          title={M.companyBrain.emptyTitle}
         />
       ) : null}
 
       {data && status === "ready" ? (
         <>
-          <p className="muted">
-            Company Brain is based on synced canonical GitHub records. Live OAuth,
-            provider sync, and AI briefing are not enabled in this view.
-          </p>
-          <section className="grid" aria-label="Company Brain summary">
+          <p className="muted">{M.companyBrain.intro}</p>
+          <section className="grid" aria-label={M.companyBrain.summaryLabel}>
             <StatusCard
-              description="Canonical GitHub repositories known to this workspace."
-              title="Repositories"
+              description={M.companyBrain.reposDescription}
+              title={M.companyBrain.reposTitle}
               value={String(data.summary.repositories)}
             />
             <StatusCard
-              description="Open GitHub issue/task records from canonical tasks."
-              title="Open issues"
+              description={M.companyBrain.openIssuesDescription}
+              title={M.companyBrain.openIssuesTitle}
               value={String(data.summary.open_issues)}
             />
             <StatusCard
-              description="Open pull requests linked to canonical repositories."
-              title="Open PRs"
+              description={M.companyBrain.openPrsDescription}
+              title={M.companyBrain.openPrsTitle}
               value={String(data.summary.open_pull_requests)}
             />
             <StatusCard
-              description="Closed issues and merged pull requests."
-              title="Closed / merged"
+              description={M.companyBrain.closedDescription}
+              title={M.companyBrain.closedTitle}
               value={`${data.summary.closed_issues} / ${data.summary.merged_pull_requests}`}
             />
           </section>
           <section className="work-columns">
             <RepositorySection repositories={data.repositories} />
             <BrainWorkSection
-              emptyText="No open issue/task records in Company Brain."
+              emptyText={M.companyBrain.noOpenIssues}
               items={data.work.issues}
-              title="Open issues / tasks"
+              title={M.companyBrain.openIssuesSection}
             />
             <BrainWorkSection
-              emptyText="No open pull requests in Company Brain."
+              emptyText={M.companyBrain.noOpenPrs}
               items={data.work.pull_requests}
-              title="Open pull requests"
+              title={M.companyBrain.openPrsSection}
             />
             <BrainWorkSection
-              emptyText="No recent GitHub work has been synced yet."
+              emptyText={M.companyBrain.noRecent}
               items={data.work.recent}
-              title="Recent GitHub work"
+              title={M.companyBrain.recentSection}
             />
           </section>
           <EvidenceSection evidence={data.evidence} />
           <CapabilityNote data={data} />
           {data.warnings.length > 0 ? (
-            <ul className="meta-list" aria-label="Company Brain warnings">
+            <ul className="meta-list" aria-label={M.common.warnings}>
               {data.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
               ))}
@@ -190,31 +188,31 @@ function RepositorySection({
   repositories: CompanyBrainRepository[];
 }) {
   return (
-    <section className="work-section" aria-label="Company Brain repositories">
-      <h3>Repositories</h3>
+    <section className="work-section" aria-label={M.companyBrain.reposSection}>
+      <h3>{M.companyBrain.reposSection}</h3>
       {repositories.length === 0 ? (
-        <p className="muted">No canonical repositories synced yet.</p>
+        <p className="muted">{M.companyBrain.noRepos}</p>
       ) : null}
       <div className="work-list">
         {repositories.map((repository) => (
           <article className="work-item" key={repository.id}>
             <div className="work-item-main">
-              <span className="badge">Repository</span>
+              <span className="badge">{M.companyBrain.repoBadge}</span>
               <h4>{repository.full_name}</h4>
             </div>
             <dl className="work-meta">
               <div>
-                <dt>Visibility</dt>
-                <dd>{repository.visibility ?? "unknown"}</dd>
+                <dt>{M.companyBrain.metaVisibility}</dt>
+                <dd>{repository.visibility ?? M.common.unknown}</dd>
               </div>
               <div>
-                <dt>Archived</dt>
-                <dd>{repository.archived ? "yes" : "no"}</dd>
+                <dt>{M.companyBrain.archived}</dt>
+                <dd>{repository.archived ? M.common.yes : M.common.no}</dd>
               </div>
             </dl>
             <SourceRefList refs={repository.source_refs} />
             {repository.source_url ? (
-              <SourceLink url={repository.source_url}>Open source</SourceLink>
+              <SourceLink url={repository.source_url}>{M.common.openSource}</SourceLink>
             ) : null}
           </article>
         ))}
@@ -240,26 +238,26 @@ function BrainWorkSection({
         {items.map((item) => (
           <article className="work-item" key={`${item.type}-${item.id}`}>
             <div className="work-item-main">
-              <span className="badge">{item.type === "issue" ? "Issue" : "PR"}</span>
+              <span className="badge">{item.type === "issue" ? M.companyBrain.badgeIssue : M.companyBrain.badgePr}</span>
               <h4>{item.title}</h4>
             </div>
             <dl className="work-meta">
               <div>
-                <dt>Repository</dt>
-                <dd>{item.repository_full_name ?? "Unknown repository"}</dd>
+                <dt>{M.companyBrain.metaRepository}</dt>
+                <dd>{item.repository_full_name ?? M.companyBrain.unknownRepository}</dd>
               </div>
               <div>
-                <dt>State</dt>
-                <dd>{item.state ?? "unknown"}</dd>
+                <dt>{M.companyBrain.metaState}</dt>
+                <dd>{item.state ?? M.common.unknown}</dd>
               </div>
               <div>
-                <dt>Reference</dt>
-                <dd>{item.number ? `#${item.number}` : item.external_id ?? "unknown"}</dd>
+                <dt>{M.companyBrain.metaReference}</dt>
+                <dd>{item.number ? `#${item.number}` : item.external_id ?? M.common.unknown}</dd>
               </div>
             </dl>
             <SourceRefList refs={item.source_refs} />
             {item.source_url ? (
-              <SourceLink url={item.source_url}>Open source</SourceLink>
+              <SourceLink url={item.source_url}>{M.common.openSource}</SourceLink>
             ) : null}
           </article>
         ))}
@@ -270,10 +268,10 @@ function BrainWorkSection({
 
 function EvidenceSection({ evidence }: { evidence: CompanyBrainSourceRef[] }) {
   return (
-    <section className="work-section" aria-label="Company Brain evidence">
-      <h3>Evidence / sources</h3>
+    <section className="work-section" aria-label={M.companyBrain.evidenceSection}>
+      <h3>{M.companyBrain.evidenceSection}</h3>
       {evidence.length === 0 ? (
-        <p className="muted">No source refs were returned for the current records.</p>
+        <p className="muted">{M.companyBrain.noEvidence}</p>
       ) : null}
       <SourceRefList refs={evidence} />
     </section>
@@ -282,13 +280,15 @@ function EvidenceSection({ evidence }: { evidence: CompanyBrainSourceRef[] }) {
 
 function CapabilityNote({ data }: { data: CompanyBrainResponse }) {
   return (
-    <section className="callout" aria-label="Company Brain capabilities">
-      <strong>Current capability mode</strong>
+    <section className="callout" aria-label={M.companyBrain.capabilityTitle}>
+      <strong>{M.companyBrain.capabilityTitle}</strong>
       <p>
-        Local sync: {data.capabilities.local_sync ? "available" : "unavailable"}.
-        Live OAuth: {data.capabilities.live_github_oauth ? "enabled" : "not enabled"}.
-        Provider sync: {data.capabilities.live_provider_sync ? "enabled" : "not enabled"}.
-        AI briefing: {data.capabilities.llm_briefing ? "enabled" : "not enabled"}.
+        {T.brainCapability(
+          data.capabilities.local_sync,
+          data.capabilities.live_github_oauth,
+          data.capabilities.live_provider_sync,
+          data.capabilities.llm_briefing
+        )}
       </p>
     </section>
   );
@@ -296,11 +296,7 @@ function CapabilityNote({ data }: { data: CompanyBrainResponse }) {
 
 function SourceRefList({ refs }: { refs: CompanyBrainSourceRef[] }) {
   if (refs.length === 0) {
-    return (
-      <p className="muted">
-        Canonical synced record; no separate source ref returned.
-      </p>
-    );
+    return <p className="muted">{M.companyBrain.noSourceRef}</p>;
   }
   return (
     <ul className="source-ref-list">

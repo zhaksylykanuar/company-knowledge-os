@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { AppShell } from "../components/AppShell";
+import { M } from "../lib/messages";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "founderOS",
-  description: "Minimal founderOS MVP shell"
+  title: M.app.metaTitle,
+  description: M.app.metaDescription
 };
 
 type RootLayoutProps = {
@@ -15,7 +16,7 @@ type RootLayoutProps = {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
+    <html lang="ru">
       <body>
         <AppShell>{children}</AppShell>
       </body>

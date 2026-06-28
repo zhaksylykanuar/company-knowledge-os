@@ -1,13 +1,14 @@
 import { ActionProposalsPanel } from "../../components/ActionProposalsPanel";
 import { PageHeader } from "../../components/PageHeader";
+import { M } from "../../lib/messages";
 
 export default function ActionsPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Actions"
-        title="Human-approved action boundary"
-        description="Action proposals move through local proposed, approved, and rejected states without external execution."
+        eyebrow={M.actionsPage.eyebrow}
+        title={M.actionsPage.title}
+        description={M.actionsPage.description}
       />
       <ActionProposalsPanel />
     </>

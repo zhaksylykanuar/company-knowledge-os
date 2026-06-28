@@ -7,6 +7,7 @@ import {
   buildWorkspaceManualBriefingPath,
   generateManualFounderBriefing
 } from "../lib/api";
+import { M } from "../lib/messages";
 import type { FounderBriefingResponse } from "../lib/types";
 import { BriefingPanelView } from "../components/BriefingPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
@@ -144,26 +145,26 @@ test("posts deterministic manual briefing request", async () => {
 
 test("renders loading state", () => {
   const html = renderPanel({ data: null, status: "loading" });
-  assert.match(html, /Generating deterministic briefing/);
+  assert.ok(html.includes(M.briefingPanel.loadingDeterministic));
 });
 
 test("renders no-workspace state without any operator-key gate", () => {
   const html = renderPanel({ data: null, status: "missing" });
-  assert.match(html, /No workspace available/);
+  assert.ok(html.includes(M.common.noWorkspaceTitle));
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /owner email/);
 });
 
 test("renders empty no-data state before generation", () => {
   const html = renderPanel({ data: null, status: "empty" });
-  assert.match(html, /No briefing loaded/);
-  assert.match(html, /request the deterministic manual briefing/);
+  assert.ok(html.includes(M.briefingPanel.noBriefingTitle));
+  assert.ok(html.includes(M.briefingPanel.noBriefingDescription));
 });
 
 test("renders unsupported state", () => {
   const html = renderPanel({ data: null, status: "unsupported" });
-  assert.match(html, /Manual briefing unsupported/);
-  assert.match(html, /supported manual deterministic briefing capability/);
+  assert.ok(html.includes(M.briefingPanel.unsupportedTitle));
+  assert.ok(html.includes(M.briefingPanel.unsupportedDescription));
 });
 
 test("renders backend error state with retry", () => {
@@ -173,19 +174,19 @@ test("renders backend error state with retry", () => {
     onRetry: () => undefined,
     status: "error"
   });
-  assert.match(html, /Briefing unavailable/);
+  assert.ok(html.includes(M.briefingPanel.unavailableTitle));
   assert.match(html, /briefing backend unavailable/);
-  assert.match(html, /Retry/);
+  assert.ok(html.includes(M.common.retry));
 });
 
 test("renders deterministic briefing sections and summary", () => {
   const html = renderPanel();
-  assert.match(html, /Manual Founder Briefing/);
-  assert.match(html, /Manual deterministic briefing from evidence-backed company records/);
-  assert.match(html, /Repositories/);
-  assert.match(html, /Queued sync jobs/);
-  assert.match(html, /Latest sync/);
-  assert.match(html, /AI \/ persistence/);
+  assert.ok(html.includes(M.briefingPanel.title));
+  assert.ok(html.includes(M.briefingPanel.intro));
+  assert.ok(html.includes(M.briefingPanel.reposTitle));
+  assert.ok(html.includes(M.briefingPanel.queuedTitle));
+  assert.ok(html.includes(M.briefingPanel.latestSyncTitle));
+  assert.ok(html.includes(M.briefingPanel.aiTitle));
   assert.match(html, /Repository inventory is available/);
   assert.match(html, /Briefing is deterministic/);
   assert.match(html, /91%/);
@@ -193,7 +194,7 @@ test("renders deterministic briefing sections and summary", () => {
 
 test("renders empty briefing payload without fake claims", () => {
   const html = renderPanel({ data: emptyBriefing, status: "empty" });
-  assert.match(html, /No briefing items returned by the backend/);
+  assert.ok(html.includes(M.briefingPanel.noItems));
   assert.match(html, /No evidence refs were available/);
   assert.doesNotMatch(html, /strategic advice/);
   assert.doesNotMatch(html, /source_events/);
@@ -201,11 +202,11 @@ test("renders empty briefing payload without fake claims", () => {
 
 test("renders evidence buttons and deterministic system fact labels", () => {
   const html = renderPanel();
-  assert.match(html, /Evidence: qtwin-io\/founderos-api/);
-  assert.match(html, /Deterministic system fact; no separate evidence ref returned/);
-  assert.match(html, /AI briefing: not enabled/);
-  assert.match(html, /Live provider sync: not enabled/);
-  assert.match(html, /External actions: not executed here/);
+  assert.match(html, /Источник: qtwin-io\/founderos-api/);
+  assert.ok(html.includes(M.briefingPanel.noEvidenceRef));
+  assert.match(html, /Сводка ИИ: не включено/);
+  assert.match(html, /Живая синхронизация провайдера: не включено/);
+  assert.match(html, /Внешние действия: здесь не выполняются/);
   assert.doesNotMatch(html, /AI summary/);
 });
 
@@ -219,18 +220,18 @@ test("renders evidence drawer with provider, source, record, and URL", () => {
     />
   );
 
-  assert.match(html, /Source detail/);
+  assert.ok(html.includes(M.evidence.title));
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /github/);
   assert.match(html, /repository_inventory_snapshot/);
-  assert.match(html, /No snippet returned by backend/);
-  assert.match(html, /Open source/);
+  assert.ok(html.includes(M.evidence.noSnippet));
+  assert.ok(html.includes(M.common.openSource));
   assert.doesNotMatch(html, /provider_metadata/);
   assert.doesNotMatch(html, /access_token/);
 });
 
 test("renders evidence drawer fallback when no evidence is selected", () => {
   const html = renderToStaticMarkup(<EvidenceDrawer evidence={null} />);
-  assert.match(html, /Select an evidence ref/);
-  assert.doesNotMatch(html, /Open source/);
+  assert.ok(html.includes(M.evidence.placeholder));
+  assert.ok(!html.includes(M.common.openSource));
 });

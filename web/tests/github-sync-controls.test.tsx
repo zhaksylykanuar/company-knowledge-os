@@ -9,6 +9,7 @@ import {
   fetchGitHubConnectionStatus,
   runGitHubLocalSync
 } from "../lib/api";
+import { M } from "../lib/messages";
 import type {
   GitHubConnectionStatusResponse,
   GitHubLocalSyncResponse
@@ -156,7 +157,7 @@ test("renders no-workspace state without any operator-key gate", () => {
     connectionStatus: null,
     status: "missing"
   });
-  assert.match(html, /No workspace available/);
+  assert.ok(html.includes(M.common.noWorkspaceTitle));
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /owner email/);
 });
@@ -165,25 +166,25 @@ test("renders unsupported state when no connection record exists", () => {
   const html = renderControls({
     connectionStatus: missingConnectionStatus
   });
-  assert.match(html, /GitHub connection record required/);
-  assert.match(html, /Live OAuth is not enabled yet/);
-  assert.match(html, /No live provider/);
+  assert.ok(html.includes(M.githubSync.connectionRequiredTitle));
+  assert.ok(html.includes(M.githubSync.connectionRequiredDescription));
+  assert.ok(html.includes(M.githubSync.badgeNoLiveProvider));
   assert.doesNotMatch(html, /Connected to GitHub/);
   assert.doesNotMatch(html, /source_events/);
 });
 
 test("renders connected local sync action without promising OAuth", () => {
   const html = renderControls();
-  assert.match(html, /Local sync controls/);
-  assert.match(html, /Run local GitHub sync/);
-  assert.match(html, /Local only/);
-  assert.match(html, /Live OAuth and provider execution are not enabled/);
+  assert.ok(html.includes(M.githubSync.title));
+  assert.ok(html.includes(M.githubSync.runSync));
+  assert.ok(html.includes(M.githubSync.executionModeValue));
+  assert.ok(html.includes(M.githubSync.executionModeDescription));
   assert.doesNotMatch(html, /Connected to GitHub/);
 });
 
 test("renders pending local sync state", () => {
   const html = renderControls({ status: "syncing" });
-  assert.match(html, /Running local sync/);
+  assert.ok(html.includes(M.githubSync.runningSync));
   assert.match(html, /disabled/);
 });
 
@@ -193,7 +194,7 @@ test("renders successful sync result and warnings", () => {
     status: "success"
   });
   assert.match(html, /Local GitHub data normalized into canonical backend state/);
-  assert.match(html, /1 repositories, 0 issues\/tasks, and 0 pull requests/);
+  assert.match(html, /репозиториев — 1, задач — 0, пулреквестов — 0/);
   assert.match(html, /local GitHub issues were not available/);
 });
 
@@ -203,7 +204,7 @@ test("renders local sync backend error with retry", () => {
     onRetry: () => undefined,
     status: "error"
   });
-  assert.match(html, /Local GitHub sync failed/);
+  assert.ok(html.includes(M.githubSync.syncFailedTitle));
   assert.match(html, /github connected connection record required/);
-  assert.match(html, /Refresh status/);
+  assert.ok(html.includes(M.common.refreshStatus));
 });

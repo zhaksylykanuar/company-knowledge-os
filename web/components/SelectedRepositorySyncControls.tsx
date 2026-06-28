@@ -7,6 +7,7 @@ import {
   syncSelectedRepositoryIssues,
   syncSelectedRepositoryPullRequests
 } from "../lib/api";
+import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   GitHubConnectionStatusResponse,
@@ -65,9 +66,9 @@ export function isValidRepositoryFullName(value: string): boolean {
 
 export function repositoryValidationMessage(value: string): string {
   if (!value.trim()) {
-    return "Enter a repository full name as owner/repo.";
+    return M.selectedSync.validationEmpty;
   }
-  return "Repository must be in owner/repo format with no spaces.";
+  return M.selectedSync.validationFormat;
 }
 
 export function classifySelectedSyncError(message: string): SelectedSyncError {
@@ -78,19 +79,18 @@ export function classifySelectedSyncError(message: string): SelectedSyncError {
   ) {
     return {
       kind: "allowlist",
-      message: "Repository is not allowlisted for selected sync."
+      message: M.selectedSync.errorAllowlist
     };
   }
   if (normalized.includes("insufficient workspace role")) {
     return {
       kind: "permission",
-      message:
-        "Your workspace role cannot run selected repository sync. An admin role is required."
+      message: M.selectedSync.errorPermission
     };
   }
   return {
     kind: "generic",
-    message: message || "The selected repository sync request failed."
+    message: message || M.selectedSync.errorGeneric
   };
 }
 
@@ -142,7 +142,7 @@ export function SelectedRepositorySyncControls({
         }
         setConnectionStatus(null);
         setConnectionError(
-          caught instanceof Error ? caught.message : "Request failed"
+          caught instanceof Error ? caught.message : M.common.requestFailed
         );
         setStatus("error");
       });
@@ -200,7 +200,7 @@ export function SelectedRepositorySyncControls({
       }
     } catch (caught: unknown) {
       const message =
-        caught instanceof Error ? caught.message : "Request failed";
+        caught instanceof Error ? caught.message : M.common.requestFailed;
       setSyncError(classifySelectedSyncError(message));
     } finally {
       setPendingAction(null);
@@ -259,53 +259,45 @@ export function SelectedRepositorySyncControlsView({
     >
       <div className="section-header">
         <div>
-          <span className="eyebrow">GitHub</span>
-          <h2 id="selected-repository-sync-title">Selected repository sync</h2>
+          <span className="eyebrow">{M.selectedSync.eyebrow}</span>
+          <h2 id="selected-repository-sync-title">{M.selectedSync.title}</h2>
         </div>
-        <span className="badge">Read-only</span>
+        <span className="badge">{M.selectedSync.badgeReadOnly}</span>
       </div>
 
-      <p className="muted">
-        Read-only selected repository sync. No GitHub writes are performed.
-        Issues and pull requests are fetched from selected allowlisted
-        repositories. This does not create, close, merge, or comment on GitHub
-        items.
-      </p>
+      <p className="muted">{M.selectedSync.intro}</p>
 
       {status === "loading" ? (
-        <LoadingState label="Loading GitHub connection state" />
+        <LoadingState label={M.selectedSync.loading} />
       ) : null}
 
       {status === "missing" ? (
         <EmptyState
-          description="Your account has no workspace yet, so there is nothing to sync."
-          title="No workspace available"
+          description={M.selectedSync.noWorkspaceDescription}
+          title={M.common.noWorkspaceTitle}
         />
       ) : null}
 
       {status === "error" ? (
         <>
           <ErrorState
-            description={
-              connectionError ??
-              "The dashboard could not load GitHub connection state."
-            }
-            title="Selected repository sync unavailable"
+            description={connectionError ?? M.selectedSync.unavailableDescription}
+            title={M.selectedSync.unavailableTitle}
           />
           <button
             className="button secondary"
             onClick={onRetryConnection}
             type="button"
           >
-            Retry
+            {M.common.retry}
           </button>
         </>
       ) : null}
 
       {status === "ready" && !hasConnection ? (
         <EmptyState
-          description="A GitHub connection must be configured for this workspace before selected repository sync. Configure the GitHub connection, then retry."
-          title="GitHub connection required"
+          description={M.selectedSync.connectionRequiredDescription}
+          title={M.selectedSync.connectionRequiredTitle}
         />
       ) : null}
 
@@ -313,7 +305,7 @@ export function SelectedRepositorySyncControlsView({
         <>
           <div className="field">
             <label htmlFor="selected-repository-input">
-              Repository (owner/repo)
+              {M.selectedSync.repoLabel}
             </label>
             <input
               autoComplete="off"
@@ -321,16 +313,12 @@ export function SelectedRepositorySyncControlsView({
               onChange={(event) =>
                 onRepositoryInputChange?.(event.target.value)
               }
-              placeholder="owner/repo"
+              placeholder={M.selectedSync.repoPlaceholder}
               spellCheck={false}
               type="text"
               value={repositoryInput}
             />
-            <p className="muted">
-              Selected repositories must be allowed by backend config. This UI
-              syncs one explicit repository at a time and never syncs all
-              organization repositories.
-            </p>
+            <p className="muted">{M.selectedSync.repoNote}</p>
             {repositoryError ? (
               <p className="error-text" role="alert">
                 {repositoryError}
@@ -345,7 +333,7 @@ export function SelectedRepositorySyncControlsView({
               onClick={onRunIssues}
               type="button"
             >
-              {pendingAction === "issues" ? "Syncing issues" : "Run issue sync"}
+              {pendingAction === "issues" ? M.selectedSync.syncingIssues : M.selectedSync.runIssues}
             </button>
             <button
               className="button"
@@ -354,8 +342,8 @@ export function SelectedRepositorySyncControlsView({
               type="button"
             >
               {pendingAction === "pull_requests"
-                ? "Syncing pull requests"
-                : "Run PR sync"}
+                ? M.selectedSync.syncingPr
+                : M.selectedSync.runPr}
             </button>
             <button
               className="button secondary"
@@ -364,8 +352,8 @@ export function SelectedRepositorySyncControlsView({
               type="button"
             >
               {pendingAction === "both"
-                ? "Syncing issues and pull requests"
-                : "Run issue + PR sync"}
+                ? M.selectedSync.syncingBoth
+                : M.selectedSync.runBoth}
             </button>
           </div>
 
@@ -391,12 +379,12 @@ export function SelectedRepositorySyncControlsView({
 
 function selectedSyncErrorTitle(kind: SelectedSyncErrorKind): string {
   if (kind === "allowlist") {
-    return "Repository not allowlisted";
+    return M.selectedSync.errorTitleAllowlist;
   }
   if (kind === "permission") {
-    return "Insufficient workspace role";
+    return M.selectedSync.errorTitlePermission;
   }
-  return "Selected repository sync failed";
+  return M.selectedSync.errorTitleGeneric;
 }
 
 function IssueSyncSummary({
@@ -406,28 +394,34 @@ function IssueSyncSummary({
 }) {
   const { totals } = result;
   return (
-    <section className="callout" aria-label="Selected issue sync summary">
-      <strong>Issue sync summary</strong>
+    <section className="callout" aria-label={M.selectedSync.issueSummaryTitle}>
+      <strong>{M.selectedSync.issueSummaryTitle}</strong>
       {totals.issues === 0 ? (
-        <p>No issue records were synced for the selected repository.</p>
+        <p>{M.selectedSync.noIssuesSynced}</p>
       ) : (
         <p>
-          {totals.repositories} repositories synced, {totals.issues} issues (
-          {totals.open_issues} open / {totals.closed_issues} closed).
+          {T.selectedIssueSummary(
+            totals.repositories,
+            totals.issues,
+            totals.open_issues,
+            totals.closed_issues
+          )}
         </p>
       )}
       {totals.skipped_pull_requests > 0 ? (
-        <p>
-          {totals.skipped_pull_requests} PR-shaped issue records skipped.
-        </p>
+        <p>{T.skippedPrs(totals.skipped_pull_requests)}</p>
       ) : null}
       <RepositorySummaryList
         items={result.repositories.map((repository) => ({
           full_name: repository.full_name,
-          detail: `${repository.synced_issues} issues (${repository.open_issues} open / ${repository.closed_issues} closed)`
+          detail: T.selectedIssueRepoDetail(
+            repository.synced_issues,
+            repository.open_issues,
+            repository.closed_issues
+          )
         }))}
       />
-      <p className="success-text">No GitHub writes were performed.</p>
+      <p className="success-text">{M.selectedSync.noWrites}</p>
       <SyncWarnings warnings={result.warnings} />
     </section>
   );
@@ -440,25 +434,33 @@ function PullRequestSyncSummary({
 }) {
   const { totals } = result;
   return (
-    <section className="callout" aria-label="Selected pull request sync summary">
-      <strong>Pull request sync summary</strong>
+    <section className="callout" aria-label={M.selectedSync.prSummaryTitle}>
+      <strong>{M.selectedSync.prSummaryTitle}</strong>
       {totals.pull_requests === 0 ? (
-        <p>No pull request records were synced for the selected repository.</p>
+        <p>{M.selectedSync.noPrsSynced}</p>
       ) : (
         <p>
-          {totals.repositories} repositories synced, {totals.pull_requests} pull
-          requests ({totals.open_pull_requests} open /{" "}
-          {totals.closed_pull_requests} closed / {totals.merged_pull_requests}{" "}
-          merged).
+          {T.selectedPrSummary(
+            totals.repositories,
+            totals.pull_requests,
+            totals.open_pull_requests,
+            totals.closed_pull_requests,
+            totals.merged_pull_requests
+          )}
         </p>
       )}
       <RepositorySummaryList
         items={result.repositories.map((repository) => ({
           full_name: repository.full_name,
-          detail: `${repository.synced_pull_requests} PRs (${repository.open_pull_requests} open / ${repository.closed_pull_requests} closed / ${repository.merged_pull_requests} merged)`
+          detail: T.selectedPrRepoDetail(
+            repository.synced_pull_requests,
+            repository.open_pull_requests,
+            repository.closed_pull_requests,
+            repository.merged_pull_requests
+          )
         }))}
       />
-      <p className="success-text">No GitHub writes were performed.</p>
+      <p className="success-text">{M.selectedSync.noWrites}</p>
       <SyncWarnings warnings={result.warnings} />
     </section>
   );
@@ -488,7 +490,7 @@ function SyncWarnings({ warnings }: { warnings: string[] }) {
     return null;
   }
   return (
-    <ul className="meta-list" aria-label="Selected sync warnings">
+    <ul className="meta-list" aria-label={M.common.warnings}>
       {warnings.map((warning) => (
         <li key={warning}>{warning}</li>
       ))}

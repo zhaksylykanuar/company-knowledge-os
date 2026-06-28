@@ -7,6 +7,7 @@ import {
   buildWorkspaceGitHubOperationalWorkPath,
   fetchGitHubOperationalWork
 } from "../lib/api";
+import { M } from "../lib/messages";
 import type { GitHubOperationalWorkResponse } from "../lib/types";
 import {
   formatSourceTimestamp,
@@ -122,12 +123,12 @@ test("fetches and parses operational work payloads", async () => {
 
 test("renders loading state", () => {
   const html = renderPanel({ data: null, status: "loading" });
-  assert.match(html, /Loading GitHub work/);
+  assert.ok(html.includes(M.githubWork.loading));
 });
 
 test("renders empty state", () => {
   const html = renderPanel({ data: emptyWork, status: "empty" });
-  assert.match(html, /No GitHub operational work synced yet/);
+  assert.ok(html.includes(M.githubWork.emptyTitle));
 });
 
 test("renders backend error state with retry affordance", () => {
@@ -137,9 +138,9 @@ test("renders backend error state with retry affordance", () => {
     onRetry: () => undefined,
     status: "error"
   });
-  assert.match(html, /GitHub operational work unavailable/);
+  assert.ok(html.includes(M.githubWork.unavailableTitle));
   assert.match(html, /backend unavailable/);
-  assert.match(html, /Retry/);
+  assert.ok(html.includes(M.common.retry));
 });
 
 test("renders issue and pull request records with repository identity", () => {
@@ -155,10 +156,10 @@ test("renders issue and pull request records with repository identity", () => {
 
 test("renders open, closed, merged, and all filters", () => {
   const html = renderPanel({ selectedState: "merged" });
-  assert.match(html, /Open/);
-  assert.match(html, /Closed/);
-  assert.match(html, /Merged/);
-  assert.match(html, /All/);
+  assert.ok(html.includes(M.githubWork.stateOpen));
+  assert.ok(html.includes(M.githubWork.stateClosed));
+  assert.ok(html.includes(M.githubWork.stateMerged));
+  assert.ok(html.includes(M.githubWork.stateAll));
   assert.match(html, /aria-pressed="true"/);
 });
 
@@ -167,5 +168,5 @@ test("formats source timestamps without inventing extra facts", () => {
     formatSourceTimestamp("2026-06-24T08:30:00+00:00"),
     "2026-06-24 08:30:00 UTC"
   );
-  assert.equal(formatSourceTimestamp(null), "Unknown");
+  assert.equal(formatSourceTimestamp(null), M.githubWork.timestampUnknown);
 });

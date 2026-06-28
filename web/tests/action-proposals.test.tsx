@@ -13,6 +13,7 @@ import {
   fetchActionProposals,
   rejectActionProposal
 } from "../lib/api";
+import { M } from "../lib/messages";
 import type {
   ActionProposal,
   ActionProposalListResponse,
@@ -307,12 +308,11 @@ test("surfaces unsupported transition errors", async () => {
 });
 
 test("renders loading, missing, empty, unsupported, and error states", () => {
-  assert.match(renderPanel({ data: null, status: "loading" }), /Loading action proposals/);
-  assert.match(renderPanel({ data: null, status: "missing" }), /No workspace available/);
-  assert.match(renderPanel({ data: emptyList, status: "empty" }), /No action proposals yet/);
-  assert.match(
-    renderPanel({ data: null, status: "unsupported" }),
-    /Action proposals unsupported/
+  assert.ok(renderPanel({ data: null, status: "loading" }).includes(M.actionsPanel.loading));
+  assert.ok(renderPanel({ data: null, status: "missing" }).includes(M.common.noWorkspaceTitle));
+  assert.ok(renderPanel({ data: emptyList, status: "empty" }).includes(M.actionsPanel.emptyTitle));
+  assert.ok(
+    renderPanel({ data: null, status: "unsupported" }).includes(M.actionsPanel.unsupportedTitle)
   );
   const errorHtml = renderPanel({
     data: null,
@@ -320,9 +320,9 @@ test("renders loading, missing, empty, unsupported, and error states", () => {
     onRetry: () => undefined,
     status: "error"
   });
-  assert.match(errorHtml, /Action proposals unavailable/);
+  assert.ok(errorHtml.includes(M.actionsPanel.unavailableTitle));
   assert.match(errorHtml, /transition failed/);
-  assert.match(errorHtml, /Retry/);
+  assert.ok(errorHtml.includes(M.common.retry));
 });
 
 test("renders proposal cards, statuses, evidence refs, and local-only boundary", () => {
@@ -331,18 +331,18 @@ test("renders proposal cards, statuses, evidence refs, and local-only boundary",
     onReject: () => undefined,
     onSelectEvidence: () => undefined
   });
-  assert.match(html, /Action Proposals/);
-  assert.match(html, /Local approval workflow/);
-  assert.match(html, /External execution: disabled in this UI/);
+  assert.ok(html.includes(M.actionsPanel.title));
+  assert.ok(html.includes(M.actionsPanel.intro));
+  assert.match(html, /Внешнее выполнение: отключено в этом интерфейсе/);
   assert.match(html, /Create follow-up GitHub issue/);
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /Follow up on FounderOS signal/);
-  assert.match(html, /Approve locally/);
-  assert.match(html, /Reject locally/);
-  assert.match(html, /Approved locally\. External execution is disabled in this UI/);
-  assert.match(html, /Rejected locally\. No external action was run/);
-  assert.match(html, /Evidence: qtwin-io\/founderos-api#issue\/42/);
-  assert.match(html, /No evidence refs returned by backend for this proposal/);
+  assert.ok(html.includes(M.actionsPanel.approve));
+  assert.ok(html.includes(M.actionsPanel.reject));
+  assert.ok(html.includes(M.actionsPanel.actionsApprovedNote));
+  assert.ok(html.includes(M.actionsPanel.actionsRejectedNote));
+  assert.match(html, /Источник: qtwin-io\/founderos-api#issue\/42/);
+  assert.ok(html.includes(M.actionsPanel.noEvidenceRefs));
   assert.doesNotMatch(html, /sent to GitHub/i);
   assert.doesNotMatch(html, /created GitHub issue/i);
   assert.doesNotMatch(html, /source_events/);
@@ -357,10 +357,10 @@ test("renders create form and pending local mutations", () => {
     },
     pendingMutation: "create"
   });
-  assert.match(html, /Proposal type/);
-  assert.match(html, /GitHub issue proposal/);
-  assert.match(html, /Creating local proposal/);
-  assert.match(html, /does not create a\s+GitHub issue or call a live provider/);
+  assert.ok(html.includes(M.actionCreate.typeLabel));
+  assert.ok(html.includes(M.actionCreate.typeGithubIssue));
+  assert.ok(html.includes(M.actionCreate.submitting));
+  assert.ok(html.includes(M.actionCreate.note));
 });
 
 test("renders success message after local approval or rejection", () => {
@@ -381,11 +381,11 @@ test("renders proposal evidence drawer details without raw payload dumps", () =>
     />
   );
 
-  assert.match(html, /Source detail/);
+  assert.ok(html.includes(M.evidence.title));
   assert.match(html, /github_issue/);
   assert.match(html, /qtwin-io\/founderos-api#issue\/42/);
-  assert.match(html, /Open source/);
-  assert.match(html, /No snippet returned by backend/);
+  assert.ok(html.includes(M.common.openSource));
+  assert.ok(html.includes(M.evidence.noSnippet));
   assert.doesNotMatch(html, /provider_response/);
   assert.doesNotMatch(html, /access_token/);
 });

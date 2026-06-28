@@ -10,6 +10,7 @@ import {
   syncSelectedRepositoryPullRequests,
   syncSelectedRepositoryGitHubWork
 } from "../lib/api";
+import { M } from "../lib/messages";
 import type {
   GitHubConnectionStatusResponse,
   GitHubSelectedIssueSyncResponse,
@@ -287,7 +288,7 @@ test("classifies backend allowlist, permission, and generic errors", () => {
     classifySelectedSyncError(
       "github repository is not allowed for selected pull request sync"
     ).message,
-    "Repository is not allowlisted for selected sync."
+    M.selectedSync.errorAllowlist
   );
   assert.equal(
     classifySelectedSyncError(
@@ -307,16 +308,7 @@ test("classifies backend allowlist, permission, and generic errors", () => {
 
 test("always states the read-only / no external write boundary", () => {
   const html = renderControls({ status: "missing", connectionStatus: null });
-  assert.match(html, /Read-only selected repository sync/);
-  assert.match(html, /No GitHub writes are performed/);
-  assert.match(
-    html,
-    /Issues and pull requests are fetched from selected allowlisted repositories/
-  );
-  assert.match(
-    html,
-    /does not create, close, merge, or comment on GitHub items/
-  );
+  assert.ok(html.includes(M.selectedSync.intro));
   assert.doesNotMatch(html, /Sync organization/);
   assert.doesNotMatch(html, /Write enabled/);
   assert.doesNotMatch(html, /Connected to all repos/);
@@ -324,7 +316,7 @@ test("always states the read-only / no external write boundary", () => {
 
 test("renders no-workspace state without any operator-key gate", () => {
   const html = renderControls({ status: "missing", connectionStatus: null });
-  assert.match(html, /No workspace available/);
+  assert.ok(html.includes(M.common.noWorkspaceTitle));
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /owner email/);
 });
@@ -334,8 +326,8 @@ test("renders missing connection state when no connection record exists", () => 
     status: "ready",
     connectionStatus: missingConnectionStatus
   });
-  assert.match(html, /GitHub connection required/);
-  assert.match(html, /GitHub connection must be configured/);
+  assert.ok(html.includes(M.selectedSync.connectionRequiredTitle));
+  assert.ok(html.includes(M.selectedSync.connectionRequiredDescription));
   assert.doesNotMatch(html, /Run issue sync/);
 });
 
@@ -346,64 +338,64 @@ test("renders connection load error with retry", () => {
     connectionError: "backend unavailable",
     onRetryConnection: () => undefined
   });
-  assert.match(html, /Selected repository sync unavailable/);
+  assert.ok(html.includes(M.selectedSync.unavailableTitle));
   assert.match(html, /backend unavailable/);
-  assert.match(html, /Retry/);
+  assert.ok(html.includes(M.common.retry));
 });
 
 test("renders repository input, controls, and validation error", () => {
   const html = renderControls({
-    repositoryError: "Repository must be in owner/repo format with no spaces."
+    repositoryError: M.selectedSync.validationFormat
   });
-  assert.match(html, /Repository \(owner\/repo\)/);
-  assert.match(html, /Run issue sync/);
-  assert.match(html, /Run PR sync/);
-  assert.match(html, /Run issue \+ PR sync/);
-  assert.match(html, /Selected repositories must be allowed by backend config/);
-  assert.match(html, /owner\/repo format with no spaces/);
+  assert.ok(html.includes(M.selectedSync.repoLabel));
+  assert.ok(html.includes(M.selectedSync.runIssues));
+  assert.ok(html.includes(M.selectedSync.runPr));
+  assert.ok(html.includes(M.selectedSync.runBoth));
+  assert.ok(html.includes(M.selectedSync.repoNote));
+  assert.ok(html.includes(M.selectedSync.validationFormat));
 });
 
 test("renders loading state for each in-flight action", () => {
   const issues = renderControls({ pendingAction: "issues" });
-  assert.match(issues, /Syncing issues/);
+  assert.ok(issues.includes(M.selectedSync.syncingIssues));
   assert.match(issues, /disabled/);
 
   const prs = renderControls({ pendingAction: "pull_requests" });
-  assert.match(prs, /Syncing pull requests/);
+  assert.ok(prs.includes(M.selectedSync.syncingPr));
 
   const both = renderControls({ pendingAction: "both" });
-  assert.match(both, /Syncing issues and pull requests/);
+  assert.ok(both.includes(M.selectedSync.syncingBoth));
 });
 
 test("renders issue sync summary including skipped PR-shaped records", () => {
   const html = renderControls({ issuesResult });
-  assert.match(html, /Issue sync summary/);
-  assert.match(html, /1 repositories synced, 2 issues \(1 open \/ 1 closed\)/);
-  assert.match(html, /1 PR-shaped issue records skipped/);
+  assert.ok(html.includes(M.selectedSync.issueSummaryTitle));
+  assert.match(html, /репозиториев — 1, задач — 2 \(открытых 1 \/ закрытых 1\)/);
+  assert.match(html, /Пропущено записей задач в виде PR: 1/);
   assert.match(html, /qtwin-io\/founderos-smoke/);
-  assert.match(html, /No GitHub writes were performed/);
+  assert.ok(html.includes(M.selectedSync.noWrites));
   assert.match(html, /one historical issue identifier was de-duplicated/);
 });
 
 test("renders PR sync summary with open/closed/merged counts", () => {
   const html = renderControls({ pullRequestsResult });
-  assert.match(html, /Pull request sync summary/);
+  assert.ok(html.includes(M.selectedSync.prSummaryTitle));
   assert.match(
     html,
-    /1 repositories synced, 3 pull requests \(1 open \/ 1 closed \/ 1 merged\)/
+    /репозиториев — 1, пулреквестов — 3 \(открытых 1 \/ закрытых 1 \/ слитых 1\)/
   );
-  assert.match(html, /No GitHub writes were performed/);
+  assert.ok(html.includes(M.selectedSync.noWrites));
 });
 
 test("renders both summaries together when issue + PR sync ran", () => {
   const html = renderControls({ issuesResult, pullRequestsResult });
-  assert.match(html, /Issue sync summary/);
-  assert.match(html, /Pull request sync summary/);
+  assert.ok(html.includes(M.selectedSync.issueSummaryTitle));
+  assert.ok(html.includes(M.selectedSync.prSummaryTitle));
 });
 
 test("renders empty summary when no records were synced", () => {
   const html = renderControls({ issuesResult: emptyIssuesResult });
-  assert.match(html, /No issue records were synced for the selected repository/);
+  assert.ok(html.includes(M.selectedSync.noIssuesSynced));
   assert.doesNotMatch(html, /PR-shaped issue records skipped/);
 });
 
@@ -411,28 +403,27 @@ test("renders allowlist backend error clearly", () => {
   const html = renderControls({
     syncError: {
       kind: "allowlist",
-      message: "Repository is not allowlisted for selected sync."
+      message: M.selectedSync.errorAllowlist
     }
   });
-  assert.match(html, /Repository not allowlisted/);
-  assert.match(html, /Repository is not allowlisted for selected sync/);
+  assert.ok(html.includes(M.selectedSync.errorTitleAllowlist));
+  assert.ok(html.includes(M.selectedSync.errorAllowlist));
 });
 
 test("renders permission and generic backend errors", () => {
   const permission = renderControls({
     syncError: {
       kind: "permission",
-      message:
-        "Your workspace role cannot run selected repository sync. An admin role is required."
+      message: M.selectedSync.errorPermission
     }
   });
-  assert.match(permission, /Insufficient workspace role/);
-  assert.match(permission, /admin role is required/);
+  assert.ok(permission.includes(M.selectedSync.errorTitlePermission));
+  assert.ok(permission.includes(M.selectedSync.errorPermission));
 
   const generic = renderControls({
     syncError: { kind: "generic", message: "The request failed." }
   });
-  assert.match(generic, /Selected repository sync failed/);
+  assert.ok(generic.includes(M.selectedSync.errorTitleGeneric));
   assert.match(generic, /The request failed/);
 });
 
