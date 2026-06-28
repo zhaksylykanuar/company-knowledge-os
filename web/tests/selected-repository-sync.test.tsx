@@ -194,7 +194,7 @@ test("API client builds the selected issue sync request", async () => {
   globalThis.fetch = (async (input, init) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/github/repositories/issues/sync"
+      "http://localhost/api/v1/workspaces/workspace-123/github/repositories/issues/sync"
     );
     assert.equal(init?.method, "POST");
     assert.equal(
@@ -232,7 +232,7 @@ test("API client builds the selected PR sync request with explicit states", asyn
   globalThis.fetch = (async (input, init) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/github/repositories/pull-requests/sync"
+      "http://localhost/api/v1/workspaces/workspace-123/github/repositories/pull-requests/sync"
     );
     assert.equal(init?.method, "POST");
     assert.equal(

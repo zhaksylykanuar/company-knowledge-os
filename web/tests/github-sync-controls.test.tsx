@@ -103,7 +103,7 @@ test("fetches and parses GitHub connection status", async () => {
   globalThis.fetch = (async (input) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/github/connection-status"
+      "http://localhost/api/v1/workspaces/workspace-123/github/connection-status"
     );
     return new Response(JSON.stringify(connectedStatus), {
       headers: { "Content-Type": "application/json" },
@@ -127,7 +127,7 @@ test("posts local sync request without live provider data", async () => {
   globalThis.fetch = (async (input, init) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/github/local-sync"
+      "http://localhost/api/v1/workspaces/workspace-123/github/local-sync"
     );
     assert.equal(init?.method, "POST");
     assert.equal(

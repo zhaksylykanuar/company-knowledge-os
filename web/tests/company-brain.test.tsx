@@ -187,7 +187,7 @@ test("fetches and parses Company Brain payloads", async () => {
   globalThis.fetch = (async (input) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/company-brain"
+      "http://localhost/api/v1/workspaces/workspace-123/company-brain"
     );
     return new Response(JSON.stringify(sampleBrain), {
       headers: { "Content-Type": "application/json" },

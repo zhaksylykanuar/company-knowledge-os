@@ -99,7 +99,7 @@ test("fetches and parses operational work payloads", async () => {
   globalThis.fetch = (async (input) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/github/operational-work?state=open&limit=50"
+      "http://localhost/api/v1/workspaces/workspace-123/github/operational-work?state=open&limit=50"
     );
     return new Response(JSON.stringify(sampleWork), {
       headers: { "Content-Type": "application/json" },

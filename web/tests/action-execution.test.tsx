@@ -210,9 +210,15 @@ test("fetches execution preview without posting a live write", async () => {
   globalThis.fetch = (async (input, init) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/execution-preview"
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/execution-preview"
     );
     assert.equal(init?.method, undefined);
+    // Same-origin first-party session cookie is sent; no operator key header.
+    assert.equal(init?.credentials, "include");
+    assert.equal(
+      new Headers(init?.headers).has("X-FounderOS-API-Key"),
+      false
+    );
     return new Response(JSON.stringify(disabledPreview), {
       headers: { "Content-Type": "application/json" },
       status: 200
@@ -238,7 +244,7 @@ test("fetches persisted action proposal audit trail", async () => {
   globalThis.fetch = (async (input, init) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/audit"
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/audit"
     );
     assert.equal(init?.method, undefined);
     return new Response(
@@ -293,7 +299,7 @@ test("posts execute request only through explicit execute client", async () => {
   globalThis.fetch = (async (input, init) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/execute"
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/execute"
     );
     assert.equal(init?.method, "POST");
     assert.equal(

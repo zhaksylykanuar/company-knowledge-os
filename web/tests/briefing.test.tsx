@@ -112,7 +112,7 @@ test("posts deterministic manual briefing request", async () => {
   globalThis.fetch = (async (input, init) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/briefings/manual"
+      "http://localhost/api/v1/workspaces/workspace-123/briefings/manual"
     );
     assert.equal(init?.method, "POST");
     assert.equal(

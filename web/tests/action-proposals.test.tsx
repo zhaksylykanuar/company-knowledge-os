@@ -161,7 +161,7 @@ test("fetches and parses local action proposals", async () => {
   globalThis.fetch = (async (input) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/actions/proposals?limit=50"
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals?limit=50"
     );
     return new Response(JSON.stringify(sampleList), {
       headers: { "Content-Type": "application/json" },
@@ -186,7 +186,7 @@ test("creates local action proposal without external execution", async () => {
   globalThis.fetch = (async (input, init) => {
     assert.equal(
       String(input),
-      "http://localhost:8000/api/v1/workspaces/workspace-123/actions/proposals"
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals"
     );
     assert.equal(init?.method, "POST");
     assert.equal(
@@ -284,8 +284,8 @@ test("approves and rejects locally through supported endpoints", async () => {
     assert.equal(approved.execution_started, false);
     assert.equal(rejected.proposal.status, "rejected");
     assert.deepEqual(calls, [
-      "POST http://localhost:8000/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/approve",
-      "POST http://localhost:8000/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/reject"
+      "POST http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/approve",
+      "POST http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/reject"
     ]);
   } finally {
     globalThis.fetch = originalFetch;

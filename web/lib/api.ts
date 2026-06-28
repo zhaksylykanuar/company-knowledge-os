@@ -1,8 +1,4 @@
-import {
-  getConfiguredApiBaseUrl,
-  readOperatorConfig,
-  resolveApiBaseUrl
-} from "./config";
+import { readOperatorConfig } from "./config";
 import type {
   ActionExecutionPreviewResponse,
   ActionExecutionResponse,
@@ -31,6 +27,12 @@ import type {
 } from "./types";
 
 const API_KEY_HEADER = "X-FounderOS-API-Key";
+
+// Same-origin base: the browser calls the web origin, and next.config.mjs
+// proxies /api/* to the backend, keeping the session cookie first-party.
+function sameOriginBase(): string {
+  return typeof window !== "undefined" ? window.location.origin : "http://localhost";
+}
 
 function buildUrl(path: string, baseUrl: string): URL {
   if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -61,9 +63,11 @@ export async function apiFetch<TResponse>(
   options: ApiFetchOptions = {}
 ): Promise<TResponse> {
   const localConfig = readOperatorConfig();
-  const baseUrl = options.apiBaseUrl || resolveApiBaseUrl(localConfig);
-  const url = buildUrl(path, baseUrl || getConfiguredApiBaseUrl());
+  // Always same-origin so the proxy delivers the first-party session cookie.
+  const url = buildUrl(path, sameOriginBase());
   if (options.includeOwnerEmail !== false) {
+    // owner_email is vestigial: the backend resolves the workspace from the
+    // session user and ignores it. Kept harmless for non-session callers.
     appendOwnerEmail(url, options.ownerEmail ?? localConfig.ownerEmail);
   }
 
@@ -73,14 +77,12 @@ export async function apiFetch<TResponse>(
     headers.set("Content-Type", "application/json");
   }
 
-  const apiKey = options.apiKey ?? localConfig.apiKey;
-  if (apiKey) {
-    headers.set(API_KEY_HEADER, apiKey);
-  }
-
+  // The operator API key is never sent from the browser; auth is the
+  // first-party session cookie (credentials: include).
   const response = await fetch(url, {
     ...options,
-    headers
+    headers,
+    credentials: "include"
   });
 
   if (!response.ok) {

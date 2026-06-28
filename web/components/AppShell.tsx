@@ -1,18 +1,21 @@
-import type { ReactNode } from "react";
+"use client";
 
-import { Sidebar } from "./Sidebar";
+import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+
+import { AuthGate } from "./AuthGate";
 
 type AppShellProps = {
   children: ReactNode;
 };
 
 export function AppShell({ children }: AppShellProps) {
-  return (
-    <div className="app-shell">
-      <Sidebar />
-      <main className="main">
-        <div className="content">{children}</div>
-      </main>
-    </div>
-  );
+  const pathname = usePathname();
+
+  // /login is public — render it bare, outside the authenticated chrome/gate.
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
+
+  return <AuthGate>{children}</AuthGate>;
 }
