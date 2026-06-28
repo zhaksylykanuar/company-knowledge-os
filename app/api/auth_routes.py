@@ -17,17 +17,27 @@ from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import USER_STATUS_ACTIVE, User
 from app.services.identity_service import get_user_by_email, list_workspaces_for_user
-from app.services.password_service import verify_password
-from app.services.session_service import create_session, revoke_session
+from app.services.password_service import hash_password, verify_password
+from app.services.session_service import (
+    create_session,
+    revoke_other_sessions,
+    revoke_session,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 GENERIC_LOGIN_FAILURE = "invalid email or password"
+WRONG_CURRENT_PASSWORD = "current password is incorrect"
 
 
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 def _client_ip(request: Request) -> str | None:
@@ -121,3 +131,32 @@ async def me(user: User = Depends(require_session)) -> dict:
         "user": _user_payload(user),
         "workspaces": await _workspaces_payload(user.id),
     }
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    user: User = Depends(require_session),
+) -> dict:
+    if not payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="new password is required"
+        )
+    raw_token = request.cookies.get(settings.session_cookie_name)
+    async with AsyncSessionLocal() as session:
+        db_user = await session.get(User, user.id)
+        if db_user is None or not verify_password(
+            payload.current_password, db_user.password_hash
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=WRONG_CURRENT_PASSWORD
+            )
+        db_user.password_hash = hash_password(payload.new_password)
+        await session.flush()
+        # Log out other devices; keep the current session valid.
+        await revoke_other_sessions(
+            session, user_id=db_user.id, keep_raw_token=raw_token
+        )
+        await session.commit()
+    return {"status": "ok"}

@@ -78,6 +78,22 @@ For product pages to load, the browser Settings page needs:
 - An owner email for operator workspace access.
 - A workspace ID returned by the workspace bootstrap/list/read API.
 
+### 5. Create the founder login user (email+password)
+
+Provision the single admin/founder account for browser login. The password is
+read from an env var and is never printed or committed; re-running updates the
+password idempotently (the email is unique, so no duplicate user is created):
+
+```bash
+FOUNDEROS_ADMIN_EMAIL=founder@example.com \
+FOUNDEROS_ADMIN_PASSWORD='<chosen-password>' \
+UV_NO_SYNC=1 uv run python scripts/create_admin_user.py
+```
+
+Optional: `FOUNDEROS_ADMIN_NAME`, `FOUNDEROS_ADMIN_WORKSPACE_NAME`,
+`FOUNDEROS_ADMIN_WORKSPACE_SLUG`. The founder then logs in through the web
+`/login` page; the operator API key stays for machine/admin/CI only.
+
 ## Private-beta deployment foundation
 
 The concrete manual private-beta deployment path is documented in

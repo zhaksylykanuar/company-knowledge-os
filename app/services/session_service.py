@@ -108,3 +108,25 @@ async def revoke_all_for_user(session: AsyncSession, user_id: UUID) -> None:
         .where(UserSession.revoked_at.is_(None))
         .values(revoked_at=_now())
     )
+
+
+async def revoke_other_sessions(
+    session: AsyncSession, *, user_id: UUID, keep_raw_token: str | None
+) -> None:
+    """Revoke all live sessions for a user EXCEPT the one for ``keep_raw_token``.
+
+    Used by password change so other devices are logged out while the current
+    session stays valid. With no token to keep, behaves like revoke_all_for_user.
+    """
+
+    statement = (
+        update(UserSession)
+        .where(UserSession.user_id == user_id)
+        .where(UserSession.revoked_at.is_(None))
+        .values(revoked_at=_now())
+    )
+    if keep_raw_token:
+        statement = statement.where(
+            UserSession.token_hash != _hash_token(keep_raw_token)
+        )
+    await session.execute(statement)
