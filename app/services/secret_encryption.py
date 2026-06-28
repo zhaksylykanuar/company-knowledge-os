@@ -11,10 +11,17 @@ from app.core.config import settings
 
 ENCRYPTED_SECRET_PREFIX = "fernet:v1:"
 
+# APP_ENV values where reusing the API auth key as encryption-key material is
+# tolerated as a clearly-marked developer convenience. Mirrors the auth
+# fail-closed policy (app/api/auth.py LOCAL_LIKE_APP_ENVS); kept local to avoid
+# a services -> api import.
+_LOCAL_LIKE_APP_ENVS = frozenset({"local", "dev", "development", "test", "testing"})
+
 
 class SecretEncryptionConfig(Protocol):
     secret_encryption_key: SecretStr | str | None
     api_auth_key: SecretStr | str | None
+    app_env: str
 
 
 class SecretEncryptionError(RuntimeError):
@@ -45,10 +52,27 @@ def _fernet(config: SecretEncryptionConfig) -> Fernet:
     return Fernet(urlsafe_b64encode(digest))
 
 
+def _is_local_like_env(config: SecretEncryptionConfig) -> bool:
+    app_env = getattr(config, "app_env", "") or ""
+    if not isinstance(app_env, str):
+        return False
+    return app_env.strip().casefold() in _LOCAL_LIKE_APP_ENVS
+
+
 def _configured_key_material(config: SecretEncryptionConfig) -> str:
     explicit = _secret_value(config.secret_encryption_key)
     if explicit:
         return explicit
+    # No dedicated encryption key. Fail closed outside local/dev rather than
+    # silently reusing the API auth key as encryption material: rotating the
+    # API key would otherwise make every stored provider token undecryptable,
+    # and one leaked secret would compromise both boundaries.
+    if not _is_local_like_env(config):
+        raise SecretEncryptionError(
+            "FOUNDEROS_SECRET_ENCRYPTION_KEY must be set outside local/dev; "
+            "refusing to reuse the API auth key as encryption material."
+        )
+    # Local/dev only: tolerate reusing the API auth key as a dev convenience.
     api_key = _secret_value(config.api_auth_key)
     if api_key:
         return api_key
