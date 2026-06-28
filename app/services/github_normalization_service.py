@@ -9,7 +9,8 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, literal_column, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.services.github_repository_read_service as github_repository_read_service
@@ -655,31 +656,41 @@ async def _upsert_github_issue_task(
     source_updated_at: datetime | None,
 ) -> bool:
     external_id = _work_item_external_id_from_normalized(issue)
-    task = await session.scalar(
-        select(Task)
-        .where(Task.workspace_id == sync_job.workspace_id)
-        .where(Task.source_provider == TASK_PROVIDER_GITHUB)
-        .where(Task.external_id == external_id)
-    )
-    created = task is None
-    if task is None:
-        task = Task(
-            workspace_id=sync_job.workspace_id,
-            source_provider=TASK_PROVIDER_GITHUB,
-            external_id=external_id,
-            title=_safe_title(issue.get("title"), f"GitHub issue {external_id}"),
-        )
-        session.add(task)
 
-    task.source_record_id = source_record.id
-    task.title = _safe_title(issue.get("title"), f"GitHub issue {external_id}")
-    task.description = _safe_text(issue.get("description"))
-    task.status = _issue_state(issue.get("state"))
-    task.source_url = _safe_url(issue.get("source_url"))
-    task.source_updated_at = source_updated_at
-    task.task_metadata = _task_metadata(issue)
-    await session.flush()
-    return created
+    # Idempotent, concurrency-safe upsert keyed on the canonical Task identity
+    # (workspace_id, source_provider, external_id), backed by the partial unique
+    # index uq_tasks_workspace_provider_external_id. INSERT ... ON CONFLICT DO
+    # UPDATE means two concurrent syncs for the same issue converge to exactly
+    # one row with no IntegrityError. RETURNING (xmax = 0) is true for an insert
+    # and false for an update, preserving the created/updated count semantics.
+    mutable = {
+        Task.source_record_id: source_record.id,
+        Task.title: _safe_title(issue.get("title"), f"GitHub issue {external_id}"),
+        Task.description: _safe_text(issue.get("description")),
+        Task.status: _issue_state(issue.get("state")),
+        Task.source_url: _safe_url(issue.get("source_url")),
+        Task.source_updated_at: source_updated_at,
+        Task.task_metadata: _task_metadata(issue),
+    }
+    statement = (
+        pg_insert(Task)
+        .values(
+            {
+                Task.workspace_id: sync_job.workspace_id,
+                Task.source_provider: TASK_PROVIDER_GITHUB,
+                Task.external_id: external_id,
+                **mutable,
+            }
+        )
+        .on_conflict_do_update(
+            index_elements=["workspace_id", "source_provider", "external_id"],
+            index_where=Task.external_id.isnot(None),
+            set_={**mutable, Task.updated_at: func.now()},
+        )
+        .returning(literal_column("(xmax = 0)"))
+    )
+    result = await session.execute(statement)
+    return bool(result.scalar_one())
 
 
 async def _upsert_pull_request(
