@@ -29,6 +29,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -278,6 +279,18 @@ class Task(Base):
         Index("ix_tasks_workspace_status", "workspace_id", "status"),
         Index("ix_tasks_workspace_assignee", "workspace_id", "assignee_person_id"),
         Index("ix_tasks_provider_external_id", "source_provider", "external_id"),
+        # Canonical Task identity. PARTIAL so manually-created / non-provider
+        # tasks (external_id IS NULL) are never constrained or de-duplicated;
+        # only provider-keyed rows must be unique. Backs the idempotent
+        # ON CONFLICT upsert in github_normalization_service.
+        Index(
+            "uq_tasks_workspace_provider_external_id",
+            "workspace_id",
+            "source_provider",
+            "external_id",
+            unique=True,
+            postgresql_where=text("external_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
