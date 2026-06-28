@@ -537,36 +537,45 @@ async def _upsert_source_record(
     observed_at: datetime,
 ) -> tuple[SourceRecord, bool]:
     payload_hash = _stable_payload_hash(payload)
-    source_record = await session.scalar(
-        select(SourceRecord)
-        .where(SourceRecord.workspace_id == sync_job.workspace_id)
-        .where(SourceRecord.provider == SOURCE_RECORD_PROVIDER_GITHUB)
-        .where(SourceRecord.external_id == external_id)
-    )
-    created = source_record is None
-    if source_record is None:
-        source_record = SourceRecord(
-            workspace_id=sync_job.workspace_id,
-            provider=SOURCE_RECORD_PROVIDER_GITHUB,
-            external_id=external_id,
-            record_type=record_type,
-            payload=payload,
-            payload_hash=payload_hash,
-            observed_at=observed_at,
-        )
-        session.add(source_record)
 
-    source_record.connection_id = sync_job.connection_id
-    source_record.record_type = record_type
-    source_record.source_url = source_url
-    source_record.payload = payload
-    source_record.payload_hash = payload_hash
-    source_record.observed_at = observed_at
-    source_record.source_updated_at = source_updated_at
-    source_record.sync_job_id = sync_job.id
-    source_record.is_deleted = False
-    await session.flush()
-    return source_record, created
+    # Idempotent, concurrency-safe upsert on the canonical SourceRecord identity
+    # (workspace_id, provider, external_id), backed by the existing unique
+    # constraint uq_source_records_workspace_provider_external_id. Two concurrent
+    # syncs for the same object converge to one row with no IntegrityError. The
+    # row is read back so callers keep receiving a real ORM SourceRecord, and
+    # RETURNING (xmax = 0) preserves the created/updated counters.
+    mutable = {
+        SourceRecord.connection_id: sync_job.connection_id,
+        SourceRecord.record_type: record_type,
+        SourceRecord.source_url: source_url,
+        SourceRecord.payload: payload,
+        SourceRecord.payload_hash: payload_hash,
+        SourceRecord.observed_at: observed_at,
+        SourceRecord.source_updated_at: source_updated_at,
+        SourceRecord.sync_job_id: sync_job.id,
+        SourceRecord.is_deleted: False,
+    }
+    statement = (
+        pg_insert(SourceRecord)
+        .values(
+            {
+                SourceRecord.workspace_id: sync_job.workspace_id,
+                SourceRecord.provider: SOURCE_RECORD_PROVIDER_GITHUB,
+                SourceRecord.external_id: external_id,
+                **mutable,
+            }
+        )
+        .on_conflict_do_update(
+            constraint="uq_source_records_workspace_provider_external_id",
+            set_=mutable,
+        )
+        .returning(SourceRecord.id, literal_column("(xmax = 0)"))
+    )
+    row = (await session.execute(statement)).one()
+    source_record = await session.get(
+        SourceRecord, row[0], populate_existing=True
+    )
+    return source_record, bool(row[1])
 
 
 async def _upsert_repository(
@@ -701,34 +710,46 @@ async def _upsert_pull_request(
     repository: Repository,
 ) -> bool:
     external_id = _work_item_external_id_from_normalized(pull_request)
-    row = await session.scalar(
-        select(PullRequest)
-        .where(PullRequest.workspace_id == sync_job.workspace_id)
-        .where(PullRequest.external_id == external_id)
-    )
-    created = row is None
-    if row is None:
-        row = PullRequest(
-            workspace_id=sync_job.workspace_id,
-            repository_id=repository.id,
-            external_id=external_id,
-            number=int(pull_request.get("number") or 0),
-            title=_safe_title(pull_request.get("title"), f"GitHub PR {external_id}"),
-            state=_pull_request_state(pull_request),
-        )
-        session.add(row)
 
-    row.repository_id = repository.id
-    row.number = int(pull_request.get("number") or 0)
-    row.title = _safe_title(pull_request.get("title"), f"GitHub PR {external_id}")
-    row.state = _pull_request_state(pull_request)
-    row.source_url = _safe_url(pull_request.get("source_url"))
-    row.created_at_source = _parse_optional_datetime(pull_request.get("created_at_source"))
-    row.updated_at_source = _parse_optional_datetime(pull_request.get("updated_at_source"))
-    row.merged_at_source = _parse_optional_datetime(pull_request.get("merged_at_source"))
-    row.pr_metadata = _pull_request_metadata(pull_request)
-    await session.flush()
-    return created
+    # Idempotent, concurrency-safe upsert on the canonical PullRequest identity
+    # (workspace_id, external_id), backed by the existing unique constraint
+    # uq_pull_requests_workspace_external_id. Two concurrent syncs for the same
+    # PR converge to one row with no IntegrityError; RETURNING (xmax = 0)
+    # preserves the created/updated counters.
+    mutable = {
+        PullRequest.repository_id: repository.id,
+        PullRequest.number: int(pull_request.get("number") or 0),
+        PullRequest.title: _safe_title(pull_request.get("title"), f"GitHub PR {external_id}"),
+        PullRequest.state: _pull_request_state(pull_request),
+        PullRequest.source_url: _safe_url(pull_request.get("source_url")),
+        PullRequest.created_at_source: _parse_optional_datetime(
+            pull_request.get("created_at_source")
+        ),
+        PullRequest.updated_at_source: _parse_optional_datetime(
+            pull_request.get("updated_at_source")
+        ),
+        PullRequest.merged_at_source: _parse_optional_datetime(
+            pull_request.get("merged_at_source")
+        ),
+        PullRequest.pr_metadata: _pull_request_metadata(pull_request),
+    }
+    statement = (
+        pg_insert(PullRequest)
+        .values(
+            {
+                PullRequest.workspace_id: sync_job.workspace_id,
+                PullRequest.external_id: external_id,
+                **mutable,
+            }
+        )
+        .on_conflict_do_update(
+            constraint="uq_pull_requests_workspace_external_id",
+            set_=mutable,
+        )
+        .returning(literal_column("(xmax = 0)"))
+    )
+    result = await session.execute(statement)
+    return bool(result.scalar_one())
 
 
 def _source_record_payload(
