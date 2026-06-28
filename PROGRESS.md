@@ -2,17 +2,33 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая ветка `main`; `main` опережает `origin/main` на 18 локальных коммитов
-> (sync-layer hardening + auth-фаза + русский UI поверх запушенного `82fb52f`).
-> Remote publish всё ещё ждёт, пока человек явно не попросит запушить.
+> Текущая ветка `main`; `main` опережает `origin/main` на 3 локальных коммита —
+> Briefings Chunk 1 (бэкенд / фронтенд / docs). Остальное (auth-фаза, sync-layer
+> hardening, русский UI, docs-сверка) уже в `origin/main`. Push ждёт явного
+> запроса человека.
 
 ---
 
 ## ▶ СЕЙЧАС
 
-- **Chunk:** `CHUNK 8 — Testing Gate + Deploy` закрыт по hardening-части;
-  следующий горизонт — реальные продуктовые фичи **за** логином.
-- **Что сделано (локальная серия из 18 коммитов поверх `82fb52f`, ещё не в `origin/main`):**
+- **Chunk:** первая продуктовая фича за логином — **Briefings**. Chunk 1
+  (персистентность) **сделан**; дальше Chunk 2 (LLM-нарратив). `CHUNK 8`
+  hardening закрыт ранее.
+- **Briefings Chunk 1 — персистентные сводки (НОВОЕ; бэкенд+фронтенд, гейты зелёные):**
+  ручная Founder-сводка теперь **сохраняется**. Детерминированная генерация не
+  менялась и по-прежнему без LLM — сохраняется только её вывод. Новые модели
+  `Briefing` / `BriefingItem` + миграция `e7f8a9b0c1d2` (новый единственный head),
+  workspace-scoped, `ON DELETE CASCADE`, элементы упорядочены по `position` и
+  повторяют форму генератора. `POST .../briefings/manual` запускает генерацию,
+  **сохраняет** сводку + элементы и возвращает её с `id`
+  (`persistence:"persisted"`); плюс история: `GET .../briefings` (новые сверху)
+  и `GET .../briefings/{id}`, обе session/operator-auth и строго workspace-scoped
+  (чужой workspace → 404). Фронтенд: «Сформировать сводку» сохраняет и показывает
+  сводку, есть список истории с переоткрытием прошлых сводок (русские строки в
+  `web/lib/messages.ts`). Бэкенд: `pytest 368 passed`, `ruff` чисто,
+  `alembic check` чисто. Фронтенд: `npm test` 90, build/lint/typecheck зелёные.
+  Без LLM и без GitHub OAuth/connect. Решение — DEC-048.
+- **Что сделано ранее (локальная серия из 18 коммитов поверх `82fb52f`):**
   - **Sync-layer hardening (FOS-027B2 → далее):** в канонические `tasks` добавлен
     partial unique index `uq_tasks_workspace_provider_external_id`
     (`workspace_id, source_provider, external_id` при `external_id IS NOT NULL`;
@@ -44,15 +60,16 @@
   - **Русский UI:** вся пользовательская копия вынесена в центральный каталог
     сообщений `web/lib/messages.ts` (без i18n-фреймворка).
 - **Текущее состояние:** детерминированный evidence-first спайн + продуктовый
-  логин (email+password, серверные сессии) поверх него; операторский API-ключ
-  остаётся для server/CI/админ-скриптов. Один alembic head — `c0e1f2a3b4d5`.
-- **Дальше (реальные фичи за логином):** персистентная модель `Briefing` +
-  LLM-пайплайн; GitHub OAuth / продуктовый connect и живая синхронизация;
-  провижининг второго пользователя/тиммейта (мультиюзер); первый прод-деплой на
-  Railway.
-- **Примечание:** это был docs-only проход сверки документации с кодом/git —
-  тесты в этом проходе заново не прогонялись; зелёные проверки относятся к
-  моменту коммитов соответствующих фаз.
+  логин (email+password, серверные сессии) + **персистентные briefings** поверх
+  него; операторский API-ключ остаётся для server/CI/админ-скриптов. Один
+  alembic head — `e7f8a9b0c1d2`.
+- **Дальше:** Briefings Chunk 2 — LLM-нарратив сводки (persisted-модель готова,
+  осталось добавить генерацию текста поверх неё); GitHub OAuth / продуктовый
+  connect и живая синхронизация; провижининг второго пользователя/тиммейта
+  (мультиюзер); первый прод-деплой на Railway.
+- **Примечание:** Briefings Chunk 1 — это реальный код (модели / миграция /
+  эндпоинты / фронтенд) с зелёными гейтами; бэкенд и фронтенд закоммичены
+  отдельно, push не делался.
 
 ---
 
@@ -76,7 +93,7 @@ DONE строго = есть код + проходящий тест/рабочи
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ single head | 2026-06-28 | Auth/sync-hardening migrations added (`f7b8c9d0e1a2` task-uniqueness → `a8c9d0e1f2b3` ingested_events drift → `b9d0e1f2a3c4` sessions → `c0e1f2a3b4d5` login_attempts). Один линейный head `c0e1f2a3b4d5` (проверено по цепочке `down_revision`; в docs-only проходе не переприменялось) |
+| `alembic upgrade head` | ✅ pass | 2026-06-29 | Briefings Chunk 1 added `e7f8a9b0c1d2` (briefings + briefing_items) поверх auth/sync-hardening цепочки (`f7b8c9d0e1a2` → `a8c9d0e1f2b3` → `b9d0e1f2a3c4` → `c0e1f2a3b4d5`). Один линейный head `e7f8a9b0c1d2`; `upgrade head` / `current` / `check` прогнаны и зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
 | backend tests (`pytest`) | ✅ pass | 2026-06-26 | FOS-023 on `main`: **287 passed / 0 failed / 1 warning** |
@@ -183,6 +200,22 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-29` — **Briefings Chunk 1: персистентные сводки (бэкенд+фронтенд).**
+  Ручная Founder-сводка теперь сохраняется. Генерация
+  (`founder_briefing_service`) не менялась и без LLM — сохраняется только вывод.
+  Бэкенд: новые модели `Briefing`/`BriefingItem` (`app/db/briefing_models.py`),
+  миграция `e7f8a9b0c1d2` (новый head; workspace-scoped, `ON DELETE CASCADE`,
+  `position`-порядок, форма элементов = форма генератора),
+  `briefing_persistence_service`, `POST .../briefings/manual` сохраняет и
+  возвращает сводку с `id` (`persistence:"persisted"`), история
+  `GET .../briefings` (новые сверху) + `GET .../briefings/{id}` (workspace-scoped,
+  чужой → 404). Обновлены transient-ассерты в briefing/e2e/selected-sync тестах.
+  Гейты: `pytest 368 passed`, `ruff` чисто, `alembic upgrade head`/`current`/`check`
+  зелёные. Фронтенд: api `listBriefings`/`getBriefing`, `BriefingPanel` грузит
+  историю, показывает сохранённую сводку и переоткрывает прошлые; русские строки
+  в `web/lib/messages.ts`; `npm test` 90, build/lint/typecheck зелёные. Два
+  отдельных коммита (бэкенд, фронтенд), затем docs. Без LLM, без GitHub
+  OAuth/connect; workspace-изоляция проверена тестом. Решение — DEC-048.
 - `2026-06-28` — **Docs reconciliation (docs-only).** Сверил канонические доки с
   реальным кодом/git после auth-фазы: 18 локальных коммитов поверх `82fb52f`
   (последний в `origin/main`) не были отражены в трекинг-доках, т.к. промпты

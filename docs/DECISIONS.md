@@ -1011,6 +1011,38 @@ Consequences:
   minimal no-auth liveness probe, while env/feature-flag detail moved to
   `GET /health/detail` behind the operator key.
 
+## DEC-048 - Founder Briefings Are Persisted; Generation Stays Deterministic (Chunk 1)
+
+Decision (2026-06-29): the Founder Briefing becomes durable. The deterministic,
+LLM-free generator (`founder_briefing_service.generate_manual_founder_briefing`)
+is unchanged; a new persistence layer SAVES its output as `Briefing` +
+`BriefingItem` rows so the founder has history. `POST .../briefings/manual` now
+runs generation, persists, and returns the saved briefing (with `id`,
+`persistence:"persisted"`); `GET .../briefings` and `GET .../briefings/{id}`
+read history. The LLM-generated narrative is a later chunk (Chunk 2).
+
+Rationale: persistence and generation are separable. Saving first — without
+touching generation and without adding an LLM — gives revisitable history now
+and a stable store to layer LLM generation onto later, keeping `generated_by`
+(`deterministic_v0`) as the discriminator for which generator produced a row.
+
+Consequences:
+
+- `Briefing` is workspace-scoped (FK `ON DELETE CASCADE`); `BriefingItem` is
+  ordered by `position` and mirrors the generator's item shape verbatim
+  (category/title/summary/severity/confidence/recommended_next_step/
+  evidence_refs/related_entities/warnings) so a persisted briefing re-renders
+  identically. `created_by_user_id` is nullable (`ON DELETE SET NULL`).
+- Migration `e7f8a9b0c1d2` is the new single head.
+- Read endpoints are workspace-scoped: a briefing is fetched only within its
+  workspace, so a valid id from another workspace is a 404 — isolation is a query
+  predicate, not an assumption.
+- The response `persistence` marker moved from `"transient"` to `"persisted"`;
+  callers/tests that asserted the transient value were updated.
+- No LLM and no GitHub OAuth/connect were added in this chunk.
+- Known follow-up: Chunk 2 adds LLM narrative generation on top of this store,
+  still strict-JSON-validated and evidence-backed per the LLM boundary rules.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

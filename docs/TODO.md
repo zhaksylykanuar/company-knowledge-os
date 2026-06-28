@@ -85,12 +85,20 @@ files, no unrelated edits, and focused checks first.
   DEC-041…DEC-047.
 - Russian UI localization: done - all user-facing copy centralized in
   `web/lib/messages.ts` (no i18n framework). See DEC-045.
-- Next tasks (real features behind login): persistent `Briefing`/`BriefingItem`
-  model + LLM briefing pipeline; GitHub OAuth / product connect + live sync;
+- Briefings Chunk 1 (persist briefings): done - the deterministic Founder
+  Briefing is now persisted. New `Briefing`/`BriefingItem` models + migration
+  `e7f8a9b0c1d2` (new single head), `POST .../briefings/manual` saves the
+  briefing + items and returns it with an `id` (`persistence:"persisted"`), and
+  history endpoints `GET .../briefings` (newest-first) + `GET .../briefings/{id}`
+  are workspace-scoped (cross-workspace read → 404). Frontend lists past
+  briefings and reopens them. Generation logic unchanged; no LLM. See DEC-048.
+- Next tasks (real features behind login): Briefings Chunk 2 - LLM briefing
+  narrative on top of the now-persistent model (the persisted `Briefing`/
+  `BriefingItem` store is ready; add `generated_by` LLM generation, still
+  validated + evidence-backed); GitHub OAuth / product connect + live sync;
   multi-user / teammate provisioning beyond the single founder; first production
-  deploy of the auth phase to Railway. Much of the product UI beyond auth is
-  still scaffolding wired to deterministic local contracts — stay honest about
-  that.
+  deploy to Railway. Much of the product UI beyond auth + briefings is still
+  scaffolding wired to deterministic local contracts — stay honest about that.
 - Known debt (Repository sync concurrency): `Repository` idempotency uses an
   app-level cross-path dedupe (SELECT by `external_id`, then by `full_name`)
   before a race-safe `ON CONFLICT` insert, but the DB unique constraint is only
