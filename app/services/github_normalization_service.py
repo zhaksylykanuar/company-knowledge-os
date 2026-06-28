@@ -694,6 +694,9 @@ async def _upsert_github_issue_task(
         .on_conflict_do_update(
             index_elements=["workspace_id", "source_provider", "external_id"],
             index_where=Task.external_id.isnot(None),
+            # updated_at is a "last synced" marker (see Task.updated_at): bumped
+            # on every sync by design. User-facing recency uses source_updated_at,
+            # so no consumer needs content-change semantics here.
             set_={**mutable, Task.updated_at: func.now()},
         )
         .returning(literal_column("(xmax = 0)"))

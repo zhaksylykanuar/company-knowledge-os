@@ -323,6 +323,10 @@ class Task(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # "Last synced" marker: bumped every time a sync writes this row, NOT a
+    # content-change marker. User-facing recency comes from source_updated_at
+    # (the upstream GitHub activity time); updated_at is only a secondary
+    # ORDER BY tiebreak in the operational read model.
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
