@@ -5,7 +5,8 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
-from app.api.auth import enforce_fail_closed_auth, require_api_key
+from app.api.auth import enforce_fail_closed_auth, get_current_actor
+from app.api.auth_routes import router as auth_router
 from app.api.briefings import router as briefings_router
 from app.api.company_brain import router as company_brain_router
 from app.api.dev import router as dev_router
@@ -44,9 +45,13 @@ if cors_allowed_origins:
         max_age=600,
     )
 
-protected_api_dependencies = [Depends(require_api_key)]
+# Product routes accept EITHER a browser session cookie OR the operator API key
+# (get_current_actor resolves both); the operator/CI path is unchanged.
+protected_api_dependencies = [Depends(get_current_actor)]
 
 app.include_router(health_router, prefix="/health", tags=["health"])
+# Auth (login/logout/me/change-password) manages its own session auth — public.
+app.include_router(auth_router)
 app.include_router(workspaces_router, dependencies=protected_api_dependencies)
 app.include_router(github_router, dependencies=protected_api_dependencies)
 app.include_router(workspace_company_brain_router, dependencies=protected_api_dependencies)

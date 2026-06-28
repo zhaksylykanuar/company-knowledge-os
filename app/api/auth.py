@@ -8,6 +8,9 @@ from fastapi import Depends, HTTPException, Request, status
 from pydantic import SecretStr
 
 from app.core.config import settings
+from app.db.base import AsyncSessionLocal
+from app.db.identity_models import User
+from app.services.session_service import validate_session
 
 API_AUTH_FAILURE_DETAIL = "API authentication failed"
 AUTH_MODE_OPERATOR_API_KEY = "operator_api_key"
@@ -119,12 +122,48 @@ async def require_api_key(request: Request) -> None:
     validate_api_key(config=settings, provided_key=provided_key)
 
 
-async def get_current_actor(request: Request) -> CurrentActor:
-    """Compatibility actor for the current operator/API-key auth boundary.
+async def _user_from_session_cookie(request: Request) -> User | None:
+    """Resolve the logged-in User from the browser session cookie, or None.
 
-    Session-backed users are a future auth mode; this function does not create
-    user rows implicitly.
+    Validation (revoked/expired/unknown) and the last_seen_at bump live in
+    session_service; we commit so the bump persists.
     """
+
+    raw_token = request.cookies.get(settings.session_cookie_name)
+    if not raw_token:
+        return None
+    async with AsyncSessionLocal() as db:
+        user = await validate_session(db, raw_token)
+        await db.commit()
+    return user
+
+
+async def require_session(request: Request) -> User:
+    """Browser-only dependency: require a valid session cookie, else 401."""
+
+    user = await _user_from_session_cookie(request)
+    if user is None:
+        _reject_api_auth()
+    return user
+
+
+async def get_current_actor(request: Request) -> CurrentActor:
+    """Resolve the request actor: browser session cookie OR operator API key.
+
+    The session cookie (browser) takes precedence when present and valid; we
+    fall back to the operator API key (machine/admin/CI), which preserves the
+    existing "auth disabled in local" no-op behavior. This is how the two auth
+    modes coexist on the shared product routes.
+    """
+
+    user = await _user_from_session_cookie(request)
+    if user is not None:
+        return CurrentActor(
+            auth_mode=AUTH_MODE_SESSION,
+            user_id=user.id,
+            email=user.email,
+            is_operator=False,
+        )
 
     await require_api_key(request)
     return CurrentActor(
