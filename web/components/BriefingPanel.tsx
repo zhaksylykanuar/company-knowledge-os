@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 
 import { generateManualFounderBriefing } from "../lib/api";
-import { readOperatorConfig } from "../lib/config";
+import { useWorkspaceId } from "../lib/session";
 import type {
   BriefingEvidenceRef,
   FounderBriefingItem,
-  FounderBriefingResponse,
-  OperatorConfig
+  FounderBriefingResponse
 } from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
@@ -38,7 +37,7 @@ type BriefingPanelViewProps = {
 };
 
 export function BriefingPanel() {
-  const [config, setConfig] = useState<OperatorConfig | null>(null);
+  const workspaceId = useWorkspaceId();
   const [data, setData] = useState<FounderBriefingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<BriefingEvidenceRef | null>(null);
@@ -46,17 +45,11 @@ export function BriefingPanel() {
   const [status, setStatus] = useState<BriefingStatus>("loading");
 
   useEffect(() => {
-    const localConfig = readOperatorConfig();
-    setConfig(localConfig);
-    setStatus(
-      localConfig.workspaceId && localConfig.ownerEmail && localConfig.apiKey
-        ? "empty"
-        : "missing"
-    );
-  }, []);
+    setStatus(workspaceId ? "empty" : "missing");
+  }, [workspaceId]);
 
   async function generateBriefing() {
-    if (!config?.workspaceId || !config.ownerEmail || !config.apiKey) {
+    if (!workspaceId) {
       setStatus("missing");
       return;
     }
@@ -66,7 +59,7 @@ export function BriefingPanel() {
     setSelectedEvidenceItemTitle(null);
     setStatus("loading");
     try {
-      const payload = await generateManualFounderBriefing(config.workspaceId);
+      const payload = await generateManualFounderBriefing(workspaceId);
       setData(payload);
       setStatus(payload.briefing.items.length > 0 ? "success" : "empty");
     } catch (caught: unknown) {
@@ -131,8 +124,8 @@ export function BriefingPanelView({
 
       {status === "missing" ? (
         <EmptyState
-          description="Set the workspace ID, owner email, and operator API key in Settings before generating the manual briefing."
-          title="Workspace settings required"
+          description="Your account has no workspace yet, so there is nothing to brief on."
+          title="No workspace available"
         />
       ) : null}
 

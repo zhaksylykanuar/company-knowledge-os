@@ -133,9 +133,7 @@ test("posts deterministic manual briefing request", async () => {
   }) as typeof fetch;
 
   try {
-    const payload = await generateManualFounderBriefing("workspace-123", {}, {
-      includeOwnerEmail: false
-    });
+    const payload = await generateManualFounderBriefing("workspace-123", {}, {});
     assert.equal(payload.briefing.llm_used, false);
     assert.equal(payload.briefing.persistence, "transient");
     assert.equal(payload.briefing.items[0]?.evidence_refs[0]?.source, "github");
@@ -149,10 +147,11 @@ test("renders loading state", () => {
   assert.match(html, /Generating deterministic briefing/);
 });
 
-test("renders missing settings state", () => {
+test("renders no-workspace state without any operator-key gate", () => {
   const html = renderPanel({ data: null, status: "missing" });
-  assert.match(html, /Workspace settings required/);
-  assert.match(html, /workspace ID, owner email, and operator API key/);
+  assert.match(html, /No workspace available/);
+  assert.doesNotMatch(html, /operator API key/);
+  assert.doesNotMatch(html, /owner email/);
 });
 
 test("renders empty no-data state before generation", () => {

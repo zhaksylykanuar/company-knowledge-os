@@ -7,12 +7,11 @@ import {
   syncSelectedRepositoryIssues,
   syncSelectedRepositoryPullRequests
 } from "../lib/api";
-import { readOperatorConfig } from "../lib/config";
+import { useWorkspaceId } from "../lib/session";
 import type {
   GitHubConnectionStatusResponse,
   GitHubSelectedIssueSyncResponse,
-  GitHubSelectedPullRequestSyncResponse,
-  OperatorConfig
+  GitHubSelectedPullRequestSyncResponse
 } from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
@@ -98,7 +97,7 @@ export function classifySelectedSyncError(message: string): SelectedSyncError {
 export function SelectedRepositorySyncControls({
   onSyncComplete
 }: SelectedRepositorySyncControlsProps) {
-  const [config, setConfig] = useState<OperatorConfig | null>(null);
+  const workspaceId = useWorkspaceId();
   const [connectionStatus, setConnectionStatus] =
     useState<GitHubConnectionStatusResponse | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -119,14 +118,7 @@ export function SelectedRepositorySyncControls({
     useState<GitHubSelectedPullRequestSyncResponse | null>(null);
 
   useEffect(() => {
-    setConfig(readOperatorConfig());
-  }, []);
-
-  useEffect(() => {
-    if (config === null) {
-      return;
-    }
-    if (!config.workspaceId || !config.ownerEmail || !config.apiKey) {
+    if (!workspaceId) {
       setConnectionStatus(null);
       setConnectionError(null);
       setStatus("missing");
@@ -136,7 +128,7 @@ export function SelectedRepositorySyncControls({
     let cancelled = false;
     setStatus("loading");
     setConnectionError(null);
-    fetchGitHubConnectionStatus(config.workspaceId)
+    fetchGitHubConnectionStatus(workspaceId)
       .then((payload) => {
         if (cancelled) {
           return;
@@ -158,10 +150,10 @@ export function SelectedRepositorySyncControls({
     return () => {
       cancelled = true;
     };
-  }, [config, reloadKey]);
+  }, [workspaceId, reloadKey]);
 
   async function runSelectedSync(action: SelectedSyncAction): Promise<void> {
-    if (!config?.workspaceId) {
+    if (!workspaceId) {
       setStatus("missing");
       return;
     }
@@ -188,7 +180,7 @@ export function SelectedRepositorySyncControls({
 
     try {
       if (action === "issues" || action === "both") {
-        const issues = await syncSelectedRepositoryIssues(config.workspaceId, {
+        const issues = await syncSelectedRepositoryIssues(workspaceId, {
           connection_id: connectionId,
           repositories: [repository]
         });
@@ -197,7 +189,7 @@ export function SelectedRepositorySyncControls({
       }
       if (action === "pull_requests" || action === "both") {
         const pullRequests = await syncSelectedRepositoryPullRequests(
-          config.workspaceId,
+          workspaceId,
           {
             connection_id: connectionId,
             repositories: [repository]
@@ -286,8 +278,8 @@ export function SelectedRepositorySyncControlsView({
 
       {status === "missing" ? (
         <EmptyState
-          description="Set the workspace ID, owner email, and operator API key in Settings before running selected repository sync."
-          title="Workspace settings required"
+          description="Your account has no workspace yet, so there is nothing to sync."
+          title="No workspace available"
         />
       ) : null}
 

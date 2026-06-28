@@ -1,4 +1,3 @@
-import { readOperatorConfig } from "./config";
 import type {
   ActionExecutionPreviewResponse,
   ActionExecutionResponse,
@@ -26,8 +25,6 @@ import type {
   GitHubSelectedRepositorySyncResult
 } from "./types";
 
-const API_KEY_HEADER = "X-FounderOS-API-Key";
-
 // Same-origin base: the browser calls the web origin, and next.config.mjs
 // proxies /api/* to the backend, keeping the session cookie first-party.
 function sameOriginBase(): string {
@@ -39,13 +36,6 @@ function buildUrl(path: string, baseUrl: string): URL {
     return new URL(path);
   }
   return new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
-}
-
-function appendOwnerEmail(url: URL, ownerEmail: string | null | undefined): void {
-  if (!ownerEmail || url.searchParams.has("owner_email")) {
-    return;
-  }
-  url.searchParams.set("owner_email", ownerEmail);
 }
 
 async function readError(response: Response): Promise<string> {
@@ -62,14 +52,10 @@ export async function apiFetch<TResponse>(
   path: string,
   options: ApiFetchOptions = {}
 ): Promise<TResponse> {
-  const localConfig = readOperatorConfig();
   // Always same-origin so the proxy delivers the first-party session cookie.
+  // The backend resolves the workspace from the session user — no owner_email
+  // and no operator API key are sent from the browser.
   const url = buildUrl(path, sameOriginBase());
-  if (options.includeOwnerEmail !== false) {
-    // owner_email is vestigial: the backend resolves the workspace from the
-    // session user and ignores it. Kept harmless for non-session callers.
-    appendOwnerEmail(url, options.ownerEmail ?? localConfig.ownerEmail);
-  }
 
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
@@ -473,5 +459,3 @@ export async function syncSelectedRepositoryGitHubWork(
   );
   return { issues, pull_requests: pullRequests };
 }
-
-export { API_KEY_HEADER };

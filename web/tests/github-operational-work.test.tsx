@@ -111,7 +111,7 @@ test("fetches and parses operational work payloads", async () => {
     const payload = await fetchGitHubOperationalWork(
       "workspace-123",
       { limit: 50, state: "open" },
-      { includeOwnerEmail: false }
+      {}
     );
     assert.equal(payload.issues[0]?.title, "Investigate failing sync");
     assert.equal(payload.pull_requests[0]?.repository_full_name, "qtwin-io/founderos-api");

@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 
 import { fetchGitHubOperationalWork } from "../lib/api";
-import { readOperatorConfig } from "../lib/config";
+import { useWorkspaceId } from "../lib/session";
 import type {
   GitHubOperationalIssue,
   GitHubOperationalPullRequest,
   GitHubOperationalWorkResponse,
-  GitHubOperationalWorkState,
-  OperatorConfig
+  GitHubOperationalWorkState
 } from "../lib/types";
 import { SourceLink } from "./SourceLink";
 import { EmptyState } from "./EmptyState";
@@ -42,7 +41,7 @@ type GitHubOperationalWorkPanelViewProps = {
 export function GitHubOperationalWorkPanel({
   refreshSignal = 0
 }: GitHubOperationalWorkPanelProps) {
-  const [config, setConfig] = useState<OperatorConfig | null>(null);
+  const workspaceId = useWorkspaceId();
   const [data, setData] = useState<GitHubOperationalWorkResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -51,14 +50,7 @@ export function GitHubOperationalWorkPanel({
   const [status, setStatus] = useState<PanelStatus>("loading");
 
   useEffect(() => {
-    setConfig(readOperatorConfig());
-  }, []);
-
-  useEffect(() => {
-    if (config === null) {
-      return;
-    }
-    if (!config.workspaceId) {
+    if (!workspaceId) {
       setStatus("missing");
       setData(null);
       setError(null);
@@ -68,7 +60,7 @@ export function GitHubOperationalWorkPanel({
     let cancelled = false;
     setStatus("loading");
     setError(null);
-    fetchGitHubOperationalWork(config.workspaceId, {
+    fetchGitHubOperationalWork(workspaceId, {
       limit: 100,
       state: selectedState
     })
@@ -95,7 +87,7 @@ export function GitHubOperationalWorkPanel({
     return () => {
       cancelled = true;
     };
-  }, [config, refreshSignal, reloadKey, selectedState]);
+  }, [workspaceId, refreshSignal, reloadKey, selectedState]);
 
   return (
     <GitHubOperationalWorkPanelView
@@ -145,8 +137,8 @@ export function GitHubOperationalWorkPanelView({
 
       {status === "missing" ? (
         <EmptyState
-          description="Add a workspace ID in Settings to load canonical GitHub issues and pull requests."
-          title="Workspace settings required"
+          description="Your account has no workspace yet, so there is no GitHub work to show."
+          title="No workspace available"
         />
       ) : null}
 

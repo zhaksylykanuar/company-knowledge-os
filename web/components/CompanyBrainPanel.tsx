@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 
 import { fetchCompanyBrain } from "../lib/api";
-import { readOperatorConfig } from "../lib/config";
+import { useWorkspaceId } from "../lib/session";
 import type {
   CompanyBrainRepository,
   CompanyBrainResponse,
   CompanyBrainSourceRef,
-  CompanyBrainWorkItem,
-  OperatorConfig
+  CompanyBrainWorkItem
 } from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
@@ -31,21 +30,14 @@ type CompanyBrainPanelViewProps = {
 };
 
 export function CompanyBrainPanel({ refreshSignal = 0 }: CompanyBrainPanelProps) {
-  const [config, setConfig] = useState<OperatorConfig | null>(null);
+  const workspaceId = useWorkspaceId();
   const [data, setData] = useState<CompanyBrainResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [status, setStatus] = useState<PanelStatus>("loading");
 
   useEffect(() => {
-    setConfig(readOperatorConfig());
-  }, []);
-
-  useEffect(() => {
-    if (config === null) {
-      return;
-    }
-    if (!config.workspaceId || !config.ownerEmail || !config.apiKey) {
+    if (!workspaceId) {
       setData(null);
       setError(null);
       setStatus("missing");
@@ -55,7 +47,7 @@ export function CompanyBrainPanel({ refreshSignal = 0 }: CompanyBrainPanelProps)
     let cancelled = false;
     setStatus("loading");
     setError(null);
-    fetchCompanyBrain(config.workspaceId)
+    fetchCompanyBrain(workspaceId)
       .then((payload) => {
         if (cancelled) {
           return;
@@ -75,7 +67,7 @@ export function CompanyBrainPanel({ refreshSignal = 0 }: CompanyBrainPanelProps)
     return () => {
       cancelled = true;
     };
-  }, [config, refreshSignal, reloadKey]);
+  }, [workspaceId, refreshSignal, reloadKey]);
 
   return (
     <CompanyBrainPanelView
@@ -107,8 +99,8 @@ export function CompanyBrainPanelView({
 
       {status === "missing" ? (
         <EmptyState
-          description="Set the workspace ID, owner email, and operator API key in Settings to load the evidence-backed Company Brain."
-          title="Workspace settings required"
+          description="Your account has no workspace yet, so there is no Company Brain to show."
+          title="No workspace available"
         />
       ) : null}
 

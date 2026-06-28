@@ -196,9 +196,7 @@ test("fetches and parses Company Brain payloads", async () => {
   }) as typeof fetch;
 
   try {
-    const payload = await fetchCompanyBrain("workspace-123", {
-      includeOwnerEmail: false
-    });
+    const payload = await fetchCompanyBrain("workspace-123", {});
     assert.equal(payload.mode, "github_first_canonical");
     assert.equal(payload.summary.open_pull_requests, 1);
     assert.equal(payload.capabilities.live_provider_sync, false);
@@ -212,10 +210,11 @@ test("renders loading state", () => {
   assert.match(html, /Loading Company Brain/);
 });
 
-test("renders missing settings state", () => {
+test("renders no-workspace state without any operator-key gate", () => {
   const html = renderPanel({ data: null, status: "missing" });
-  assert.match(html, /Workspace settings required/);
-  assert.match(html, /workspace ID, owner email, and operator API key/);
+  assert.match(html, /No workspace available/);
+  assert.doesNotMatch(html, /operator API key/);
+  assert.doesNotMatch(html, /owner email/);
 });
 
 test("renders empty state", () => {

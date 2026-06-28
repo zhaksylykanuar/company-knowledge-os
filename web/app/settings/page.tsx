@@ -1,111 +1,98 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import type { FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { PageHeader } from "../../components/PageHeader";
-import {
-  clearOperatorConfig,
-  DEFAULT_OPERATOR_CONFIG,
-  readOperatorConfig,
-  resolveApiBaseUrl,
-  writeOperatorConfig
-} from "../../lib/config";
-import { API_KEY_HEADER } from "../../lib/api";
-import type { OperatorConfig } from "../../lib/types";
+import { changePassword, logout } from "../../lib/auth";
+import { useSession } from "../../lib/session";
 
 export default function SettingsPage() {
-  const [config, setConfig] = useState<OperatorConfig>(DEFAULT_OPERATOR_CONFIG);
-  const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const session = useSession();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    setConfig(readOperatorConfig());
-  }, []);
-
-  function updateField(field: keyof OperatorConfig, value: string): void {
-    setSaved(false);
-    setConfig((current) => ({ ...current, [field]: value }));
-  }
-
-  function save(event: FormEvent<HTMLFormElement>): void {
+  async function onChangePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    writeOperatorConfig(config);
-    setSaved(true);
+    setMessage(null);
+    setError(null);
+    setPending(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setMessage("Password changed. Your other devices were signed out.");
+      setCurrentPassword("");
+      setNewPassword("");
+    } catch {
+      setError("Could not change the password. Check your current password.");
+    } finally {
+      setPending(false);
+    }
   }
 
-  function clear(): void {
-    clearOperatorConfig();
-    setConfig(DEFAULT_OPERATOR_CONFIG);
-    setSaved(false);
+  async function onSignOut() {
+    await logout();
+    router.replace("/login");
   }
 
   return (
     <>
       <PageHeader
-        eyebrow="Settings"
-        title="Local operator settings"
-        description="Browser-only configuration for the local MVP frontend shell."
+        eyebrow="Account"
+        title="Your account"
+        description="You are signed in with a session cookie. No operator API key is used in the browser."
       />
-      <form className="form panel" onSubmit={save}>
-        <div className="field">
-          <label htmlFor="apiBaseUrl">API base URL</label>
-          <input
-            id="apiBaseUrl"
-            onChange={(event) => updateField("apiBaseUrl", event.target.value)}
-            placeholder="http://localhost:8000"
-            type="url"
-            value={config.apiBaseUrl}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="apiKey">Operator API key</label>
-          <input
-            autoComplete="off"
-            id="apiKey"
-            onChange={(event) => updateField("apiKey", event.target.value)}
-            placeholder={API_KEY_HEADER}
-            type="password"
-            value={config.apiKey}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="ownerEmail">Owner email</label>
-          <input
-            id="ownerEmail"
-            onChange={(event) => updateField("ownerEmail", event.target.value)}
-            placeholder="founder@example.com"
-            type="email"
-            value={config.ownerEmail}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="workspaceId">Workspace ID</label>
-          <input
-            id="workspaceId"
-            onChange={(event) => updateField("workspaceId", event.target.value)}
-            placeholder="Workspace UUID"
-            type="text"
-            value={config.workspaceId}
-          />
-        </div>
+      <section className="panel">
+        <ul className="meta-list">
+          <li>Signed in as: {session?.user.email ?? "…"}</li>
+          <li>Workspace: {session?.workspaces[0]?.name ?? "None"}</li>
+        </ul>
         <div className="actions-row">
-          <button className="button" type="submit">
-            Save settings
+          <button className="button secondary" type="button" onClick={onSignOut}>
+            Sign out
           </button>
-          <button className="button secondary" onClick={clear} type="button">
-            Clear
+        </div>
+      </section>
+      <form className="form panel" onSubmit={onChangePassword}>
+        <h2>Change password</h2>
+        <div className="field">
+          <label htmlFor="current-password">Current password</label>
+          <input
+            autoComplete="current-password"
+            id="current-password"
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            type="password"
+            value={currentPassword}
+            required
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="new-password">New password</label>
+          <input
+            autoComplete="new-password"
+            id="new-password"
+            onChange={(event) => setNewPassword(event.target.value)}
+            type="password"
+            value={newPassword}
+            required
+          />
+        </div>
+        {message ? <p className="success-text">{message}</p> : null}
+        {error ? (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="actions-row">
+          <button className="button" disabled={pending} type="submit">
+            {pending ? "Changing…" : "Change password"}
           </button>
         </div>
       </form>
-      <section className="panel">
-        <ul className="meta-list">
-          <li>Effective API base URL: {resolveApiBaseUrl(config)}</li>
-          <li>API key header: {API_KEY_HEADER}</li>
-          <li>API key saved: {config.apiKey ? "Yes" : "No"}</li>
-          <li>Owner email saved: {config.ownerEmail ? "Yes" : "No"}</li>
-          <li>Workspace ID saved: {config.workspaceId ? "Yes" : "No"}</li>
-          <li>Saved in this session: {saved ? "Yes" : "No"}</li>
-        </ul>
-      </section>
     </>
   );
 }

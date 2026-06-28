@@ -112,9 +112,7 @@ test("fetches and parses GitHub connection status", async () => {
   }) as typeof fetch;
 
   try {
-    const payload = await fetchGitHubConnectionStatus("workspace-123", {
-      includeOwnerEmail: false
-    });
+    const payload = await fetchGitHubConnectionStatus("workspace-123", {});
     assert.equal(payload.status, "connected");
     assert.equal(payload.is_live, false);
   } finally {
@@ -145,9 +143,7 @@ test("posts local sync request without live provider data", async () => {
   }) as typeof fetch;
 
   try {
-    const payload = await runGitHubLocalSync("workspace-123", {}, {
-      includeOwnerEmail: false
-    });
+    const payload = await runGitHubLocalSync("workspace-123", {}, {});
     assert.equal(payload.capability_mode, "local_normalization");
     assert.equal(payload.provider_sync_started, false);
   } finally {
@@ -155,13 +151,14 @@ test("posts local sync request without live provider data", async () => {
   }
 });
 
-test("renders missing settings state", () => {
+test("renders no-workspace state without any operator-key gate", () => {
   const html = renderControls({
     connectionStatus: null,
     status: "missing"
   });
-  assert.match(html, /Workspace settings required/);
-  assert.match(html, /workspace ID, owner email, and operator API key/);
+  assert.match(html, /No workspace available/);
+  assert.doesNotMatch(html, /operator API key/);
+  assert.doesNotMatch(html, /owner email/);
 });
 
 test("renders unsupported state when no connection record exists", () => {

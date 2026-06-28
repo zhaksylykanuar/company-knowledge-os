@@ -170,9 +170,7 @@ test("fetches and parses local action proposals", async () => {
   }) as typeof fetch;
 
   try {
-    const payload = await fetchActionProposals("workspace-123", {}, {
-      includeOwnerEmail: false
-    });
+    const payload = await fetchActionProposals("workspace-123", {}, {});
     assert.equal(payload.count, 3);
     assert.equal(payload.proposals[0]?.execution_started, false);
     assert.equal(payload.is_live, false);
@@ -239,7 +237,7 @@ test("creates local action proposal without external execution", async () => {
         target_provider: "github",
         title: "Create follow-up GitHub issue"
       },
-      { includeOwnerEmail: false }
+      {}
     );
     assert.equal(payload.execution_started, false);
     assert.equal(payload.proposal.status, "proposed");
@@ -270,14 +268,12 @@ test("approves and rejects locally through supported endpoints", async () => {
   }) as typeof fetch;
 
   try {
-    const approved = await approveActionProposal("workspace-123", "proposal-1", {
-      includeOwnerEmail: false
-    });
+    const approved = await approveActionProposal("workspace-123", "proposal-1", {});
     const rejected = await rejectActionProposal(
       "workspace-123",
       "proposal-1",
       { reason: "Not now" },
-      { includeOwnerEmail: false }
+      {}
     );
 
     assert.equal(approved.proposal.status, "approved");
@@ -302,9 +298,7 @@ test("surfaces unsupported transition errors", async () => {
 
   try {
     await assert.rejects(
-      approveActionProposal("workspace-123", "proposal-1", {
-        includeOwnerEmail: false
-      }),
+      approveActionProposal("workspace-123", "proposal-1", {}),
       /action proposal is not in proposed status/
     );
   } finally {
@@ -314,7 +308,7 @@ test("surfaces unsupported transition errors", async () => {
 
 test("renders loading, missing, empty, unsupported, and error states", () => {
   assert.match(renderPanel({ data: null, status: "loading" }), /Loading action proposals/);
-  assert.match(renderPanel({ data: null, status: "missing" }), /Workspace settings required/);
+  assert.match(renderPanel({ data: null, status: "missing" }), /No workspace available/);
   assert.match(renderPanel({ data: emptyList, status: "empty" }), /No action proposals yet/);
   assert.match(
     renderPanel({ data: null, status: "unsupported" }),

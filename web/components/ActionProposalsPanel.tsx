@@ -8,14 +8,13 @@ import {
   fetchActionProposals,
   rejectActionProposal
 } from "../lib/api";
-import { readOperatorConfig } from "../lib/config";
+import { useWorkspaceId } from "../lib/session";
 import type {
   ActionProposal,
   ActionProposalEvidenceRef,
   ActionProposalListResponse,
   ActionProposalType,
-  ActionTargetProvider,
-  OperatorConfig
+  ActionTargetProvider
 } from "../lib/types";
 import { ActionExecutionControls } from "./ActionExecutionControls";
 import { EmptyState } from "./EmptyState";
@@ -67,7 +66,7 @@ const DEFAULT_CREATE_FORM: ActionProposalCreateFormState = {
 };
 
 export function ActionProposalsPanel() {
-  const [config, setConfig] = useState<OperatorConfig | null>(null);
+  const workspaceId = useWorkspaceId();
   const [data, setData] = useState<ActionProposalListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<ActionProposalCreateFormState>(
@@ -82,14 +81,7 @@ export function ActionProposalsPanel() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    setConfig(readOperatorConfig());
-  }, []);
-
-  useEffect(() => {
-    if (config === null) {
-      return;
-    }
-    if (!config.workspaceId || !config.ownerEmail || !config.apiKey) {
+    if (!workspaceId) {
       setData(null);
       setError(null);
       setStatus("missing");
@@ -99,7 +91,7 @@ export function ActionProposalsPanel() {
     let cancelled = false;
     setStatus("loading");
     setError(null);
-    fetchActionProposals(config.workspaceId)
+    fetchActionProposals(workspaceId)
       .then((payload) => {
         if (cancelled) {
           return;
@@ -119,7 +111,7 @@ export function ActionProposalsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [config, reloadKey]);
+  }, [workspaceId, reloadKey]);
 
   function updateCreateForm(
     field: keyof ActionProposalCreateFormState,
@@ -130,7 +122,7 @@ export function ActionProposalsPanel() {
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!config?.workspaceId || !config.ownerEmail || !config.apiKey) {
+    if (!workspaceId) {
       setStatus("missing");
       return;
     }
@@ -145,7 +137,7 @@ export function ActionProposalsPanel() {
     setSuccessMessage(null);
     setPendingMutation("create");
     try {
-      const response = await createActionProposal(config.workspaceId, request);
+      const response = await createActionProposal(workspaceId, request);
       setData((current) => mergeCreatedProposal(current, response.proposal, response.warnings));
       setStatus("ready");
       setCreateForm(DEFAULT_CREATE_FORM);
@@ -159,7 +151,7 @@ export function ActionProposalsPanel() {
   }
 
   async function approve(proposalId: string) {
-    if (!config?.workspaceId || !config.ownerEmail || !config.apiKey) {
+    if (!workspaceId) {
       setStatus("missing");
       return;
     }
@@ -168,7 +160,7 @@ export function ActionProposalsPanel() {
     setSuccessMessage(null);
     setPendingMutation(`approve:${proposalId}`);
     try {
-      const response = await approveActionProposal(config.workspaceId, proposalId);
+      const response = await approveActionProposal(workspaceId, proposalId);
       setData((current) => mergeUpdatedProposal(current, response.proposal, response.warnings));
       setStatus("ready");
       setSuccessMessage("Approved locally. External execution is not enabled in this UI.");
@@ -181,7 +173,7 @@ export function ActionProposalsPanel() {
   }
 
   async function reject(proposalId: string) {
-    if (!config?.workspaceId || !config.ownerEmail || !config.apiKey) {
+    if (!workspaceId) {
       setStatus("missing");
       return;
     }
@@ -190,7 +182,7 @@ export function ActionProposalsPanel() {
     setSuccessMessage(null);
     setPendingMutation(`reject:${proposalId}`);
     try {
-      const response = await rejectActionProposal(config.workspaceId, proposalId, {
+      const response = await rejectActionProposal(workspaceId, proposalId, {
         reason: "Rejected locally from product UI."
       });
       setData((current) => mergeUpdatedProposal(current, response.proposal, response.warnings));
@@ -290,8 +282,8 @@ export function ActionProposalsPanelView({
 
       {status === "missing" ? (
         <EmptyState
-          description="Set the workspace ID, owner email, and operator API key in Settings to load local action proposals."
-          title="Workspace settings required"
+          description="Your account has no workspace yet, so there are no proposals to show."
+          title="No workspace available"
         />
       ) : null}
 

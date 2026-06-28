@@ -6,11 +6,10 @@ import {
   fetchGitHubConnectionStatus,
   runGitHubLocalSync
 } from "../lib/api";
-import { readOperatorConfig } from "../lib/config";
+import { useWorkspaceId } from "../lib/session";
 import type {
   GitHubConnectionStatusResponse,
-  GitHubLocalSyncResponse,
-  OperatorConfig
+  GitHubLocalSyncResponse
 } from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
@@ -33,7 +32,7 @@ type GitHubSyncControlsViewProps = {
 };
 
 export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) {
-  const [config, setConfig] = useState<OperatorConfig | null>(null);
+  const workspaceId = useWorkspaceId();
   const [connectionStatus, setConnectionStatus] =
     useState<GitHubConnectionStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,14 +41,7 @@ export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) 
   const [status, setStatus] = useState<SyncControlStatus>("loading");
 
   useEffect(() => {
-    setConfig(readOperatorConfig());
-  }, []);
-
-  useEffect(() => {
-    if (config === null) {
-      return;
-    }
-    if (!config.workspaceId || !config.ownerEmail || !config.apiKey) {
+    if (!workspaceId) {
       setConnectionStatus(null);
       setError(null);
       setStatus("missing");
@@ -59,7 +51,7 @@ export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) 
     let cancelled = false;
     setStatus("loading");
     setError(null);
-    fetchGitHubConnectionStatus(config.workspaceId)
+    fetchGitHubConnectionStatus(workspaceId)
       .then((payload) => {
         if (cancelled) {
           return;
@@ -79,17 +71,17 @@ export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) 
     return () => {
       cancelled = true;
     };
-  }, [config, reloadKey]);
+  }, [workspaceId, reloadKey]);
 
   async function syncLocalGitHubData() {
-    if (!config?.workspaceId) {
+    if (!workspaceId) {
       setStatus("missing");
       return;
     }
     setError(null);
     setStatus("syncing");
     try {
-      const payload = await runGitHubLocalSync(config.workspaceId);
+      const payload = await runGitHubLocalSync(workspaceId);
       setResult(payload);
       setStatus("success");
       onSyncComplete?.();
@@ -136,8 +128,8 @@ export function GitHubSyncControlsView({
 
       {status === "missing" ? (
         <EmptyState
-          description="Set the workspace ID, owner email, and operator API key in Settings before running local GitHub sync."
-          title="Workspace settings required"
+          description="Your account has no workspace yet, so there is nothing to sync."
+          title="No workspace available"
         />
       ) : null}
 

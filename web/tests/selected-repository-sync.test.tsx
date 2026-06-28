@@ -217,7 +217,7 @@ test("API client builds the selected issue sync request", async () => {
         connection_id: "connection-1",
         repositories: ["qtwin-io/founderos-smoke"]
       },
-      { includeOwnerEmail: false }
+      {}
     );
     assert.equal(payload.totals.issues, 2);
     assert.equal(payload.capabilities.external_writes, false);
@@ -257,7 +257,7 @@ test("API client builds the selected PR sync request with explicit states", asyn
         repositories: ["qtwin-io/founderos-smoke"],
         states: ["open", "closed", "merged"]
       },
-      { includeOwnerEmail: false }
+      {}
     );
     assert.equal(payload.totals.merged_pull_requests, 1);
     assert.equal(payload.external_write_performed, false);
@@ -322,10 +322,11 @@ test("always states the read-only / no external write boundary", () => {
   assert.doesNotMatch(html, /Connected to all repos/);
 });
 
-test("renders missing workspace settings state", () => {
+test("renders no-workspace state without any operator-key gate", () => {
   const html = renderControls({ status: "missing", connectionStatus: null });
-  assert.match(html, /Workspace settings required/);
-  assert.match(html, /workspace ID, owner email, and operator API key/);
+  assert.match(html, /No workspace available/);
+  assert.doesNotMatch(html, /operator API key/);
+  assert.doesNotMatch(html, /owner email/);
 });
 
 test("renders missing connection state when no connection record exists", () => {
@@ -479,7 +480,7 @@ test("combined helper issues both selected sync requests and returns both result
         connection_id: "connection-1",
         repositories: ["qtwin-io/founderos-smoke"]
       },
-      { includeOwnerEmail: false }
+      {}
     );
     assert.equal(calls.length, 2);
     assert.ok(calls[0].endsWith("/repositories/issues/sync"));

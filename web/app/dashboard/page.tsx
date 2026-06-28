@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { ActionProposalsPanel } from "../../components/ActionProposalsPanel";
 import { BriefingPanel } from "../../components/BriefingPanel";
@@ -10,43 +10,30 @@ import { GitHubSyncControls } from "../../components/GitHubSyncControls";
 import { PageHeader } from "../../components/PageHeader";
 import { SelectedRepositorySyncControls } from "../../components/SelectedRepositorySyncControls";
 import { StatusCard } from "../../components/StatusCard";
-import { readOperatorConfig, resolveApiBaseUrl } from "../../lib/config";
-import type { OperatorConfig } from "../../lib/types";
+import { useSession } from "../../lib/session";
 
 export default function DashboardPage() {
-  const [config, setConfig] = useState<OperatorConfig | null>(null);
+  const session = useSession();
   const [operationalWorkRefresh, setOperationalWorkRefresh] = useState(0);
-
-  useEffect(() => {
-    setConfig(readOperatorConfig());
-  }, []);
-
-  const apiBaseUrl = config ? resolveApiBaseUrl(config) : "Loading";
-  const workspaceStatus = config?.workspaceId ? "Configured" : "Missing";
-  const keyStatus = config?.apiKey ? "Configured" : "Missing";
+  const workspace = session?.workspaces[0] ?? null;
 
   return (
     <>
       <PageHeader
         eyebrow="Dashboard"
         title="MVP status"
-        description="Local operator view of the backend flow configuration and next UI surfaces."
+        description="Signed-in view of the backend flow and the GitHub-first MVP surfaces."
       />
       <section className="grid">
         <StatusCard
-          description={apiBaseUrl}
+          description="Same-origin API authenticated by your session cookie."
           title="Backend API"
-          value={apiBaseUrl ? "Ready" : "Missing"}
+          value="Connected"
         />
         <StatusCard
-          description="Workspace ID stored in browser settings."
+          description={workspace ? workspace.name : "No workspace for this account yet."}
           title="Workspace"
-          value={workspaceStatus}
-        />
-        <StatusCard
-          description="Operator API key is required for local MVP calls."
-          title="API key"
-          value={keyStatus}
+          value={workspace ? "Active" : "None"}
         />
         <StatusCard
           description="Local sync controls, Company Brain, and canonical work are loaded below."

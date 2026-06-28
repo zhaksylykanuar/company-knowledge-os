@@ -31,8 +31,8 @@ const destinations = [
   {
     href: "/settings",
     title: "Settings",
-    value: "Local",
-    description: "Browser-only operator API configuration."
+    value: "Account",
+    description: "Your signed-in account, sign out, and change password."
   }
 ];
 

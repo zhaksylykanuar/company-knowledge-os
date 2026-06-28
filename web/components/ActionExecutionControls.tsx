@@ -7,7 +7,7 @@ import {
   fetchActionProposalAudit,
   fetchActionExecutionPreview
 } from "../lib/api";
-import { readOperatorConfig } from "../lib/config";
+import { useWorkspaceId } from "../lib/session";
 import type {
   ActionExecutionAuditEvent,
   ActionExecutionPreviewResponse,
@@ -44,6 +44,7 @@ export function ActionExecutionControls({
   onRefresh,
   proposal
 }: ActionExecutionControlsProps) {
+  const workspaceId = useWorkspaceId();
   const [auditEvents, setAuditEvents] = useState<ActionExecutionAuditEvent[]>([]);
   const [connectionId, setConnectionId] = useState("");
   const [confirmationChecked, setConfirmationChecked] = useState(false);
@@ -62,9 +63,8 @@ export function ActionExecutionControls({
   }
 
   async function previewExecution() {
-    const config = readOperatorConfig();
-    if (!config.workspaceId || !config.ownerEmail || !config.apiKey) {
-      setError("Workspace ID, owner email, and API key are required for preview.");
+    if (!workspaceId) {
+      setError("Your account has no workspace, so preview is unavailable.");
       return;
     }
 
@@ -72,10 +72,10 @@ export function ActionExecutionControls({
     setSuccessMessage(null);
     setIsPreviewPending(true);
     try {
-      const response = await fetchActionExecutionPreview(config.workspaceId, proposal.id);
+      const response = await fetchActionExecutionPreview(workspaceId, proposal.id);
       setPreview(response);
       setAuditEvents(response.audit);
-      await refreshAudit(config.workspaceId);
+      await refreshAudit(workspaceId);
       setSuccessMessage("Execution preview loaded. No external write was performed.");
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "Request failed");
@@ -85,9 +85,8 @@ export function ActionExecutionControls({
   }
 
   async function executeWithConfirmation() {
-    const config = readOperatorConfig();
-    if (!config.workspaceId || !config.ownerEmail || !config.apiKey) {
-      setError("Workspace ID, owner email, and API key are required for execution.");
+    if (!workspaceId) {
+      setError("Your account has no workspace, so execution is unavailable.");
       return;
     }
     if (!preview?.capabilities.external_execution || !preview.capabilities.live_provider_write) {
@@ -103,13 +102,13 @@ export function ActionExecutionControls({
     setSuccessMessage(null);
     setIsExecutePending(true);
     try {
-      const response = await executeActionProposal(config.workspaceId, proposal.id, {
+      const response = await executeActionProposal(workspaceId, proposal.id, {
         connection_id: connectionId.trim(),
         confirm_external_write: true
       });
       setExecuteResult(response);
       setReceipt(response.receipt);
-      await refreshAudit(config.workspaceId);
+      await refreshAudit(workspaceId);
       setSuccessMessage(
         response.warnings.some((warning) => warning.includes("existing successful"))
           ? "Existing execution receipt returned. No additional external write occurred."
@@ -123,7 +122,7 @@ export function ActionExecutionControls({
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : "Request failed");
       try {
-        await refreshAudit(config.workspaceId);
+        await refreshAudit(workspaceId);
       } catch {
         // Keep the primary execution error visible if audit refresh also fails.
       }

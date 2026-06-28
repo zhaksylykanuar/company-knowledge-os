@@ -4,45 +4,34 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import type { MeResponse } from "../lib/auth";
 import { fetchMe, logout } from "../lib/auth";
-import { readOperatorConfig, writeOperatorConfig } from "../lib/config";
+import { SessionContext } from "../lib/session";
 import { Sidebar } from "./Sidebar";
-
-type GateState = "loading" | "authed" | "unauthenticated";
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [state, setState] = useState<GateState>("loading");
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [resolved, setResolved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     fetchMe()
-      .then((me) => {
+      .then((result) => {
         if (cancelled) {
           return;
         }
-        if (me === null) {
-          setState("unauthenticated");
+        if (result === null) {
           router.replace("/login");
-          return;
+        } else {
+          setMe(result);
         }
-        // Bridge the session identity into the existing browser config so
-        // current pages (which read config.workspaceId) keep working without a
-        // rewrite. The operator API key is cleared — auth is the session cookie.
-        const current = readOperatorConfig();
-        const workspace = me.workspaces[0];
-        writeOperatorConfig({
-          ...current,
-          apiKey: "",
-          ownerEmail: me.user.email,
-          workspaceId: workspace ? workspace.id : current.workspaceId
-        });
-        setState("authed");
+        setResolved(true);
       })
       .catch(() => {
         if (!cancelled) {
-          setState("unauthenticated");
           router.replace("/login");
+          setResolved(true);
         }
       });
     return () => {
@@ -55,7 +44,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     router.replace("/login");
   }
 
-  if (state !== "authed") {
+  if (!resolved || me === null) {
     return (
       <div className="auth-loading" aria-busy="true">
         Loading…
@@ -63,17 +52,26 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
+  const session = {
+    user: me.user,
+    workspaces: me.workspaces,
+    workspaceId: me.workspaces[0]?.id ?? null
+  };
+
   return (
-    <div className="app-shell">
-      <Sidebar />
-      <main className="main">
-        <div className="topbar">
-          <button type="button" className="logout-button" onClick={onLogout}>
-            Sign out
-          </button>
-        </div>
-        <div className="content">{children}</div>
-      </main>
-    </div>
+    <SessionContext.Provider value={session}>
+      <div className="app-shell">
+        <Sidebar />
+        <main className="main">
+          <div className="topbar">
+            <span className="topbar-user">{me.user.email}</span>
+            <button type="button" className="logout-button" onClick={onLogout}>
+              Sign out
+            </button>
+          </div>
+          <div className="content">{children}</div>
+        </main>
+      </div>
+    </SessionContext.Provider>
   );
 }

@@ -229,7 +229,7 @@ test("fetches execution preview without posting a live write", async () => {
     const payload = await fetchActionExecutionPreview(
       "workspace-123",
       "proposal-2",
-      { includeOwnerEmail: false }
+      {}
     );
     assert.equal(payload.status, "preview_ready");
     assert.equal(payload.capabilities.external_execution, false);
@@ -265,7 +265,7 @@ test("fetches persisted action proposal audit trail", async () => {
     const payload = await fetchActionProposalAudit(
       "workspace-123",
       "proposal-2",
-      { includeOwnerEmail: false }
+      {}
     );
     assert.equal(payload.events[0]?.event_type, "execution_preview_generated");
     assert.equal(payload.receipt.provider_result, "none");
@@ -324,7 +324,7 @@ test("posts execute request only through explicit execute client", async () => {
         connection_id: "connection-1",
         confirm_external_write: true
       },
-      { includeOwnerEmail: false }
+      {}
     );
     assert.equal(payload.external_write_performed, true);
     assert.equal(payload.execution.status, "succeeded");
