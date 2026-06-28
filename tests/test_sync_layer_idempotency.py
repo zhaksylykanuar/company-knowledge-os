@@ -25,6 +25,7 @@ from app.db.identity_models import User, Workspace
 from app.services.github_normalization_service import (
     SOURCE_RECORD_TYPE_ISSUE,
     _upsert_pull_request,
+    _upsert_repository,
     _upsert_source_record,
 )
 
@@ -217,5 +218,113 @@ async def test_pull_request_upsert_concurrent_yields_single_row() -> None:
                 .where(PullRequest.external_id == external_id)
             )
         assert count == 1
+    finally:
+        await _cleanup(user_id, workspace_id)
+
+
+# --- Repository -------------------------------------------------------------
+
+
+def _repo(full_name: str, *, default_branch: str = "main") -> dict:
+    return {
+        "full_name": full_name,
+        "name": full_name.rsplit("/", 1)[-1],
+        "visibility": "private",
+        "default_branch": default_branch,
+        "archived": False,
+        "source_url": f"https://github.com/{full_name}",
+        "last_activity_at": "2026-06-28T10:00:00Z",
+        "metadata": {"source": "test"},
+    }
+
+
+async def _upsert_repository_once(
+    workspace_id: UUID, external_id: str, full_name: str, default_branch: str = "main"
+) -> tuple[bool, UUID]:
+    async with AsyncSessionLocal() as session:
+        repository, created = await _upsert_repository(
+            session,
+            sync_job=SimpleNamespace(workspace_id=workspace_id),
+            repo=_repo(full_name, default_branch=default_branch),
+            external_id=external_id,
+        )
+        repo_id = repository.id  # read before commit (expire_on_commit)
+        await session.commit()
+        return created, repo_id
+
+
+async def _count_repositories(workspace_id: UUID, full_name: str) -> int:
+    async with AsyncSessionLocal() as session:
+        return await session.scalar(
+            select(func.count())
+            .select_from(Repository)
+            .where(Repository.workspace_id == workspace_id)
+            .where(Repository.full_name == full_name)
+        )
+
+
+async def test_repository_upsert_is_idempotent_sequentially() -> None:
+    marker = uuid4().hex[:10]
+    user_id, workspace_id = await _seed_workspace(marker)
+    full_name = f"qtwin-io/repo-{marker}"
+    external_id = f"gh-id-{marker}"
+    try:
+        first_created, first_id = await _upsert_repository_once(
+            workspace_id, external_id, full_name, default_branch="main"
+        )
+        second_created, second_id = await _upsert_repository_once(
+            workspace_id, external_id, full_name, default_branch="develop"
+        )
+        assert first_created is True
+        assert second_created is False
+        assert first_id == second_id  # same row, no duplicate
+        assert await _count_repositories(workspace_id, full_name) == 1
+        async with AsyncSessionLocal() as session:
+            row = await session.get(Repository, first_id)
+            assert row is not None and row.default_branch == "develop"  # updated
+    finally:
+        await _cleanup(user_id, workspace_id)
+
+
+async def test_repository_upsert_concurrent_yields_single_row() -> None:
+    marker = uuid4().hex[:10]
+    user_id, workspace_id = await _seed_workspace(marker)
+    full_name = f"qtwin-io/repo-{marker}"
+    external_id = f"gh-id-{marker}"
+    try:
+        results = await asyncio.gather(
+            *(
+                _upsert_repository_once(workspace_id, external_id, full_name)
+                for _ in range(5)
+            )
+        )
+        assert sum(1 for created, _ in results if created) == 1
+        assert await _count_repositories(workspace_id, full_name) == 1
+    finally:
+        await _cleanup(user_id, workspace_id)
+
+
+async def test_repository_upsert_dedupes_across_external_id_and_full_name() -> None:
+    # Load-bearing cross-path dedup: a repo first seen via the work-item path
+    # (external_id == full_name) and later via the main sync (external_id ==
+    # numeric id) must converge onto ONE row, not duplicate.
+    marker = uuid4().hex[:10]
+    user_id, workspace_id = await _seed_workspace(marker)
+    full_name = f"qtwin-io/repo-{marker}"
+    try:
+        work_item_created, work_item_id = await _upsert_repository_once(
+            workspace_id, full_name, full_name
+        )
+        main_created, main_id = await _upsert_repository_once(
+            workspace_id, f"gh-id-{marker}", full_name
+        )
+        assert work_item_created is True
+        assert main_created is False  # resolved via full_name fallback
+        assert work_item_id == main_id  # same row
+        assert await _count_repositories(workspace_id, full_name) == 1
+        async with AsyncSessionLocal() as session:
+            row = await session.get(Repository, main_id)
+            # external_id was migrated to the numeric id on the second upsert.
+            assert row is not None and row.external_id == f"gh-id-{marker}"
     finally:
         await _cleanup(user_id, workspace_id)

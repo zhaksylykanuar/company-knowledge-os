@@ -9,7 +9,7 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, literal_column, select
+from sqlalchemy import func, literal_column, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -586,40 +586,65 @@ async def _upsert_repository(
     external_id: str,
 ) -> tuple[Repository, bool]:
     full_name = _repository_full_name(repo)
-    repository = await session.scalar(
+
+    # Cross-path dedup (load-bearing): the main sync keys external_id on the
+    # GitHub numeric id (build_normalized_repository) while the work-item path
+    # keys it on full_name, so the same repo can be reached under two different
+    # external_id values. Resolve by external_id first, then by full_name, so
+    # those paths converge onto one row instead of creating a duplicate. This is
+    # why a single ON CONFLICT (workspace_id, external_id) is insufficient here.
+    existing = await session.scalar(
         select(Repository)
         .where(Repository.workspace_id == sync_job.workspace_id)
         .where(Repository.external_id == external_id)
     )
-    if repository is None:
-        repository = await session.scalar(
+    if existing is None:
+        existing = await session.scalar(
             select(Repository)
             .where(Repository.workspace_id == sync_job.workspace_id)
             .where(Repository.full_name == full_name)
         )
-    created = repository is None
-    if repository is None:
-        repository = Repository(
-            workspace_id=sync_job.workspace_id,
-            provider=SOURCE_RECORD_PROVIDER_GITHUB,
-            external_id=external_id,
-            name=_repository_name(repo),
-            full_name=full_name,
-        )
-        session.add(repository)
 
-    repository.provider = SOURCE_RECORD_PROVIDER_GITHUB
-    repository.external_id = external_id
-    repository.name = _repository_name(repo)
-    repository.full_name = full_name
-    repository.default_branch = _safe_text(repo.get("default_branch"))
-    repository.visibility = _repository_visibility(repo.get("visibility"))
-    repository.archived = bool(repo.get("archived"))
-    repository.source_url = _safe_url(repo.get("source_url"))
-    repository.last_activity_at = _parse_optional_datetime(repo.get("last_activity_at"))
-    repository.repo_metadata = _repository_metadata(repo)
-    await session.flush()
-    return repository, created
+    mutable = {
+        Repository.provider: SOURCE_RECORD_PROVIDER_GITHUB,
+        Repository.external_id: external_id,
+        Repository.name: _repository_name(repo),
+        Repository.full_name: full_name,
+        Repository.default_branch: _safe_text(repo.get("default_branch")),
+        Repository.visibility: _repository_visibility(repo.get("visibility")),
+        Repository.archived: bool(repo.get("archived")),
+        Repository.source_url: _safe_url(repo.get("source_url")),
+        Repository.last_activity_at: _parse_optional_datetime(repo.get("last_activity_at")),
+        Repository.repo_metadata: _repository_metadata(repo),
+        Repository.updated_at: func.now(),
+    }
+
+    if existing is not None:
+        # Found via either key — update in place by primary key (no conflict).
+        await session.execute(
+            update(Repository).where(Repository.id == existing.id).values(mutable)
+        )
+        repository = await session.get(
+            Repository, existing.id, populate_existing=True
+        )
+        return repository, False
+
+    # Not found — race-safe insert: concurrent inserts of the same external_id
+    # converge via ON CONFLICT DO UPDATE instead of raising IntegrityError.
+    # RETURNING (xmax = 0) preserves the created/updated counter, and the row is
+    # read back so callers keep receiving a real ORM Repository for .id linking.
+    statement = (
+        pg_insert(Repository)
+        .values({Repository.workspace_id: sync_job.workspace_id, **mutable})
+        .on_conflict_do_update(
+            constraint="uq_repositories_workspace_external_id",
+            set_=mutable,
+        )
+        .returning(Repository.id, literal_column("(xmax = 0)"))
+    )
+    row = (await session.execute(statement)).one()
+    repository = await session.get(Repository, row[0], populate_existing=True)
+    return repository, bool(row[1])
 
 
 async def _ensure_repository_for_work_item(
