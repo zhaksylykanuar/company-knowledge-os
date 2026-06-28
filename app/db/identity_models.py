@@ -80,6 +80,43 @@ class Workspace(Base):
     )
 
 
+class UserSession(Base):
+    """Server-side login session (email+password auth, Chunk 1 core).
+
+    Stores ONLY a hash of the opaque session token — the raw token is returned
+    to the caller and never persisted, so a DB leak yields no live sessions.
+    Sessions are revocable rows: validation fails once ``revoked_at`` is set or
+    ``expires_at`` has passed. Class is named ``UserSession`` (table
+    ``sessions``) to avoid confusion with SQLAlchemy's ``AsyncSession``.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_sessions_user_id", ondelete="CASCADE"),
+        index=True,
+    )
+    # sha256 hex digest of the raw token (64 chars). Unique so each token maps
+    # to at most one session row.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 class Membership(Base):
     __tablename__ = "memberships"
     __table_args__ = (
