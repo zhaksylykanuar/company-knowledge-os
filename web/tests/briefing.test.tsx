@@ -4,23 +4,29 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  buildWorkspaceBriefingPath,
+  buildWorkspaceBriefingsPath,
   buildWorkspaceManualBriefingPath,
-  generateManualFounderBriefing
+  generateManualFounderBriefing,
+  listBriefings
 } from "../lib/api";
-import { M } from "../lib/messages";
-import type { FounderBriefingResponse } from "../lib/types";
+import { M, T } from "../lib/messages";
+import type { BriefingListResponse, FounderBriefingResponse } from "../lib/types";
 import { BriefingPanelView } from "../components/BriefingPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 
 const sampleBriefing: FounderBriefingResponse = {
   briefing: {
+    id: "briefing-1",
     title: "Founder Briefing",
     summary: "Deterministic briefing from canonical workspace records.",
+    created_at: "2026-06-24T10:00:00+00:00",
     generated_at: "2026-06-24T10:00:00+00:00",
+    generated_by: "deterministic_v0",
     workspace_id: "workspace-123",
     is_live: false,
     llm_used: false,
-    persistence: "transient",
+    persistence: "persisted",
     items: [
       {
         id: "repo-coverage",
@@ -88,10 +94,13 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <BriefingPanelView
+      activeBriefingId={props.activeBriefingId ?? null}
       data={"data" in props ? props.data ?? null : sampleBriefing}
       error={props.error ?? null}
+      history={props.history ?? []}
       onCloseEvidence={props.onCloseEvidence}
       onGenerate={props.onGenerate}
+      onOpenBriefing={props.onOpenBriefing}
       onRetry={props.onRetry}
       onSelectEvidence={props.onSelectEvidence}
       selectedEvidence={props.selectedEvidence ?? null}
@@ -136,7 +145,8 @@ test("posts deterministic manual briefing request", async () => {
   try {
     const payload = await generateManualFounderBriefing("workspace-123", {}, {});
     assert.equal(payload.briefing.llm_used, false);
-    assert.equal(payload.briefing.persistence, "transient");
+    assert.equal(payload.briefing.persistence, "persisted");
+    assert.equal(payload.briefing.id, "briefing-1");
     assert.equal(payload.briefing.items[0]?.evidence_refs[0]?.source, "github");
   } finally {
     globalThis.fetch = originalFetch;
@@ -234,4 +244,88 @@ test("renders evidence drawer fallback when no evidence is selected", () => {
   const html = renderToStaticMarkup(<EvidenceDrawer evidence={null} />);
   assert.ok(html.includes(M.evidence.placeholder));
   assert.ok(!html.includes(M.common.openSource));
+});
+
+test("builds the briefing history and single-briefing URLs", () => {
+  assert.equal(
+    buildWorkspaceBriefingsPath("workspace-123"),
+    "/api/v1/workspaces/workspace-123/briefings?limit=20&offset=0"
+  );
+  assert.equal(
+    buildWorkspaceBriefingPath("workspace-123", "briefing-1"),
+    "/api/v1/workspaces/workspace-123/briefings/briefing-1"
+  );
+});
+
+test("lists saved briefings newest-first from the history endpoint", async () => {
+  const sampleHistory: BriefingListResponse = {
+    count: 2,
+    briefings: [
+      {
+        id: "briefing-2",
+        created_at: "2026-06-25T10:00:00+00:00",
+        generated_at: "2026-06-25T10:00:00+00:00",
+        generated_by: "deterministic_v0",
+        title: "Founder Briefing",
+        summary: "Newer briefing.",
+        item_count: 3,
+        signals: sampleBriefing.briefing.signals
+      },
+      {
+        id: "briefing-1",
+        created_at: "2026-06-24T10:00:00+00:00",
+        generated_at: "2026-06-24T10:00:00+00:00",
+        generated_by: "deterministic_v0",
+        title: "Founder Briefing",
+        summary: "Older briefing.",
+        item_count: 2,
+        signals: sampleBriefing.briefing.signals
+      }
+    ]
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/briefings?limit=20&offset=0"
+    );
+    assert.equal(init?.method ?? "GET", "GET");
+    return new Response(JSON.stringify(sampleHistory), {
+      headers: { "Content-Type": "application/json" },
+      status: 200
+    });
+  }) as typeof fetch;
+
+  try {
+    const payload = await listBriefings("workspace-123");
+    assert.equal(payload.count, 2);
+    assert.equal(payload.briefings[0]?.id, "briefing-2");
+    assert.equal(payload.briefings[1]?.id, "briefing-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("renders briefing history with open buttons", () => {
+  const history = [
+    {
+      id: "briefing-2",
+      created_at: "2026-06-25T10:00:00+00:00",
+      generated_at: "2026-06-25T10:00:00+00:00",
+      generated_by: "deterministic_v0",
+      title: "Founder Briefing",
+      summary: "Newer briefing.",
+      item_count: 3,
+      signals: sampleBriefing.briefing.signals
+    }
+  ];
+  const html = renderPanel({ activeBriefingId: "briefing-1", history, status: "success" });
+  assert.ok(html.includes(M.briefingHistory.title));
+  assert.ok(html.includes(M.briefingHistory.open));
+  assert.ok(html.includes(T.briefingHistoryMeta(3, "2026-06-25T10:00:00+00:00")));
+});
+
+test("renders empty briefing history hint when there is no history", () => {
+  const html = renderPanel({ data: null, history: [], status: "empty" });
+  assert.ok(html.includes(M.briefingHistory.empty));
 });

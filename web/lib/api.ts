@@ -10,6 +10,7 @@ import type {
   ActionProposalRejectRequest,
   ApiErrorPayload,
   ApiFetchOptions,
+  BriefingListResponse,
   CompanyBrainResponse,
   FounderBriefingRequest,
   FounderBriefingResponse,
@@ -147,6 +148,49 @@ export async function generateManualFounderBriefing(
       }),
       method: "POST"
     }
+  );
+}
+
+export function buildWorkspaceBriefingsPath(
+  workspaceId: string,
+  request: { limit?: number; offset?: number } = {}
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(request.limit ?? 20));
+  params.set("offset", String(request.offset ?? 0));
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/briefings?${params.toString()}`;
+}
+
+export function buildWorkspaceBriefingPath(
+  workspaceId: string,
+  briefingId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/briefings/${encodeURIComponent(briefingId)}`;
+}
+
+export async function listBriefings(
+  workspaceId: string,
+  request: { limit?: number; offset?: number } = {},
+  options: ApiFetchOptions = {}
+): Promise<BriefingListResponse> {
+  return apiFetch<BriefingListResponse>(
+    buildWorkspaceBriefingsPath(workspaceId, request),
+    options
+  );
+}
+
+export async function getBriefing(
+  workspaceId: string,
+  briefingId: string,
+  options: ApiFetchOptions = {}
+): Promise<FounderBriefingResponse> {
+  return apiFetch<FounderBriefingResponse>(
+    buildWorkspaceBriefingPath(workspaceId, briefingId),
+    options
   );
 }
 
