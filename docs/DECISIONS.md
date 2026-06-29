@@ -1043,6 +1043,38 @@ Consequences:
 - Known follow-up: Chunk 2 adds LLM narrative generation on top of this store,
   still strict-JSON-validated and evidence-backed per the LLM boundary rules.
 
+## DEC-049 - Active Docs Stay Lean; Broken Operator Artifacts Are Removed
+
+Decision (2026-06-29): the active documentation set remains the small canonical
+set navigated by `docs/README.md`, and `docs/TODO.md` is a near-term backlog
+rather than a long completed-work ledger. Completed-work detail lives in
+`PROGRESS.md`, `docs/CHANGELOG.md`, and git history. Future agents must update
+source-of-truth docs in the same task as behavior changes and must not paste
+secrets, raw provider payloads, production smoke outputs, or private source
+bodies into docs.
+
+The cleanup also removes obsolete grouped-lifecycle operator scripts that were
+not referenced by the active product path and failed import because their
+required report module had already been removed. These scripts belonged to an
+operator workflow outside the retained GitHub-first spine.
+
+Rationale: stale task ledgers and broken operator artifacts make the repository
+harder for humans and agents to understand. The project should bias toward fewer
+accurate docs and runnable scripts, preserving uncertain or historical material
+only when it is still useful or explicitly audit-only.
+
+Consequences:
+
+- `docs/README.md` now includes the source-of-truth matrix and documentation
+  maintenance rules. `AGENTS.md` mirrors the agent-facing subset.
+- `docs/TODO.md` is concise and points next work at GitHub product connect/live
+  sync before LLM briefing narrative, because an empty workspace gives the LLM
+  little real evidence to summarize.
+- Removed scripts are recoverable from git history if a future scoped task
+  deliberately revives that operator workflow.
+- Generated/cache/build outputs stay ignored; real secrets and source-of-truth
+  raw storage remain untouched.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

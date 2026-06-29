@@ -47,6 +47,8 @@ if [[ "$mode" == "--staged" ]]; then
 fi
 
 while IFS= read -r -d '' file; do
+  [[ -e "$file" ]] || continue
+
   if [[ "$file" != ".env.example" ]] && is_sensitive_path "$file"; then
     echo "ERROR: tracked secrets or raw data detected: $file" >&2
     exit 1

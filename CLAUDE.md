@@ -8,7 +8,10 @@ AI, token, and extraction workflow rules for FounderOS.
   pipeline today; ingestion/extraction is deterministic-only. The LLM rules
   below are forward-looking guardrails for if/when an LLM path is reintroduced.
 - Deterministic extraction: implemented (deterministic projections: Company
-  Brain, manual Founder Briefing, GitHub normalization).
+  Brain, persisted manual Founder Briefing, GitHub normalization).
+- LLM briefing narrative: not implemented — persisted Briefing/BriefingItem
+  history exists, but current generation is still deterministic and evidence
+  backed, with no AI calls.
 - LLM write actions: disallowed unless a future explicit approval workflow exists
 - Direct LLM mutation of production data: disallowed
 

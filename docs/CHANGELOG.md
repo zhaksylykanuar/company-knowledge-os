@@ -1,3 +1,31 @@
+# FounderOS Changelog
+
+## 2026-06-29
+
+### Changed
+
+- Persisted deterministic Founder Briefings: `Briefing` / `BriefingItem` tables
+  and history endpoints now store/reopen generated manual briefings while the
+  generator remains deterministic and LLM-free. New single Alembic head:
+  `e7f8a9b0c1d2`.
+- Audited the active documentation set and clarified the source-of-truth matrix
+  in `docs/README.md`. `docs/TODO.md` was reduced from a completed-work ledger
+  to a near-term backlog focused on GitHub product connect/live sync before LLM
+  briefing narrative.
+- Updated `README.md`, `PROGRESS.md`, `docs/ROADMAP.md`,
+  `founderOS_MASTER_PLAYBOOK.md`, `AGENTS.md`, and `CLAUDE.md` to reflect that
+  deterministic Founder Briefings are now persisted and that current LLM rules
+  remain forward-looking.
+- Added documentation-maintenance rules for future agents and Make convenience
+  targets for backend, frontend, combined checks, and tracked-secret scan.
+- Expanded `.gitignore` for common generated/cache/build artifacts.
+
+### Removed
+
+- Removed three obsolete grouped-lifecycle operator scripts that were no longer
+  referenced and failed import because their required report module had already
+  been removed in earlier cleanup.
+
 ## 2026-06-28
 
 ### Added
@@ -96,8 +124,6 @@
   using the supported operator bootstrap API. Provider writes, LLM, real
   connectors, selected repo live sync, and ActionProposal execute remained
   disabled/not called. Secret values are intentionally omitted.
-
-# FounderOS Changelog
 
 ## 2026-06-26
 

@@ -1,10 +1,15 @@
 # Threat Model — Company Knowledge & Decision OS
 
 ## Assets
-OAuth tokens, raw documents, emails, Jira/Git payloads, extracted facts, approvals, audit logs.
+Provider tokens / future OAuth tokens, raw documents, GitHub/Jira/email
+payloads, extracted facts, evidence refs, session records, approvals, briefing
+history, and audit logs.
 
 ## Trust boundaries
-External providers -> backend connectors -> event bus -> source of truth -> agent runner -> outputs.
+Browser session / operator API key -> backend routes -> service layer -> raw
+storage + Postgres source of truth -> deterministic/LLM-guarded projections ->
+UI/operator outputs. Future provider webhooks and LLM calls are additional trust
+boundaries and must be explicitly designed before enablement.
 
 ## Main risks
 Prompt injection, token leakage, accidental write, duplicate retries, unsupported claims, webhook spoofing.

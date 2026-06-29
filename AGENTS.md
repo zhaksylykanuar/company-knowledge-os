@@ -61,6 +61,28 @@ Operational rules for Codex and other AI agents working in FounderOS.
 - Do not edit migrations unless the task explicitly requires a schema change.
 - Future behavior changes must update the relevant docs in the same task.
 
+## Documentation Maintenance
+
+- `docs/README.md` is the documentation map and source-of-truth matrix; update it
+  whenever docs are added, removed, renamed, or demoted to audit-only history.
+- `PROGRESS.md` is the live status pointer; update it after every completed
+  task with what changed, what was verified, and the next recommended step.
+- `docs/TODO.md` is the near-term backlog; keep it short and remove or rewrite
+  completed task ledgers when they stop helping the next implementer.
+- `docs/DECISIONS.md` is for durable decisions, tradeoffs, and reversals. Do
+  not bury durable architecture or safety decisions only in a session report.
+- `docs/ROADMAP.md` is planning context, not live state. Keep it aligned with
+  `PROGRESS.md` after phase-level changes.
+- `docs/POST_MVP.md` is the parking lot for intentionally deferred ideas.
+- `docs/CHANGELOG.md` records user-visible, architectural, safety, and
+  operational changes by date.
+- Do not paste secrets, env values, private provider payloads, raw source
+  bodies, chat IDs, tokens, database URLs, or production smoke outputs into
+  docs. Use env variable names and placeholder examples only.
+- Remove obsolete docs when they are superseded by source-of-truth docs; if a
+  deletion could be controversial, preserve the file and document the
+  uncertainty in `PROGRESS.md` or the final report.
+
 ## Verification
 
 - For code changes, prefer focused tests first, then broader checks when needed.

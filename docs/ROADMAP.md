@@ -5,10 +5,11 @@ Status: roadmap is subordinate to the canonical control trio:
 `DECISIONS.md` (why).
 
 The current execution pointer is `../PROGRESS.md`: CHUNK 8 hardening is closed
-(FOS-027B2 + sync-layer idempotency) and an email+password / server-side-session
-login phase has landed locally; the next horizon is real product features behind
-login. Docs consolidation is complete; this roadmap is planning context, not the
-live task source.
+(FOS-027B2 + sync-layer idempotency), email+password / server-side-session login
+is built, and deterministic Founder Briefings now persist history. The next
+horizon is real connected data (GitHub product connect/live sync) before an LLM
+briefing narrative. Docs consolidation is complete; this roadmap is planning
+context, not the live task source.
 
 ## Phase 0 - Project Setup
 
@@ -26,7 +27,8 @@ Missing:
 
 - None for the current MVP path.
 
-Next step: follow `../PROGRESS.md` for human-approved manual hosting setup/dry deploy rehearsal, or production auth/GitHub onboarding hardening before deploy.
+Next step: follow `../PROGRESS.md`; do not treat this roadmap as the live task
+queue.
 
 Definition of Done:
 
@@ -45,7 +47,7 @@ Done:
 
 - Canonical `User`, `Workspace`, `Membership`, `IntegrationConnection`,
   `SyncJob`, `SourceRecord`, `EvidenceRef`, `Repository`, `PullRequest`, `Task`,
-  `ActionProposal`, `ActionExecution`, and proposal-scoped
+  `Briefing`, `BriefingItem`, `ActionProposal`, `ActionExecution`, and proposal-scoped
   `ActionExecutionEvent` audit foundations exist.
 - Auth/session foundations exist: a `sessions` table (ORM `UserSession`, stores
   only the sha256 token hash) and a `login_attempts` brute-force throttle table;
@@ -53,9 +55,9 @@ Done:
 - Canonical `tasks` now have a partial unique index
   `uq_tasks_workspace_provider_external_id` and idempotent `ON CONFLICT` upserts
   across the GitHub sync path.
-- Existing migrations are at one Alembic head/current: `c0e1f2a3b4d5` (after the
-  task-uniqueness, `ingested_events`-drift, `sessions`, and `login_attempts`
-  migrations).
+- Existing migrations are at one Alembic head/current: `e7f8a9b0c1d2` (after the
+  task-uniqueness, `ingested_events`-drift, sessions/login-throttle, and
+  briefing-persistence migrations).
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
   compatibility substrate; FOS-009 repointed workspace repository reads to
@@ -63,13 +65,12 @@ Done:
 
 Missing:
 
-- Persistent `Briefing` / `BriefingItem`.
 - `NormalizedEntity` and related generalized entity tables after the GitHub
   spine proves the need.
 - Person ambiguity remains open as ASK-1.
 
-Next step: briefing UI and evidence drawer; physical substrate drop remains a
-later migration/cleanup task.
+Next step: GitHub product connect/live sync identity work; physical substrate
+drop remains a later migration/cleanup task.
 
 Definition of Done:
 
@@ -104,19 +105,22 @@ Done:
   `POST /api/v1/auth/login|logout`, `GET /api/v1/auth/me`,
   `POST /api/v1/auth/change-password`, with `require_session` /
   `get_current_actor` (session-or-operator-key) auth and a DB login throttle.
+- Founder Briefing persistence exists: `POST .../briefings/manual` stores the
+  deterministic briefing, and `GET .../briefings` / `GET .../briefings/{id}`
+  expose workspace-scoped history.
 - LLM paths are gated/off by default.
 
 Missing:
 
 - Full GitHub OAuth/product connect flow.
 - Live GitHub OAuth/product sync execution path.
-- Persistent briefing models.
+- LLM briefing narrative over real connected data.
 - Multi-user / teammate provisioning beyond the single seeded founder.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
 
-Next step: follow `../PROGRESS.md`; selected repository sync UI controls are now
-exposed in the product dashboard (FOS-024).
+Next step: follow `../PROGRESS.md`; GitHub product connect/live sync should
+precede LLM briefing work because the workspace is otherwise mostly empty.
 
 Definition of Done:
 
@@ -157,6 +161,8 @@ Done:
   repositories, open issue/PR highlights, recent work, and source refs.
 - Dashboard and `/briefings` surface deterministic manual briefing with returned
   evidence refs in a frontend evidence drawer.
+- `/briefings` persists generated deterministic briefings and lists/reopens
+  briefing history.
 - Dashboard and `/actions` surface local ActionProposal list/create/approve/
   reject plus guarded execution preview/audit controls.
 - `/actions` renders persisted execution audit events and local receipt/readiness
@@ -172,14 +178,13 @@ Missing:
 - Self-serve workspace onboarding / multi-user invite (today the single founder
   is seeded via `scripts/create_admin_user.py`).
 - Browser/product E2E coverage.
-- The first human-gated live external write proof has been read back into
-  canonical product state and closed after explicit human approval.
 - Selected repository issue and PR sync now have read-only product UI controls
   in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
   allowlisted repository at a time without external writes.
+- GitHub product connect/onboarding and multi-user invites remain missing.
 
-Next step: extend selected sync UI to multiple allowlisted repositories without
-adding external writes (after explicit human approval of additional repos).
+Next step: keep product UI honest while GitHub connect/live sync is added; do
+not add browser-stored operator credentials.
 
 Definition of Done:
 
@@ -221,10 +226,11 @@ Done:
 - Company Brain dashboard panel reads canonical GitHub repositories, issue/task
   records, pull requests, and source refs without reading retained
   `source_events` as primary truth.
-- Manual Founder Briefing v0 can return a deterministic, transient,
+- Manual Founder Briefing v0 can generate and persist a deterministic,
   evidence-aware briefing from local workspace GitHub signals.
-- Product dashboard and `/briefings` page can generate that manual briefing and
-  inspect returned evidence refs in a frontend evidence drawer.
+- Product dashboard and `/briefings` page can generate that manual briefing,
+  inspect returned evidence refs in a frontend evidence drawer, and reopen
+  persisted briefing history.
 - Local ActionProposal approval foundation can store, approve, and reject
   workspace-scoped proposals without external execution.
 - Product dashboard and `/actions` page can list, create, approve, and reject
@@ -252,8 +258,8 @@ Missing:
   repository at a time. External issue/PR URLs and local workspace/proposal/
   connection/evidence identifiers are intentionally omitted from public docs.
 
-Next step: read-only product UI controls for selected repository issue+PR sync
-shipped in FOS-024; extend to multi-repository selected sync next.
+Next step: implement GitHub product connect/live sync with strict
+workspace/installation scoping before adding LLM briefing intelligence.
 
 Definition of Done:
 
@@ -277,12 +283,11 @@ Missing:
 
 - Edge-case handling tied to the GitHub-first E2E.
 - Token-expired handling in the product flow.
-- Evidence drawer in the product frontend.
 - Action failure UI in the product frontend.
 - Filters/search/stale labels for the MVP web app.
 
-Next step: wait until Phase 4 has a working E2E, then polish the actual path
-users run.
+Next step: polish only the real connected-data path as it lands; do not polish
+fixture-only empty states into false product readiness.
 
 Definition of Done:
 
@@ -310,7 +315,7 @@ Done:
 Missing:
 
 - Browser/product GitHub-first E2E tests.
-- Deployed/full-stack smoke run.
+- Deployed/full-stack smoke after auth-session deployment.
 - Manual QA checklist for MVP.
 
 Next step: add focused tests with each implementation slice; do not add broad
@@ -368,8 +373,8 @@ Missing:
 - Worker service if/when queue runtime exists.
 - Broader beta monitoring/alerting and backup verification.
 
-Next step: harden production auth/GitHub onboarding and private-beta operator
-handoff before broader beta use.
+Next step: first auth-session production deploy/handoff, then GitHub
+connect/live sync; keep deploy manual and smoke-gated.
 
 Definition of Done:
 
