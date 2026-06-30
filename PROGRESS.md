@@ -14,9 +14,16 @@
   identity/race debt перед live sync **закрыт** (DEC-050). Следующий лучший
   продуктовый шаг — GitHub product connect / live sync, чтобы заполнить
   workspace реальными данными перед LLM-нарративом.
-- **Repository identity guard (НОВОЕ; DB+upsert):** добавлена миграция
-  `e8f9a0b1c2d3` и уникальный guard
-  `uq_repositories_workspace_provider_full_name` (`workspace_id, provider,
+- **GitHub local repository surface (НОВОЕ):** `.local/repos.json` (25 repos,
+  owner `qtwin-io`, offline/local only) теперь поддержан как fallback GitHub
+  discovery snapshot for repo audit / repository inventory. Добавлен скрипт
+  `scripts/prepare_github_local_snapshot.py`, который нормализует этот файл в
+  `.local/discovery/github/<snapshot>/raw/repos.json` и пишет безопасный
+  `.local/github-repositories.env` allowlist snippet без provider calls,
+  токенов/секретов или write enablement. Локально подготовлен snapshot
+  `.local/discovery/github/local-repos-current/raw/repos.json`. Решение — DEC-051.
+- **Repository identity guard:** добавлена миграция `e8f9a0b1c2d3` и уникальный
+  guard `uq_repositories_workspace_provider_full_name` (`workspace_id, provider,
   full_name`). `_upsert_repository` теперь race-safe across `external_id` and
   `full_name` paths and не понижает стабильный GitHub id обратно до full_name.
   Это закрывает near-term backlog item перед GitHub product connect/live sync.
@@ -105,10 +112,10 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic upgrade head` | ✅ pass | 2026-06-30 | Repository identity guard added `e8f9a0b1c2d3`; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-30 | Repository identity guard pass: **371 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-30 | Repository identity guard pass: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-06-30 | GitHub local repository surface pass: **375 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-06-30 | GitHub local repository surface pass: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-30 | Repository identity guard pass: `npm test` 90 passed, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
+| frontend build | ✅ pass | 2026-06-30 | GitHub local repository surface pass: `npm test` 90 passed, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
 | docs navigation | ✅ pass | 2026-06-30 | Covered by full pytest actualization pass; docs/private-beta/hosting/navigation contract tests remain green |
 | `alembic check` (retained substrate) | ✅ reconciled | 2026-06-30 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; repository identity guard pass: `alembic upgrade head` + `alembic check` зелёные |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
@@ -208,6 +215,23 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-30` — **GitHub local repository surface prep.**
+  Подготовлен offline/local GitHub repository surface из `.local/repos.json`: 25
+  repo records (owner `qtwin-io`, mostly private) без provider calls. Repo audit
+  и repository inventory теперь принимают `.local/repos.json` как fallback
+  discovery snapshot when canonical `.local/discovery/github/<snapshot>/raw/repos.json`
+  absent. Добавлен `scripts/prepare_github_local_snapshot.py`: normalizes owner
+  string → `owner.login`, adds `visibility`, refuses sensitive-looking keys,
+  writes canonical discovery snapshot and safe `.local/github-repositories.env`
+  allowlist snippet. Локально создан ignored snapshot
+  `.local/discovery/github/local-repos-current/raw/repos.json` + ignored
+  `.local/github-repositories.env`. Обновлены DEC-051, README, TODO/ROADMAP,
+  CHANGELOG, PROGRESS. Проверки: focused tests **17 passed**, full backend
+  **375 passed / 1 warning**, `ruff`, `alembic heads/current/upgrade/check`,
+  tracked secret scan, frontend `npm test` **90 passed** + build + typecheck +
+  lint — зелёные. No provider calls, deploys, production DB/cloud
+  writes, raw storage/Obsidian or secrets edits.
 
 - `2026-06-30` — **Repository identity guard before GitHub live sync.**
   Рабочая ветка `fix/repository-identity-guard`. Закрыт near-term blocker перед

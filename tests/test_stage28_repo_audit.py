@@ -127,6 +127,34 @@ def test_repo_audit_reads_fixture_and_computes_repo_facts(tmp_path: Path) -> Non
     assert "owner_candidate_unknown" in second["risks"]
 
 
+def test_repo_audit_reads_root_local_repos_json(tmp_path: Path) -> None:
+    (tmp_path / "repos.json").write_text(
+        json.dumps(
+            [
+                _repo(
+                    name="root-repo",
+                    pushed_at="2026-06-29T00:00:00Z",
+                    root_names=["pyproject.toml"],
+                )
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    audit = load_repo_audit(
+        workspace_path=tmp_path,
+        now=datetime(2026, 6, 30, tzinfo=timezone.utc),
+    )
+
+    assert audit["status"] == "computed"
+    assert audit["repo_count"] == 1
+    assert audit["repo_facts"][0]["full_name"] == "qtwin-io/root-repo"
+    assert audit["source_snapshot"]["path"] == "repos.json"
+    assert audit["source_snapshot"]["snapshot_key"] == "local-root-repos"
+    assert audit["network_calls"] is False
+    assert audit["db_written"] is False
+
+
 def test_repo_audit_exposes_source_snapshot_freshness(tmp_path: Path) -> None:
     raw_path = _write_raw_repos(
         tmp_path,

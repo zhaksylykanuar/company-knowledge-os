@@ -101,7 +101,8 @@ Done:
   `/api/v1/workspaces/{workspace_id}/github/repositories/issues/sync`.
 - Selected repository PR sync exists for explicitly allowlisted repositories:
   `/api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync`.
-- Company Brain repo-audit read model remains available.
+- Company Brain repo-audit read model remains available and can bootstrap from
+  `.local/repos.json` as an offline GitHub repository surface.
 - Email+password login on server-side sessions exists:
   `POST /api/v1/auth/login|logout`, `GET /api/v1/auth/me`,
   `POST /api/v1/auth/change-password`, with `require_session` /

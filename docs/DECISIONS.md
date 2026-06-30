@@ -1113,6 +1113,36 @@ Consequences:
   concurrent GitHub live sync work. GitHub App/product connect design remains
   the next product step.
 
+## DEC-051 - Local GitHub Repository Surface Boots From `.local/repos.json`
+
+Decision (2026-06-30): before GitHub App product connect is implemented, the
+local GitHub repository surface can be bootstrapped from `.local/repos.json`.
+Repo audit and repository inventory now treat that file as a valid offline
+GitHub discovery snapshot when no canonical
+`.local/discovery/github/<snapshot>/raw/repos.json` snapshot exists. The
+canonical discovery layout remains preferred when present.
+
+The helper `scripts/prepare_github_local_snapshot.py` normalizes the root local
+repo list into the canonical discovery layout and writes a safe local repository
+env snippet (`.local/github-repositories.env`) with repo allowlists only. It does
+not call GitHub, does not handle tokens, and refuses sensitive-looking keys in
+input JSON.
+
+Rationale: the founder already has a local repository surface at
+`.local/repos.json`. Supporting it directly lets GitHub dashboard/repo-audit
+surfaces show real repository context immediately, while keeping product GitHub
+connect/live sync as a separate GitHub App installation path.
+
+Consequences:
+
+- `.local/repos.json` is treated as local, offline evidence only; it is not a
+  provider credential source and is not committed.
+- The generated `.local/discovery/github/<snapshot>/raw/repos.json` and
+  `.local/github-repositories.env` are local ignored artifacts.
+- Repository allowlist snippets contain repo names only. Provider writes remain
+  disabled by default; write allowlists still require explicit human approval.
+- GitHub App product connect/live sync remains the next product slice.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

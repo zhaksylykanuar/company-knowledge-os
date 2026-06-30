@@ -406,7 +406,10 @@ def _reconcile(
 
 def _latest_raw_repos_path(workspace: Path) -> Path | None:
     candidates = sorted((workspace / "discovery" / "github").glob("*/raw/repos.json"))
-    return candidates[-1] if candidates else None
+    if candidates:
+        return candidates[-1]
+    root_repos = workspace / "repos.json"
+    return root_repos if root_repos.exists() else None
 
 
 def _snapshot_meta(*, path: Path, workspace: Path, now: datetime) -> dict[str, Any]:
@@ -415,11 +418,7 @@ def _snapshot_meta(*, path: Path, workspace: Path, now: datetime) -> dict[str, A
     except OSError:
         return _empty_snapshot()
     relative = _safe_relative(path, workspace)
-    snapshot_id = None
-    try:
-        snapshot_id = path.parents[1].name
-    except IndexError:
-        snapshot_id = None
+    snapshot_id = _snapshot_id_from_path(path=path, workspace=workspace)
     return {
         "available": True,
         "status": "available",
@@ -429,6 +428,17 @@ def _snapshot_meta(*, path: Path, workspace: Path, now: datetime) -> dict[str, A
         "modified_at": modified.isoformat(),
         "snapshot_age_seconds": max(0, int((now - modified).total_seconds())),
     }
+
+
+def _snapshot_id_from_path(*, path: Path, workspace: Path) -> str | None:
+    try:
+        if path.parent == workspace and path.name == "repos.json":
+            return "local-root-repos"
+        if path.name == "repos.json" and path.parent.name == "raw":
+            return path.parents[1].name
+    except IndexError:
+        return None
+    return None
 
 
 def _empty_snapshot() -> dict[str, Any]:

@@ -101,6 +101,33 @@ def test_repository_inventory_uses_discovery_before_legacy_seed(tmp_path) -> Non
     assert inventory["repo_mapping_policy"] == "repo_is_component_or_evidence_not_jira_project"
 
 
+def test_repository_inventory_uses_root_local_repos_json_when_present(tmp_path) -> None:
+    _write_discovery(
+        tmp_path / "repos.json",
+        [
+            {
+                "name": "root-repo",
+                "full_name": "org/root-repo",
+                "private": True,
+                "default_branch": "main",
+                "updated_at": "2026-06-29T00:00:00+00:00",
+            }
+        ],
+    )
+
+    inventory = load_repository_source_inventory_snapshot(
+        workspace_path=tmp_path,
+        now=datetime(2026, 6, 30, tzinfo=timezone.utc),
+    )
+
+    assert inventory["source_class"] == INVENTORY_DISCOVERY_SNAPSHOT
+    assert inventory["operational_repo_count"] == 1
+    assert inventory["repositories"][0]["full_name"] == "org/root-repo"
+    assert inventory["repositories"][0]["visibility"] == "private"
+    assert inventory["source_snapshot"]["path"] == "repos.json"
+    assert inventory["source_snapshot"]["snapshot_key"] == "local-root-repos"
+
+
 def test_repository_inventory_falls_back_to_legacy_seed_when_no_observation(
     tmp_path,
 ) -> None:

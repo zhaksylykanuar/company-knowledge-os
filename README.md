@@ -95,6 +95,28 @@ page.
 The operator API key and the `/api/v1/workspaces/bootstrap` endpoint remain for
 machine/CI/admin tooling only; they are not part of the founder browser login.
 
+## Local GitHub repository surface
+
+If a local GitHub repository export exists at `.local/repos.json`, FounderOS can
+use it as an offline repository surface before product GitHub App connect/live
+sync is implemented. The repo audit and repository inventory read models accept
+that file directly when no canonical discovery snapshot exists.
+
+To also write the canonical local discovery layout and a safe repository
+allowlist snippet, run:
+
+```bash
+uv run python scripts/prepare_github_local_snapshot.py \
+  --source .local/repos.json \
+  --workspace .local \
+  --snapshot-id local-repos-current
+```
+
+This writes `.local/discovery/github/local-repos-current/raw/repos.json` and
+`.local/github-repositories.env`. The helper is offline-only: it makes no GitHub
+provider calls, stores no tokens/secrets, and keeps provider writes disabled by
+default.
+
 ## Private-beta deployment foundation
 
 The concrete manual private-beta deployment path is documented in

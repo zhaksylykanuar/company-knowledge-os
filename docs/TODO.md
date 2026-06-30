@@ -21,7 +21,8 @@ Implemented foundations:
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with
   idempotent canonical upserts, DB-level Repository identity guards, and no
-  browser-shipped operator key.
+  browser-shipped operator key. Local `.local/repos.json` can now bootstrap the
+  offline repository surface before product connect.
 - Deterministic Company Brain and persisted deterministic Founder Briefings with
   history and evidence refs. No LLM generation is currently implemented.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
@@ -59,7 +60,8 @@ Done when:
 ## Near-Term Backlog
 
 1. **GitHub product connect / live sync.**
-   Build the connect flow, connection status UX, initial sync, reconciliation,
+   Local repository surface is prepared from `.local/repos.json`; now build the
+   connect flow, connection status UX, initial sync, reconciliation,
    rate-limit handling, and observability. Keep provider writes disabled.
 
 2. **First auth-session production deploy.**

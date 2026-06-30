@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Added offline GitHub repository-surface preparation from `.local/repos.json`:
+  repo audit and repository inventory now accept the root local repo list as a
+  fallback discovery snapshot, and `scripts/prepare_github_local_snapshot.py`
+  writes the canonical `.local/discovery/github/<snapshot>/raw/repos.json` layout
+  plus a safe local repo allowlist snippet without provider calls or secrets.
+
 - Added a DB-level GitHub repository identity guard:
   `uq_repositories_workspace_provider_full_name` on
   `(workspace_id, provider, full_name)`. Migration `e8f9a0b1c2d3` de-duplicates
