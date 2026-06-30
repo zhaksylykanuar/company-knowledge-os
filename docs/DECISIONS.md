@@ -1033,7 +1033,8 @@ Consequences:
   (category/title/summary/severity/confidence/recommended_next_step/
   evidence_refs/related_entities/warnings) so a persisted briefing re-renders
   identically. `created_by_user_id` is nullable (`ON DELETE SET NULL`).
-- Migration `e7f8a9b0c1d2` is the new single head.
+- Migration `e7f8a9b0c1d2` was the then-new single head for Briefings Chunk 1;
+  later heads are tracked by newer decisions.
 - Read endpoints are workspace-scoped: a briefing is fetched only within its
   workspace, so a valid id from another workspace is a 404 — isolation is a query
   predicate, not an assumption.
@@ -1074,6 +1075,43 @@ Consequences:
   deliberately revives that operator workflow.
 - Generated/cache/build outputs stay ignored; real secrets and source-of-truth
   raw storage remain untouched.
+
+## DEC-050 - GitHub Repository Identity Uses Workspace/Provider/Full Name Guard
+
+Decision (2026-06-30): canonical GitHub repository identity is protected by two
+workspace-scoped database identities:
+
+1. `(workspace_id, external_id)` remains the stable provider-object identity
+   when GitHub numeric ids are known.
+2. `(workspace_id, provider, full_name)` is a second unique guard for the
+   repository's GitHub `owner/repo` full name, so work-item sync paths that first
+   know only `full_name` converge with later repository sync paths that know the
+   stable GitHub id.
+
+The normalization upsert now inserts with `ON CONFLICT DO NOTHING` without an
+explicit conflict target, letting either unique guard catch a concurrent insert.
+On conflict it reads the existing row by either identity and updates it in place.
+If a stable GitHub id is already known, later work-item paths must not downgrade
+`external_id` back to `full_name`.
+
+Rationale: before GitHub product connect/live sync, repository identity must be
+race-safe at the database layer. The prior app-level fallback lookup by
+`full_name` was enough for sequential selected-sync paths but could race when
+polling/webhooks or multiple live sync paths observe the same repository through
+different identities.
+
+Consequences:
+
+- Migration `e8f9a0b1c2d3` de-duplicates existing duplicate repository rows by
+  `(workspace_id, provider, full_name)`, preferring rows with stable external ids,
+  re-points `pull_requests.repository_id` to the keeper, deletes loser rows, and
+  adds `uq_repositories_workspace_provider_full_name`.
+- The Alembic head moves from `e7f8a9b0c1d2` to `e8f9a0b1c2d3`.
+- Same `full_name` remains allowed across different workspaces; workspace scope
+  is part of both identities.
+- This closes the known Repository cross-path dedupe race that blocked safe
+  concurrent GitHub live sync work. GitHub App/product connect design remains
+  the next product step.
 
 ## ASK - Open Questions For The Human (not decided)
 

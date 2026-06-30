@@ -1,5 +1,16 @@
 # FounderOS Changelog
 
+## 2026-06-30
+
+### Changed
+
+- Added a DB-level GitHub repository identity guard:
+  `uq_repositories_workspace_provider_full_name` on
+  `(workspace_id, provider, full_name)`. Migration `e8f9a0b1c2d3` de-duplicates
+  existing duplicate repository rows, re-points pull requests to the keeper, and
+  makes repository upsert race-safe across the `external_id` and `full_name`
+  paths before GitHub product connect/live sync.
+
 ## 2026-06-29
 
 ### Changed

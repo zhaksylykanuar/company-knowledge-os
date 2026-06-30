@@ -54,10 +54,11 @@ Done:
   account-active state reuses `User.status` (no `is_active`).
 - Canonical `tasks` now have a partial unique index
   `uq_tasks_workspace_provider_external_id` and idempotent `ON CONFLICT` upserts
-  across the GitHub sync path.
-- Existing migrations are at one Alembic head/current: `e7f8a9b0c1d2` (after the
+  across the GitHub sync path. Canonical `repositories` also have a
+  workspace/provider/full_name unique guard for cross-path GitHub identity.
+- Existing migrations are at one Alembic head/current: `e8f9a0b1c2d3` (after the
   task-uniqueness, `ingested_events`-drift, sessions/login-throttle, and
-  briefing-persistence migrations).
+  briefing-persistence, and repository full-name identity migrations).
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
   compatibility substrate; FOS-009 repointed workspace repository reads to
@@ -69,7 +70,7 @@ Missing:
   spine proves the need.
 - Person ambiguity remains open as ASK-1.
 
-Next step: GitHub product connect/live sync identity work; physical substrate
+Next step: GitHub product connect/live sync design and implementation; physical substrate
 drop remains a later migration/cleanup task.
 
 Definition of Done:

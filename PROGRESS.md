@@ -10,13 +10,21 @@
 ## ▶ СЕЙЧАС
 
 - **Chunk:** первая продуктовая фича за логином — **Briefings**. Chunk 1
-  (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Следующий
-  лучший продуктовый шаг — GitHub product connect / live sync, чтобы заполнить
+  (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Repository
+  identity/race debt перед live sync **закрыт** (DEC-050). Следующий лучший
+  продуктовый шаг — GitHub product connect / live sync, чтобы заполнить
   workspace реальными данными перед LLM-нарративом.
-- **Briefings Chunk 1 — персистентные сводки (НОВОЕ; бэкенд+фронтенд, гейты зелёные):**
+- **Repository identity guard (НОВОЕ; DB+upsert):** добавлена миграция
+  `e8f9a0b1c2d3` и уникальный guard
+  `uq_repositories_workspace_provider_full_name` (`workspace_id, provider,
+  full_name`). `_upsert_repository` теперь race-safe across `external_id` and
+  `full_name` paths and не понижает стабильный GitHub id обратно до full_name.
+  Это закрывает near-term backlog item перед GitHub product connect/live sync.
+  Решение — DEC-050.
+- **Briefings Chunk 1 — персистентные сводки (бэкенд+фронтенд, гейты зелёные):**
   ручная Founder-сводка теперь **сохраняется**. Детерминированная генерация не
   менялась и по-прежнему без LLM — сохраняется только её вывод. Новые модели
-  `Briefing` / `BriefingItem` + миграция `e7f8a9b0c1d2` (новый единственный head),
+  `Briefing` / `BriefingItem` + миграция `e7f8a9b0c1d2` (Briefings head на момент chunk),
   workspace-scoped, `ON DELETE CASCADE`, элементы упорядочены по `position` и
   повторяют форму генератора. `POST .../briefings/manual` запускает генерацию,
   **сохраняет** сводку + элементы и возвращает её с `id`
@@ -61,7 +69,7 @@
 - **Текущее состояние:** детерминированный evidence-first спайн + продуктовый
   логин (email+password, серверные сессии) + **персистентные briefings** поверх
   него; операторский API-ключ остаётся для server/CI/админ-скриптов. Один
-  alembic head — `e7f8a9b0c1d2`.
+  alembic head — `e8f9a0b1c2d3`.
 - **Дальше:** GitHub product connect / live sync (предпочтительно GitHub App
   installation + strict workspace scoping) и реальная синхронизация; затем
   Briefings Chunk 2 — LLM-нарратив поверх уже персистентной модели и реальных
@@ -94,15 +102,15 @@ DONE строго = есть код + проходящий тест/рабочи
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ pass | 2026-06-30 | Actualization pass: один линейный head `e7f8a9b0c1d2`; `uv run alembic heads`, `uv run alembic current`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
+| `alembic upgrade head` | ✅ pass | 2026-06-30 | Repository identity guard added `e8f9a0b1c2d3`; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-30 | Actualization pass: **368 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-30 | Actualization pass: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-06-30 | Repository identity guard pass: **371 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-06-30 | Repository identity guard pass: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-30 | Actualization pass: `npm test` 90 passed, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
+| frontend build | ✅ pass | 2026-06-30 | Repository identity guard pass: `npm test` 90 passed, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
 | docs navigation | ✅ pass | 2026-06-30 | Covered by full pytest actualization pass; docs/private-beta/hosting/navigation contract tests remain green |
-| `alembic check` (retained substrate) | ✅ reconciled | 2026-06-30 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; actualization pass: `alembic upgrade head` + `alembic check` зелёные |
+| `alembic check` (retained substrate) | ✅ reconciled | 2026-06-30 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; repository identity guard pass: `alembic upgrade head` + `alembic check` зелёные |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
 | prod smoke | ✅ pass | 2026-06-27 | FOS-026C: deployed Railway read-only smoke passed with minimal private-beta workspace/owner context; no provider writes, LLM calls, selected repo sync, or ActionProposal execute |
@@ -200,6 +208,24 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-30` — **Repository identity guard before GitHub live sync.**
+  Рабочая ветка `fix/repository-identity-guard`. Закрыт near-term blocker перед
+  GitHub product connect/live sync: в `repositories` добавлен DB-level unique
+  guard `uq_repositories_workspace_provider_full_name` (`workspace_id, provider,
+  full_name`) миграцией `e8f9a0b1c2d3` (новый single head). Миграция
+  детерминированно дедупит существующие duplicate rows по full_name, re-points
+  `pull_requests.repository_id` на keeper и удаляет loser rows. `_upsert_repository`
+  переведён на race-safe `ON CONFLICT DO NOTHING` + select/update by either
+  identity; work-item paths no longer downgrade stable GitHub numeric ids back to
+  full_name. Добавлены concurrent cross-path, stable-id preservation,
+  workspace-isolation and schema-constraint tests. Обновлены DEC-050,
+  `docs/TODO.md`, `docs/ROADMAP.md`, `docs/CHANGELOG.md`, `PROGRESS.md`.
+  Проверки: focused sync/model tests **19 passed**, full backend **371 passed / 1
+  warning**, `ruff`, `alembic heads/current/upgrade/check`, tracked secret scan,
+  frontend `npm test` **90 passed** + build + typecheck + lint — зелёные. No push,
+  provider calls, deploys, production DB/cloud writes, raw storage/Obsidian or
+  secrets edits.
 
 - `2026-06-30` — **Project actualization / continuation checkpoint.**
   Сверены required docs (`docs/README.md`, `AGENTS.md`, `CLAUDE.md`), live

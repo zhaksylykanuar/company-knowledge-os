@@ -304,6 +304,35 @@ async def test_repository_upsert_concurrent_yields_single_row() -> None:
         await _cleanup(user_id, workspace_id)
 
 
+async def test_repository_upsert_concurrent_cross_path_yields_single_row() -> None:
+    # Live sync can see the same repository concurrently from two identities:
+    # work items use full_name as a temporary external_id, while repository sync
+    # uses the stable GitHub id. Both paths must converge without IntegrityError.
+    marker = uuid4().hex[:10]
+    user_id, workspace_id = await _seed_workspace(marker)
+    full_name = f"qtwin-io/repo-{marker}"
+    stable_external_id = f"gh-id-{marker}"
+    try:
+        results = await asyncio.gather(
+            *(
+                _upsert_repository_once(workspace_id, full_name, full_name)
+                for _ in range(5)
+            ),
+            *(
+                _upsert_repository_once(workspace_id, stable_external_id, full_name)
+                for _ in range(5)
+            ),
+        )
+        assert sum(1 for created, _ in results if created) == 1
+        assert len({repo_id for _, repo_id in results}) == 1
+        assert await _count_repositories(workspace_id, full_name) == 1
+        async with AsyncSessionLocal() as session:
+            row = await session.get(Repository, results[0][1])
+            assert row is not None and row.external_id == stable_external_id
+    finally:
+        await _cleanup(user_id, workspace_id)
+
+
 async def test_repository_upsert_dedupes_across_external_id_and_full_name() -> None:
     # Load-bearing cross-path dedup: a repo first seen via the work-item path
     # (external_id == full_name) and later via the main sync (external_id ==
@@ -328,3 +357,49 @@ async def test_repository_upsert_dedupes_across_external_id_and_full_name() -> N
             assert row is not None and row.external_id == f"gh-id-{marker}"
     finally:
         await _cleanup(user_id, workspace_id)
+
+
+async def test_repository_upsert_does_not_downgrade_stable_external_id() -> None:
+    marker = uuid4().hex[:10]
+    user_id, workspace_id = await _seed_workspace(marker)
+    full_name = f"qtwin-io/repo-{marker}"
+    stable_external_id = f"gh-id-{marker}"
+    try:
+        main_created, main_id = await _upsert_repository_once(
+            workspace_id, stable_external_id, full_name, default_branch="main"
+        )
+        work_item_created, work_item_id = await _upsert_repository_once(
+            workspace_id, full_name, full_name, default_branch="develop"
+        )
+        assert main_created is True
+        assert work_item_created is False
+        assert main_id == work_item_id
+        async with AsyncSessionLocal() as session:
+            row = await session.get(Repository, main_id)
+            assert row is not None
+            assert row.external_id == stable_external_id
+            assert row.default_branch == "develop"
+    finally:
+        await _cleanup(user_id, workspace_id)
+
+
+async def test_repository_full_name_identity_is_workspace_scoped() -> None:
+    marker = uuid4().hex[:10]
+    user_id_one, workspace_id_one = await _seed_workspace(f"{marker}-one")
+    user_id_two, workspace_id_two = await _seed_workspace(f"{marker}-two")
+    full_name = f"qtwin-io/repo-{marker}"
+    try:
+        first_created, first_id = await _upsert_repository_once(
+            workspace_id_one, f"gh-id-{marker}-one", full_name
+        )
+        second_created, second_id = await _upsert_repository_once(
+            workspace_id_two, f"gh-id-{marker}-two", full_name
+        )
+        assert first_created is True
+        assert second_created is True
+        assert first_id != second_id
+        assert await _count_repositories(workspace_id_one, full_name) == 1
+        assert await _count_repositories(workspace_id_two, full_name) == 1
+    finally:
+        await _cleanup(user_id_one, workspace_id_one)
+        await _cleanup(user_id_two, workspace_id_two)

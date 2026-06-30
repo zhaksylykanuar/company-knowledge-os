@@ -9,7 +9,7 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, literal_column, select, update
+from sqlalchemy import func, literal_column, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -587,24 +587,6 @@ async def _upsert_repository(
 ) -> tuple[Repository, bool]:
     full_name = _repository_full_name(repo)
 
-    # Cross-path dedup (load-bearing): the main sync keys external_id on the
-    # GitHub numeric id (build_normalized_repository) while the work-item path
-    # keys it on full_name, so the same repo can be reached under two different
-    # external_id values. Resolve by external_id first, then by full_name, so
-    # those paths converge onto one row instead of creating a duplicate. This is
-    # why a single ON CONFLICT (workspace_id, external_id) is insufficient here.
-    existing = await session.scalar(
-        select(Repository)
-        .where(Repository.workspace_id == sync_job.workspace_id)
-        .where(Repository.external_id == external_id)
-    )
-    if existing is None:
-        existing = await session.scalar(
-            select(Repository)
-            .where(Repository.workspace_id == sync_job.workspace_id)
-            .where(Repository.full_name == full_name)
-        )
-
     mutable = {
         Repository.provider: SOURCE_RECORD_PROVIDER_GITHUB,
         Repository.external_id: external_id,
@@ -619,32 +601,68 @@ async def _upsert_repository(
         Repository.updated_at: func.now(),
     }
 
-    if existing is not None:
-        # Found via either key — update in place by primary key (no conflict).
-        await session.execute(
-            update(Repository).where(Repository.id == existing.id).values(mutable)
-        )
-        repository = await session.get(
-            Repository, existing.id, populate_existing=True
-        )
-        return repository, False
-
-    # Not found — race-safe insert: concurrent inserts of the same external_id
-    # converge via ON CONFLICT DO UPDATE instead of raising IntegrityError.
-    # RETURNING (xmax = 0) preserves the created/updated counter, and the row is
-    # read back so callers keep receiving a real ORM Repository for .id linking.
+    # Cross-path dedup (load-bearing): the main sync keys external_id on the
+    # GitHub numeric id (build_normalized_repository) while the work-item path
+    # initially keys it on full_name. The database now has guards for both
+    # identities:
+    #   * uq_repositories_workspace_external_id
+    #   * uq_repositories_workspace_provider_full_name
+    #
+    # ``ON CONFLICT DO NOTHING`` deliberately has no explicit target, so either
+    # unique guard can catch a concurrent insert. If a conflict happened, read
+    # the canonical row by either identity and update in place. This avoids an
+    # IntegrityError when live polling/webhook paths race across identities.
     statement = (
         pg_insert(Repository)
         .values({Repository.workspace_id: sync_job.workspace_id, **mutable})
-        .on_conflict_do_update(
-            constraint="uq_repositories_workspace_external_id",
-            set_=mutable,
-        )
-        .returning(Repository.id, literal_column("(xmax = 0)"))
+        .on_conflict_do_nothing()
+        .returning(Repository.id)
     )
-    row = (await session.execute(statement)).one()
-    repository = await session.get(Repository, row[0], populate_existing=True)
-    return repository, bool(row[1])
+    inserted = (await session.execute(statement)).first()
+    if inserted is not None:
+        repository = await session.get(
+            Repository, inserted[0], populate_existing=True
+        )
+        return repository, True
+
+    existing = await session.scalar(
+        select(Repository)
+        .where(Repository.workspace_id == sync_job.workspace_id)
+        .where(Repository.provider == SOURCE_RECORD_PROVIDER_GITHUB)
+        .where(
+            or_(
+                Repository.external_id == external_id,
+                Repository.full_name == full_name,
+            )
+        )
+        .order_by(
+            (Repository.full_name == full_name).desc(),
+            (Repository.external_id == external_id).desc(),
+            Repository.updated_at.desc().nulls_last(),
+            Repository.created_at.desc().nulls_last(),
+            Repository.id.desc(),
+        )
+    )
+    if existing is None:
+        raise GitHubNormalizationError(
+            "repository upsert conflict could not be resolved"
+        )
+
+    update_values = dict(mutable)
+    if external_id == full_name:
+        # Work-item-created repository records use full_name as a temporary
+        # external_id on insert. Once a later main sync has learned the stable
+        # GitHub id, any concurrent/subsequent work-item update must not
+        # downgrade it back to full_name. Removing this field for every
+        # work-item update also avoids a stale pre-upgrade read racing after the
+        # stable-id update.
+        update_values.pop(Repository.external_id, None)
+
+    await session.execute(
+        update(Repository).where(Repository.id == existing.id).values(update_values)
+    )
+    repository = await session.get(Repository, existing.id, populate_existing=True)
+    return repository, False
 
 
 async def _ensure_repository_for_work_item(

@@ -13,14 +13,15 @@ first.
 Implemented foundations:
 
 - FastAPI backend with canonical `/api/v1` routes, async SQLAlchemy/Postgres,
-  Alembic migrations, and one current Alembic head (`e7f8a9b0c1d2`).
+  Alembic migrations, and one current Alembic head (`e8f9a0b1c2d3`).
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
 - Email+password founder login on server-side sessions (Argon2id, httpOnly
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with
-  idempotent canonical upserts and no browser-shipped operator key.
+  idempotent canonical upserts, DB-level Repository identity guards, and no
+  browser-shipped operator key.
 - Deterministic Company Brain and persisted deterministic Founder Briefings with
   history and evidence refs. No LLM generation is currently implemented.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
@@ -57,32 +58,26 @@ Done when:
 
 ## Near-Term Backlog
 
-1. **Fix Repository cross-path dedupe race before concurrent live sync.**
-   Current known debt: repository upsert can dedupe by `external_id` with a DB
-   constraint, but cross-path dedupe by `full_name` is app-level. Add the proper
-   DB-level guard/identity decision before polling + webhooks can race.
-
-2. **GitHub product connect / live sync.**
+1. **GitHub product connect / live sync.**
    Build the connect flow, connection status UX, initial sync, reconciliation,
    rate-limit handling, and observability. Keep provider writes disabled.
 
-3. **First auth-session production deploy.**
+2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade
    head`, smoke. Do not add auto-deploy or provider-write smoke without explicit
    human approval.
 
-4. **Briefings Chunk 2: LLM narrative over real evidence.**
+3. **Briefings Chunk 2: LLM narrative over real evidence.**
    Add only after real connected data exists. LLM output must be strict JSON,
    schema-validated, evidence-backed, and persisted only after deterministic
    validation. LLMs must not mutate production data or call providers.
 
-5. **Multi-user / teammate provisioning.**
+4. **Multi-user / teammate provisioning.**
    Add invite/provisioning flow after single-founder auth/session behavior is
    deployed and stable.
 
 ## Known Debts / Watch List
 
-- `Repository` identity/race debt described above.
 - Retained compatibility substrate (`source_events`, `normalized_activity_items`,
   `ingested_events`) still exists; do not drop it without a scoped migration and
   explicit approval.
