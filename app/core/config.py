@@ -167,9 +167,9 @@ class Settings(BaseSettings):
     )
     api_auth_header_name: str = "X-FounderOS-API-Key"
 
-    # --- Email+password server-side sessions (Chunk 1: core only) ---
-    # Session lifetime; cookie placeholders are wired into an httpOnly+Secure
-    # cookie in a later chunk. No secrets here.
+    # --- Email+password server-side sessions ---
+    # Session lifetime and non-secret cookie metadata. The cookie Secure flag is
+    # derived from APP_ENV at response time (Secure outside local-like envs).
     session_ttl_days: int = Field(
         default=14,
         validation_alias=AliasChoices("FOUNDEROS_SESSION_TTL_DAYS"),
@@ -177,10 +177,6 @@ class Settings(BaseSettings):
     session_cookie_name: str = Field(
         default="founderos_session",
         validation_alias=AliasChoices("FOUNDEROS_SESSION_COOKIE_NAME"),
-    )
-    session_cookie_secure: bool = Field(
-        default=True,
-        validation_alias=AliasChoices("FOUNDEROS_SESSION_COOKIE_SECURE"),
     )
     session_cookie_samesite: str = Field(
         default="lax",

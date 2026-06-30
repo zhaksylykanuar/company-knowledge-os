@@ -2,17 +2,40 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая ветка `main`; `main` опережает `origin/main` на 18 локальных коммитов
-> (sync-layer hardening + auth-фаза + русский UI поверх запушенного `82fb52f`).
-> Remote publish всё ещё ждёт, пока человек явно не попросит запушить.
+> Текущая ветка `main`. Локальные коммиты не пушить без явного запроса
+> человека.
 
 ---
 
 ## ▶ СЕЙЧАС
 
-- **Chunk:** `CHUNK 8 — Testing Gate + Deploy` закрыт по hardening-части;
-  следующий горизонт — реальные продуктовые фичи **за** логином.
-- **Что сделано (локальная серия из 18 коммитов поверх `82fb52f`, ещё не в `origin/main`):**
+- **Chunk:** первая продуктовая фича за логином — **Briefings**. Chunk 1
+  (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Repository
+  identity/race debt перед live sync **закрыт** (DEC-050). Следующий лучший
+  продуктовый шаг — GitHub product connect / live sync, чтобы заполнить
+  workspace реальными данными перед LLM-нарративом.
+- **Repository identity guard (НОВОЕ; DB+upsert):** добавлена миграция
+  `e8f9a0b1c2d3` и уникальный guard
+  `uq_repositories_workspace_provider_full_name` (`workspace_id, provider,
+  full_name`). `_upsert_repository` теперь race-safe across `external_id` and
+  `full_name` paths and не понижает стабильный GitHub id обратно до full_name.
+  Это закрывает near-term backlog item перед GitHub product connect/live sync.
+  Решение — DEC-050.
+- **Briefings Chunk 1 — персистентные сводки (бэкенд+фронтенд, гейты зелёные):**
+  ручная Founder-сводка теперь **сохраняется**. Детерминированная генерация не
+  менялась и по-прежнему без LLM — сохраняется только её вывод. Новые модели
+  `Briefing` / `BriefingItem` + миграция `e7f8a9b0c1d2` (Briefings head на момент chunk),
+  workspace-scoped, `ON DELETE CASCADE`, элементы упорядочены по `position` и
+  повторяют форму генератора. `POST .../briefings/manual` запускает генерацию,
+  **сохраняет** сводку + элементы и возвращает её с `id`
+  (`persistence:"persisted"`); плюс история: `GET .../briefings` (новые сверху)
+  и `GET .../briefings/{id}`, обе session/operator-auth и строго workspace-scoped
+  (чужой workspace → 404). Фронтенд: «Сформировать сводку» сохраняет и показывает
+  сводку, есть список истории с переоткрытием прошлых сводок (русские строки в
+  `web/lib/messages.ts`). Бэкенд: `pytest 368 passed`, `ruff` чисто,
+  `alembic check` чисто. Фронтенд: `npm test` 90, build/lint/typecheck зелёные.
+  Без LLM и без GitHub OAuth/connect. Решение — DEC-048.
+- **Что сделано ранее (sync-hardening/auth/русский UI series перед Briefings):**
   - **Sync-layer hardening (FOS-027B2 → далее):** в канонические `tasks` добавлен
     partial unique index `uq_tasks_workspace_provider_external_id`
     (`workspace_id, source_provider, external_id` при `external_id IS NOT NULL`;
@@ -44,15 +67,17 @@
   - **Русский UI:** вся пользовательская копия вынесена в центральный каталог
     сообщений `web/lib/messages.ts` (без i18n-фреймворка).
 - **Текущее состояние:** детерминированный evidence-first спайн + продуктовый
-  логин (email+password, серверные сессии) поверх него; операторский API-ключ
-  остаётся для server/CI/админ-скриптов. Один alembic head — `c0e1f2a3b4d5`.
-- **Дальше (реальные фичи за логином):** персистентная модель `Briefing` +
-  LLM-пайплайн; GitHub OAuth / продуктовый connect и живая синхронизация;
-  провижининг второго пользователя/тиммейта (мультиюзер); первый прод-деплой на
-  Railway.
-- **Примечание:** это был docs-only проход сверки документации с кодом/git —
-  тесты в этом проходе заново не прогонялись; зелёные проверки относятся к
-  моменту коммитов соответствующих фаз.
+  логин (email+password, серверные сессии) + **персистентные briefings** поверх
+  него; операторский API-ключ остаётся для server/CI/админ-скриптов. Один
+  alembic head — `e8f9a0b1c2d3`.
+- **Дальше:** GitHub product connect / live sync (предпочтительно GitHub App
+  installation + strict workspace scoping) и реальная синхронизация; затем
+  Briefings Chunk 2 — LLM-нарратив поверх уже персистентной модели и реальных
+  evidence-backed данных; провижининг второго пользователя/тиммейта
+  (мультиюзер); первый прод-деплой на Railway.
+- **Примечание:** Briefings Chunk 1 — это реальный код (модели / миграция /
+  эндпоинты / фронтенд) с зелёными гейтами; бэкенд и фронтенд закоммичены
+  отдельно, push не делался.
 
 ---
 
@@ -66,25 +91,26 @@ Chunks: 2 / 9
 Разбивка: **DONE = 22** · **PARTIAL = 6** · **MISSING = 1**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
-Для сравнения: `docs/TODO.md` помечает «done» ~22 задачи **собственной** схемы (FOS-DB/GH/BRF/ACT/E2E/FE), что создаёт впечатление почти готового backend MVP; против playbook/main-path схемы строго готово 14.
+`docs/TODO.md` теперь содержит только near-term backlog; завершённые детали
+живут в этом файле, `docs/CHANGELOG.md` и git history.
 
 **Легенда статусов задачи:** `[ ]` todo · `[~]` in progress/partial · `[x]` done · `[!]` blocked
 
 ---
 
-## 🚦 GATE HEALTH (результат последней проверки — 2026-06-25)
+## 🚦 GATE HEALTH (результат последней проверки — 2026-06-30)
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ single head | 2026-06-28 | Auth/sync-hardening migrations added (`f7b8c9d0e1a2` task-uniqueness → `a8c9d0e1f2b3` ingested_events drift → `b9d0e1f2a3c4` sessions → `c0e1f2a3b4d5` login_attempts). Один линейный head `c0e1f2a3b4d5` (проверено по цепочке `down_revision`; в docs-only проходе не переприменялось) |
+| `alembic upgrade head` | ✅ pass | 2026-06-30 | Repository identity guard added `e8f9a0b1c2d3`; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-26 | FOS-023 on `main`: **287 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-26 | FOS-023 on `main`: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-06-30 | Repository identity guard pass: **371 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-06-30 | Repository identity guard pass: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-26 | FOS-025C on `main`: local `npm test`, `npm run build`, `npm run typecheck`, and `npm run lint` passed; CI frontend job added |
-| docs navigation | ✅ pass | 2026-06-26 | FOS-023 on `main`: `tests/test_docs_navigation_integrity.py` 2 passed |
-| `alembic check` (retained substrate) | ✅ reconciled | 2026-06-28 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3` (индексы/ограничения приведены к ORM `IngestedEvent`, без изменения данных). В docs-only проходе `alembic check` заново не запускался |
+| frontend build | ✅ pass | 2026-06-30 | Repository identity guard pass: `npm test` 90 passed, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
+| docs navigation | ✅ pass | 2026-06-30 | Covered by full pytest actualization pass; docs/private-beta/hosting/navigation contract tests remain green |
+| `alembic check` (retained substrate) | ✅ reconciled | 2026-06-30 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; repository identity guard pass: `alembic upgrade head` + `alembic check` зелёные |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
 | prod smoke | ✅ pass | 2026-06-27 | FOS-026C: deployed Railway read-only smoke passed with minimal private-beta workspace/owner context; no provider writes, LLM calls, selected repo sync, or ActionProposal execute |
@@ -122,8 +148,8 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ### CHUNK 4 — Briefing MVP
 *Gate: пользователь генерирует briefing с evidence drawer.*
-- [~] FOS-013 — Briefing backend — `app/services/founder_briefing_service.py` детерминированный, transient (`BRIEFING_PERSISTENCE_TRANSIENT`), без LLM и без таблиц Briefing/BriefingItem. `tests/test_founder_briefing_api.py` зелёный
-- [x] FOS-014 — Briefing UI + evidence drawer — `web/components/BriefingPanel.tsx` + `EvidenceDrawer.tsx`; `web/app/dashboard` and `web/app/briefings` call the deterministic manual briefing endpoint, render returned briefing items/signals/warnings, and show provided evidence refs without inventing facts
+- [x] FOS-013 — Briefing backend — `app/services/founder_briefing_service.py` детерминированный и без LLM; Chunk 1 добавил `Briefing`/`BriefingItem` persistence + history поверх той же генерации. `tests/test_founder_briefing_api.py` зелёный
+- [x] FOS-014 — Briefing UI + evidence drawer — `web/components/BriefingPanel.tsx` + `EvidenceDrawer.tsx`; `web/app/dashboard` and `web/app/briefings` call the deterministic manual briefing endpoint, persist/show the briefing, list/reopen history, render returned briefing items/signals/warnings, and show provided evidence refs without inventing facts
 
 ### CHUNK 5 — Action Approval 🎯 full main E2E
 *Gate: approved action создаёт реальный GitHub issue.*
@@ -136,12 +162,12 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] FOS-022 — Selected repository issue sync — `POST /api/v1/workspaces/{workspace_id}/github/repositories/issues/sync` reads issues only from explicit read-sync allowlisted repositories, uses encrypted GitHub connection access for provider reads, creates a manual SyncJob, normalizes selected issues into canonical `SourceRecord`/`Task` + repository records, skips PR-shaped issue API records, preserves open/closed state, and keeps external writes disabled. Verified live against the approved smoke repository only; no `/execute` call and no new GitHub issue/write.
 - [x] FOS-023 — Selected repository PR sync — `POST /api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync` reads PRs only from explicit read-sync allowlisted repositories, validates allowlist before token decrypt/provider reads, creates a manual SyncJob, normalizes selected PRs into canonical `SourceRecord`/`PullRequest` + repository records, preserves open/closed/merged state, avoids duplicate repository rows after selected issue sync, de-dupes PR read models by repository+number, and keeps external writes disabled. Verified with read-only provider mocks for the approved repository scope; no `/execute` call and no GitHub write.
 
-### CHUNK 6 — Remaining Connectors
+### CHUNK 6 — Remaining Connectors — FROZEN / POST-MVP
 *Gate: Jira / Gmail / Drive / Documents видны в Brain.*
-- [~] FOS-JIRA-01 — Jira connector minimal — `app/connectors/jira.py` + `jira_discovery`/`jira_graph_mapping`; нет `web/app/jira`, не в каноническом Brain
-- [~] FOS-GMAIL-01 — Gmail connector minimal — `app/connectors/gmail.py` + gmail-модели + `app/api/gmail.py`; нет `web/app/gmail`
-- [~] FOS-019 — Drive connector minimal — `app/connectors/google_drive.py` + `app/api/drive.py`; нет `web/app/drive`
-- [~] FOS-DOC-01 — Documents module — есть `source_documents` (RAG-ingestion), но нет канонического Document CRUD (`body_markdown`, §7.11) и `web/app/documents`
+- [ ] FOS-JIRA-01 — Jira connector minimal — frozen until GitHub product connect/live sync proves the ingestion pattern. No active `app/connectors/jira.py` or `web/app/jira` exists after the Lineage-2 purge.
+- [ ] FOS-GMAIL-01 — Gmail connector minimal — frozen until after GitHub. No active `app/connectors/gmail.py` or `web/app/gmail` exists.
+- [ ] FOS-019 — Drive connector minimal — frozen until after GitHub. No active `app/connectors/google_drive.py` or `web/app/drive` exists.
+- [ ] FOS-DOC-01 — Documents module — post-MVP; no canonical Document CRUD (`body_markdown`, §7.11) or `web/app/documents` exists.
 
 ### CHUNK 7 — Polish + Repo Audit UI
 *Gate: нет dead-end состояний; repo audit виден в UI.*
@@ -173,16 +199,84 @@ DONE строго = есть код + проходящий тест/рабочи
 
 - ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). `source_events` repointed to compatibility fallback in FOS-009 (DEC-030); physical drop remains a later migration/cleanup task, not this feature path.
 
-- [SPINE] **Selected repository sync UI controls are next.** The live
-  write/read-back/cleanup loop, selected repository issue sync, and selected
-  repository PR sync backend path are verified for the approved scope. Live
-  OAuth/provider sync remains outside this path; broader multi-repository sync
-  still requires explicit human-approved repository scope.
+- [SPINE] **GitHub product connect/live sync is next.** The live
+  write/read-back/cleanup loop, selected repository issue sync, selected
+  repository PR sync backend path, and selected sync UI controls are verified
+  for the approved scope. Product OAuth/App connect and broader live sync remain
+  outside this path and must preserve explicit repository/workspace scope.
 
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-06-30` — **Repository identity guard before GitHub live sync.**
+  Рабочая ветка `fix/repository-identity-guard`. Закрыт near-term blocker перед
+  GitHub product connect/live sync: в `repositories` добавлен DB-level unique
+  guard `uq_repositories_workspace_provider_full_name` (`workspace_id, provider,
+  full_name`) миграцией `e8f9a0b1c2d3` (новый single head). Миграция
+  детерминированно дедупит существующие duplicate rows по full_name, re-points
+  `pull_requests.repository_id` на keeper и удаляет loser rows. `_upsert_repository`
+  переведён на race-safe `ON CONFLICT DO NOTHING` + select/update by either
+  identity; work-item paths no longer downgrade stable GitHub numeric ids back to
+  full_name. Добавлены concurrent cross-path, stable-id preservation,
+  workspace-isolation and schema-constraint tests. Обновлены DEC-050,
+  `docs/TODO.md`, `docs/ROADMAP.md`, `docs/CHANGELOG.md`, `PROGRESS.md`.
+  Проверки: focused sync/model tests **19 passed**, full backend **371 passed / 1
+  warning**, `ruff`, `alembic heads/current/upgrade/check`, tracked secret scan,
+  frontend `npm test` **90 passed** + build + typecheck + lint — зелёные. No push,
+  provider calls, deploys, production DB/cloud writes, raw storage/Obsidian or
+  secrets edits.
+
+- `2026-06-30` — **Project actualization / continuation checkpoint.**
+  Сверены required docs (`docs/README.md`, `AGENTS.md`, `CLAUDE.md`), live
+  status, near-term backlog, git state and targeted repository/GitHub sync debt.
+  Remote checked with `git fetch origin`: `main` чистый, локальная ветка
+  **ahead `origin/main`** (`origin/main` на `016c7e7`), push не делался. Текущий следующий
+  инженерный шаг не меняется: перед GitHub product connect/live sync закрыть
+  Repository identity/race debt — DB-level guard for workspace-scoped GitHub
+  repository `full_name`/identity, then continue GitHub App/product connect
+  design. Проверки actualized: `uv run ruff check .`, `uv run alembic heads`,
+  `uv run alembic current`, `uv run alembic upgrade head`, `uv run alembic
+  check`, `uv run pytest -q` (**368 passed / 1 warning**), tracked secret scan,
+  frontend `npm test` (**90 passed**) + build + typecheck + lint — зелёные. No
+  provider calls, deploys, production DB/cloud writes, raw storage/Obsidian or
+  secrets edits.
+
+- `2026-06-29` — **Project-wide audit / cleanup / docs refresh.**
+  Проведена полная инвентаризация tracked/untracked структуры без чтения
+  секретов. Удалены 3 obsolete grouped-lifecycle operator scripts
+  (`doctor_no_marker_grouped_lifecycle_review.py`,
+  `manual_no_marker_grouped_lifecycle_review.py`,
+  `manual_no_marker_grouped_lifecycle_review_sweep.py`): они не имели ссылок из
+  активного пути и не импортировались из-за уже удалённого report-модуля.
+  `docs/TODO.md` сжат из completed-work ledger в near-term backlog; active docs
+  обновлены под persisted Briefings и следующий шаг GitHub product connect/live
+  sync перед LLM-нарративом. Добавлены doc-maintenance правила в
+  `docs/README.md`/`AGENTS.md`, Make check targets, расширен `.gitignore`,
+  убран неиспользуемый `session_cookie_secure` config field, а secret scan
+  теперь тихо пропускает deleted-but-not-yet-staged files. Проверки: `uv sync
+  --frozen`, `ruff`, `alembic upgrade head`, `alembic check`, full pytest
+  **368 passed / 1 warning**, frontend `npm test` **90 passed** + build +
+  typecheck + lint, docs contract tests **22 passed**, tracked secret scan,
+  markdown link sanity, `git diff --check` — зелёные. No push, deploy, provider
+  calls, production DB/cloud writes, raw storage/Obsidian/secrets edits.
+
+- `2026-06-29` — **Briefings Chunk 1: персистентные сводки (бэкенд+фронтенд).**
+  Ручная Founder-сводка теперь сохраняется. Генерация
+  (`founder_briefing_service`) не менялась и без LLM — сохраняется только вывод.
+  Бэкенд: новые модели `Briefing`/`BriefingItem` (`app/db/briefing_models.py`),
+  миграция `e7f8a9b0c1d2` (новый head; workspace-scoped, `ON DELETE CASCADE`,
+  `position`-порядок, форма элементов = форма генератора),
+  `briefing_persistence_service`, `POST .../briefings/manual` сохраняет и
+  возвращает сводку с `id` (`persistence:"persisted"`), история
+  `GET .../briefings` (новые сверху) + `GET .../briefings/{id}` (workspace-scoped,
+  чужой → 404). Обновлены transient-ассерты в briefing/e2e/selected-sync тестах.
+  Гейты: `pytest 368 passed`, `ruff` чисто, `alembic upgrade head`/`current`/`check`
+  зелёные. Фронтенд: api `listBriefings`/`getBriefing`, `BriefingPanel` грузит
+  историю, показывает сохранённую сводку и переоткрывает прошлые; русские строки
+  в `web/lib/messages.ts`; `npm test` 90, build/lint/typecheck зелёные. Два
+  отдельных коммита (бэкенд, фронтенд), затем docs. Без LLM, без GitHub
+  OAuth/connect; workspace-изоляция проверена тестом. Решение — DEC-048.
 - `2026-06-28` — **Docs reconciliation (docs-only).** Сверил канонические доки с
   реальным кодом/git после auth-фазы: 18 локальных коммитов поверх `82fb52f`
   (последний в `origin/main`) не были отражены в трекинг-доках, т.к. промпты

@@ -178,6 +178,12 @@ class Repository(Base):
             "external_id",
             name="uq_repositories_workspace_external_id",
         ),
+        UniqueConstraint(
+            "workspace_id",
+            "provider",
+            "full_name",
+            name="uq_repositories_workspace_provider_full_name",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(

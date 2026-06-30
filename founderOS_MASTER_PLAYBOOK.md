@@ -27,13 +27,14 @@
   репозиториев / issues / PR в канонические таблицы (идемпотентный `ON CONFLICT`
   upsert), Company Brain и ручной evidence-брифинг, плюс human-approved guarded
   write-back одного GitHub issue;
-- детерминированные проекции без LLM: брифинги/extraction считаются из локальных
-  данных и несут `evidence_refs`.
+- детерминированные проекции без LLM: Company Brain и Founder Briefing считаются
+  из локальных данных и несут `evidence_refs`; ручные Founder Briefings уже
+  сохраняются в `Briefing` / `BriefingItem` с историей.
 
 Ещё **не** реализовано (остаётся видением этого плана, а не текущим кодом):
 
-- GitHub OAuth start/callback/connect и живая продуктовая синхронизация;
-- персистентные briefing-модели и LLM-брифинг-пайплайн;
+- GitHub OAuth/App start/callback/connect и живая продуктовая синхронизация;
+- LLM-брифинг-пайплайн поверх уже персистентной модели;
 - продуктовые пути Jira / Gmail / Drive / Documents;
 - мультиюзер/онбординг (сейчас один основатель, заводится через
   `scripts/create_admin_user.py`);

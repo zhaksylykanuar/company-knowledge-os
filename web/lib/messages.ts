@@ -269,7 +269,19 @@ export const M = {
     metaConfidence: "Уверенность",
     metaNextStep: "Рекомендуемый следующий шаг",
     noNextStep: "Следующий шаг не указан",
-    noEvidenceRef: "Системный детерминированный факт; отдельный источник не возвращён."
+    noEvidenceRef: "Системный детерминированный факт; отдельный источник не возвращён.",
+    storedValue: "Сохранено"
+  },
+
+  briefingHistory: {
+    title: "История сводок",
+    description: "Сохранённые сводки этого рабочего пространства, новые — сверху.",
+    empty: "Сохранённых сводок пока нет. Сформируйте первую сводку выше.",
+    loading: "Загрузка истории сводок",
+    failed: "Не удалось загрузить историю сводок.",
+    open: "Открыть",
+    current: "Открыта",
+    itemsLabel: "пунктов"
   },
 
   actionsPage: {
@@ -498,6 +510,9 @@ export const T = {
   evidenceAttached: (count: number) => `Прикреплено источников: ${count}`,
   related: (list: string) => `Связано: ${list}`,
   confidencePercent: (value: number) => `${Math.round(value * 100)}%`,
+  // Briefing history entry meta: "<n> пунктов · <when>"
+  briefingHistoryMeta: (count: number, when: string) =>
+    `${count} ${M.briefingHistory.itemsLabel} · ${when}`,
   // Briefing capability line
   briefingCapability: (ai: boolean, live: boolean) =>
     `Ручная детерминированная сводка. Сводка ИИ: ${ai ? M.common.enabled : M.common.notEnabled}. ` +

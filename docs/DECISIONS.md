@@ -1011,6 +1011,108 @@ Consequences:
   minimal no-auth liveness probe, while env/feature-flag detail moved to
   `GET /health/detail` behind the operator key.
 
+## DEC-048 - Founder Briefings Are Persisted; Generation Stays Deterministic (Chunk 1)
+
+Decision (2026-06-29): the Founder Briefing becomes durable. The deterministic,
+LLM-free generator (`founder_briefing_service.generate_manual_founder_briefing`)
+is unchanged; a new persistence layer SAVES its output as `Briefing` +
+`BriefingItem` rows so the founder has history. `POST .../briefings/manual` now
+runs generation, persists, and returns the saved briefing (with `id`,
+`persistence:"persisted"`); `GET .../briefings` and `GET .../briefings/{id}`
+read history. The LLM-generated narrative is a later chunk (Chunk 2).
+
+Rationale: persistence and generation are separable. Saving first — without
+touching generation and without adding an LLM — gives revisitable history now
+and a stable store to layer LLM generation onto later, keeping `generated_by`
+(`deterministic_v0`) as the discriminator for which generator produced a row.
+
+Consequences:
+
+- `Briefing` is workspace-scoped (FK `ON DELETE CASCADE`); `BriefingItem` is
+  ordered by `position` and mirrors the generator's item shape verbatim
+  (category/title/summary/severity/confidence/recommended_next_step/
+  evidence_refs/related_entities/warnings) so a persisted briefing re-renders
+  identically. `created_by_user_id` is nullable (`ON DELETE SET NULL`).
+- Migration `e7f8a9b0c1d2` was the then-new single head for Briefings Chunk 1;
+  later heads are tracked by newer decisions.
+- Read endpoints are workspace-scoped: a briefing is fetched only within its
+  workspace, so a valid id from another workspace is a 404 — isolation is a query
+  predicate, not an assumption.
+- The response `persistence` marker moved from `"transient"` to `"persisted"`;
+  callers/tests that asserted the transient value were updated.
+- No LLM and no GitHub OAuth/connect were added in this chunk.
+- Known follow-up: Chunk 2 adds LLM narrative generation on top of this store,
+  still strict-JSON-validated and evidence-backed per the LLM boundary rules.
+
+## DEC-049 - Active Docs Stay Lean; Broken Operator Artifacts Are Removed
+
+Decision (2026-06-29): the active documentation set remains the small canonical
+set navigated by `docs/README.md`, and `docs/TODO.md` is a near-term backlog
+rather than a long completed-work ledger. Completed-work detail lives in
+`PROGRESS.md`, `docs/CHANGELOG.md`, and git history. Future agents must update
+source-of-truth docs in the same task as behavior changes and must not paste
+secrets, raw provider payloads, production smoke outputs, or private source
+bodies into docs.
+
+The cleanup also removes obsolete grouped-lifecycle operator scripts that were
+not referenced by the active product path and failed import because their
+required report module had already been removed. These scripts belonged to an
+operator workflow outside the retained GitHub-first spine.
+
+Rationale: stale task ledgers and broken operator artifacts make the repository
+harder for humans and agents to understand. The project should bias toward fewer
+accurate docs and runnable scripts, preserving uncertain or historical material
+only when it is still useful or explicitly audit-only.
+
+Consequences:
+
+- `docs/README.md` now includes the source-of-truth matrix and documentation
+  maintenance rules. `AGENTS.md` mirrors the agent-facing subset.
+- `docs/TODO.md` is concise and points next work at GitHub product connect/live
+  sync before LLM briefing narrative, because an empty workspace gives the LLM
+  little real evidence to summarize.
+- Removed scripts are recoverable from git history if a future scoped task
+  deliberately revives that operator workflow.
+- Generated/cache/build outputs stay ignored; real secrets and source-of-truth
+  raw storage remain untouched.
+
+## DEC-050 - GitHub Repository Identity Uses Workspace/Provider/Full Name Guard
+
+Decision (2026-06-30): canonical GitHub repository identity is protected by two
+workspace-scoped database identities:
+
+1. `(workspace_id, external_id)` remains the stable provider-object identity
+   when GitHub numeric ids are known.
+2. `(workspace_id, provider, full_name)` is a second unique guard for the
+   repository's GitHub `owner/repo` full name, so work-item sync paths that first
+   know only `full_name` converge with later repository sync paths that know the
+   stable GitHub id.
+
+The normalization upsert now inserts with `ON CONFLICT DO NOTHING` without an
+explicit conflict target, letting either unique guard catch a concurrent insert.
+On conflict it reads the existing row by either identity and updates it in place.
+If a stable GitHub id is already known, later work-item paths must not downgrade
+`external_id` back to `full_name`.
+
+Rationale: before GitHub product connect/live sync, repository identity must be
+race-safe at the database layer. The prior app-level fallback lookup by
+`full_name` was enough for sequential selected-sync paths but could race when
+polling/webhooks or multiple live sync paths observe the same repository through
+different identities.
+
+Consequences:
+
+- Migration `e8f9a0b1c2d3` de-duplicates existing duplicate repository rows by
+  `(workspace_id, provider, full_name)`, preferring rows with stable external ids,
+  re-points `pull_requests.repository_id` to the keeper, deletes loser rows, and
+  adds `uq_repositories_workspace_provider_full_name`.
+- The Alembic head moves from `e7f8a9b0c1d2` to `e8f9a0b1c2d3`.
+- Same `full_name` remains allowed across different workspaces; workspace scope
+  is part of both identities.
+- This closes the known Repository cross-path dedupe race that blocked safe
+  concurrent GitHub live sync work. GitHub App/product connect design remains
+  the next product step.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

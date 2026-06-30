@@ -8,16 +8,22 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
+from sqlalchemy.orm import selectinload
 
 import app.services.github_repository_read_service as github_repository_read_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
+from app.db.briefing_models import Briefing, BriefingItem
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_MEMBER,
     MEMBERSHIP_ROLE_VIEWER,
     Membership,
     User,
     Workspace,
+)
+from app.services.founder_briefing_service import (
+    FounderBriefingOptions,
+    generate_manual_founder_briefing,
 )
 from app.db.integration_models import (
     INTEGRATION_CONNECTION_STATUS_CONNECTED,
@@ -76,6 +82,24 @@ async def _cleanup_briefing_fixture(marker: str) -> None:
             ).scalars()
         )
         if workspace_ids:
+            briefing_ids = list(
+                (
+                    await session.execute(
+                        select(Briefing.id).where(
+                            Briefing.workspace_id.in_(workspace_ids)
+                        )
+                    )
+                ).scalars()
+            )
+            if briefing_ids:
+                await session.execute(
+                    delete(BriefingItem).where(
+                        BriefingItem.briefing_id.in_(briefing_ids)
+                    )
+                )
+                await session.execute(
+                    delete(Briefing).where(Briefing.id.in_(briefing_ids))
+                )
             await session.execute(
                 delete(SyncJob).where(SyncJob.workspace_id.in_(workspace_ids))
             )
@@ -310,7 +334,7 @@ async def test_member_and_viewer_can_read_manual_briefing(monkeypatch, role: str
         await _cleanup_briefing_fixture(marker)
 
 
-async def test_empty_workspace_returns_transient_briefing_with_warnings(
+async def test_empty_workspace_returns_persisted_briefing_with_warnings(
     monkeypatch,
 ) -> None:
     marker = uuid4().hex
@@ -339,11 +363,12 @@ async def test_empty_workspace_returns_transient_briefing_with_warnings(
 
         assert response.status_code == 200
         briefing = response.json()["briefing"]
+        assert briefing["id"]
         assert briefing["title"] == "Founder Briefing"
         assert briefing["workspace_id"] == created["workspace"]["id"]
         assert briefing["is_live"] is False
         assert briefing["llm_used"] is False
-        assert briefing["persistence"] == "transient"
+        assert briefing["persistence"] == "persisted"
         assert briefing["signals"]["github"] == {
             "connection_status": "local_bridge_only",
             "repository_count": 0,
@@ -637,7 +662,7 @@ async def test_manual_briefing_does_not_call_llm_provider_source_or_mutate_sync_
         briefing = response.json()["briefing"]
         assert briefing["is_live"] is False
         assert briefing["llm_used"] is False
-        assert briefing["persistence"] == "transient"
+        assert briefing["persistence"] == "persisted"
         assert await _count(SyncJob) == sync_job_count_before
         assert after.status == before.status
         assert after.records_seen == before.records_seen
@@ -646,6 +671,307 @@ async def test_manual_briefing_does_not_call_llm_provider_source_or_mutate_sync_
         await _cleanup_briefing_fixture(marker)
 
 
-def test_manual_briefing_api_does_not_create_migration_file() -> None:
+def test_briefing_persistence_migration_exists() -> None:
+    # Briefings Chunk 1 persists briefings, so a briefing migration must exist.
     version_files = {path.name for path in Path("migrations/versions").glob("*.py")}
-    assert not any("briefing" in name for name in version_files)
+    assert any("briefing" in name for name in version_files)
+
+
+async def _stored_briefings(workspace_id: str) -> list[Briefing]:
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Briefing)
+            .where(Briefing.workspace_id == UUID(workspace_id))
+            .order_by(Briefing.created_at.desc(), Briefing.id.desc())
+            .options(selectinload(Briefing.items))
+        )
+        return list(result.scalars().all())
+
+
+async def test_manual_briefing_persists_briefing_and_items(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={},
+            )
+
+        assert response.status_code == 200
+        briefing = response.json()["briefing"]
+        assert briefing["id"]
+        assert briefing["persistence"] == "persisted"
+        assert briefing["generated_by"] == "deterministic_v0"
+        assert briefing["workspace_id"] == workspace_id
+        assert briefing["items"]
+
+        stored = await _stored_briefings(workspace_id)
+        assert len(stored) == 1
+        assert str(stored[0].id) == briefing["id"]
+        assert len(stored[0].items) == len(briefing["items"])
+        # The generator's string item id round-trips as the persisted item_key.
+        assert {item.item_key for item in stored[0].items} == {
+            item["id"] for item in briefing["items"]
+        }
+        # Items keep generated order (position 0..n-1, matching response order).
+        assert [item.position for item in stored[0].items] == list(
+            range(len(stored[0].items))
+        )
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_briefing_history_list_returns_newest_first(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+
+        generated_ids: list[str] = []
+        async with _async_client() as client:
+            for _ in range(2):
+                response = await client.post(
+                    f"/api/v1/workspaces/{workspace_id}/briefings/manual",
+                    headers=_headers(),
+                    params={"owner_email": owner_email},
+                    json={},
+                )
+                assert response.status_code == 200
+                generated_ids.append(response.json()["briefing"]["id"])
+
+            list_response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/briefings",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+
+        assert list_response.status_code == 200
+        body = list_response.json()
+        assert body["count"] == 2
+        listed = body["briefings"]
+        assert len(listed) == 2
+        # Same two briefings, and newest-first (non-increasing created_at).
+        assert {entry["id"] for entry in listed} == set(generated_ids)
+        assert listed[0]["created_at"] >= listed[1]["created_at"]
+        assert listed[0]["title"] == "Founder Briefing"
+        assert "item_count" in listed[0]
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_get_briefing_by_id_returns_items(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+
+        async with _async_client() as client:
+            generate = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={},
+            )
+            assert generate.status_code == 200
+            generated = generate.json()["briefing"]
+
+            fetched = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/briefings/{generated['id']}",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+
+        assert fetched.status_code == 200
+        reopened = fetched.json()["briefing"]
+        assert reopened["id"] == generated["id"]
+        assert reopened["persistence"] == "persisted"
+        assert [item["id"] for item in reopened["items"]] == [
+            item["id"] for item in generated["items"]
+        ]
+        assert [item["category"] for item in reopened["items"]] == [
+            item["category"] for item in generated["items"]
+        ]
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_get_unknown_briefing_returns_404(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/briefings/{uuid4()}",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": "briefing not found"}
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_briefing_workspace_isolation(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created_a = await _bootstrap_workspace(marker, suffix="-a")
+        created_b = await _bootstrap_workspace(marker, suffix="-b")
+        workspace_a = created_a["workspace"]["id"]
+        workspace_b = created_b["workspace"]["id"]
+        owner_a = _bootstrap_payload(marker, suffix="-a")["owner_email"]
+        owner_b = _bootstrap_payload(marker, suffix="-b")["owner_email"]
+
+        async with _async_client() as client:
+            generate = await client.post(
+                f"/api/v1/workspaces/{workspace_a}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": owner_a},
+                json={},
+            )
+            assert generate.status_code == 200
+            briefing_a_id = generate.json()["briefing"]["id"]
+
+            # B cannot read A's briefing through B's own workspace path.
+            cross_read = await client.get(
+                f"/api/v1/workspaces/{workspace_b}/briefings/{briefing_a_id}",
+                headers=_headers(),
+                params={"owner_email": owner_b},
+            )
+            # B cannot reach A's workspace at all (not a member).
+            other_workspace = await client.get(
+                f"/api/v1/workspaces/{workspace_a}/briefings/{briefing_a_id}",
+                headers=_headers(),
+                params={"owner_email": owner_b},
+            )
+            # B's history is empty (A's briefing does not leak in).
+            b_history = await client.get(
+                f"/api/v1/workspaces/{workspace_b}/briefings",
+                headers=_headers(),
+                params={"owner_email": owner_b},
+            )
+
+        assert cross_read.status_code == 404
+        assert other_workspace.status_code == 404
+        assert b_history.status_code == 200
+        assert b_history.json()["count"] == 0
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_persisted_briefing_matches_deterministic_generation(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+
+        # The deterministic generator, called directly (unchanged, no LLM).
+        async with AsyncSessionLocal() as session:
+            generated = await generate_manual_founder_briefing(
+                session,
+                workspace_id=UUID(workspace_id),
+                options=FounderBriefingOptions(),
+            )
+        generated_briefing = generated["briefing"]
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={},
+            )
+
+        assert response.status_code == 200
+        persisted = response.json()["briefing"]
+        # Persisted content mirrors the deterministic generation verbatim.
+        assert persisted["title"] == generated_briefing["title"]
+        assert persisted["summary"] == generated_briefing["summary"]
+        assert persisted["signals"] == generated_briefing["signals"]
+        assert [item["id"] for item in persisted["items"]] == [
+            item["id"] for item in generated_briefing["items"]
+        ]
+        assert [item["category"] for item in persisted["items"]] == [
+            item["category"] for item in generated_briefing["items"]
+        ]
+        assert [item["severity"] for item in persisted["items"]] == [
+            item["severity"] for item in generated_briefing["items"]
+        ]
+        assert [item["evidence_refs"] for item in persisted["items"]] == [
+            item["evidence_refs"] for item in generated_briefing["items"]
+        ]
+    finally:
+        await _cleanup_briefing_fixture(marker)

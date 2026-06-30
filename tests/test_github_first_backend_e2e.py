@@ -430,7 +430,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
             briefing = briefing_response.json()["briefing"]
             assert briefing["is_live"] is False
             assert briefing["llm_used"] is False
-            assert briefing["persistence"] == "transient"
+            assert briefing["persistence"] == "persisted"
             assert briefing["signals"]["github"]["connection_status"] == "connected"
             assert briefing["signals"]["github"]["repository_count"] == 1
             assert briefing["signals"]["github"]["latest_sync_job_status"] in {

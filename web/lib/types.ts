@@ -106,26 +106,49 @@ export type FounderBriefingItem = {
   warnings: string[];
 };
 
+export type BriefingGitHubSignals = {
+  connection_status: string;
+  repository_count: number;
+  queued_sync_jobs: number;
+  latest_sync_job_status: string | null;
+};
+
 export type FounderBriefingResponse = {
   briefing: {
+    id: string;
+    workspace_id: string;
+    created_at: string;
+    generated_at: string;
+    generated_by: string;
     title: string;
     summary: string;
-    generated_at: string;
-    workspace_id: string;
     is_live: boolean;
     llm_used: boolean;
-    persistence: "transient" | string;
+    persistence: string;
     items: FounderBriefingItem[];
     signals: {
-      github: {
-        connection_status: string;
-        repository_count: number;
-        queued_sync_jobs: number;
-        latest_sync_job_status: string | null;
-      };
+      github: BriefingGitHubSignals;
     };
     warnings: string[];
   };
+};
+
+export type BriefingSummary = {
+  id: string;
+  created_at: string;
+  generated_at: string;
+  generated_by: string;
+  title: string;
+  summary: string;
+  item_count: number;
+  signals: {
+    github: BriefingGitHubSignals;
+  };
+};
+
+export type BriefingListResponse = {
+  briefings: BriefingSummary[];
+  count: number;
 };
 
 export type ActionProposalStatus =

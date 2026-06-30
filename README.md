@@ -26,9 +26,10 @@ Read in this order (control trio = what / where / why):
   (Argon2id, httpOnly first-party cookie via a same-origin proxy, DB login
   throttle). The operator API key remains for server/CI/admin tooling. See
   step 4 below to provision the founder account.
-- The canonical product gap remains production/private-beta hardening: the first
-  production deploy of the auth phase, GitHub OAuth/onboarding, persistent
-  briefing + LLM pipeline, and multi-user provisioning.
+- Founder Briefings now persist deterministic briefing history. The remaining
+  product gaps are real GitHub product connect/live sync, LLM briefing narrative
+  over real connected data, multi-user provisioning beyond the seeded founder,
+  and the first production deploy of the auth phase.
 
 ## Local full-stack run path
 
@@ -174,8 +175,17 @@ Reproduce the backend CI gates locally:
 uv sync --frozen
 uv run ruff check .
 uv run alembic upgrade head
+uv run alembic check
 uv run pytest -q
 bash scripts/check_no_secrets.sh --tracked
+```
+
+Convenience Make targets wrap the same safe local gates:
+
+```bash
+make backend-check
+make frontend-check
+make check
 ```
 
 For frontend work:
@@ -218,6 +228,10 @@ scripts/        local operator, smoke, and diagnostic CLIs
 tests/          pytest suite
 migrations/     Alembic migrations
 ```
+
+Generated caches/build outputs (`__pycache__/`, `.pytest_cache/`,
+`.ruff_cache/`, `.mypy_cache/`, `web/.next/`, `web/.tmp-test/`, coverage files,
+local SQLite files, and `node_modules/`) are ignored and should not be tracked.
 
 ## Safety Boundaries
 

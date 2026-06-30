@@ -440,7 +440,7 @@ async def test_selected_issue_sync_persists_canonical_issues_and_read_models(
         assert briefing.status_code == 200, briefing.text
         briefing_body = briefing.json()["briefing"]
         assert briefing_body["llm_used"] is False
-        assert briefing_body["persistence"] == "transient"
+        assert briefing_body["persistence"] == "persisted"
         assert any(item["evidence_refs"] for item in briefing_body["items"])
         assert any(
             "No external write occurred" in warning

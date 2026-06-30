@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { generateManualFounderBriefing } from "../lib/api";
+import { generateManualFounderBriefing, getBriefing, listBriefings } from "../lib/api";
 import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   BriefingEvidenceRef,
+  BriefingSummary,
   FounderBriefingItem,
   FounderBriefingResponse
 } from "../lib/types";
@@ -28,8 +29,11 @@ type BriefingStatus =
 type BriefingPanelViewProps = {
   data: FounderBriefingResponse | null;
   error: string | null;
+  history?: BriefingSummary[];
+  activeBriefingId?: string | null;
   onGenerate?: () => void;
   onRetry?: () => void;
+  onOpenBriefing?: (briefingId: string) => void;
   onCloseEvidence?: () => void;
   onSelectEvidence?: (evidence: BriefingEvidenceRef, itemTitle: string) => void;
   selectedEvidence: BriefingEvidenceRef | null;
@@ -41,13 +45,31 @@ export function BriefingPanel() {
   const workspaceId = useWorkspaceId();
   const [data, setData] = useState<FounderBriefingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<BriefingSummary[]>([]);
+  const [activeBriefingId, setActiveBriefingId] = useState<string | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<BriefingEvidenceRef | null>(null);
   const [selectedEvidenceItemTitle, setSelectedEvidenceItemTitle] = useState<string | null>(null);
   const [status, setStatus] = useState<BriefingStatus>("loading");
 
+  const refreshHistory = useCallback(async (currentWorkspaceId: string) => {
+    try {
+      const payload = await listBriefings(currentWorkspaceId, { limit: 20 });
+      setHistory(payload.briefings);
+    } catch {
+      // History is supplementary; keep the generate flow usable if it fails.
+      setHistory([]);
+    }
+  }, []);
+
   useEffect(() => {
-    setStatus(workspaceId ? "empty" : "missing");
-  }, [workspaceId]);
+    if (!workspaceId) {
+      setStatus("missing");
+      setHistory([]);
+      return;
+    }
+    setStatus("empty");
+    void refreshHistory(workspaceId);
+  }, [workspaceId, refreshHistory]);
 
   async function generateBriefing() {
     if (!workspaceId) {
@@ -62,6 +84,30 @@ export function BriefingPanel() {
     try {
       const payload = await generateManualFounderBriefing(workspaceId);
       setData(payload);
+      setActiveBriefingId(payload.briefing.id);
+      setStatus(payload.briefing.items.length > 0 ? "success" : "empty");
+      // The new briefing is now saved — refresh history so it appears.
+      void refreshHistory(workspaceId);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
+      setStatus("error");
+    }
+  }
+
+  async function openBriefing(briefingId: string) {
+    if (!workspaceId) {
+      setStatus("missing");
+      return;
+    }
+
+    setError(null);
+    setSelectedEvidence(null);
+    setSelectedEvidenceItemTitle(null);
+    setStatus("loading");
+    try {
+      const payload = await getBriefing(workspaceId, briefingId);
+      setData(payload);
+      setActiveBriefingId(payload.briefing.id);
       setStatus(payload.briefing.items.length > 0 ? "success" : "empty");
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : M.common.requestFailed);
@@ -71,13 +117,16 @@ export function BriefingPanel() {
 
   return (
     <BriefingPanelView
+      activeBriefingId={activeBriefingId}
       data={data}
       error={error}
+      history={history}
       onCloseEvidence={() => {
         setSelectedEvidence(null);
         setSelectedEvidenceItemTitle(null);
       }}
       onGenerate={generateBriefing}
+      onOpenBriefing={openBriefing}
       onRetry={generateBriefing}
       onSelectEvidence={(evidence, itemTitle) => {
         setSelectedEvidence(evidence);
@@ -91,10 +140,13 @@ export function BriefingPanel() {
 }
 
 export function BriefingPanelView({
+  activeBriefingId = null,
   data,
   error,
+  history = [],
   onCloseEvidence,
   onGenerate,
+  onOpenBriefing,
   onRetry,
   onSelectEvidence,
   selectedEvidence,
@@ -103,6 +155,7 @@ export function BriefingPanelView({
 }: BriefingPanelViewProps) {
   const briefing = data?.briefing ?? null;
   const isGenerating = status === "loading";
+  const showHistory = status !== "missing" && status !== "unsupported";
 
   return (
     <section className="panel briefing-panel" aria-labelledby="briefing-title">
@@ -182,7 +235,7 @@ export function BriefingPanelView({
             <StatusCard
               description={M.briefingPanel.aiDescription}
               title={M.briefingPanel.aiTitle}
-              value={briefing.llm_used ? M.briefingPanel.aiValue : briefing.persistence}
+              value={briefing.llm_used ? M.briefingPanel.aiValue : M.briefingPanel.storedValue}
             />
           </section>
           <section className="callout" aria-label={M.briefingPanel.capabilityTitle}>
@@ -209,6 +262,59 @@ export function BriefingPanelView({
           ) : null}
         </>
       ) : null}
+
+      {showHistory ? (
+        <BriefingHistorySection
+          activeBriefingId={activeBriefingId}
+          history={history}
+          onOpenBriefing={onOpenBriefing}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function BriefingHistorySection({
+  activeBriefingId,
+  history,
+  onOpenBriefing
+}: {
+  activeBriefingId: string | null;
+  history: BriefingSummary[];
+  onOpenBriefing?: (briefingId: string) => void;
+}) {
+  return (
+    <section className="work-section briefing-history" aria-label={M.briefingHistory.title}>
+      <h3>{M.briefingHistory.title}</h3>
+      <p className="muted">{M.briefingHistory.description}</p>
+      {history.length === 0 ? (
+        <p className="muted">{M.briefingHistory.empty}</p>
+      ) : (
+        <div className="work-list">
+          {history.map((entry) => (
+            <article className="work-item" key={entry.id}>
+              <div className="work-item-main">
+                <h4>{entry.title}</h4>
+              </div>
+              <p className="muted">
+                {T.briefingHistoryMeta(entry.item_count, entry.created_at)}
+              </p>
+              <div className="actions-row">
+                <button
+                  className="button secondary"
+                  disabled={!onOpenBriefing || entry.id === activeBriefingId}
+                  onClick={() => onOpenBriefing?.(entry.id)}
+                  type="button"
+                >
+                  {entry.id === activeBriefingId
+                    ? M.briefingHistory.current
+                    : M.briefingHistory.open}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
