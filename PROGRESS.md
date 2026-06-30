@@ -27,7 +27,7 @@
   `web/lib/messages.ts`). Бэкенд: `pytest 368 passed`, `ruff` чисто,
   `alembic check` чисто. Фронтенд: `npm test` 90, build/lint/typecheck зелёные.
   Без LLM и без GitHub OAuth/connect. Решение — DEC-048.
-- **Что сделано ранее (локальная серия из 18 коммитов поверх `82fb52f`):**
+- **Что сделано ранее (sync-hardening/auth/русский UI series перед Briefings):**
   - **Sync-layer hardening (FOS-027B2 → далее):** в канонические `tasks` добавлен
     partial unique index `uq_tasks_workspace_provider_external_id`
     (`workspace_id, source_provider, external_id` при `external_id IS NOT NULL`;
@@ -204,8 +204,8 @@ DONE строго = есть код + проходящий тест/рабочи
 - `2026-06-30` — **Project actualization / continuation checkpoint.**
   Сверены required docs (`docs/README.md`, `AGENTS.md`, `CLAUDE.md`), live
   status, near-term backlog, git state and targeted repository/GitHub sync debt.
-  Remote checked with `git fetch origin`: `main` чистый, локально **ahead 4**
-  коммита (`22f9eb4` поверх `016c7e7`), push не делался. Текущий следующий
+  Remote checked with `git fetch origin`: `main` чистый, локальная ветка
+  **ahead `origin/main`** (`origin/main` на `016c7e7`), push не делался. Текущий следующий
   инженерный шаг не меняется: перед GitHub product connect/live sync закрыть
   Repository identity/race debt — DB-level guard for workspace-scoped GitHub
   repository `full_name`/identity, then continue GitHub App/product connect
