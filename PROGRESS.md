@@ -90,19 +90,19 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ---
 
-## 🚦 GATE HEALTH (результат последней проверки — 2026-06-29)
+## 🚦 GATE HEALTH (результат последней проверки — 2026-06-30)
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ pass | 2026-06-29 | Briefings Chunk 1 added `e7f8a9b0c1d2` (briefings + briefing_items) поверх auth/sync-hardening цепочки (`f7b8c9d0e1a2` → `a8c9d0e1f2b3` → `b9d0e1f2a3c4` → `c0e1f2a3b4d5`). Один линейный head `e7f8a9b0c1d2`; `upgrade head` / `current` / `check` прогнаны и зелёные |
+| `alembic upgrade head` | ✅ pass | 2026-06-30 | Actualization pass: один линейный head `e7f8a9b0c1d2`; `uv run alembic heads`, `uv run alembic current`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-29 | Project audit/cleanup pass: **368 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-29 | Project audit/cleanup pass: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-06-30 | Actualization pass: **368 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-06-30 | Actualization pass: `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-29 | Project audit/cleanup pass: `npm test` 90 passed, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
-| docs navigation | ✅ pass | 2026-06-29 | Project audit/cleanup pass: docs/private-beta/hosting contract tests **22 passed** and all inline markdown links resolved |
-| `alembic check` (retained substrate) | ✅ reconciled | 2026-06-29 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; `alembic upgrade head` + `alembic check` зелёные |
+| frontend build | ✅ pass | 2026-06-30 | Actualization pass: `npm test` 90 passed, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
+| docs navigation | ✅ pass | 2026-06-30 | Covered by full pytest actualization pass; docs/private-beta/hosting/navigation contract tests remain green |
+| `alembic check` (retained substrate) | ✅ reconciled | 2026-06-30 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; actualization pass: `alembic upgrade head` + `alembic check` зелёные |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
 | prod smoke | ✅ pass | 2026-06-27 | FOS-026C: deployed Railway read-only smoke passed with minimal private-beta workspace/owner context; no provider writes, LLM calls, selected repo sync, or ActionProposal execute |
@@ -200,6 +200,21 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-06-30` — **Project actualization / continuation checkpoint.**
+  Сверены required docs (`docs/README.md`, `AGENTS.md`, `CLAUDE.md`), live
+  status, near-term backlog, git state and targeted repository/GitHub sync debt.
+  Remote checked with `git fetch origin`: `main` чистый, локально **ahead 4**
+  коммита (`22f9eb4` поверх `016c7e7`), push не делался. Текущий следующий
+  инженерный шаг не меняется: перед GitHub product connect/live sync закрыть
+  Repository identity/race debt — DB-level guard for workspace-scoped GitHub
+  repository `full_name`/identity, then continue GitHub App/product connect
+  design. Проверки actualized: `uv run ruff check .`, `uv run alembic heads`,
+  `uv run alembic current`, `uv run alembic upgrade head`, `uv run alembic
+  check`, `uv run pytest -q` (**368 passed / 1 warning**), tracked secret scan,
+  frontend `npm test` (**90 passed**) + build + typecheck + lint — зелёные. No
+  provider calls, deploys, production DB/cloud writes, raw storage/Obsidian or
+  secrets edits.
 
 - `2026-06-29` — **Project-wide audit / cleanup / docs refresh.**
   Проведена полная инвентаризация tracked/untracked структуры без чтения
