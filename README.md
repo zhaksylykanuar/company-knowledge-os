@@ -27,11 +27,11 @@ Read in this order (control trio = what / where / why):
   throttle). The operator API key remains for server/CI/admin tooling. See
   step 4 below to provision the founder account.
 - Founder Briefings now persist deterministic briefing history. GitHub App
-  product-connect plus polling-only live read-sync backend/UI foundations exist;
-  the remaining product gaps are GitHub App synced-evidence hardening plus first
-  human-approved real read run, LLM briefing narrative over real connected data,
-  multi-user provisioning beyond the seeded founder, and the first production
-  deploy of the auth phase.
+  product-connect plus polling-only live read-sync backend/UI foundations exist,
+  with mocked synced-evidence isolation verified for Company Brain/Briefings;
+  the remaining product gaps are first human-approved real read run readiness,
+  LLM briefing narrative over real connected data, multi-user provisioning
+  beyond the seeded founder, and the first production deploy of the auth phase.
 
 ## Local full-stack run path
 

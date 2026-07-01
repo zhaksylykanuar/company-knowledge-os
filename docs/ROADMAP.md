@@ -8,10 +8,11 @@ The current execution pointer is `../PROGRESS.md`: CHUNK 8 hardening is closed
 (FOS-027B2 + sync-layer idempotency), email+password / server-side-session login
 is built, deterministic Founder Briefings now persist history, GitHub App
 product-connect foundation is in place, polling-only GitHub App live read sync
-exists in the backend, and `/github` has an explicit single-repository read-only
-sync control. The next horizon is verifying evidence-backed surfaces over synced
-data before an LLM briefing narrative. Docs consolidation is complete; this
-roadmap is planning context, not the live task source.
+exists in the backend, `/github` has an explicit single-repository read-only
+sync control, and mocked synced-evidence isolation is verified for Company Brain
+and deterministic Briefings. The next horizon is first real read-run readiness
+before an LLM briefing narrative. Docs consolidation is complete; this roadmap
+is planning context, not the live task source.
 
 ## Phase 0 - Project Setup
 
@@ -72,7 +73,7 @@ Missing:
   spine proves the need.
 - Person ambiguity remains open as ASK-1.
 
-Next step: GitHub App synced evidence verification; physical substrate drop
+Next step: GitHub App real read-run readiness; physical substrate drop
 remains a later migration/cleanup task.
 
 Definition of Done:
@@ -113,6 +114,9 @@ Done:
 - `/github` has an explicit single-repository GitHub App read-only sync control
   over that endpoint; it keeps no browser secrets and shows no-write/token
   persistence boundaries.
+- Tests verify mocked GitHub App synced data flows into Company Brain and
+  persisted deterministic Briefings with evidence while another workspace cannot
+  see the synced canonical state/evidence refs.
 - Selected repository issue sync exists for explicitly allowlisted repositories:
   `/api/v1/workspaces/{workspace_id}/github/repositories/issues/sync`.
 - Selected repository PR sync exists for explicitly allowlisted repositories:
@@ -130,14 +134,14 @@ Done:
 
 Missing:
 
-- Briefing/evidence isolation verification over GitHub App synced data and the
-  first human-approved real-provider read run.
+- Live-read observability/rate-limit hardening and the first human-approved
+  real-provider read run.
 - LLM briefing narrative over real connected data.
 - Multi-user / teammate provisioning beyond the single seeded founder.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
 
-Next step: follow `../PROGRESS.md`; GitHub App synced evidence verification
+Next step: follow `../PROGRESS.md`; first GitHub App real read-run readiness
 should precede LLM briefing work because the workspace is otherwise mostly empty.
 
 Definition of Done:
@@ -199,11 +203,11 @@ Missing:
 - Selected repository issue and PR sync now have read-only product UI controls
   in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
   allowlisted repository at a time without external writes.
-- GitHub App synced evidence verification/hardening and multi-user invites remain
-  missing.
+- GitHub App live-read observability/first real read run and multi-user invites
+  remain missing.
 
-Next step: keep product UI honest while GitHub App synced evidence is verified;
-do not add browser-stored operator credentials.
+Next step: keep product UI honest while GitHub App live-read observability and
+real-run readiness are added; do not add browser-stored operator credentials.
 
 Definition of Done:
 
@@ -269,14 +273,15 @@ Done:
 
 Missing:
 
-- Evidence/briefing verification over GitHub App synced data.
+- Live-read observability/rate-limit handling and first approved real-provider
+  read run.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
 - Multi-repository selected sync from the product UI beyond one explicit
   repository at a time. External issue/PR URLs and local workspace/proposal/
   connection/evidence identifiers are intentionally omitted from public docs.
 
-Next step: verify GitHub App synced evidence with strict
+Next step: prepare the first GitHub App real read run with strict
 workspace/installation/repository scoping before adding LLM briefing intelligence.
 
 Definition of Done:

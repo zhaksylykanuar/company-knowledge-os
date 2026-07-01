@@ -18,6 +18,9 @@
 - Added `/github` product UI for explicit GitHub App read-only sync of one
   repository through the new backend endpoint, with no browser secrets and
   user-visible no-write/token-persistence boundaries.
+- Added GitHub App synced-evidence verification coverage proving mocked live
+  sync feeds Company Brain and deterministic Briefings with evidence while a
+  second workspace cannot see the synced canonical state or evidence refs.
 
 ## 2026-06-30
 

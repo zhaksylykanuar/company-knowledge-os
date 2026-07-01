@@ -14,6 +14,7 @@ from sqlalchemy import delete, func, select
 from app.api.auth import settings
 from app.core.config import Settings
 from app.db.base import AsyncSessionLocal
+from app.db.briefing_models import Briefing, BriefingItem
 from app.db.canonical_models import EvidenceRef, PullRequest, Repository, SourceRecord, Task
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_MEMBER,
@@ -110,6 +111,22 @@ async def _cleanup_fixture(marker: str) -> None:
             ).scalars()
         )
         if workspace_ids:
+            briefing_ids = list(
+                (
+                    await session.execute(
+                        select(Briefing.id).where(
+                            Briefing.workspace_id.in_(workspace_ids)
+                        )
+                    )
+                ).scalars()
+            )
+            if briefing_ids:
+                await session.execute(
+                    delete(BriefingItem).where(
+                        BriefingItem.briefing_id.in_(briefing_ids)
+                    )
+                )
+                await session.execute(delete(Briefing).where(Briefing.id.in_(briefing_ids)))
             await session.execute(
                 delete(EvidenceRef).where(EvidenceRef.workspace_id.in_(workspace_ids))
             )
@@ -400,6 +417,111 @@ async def test_github_app_live_sync_reads_and_persists_without_token_storage_or_
         serialized_sync_job = json.dumps(sync_job_payload, default=str)
         assert "jit-installation-token" not in serialized_sync_job
         assert "installation_access_token_persisted" in serialized_sync_job
+    finally:
+        await _cleanup_fixture(marker)
+
+
+async def test_github_app_synced_data_feeds_brain_and_briefing_with_workspace_isolation(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_fixture(marker)
+
+    try:
+        created_a = await _bootstrap_workspace(marker)
+        created_b = await _bootstrap_workspace(marker, suffix="-b")
+        workspace_a = created_a["workspace"]["id"]
+        workspace_b = created_b["workspace"]["id"]
+        owner_a = _bootstrap_payload(marker)["owner_email"]
+        owner_b = _bootstrap_payload(marker, suffix="-b")["owner_email"]
+        connection = await _create_app_connection(workspace_a, marker)
+        _install_mock_provider(monkeypatch)
+
+        async with _async_client() as client:
+            sync_response = await client.post(
+                f"/api/v1/workspaces/{workspace_a}/github/connections/app-installation/sync",
+                headers=_headers(),
+                params={"owner_email": owner_a},
+                json={
+                    "connection_id": connection["id"],
+                    "repositories": ["qtwin-io/company-knowledge-os"],
+                },
+            )
+            brain_a = await client.get(
+                f"/api/v1/workspaces/{workspace_a}/company-brain",
+                headers=_headers(),
+                params={"owner_email": owner_a},
+            )
+            briefing_a = await client.post(
+                f"/api/v1/workspaces/{workspace_a}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": owner_a},
+                json={},
+            )
+            brain_b = await client.get(
+                f"/api/v1/workspaces/{workspace_b}/company-brain",
+                headers=_headers(),
+                params={"owner_email": owner_b},
+            )
+            briefing_b = await client.post(
+                f"/api/v1/workspaces/{workspace_b}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": owner_b},
+                json={},
+            )
+            wrong_owner_brain = await client.get(
+                f"/api/v1/workspaces/{workspace_a}/company-brain",
+                headers=_headers(),
+                params={"owner_email": owner_b},
+            )
+
+        assert sync_response.status_code == 200, sync_response.text
+        assert brain_a.status_code == 200, brain_a.text
+        brain_a_body = brain_a.json()
+        assert brain_a_body["summary"]["repositories"] == 1
+        assert brain_a_body["summary"]["open_issues"] == 1
+        assert brain_a_body["summary"]["merged_pull_requests"] == 1
+        assert brain_a_body["repositories"][0]["full_name"] == (
+            "qtwin-io/company-knowledge-os"
+        )
+        evidence_labels = {ref["label"] for ref in brain_a_body["evidence"]}
+        assert "qtwin-io/company-knowledge-os" in evidence_labels
+        assert "9001" in evidence_labels
+        assert "qtwin-io/company-knowledge-os#pull/3" in evidence_labels
+        serialized_brain_a = json.dumps(brain_a_body, sort_keys=True)
+        assert "jit-installation-token" not in serialized_brain_a
+
+        assert briefing_a.status_code == 200, briefing_a.text
+        briefing_a_body = briefing_a.json()["briefing"]
+        assert briefing_a_body["llm_used"] is False
+        assert briefing_a_body["persistence"] == "persisted"
+        assert any(item["evidence_refs"] for item in briefing_a_body["items"])
+        briefing_refs = [
+            ref
+            for item in briefing_a_body["items"]
+            for ref in item["evidence_refs"]
+        ]
+        assert any(
+            ref["kind"] == "sync_job"
+            and ref["ref"] == sync_response.json()["sync_job"]["id"]
+            for ref in briefing_refs
+        )
+        assert "jit-installation-token" not in json.dumps(briefing_a_body, sort_keys=True)
+        assert "company-knowledge-os" in json.dumps(briefing_a_body, sort_keys=True)
+
+        assert brain_b.status_code == 200, brain_b.text
+        brain_b_body = brain_b.json()
+        assert brain_b_body["summary"]["repositories"] == 0
+        assert brain_b_body["evidence"] == []
+        assert "company-knowledge-os" not in json.dumps(brain_b_body, sort_keys=True)
+
+        assert briefing_b.status_code == 200, briefing_b.text
+        briefing_b_body = briefing_b.json()["briefing"]
+        serialized_briefing_b = json.dumps(briefing_b_body, sort_keys=True)
+        assert sync_response.json()["sync_job"]["id"] not in serialized_briefing_b
+        assert connection["id"] not in serialized_briefing_b
+        assert wrong_owner_brain.status_code == 404
     finally:
         await _cleanup_fixture(marker)
 

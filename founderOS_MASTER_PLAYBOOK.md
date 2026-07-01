@@ -29,16 +29,15 @@
   канонические таблицы (идемпотентный `ON CONFLICT` upsert), workspace-scoped
   app-installation connection state без browser PAT/секретов, just-in-time
   installation tokens без persistence, explicit single-repo `/github` sync
-  control, Company Brain и ручной evidence-брифинг, плюс human-approved guarded
-  write-back одного GitHub issue;
+  control, mocked synced-evidence isolation for Company Brain/manual Briefings,
+  плюс human-approved guarded write-back одного GitHub issue;
 - детерминированные проекции без LLM: Company Brain и Founder Briefing считаются
   из локальных данных и несут `evidence_refs`; ручные Founder Briefings уже
   сохраняются в `Briefing` / `BriefingItem` с историей.
 
 Ещё **не** реализовано (остаётся видением этого плана, а не текущим кодом):
 
-- GitHub App synced-evidence hardening and first approved real-provider read
-  run;
+- GitHub App first approved real-provider read run readiness;
 - LLM-брифинг-пайплайн поверх уже персистентной модели;
 - продуктовые пути Jira / Gmail / Drive / Documents;
 - мультиюзер/онбординг (сейчас один основатель, заводится через
