@@ -121,7 +121,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic upgrade head` | ✅ pass | 2026-07-01 | GitHub App foundation made no schema change; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic current`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App foundation pass: **380 passed / 0 failed / 1 warning** |
+| backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App foundation + endpoint test hardening pass: **384 passed / 0 failed / 1 warning** |
 | `ruff` | ✅ pass | 2026-07-01 | GitHub App foundation pass: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
 | frontend build | ✅ pass | 2026-07-01 | GitHub App foundation pass: `npm test` **95 passed**, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
@@ -226,6 +226,19 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-01` — **GitHub App foundation independent verification + test hardening.**
+  Независимо перепроверен предыдущий foundation commit (`31566e9`) на ветке
+  `feat/github-app-connect-foundation`: backend/frontend gates подтверждены
+  зелёными до изменений (**380 / 95**). Найдены и закрыты три реальных test-gap
+  на новом admin-gated endpoint `POST .../github/connections/app-installation`
+  (сравнение с sibling `provider-token` контрактом): member/viewer RBAC → 403
+  `insufficient workspace role`; идемпотентный update того же installation
+  in place (одна строка, обновлённые metadata); невалидный
+  `repository_selection` → 400. Только тесты, без изменения продакшн-поведения.
+  Проверки: `uv run ruff check .` (тест-файл), full backend `pytest`
+  **384 passed / 1 warning**, `git diff --check` — зелёные. No provider calls,
+  deploys, production writes, or push.
 
 - `2026-07-01` — **GitHub App product-connect foundation.**
   Создана branch `feat/github-app-connect-foundation` от local `main`

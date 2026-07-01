@@ -8,7 +8,13 @@ from sqlalchemy import delete, func, select
 
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
-from app.db.identity_models import Membership, User, Workspace
+from app.db.identity_models import (
+    MEMBERSHIP_ROLE_MEMBER,
+    MEMBERSHIP_ROLE_VIEWER,
+    Membership,
+    User,
+    Workspace,
+)
 from app.db.integration_models import (
     INTEGRATION_CONNECTION_STATUS_CONNECTED,
     INTEGRATION_CONNECTION_STATUS_DISABLED,
@@ -115,6 +121,29 @@ async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
         )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+async def _add_workspace_user(
+    workspace_id: str,
+    marker: str,
+    *,
+    role: str,
+    suffix: str,
+) -> str:
+    email = f"github-conn-{marker}-{suffix}@example.test"
+    async with AsyncSessionLocal() as session:
+        user = User(email=email, name=f"GitHub Connection {role}")
+        session.add(user)
+        await session.flush()
+        session.add(
+            Membership(
+                workspace_id=UUID(workspace_id),
+                user_id=user.id,
+                role=role,
+            )
+        )
+        await session.commit()
+    return email
 
 
 async def _seed_connection(
@@ -554,6 +583,136 @@ async def test_github_app_installation_cannot_bind_to_another_workspace(
     finally:
         await _cleanup_connection_fixture(marker)
         await _cleanup_connection_fixture(other_marker)
+
+
+@pytest.mark.parametrize("role", [MEMBERSHIP_ROLE_MEMBER, MEMBERSHIP_ROLE_VIEWER])
+async def test_member_and_viewer_cannot_record_github_app_installation(
+    monkeypatch,
+    role: str,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch)
+    await _cleanup_connection_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        user_email = await _add_workspace_user(
+            created["workspace"]["id"],
+            marker,
+            role=role,
+            suffix=role,
+        )
+        connection_count_before = await _count(IntegrationConnection)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/app-installation",
+                headers=_headers(),
+                params={"owner_email": user_email},
+                json={
+                    "installation_id": f"role-{role}",
+                    "account_login": "qtwin-io",
+                },
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "insufficient workspace role"}
+        assert await _count(IntegrationConnection) == connection_count_before
+    finally:
+        await _cleanup_connection_fixture(marker)
+
+
+async def test_github_app_installation_repeated_installation_updates_in_place(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch)
+    await _cleanup_connection_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+
+        async with _async_client() as client:
+            first = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/connections/app-installation",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "installation_id": "55555",
+                    "account_login": "qtwin-io",
+                    "repository_selection": "all",
+                },
+            )
+            second = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/connections/app-installation",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "installation_id": "55555",
+                    "account_login": "qtwin-io-renamed",
+                    "repository_selection": "selected",
+                    "selected_repositories": [
+                        {"full_name": "qtwin-io/company-knowledge-os"}
+                    ],
+                },
+            )
+            list_response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/connections",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+
+        assert first.status_code == 200, first.text
+        assert second.status_code == 200, second.text
+        first_id = first.json()["connection"]["id"]
+        second_body = second.json()["connection"]
+        assert second_body["id"] == first_id
+        assert second_body["display_name"] == "GitHub App: qtwin-io-renamed"
+        assert second_body["metadata"]["repository_selection"] == "selected"
+        assert second_body["metadata"]["account_login"] == "qtwin-io-renamed"
+
+        listed = list_response.json()
+        assert listed["count"] == 1
+        assert listed["connections"][0]["id"] == first_id
+    finally:
+        await _cleanup_connection_fixture(marker)
+
+
+async def test_github_app_installation_rejects_invalid_repository_selection(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch)
+    await _cleanup_connection_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        connection_count_before = await _count(IntegrationConnection)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/app-installation",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "installation_id": "77777",
+                    "account_login": "qtwin-io",
+                    "repository_selection": "everything",
+                },
+            )
+
+        assert response.status_code == 400
+        assert response.json() == {
+            "detail": "github app repository_selection must be all, selected, or unknown"
+        }
+        assert await _count(IntegrationConnection) == connection_count_before
+    finally:
+        await _cleanup_connection_fixture(marker)
 
 
 async def test_github_connection_status_connected_with_token(monkeypatch) -> None:

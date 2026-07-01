@@ -8,6 +8,9 @@
   workspace-scoped app-installation connection recording without provider calls
   or persisted installation tokens, and a `/github` UI panel showing app
   readiness, local repository surface count, and external writes disabled.
+- Hardened GitHub App installation endpoint test coverage: member/viewer RBAC
+  rejection, idempotent same-installation update in place, and invalid
+  `repository_selection` rejection. Test-only; no production behavior change.
 
 ## 2026-06-30
 
