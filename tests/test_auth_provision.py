@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
@@ -77,6 +80,24 @@ async def test_provision_admin_creates_user_workspace_membership_idempotently() 
         assert verify_password("pw-1", user.password_hash) is False
     finally:
         await _cleanup(email)
+
+
+def test_create_admin_user_script_runs_from_repo_root_without_pythonpath() -> None:
+    env = os.environ.copy()
+    env.pop("FOUNDEROS_ADMIN_EMAIL", None)
+    env.pop("FOUNDEROS_ADMIN_PASSWORD", None)
+
+    result = subprocess.run(
+        [sys.executable, "scripts/create_admin_user.py"],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "FOUNDEROS_ADMIN_EMAIL and FOUNDEROS_ADMIN_PASSWORD" in result.stdout
+    assert "ModuleNotFoundError" not in result.stderr
 
 
 async def test_change_password_rejects_wrong_current_and_accepts_correct() -> None:

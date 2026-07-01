@@ -18,6 +18,9 @@
 - Added `/github` product UI for explicit GitHub App read-only sync of one
   repository through the new backend endpoint, with no browser secrets and
   user-visible no-write/token-persistence boundaries.
+- Fixed `scripts/create_admin_user.py` so direct local execution
+  (`uv run python scripts/create_admin_user.py`) can import the project `app`
+  package without manually setting `PYTHONPATH`.
 - Refined the `/github` GitHub App sync UI to render each known repository with
   its own adjacent read-only sync button and per-repository success/error state;
   no bulk sync control was added.

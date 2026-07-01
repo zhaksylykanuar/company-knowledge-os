@@ -246,6 +246,16 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-01` — **Local admin provisioning script import fix.**
+  Fixed `scripts/create_admin_user.py` direct execution from repo root by adding
+  the same project-root `sys.path` bootstrap pattern used by `start_local.py`.
+  This resolves `ModuleNotFoundError: No module named 'app'` when running
+  `uv run python scripts/create_admin_user.py` to set/reset the founder login.
+  Added regression coverage in `tests/test_auth_provision.py`. Checks:
+  `uv run ruff check scripts/create_admin_user.py tests/test_auth_provision.py`
+  and `uv run pytest -q tests/test_auth_provision.py` **4 passed**. No password,
+  secrets, raw storage, provider calls, deploys, or push.
+
 - `2026-07-01` — **Per-repository GitHub App sync buttons in UI.**
   По подтверждённому плану refinеd `/github`: теперь UI выводит каждый known
   repository из repository surface отдельной карточкой/строкой с соседней
