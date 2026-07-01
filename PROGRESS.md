@@ -13,17 +13,19 @@
   (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Repository
   identity/race debt перед live sync **закрыт** (DEC-050). GitHub App
   product-connect foundation **сделан** (DEC-052). GitHub App polling-only live
-  read sync backend foundation **сделан** (DEC-053). Следующий лучший
-  продуктовый шаг — product UI/hardening для explicit repository sync и первый
-  real-provider read run только после отдельного human approval.
-- **GitHub App live read sync backend foundation (НОВОЕ):** DEC-053 фиксирует
+  read sync backend foundation **сделан** (DEC-053). `/github` product UI для
+  explicit single-repo read-only sync **сделан**. Следующий лучший продуктовый
+  шаг — synced evidence/briefing isolation verification и первый real-provider
+  read run только после отдельного human approval.
+- **GitHub App live read sync backend/UI foundation (НОВОЕ):** DEC-053 фиксирует
   polling-only v0 (webhooks deferred до raw-body signature verification +
   delivery dedupe). Добавлены JIT installation token minting, read-only
   installation repository client, endpoint
   `POST .../github/connections/app-installation/sync`, explicit repository
   scope, issues/PRs provider reads into existing canonical
-  normalization/upsert path. Installation access token не сохраняется,
-  provider writes не выполняются, tests mock provider calls.
+  normalization/upsert path, and `/github` explicit repo sync control.
+  Installation access token не сохраняется, provider writes не выполняются,
+  tests/mock UI keep provider calls mocked.
 - **GitHub App product-connect foundation (НОВОЕ):** DEC-052 выбирает GitHub App
   installation как product path (не OAuth/PAT в браузере). Добавлены backend
   config/status contract (`FOUNDEROS_GITHUB_APP_*`), workspace-scoped
@@ -93,13 +95,12 @@
     сообщений `web/lib/messages.ts` (без i18n-фреймворка).
 - **Текущее состояние:** детерминированный evidence-first спайн + продуктовый
   логин (email+password, серверные сессии) + **персистентные briefings** поверх
-  него + GitHub App product-connect + backend polling-only live read sync
+  него + GitHub App product-connect + polling-only live read sync backend/UI
   foundation; операторский API-ключ остаётся для server/CI/админ-скриптов. Один
   alembic head — `e8f9a0b1c2d3`.
-- **Дальше:** product UI/hardening for GitHub App live sync (explicit repo
-  control, rate-limit/error observability, briefing/evidence isolation over
-  synced data) и первый real-provider read run только после отдельного human
-  approval; затем Briefings Chunk 2 — LLM-нарратив поверх уже персистентной
+- **Дальше:** briefing/evidence isolation verification over GitHub App synced
+  data, rate-limit/error observability, и первый real-provider read run только
+  после отдельного human approval; затем Briefings Chunk 2 — LLM-нарратив поверх уже персистентной
   модели и реальных evidence-backed данных; провижининг второго
   пользователя/тиммейта (мультиюзер); первый прод-деплой на Railway.
 - **Примечание:** Briefings Chunk 1 — это реальный код (модели / миграция /
@@ -135,7 +136,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation pass: **390 passed / 0 failed / 1 warning** |
 | `ruff` | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation pass: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-07-01 | GitHub App foundation pass: `npm test` **95 passed**, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
+| frontend build | ✅ pass | 2026-07-01 | GitHub App live sync UI pass: `npm test` **98 passed**, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
 | docs navigation | ✅ pass | 2026-07-01 | Covered by full pytest; docs/private-beta/hosting/navigation contract tests remain green |
 | `alembic check` (retained substrate) | ✅ reconciled | 2026-07-01 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; GitHub App live read-sync foundation pass: `alembic upgrade head` + `alembic check` зелёные |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
@@ -238,6 +239,21 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-01` — **GitHub App live sync explicit repo UI.**
+  Productized the backend polling-only live read-sync foundation on `/github`:
+  typed frontend API for
+  `POST .../github/connections/app-installation/sync`, explicit owner/repo input
+  (prefilled from repository surface when available), read-only sync action,
+  invalid-repo/missing-app/error/success states, synced counts, and visible
+  no-write/no-token-persistence copy. No browser secrets/operator key/PAT. Tests
+  added for endpoint URL/body, render states, result/warning rendering, and
+  no-write boundary. Docs updated (TODO, ROADMAP, CHANGELOG, README, master
+  playbook, PROGRESS). Проверки: frontend `npm test` **98 passed**, `npm run
+  build`, `npm run typecheck`, `npm run lint`, docs contracts **16 passed**,
+  `git diff --check`, tracked secret scan — зелёные. Backend code not changed in
+  this UI chunk after previous backend **390 passed**. No real provider calls,
+  deploys, production DB/cloud writes, raw storage/Obsidian edits, or push.
 
 - `2026-07-01` — **GitHub App polling-only live read sync backend foundation.**
   Продолжили по плану после GitHub App product-connect foundation. Добавлен

@@ -155,7 +155,22 @@ export const M = {
     writeTitle: "Записи в GitHub",
     writeDescription: "Product connect остаётся read-only; write-actions включаются только отдельным approval path.",
     missingEnvTitle: "Не хватает server-side env-полей",
-    openSetup: "Открыть установку GitHub App"
+    openSetup: "Открыть установку GitHub App",
+    liveSyncTitle: "Живая read-only синхронизация",
+    liveSyncDescription:
+      "Запускает backend polling-only GitHub App sync для одного явно указанного репозитория. Токен установки выпускается just-in-time, не сохраняется, записи в GitHub не выполняются.",
+    liveSyncRepositoryLabel: "Репозиторий для синхронизации",
+    liveSyncRepositoryPlaceholder: "owner/repo",
+    liveSyncRepositoryNote:
+      "Репозиторий должен быть доступен текущей установке GitHub App. Массовая синхронизация всей организации здесь не запускается.",
+    liveSyncRepositoryInvalid: "Укажите репозиторий в формате owner/repo без пробелов.",
+    liveSyncRequiresApp: "Сначала нужна подключённая запись GitHub App installation.",
+    liveSyncRun: "Синхронизировать read-only",
+    liveSyncRunning: "Идёт read-only синхронизация",
+    liveSyncFailedTitle: "Живая read-only синхронизация не удалась",
+    liveSyncFailedDescription: "Backend не смог выполнить GitHub App read sync.",
+    liveSyncResultTitle: "Итог GitHub App read sync",
+    liveSyncNoWrites: "Записи в GitHub не выполнялись."
   },
 
   githubSync: {
@@ -567,6 +582,8 @@ export const T = {
   repoReadSource: (source: string) => `Источник чтения репозиториев: ${source}.`,
   githubRepositorySurfaceDescription: (source: string) =>
     `Источник поверхности репозиториев: ${source}. Живой provider-sync здесь не запускается.`,
+  githubAppLiveSyncResult: (repos: number, issues: number, prs: number, status: string) =>
+    `Синхронизировано через GitHub App: репозиториев — ${repos}, задач — ${issues}, пулреквестов — ${prs}. Статус: ${status}.`,
   connectionNotReady: (status: string) =>
     `Запись в бэкенде в статусе ${status}. Локальная нормализация требует подключённой записи GitHub.`,
   syncResultCounts: (repos: number, issues: number, prs: number, status: string) =>

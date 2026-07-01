@@ -389,6 +389,58 @@ export type GitHubRepositoryListResponse = {
   warnings: string[];
 };
 
+export type GitHubAppLiveSyncRequest = {
+  connection_id: string;
+  repositories: string[];
+  include_issues?: boolean;
+  include_pull_requests?: boolean;
+  issue_states?: ("open" | "closed" | "all")[];
+  pull_request_states?: ("open" | "closed" | "merged" | "all")[];
+};
+
+export type GitHubAppLiveSyncResponse = {
+  workspace_id: string;
+  connection_id: string;
+  installation_id: string;
+  repositories: {
+    full_name: string;
+    synced_issues: number;
+    synced_pull_requests: number;
+    skipped_pull_requests: number;
+  }[];
+  totals: {
+    repositories: number;
+    issues: number;
+    pull_requests: number;
+    skipped_pull_requests: number;
+  };
+  sync_job: {
+    id: string;
+    status: string;
+    records_seen: number;
+    records_created: number;
+    records_updated: number;
+    started_at: string | null;
+    finished_at: string | null;
+  };
+  counts: {
+    repositories: number;
+    issues: number;
+    pull_requests: number;
+  };
+  capabilities: {
+    read_only_sync: boolean;
+    external_writes: boolean;
+    installation_access_token_persisted: boolean;
+  };
+  is_live: boolean;
+  provider_sync_started: boolean;
+  local_normalization_performed: boolean;
+  external_write_performed: boolean;
+  persistence_mode: string;
+  warnings: string[];
+};
+
 export type GitHubLocalSyncRequest = {
   include_repositories?: boolean;
   include_issues?: boolean;

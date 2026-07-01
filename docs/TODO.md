@@ -31,19 +31,21 @@ Implemented foundations:
   explicitly repository-scoped; backend can mint just-in-time installation
   tokens, read installation repositories/issues/PRs for requested repositories,
   and persist through existing idempotent normalization without storing tokens or
-  performing provider writes.
+  performing provider writes. `/github` now has a product control for explicit
+  single-repository read-only sync.
 - Deterministic Company Brain and persisted deterministic Founder Briefings with
   history and evidence refs. No LLM generation is currently implemented.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
-## Next Priority: GitHub App Live Sync Productization
+## Next Priority: GitHub App Synced Evidence Verification
 
 Rationale: the workspace is mostly empty until a real data source is connected.
 Do not spend the next feature slice on an LLM briefing over fixture/empty data.
-The GitHub App backend sync foundation now exists; next, make the scoped live
-sync product-usable and verify the evidence-backed surfaces over real synced
-data, then add LLM narrative on top of validated records.
+The GitHub App backend + product UI sync foundation now exists; next, verify the
+evidence-backed surfaces over synced data and perform the first real read run
+only after explicit human approval, then add LLM narrative on top of validated
+records.
 
 Done when:
 
@@ -64,11 +66,11 @@ Done when:
 
 ## Near-Term Backlog
 
-1. **GitHub App live sync productization.**
-   Backend polling-only live read sync is in place. Next: add a product UI
-   control for explicit repository sync, improve rate-limit/error observability,
-   add briefing/evidence two-workspace isolation tests over synced data, and run
-   the first real scoped read sync only after explicit human approval.
+1. **GitHub App synced evidence verification.**
+   Backend polling-only live read sync and `/github` explicit repo control are
+   in place. Next: improve rate-limit/error observability, add briefing/evidence
+   two-workspace isolation tests over synced data, and run the first real scoped
+   read sync only after explicit human approval.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

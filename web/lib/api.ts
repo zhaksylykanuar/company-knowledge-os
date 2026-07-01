@@ -14,6 +14,8 @@ import type {
   CompanyBrainResponse,
   FounderBriefingRequest,
   FounderBriefingResponse,
+  GitHubAppLiveSyncRequest,
+  GitHubAppLiveSyncResponse,
   GitHubConnectionStatusResponse,
   GitHubLocalSyncRequest,
   GitHubLocalSyncResponse,
@@ -409,6 +411,39 @@ export async function fetchGitHubRepositories(
   return apiFetch<GitHubRepositoryListResponse>(
     buildWorkspaceGitHubRepositoriesPath(workspaceId),
     options
+  );
+}
+
+export function buildWorkspaceGitHubAppLiveSyncPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/connections/app-installation/sync`;
+}
+
+export async function runGitHubAppLiveSync(
+  workspaceId: string,
+  request: GitHubAppLiveSyncRequest,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppLiveSyncResponse> {
+  const body: Record<string, unknown> = {
+    connection_id: request.connection_id,
+    repositories: request.repositories,
+    include_issues: request.include_issues ?? true,
+    include_pull_requests: request.include_pull_requests ?? true
+  };
+  if (request.issue_states && request.issue_states.length > 0) {
+    body.issue_states = request.issue_states;
+  }
+  if (request.pull_request_states && request.pull_request_states.length > 0) {
+    body.pull_request_states = request.pull_request_states;
+  }
+  return apiFetch<GitHubAppLiveSyncResponse>(
+    buildWorkspaceGitHubAppLiveSyncPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(body),
+      method: "POST"
+    }
   );
 }
 
