@@ -27,27 +27,34 @@ Implemented foundations:
   installation over OAuth/PAT for product onboarding; backend config/status and
   workspace-scoped installation connection recording exist without provider
   calls or persisted installation tokens.
+- GitHub App live read-sync foundation: DEC-053 keeps v0 polling-only and
+  explicitly repository-scoped; backend can mint just-in-time installation
+  tokens, read installation repositories/issues/PRs for requested repositories,
+  and persist through existing idempotent normalization without storing tokens or
+  performing provider writes.
 - Deterministic Company Brain and persisted deterministic Founder Briefings with
   history and evidence refs. No LLM generation is currently implemented.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
-## Next Priority: GitHub App Live Read Sync
+## Next Priority: GitHub App Live Sync Productization
 
 Rationale: the workspace is mostly empty until a real data source is connected.
 Do not spend the next feature slice on an LLM briefing over fixture/empty data.
-The GitHub App foundation now exists; next, get real GitHub data flowing through
-read-only, scoped live sync, then add LLM narrative on top of validated,
-evidence-backed records.
+The GitHub App backend sync foundation now exists; next, make the scoped live
+sync product-usable and verify the evidence-backed surfaces over real synced
+data, then add LLM narrative on top of validated records.
 
 Done when:
 
 - DEC-052 remains the product-connect decision: GitHub App installation,
   workspace-scoped binding, backend-only private key/webhook secret, and
   no persisted short-lived installation access tokens.
-- Repository selection/scope is minimal and read-only by default.
-- Webhook signature verification uses the raw body and dedupes deliveries, or a
-  polling-only v0 explicitly documents why webhooks are deferred.
+- DEC-053 remains the live-sync v0 decision: polling-only, admin-triggered,
+  explicit repository scope; webhooks deferred until raw-body signature
+  verification and delivery dedupe exist.
+- Repository selection/scope is minimal and read-only by default; do not add a
+  "sync everything" control.
 - Sync writes through the existing idempotent normalization/upsert path.
 - Two-workspace isolation tests cover connection, sync, briefing, and evidence
   dereference behavior.
@@ -57,11 +64,11 @@ Done when:
 
 ## Near-Term Backlog
 
-1. **GitHub App live read sync.**
-   Product-connect foundation is in place; now mint just-in-time installation
-   tokens, read installation repositories/issues/PRs for explicit scope, write
-   only through existing idempotent normalization/upserts, add rate-limit/error
-   observability, and keep provider writes disabled.
+1. **GitHub App live sync productization.**
+   Backend polling-only live read sync is in place. Next: add a product UI
+   control for explicit repository sync, improve rate-limit/error observability,
+   add briefing/evidence two-workspace isolation tests over synced data, and run
+   the first real scoped read sync only after explicit human approval.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

@@ -27,6 +27,14 @@ from app.services.github_connection_service import (
     get_github_connection_status,
     list_github_connections,
 )
+from app.services.github_app_live_sync_service import (
+    GitHubAppLiveSyncConflictError,
+    GitHubAppLiveSyncError,
+    GitHubAppLiveSyncInput,
+    GitHubAppLiveSyncNotFoundError,
+    GitHubAppLiveSyncProviderReadError,
+    sync_github_app_installation_repositories,
+)
 from app.services.github_normalization_service import (
     GITHUB_NORMALIZATION_JOB_NOT_FOUND,
     GITHUB_NORMALIZATION_JOB_NOT_GITHUB,
@@ -356,6 +364,60 @@ class GitHubNormalizationResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class GitHubAppLiveSyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    connection_id: UUID
+    repositories: list[str] = Field(min_length=1, max_length=20)
+    include_issues: bool = True
+    include_pull_requests: bool = True
+    issue_states: list[str] = Field(
+        default_factory=lambda: ["open", "closed"],
+        max_length=3,
+    )
+    pull_request_states: list[str] = Field(
+        default_factory=lambda: ["open", "closed", "merged"],
+        max_length=4,
+    )
+
+
+class GitHubAppLiveSyncRepositoryRead(BaseModel):
+    full_name: str
+    synced_issues: int
+    synced_pull_requests: int
+    skipped_pull_requests: int
+
+
+class GitHubAppLiveSyncTotalsRead(BaseModel):
+    repositories: int
+    issues: int
+    pull_requests: int
+    skipped_pull_requests: int
+
+
+class GitHubAppLiveSyncCapabilitiesRead(BaseModel):
+    read_only_sync: bool
+    external_writes: bool
+    installation_access_token_persisted: bool
+
+
+class GitHubAppLiveSyncResponse(BaseModel):
+    workspace_id: UUID
+    connection_id: UUID
+    installation_id: str
+    repositories: list[GitHubAppLiveSyncRepositoryRead]
+    totals: GitHubAppLiveSyncTotalsRead
+    sync_job: GitHubNormalizationSyncJobRead
+    counts: GitHubNormalizationCountsRead
+    capabilities: GitHubAppLiveSyncCapabilitiesRead
+    is_live: bool
+    provider_sync_started: bool
+    local_normalization_performed: bool
+    external_write_performed: bool
+    persistence_mode: str
+    warnings: list[str] = Field(default_factory=list)
+
+
 class GitHubLocalSyncRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -633,6 +695,58 @@ async def create_github_app_installation_connection(
             "GitHub App installation connection recorded; live provider sync is not started by this endpoint."
         ],
     )
+
+
+@router.post(
+    "/connections/app-installation/sync",
+    response_model=GitHubAppLiveSyncResponse,
+)
+async def run_github_app_installation_live_sync(
+    workspace_id: UUID,
+    payload: GitHubAppLiveSyncRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubAppLiveSyncResponse:
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await sync_github_app_installation_repositories(
+                session,
+                workspace_id=workspace_id,
+                input_payload=GitHubAppLiveSyncInput(
+                    connection_id=payload.connection_id,
+                    repositories=payload.repositories,
+                    include_issues=payload.include_issues,
+                    include_pull_requests=payload.include_pull_requests,
+                    issue_states=payload.issue_states,
+                    pull_request_states=payload.pull_request_states,
+                ),
+                requested_by=access.actor.auth_mode,
+            )
+            await session.commit()
+        except GitHubAppLiveSyncNotFoundError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.detail,
+            ) from exc
+        except GitHubAppLiveSyncConflictError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except GitHubAppLiveSyncProviderReadError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=exc.detail,
+            ) from exc
+        except GitHubAppLiveSyncError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubAppLiveSyncResponse.model_validate(result)
 
 
 @router.post(

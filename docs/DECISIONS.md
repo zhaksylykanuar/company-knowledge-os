@@ -1187,6 +1187,34 @@ Consequences:
 - The next slice is live read sync using just-in-time installation tokens,
   strict repository scope, and the existing idempotent normalization/upsert path.
 
+## DEC-053 - GitHub App Live Read Sync Starts Polling-Only and Explicitly Scoped
+
+Decision (2026-07-01): the first GitHub App live read sync is an explicit,
+admin-triggered polling/read endpoint, not webhook-driven automation. The
+endpoint requires an existing workspace-scoped GitHub App installation
+connection and an explicit list of repository `owner/repo` names. It mints a
+short-lived installation access token just-in-time, reads only installation
+repositories/issues/PRs for the requested repositories, and persists through the
+existing idempotent GitHub normalization/upsert path. The installation token is
+not persisted.
+
+Webhooks are intentionally deferred from this v0. Rationale: a safe webhook path
+needs raw-body signature verification, delivery dedupe/replay handling, event
+type filtering, retry semantics, and observability. The polling-only endpoint
+gets real GitHub data flowing while keeping execution human/admin triggered,
+repository-scoped, and easier to test without provider calls in CI.
+
+Consequences:
+
+- `POST .../github/connections/app-installation/sync` performs read-only live
+  sync for explicit repositories and returns `external_write_performed: false`.
+- The endpoint does not sync all organization repositories by default; requested
+  repositories must also be visible to the installation.
+- Provider writes remain outside this path. Action execution still requires the
+  existing separate approval/write controls and allowlists.
+- A future webhook slice must add raw-body signature verification and delivery
+  dedupe before any webhook payload mutates local canonical state.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

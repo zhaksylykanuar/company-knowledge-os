@@ -12,9 +12,18 @@
 - **Chunk:** первая продуктовая фича за логином — **Briefings**. Chunk 1
   (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Repository
   identity/race debt перед live sync **закрыт** (DEC-050). GitHub App
-  product-connect foundation **сделан** (DEC-052). Следующий лучший продуктовый
-  шаг — GitHub App live read sync, чтобы заполнить workspace реальными данными
-  перед LLM-нарративом.
+  product-connect foundation **сделан** (DEC-052). GitHub App polling-only live
+  read sync backend foundation **сделан** (DEC-053). Следующий лучший
+  продуктовый шаг — product UI/hardening для explicit repository sync и первый
+  real-provider read run только после отдельного human approval.
+- **GitHub App live read sync backend foundation (НОВОЕ):** DEC-053 фиксирует
+  polling-only v0 (webhooks deferred до raw-body signature verification +
+  delivery dedupe). Добавлены JIT installation token minting, read-only
+  installation repository client, endpoint
+  `POST .../github/connections/app-installation/sync`, explicit repository
+  scope, issues/PRs provider reads into existing canonical
+  normalization/upsert path. Installation access token не сохраняется,
+  provider writes не выполняются, tests mock provider calls.
 - **GitHub App product-connect foundation (НОВОЕ):** DEC-052 выбирает GitHub App
   installation как product path (не OAuth/PAT в браузере). Добавлены backend
   config/status contract (`FOUNDEROS_GITHUB_APP_*`), workspace-scoped
@@ -84,12 +93,14 @@
     сообщений `web/lib/messages.ts` (без i18n-фреймворка).
 - **Текущее состояние:** детерминированный evidence-first спайн + продуктовый
   логин (email+password, серверные сессии) + **персистентные briefings** поверх
-  него + GitHub App product-connect foundation; операторский API-ключ остаётся
-  для server/CI/админ-скриптов. Один alembic head — `e8f9a0b1c2d3`.
-- **Дальше:** GitHub App live read sync using just-in-time installation tokens,
-  strict repository/workspace scoping, and existing idempotent
-  normalization/upsert path; затем Briefings Chunk 2 — LLM-нарратив поверх уже
-  персистентной модели и реальных evidence-backed данных; провижининг второго
+  него + GitHub App product-connect + backend polling-only live read sync
+  foundation; операторский API-ключ остаётся для server/CI/админ-скриптов. Один
+  alembic head — `e8f9a0b1c2d3`.
+- **Дальше:** product UI/hardening for GitHub App live sync (explicit repo
+  control, rate-limit/error observability, briefing/evidence isolation over
+  synced data) и первый real-provider read run только после отдельного human
+  approval; затем Briefings Chunk 2 — LLM-нарратив поверх уже персистентной
+  модели и реальных evidence-backed данных; провижининг второго
   пользователя/тиммейта (мультиюзер); первый прод-деплой на Railway.
 - **Примечание:** Briefings Chunk 1 — это реальный код (модели / миграция /
   эндпоинты / фронтенд) с зелёными гейтами; бэкенд и фронтенд закоммичены
@@ -118,15 +129,15 @@ DONE строго = есть код + проходящий тест/рабочи
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ pass | 2026-07-01 | GitHub App foundation made no schema change; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic current`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
+| `alembic upgrade head` | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation made no schema change; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic current`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App foundation + endpoint test hardening pass: **384 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-07-01 | GitHub App foundation pass: `uv run ruff check .` → `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation pass: **390 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation pass: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
 | frontend build | ✅ pass | 2026-07-01 | GitHub App foundation pass: `npm test` **95 passed**, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
 | docs navigation | ✅ pass | 2026-07-01 | Covered by full pytest; docs/private-beta/hosting/navigation contract tests remain green |
-| `alembic check` (retained substrate) | ✅ reconciled | 2026-07-01 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; GitHub App foundation pass: `alembic upgrade head` + `alembic check` зелёные |
+| `alembic check` (retained substrate) | ✅ reconciled | 2026-07-01 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; GitHub App live read-sync foundation pass: `alembic upgrade head` + `alembic check` зелёные |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
 | prod smoke | ✅ pass | 2026-06-27 | FOS-026C: deployed Railway read-only smoke passed with minimal private-beta workspace/owner context; no provider writes, LLM calls, selected repo sync, or ActionProposal execute |
@@ -218,14 +229,36 @@ DONE строго = есть код + проходящий тест/рабочи
 
 - ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). `source_events` repointed to compatibility fallback in FOS-009 (DEC-030); physical drop remains a later migration/cleanup task, not this feature path.
 
-- [SPINE] **GitHub App live read sync is next.** GitHub App product-connect
-  foundation is recorded in DEC-052 and present in backend/UI. The next missing
-  piece is read-only provider execution using just-in-time installation tokens,
-  strict repository/workspace scope, and existing canonical normalization.
+- [SPINE] **GitHub App live sync productization is next.** GitHub App
+  product-connect foundation is recorded in DEC-052; polling-only backend live
+  read sync is recorded in DEC-053. The next missing piece is product UI,
+  observability/hardening, briefing/evidence isolation over synced data, and the
+  first real-provider read run after explicit human approval.
 
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-01` — **GitHub App polling-only live read sync backend foundation.**
+  Продолжили по плану после GitHub App product-connect foundation. Добавлен
+  DEC-053: v0 live read sync is polling-only/admin-triggered/explicit repo
+  scoped; webhooks deferred until raw-body signature verification + delivery
+  dedupe. Backend: новый `github_app_token_service` builds GitHub App JWT and
+  mints short-lived installation tokens just-in-time; `github_repository_client`
+  reads installation repositories; `github_app_live_sync_service` validates
+  workspace-scoped app-installation connection, requires explicit repositories,
+  reads installation repos/issues/PRs, creates manual SyncJob, and persists via
+  existing idempotent `normalize_github_sync_job_local`; new endpoint
+  `POST .../github/connections/app-installation/sync`. Tests mock all provider
+  calls and prove token not persisted, no provider writes, workspace isolation
+  before provider read, member/viewer RBAC, repo-not-installed rejection, invalid
+  state rejection, and JWT shape without private-key leakage. Docs updated
+  (DECISIONS, TODO, ROADMAP, CHANGELOG, README, master playbook, PROGRESS).
+  Проверки: focused **46 passed / 1 warning**, full backend `pytest`
+  **390 passed / 1 warning**, `uv run ruff check .`, `alembic
+  heads/current/upgrade/check` — зелёные. Frontend not touched. No real provider
+  calls, deploys, production DB/cloud writes, raw storage/Obsidian edits, or
+  push.
 
 - `2026-07-01` — **GitHub App foundation independent verification + test hardening.**
   Независимо перепроверен предыдущий foundation commit (`31566e9`) на ветке

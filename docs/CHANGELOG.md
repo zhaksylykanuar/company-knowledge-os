@@ -11,6 +11,10 @@
 - Hardened GitHub App installation endpoint test coverage: member/viewer RBAC
   rejection, idempotent same-installation update in place, and invalid
   `repository_selection` rejection. Test-only; no production behavior change.
+- Added polling-only GitHub App live read-sync foundation: just-in-time
+  installation token minting, installation repository read client, explicit
+  repository-scoped issues/PRs read sync through the existing normalization
+  path, and tests proving no token persistence or provider writes.
 
 ## 2026-06-30
 
