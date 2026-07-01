@@ -16,8 +16,22 @@
   read sync backend foundation **сделан** (DEC-053). `/github` product UI со
   списком repo и per-repo read-only sync кнопкой **сделан**. Mocked synced
   evidence/briefing isolation verification **сделан**. Live-read
-  observability/rate-limit handling **сделан**. Следующий лучший продуктовый шаг
-  — первый real-provider read run только после отдельного human approval.
+  observability/rate-limit handling **сделан**. Локальный `/github` теперь
+  показывает canonical org repo rows для `qtwin-io` из `.local/repos.json`
+  (25 repos), а не retained source-event/legacy fallbacks; live read-only check
+  по org env keys подтвердил тот же count без вывода секретов. Следующий лучший
+  продуктовый шаг — первый GitHub App real-provider read run только после
+  отдельного human approval.
+- **Local `/github` org repo inventory fix (НОВОЕ):**
+  `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
+  в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
+  из highest-precedence canonical inventory. Скрипт idempotent/offline-only,
+  читает non-secret `FOS_GITHUB_TARGET_ORG` из env/`.env.local`/`.env`, не
+  читает/печатает GitHub tokens и не делает provider calls. Локально выполнено
+  для `founder@example.com`: 25 `qtwin-io` repos visible через frontend proxy,
+  token leak check false. После этого локально удалены stale non-org GitHub
+  `source_events`/derived activity rows (`company-knowledge-os`, `example-org`);
+  `qtwin-io` source events and canonical repo rows сохранены.
 - **GitHub App live read sync backend/UI foundation (НОВОЕ):** DEC-053 фиксирует
   polling-only v0 (webhooks deferred до raw-body signature verification +
   delivery dedupe). Добавлены JIT installation token minting, read-only

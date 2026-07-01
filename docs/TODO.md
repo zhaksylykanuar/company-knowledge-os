@@ -22,7 +22,8 @@ Implemented foundations:
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with
   idempotent canonical upserts, DB-level Repository identity guards, and no
   browser-shipped operator key. Local `.local/repos.json` can now bootstrap the
-  offline repository surface before product connect.
+  offline repository surface before product connect and can be promoted into
+  canonical workspace `Repository` rows for the local `/github` UI.
 - GitHub App product-connect foundation: DEC-052 chooses GitHub App
   installation over OAuth/PAT for product onboarding; backend config/status and
   workspace-scoped installation connection recording exist without provider

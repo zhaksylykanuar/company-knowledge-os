@@ -121,6 +121,19 @@ This writes `.local/discovery/github/local-repos-current/raw/repos.json` and
 provider calls, stores no tokens/secrets, and keeps provider writes disabled by
 default.
 
+For a local logged-in workspace, promote that same organization repo snapshot
+into canonical repository rows so `/github` uses it before falling back to
+retained source events or legacy seed data:
+
+```bash
+uv run python scripts/ingest_local_org_repositories.py \
+  --owner-email founder@example.com
+```
+
+If `--org` is omitted, the script reads the non-secret
+`FOS_GITHUB_TARGET_ORG` value from the environment, `.env.local`, then `.env`.
+It is idempotent, offline-only, and never reads or prints GitHub tokens.
+
 ## Private-beta deployment foundation
 
 The concrete manual private-beta deployment path is documented in

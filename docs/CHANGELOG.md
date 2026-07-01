@@ -30,6 +30,11 @@
 - Added sanitized GitHub provider error/rate-limit observability for live read
   sync: safe HTTP status/message/rate-limit headers propagate to API errors
   without leaking authorization headers, tokens, or provider payload dumps.
+- Added an offline, idempotent local org repository ingest helper that promotes
+  `.local/repos.json` into canonical workspace `Repository` rows so `/github`
+  shows the configured organization's repositories instead of retained
+  source-event or legacy fallback rows; the helper reads only the non-secret
+  target-org setting from env files and does not read or print GitHub tokens.
 
 ## 2026-06-30
 
