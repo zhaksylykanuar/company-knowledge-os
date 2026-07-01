@@ -1,5 +1,14 @@
 # FounderOS Changelog
 
+## 2026-07-01
+
+### Changed
+
+- Added GitHub App product-connect foundation: backend config/status contract,
+  workspace-scoped app-installation connection recording without provider calls
+  or persisted installation tokens, and a `/github` UI panel showing app
+  readiness, local repository surface count, and external writes disabled.
+
 ## 2026-06-30
 
 ### Changed

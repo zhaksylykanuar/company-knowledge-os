@@ -12,6 +12,7 @@ import {
 } from "../lib/api";
 import { M } from "../lib/messages";
 import type {
+  GitHubAppConfigStatus,
   GitHubConnectionStatusResponse,
   GitHubSelectedIssueSyncResponse,
   GitHubSelectedPullRequestSyncResponse
@@ -23,9 +24,24 @@ import {
   SelectedRepositorySyncControlsView
 } from "../components/SelectedRepositorySyncControls";
 
+const configuredApp: GitHubAppConfigStatus = {
+  configured: true,
+  app_id_configured: true,
+  app_slug: "founderos",
+  private_key_configured: true,
+  private_key_source: "path",
+  webhook_secret_configured: false,
+  setup_url: "https://github.com/apps/founderos/installations/new",
+  callback_url: null,
+  missing_env: [],
+  installation_tokens_persisted: false,
+  provider_writes_enabled: false
+};
+
 const connectedStatus: GitHubConnectionStatusResponse = {
   provider: "github",
   status: "connected",
+  connection_method: "manual_provider_token",
   connection_id: "connection-1",
   display_name: "GitHub manual connection",
   last_sync_at: null,
@@ -35,12 +51,14 @@ const connectedStatus: GitHubConnectionStatusResponse = {
   repository_read_available: true,
   repository_read_source: "integration_connection",
   is_live: false,
+  app: configuredApp,
   warnings: []
 };
 
 const missingConnectionStatus: GitHubConnectionStatusResponse = {
   ...connectedStatus,
   status: "local_bridge_only",
+  connection_method: null,
   connection_id: null,
   has_connection_record: false,
   has_valid_token_record: false,

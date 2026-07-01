@@ -16,8 +16,12 @@ from app.db.base import AsyncSessionLocal
 from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN
 from app.db.integration_models import INTEGRATION_CONNECTION_STATUS_CONNECTED
 from app.services.github_connection_service import (
+    GITHUB_APP_INSTALLATION_ALREADY_BOUND,
     GITHUB_PROVIDER_TOKEN_WARNING,
+    GitHubAppInstallationConnectionError,
+    GitHubAppInstallationConnectionInput,
     GitHubProviderTokenConnectionInput,
+    create_or_update_github_app_installation_connection,
     create_or_update_github_provider_token_connection,
     get_github_connection,
     get_github_connection_status,
@@ -112,6 +116,7 @@ class GitHubConnectionRead(BaseModel):
     last_error: str | None = None
     has_access_token: bool
     has_refresh_token: bool
+    connection_method: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
@@ -125,9 +130,24 @@ class GitHubConnectionListResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class GitHubAppConfigStatusRead(BaseModel):
+    configured: bool
+    app_id_configured: bool
+    app_slug: str | None = None
+    private_key_configured: bool
+    private_key_source: str | None = None
+    webhook_secret_configured: bool
+    setup_url: str | None = None
+    callback_url: str | None = None
+    missing_env: list[str] = Field(default_factory=list)
+    installation_tokens_persisted: bool
+    provider_writes_enabled: bool
+
+
 class GitHubConnectionStatusResponse(BaseModel):
     provider: str
     status: str
+    connection_method: str | None = None
     connection_id: UUID | None = None
     display_name: str | None = None
     last_sync_at: datetime | None = None
@@ -137,6 +157,7 @@ class GitHubConnectionStatusResponse(BaseModel):
     repository_read_available: bool
     repository_read_source: str
     is_live: bool
+    app: GitHubAppConfigStatusRead
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -164,6 +185,39 @@ class GitHubProviderTokenConnectionRequest(BaseModel):
 class GitHubProviderTokenConnectionResponse(BaseModel):
     connection: GitHubConnectionRead
     is_live: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubAppSelectedRepositoryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    id: str | int | None = Field(default=None)
+    name: str | None = Field(default=None, max_length=255)
+    full_name: str | None = Field(default=None, max_length=255)
+    private: bool | None = None
+
+
+class GitHubAppInstallationConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    installation_id: str = Field(min_length=1, max_length=64)
+    account_login: str = Field(min_length=1, max_length=255)
+    account_id: str | None = Field(default=None, max_length=64)
+    repository_selection: str = Field(default="unknown", max_length=32)
+    selected_repositories: list[GitHubAppSelectedRepositoryRequest] = Field(
+        default_factory=list,
+        max_length=100,
+    )
+    display_name: str | None = Field(default=None, max_length=255)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class GitHubAppInstallationConnectionResponse(BaseModel):
+    connection: GitHubConnectionRead
+    is_live: bool
+    provider_sync_started: bool
+    installation_access_token_persisted: bool
+    external_write_performed: bool
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -526,6 +580,58 @@ async def create_github_provider_token_connection(
         connection=GitHubConnectionRead.model_validate(connection),
         is_live=False,
         warnings=[GITHUB_PROVIDER_TOKEN_WARNING],
+    )
+
+
+@router.post(
+    "/connections/app-installation",
+    response_model=GitHubAppInstallationConnectionResponse,
+)
+async def create_github_app_installation_connection(
+    workspace_id: UUID,
+    payload: GitHubAppInstallationConnectionRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> GitHubAppInstallationConnectionResponse:
+    _ = access
+    async with AsyncSessionLocal() as session:
+        try:
+            connection = await create_or_update_github_app_installation_connection(
+                session,
+                workspace_id=workspace_id,
+                payload=GitHubAppInstallationConnectionInput(
+                    installation_id=payload.installation_id,
+                    account_login=payload.account_login,
+                    account_id=payload.account_id,
+                    repository_selection=payload.repository_selection,
+                    selected_repositories=[
+                        repository.model_dump(exclude_none=True)
+                        for repository in payload.selected_repositories
+                    ],
+                    display_name=payload.display_name,
+                    metadata=payload.metadata,
+                ),
+            )
+            await session.commit()
+        except GitHubAppInstallationConnectionError as exc:
+            await session.rollback()
+            if exc.detail == GITHUB_APP_INSTALLATION_ALREADY_BOUND:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=exc.detail,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubAppInstallationConnectionResponse(
+        connection=GitHubConnectionRead.model_validate(connection),
+        is_live=False,
+        provider_sync_started=False,
+        installation_access_token_persisted=False,
+        external_write_performed=False,
+        warnings=[
+            "GitHub App installation connection recorded; live provider sync is not started by this endpoint."
+        ],
     )
 
 

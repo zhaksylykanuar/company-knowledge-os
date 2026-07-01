@@ -93,6 +93,13 @@ Backend env names:
 - `REQUIRE_APPROVAL_FOR_WRITES`
 - `FOS_GITHUB_WRITE_ALLOWED_REPOS`
 - `FOS_GITHUB_SYNC_ALLOWED_REPOS`
+- `FOUNDEROS_GITHUB_APP_ID`
+- `FOUNDEROS_GITHUB_APP_SLUG`
+- `FOUNDEROS_GITHUB_APP_PRIVATE_KEY` or
+  `FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH`
+- `FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET`
+- `FOUNDEROS_GITHUB_APP_SETUP_URL`
+- `FOUNDEROS_GITHUB_APP_CALLBACK_URL`
 - `FOUNDEROS_ENABLE_REAL_CONNECTORS`
 - `FOUNDEROS_REQUIRE_CONNECTOR_SCOPE`
 
@@ -103,6 +110,8 @@ Backend private-beta defaults:
 - `FOUNDEROS_ENABLE_REAL_CONNECTORS` disabled unless a human approves a scoped
   read-only provider test.
 - GitHub write and sync allowlists remain explicit and repository-scoped.
+- GitHub App private key and webhook secret stay backend-only; installation
+  access tokens should be minted just-in-time and not persisted.
 
 ## Frontend service dry-run details
 

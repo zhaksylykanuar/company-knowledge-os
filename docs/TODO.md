@@ -23,30 +23,28 @@ Implemented foundations:
   idempotent canonical upserts, DB-level Repository identity guards, and no
   browser-shipped operator key. Local `.local/repos.json` can now bootstrap the
   offline repository surface before product connect.
+- GitHub App product-connect foundation: DEC-052 chooses GitHub App
+  installation over OAuth/PAT for product onboarding; backend config/status and
+  workspace-scoped installation connection recording exist without provider
+  calls or persisted installation tokens.
 - Deterministic Company Brain and persisted deterministic Founder Briefings with
   history and evidence refs. No LLM generation is currently implemented.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
-## Next Priority: GitHub Product Connect / Live Sync
+## Next Priority: GitHub App Live Read Sync
 
 Rationale: the workspace is mostly empty until a real data source is connected.
 Do not spend the next feature slice on an LLM briefing over fixture/empty data.
-Get real GitHub data flowing first, then add LLM narrative on top of validated,
+The GitHub App foundation now exists; next, get real GitHub data flowing through
+read-only, scoped live sync, then add LLM narrative on top of validated,
 evidence-backed records.
 
 Done when:
 
-- GitHub connect design is recorded in `docs/DECISIONS.md` before coding.
-- GitHub App vs OAuth App choice is explicit; prefer GitHub App installation for
-  workspace-scoped repository access unless a concrete product constraint says
-  otherwise.
-- Connection state is workspace-scoped and cannot bind an installation to the
-  wrong workspace.
-- Token/secret storage model is explicit: do not persist short-lived installation
-  access tokens when they can be minted just-in-time; protect the GitHub App
-  private key/webhook secret/any user OAuth refresh token with the existing
-  secret-encryption posture.
+- DEC-052 remains the product-connect decision: GitHub App installation,
+  workspace-scoped binding, backend-only private key/webhook secret, and
+  no persisted short-lived installation access tokens.
 - Repository selection/scope is minimal and read-only by default.
 - Webhook signature verification uses the raw body and dedupes deliveries, or a
   polling-only v0 explicitly documents why webhooks are deferred.
@@ -59,10 +57,11 @@ Done when:
 
 ## Near-Term Backlog
 
-1. **GitHub product connect / live sync.**
-   Local repository surface is prepared from `.local/repos.json`; now build the
-   connect flow, connection status UX, initial sync, reconciliation,
-   rate-limit handling, and observability. Keep provider writes disabled.
+1. **GitHub App live read sync.**
+   Product-connect foundation is in place; now mint just-in-time installation
+   tokens, read installation repositories/issues/PRs for explicit scope, write
+   only through existing idempotent normalization/upserts, add rate-limit/error
+   observability, and keep provider writes disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

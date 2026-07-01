@@ -19,6 +19,7 @@ import type {
   GitHubLocalSyncResponse,
   GitHubOperationalWorkResponse,
   GitHubOperationalWorkState,
+  GitHubRepositoryListResponse,
   GitHubSelectedIssueSyncRequest,
   GitHubSelectedIssueSyncResponse,
   GitHubSelectedPullRequestSyncRequest,
@@ -386,6 +387,27 @@ export async function fetchGitHubConnectionStatus(
 ): Promise<GitHubConnectionStatusResponse> {
   return apiFetch<GitHubConnectionStatusResponse>(
     buildWorkspaceGitHubConnectionStatusPath(workspaceId),
+    options
+  );
+}
+
+export function buildWorkspaceGitHubRepositoriesPath(
+  workspaceId: string,
+  limit = 100
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/repositories?${params.toString()}`;
+}
+
+export async function fetchGitHubRepositories(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubRepositoryListResponse> {
+  return apiFetch<GitHubRepositoryListResponse>(
+    buildWorkspaceGitHubRepositoriesPath(workspaceId),
     options
   );
 }

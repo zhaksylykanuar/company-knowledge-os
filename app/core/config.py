@@ -99,6 +99,41 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("FOS_GITHUB_SYNC_ALLOWED_REPOS"),
     )
+    # --- GitHub App product-connect foundation ---
+    # Values below describe the app installation path. Secret values are never
+    # returned to the browser; status payloads expose only configured/missing
+    # booleans and safe setup/callback URLs.
+    github_app_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_ID", "GITHUB_APP_ID"),
+    )
+    github_app_slug: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_SLUG", "GITHUB_APP_SLUG"),
+    )
+    github_app_private_key: SecretStr | str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_PRIVATE_KEY"),
+    )
+    github_app_private_key_path: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH"),
+    )
+    github_app_webhook_secret: SecretStr | str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET",
+            "GITHUB_WEBHOOK_SECRET",
+        ),
+    )
+    github_app_setup_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_SETUP_URL"),
+    )
+    github_app_callback_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_CALLBACK_URL"),
+    )
     enable_obsidian_export: bool = True
     require_approval_for_writes: bool = True
     enable_obsidian_bridge: bool = Field(

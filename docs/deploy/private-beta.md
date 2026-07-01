@@ -74,6 +74,13 @@ Optional only when the corresponding feature is intentionally enabled:
 - `OPENAI_API_KEY`
 - `FOS_OPENAI_API_KEY`
 - `FOUNDEROS_GITHUB_REPOS`
+- `FOUNDEROS_GITHUB_APP_ID`
+- `FOUNDEROS_GITHUB_APP_SLUG`
+- `FOUNDEROS_GITHUB_APP_PRIVATE_KEY` or
+  `FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH`
+- `FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET`
+- `FOUNDEROS_GITHUB_APP_SETUP_URL`
+- `FOUNDEROS_GITHUB_APP_CALLBACK_URL`
 - `FOUNDEROS_JIRA_PROJECT_KEYS`
 - `ENABLE_OBSIDIAN_EXPORT`
 - `FOUNDEROS_ENABLE_OBSIDIAN_BRIDGE`
@@ -99,6 +106,9 @@ Private-beta default policy:
   human-approved read-only connector test.
 - Broad provider token scope is not a safety boundary; explicit write and sync
   allowlists are still required.
+- GitHub App product-connect config is server-side only. Private keys and
+  webhook secrets are never browser env vars; installation access tokens should
+  be minted just-in-time and not persisted.
 
 ## Required frontend env names
 

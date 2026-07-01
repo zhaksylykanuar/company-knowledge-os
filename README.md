@@ -26,10 +26,11 @@ Read in this order (control trio = what / where / why):
   (Argon2id, httpOnly first-party cookie via a same-origin proxy, DB login
   throttle). The operator API key remains for server/CI/admin tooling. See
   step 4 below to provision the founder account.
-- Founder Briefings now persist deterministic briefing history. The remaining
-  product gaps are real GitHub product connect/live sync, LLM briefing narrative
-  over real connected data, multi-user provisioning beyond the seeded founder,
-  and the first production deploy of the auth phase.
+- Founder Briefings now persist deterministic briefing history. GitHub App
+  product-connect foundation exists; the remaining product gaps are GitHub App
+  live read sync, LLM briefing narrative over real connected data, multi-user
+  provisioning beyond the seeded founder, and the first production deploy of
+  the auth phase.
 
 ## Local full-stack run path
 
@@ -145,6 +146,16 @@ Minimum backend env names for a private-beta candidate:
 - `REQUIRE_APPROVAL_FOR_WRITES`
 - `FOS_GITHUB_WRITE_ALLOWED_REPOS`
 - `FOS_GITHUB_SYNC_ALLOWED_REPOS`
+
+GitHub App product-connect env names (server-side only, required only when the
+GitHub App installation path is enabled):
+
+- `FOUNDEROS_GITHUB_APP_ID`
+- `FOUNDEROS_GITHUB_APP_SLUG`
+- `FOUNDEROS_GITHUB_APP_PRIVATE_KEY` or `FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH`
+- `FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET`
+- `FOUNDEROS_GITHUB_APP_SETUP_URL`
+- `FOUNDEROS_GITHUB_APP_CALLBACK_URL`
 
 Minimum frontend env names:
 

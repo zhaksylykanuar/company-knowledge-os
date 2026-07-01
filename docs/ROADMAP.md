@@ -6,10 +6,10 @@ Status: roadmap is subordinate to the canonical control trio:
 
 The current execution pointer is `../PROGRESS.md`: CHUNK 8 hardening is closed
 (FOS-027B2 + sync-layer idempotency), email+password / server-side-session login
-is built, and deterministic Founder Briefings now persist history. The next
-horizon is real connected data (GitHub product connect/live sync) before an LLM
-briefing narrative. Docs consolidation is complete; this roadmap is planning
-context, not the live task source.
+is built, deterministic Founder Briefings now persist history, and GitHub App
+product-connect foundation is in place. The next horizon is real connected data
+(GitHub App live read sync) before an LLM briefing narrative. Docs consolidation
+is complete; this roadmap is planning context, not the live task source.
 
 ## Phase 0 - Project Setup
 
@@ -70,8 +70,8 @@ Missing:
   spine proves the need.
 - Person ambiguity remains open as ASK-1.
 
-Next step: GitHub product connect/live sync design and implementation; physical substrate
-drop remains a later migration/cleanup task.
+Next step: GitHub App live read sync implementation; physical substrate drop
+remains a later migration/cleanup task.
 
 Definition of Done:
 
@@ -97,6 +97,11 @@ Done:
 - Workspace-scoped Company Brain read model exists for deterministic canonical
   GitHub repository/work/evidence state:
   `/api/v1/workspaces/{workspace_id}/company-brain`.
+- GitHub App product-connect foundation exists: config/status reports safe
+  readiness, DEC-052 chooses GitHub App installation as the product path, and
+  `/api/v1/workspaces/{workspace_id}/github/connections/app-installation`
+  records a workspace-scoped installation without provider calls or persisted
+  installation tokens.
 - Selected repository issue sync exists for explicitly allowlisted repositories:
   `/api/v1/workspaces/{workspace_id}/github/repositories/issues/sync`.
 - Selected repository PR sync exists for explicitly allowlisted repositories:
@@ -114,15 +119,14 @@ Done:
 
 Missing:
 
-- Full GitHub OAuth/product connect flow.
-- Live GitHub OAuth/product sync execution path.
+- Live GitHub App read sync execution path.
 - LLM briefing narrative over real connected data.
 - Multi-user / teammate provisioning beyond the single seeded founder.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
 
-Next step: follow `../PROGRESS.md`; GitHub product connect/live sync should
-precede LLM briefing work because the workspace is otherwise mostly empty.
+Next step: follow `../PROGRESS.md`; GitHub App live read sync should precede LLM
+briefing work because the workspace is otherwise mostly empty.
 
 Definition of Done:
 
@@ -158,7 +162,7 @@ Done:
 - Dashboard reads canonical GitHub operational work from the backend and shows
   issue/task and PR sections with open/all/closed/merged filters.
 - Dashboard exposes honest GitHub local-sync controls over existing backend
-  contracts and does not claim live OAuth/provider execution.
+  contracts and does not claim live provider execution.
 - Dashboard surfaces deterministic Company Brain state with summary counts,
   repositories, open issue/PR highlights, recent work, and source refs.
 - Dashboard and `/briefings` surface deterministic manual briefing with returned
@@ -183,9 +187,9 @@ Missing:
 - Selected repository issue and PR sync now have read-only product UI controls
   in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
   allowlisted repository at a time without external writes.
-- GitHub product connect/onboarding and multi-user invites remain missing.
+- GitHub App live read sync and multi-user invites remain missing.
 
-Next step: keep product UI honest while GitHub connect/live sync is added; do
+Next step: keep product UI honest while GitHub App live read sync is added; do
 not add browser-stored operator credentials.
 
 Definition of Done:
@@ -252,16 +256,15 @@ Done:
 
 Missing:
 
-- Full GitHub OAuth implementation path.
-- Actual GitHub sync execution through the product flow.
+- Live GitHub App read-sync execution through the product flow.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
 - Multi-repository selected sync from the product UI beyond one explicit
   repository at a time. External issue/PR URLs and local workspace/proposal/
   connection/evidence identifiers are intentionally omitted from public docs.
 
-Next step: implement GitHub product connect/live sync with strict
-workspace/installation scoping before adding LLM briefing intelligence.
+Next step: implement GitHub App live read sync with strict
+workspace/installation/repository scoping before adding LLM briefing intelligence.
 
 Definition of Done:
 
@@ -370,13 +373,13 @@ Missing:
 
 - First production deploy of the auth phase (the Railway rehearsal predates it);
   founder account provisioning + `FOUNDEROS_API_PROXY_TARGET` wiring in prod.
-- GitHub OAuth/onboarding path for private-beta users.
+- GitHub App live read sync path for private-beta users.
 - Custom domain decision and setup.
 - Worker service if/when queue runtime exists.
 - Broader beta monitoring/alerting and backup verification.
 
-Next step: first auth-session production deploy/handoff, then GitHub
-connect/live sync; keep deploy manual and smoke-gated.
+Next step: first auth-session production deploy/handoff, then GitHub App live
+read sync; keep deploy manual and smoke-gated.
 
 Definition of Done:
 

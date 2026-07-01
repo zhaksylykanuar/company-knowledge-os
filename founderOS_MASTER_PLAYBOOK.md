@@ -23,17 +23,19 @@
   `/api/v1/auth/login|logout|me|change-password`, страница `/login`, аккаунт в
   Settings; операторская аутентификация по API-ключу сохраняется для
   server/CI/админ-скриптов и сосуществует с сессией (fail-closed вне local/dev);
-- GitHub через provider-token connection: read-only нормализация
-  репозиториев / issues / PR в канонические таблицы (идемпотентный `ON CONFLICT`
-  upsert), Company Brain и ручной evidence-брифинг, плюс human-approved guarded
-  write-back одного GitHub issue;
+- GitHub через provider-token operator bridge и новый GitHub App
+  product-connect foundation (DEC-052): read-only нормализация репозиториев /
+  issues / PR в канонические таблицы (идемпотентный `ON CONFLICT` upsert),
+  workspace-scoped app-installation connection state без browser PAT/секретов и
+  без persisted installation tokens, Company Brain и ручной evidence-брифинг,
+  плюс human-approved guarded write-back одного GitHub issue;
 - детерминированные проекции без LLM: Company Brain и Founder Briefing считаются
   из локальных данных и несут `evidence_refs`; ручные Founder Briefings уже
   сохраняются в `Briefing` / `BriefingItem` с историей.
 
 Ещё **не** реализовано (остаётся видением этого плана, а не текущим кодом):
 
-- GitHub OAuth/App start/callback/connect и живая продуктовая синхронизация;
+- GitHub App live read sync через just-in-time installation tokens;
 - LLM-брифинг-пайплайн поверх уже персистентной модели;
 - продуктовые пути Jira / Gmail / Drive / Documents;
 - мультиюзер/онбординг (сейчас один основатель, заводится через

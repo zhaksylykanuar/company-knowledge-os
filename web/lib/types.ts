@@ -336,9 +336,24 @@ export type ActionExecutionResponse = {
   warnings: string[];
 };
 
+export type GitHubAppConfigStatus = {
+  configured: boolean;
+  app_id_configured: boolean;
+  app_slug: string | null;
+  private_key_configured: boolean;
+  private_key_source: string | null;
+  webhook_secret_configured: boolean;
+  setup_url: string | null;
+  callback_url: string | null;
+  missing_env: string[];
+  installation_tokens_persisted: boolean;
+  provider_writes_enabled: boolean;
+};
+
 export type GitHubConnectionStatusResponse = {
   provider: string;
   status: string;
+  connection_method: string | null;
   connection_id: string | null;
   display_name: string | null;
   last_sync_at: string | null;
@@ -347,6 +362,29 @@ export type GitHubConnectionStatusResponse = {
   has_valid_token_record: boolean;
   repository_read_available: boolean;
   repository_read_source: string;
+  is_live: boolean;
+  app: GitHubAppConfigStatus;
+  warnings: string[];
+};
+
+export type GitHubRepositoryRead = {
+  id: string;
+  name: string;
+  full_name: string;
+  default_branch: string | null;
+  visibility: string;
+  archived: boolean;
+  source_url: string | null;
+  last_activity_at: string | null;
+  source: string;
+  evidence_refs: BriefingEvidenceRef[];
+  metadata: Record<string, unknown>;
+};
+
+export type GitHubRepositoryListResponse = {
+  repositories: GitHubRepositoryRead[];
+  count: number;
+  source: string;
   is_live: boolean;
   warnings: string[];
 };

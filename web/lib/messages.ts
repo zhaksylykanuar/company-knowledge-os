@@ -132,6 +132,32 @@ export const M = {
       "Панель уже читает каноническую работу GitHub. Эти элементы подключения и синхронизации остаются заготовками до появления продуктового подключения/синхронизации."
   },
 
+  githubProductConnect: {
+    eyebrow: "GitHub App",
+    title: "Продуктовое подключение GitHub",
+    badgeReadOnly: "Только чтение",
+    description:
+      "Фундамент подключения через GitHub App: установка привязана к рабочему пространству, токены установки не хранятся, внешние записи отключены.",
+    loading: "Загрузка состояния GitHub App",
+    noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — подключать нечего.",
+    unavailableTitle: "Состояние GitHub App недоступно",
+    unavailableDescription: "Панель не смогла загрузить состояние продуктового подключения GitHub.",
+    appTitle: "GitHub App",
+    appConnected: "Подключено",
+    appConfigured: "Готово",
+    appNotConfigured: "Не настроено",
+    appInstallationDescription: "Установка GitHub App записана в этом рабочем пространстве.",
+    appReadyDescription: "Конфигурация GitHub App готова; можно установить приложение для рабочего пространства.",
+    appMissingDescription: "Нужны server-side env-поля GitHub App перед установкой.",
+    repositoriesTitle: "Локальная поверхность репозиториев",
+    tokenTitle: "Токены установки хранятся",
+    tokenDescription: "Для GitHub App токены установки должны выпускаться just-in-time и не сохраняться.",
+    writeTitle: "Записи в GitHub",
+    writeDescription: "Product connect остаётся read-only; write-actions включаются только отдельным approval path.",
+    missingEnvTitle: "Не хватает server-side env-полей",
+    openSetup: "Открыть установку GitHub App"
+  },
+
   githubSync: {
     eyebrow: "GitHub",
     title: "Локальная синхронизация",
@@ -539,6 +565,8 @@ export const T = {
   workPullRequestsDescription: (state: string) =>
     `${state}: пулреквесты, связанные с репозиториями, где это возможно.`,
   repoReadSource: (source: string) => `Источник чтения репозиториев: ${source}.`,
+  githubRepositorySurfaceDescription: (source: string) =>
+    `Источник поверхности репозиториев: ${source}. Живой provider-sync здесь не запускается.`,
   connectionNotReady: (status: string) =>
     `Запись в бэкенде в статусе ${status}. Локальная нормализация требует подключённой записи GitHub.`,
   syncResultCounts: (repos: number, issues: number, prs: number, status: string) =>

@@ -1143,6 +1143,50 @@ Consequences:
   disabled by default; write allowlists still require explicit human approval.
 - GitHub App product connect/live sync remains the next product slice.
 
+## DEC-052 - GitHub Product Connect Uses GitHub App Installation
+
+Decision (2026-07-01): the product GitHub connect path uses a GitHub App
+installation, not user OAuth/PAT as the primary product path. The existing
+manual provider-token bridge remains an operator/admin bridge for controlled
+tests; it is not the browser product onboarding model.
+
+The foundation records a workspace-scoped GitHub App installation in
+`IntegrationConnection` using `provider_metadata.connection_method =
+"github_app_installation"`. The installation id is carried in metadata and in a
+non-secret external account key (`github_app_installation:<installation_id>`).
+An installation may not be bound to a different workspace through the service.
+
+Token and secret model:
+
+- GitHub App private key and webhook secret are backend-only env/config values.
+  They are exposed to status payloads only as configured/missing booleans and
+  safe setup/callback URLs.
+- Short-lived installation access tokens should be minted just-in-time for
+  provider reads and are not persisted in `IntegrationConnection`.
+- The app-installation connection endpoint records connection state only; it
+  does not call GitHub, start sync, persist installation tokens, or perform
+  provider writes.
+- Provider writes remain disabled by default and require the existing separate
+  approval/write path and explicit allowlists.
+
+Rationale: a GitHub App installation gives founderOS the right future unit of
+workspace-scoped repository access, supports selected-repository permissions,
+and avoids browser-shipped tokens/PATs. Keeping installation tokens ephemeral
+matches the existing secret-encryption posture and reduces stored credential
+surface.
+
+Consequences:
+
+- GitHub connection status now includes a redacted GitHub App config block:
+  configured/missing env names, setup/callback URLs, webhook/private-key boolean
+  readiness, and explicit `installation_tokens_persisted: false`.
+- `/api/v1/workspaces/{workspace_id}/github/connections/app-installation`
+  records/updates an installation connection for admins without provider calls.
+- `/github` now shows GitHub App readiness, repository-surface count, no
+  persisted installation tokens, and external writes disabled.
+- The next slice is live read sync using just-in-time installation tokens,
+  strict repository scope, and the existing idempotent normalization/upsert path.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

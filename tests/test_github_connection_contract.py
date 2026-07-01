@@ -32,6 +32,28 @@ def _set_auth(monkeypatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
 
 
+def _set_github_app_config(monkeypatch, *, configured: bool = True) -> None:
+    monkeypatch.setattr(settings, "github_app_id", "12345" if configured else None)
+    monkeypatch.setattr(
+        settings,
+        "github_app_slug",
+        "founderos-test" if configured else None,
+    )
+    monkeypatch.setattr(settings, "github_app_private_key", None)
+    monkeypatch.setattr(
+        settings,
+        "github_app_private_key_path",
+        "/secrets/github-app.pem" if configured else None,
+    )
+    monkeypatch.setattr(
+        settings,
+        "github_app_webhook_secret",
+        SecretStr("test-webhook-secret") if configured else None,
+    )
+    monkeypatch.setattr(settings, "github_app_setup_url", None)
+    monkeypatch.setattr(settings, "github_app_callback_url", None)
+
+
 def _async_client() -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
@@ -132,6 +154,17 @@ async def _seed_connection(
         return connection.id
 
 
+async def _stored_connection(connection_id: str) -> IntegrationConnection:
+    async with AsyncSessionLocal() as session:
+        connection = await session.scalar(
+            select(IntegrationConnection).where(
+                IntegrationConnection.id == UUID(connection_id)
+            )
+        )
+        assert connection is not None
+        return connection
+
+
 async def _count(model: type) -> int:
     async with AsyncSessionLocal() as session:
         return int(await session.scalar(select(func.count()).select_from(model)) or 0)
@@ -185,6 +218,7 @@ async def test_github_connection_status_empty_workspace_is_local_bridge_only(
 ) -> None:
     marker = uuid4().hex
     _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch, configured=False)
     await _cleanup_connection_fixture(marker)
 
     try:
@@ -219,7 +253,54 @@ async def test_github_connection_status_empty_workspace_is_local_bridge_only(
         assert body["repository_read_available"] is True
         assert body["repository_read_source"] == "local_bridge"
         assert body["is_live"] is False
+        assert body["connection_method"] is None
+        assert body["app"]["configured"] is False
+        assert body["app"]["app_id_configured"] is False
+        assert body["app"]["private_key_configured"] is False
+        assert body["app"]["installation_tokens_persisted"] is False
+        assert body["app"]["provider_writes_enabled"] is False
+        assert "FOUNDEROS_GITHUB_APP_ID" in body["app"]["missing_env"]
         assert any("local bridge only" in warning for warning in body["warnings"])
+    finally:
+        await _cleanup_connection_fixture(marker)
+
+
+async def test_github_connection_status_reports_app_config_without_secret_values(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch, configured=True)
+    await _cleanup_connection_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connection-status",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["app"] == {
+            "configured": True,
+            "app_id_configured": True,
+            "app_slug": "founderos-test",
+            "private_key_configured": True,
+            "private_key_source": "path",
+            "webhook_secret_configured": True,
+            "setup_url": "https://github.com/apps/founderos-test/installations/new",
+            "callback_url": None,
+            "missing_env": [],
+            "installation_tokens_persisted": False,
+            "provider_writes_enabled": False,
+        }
+        assert "12345" not in response.text
+        assert "test-webhook-secret" not in response.text
+        assert "/secrets/github-app.pem" not in response.text
     finally:
         await _cleanup_connection_fixture(marker)
 
@@ -306,6 +387,170 @@ async def test_github_connection_detail_is_workspace_scoped_and_redacted(
         assert allowed.status_code == 200
         assert allowed.json()["id"] == str(connection_id)
         assert "encrypted-access-placeholder" not in allowed.text
+    finally:
+        await _cleanup_connection_fixture(marker)
+        await _cleanup_connection_fixture(other_marker)
+
+
+async def test_admin_can_record_github_app_installation_without_tokens_or_sync(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch)
+    await _cleanup_connection_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        sync_job_count_before = await _count(SyncJob)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/app-installation",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "installation_id": "98765",
+                    "account_login": "qtwin-io",
+                    "account_id": "111",
+                    "repository_selection": "selected",
+                    "selected_repositories": [
+                        {
+                            "id": 1,
+                            "name": "company-knowledge-os",
+                            "full_name": "qtwin-io/company-knowledge-os",
+                            "private": True,
+                        }
+                    ],
+                    "metadata": {
+                        "note": "product connect foundation",
+                        "webhook_secret_hint": "must-not-store",
+                    },
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["is_live"] is False
+        assert body["provider_sync_started"] is False
+        assert body["installation_access_token_persisted"] is False
+        assert body["external_write_performed"] is False
+        assert await _count(SyncJob) == sync_job_count_before
+
+        connection = body["connection"]
+        assert connection["provider"] == "github"
+        assert connection["status"] == "connected"
+        assert connection["display_name"] == "GitHub App: qtwin-io"
+        assert connection["external_account_id"] == "github_app_installation:98765"
+        assert connection["scopes"] == ["github_app_installation"]
+        assert connection["has_access_token"] is False
+        assert connection["has_refresh_token"] is False
+        assert connection["connection_method"] == "github_app_installation"
+        assert connection["metadata"]["connection_method"] == "github_app_installation"
+        assert connection["metadata"]["installation_id"] == "98765"
+        assert connection["metadata"]["repository_selection"] == "selected"
+        assert connection["metadata"]["selected_repositories"] == [
+            {
+                "id": "1",
+                "name": "company-knowledge-os",
+                "full_name": "qtwin-io/company-knowledge-os",
+                "private": True,
+            }
+        ]
+        assert connection["metadata"]["installation_access_token_persisted"] is False
+        assert connection["metadata"]["provider_writes_enabled"] is False
+        assert "must-not-store" not in response.text
+        assert "encrypted_access_token" not in response.text
+
+        stored = await _stored_connection(connection["id"])
+        assert stored.encrypted_access_token is None
+        assert stored.encrypted_refresh_token is None
+        assert stored.provider_metadata["token_strategy"] == (
+            "mint_installation_token_just_in_time"
+        )
+    finally:
+        await _cleanup_connection_fixture(marker)
+
+
+async def test_github_app_installation_status_uses_jit_token_warning(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch)
+    await _cleanup_connection_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        async with _async_client() as client:
+            create_response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/app-installation",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "installation_id": "24680",
+                    "account_login": "qtwin-io",
+                    "repository_selection": "all",
+                },
+            )
+            status_response = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connection-status",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert create_response.status_code == 200, create_response.text
+        assert status_response.status_code == 200
+        body = status_response.json()
+        assert body["status"] == "connected"
+        assert body["connection_method"] == "github_app_installation"
+        assert body["has_valid_token_record"] is False
+        assert body["repository_read_source"] == "local_bridge"
+        assert body["is_live"] is False
+        assert any("just-in-time installation tokens" in warning for warning in body["warnings"])
+    finally:
+        await _cleanup_connection_fixture(marker)
+
+
+async def test_github_app_installation_cannot_bind_to_another_workspace(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    other_marker = f"{marker}-other"
+    _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch)
+    await _cleanup_connection_fixture(marker)
+    await _cleanup_connection_fixture(other_marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        other = await _bootstrap_workspace(other_marker)
+
+        async with _async_client() as client:
+            first = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/app-installation",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "installation_id": "13579",
+                    "account_login": "qtwin-io",
+                },
+            )
+            second = await client.post(
+                f"/api/v1/workspaces/{other['workspace']['id']}/github/connections/app-installation",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(other_marker)["owner_email"]},
+                json={
+                    "installation_id": "13579",
+                    "account_login": "qtwin-io",
+                },
+            )
+
+        assert first.status_code == 200, first.text
+        assert second.status_code == 409
+        assert second.json() == {
+            "detail": "github app installation is already bound to another workspace"
+        }
     finally:
         await _cleanup_connection_fixture(marker)
         await _cleanup_connection_fixture(other_marker)

@@ -11,14 +11,30 @@ import {
 } from "../lib/api";
 import { M } from "../lib/messages";
 import type {
+  GitHubAppConfigStatus,
   GitHubConnectionStatusResponse,
   GitHubLocalSyncResponse
 } from "../lib/types";
 import { GitHubSyncControlsView } from "../components/GitHubSyncControls";
 
+const configuredApp: GitHubAppConfigStatus = {
+  configured: true,
+  app_id_configured: true,
+  app_slug: "founderos",
+  private_key_configured: true,
+  private_key_source: "path",
+  webhook_secret_configured: false,
+  setup_url: "https://github.com/apps/founderos/installations/new",
+  callback_url: null,
+  missing_env: [],
+  installation_tokens_persisted: false,
+  provider_writes_enabled: false
+};
+
 const connectedStatus: GitHubConnectionStatusResponse = {
   provider: "github",
   status: "connected",
+  connection_method: "manual_provider_token",
   connection_id: "connection-1",
   display_name: "GitHub manual connection",
   last_sync_at: null,
@@ -28,12 +44,14 @@ const connectedStatus: GitHubConnectionStatusResponse = {
   repository_read_available: true,
   repository_read_source: "integration_connection",
   is_live: false,
+  app: configuredApp,
   warnings: []
 };
 
 const missingConnectionStatus: GitHubConnectionStatusResponse = {
   provider: "github",
   status: "local_bridge_only",
+  connection_method: null,
   connection_id: null,
   display_name: null,
   last_sync_at: null,
@@ -43,6 +61,16 @@ const missingConnectionStatus: GitHubConnectionStatusResponse = {
   repository_read_available: true,
   repository_read_source: "local_bridge",
   is_live: false,
+  app: {
+    ...configuredApp,
+    configured: false,
+    app_id_configured: false,
+    app_slug: null,
+    private_key_configured: false,
+    private_key_source: null,
+    setup_url: null,
+    missing_env: ["FOUNDEROS_GITHUB_APP_ID"]
+  },
   warnings: [
     "no GitHub IntegrationConnection exists; repository read uses local bridge only"
   ]

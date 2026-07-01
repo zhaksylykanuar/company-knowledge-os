@@ -11,9 +11,18 @@
 
 - **Chunk:** первая продуктовая фича за логином — **Briefings**. Chunk 1
   (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Repository
-  identity/race debt перед live sync **закрыт** (DEC-050). Следующий лучший
-  продуктовый шаг — GitHub product connect / live sync, чтобы заполнить
-  workspace реальными данными перед LLM-нарративом.
+  identity/race debt перед live sync **закрыт** (DEC-050). GitHub App
+  product-connect foundation **сделан** (DEC-052). Следующий лучший продуктовый
+  шаг — GitHub App live read sync, чтобы заполнить workspace реальными данными
+  перед LLM-нарративом.
+- **GitHub App product-connect foundation (НОВОЕ):** DEC-052 выбирает GitHub App
+  installation как product path (не OAuth/PAT в браузере). Добавлены backend
+  config/status contract (`FOUNDEROS_GITHUB_APP_*`), workspace-scoped
+  app-installation connection endpoint
+  `POST .../github/connections/app-installation`, safe status payload без
+  секретов, no provider calls, no persisted installation access tokens, no
+  external writes. `/github` теперь показывает GitHub App readiness, local repo
+  surface count, token persistence boundary, and writes disabled.
 - **GitHub local repository surface (НОВОЕ):** `.local/repos.json` (25 repos,
   owner `qtwin-io`, offline/local only) теперь поддержан как fallback GitHub
   discovery snapshot for repo audit / repository inventory. Добавлен скрипт
@@ -26,7 +35,7 @@
   guard `uq_repositories_workspace_provider_full_name` (`workspace_id, provider,
   full_name`). `_upsert_repository` теперь race-safe across `external_id` and
   `full_name` paths and не понижает стабильный GitHub id обратно до full_name.
-  Это закрывает near-term backlog item перед GitHub product connect/live sync.
+  Это закрывает near-term backlog item перед GitHub App live read sync.
   Решение — DEC-050.
 - **Briefings Chunk 1 — персистентные сводки (бэкенд+фронтенд, гейты зелёные):**
   ручная Founder-сводка теперь **сохраняется**. Детерминированная генерация не
@@ -75,13 +84,13 @@
     сообщений `web/lib/messages.ts` (без i18n-фреймворка).
 - **Текущее состояние:** детерминированный evidence-first спайн + продуктовый
   логин (email+password, серверные сессии) + **персистентные briefings** поверх
-  него; операторский API-ключ остаётся для server/CI/админ-скриптов. Один
-  alembic head — `e8f9a0b1c2d3`.
-- **Дальше:** GitHub product connect / live sync (предпочтительно GitHub App
-  installation + strict workspace scoping) и реальная синхронизация; затем
-  Briefings Chunk 2 — LLM-нарратив поверх уже персистентной модели и реальных
-  evidence-backed данных; провижининг второго пользователя/тиммейта
-  (мультиюзер); первый прод-деплой на Railway.
+  него + GitHub App product-connect foundation; операторский API-ключ остаётся
+  для server/CI/админ-скриптов. Один alembic head — `e8f9a0b1c2d3`.
+- **Дальше:** GitHub App live read sync using just-in-time installation tokens,
+  strict repository/workspace scoping, and existing idempotent
+  normalization/upsert path; затем Briefings Chunk 2 — LLM-нарратив поверх уже
+  персистентной модели и реальных evidence-backed данных; провижининг второго
+  пользователя/тиммейта (мультиюзер); первый прод-деплой на Railway.
 - **Примечание:** Briefings Chunk 1 — это реальный код (модели / миграция /
   эндпоинты / фронтенд) с зелёными гейтами; бэкенд и фронтенд закоммичены
   отдельно, push не делался.
@@ -105,19 +114,19 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ---
 
-## 🚦 GATE HEALTH (результат последней проверки — 2026-06-30)
+## 🚦 GATE HEALTH (результат последней проверки — 2026-07-01)
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ pass | 2026-06-30 | Repository identity guard added `e8f9a0b1c2d3`; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
+| `alembic upgrade head` | ✅ pass | 2026-07-01 | GitHub App foundation made no schema change; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic current`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-06-30 | GitHub local repository surface pass: **375 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-06-30 | GitHub local repository surface pass: `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App foundation pass: **380 passed / 0 failed / 1 warning** |
+| `ruff` | ✅ pass | 2026-07-01 | GitHub App foundation pass: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-06-30 | GitHub local repository surface pass: `npm test` 90 passed, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
-| docs navigation | ✅ pass | 2026-06-30 | Covered by full pytest actualization pass; docs/private-beta/hosting/navigation contract tests remain green |
-| `alembic check` (retained substrate) | ✅ reconciled | 2026-06-30 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; repository identity guard pass: `alembic upgrade head` + `alembic check` зелёные |
+| frontend build | ✅ pass | 2026-07-01 | GitHub App foundation pass: `npm test` **95 passed**, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
+| docs navigation | ✅ pass | 2026-07-01 | Covered by full pytest; docs/private-beta/hosting/navigation contract tests remain green |
+| `alembic check` (retained substrate) | ✅ reconciled | 2026-07-01 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; GitHub App foundation pass: `alembic upgrade head` + `alembic check` зелёные |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
 | prod smoke | ✅ pass | 2026-06-27 | FOS-026C: deployed Railway read-only smoke passed with minimal private-beta workspace/owner context; no provider writes, LLM calls, selected repo sync, or ActionProposal execute |
@@ -146,10 +155,13 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ### CHUNK 3 — GitHub E2E (SPINE) 🎯 критический milestone
 *Gate: пользователь подключает GitHub через UI → sync → данные в Dashboard и Brain.*
-- [~] FOS-007 — GitHub OAuth — нет OAuth start/callback (§7.5); соединение через PAT-bridge, токен шифруется. `tests/test_github_provider_token_connection.py` зелёный
+- [~] FOS-007 — GitHub product connect — GitHub App installation выбран и
+  foundation реализован (DEC-052): backend config/status, workspace-scoped
+  app-installation connection record, `/github` readiness UI. Live provider read
+  sync ещё не реализован; PAT bridge остаётся operator/admin bridge.
 - [x] FOS-008 — GitHub sync repositories — `normalize-local` при `persist_if_supported=true` пишет canonical `source_records`/`repositories` idempotent-upsert; `persist_if_supported=false` остаётся projection-only. Доказано `tests/test_github_normalization_api.py` + `tests/test_github_first_backend_e2e.py`
 - [x] FOS-009 — GitHub sync issues + PRs — local normalization reads local `cursor_before.local_github` issue/PR records, persists issues as canonical `Task`, PRs as canonical `PullRequest` linked to `Repository`, exposes `/api/v1/workspaces/{workspace_id}/github/operational-work`, and repoints repository inventory to canonical `repositories` before retained `source_events` fallback. No live provider execution.
-- [x] FOS-010 — Connectors UI page — `web/app/dashboard` has product GitHub local-sync controls over existing backend contracts: reads connection status, runs canonical local normalization through `/api/v1/workspaces/{workspace_id}/github/local-sync`, reports counts/warnings, refreshes operational work, and keeps live OAuth/provider execution out of the UI.
+- [x] FOS-010 — Connectors UI page — `web/app/dashboard` has product GitHub local-sync controls over existing backend contracts, and `/github` shows GitHub App product-connect readiness. UI reads connection status, runs canonical local normalization through `/api/v1/workspaces/{workspace_id}/github/local-sync`, reports counts/warnings, refreshes operational work, and keeps live provider execution out of the UI.
 - [x] FOS-011 — Dashboard v0 — `web/app/dashboard/page.tsx` fetches canonical GitHub operational work via typed frontend API client, renders issue/task and PR sections, repository labels where present, open/all/closed/merged filters, and loading/empty/error states. No `source_events` direct read and no hardcoded current GitHub work.
 - [x] FOS-012 — Brain entity API + UI — workspace-scoped canonical Company Brain read API `GET /api/v1/workspaces/{workspace_id}/company-brain` reads canonical `repositories`/GitHub `tasks`/`pull_requests` + `SourceRecord` refs, and `web/app/dashboard` renders deterministic evidence-backed GitHub state. Legacy founder preview routes remain unchanged; no live provider/AI execution.
 
@@ -171,7 +183,7 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ### CHUNK 6 — Remaining Connectors — FROZEN / POST-MVP
 *Gate: Jira / Gmail / Drive / Documents видны в Brain.*
-- [ ] FOS-JIRA-01 — Jira connector minimal — frozen until GitHub product connect/live sync proves the ingestion pattern. No active `app/connectors/jira.py` or `web/app/jira` exists after the Lineage-2 purge.
+- [ ] FOS-JIRA-01 — Jira connector minimal — frozen until GitHub App live read sync proves the ingestion pattern. No active `app/connectors/jira.py` or `web/app/jira` exists after the Lineage-2 purge.
 - [ ] FOS-GMAIL-01 — Gmail connector minimal — frozen until after GitHub. No active `app/connectors/gmail.py` or `web/app/gmail` exists.
 - [ ] FOS-019 — Drive connector minimal — frozen until after GitHub. No active `app/connectors/google_drive.py` or `web/app/drive` exists.
 - [ ] FOS-DOC-01 — Documents module — post-MVP; no canonical Document CRUD (`body_markdown`, §7.11) or `web/app/documents` exists.
@@ -196,7 +208,7 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] Sync-layer idempotency + hardening (post-FOS-027B2) — idempotent `ON CONFLICT` upserts for `PullRequest`/`SourceRecord`/`Repository`; `ingested_events` alembic drift reconciled (migration `a8c9d0e1f2b3`, indexes/constraints only); secret-encryption fail-closed outside local (`FOUNDEROS_SECRET_ENCRYPTION_KEY` required); public health split (`/health` liveness public, `/health/detail` behind operator key).
 - [x] Auth phase (email+password, server-side sessions) — `password_service` (Argon2id), `session_service` + `sessions` table (stores only the sha256 token hash), `/api/v1/auth/login|logout|me|change-password`, `require_session` + `get_current_actor` (session-or-operator resolver), DB login brute-force throttle (`login_attempts`), same-origin Next.js proxy for a first-party cookie (`FOUNDEROS_API_PROXY_TARGET`), frontend migrated off operator-key/owner-email to the session (`web/lib/config.ts` removed), Settings→account page, admin seeded via `scripts/create_admin_user.py`. Single founder now, multi-user-capable. No FOS id (feat(auth)/feat(web) commits). See DEC-041…DEC-047.
 - [x] Russian UI localization — all user-facing copy centralized in `web/lib/messages.ts` (no i18n framework; second language is a small addition). See DEC-045.
-- [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth is now built (email+password sessions), but GitHub OAuth onboarding/custom-domain hardening and the first production deploy of the auth phase remain before broader beta.
+- [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth is now built (email+password sessions), but GitHub App live-sync hardening/custom-domain hardening and the first production deploy of the auth phase remain before broader beta.
 
 ---
 
@@ -206,15 +218,35 @@ DONE строго = есть код + проходящий тест/рабочи
 
 - ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). `source_events` repointed to compatibility fallback in FOS-009 (DEC-030); physical drop remains a later migration/cleanup task, not this feature path.
 
-- [SPINE] **GitHub product connect/live sync is next.** The live
-  write/read-back/cleanup loop, selected repository issue sync, selected
-  repository PR sync backend path, and selected sync UI controls are verified
-  for the approved scope. Product OAuth/App connect and broader live sync remain
-  outside this path and must preserve explicit repository/workspace scope.
+- [SPINE] **GitHub App live read sync is next.** GitHub App product-connect
+  foundation is recorded in DEC-052 and present in backend/UI. The next missing
+  piece is read-only provider execution using just-in-time installation tokens,
+  strict repository/workspace scope, and existing canonical normalization.
 
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-01` — **GitHub App product-connect foundation.**
+  Создана branch `feat/github-app-connect-foundation` от local `main`
+  (содержит предыдущий local GitHub repository-surface commit). Добавлен DEC-052:
+  product connect uses GitHub App installation, not browser PAT/OAuth; GitHub
+  App private key/webhook secret are backend-only; short-lived installation
+  tokens are minted just-in-time and not persisted. Backend: new
+  `FOUNDEROS_GITHUB_APP_*` config/status contract; redacted
+  `/github/connection-status` app block; admin endpoint
+  `POST .../github/connections/app-installation` records/updates a
+  workspace-scoped installation connection without provider calls, SyncJob
+  execution, persisted tokens, or external writes; service rejects binding the
+  same installation to another workspace. Frontend: `/github` renders GitHub App
+  readiness, local repository-surface count, token persistence boundary, and
+  writes disabled via a new product-connect panel. Env templates/runbooks,
+  TODO/ROADMAP/CHANGELOG/PROGRESS/master playbook updated. Checks:
+  `uv run ruff check .`, `uv run alembic heads/current/upgrade/check`, full
+  backend `pytest` **380 passed / 1 warning**, frontend `npm test` **95 passed**
+  + build + typecheck + lint, `git diff --check`, and tracked secret scan —
+  зелёные. No provider calls, deploys, production DB/cloud writes, raw
+  storage/Obsidian edits, or push.
 
 - `2026-06-30` — **GitHub local repository surface prep.**
   Подготовлен offline/local GitHub repository surface из `.local/repos.json`: 25
