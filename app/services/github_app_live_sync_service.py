@@ -122,7 +122,7 @@ async def sync_github_app_installation_repositories(
         )
     except GitHubRepositoryClientError as exc:
         raise GitHubAppLiveSyncProviderReadError(
-            GITHUB_APP_LIVE_SYNC_PROVIDER_READ_FAILED
+            _provider_read_error_detail(exc.detail)
         ) from exc
 
     installed_by_full_name = _installation_repository_map(installation_repositories)
@@ -159,7 +159,7 @@ async def sync_github_app_installation_repositories(
                 )
             except GitHubIssueClientError as exc:
                 raise GitHubAppLiveSyncProviderReadError(
-                    GITHUB_APP_LIVE_SYNC_PROVIDER_READ_FAILED
+                    _provider_read_error_detail(exc.detail)
                 ) from exc
             for raw_issue in raw_issues:
                 if not isinstance(raw_issue, Mapping):
@@ -187,7 +187,7 @@ async def sync_github_app_installation_repositories(
                 )
             except GitHubPullRequestClientError as exc:
                 raise GitHubAppLiveSyncProviderReadError(
-                    GITHUB_APP_LIVE_SYNC_PROVIDER_READ_FAILED
+                    _provider_read_error_detail(exc.detail)
                 ) from exc
             for raw_pull_request in raw_pull_requests:
                 if not isinstance(raw_pull_request, Mapping):
@@ -593,6 +593,13 @@ def _warnings(normalization_warnings: list[str]) -> list[str]:
             *normalization_warnings,
         ]
     )
+
+
+def _provider_read_error_detail(detail: str) -> str:
+    if not isinstance(detail, str) or not detail.strip():
+        return GITHUB_APP_LIVE_SYNC_PROVIDER_READ_FAILED
+    normalized = " ".join(detail.strip().split())[:500]
+    return f"{GITHUB_APP_LIVE_SYNC_PROVIDER_READ_FAILED}: {normalized}"
 
 
 def _repository_visibility(raw_repository: Mapping[str, Any]) -> str:

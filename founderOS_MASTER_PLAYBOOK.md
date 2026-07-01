@@ -30,6 +30,7 @@
   app-installation connection state без browser PAT/секретов, just-in-time
   installation tokens без persistence, explicit single-repo `/github` sync
   control, mocked synced-evidence isolation for Company Brain/manual Briefings,
+  safe rate-limit/error observability,
   плюс human-approved guarded write-back одного GitHub issue;
 - детерминированные проекции без LLM: Company Brain и Founder Briefing считаются
   из локальных данных и несут `evidence_refs`; ручные Founder Briefings уже
@@ -37,7 +38,7 @@
 
 Ещё **не** реализовано (остаётся видением этого плана, а не текущим кодом):
 
-- GitHub App first approved real-provider read run readiness;
+- GitHub App first approved real-provider read run;
 - LLM-брифинг-пайплайн поверх уже персистентной модели;
 - продуктовые пути Jira / Gmail / Drive / Documents;
 - мультиюзер/онбординг (сейчас один основатель, заводится через

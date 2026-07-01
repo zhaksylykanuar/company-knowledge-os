@@ -10,9 +10,10 @@ is built, deterministic Founder Briefings now persist history, GitHub App
 product-connect foundation is in place, polling-only GitHub App live read sync
 exists in the backend, `/github` has an explicit single-repository read-only
 sync control, and mocked synced-evidence isolation is verified for Company Brain
-and deterministic Briefings. The next horizon is first real read-run readiness
-before an LLM briefing narrative. Docs consolidation is complete; this roadmap
-is planning context, not the live task source.
+and deterministic Briefings. Safe live-read error/rate-limit observability is
+also in place. The next horizon is the first explicitly approved real read run
+before an LLM briefing narrative. Docs consolidation is complete; this roadmap is
+planning context, not the live task source.
 
 ## Phase 0 - Project Setup
 
@@ -117,6 +118,9 @@ Done:
 - Tests verify mocked GitHub App synced data flows into Company Brain and
   persisted deterministic Briefings with evidence while another workspace cannot
   see the synced canonical state/evidence refs.
+- Safe GitHub provider HTTP status/message/rate-limit details surface on live
+  read errors without leaking authorization headers, tokens, or provider payload
+  dumps.
 - Selected repository issue sync exists for explicitly allowlisted repositories:
   `/api/v1/workspaces/{workspace_id}/github/repositories/issues/sync`.
 - Selected repository PR sync exists for explicitly allowlisted repositories:
@@ -134,8 +138,7 @@ Done:
 
 Missing:
 
-- Live-read observability/rate-limit hardening and the first human-approved
-  real-provider read run.
+- First human-approved real-provider read run.
 - LLM briefing narrative over real connected data.
 - Multi-user / teammate provisioning beyond the single seeded founder.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
@@ -273,8 +276,7 @@ Done:
 
 Missing:
 
-- Live-read observability/rate-limit handling and first approved real-provider
-  read run.
+- First approved real-provider read run.
 - Physical retained-substrate drop after the canonical repository read path is
   stable.
 - Multi-repository selected sync from the product UI beyond one explicit

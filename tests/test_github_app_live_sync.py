@@ -30,6 +30,7 @@ from app.services.github_app_token_service import (
     GitHubInstallationAccessToken,
     build_github_app_jwt,
 )
+from app.services.github_repository_client import GitHubRepositoryClientError
 
 
 def _headers() -> dict[str, str]:
@@ -643,6 +644,75 @@ async def test_github_app_live_sync_rejects_repository_outside_installation(
             "detail": "github repository is not part of the app installation"
         }
         assert calls == {"token": 1, "repositories": 1, "issues": 0, "pull_requests": 0}
+        assert await _count_for_workspace(Repository, workspace_id) == 0
+    finally:
+        await _cleanup_fixture(marker)
+
+
+async def test_github_app_live_sync_surfaces_sanitized_rate_limit_detail(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_fixture(marker)
+
+    async def fake_mint_installation_access_token(
+        *, installation_id: str
+    ) -> GitHubInstallationAccessToken:
+        assert installation_id == "98765"
+        return GitHubInstallationAccessToken(token="jit-installation-token")
+
+    async def fake_list_installation_repositories(**_kwargs) -> list[dict]:
+        raise GitHubRepositoryClientError(
+            "github repository read request failed; http_403; "
+            "message=API rate limit exceeded.; rate_limited=true; "
+            "retry_after_seconds=60; rate_limit_remaining=0"
+        )
+
+    async def fail_list_issues(**_kwargs) -> list[dict]:
+        raise AssertionError("rate-limited repository read must stop before issues")
+
+    monkeypatch.setattr(
+        github_app_live_sync_service.github_app_token_service,
+        "mint_installation_access_token",
+        fake_mint_installation_access_token,
+    )
+    monkeypatch.setattr(
+        github_app_live_sync_service.github_repository_client,
+        "list_installation_repositories",
+        fake_list_installation_repositories,
+    )
+    monkeypatch.setattr(
+        github_app_live_sync_service.github_issue_client,
+        "list_issues",
+        fail_list_issues,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        connection = await _create_app_connection(workspace_id, marker)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/github/connections/app-installation/sync",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "connection_id": connection["id"],
+                    "repositories": ["qtwin-io/company-knowledge-os"],
+                },
+            )
+
+        assert response.status_code == 502
+        assert response.json() == {
+            "detail": (
+                "github app live read failed: github repository read request "
+                "failed; http_403; message=API rate limit exceeded.; "
+                "rate_limited=true; retry_after_seconds=60; rate_limit_remaining=0"
+            )
+        }
+        assert "jit-installation-token" not in response.text
         assert await _count_for_workspace(Repository, workspace_id) == 0
     finally:
         await _cleanup_fixture(marker)

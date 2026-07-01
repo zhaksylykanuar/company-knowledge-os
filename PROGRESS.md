@@ -15,9 +15,9 @@
   product-connect foundation **сделан** (DEC-052). GitHub App polling-only live
   read sync backend foundation **сделан** (DEC-053). `/github` product UI для
   explicit single-repo read-only sync **сделан**. Mocked synced
-  evidence/briefing isolation verification **сделан**. Следующий лучший
-  продуктовый шаг — live-read observability/rate-limit handling и первый
-  real-provider read run только после отдельного human approval.
+  evidence/briefing isolation verification **сделан**. Live-read
+  observability/rate-limit handling **сделан**. Следующий лучший продуктовый шаг
+  — первый real-provider read run только после отдельного human approval.
 - **GitHub App live read sync backend/UI foundation (НОВОЕ):** DEC-053 фиксирует
   polling-only v0 (webhooks deferred до raw-body signature verification +
   delivery dedupe). Добавлены JIT installation token minting, read-only
@@ -28,7 +28,8 @@
   Installation access token не сохраняется, provider writes не выполняются,
   tests/mock UI keep provider calls mocked. Company Brain and persisted
   deterministic Briefings are verified over mocked synced data with workspace
-  isolation.
+  isolation. Safe provider HTTP status/message/rate-limit metadata propagates to
+  API errors without leaking authorization headers, tokens, or provider payloads.
 - **GitHub App product-connect foundation (НОВОЕ):** DEC-052 выбирает GitHub App
   installation как product path (не OAuth/PAT в браузере). Добавлены backend
   config/status contract (`FOUNDEROS_GITHUB_APP_*`), workspace-scoped
@@ -99,10 +100,11 @@
 - **Текущее состояние:** детерминированный evidence-first спайн + продуктовый
   логин (email+password, серверные сессии) + **персистентные briefings** поверх
   него + GitHub App product-connect + polling-only live read sync backend/UI
-  foundation + synced-evidence isolation tests; операторский API-ключ остаётся
-  для server/CI/админ-скриптов. Один alembic head — `e8f9a0b1c2d3`.
-- **Дальше:** rate-limit/error observability and first real-provider read run
-  readiness только после отдельного human approval; затем Briefings Chunk 2 —
+  foundation + synced-evidence isolation tests + safe rate-limit/error
+  observability; операторский API-ключ остаётся для server/CI/админ-скриптов.
+  Один alembic head — `e8f9a0b1c2d3`.
+- **Дальше:** first real-provider read run только после отдельного human
+  approval; затем Briefings Chunk 2 —
   LLM-нарратив поверх уже персистентной
   модели и реальных evidence-backed данных; провижининг второго
   пользователя/тиммейта (мультиюзер); первый прод-деплой на Railway.
@@ -136,7 +138,7 @@ DONE строго = есть код + проходящий тест/рабочи
 | `alembic upgrade head` | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation made no schema change; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic current`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App synced-evidence verification pass: **391 passed / 0 failed / 1 warning** |
+| backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App live-read observability pass: **394 passed / 0 failed / 1 warning** |
 | `ruff` | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation pass: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
 | frontend build | ✅ pass | 2026-07-01 | GitHub App live sync UI pass: `npm test` **98 passed**, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
@@ -242,6 +244,19 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-01` — **GitHub App live-read error/rate-limit observability.**
+  Added shared safe GitHub provider error formatting for repository/issue/PR
+  read clients. Live read sync now propagates sanitized provider read details to
+  API `502` errors: HTTP status, bounded GitHub message, and safe rate-limit
+  headers (`retry-after`, `x-ratelimit-*`) when present. Tests prove rate-limit
+  metadata surfaces while authorization headers/JIT tokens/provider payload dumps
+  do not leak, and provider read failures stop before canonical persistence.
+  Docs updated (TODO, ROADMAP, CHANGELOG, README, master playbook, PROGRESS).
+  Проверки: provider error + app live sync tests **10 passed**, full backend
+  `pytest` **394 passed / 1 warning**, `uv run ruff check .`, `alembic
+  heads/current/upgrade/check` — зелёные. No real provider calls, deploys,
+  production DB/cloud writes, raw storage/Obsidian edits, or push.
 
 - `2026-07-01` — **GitHub App synced evidence isolation verification.**
   Добавлен backend test over mocked GitHub App live sync proving synced canonical

@@ -21,6 +21,9 @@
 - Added GitHub App synced-evidence verification coverage proving mocked live
   sync feeds Company Brain and deterministic Briefings with evidence while a
   second workspace cannot see the synced canonical state or evidence refs.
+- Added sanitized GitHub provider error/rate-limit observability for live read
+  sync: safe HTTP status/message/rate-limit headers propagate to API errors
+  without leaking authorization headers, tokens, or provider payload dumps.
 
 ## 2026-06-30
 

@@ -34,7 +34,9 @@ Implemented foundations:
   performing provider writes. `/github` now has a product control for explicit
   single-repository read-only sync. Tests verify mocked synced data reaches
   Company Brain and persisted deterministic Briefings with evidence while
-  workspace B cannot see workspace A's synced canonical state/evidence.
+  workspace B cannot see workspace A's synced canonical state/evidence. Safe
+  provider error/rate-limit details surface HTTP status/message/retry metadata
+  without leaking tokens or provider payloads.
 - Deterministic Company Brain and persisted deterministic Founder Briefings with
   history and evidence refs. No LLM generation is currently implemented.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
@@ -44,10 +46,11 @@ Implemented foundations:
 
 Rationale: the workspace is mostly empty until a real data source is connected.
 Do not spend the next feature slice on an LLM briefing over fixture/empty data.
-The GitHub App backend + product UI sync foundation now exists and mocked synced
-evidence is verified across Company Brain/Briefings. Next, improve live-read
-observability/error handling and perform the first real read run only after
-explicit human approval, then add LLM narrative on top of validated records.
+The GitHub App backend + product UI sync foundation now exists, mocked synced
+evidence is verified across Company Brain/Briefings, and safe live-read
+error/rate-limit details are exposed. Next, perform the first real read run only
+after explicit human approval, then add LLM narrative on top of validated
+records.
 
 Done when:
 
@@ -70,8 +73,8 @@ Done when:
 
 1. **GitHub App real read run readiness.**
    Backend polling-only live read sync, `/github` explicit repo control, and
-   mocked synced-evidence isolation tests are in place. Next: improve
-   rate-limit/error observability and run the first real scoped read sync only
+   mocked synced-evidence isolation tests are in place; safe rate-limit/error
+   observability is in place. Next: run the first real scoped read sync only
    after explicit human approval.
 
 2. **First auth-session production deploy.**

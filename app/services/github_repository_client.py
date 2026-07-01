@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from app.services.github_provider_error import safe_github_response_detail
+
 GITHUB_API_BASE_URL = "https://api.github.com"
 
 
@@ -84,12 +86,7 @@ async def list_installation_repositories(
 
 
 def _safe_response_detail(response: httpx.Response) -> str:
-    try:
-        data = response.json()
-    except ValueError:
-        data = None
-    if isinstance(data, Mapping):
-        message = data.get("message")
-        if isinstance(message, str) and message.strip():
-            return f"github repository read request failed: {message.strip()[:300]}"
-    return f"github repository read request failed: http_{response.status_code}"
+    return safe_github_response_detail(
+        response,
+        operation="github repository read request",
+    )
