@@ -170,7 +170,11 @@ export const M = {
     liveSyncFailedTitle: "Живая read-only синхронизация не удалась",
     liveSyncFailedDescription: "Backend не смог выполнить GitHub App read sync.",
     liveSyncResultTitle: "Итог GitHub App read sync",
-    liveSyncNoWrites: "Записи в GitHub не выполнялись."
+    liveSyncNoWrites: "Записи в GitHub не выполнялись.",
+    repositoryListTitle: "Репозитории",
+    repositoryListEmptyTitle: "Репозитории не найдены",
+    repositoryListEmptyDescription:
+      "Локальная поверхность репозиториев пуста. Сначала подготовьте repository surface или подключите GitHub App."
   },
 
   githubSync: {
@@ -582,6 +586,12 @@ export const T = {
   repoReadSource: (source: string) => `Источник чтения репозиториев: ${source}.`,
   githubRepositorySurfaceDescription: (source: string) =>
     `Источник поверхности репозиториев: ${source}. Живой provider-sync здесь не запускается.`,
+  githubRepositoryMeta: (visibility: string, archived: boolean, source: string) =>
+    `Видимость: ${visibility || M.common.unknown}. ` +
+    `Статус: ${archived ? "архивный" : "активный"}. ` +
+    `Источник: ${source || M.common.unknown}.`,
+  githubRepositoryLastActivity: (value: string) =>
+    `Последняя активность: ${value}.`,
   githubAppLiveSyncResult: (repos: number, issues: number, prs: number, status: string) =>
     `Синхронизировано через GitHub App: репозиториев — ${repos}, задач — ${issues}, пулреквестов — ${prs}. Статус: ${status}.`,
   connectionNotReady: (status: string) =>

@@ -8,9 +8,9 @@ The current execution pointer is `../PROGRESS.md`: CHUNK 8 hardening is closed
 (FOS-027B2 + sync-layer idempotency), email+password / server-side-session login
 is built, deterministic Founder Briefings now persist history, GitHub App
 product-connect foundation is in place, polling-only GitHub App live read sync
-exists in the backend, `/github` has an explicit single-repository read-only
-sync control, and mocked synced-evidence isolation is verified for Company Brain
-and deterministic Briefings. Safe live-read error/rate-limit observability is
+exists in the backend, `/github` renders each known repository with its own
+explicit read-only sync button, and mocked synced-evidence isolation is verified
+for Company Brain and deterministic Briefings. Safe live-read error/rate-limit observability is
 also in place. The next horizon is the first explicitly approved real read run
 before an LLM briefing narrative. Docs consolidation is complete; this roadmap is
 planning context, not the live task source.
@@ -112,9 +112,9 @@ Done:
   installation repositories/issues/PRs, and persists through existing canonical
   normalization without storing the token or performing provider writes
   (DEC-053).
-- `/github` has an explicit single-repository GitHub App read-only sync control
-  over that endpoint; it keeps no browser secrets and shows no-write/token
-  persistence boundaries.
+- `/github` renders each known repository with an adjacent explicit GitHub App
+  read-only sync button over that endpoint; it keeps no browser secrets, has no
+  bulk sync control, and shows no-write/token persistence boundaries.
 - Tests verify mocked GitHub App synced data flows into Company Brain and
   persisted deterministic Briefings with evidence while another workspace cannot
   see the synced canonical state/evidence refs.

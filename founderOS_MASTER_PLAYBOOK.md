@@ -28,8 +28,8 @@
   foundation (DEC-053): read-only нормализация репозиториев / issues / PR в
   канонические таблицы (идемпотентный `ON CONFLICT` upsert), workspace-scoped
   app-installation connection state без browser PAT/секретов, just-in-time
-  installation tokens без persistence, explicit single-repo `/github` sync
-  control, mocked synced-evidence isolation for Company Brain/manual Briefings,
+  installation tokens без persistence, per-repository `/github` read-only sync
+  controls, mocked synced-evidence isolation for Company Brain/manual Briefings,
   safe rate-limit/error observability,
   плюс human-approved guarded write-back одного GitHub issue;
 - детерминированные проекции без LLM: Company Brain и Founder Briefing считаются

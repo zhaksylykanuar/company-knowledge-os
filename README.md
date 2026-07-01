@@ -28,8 +28,9 @@ Read in this order (control trio = what / where / why):
   step 4 below to provision the founder account.
 - Founder Briefings now persist deterministic briefing history. GitHub App
   product-connect plus polling-only live read-sync backend/UI foundations exist,
-  with mocked synced-evidence isolation verified for Company Brain/Briefings and
-  safe rate-limit/error observability; the remaining product gaps are the first
+  including per-repository read-only sync buttons in `/github`, mocked
+  synced-evidence isolation for Company Brain/Briefings, and safe
+  rate-limit/error observability; the remaining product gaps are the first
   human-approved real read run, LLM briefing narrative over real connected data,
   multi-user provisioning beyond the seeded founder, and the first production
   deploy of the auth phase.

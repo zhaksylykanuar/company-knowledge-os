@@ -13,8 +13,8 @@
   (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Repository
   identity/race debt перед live sync **закрыт** (DEC-050). GitHub App
   product-connect foundation **сделан** (DEC-052). GitHub App polling-only live
-  read sync backend foundation **сделан** (DEC-053). `/github` product UI для
-  explicit single-repo read-only sync **сделан**. Mocked synced
+  read sync backend foundation **сделан** (DEC-053). `/github` product UI со
+  списком repo и per-repo read-only sync кнопкой **сделан**. Mocked synced
   evidence/briefing isolation verification **сделан**. Live-read
   observability/rate-limit handling **сделан**. Следующий лучший продуктовый шаг
   — первый real-provider read run только после отдельного human approval.
@@ -24,7 +24,8 @@
   installation repository client, endpoint
   `POST .../github/connections/app-installation/sync`, explicit repository
   scope, issues/PRs provider reads into existing canonical
-  normalization/upsert path, and `/github` explicit repo sync control.
+  normalization/upsert path, and `/github` per-repository explicit sync
+  controls.
   Installation access token не сохраняется, provider writes не выполняются,
   tests/mock UI keep provider calls mocked. Company Brain and persisted
   deterministic Briefings are verified over mocked synced data with workspace
@@ -244,6 +245,19 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-01` — **Per-repository GitHub App sync buttons in UI.**
+  По подтверждённому плану refinеd `/github`: теперь UI выводит каждый known
+  repository из repository surface отдельной карточкой/строкой с соседней
+  кнопкой `Синхронизировать read-only`. Каждая кнопка вызывает existing GitHub
+  App polling endpoint for exactly that one repo and keeps independent per-repo
+  `syncing/success/error` state. No bulk sync control, no browser secrets, no
+  provider writes. Frontend API/types/tests updated; docs updated (CHANGELOG,
+  TODO, ROADMAP, README, master playbook, PROGRESS). Проверки: frontend
+  `npm test` **98 passed**, `npm run build`, `npm run typecheck`, `npm run lint`
+  — зелёные; docs contracts **16 passed**, `git diff --check`, tracked secret
+  scan — зелёные. No real provider calls, deploys, production DB/cloud writes,
+  raw storage/Obsidian edits, or push.
 
 - `2026-07-01` — **GitHub App live-read error/rate-limit observability.**
   Added shared safe GitHub provider error formatting for repository/issue/PR

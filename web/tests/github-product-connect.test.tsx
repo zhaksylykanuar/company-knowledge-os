@@ -91,6 +91,19 @@ const repositories: GitHubRepositoryListResponse = {
       source: "local_snapshot",
       evidence_refs: [],
       metadata: {}
+    },
+    {
+      id: "repo-2",
+      name: "another-repo",
+      full_name: "qtwin-io/another-repo",
+      default_branch: "main",
+      visibility: "private",
+      archived: false,
+      source_url: "https://github.com/qtwin-io/another-repo",
+      last_activity_at: "2026-07-01T10:00:00Z",
+      source: "local_snapshot",
+      evidence_refs: [],
+      metadata: {}
     }
   ],
   count: 25,
@@ -153,14 +166,10 @@ function renderPanel(
     <GitHubProductConnectPanelView
       connectionStatus={props.connectionStatus ?? connectedAppStatus}
       error={props.error ?? null}
-      liveSyncError={props.liveSyncError ?? null}
-      liveSyncResult={props.liveSyncResult ?? null}
-      liveSyncState={props.liveSyncState ?? "idle"}
       onRetry={props.onRetry}
-      onRepositoryChange={props.onRepositoryChange}
-      onRunLiveSync={props.onRunLiveSync}
+      onRunRepositorySync={props.onRunRepositorySync}
+      repositorySync={props.repositorySync ?? {}}
       repositories={props.repositories ?? repositories}
-      repositoryInput={props.repositoryInput ?? "qtwin-io/company-knowledge-os"}
       state={props.state ?? "ready"}
     />
   );
@@ -245,6 +254,11 @@ test("renders connected GitHub App foundation without write promises", () => {
   assert.ok(html.includes(M.githubProductConnect.liveSyncTitle));
   assert.ok(html.includes(M.githubProductConnect.liveSyncRun));
   assert.ok(html.includes("qtwin-io/company-knowledge-os"));
+  assert.ok(html.includes("qtwin-io/another-repo"));
+  assert.equal(
+    (html.match(new RegExp(M.githubProductConnect.liveSyncRun, "g")) ?? []).length,
+    2
+  );
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /provider token/i);
   assert.doesNotMatch(html, /write enabled/i);
@@ -263,29 +277,46 @@ test("renders missing GitHub App env contract", () => {
 
 test("renders invalid repository and missing app sync states", () => {
   const invalid = renderPanel({
-    repositoryInput: "bad repo"
+    repositories: {
+      ...repositories,
+      repositories: [
+        {
+          ...repositories.repositories[0],
+          full_name: "bad repo"
+        }
+      ]
+    }
   });
   assert.ok(invalid.includes(M.githubProductConnect.liveSyncRepositoryInvalid));
 
   const missingApp = renderPanel({
-    connectionStatus: missingAppStatus,
-    repositoryInput: "qtwin-io/company-knowledge-os"
+    connectionStatus: missingAppStatus
   });
   assert.ok(missingApp.includes(M.githubProductConnect.liveSyncRequiresApp));
 });
 
 test("renders live sync success and error states without write claim", () => {
   const success = renderPanel({
-    liveSyncResult,
-    liveSyncState: "success"
+    repositorySync: {
+      "qtwin-io/company-knowledge-os": {
+        error: null,
+        result: liveSyncResult,
+        state: "success"
+      }
+    }
   });
   assert.ok(success.includes(M.githubProductConnect.liveSyncResultTitle));
   assert.ok(success.includes(M.githubProductConnect.liveSyncNoWrites));
   assert.ok(success.includes("репозиториев — 1, задач — 1, пулреквестов — 1"));
 
   const error = renderPanel({
-    liveSyncError: "github repository is not part of the app installation",
-    liveSyncState: "error"
+    repositorySync: {
+      "qtwin-io/company-knowledge-os": {
+        error: "github repository is not part of the app installation",
+        result: null,
+        state: "error"
+      }
+    }
   });
   assert.ok(error.includes(M.githubProductConnect.liveSyncFailedTitle));
   assert.match(error, /not part of the app installation/);

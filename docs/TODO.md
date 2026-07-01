@@ -31,8 +31,9 @@ Implemented foundations:
   explicitly repository-scoped; backend can mint just-in-time installation
   tokens, read installation repositories/issues/PRs for requested repositories,
   and persist through existing idempotent normalization without storing tokens or
-  performing provider writes. `/github` now has a product control for explicit
-  single-repository read-only sync. Tests verify mocked synced data reaches
+  performing provider writes. `/github` now renders known repositories with an
+  adjacent explicit single-repository read-only sync button for each repo; no
+  bulk sync control exists. Tests verify mocked synced data reaches
   Company Brain and persisted deterministic Briefings with evidence while
   workspace B cannot see workspace A's synced canonical state/evidence. Safe
   provider error/rate-limit details surface HTTP status/message/retry metadata

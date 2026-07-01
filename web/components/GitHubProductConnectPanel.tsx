@@ -22,18 +22,19 @@ import { StatusCard } from "./StatusCard";
 
 type ProductConnectState = "loading" | "ready" | "error" | "missing";
 type LiveSyncState = "idle" | "syncing" | "success" | "error";
+type RepositorySyncStatus = {
+  error: string | null;
+  result: GitHubAppLiveSyncResponse | null;
+  state: LiveSyncState;
+};
 
 type GitHubProductConnectPanelViewProps = {
   connectionStatus: GitHubConnectionStatusResponse | null;
   error: string | null;
-  liveSyncError: string | null;
-  liveSyncResult: GitHubAppLiveSyncResponse | null;
-  liveSyncState: LiveSyncState;
   onRetry?: () => void;
-  onRepositoryChange?: (value: string) => void;
-  onRunLiveSync?: () => void;
+  onRunRepositorySync?: (repositoryFullName: string) => void;
+  repositorySync: Record<string, RepositorySyncStatus>;
   repositories: GitHubRepositoryListResponse | null;
-  repositoryInput: string;
   state: ProductConnectState;
 };
 
@@ -45,11 +46,9 @@ export function GitHubProductConnectPanel() {
     useState<GitHubRepositoryListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [repositoryInput, setRepositoryInput] = useState("");
-  const [liveSyncError, setLiveSyncError] = useState<string | null>(null);
-  const [liveSyncResult, setLiveSyncResult] =
-    useState<GitHubAppLiveSyncResponse | null>(null);
-  const [liveSyncState, setLiveSyncState] = useState<LiveSyncState>("idle");
+  const [repositorySync, setRepositorySync] = useState<
+    Record<string, RepositorySyncStatus>
+  >({});
   const [state, setState] = useState<ProductConnectState>("loading");
 
   useEffect(() => {
@@ -74,12 +73,6 @@ export function GitHubProductConnectPanel() {
         }
         setConnectionStatus(status);
         setRepositories(repositoryList);
-        setRepositoryInput((current) => {
-          if (current.trim()) {
-            return current;
-          }
-          return repositoryList.repositories[0]?.full_name ?? "";
-        });
         setState("ready");
       })
       .catch((caught: unknown) => {
@@ -97,14 +90,15 @@ export function GitHubProductConnectPanel() {
     };
   }, [workspaceId, reloadKey]);
 
-  async function syncExplicitRepository() {
-    const repository = repositoryInput.trim();
+  async function syncRepository(repositoryFullName: string) {
+    const repository = repositoryFullName.trim();
     if (!workspaceId || !connectionStatus?.connection_id || !repository) {
       return;
     }
-    setLiveSyncError(null);
-    setLiveSyncResult(null);
-    setLiveSyncState("syncing");
+    setRepositorySync((current) => ({
+      ...current,
+      [repository]: { error: null, result: null, state: "syncing" }
+    }));
     try {
       const payload = await runGitHubAppLiveSync(workspaceId, {
         connection_id: connectionStatus.connection_id,
@@ -112,12 +106,20 @@ export function GitHubProductConnectPanel() {
         include_issues: true,
         include_pull_requests: true
       });
-      setLiveSyncResult(payload);
-      setLiveSyncState("success");
+      setRepositorySync((current) => ({
+        ...current,
+        [repository]: { error: null, result: payload, state: "success" }
+      }));
       setReloadKey((current) => current + 1);
     } catch (caught: unknown) {
-      setLiveSyncError(caught instanceof Error ? caught.message : M.common.requestFailed);
-      setLiveSyncState("error");
+      setRepositorySync((current) => ({
+        ...current,
+        [repository]: {
+          error: caught instanceof Error ? caught.message : M.common.requestFailed,
+          result: null,
+          state: "error"
+        }
+      }));
     }
   }
 
@@ -125,14 +127,10 @@ export function GitHubProductConnectPanel() {
     <GitHubProductConnectPanelView
       connectionStatus={connectionStatus}
       error={error}
-      liveSyncError={liveSyncError}
-      liveSyncResult={liveSyncResult}
-      liveSyncState={liveSyncState}
       onRetry={() => setReloadKey((current) => current + 1)}
-      onRepositoryChange={setRepositoryInput}
-      onRunLiveSync={syncExplicitRepository}
+      onRunRepositorySync={syncRepository}
+      repositorySync={repositorySync}
       repositories={repositories}
-      repositoryInput={repositoryInput}
       state={state}
     />
   );
@@ -141,24 +139,17 @@ export function GitHubProductConnectPanel() {
 export function GitHubProductConnectPanelView({
   connectionStatus,
   error,
-  liveSyncError,
-  liveSyncResult,
-  liveSyncState,
   onRetry,
-  onRepositoryChange,
-  onRunLiveSync,
+  onRunRepositorySync,
+  repositorySync,
   repositories,
-  repositoryInput,
   state
 }: GitHubProductConnectPanelViewProps) {
   const appStatus = connectionStatus?.app ?? null;
   const appConnectionReady =
     connectionStatus?.connection_method === "github_app_installation" &&
     connectionStatus.has_connection_record;
-  const normalizedRepository = repositoryInput.trim();
-  const repositoryLooksValid = isRepositoryFullName(normalizedRepository);
-  const canRunLiveSync =
-    appConnectionReady && repositoryLooksValid && liveSyncState !== "syncing";
+  const repositoryItems = repositories?.repositories ?? [];
 
   return (
     <section
@@ -261,69 +252,120 @@ export function GitHubProductConnectPanelView({
           <section className="callout">
             <strong>{M.githubProductConnect.liveSyncTitle}</strong>
             <p>{M.githubProductConnect.liveSyncDescription}</p>
-            <label htmlFor="github-app-live-sync-repository">
-              {M.githubProductConnect.liveSyncRepositoryLabel}
-            </label>
-            <input
-              aria-describedby="github-app-live-sync-repository-note"
-              disabled={!appConnectionReady || liveSyncState === "syncing"}
-              id="github-app-live-sync-repository"
-              onChange={(event) => onRepositoryChange?.(event.target.value)}
-              placeholder={M.githubProductConnect.liveSyncRepositoryPlaceholder}
-              type="text"
-              value={repositoryInput}
-            />
-            <p className="muted" id="github-app-live-sync-repository-note">
+            <p className="muted">
               {M.githubProductConnect.liveSyncRepositoryNote}
             </p>
-            {normalizedRepository && !repositoryLooksValid ? (
-              <p className="error-text">{M.githubProductConnect.liveSyncRepositoryInvalid}</p>
-            ) : null}
             {!appConnectionReady ? (
               <p className="muted">{M.githubProductConnect.liveSyncRequiresApp}</p>
             ) : null}
-            <div className="actions-row">
-              <button
-                className="button"
-                disabled={!canRunLiveSync}
-                onClick={onRunLiveSync}
-                type="button"
+
+            {repositoryItems.length === 0 ? (
+              <EmptyState
+                description={M.githubProductConnect.repositoryListEmptyDescription}
+                title={M.githubProductConnect.repositoryListEmptyTitle}
+              />
+            ) : (
+              <section
+                aria-label={M.githubProductConnect.repositoryListTitle}
+                className="stack"
               >
-                {liveSyncState === "syncing"
-                  ? M.githubProductConnect.liveSyncRunning
-                  : M.githubProductConnect.liveSyncRun}
-              </button>
-            </div>
+                <strong>{M.githubProductConnect.repositoryListTitle}</strong>
+                {repositoryItems.map((repository) => {
+                  const sync = repositorySync[repository.full_name] ?? {
+                    error: null,
+                    result: null,
+                    state: "idle" as LiveSyncState
+                  };
+                  const repositoryValid = isRepositoryFullName(repository.full_name);
+                  const canSyncRepository =
+                    appConnectionReady &&
+                    repositoryValid &&
+                    sync.state !== "syncing";
+                  return (
+                    <article className="card" key={repository.full_name}>
+                      <div className="section-header">
+                        <div>
+                          <h3>{repository.full_name}</h3>
+                          <p className="muted">
+                            {T.githubRepositoryMeta(
+                              repository.visibility,
+                              repository.archived,
+                              repository.source
+                            )}
+                          </p>
+                          {repository.last_activity_at ? (
+                            <p className="muted">
+                              {T.githubRepositoryLastActivity(
+                                repository.last_activity_at
+                              )}
+                            </p>
+                          ) : null}
+                        </div>
+                        <button
+                          className="button"
+                          disabled={!canSyncRepository}
+                          onClick={() => onRunRepositorySync?.(repository.full_name)}
+                          type="button"
+                        >
+                          {sync.state === "syncing"
+                            ? M.githubProductConnect.liveSyncRunning
+                            : M.githubProductConnect.liveSyncRun}
+                        </button>
+                      </div>
+
+                      {repository.source_url ? (
+                        <p>
+                          <SourceLink url={repository.source_url}>
+                            {M.common.openSource}
+                          </SourceLink>
+                        </p>
+                      ) : null}
+
+                      {!repositoryValid ? (
+                        <p className="error-text">
+                          {M.githubProductConnect.liveSyncRepositoryInvalid}
+                        </p>
+                      ) : null}
+
+                      {sync.state === "error" ? (
+                        <ErrorState
+                          description={
+                            sync.error ??
+                            M.githubProductConnect.liveSyncFailedDescription
+                          }
+                          title={M.githubProductConnect.liveSyncFailedTitle}
+                        />
+                      ) : null}
+
+                      {sync.result ? (
+                        <section className="callout">
+                          <strong>{M.githubProductConnect.liveSyncResultTitle}</strong>
+                          <p>
+                            {T.githubAppLiveSyncResult(
+                              sync.result.totals.repositories,
+                              sync.result.totals.issues,
+                              sync.result.totals.pull_requests,
+                              sync.result.sync_job.status
+                            )}
+                          </p>
+                          <p className="success-text">
+                            {M.githubProductConnect.liveSyncNoWrites}
+                          </p>
+                          {sync.result.warnings.length > 0 ? (
+                            <ul className="meta-list" aria-label={M.common.warnings}>
+                              {sync.result.warnings.map((warning) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </section>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </section>
+            )}
           </section>
-
-          {liveSyncState === "error" ? (
-            <ErrorState
-              description={liveSyncError ?? M.githubProductConnect.liveSyncFailedDescription}
-              title={M.githubProductConnect.liveSyncFailedTitle}
-            />
-          ) : null}
-
-          {liveSyncResult ? (
-            <section className="callout">
-              <strong>{M.githubProductConnect.liveSyncResultTitle}</strong>
-              <p>
-                {T.githubAppLiveSyncResult(
-                  liveSyncResult.totals.repositories,
-                  liveSyncResult.totals.issues,
-                  liveSyncResult.totals.pull_requests,
-                  liveSyncResult.sync_job.status
-                )}
-              </p>
-              <p className="success-text">{M.githubProductConnect.liveSyncNoWrites}</p>
-              {liveSyncResult.warnings.length > 0 ? (
-                <ul className="meta-list" aria-label={M.common.warnings}>
-                  {liveSyncResult.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </section>
-          ) : null}
 
           {[...connectionStatus.warnings, ...(repositories?.warnings ?? [])].length > 0 ? (
             <ul className="meta-list" aria-label={M.common.warnings}>
