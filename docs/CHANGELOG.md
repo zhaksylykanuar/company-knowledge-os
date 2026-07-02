@@ -35,6 +35,13 @@
   reviewer keeps only the failed proposals selected for retry, and a partial or
   total failure is surfaced inline without hiding the loaded list. Still no
   provider execution, external writes, or LLM calls.
+- Added local backend bulk ActionProposal endpoints:
+  `POST /actions/proposals/bulk-approve` and
+  `POST /actions/proposals/bulk-reject`. They are admin-only, dedupe requested
+  proposal IDs, return per-proposal successes/failures with counts, preserve
+  partial success semantics, and never start provider execution, external
+  writes, or LLM calls. The web bulk review controls now use these endpoints
+  instead of issuing one request per proposal.
 
 ## 2026-07-01
 

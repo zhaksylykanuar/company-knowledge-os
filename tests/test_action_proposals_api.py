@@ -596,6 +596,142 @@ async def test_approve_reject_invalid_transitions_fail(monkeypatch) -> None:
         await _cleanup_action_fixture(marker)
 
 
+async def test_bulk_approve_partially_succeeds_without_execution(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        approve_me = await _post_proposal(created["workspace"]["id"], owner_email)
+        already_approved = await _post_proposal(
+            created["workspace"]["id"],
+            owner_email,
+            payload=_proposal_payload(title="Already approved"),
+        )
+        missing_id = uuid4()
+        async with _async_client() as client:
+            approved_once = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{already_approved['id']}/approve",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+        assert approved_once.status_code == 200
+        executions_before = await _count(ActionExecution)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-approve",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "proposal_ids": [
+                        approve_me["id"],
+                        already_approved["id"],
+                        str(missing_id),
+                    ]
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["succeeded_count"] == 1
+        assert body["failed_count"] == 2
+        assert body["is_live"] is False
+        assert body["execution_started"] is False
+        assert body["proposals"][0]["id"] == approve_me["id"]
+        assert body["proposals"][0]["status"] == ACTION_PROPOSAL_STATUS_APPROVED
+        assert [failure["status_code"] for failure in body["failures"]] == [409, 404]
+        assert body["failures"][0]["proposal_id"] == already_approved["id"]
+        assert body["failures"][1]["proposal_id"] == str(missing_id)
+        assert any("deferred" in warning for warning in body["warnings"])
+        assert any("does not execute provider actions" in warning for warning in body["warnings"])
+        assert await _count(ActionExecution) == executions_before
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_bulk_reject_succeeds_without_execution(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        first = await _post_proposal(created["workspace"]["id"], owner_email)
+        second = await _post_proposal(
+            created["workspace"]["id"],
+            owner_email,
+            payload=_proposal_payload(title="Reject second"),
+        )
+        executions_before = await _count(ActionExecution)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-reject",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "proposal_ids": [first["id"], second["id"], first["id"]],
+                    "reason": "Not now",
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["succeeded_count"] == 2
+        assert body["failed_count"] == 0
+        assert body["failures"] == []
+        assert body["execution_started"] is False
+        assert {proposal["id"] for proposal in body["proposals"]} == {
+            first["id"],
+            second["id"],
+        }
+        assert {
+            proposal["status"] for proposal in body["proposals"]
+        } == {ACTION_PROPOSAL_STATUS_REJECTED}
+        assert {
+            proposal["rejection_reason"] for proposal in body["proposals"]
+        } == {"Not now"}
+        assert await _count(ActionExecution) == executions_before
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_member_cannot_bulk_approve(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        member_email = await _add_workspace_user(
+            created["workspace"]["id"],
+            marker,
+            role=MEMBERSHIP_ROLE_MEMBER,
+            suffix="bulk-member",
+        )
+        proposal = await _post_proposal(
+            created["workspace"]["id"],
+            _bootstrap_payload(marker)["owner_email"],
+        )
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-approve",
+                headers=_headers(),
+                params={"owner_email": member_email},
+                json={"proposal_ids": [proposal["id"]]},
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "insufficient workspace role"}
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
 def test_action_api_does_not_create_extra_migration_files() -> None:
     migration_files = {
         path.name

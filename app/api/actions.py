@@ -102,6 +102,16 @@ class ActionProposalRejectRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1000)
 
 
+class ActionProposalBulkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class ActionProposalBulkRejectRequest(ActionProposalBulkRequest):
+    reason: str | None = Field(default=None, max_length=1000)
+
+
 class ActionProposalExecuteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -150,6 +160,22 @@ class ActionProposalListResponse(BaseModel):
 
 class ActionProposalMutationResponse(BaseModel):
     proposal: ActionProposalRead
+    is_live: bool
+    execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ActionProposalBulkFailureRead(BaseModel):
+    proposal_id: UUID
+    status_code: int
+    detail: str
+
+
+class ActionProposalBulkResponse(BaseModel):
+    proposals: list[ActionProposalRead]
+    failures: list[ActionProposalBulkFailureRead]
+    succeeded_count: int
+    failed_count: int
     is_live: bool
     execution_started: bool
     warnings: list[str] = Field(default_factory=list)
@@ -359,6 +385,106 @@ async def list_action_proposal_endpoint(
         ],
         count=len(proposals),
         is_live=False,
+        warnings=[ACTION_PROPOSAL_NO_EXECUTION_WARNING],
+    )
+
+
+@router.post(
+    "/proposals/bulk-approve",
+    response_model=ActionProposalBulkResponse,
+)
+async def bulk_approve_action_proposals_endpoint(
+    workspace_id: UUID,
+    payload: ActionProposalBulkRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> ActionProposalBulkResponse:
+    async with AsyncSessionLocal() as session:
+        proposals: list[ActionProposalRead] = []
+        failures: list[ActionProposalBulkFailureRead] = []
+        for proposal_id in _unique_proposal_ids(payload.proposal_ids):
+            try:
+                proposal = await approve_action_proposal(
+                    session,
+                    workspace_id=workspace_id,
+                    proposal_id=proposal_id,
+                    approved_by_user_id=access.workspace_membership.user.id,
+                )
+                proposals.append(
+                    ActionProposalRead.model_validate(
+                        serialize_action_proposal(proposal)
+                    )
+                )
+            except ActionProposalNotFoundError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=proposal_id,
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=exc.detail,
+                    )
+                )
+            except ActionProposalTransitionError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=proposal_id,
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=exc.detail,
+                    )
+                )
+        await session.commit()
+
+    warnings = [ACTION_PROPOSAL_NO_EXECUTION_WARNING]
+    if proposals:
+        warnings.insert(0, ACTION_PROPOSAL_APPROVAL_WARNING)
+    return _bulk_response(proposals=proposals, failures=failures, warnings=warnings)
+
+
+@router.post(
+    "/proposals/bulk-reject",
+    response_model=ActionProposalBulkResponse,
+)
+async def bulk_reject_action_proposals_endpoint(
+    workspace_id: UUID,
+    payload: ActionProposalBulkRejectRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> ActionProposalBulkResponse:
+    async with AsyncSessionLocal() as session:
+        proposals: list[ActionProposalRead] = []
+        failures: list[ActionProposalBulkFailureRead] = []
+        for proposal_id in _unique_proposal_ids(payload.proposal_ids):
+            try:
+                proposal = await reject_action_proposal(
+                    session,
+                    workspace_id=workspace_id,
+                    proposal_id=proposal_id,
+                    rejected_by_user_id=access.workspace_membership.user.id,
+                    reason=payload.reason,
+                )
+                proposals.append(
+                    ActionProposalRead.model_validate(
+                        serialize_action_proposal(proposal)
+                    )
+                )
+            except ActionProposalNotFoundError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=proposal_id,
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=exc.detail,
+                    )
+                )
+            except ActionProposalTransitionError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=proposal_id,
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=exc.detail,
+                    )
+                )
+        await session.commit()
+
+    return _bulk_response(
+        proposals=proposals,
+        failures=failures,
         warnings=[ACTION_PROPOSAL_NO_EXECUTION_WARNING],
     )
 
@@ -982,3 +1108,31 @@ def _mutation_response(
         execution_started=False,
         warnings=warnings,
     )
+
+
+def _bulk_response(
+    *,
+    proposals: list[ActionProposalRead],
+    failures: list[ActionProposalBulkFailureRead],
+    warnings: list[str],
+) -> ActionProposalBulkResponse:
+    return ActionProposalBulkResponse(
+        proposals=proposals,
+        failures=failures,
+        succeeded_count=len(proposals),
+        failed_count=len(failures),
+        is_live=False,
+        execution_started=False,
+        warnings=warnings,
+    )
+
+
+def _unique_proposal_ids(proposal_ids: list[UUID]) -> list[UUID]:
+    seen: set[UUID] = set()
+    unique_ids: list[UUID] = []
+    for proposal_id in proposal_ids:
+        if proposal_id in seen:
+            continue
+        seen.add(proposal_id)
+        unique_ids.append(proposal_id)
+    return unique_ids

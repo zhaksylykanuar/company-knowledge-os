@@ -67,6 +67,11 @@ Implemented foundations:
   clear selection, approve selected locally, or reject selected locally. Hidden,
   approved, and rejected proposals are not selected or mutated; provider
   execution and external writes remain disabled.
+- Bulk local ActionProposal review is backed by admin-only backend endpoints
+  (`bulk-approve` / `bulk-reject`) with per-proposal success/failure results and
+  partial-success semantics, rather than frontend-only one-request-per-card
+  orchestration. The endpoints dedupe IDs and never start provider execution,
+  external writes, or LLM calls.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -104,9 +109,10 @@ Done when:
    origin badge, briefing `internal_todo` payload detail, and evidence
    drawer default-vs-manual context + evidence-ref count are in place. A local
    origin filter now composes with the status filter, and bulk local approve/
-   reject controls are available for visible `proposed` proposals. Next: polish
-   post-bulk review feedback/history if needed while keeping provider writes and
-   AI generation disabled.
+   reject controls are available for visible `proposed` proposals through
+   backend bulk endpoints with partial-success results. Next: polish post-bulk
+   review feedback/history if needed while keeping provider writes and AI
+   generation disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

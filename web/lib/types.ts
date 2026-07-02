@@ -234,6 +234,30 @@ export type ActionProposalMutationResponse = {
   warnings: string[];
 };
 
+export type ActionProposalBulkRequest = {
+  proposal_ids: string[];
+};
+
+export type ActionProposalBulkRejectRequest = ActionProposalBulkRequest & {
+  reason?: string | null;
+};
+
+export type ActionProposalBulkFailure = {
+  proposal_id: string;
+  status_code: number;
+  detail: string;
+};
+
+export type ActionProposalBulkResponse = {
+  proposals: ActionProposal[];
+  failures: ActionProposalBulkFailure[];
+  succeeded_count: number;
+  failed_count: number;
+  is_live: boolean;
+  execution_started: boolean;
+  warnings: string[];
+};
+
 export type ActionProposalRejectRequest = {
   reason?: string | null;
 };

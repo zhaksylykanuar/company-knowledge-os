@@ -5,7 +5,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   approveActionProposal,
+  bulkApproveActionProposals,
+  bulkRejectActionProposals,
   buildWorkspaceActionProposalApprovePath,
+  buildWorkspaceActionProposalBulkApprovePath,
+  buildWorkspaceActionProposalBulkRejectPath,
   buildWorkspaceActionProposalRejectPath,
   buildWorkspaceActionProposalsCollectionPath,
   buildWorkspaceActionProposalsPath,
@@ -22,7 +26,7 @@ import type {
 import {
   ActionProposalsPanelView,
   DEFAULT_CREATE_FORM,
-  summarizeBulkOutcome
+  summarizeBulkResponse
 } from "../components/ActionProposalsPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 
@@ -231,6 +235,14 @@ test("builds action proposal URLs", () => {
     buildWorkspaceActionProposalRejectPath("workspace-123", "proposal-1"),
     "/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/reject"
   );
+  assert.equal(
+    buildWorkspaceActionProposalBulkApprovePath("workspace-123"),
+    "/api/v1/workspaces/workspace-123/actions/proposals/bulk-approve"
+  );
+  assert.equal(
+    buildWorkspaceActionProposalBulkRejectPath("workspace-123"),
+    "/api/v1/workspaces/workspace-123/actions/proposals/bulk-reject"
+  );
 });
 
 test("fetches and parses local action proposals", async () => {
@@ -359,6 +371,90 @@ test("approves and rejects locally through supported endpoints", async () => {
     assert.deepEqual(calls, [
       "POST http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/approve",
       "POST http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/reject"
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("bulk approves and rejects locally through backend bulk endpoints", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input, init) => {
+    calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+    if (String(input).endsWith("/bulk-reject")) {
+      assert.equal(
+        init?.body,
+        JSON.stringify({
+          proposal_ids: ["proposal-4"],
+          reason: "Not now"
+        })
+      );
+      return new Response(
+        JSON.stringify({
+          execution_started: false,
+          failed_count: 0,
+          failures: [],
+          is_live: false,
+          proposals: [rejectedProposal],
+          succeeded_count: 1,
+          warnings: ["Action proposal API is local-only and does not execute provider actions."]
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200
+        }
+      );
+    }
+    assert.equal(
+      init?.body,
+      JSON.stringify({
+        proposal_ids: ["proposal-1", "proposal-4"]
+      })
+    );
+    return new Response(
+      JSON.stringify({
+        execution_started: false,
+        failed_count: 1,
+        failures: [
+          {
+            detail: "action proposal is not in proposed status",
+            proposal_id: "proposal-9",
+            status_code: 409
+          }
+        ],
+        is_live: false,
+        proposals: [approvedProposal],
+        succeeded_count: 1,
+        warnings: ["Action proposal API is local-only and does not execute provider actions."]
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const approved = await bulkApproveActionProposals(
+      "workspace-123",
+      { proposal_ids: ["proposal-1", "proposal-4"] },
+      {}
+    );
+    const rejected = await bulkRejectActionProposals(
+      "workspace-123",
+      { proposal_ids: ["proposal-4"], reason: "Not now" },
+      {}
+    );
+
+    assert.equal(approved.succeeded_count, 1);
+    assert.equal(approved.failed_count, 1);
+    assert.equal(approved.failures[0]?.status_code, 409);
+    assert.equal(approved.execution_started, false);
+    assert.equal(rejected.succeeded_count, 1);
+    assert.deepEqual(calls, [
+      "POST http://localhost/api/v1/workspaces/workspace-123/actions/proposals/bulk-approve",
+      "POST http://localhost/api/v1/workspaces/workspace-123/actions/proposals/bulk-reject"
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -543,20 +639,25 @@ test("bulk origin/status intersections select only currently visible proposed pr
   assert.doesNotMatch(html, /Approved local proposal/);
 });
 
-test("summarizeBulkOutcome partitions settled bulk results and keeps first failure", () => {
-  const okOne: ActionProposalMutationResponse = {
-    ...mutationResponse,
-    proposal: { ...approvedProposal, id: "proposal-1" }
-  };
-  const okTwo: ActionProposalMutationResponse = {
-    ...mutationResponse,
-    proposal: { ...approvedProposal, id: "proposal-4" }
-  };
-  const outcome = summarizeBulkOutcome([
-    { id: "proposal-1", ok: true, response: okOne },
-    { id: "proposal-9", ok: false, message: "action proposal is not in proposed status" },
-    { id: "proposal-4", ok: true, response: okTwo }
-  ]);
+test("summarizeBulkResponse partitions backend bulk results and keeps first failure", () => {
+  const outcome = summarizeBulkResponse({
+    execution_started: false,
+    failed_count: 1,
+    failures: [
+      {
+        detail: "action proposal is not in proposed status",
+        proposal_id: "proposal-9",
+        status_code: 409
+      }
+    ],
+    is_live: false,
+    proposals: [
+      { ...approvedProposal, id: "proposal-1" },
+      { ...approvedProposal, id: "proposal-4" }
+    ],
+    succeeded_count: 2,
+    warnings: []
+  });
 
   assert.deepEqual(outcome.succeededIds, ["proposal-1", "proposal-4"]);
   assert.equal(outcome.succeeded.length, 2);
@@ -565,10 +666,16 @@ test("summarizeBulkOutcome partitions settled bulk results and keeps first failu
   assert.equal(outcome.firstFailureMessage, "action proposal is not in proposed status");
 });
 
-test("summarizeBulkOutcome reports no failure message when all succeed", () => {
-  const outcome = summarizeBulkOutcome([
-    { id: "proposal-1", ok: true, response: mutationResponse }
-  ]);
+test("summarizeBulkResponse reports no failure message when all succeed", () => {
+  const outcome = summarizeBulkResponse({
+    execution_started: false,
+    failed_count: 0,
+    failures: [],
+    is_live: false,
+    proposals: [{ ...approvedProposal, id: "proposal-1" }],
+    succeeded_count: 1,
+    warnings: []
+  });
   assert.equal(outcome.failed.length, 0);
   assert.equal(outcome.firstFailureMessage, null);
   assert.deepEqual(outcome.succeededIds, ["proposal-1"]);

@@ -3,6 +3,9 @@ import type {
   ActionExecutionResponse,
   ActionProposalAuditResponse,
   ActionProposalExecuteRequest,
+  ActionProposalBulkRejectRequest,
+  ActionProposalBulkRequest,
+  ActionProposalBulkResponse,
   ActionProposalCreateRequest,
   ActionProposalListRequest,
   ActionProposalListResponse,
@@ -244,6 +247,16 @@ export function buildWorkspaceActionProposalRejectPath(
   return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/reject`;
 }
 
+export function buildWorkspaceActionProposalBulkApprovePath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceActionProposalsCollectionPath(workspaceId)}/bulk-approve`;
+}
+
+export function buildWorkspaceActionProposalBulkRejectPath(workspaceId: string): string {
+  return `${buildWorkspaceActionProposalsCollectionPath(workspaceId)}/bulk-reject`;
+}
+
 export function buildWorkspaceActionProposalExecutionPreviewPath(
   workspaceId: string,
   proposalId: string
@@ -328,6 +341,41 @@ export async function rejectActionProposal(
     {
       ...options,
       body: JSON.stringify({
+        reason: request.reason ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function bulkApproveActionProposals(
+  workspaceId: string,
+  request: ActionProposalBulkRequest,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalBulkResponse> {
+  return apiFetch<ActionProposalBulkResponse>(
+    buildWorkspaceActionProposalBulkApprovePath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        proposal_ids: request.proposal_ids
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function bulkRejectActionProposals(
+  workspaceId: string,
+  request: ActionProposalBulkRejectRequest,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalBulkResponse> {
+  return apiFetch<ActionProposalBulkResponse>(
+    buildWorkspaceActionProposalBulkRejectPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        proposal_ids: request.proposal_ids,
         reason: request.reason ?? null
       }),
       method: "POST"

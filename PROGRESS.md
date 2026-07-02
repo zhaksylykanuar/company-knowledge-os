@@ -84,11 +84,14 @@
   затрагиваются случайно. Bulk approve/reject использует существующие локальные
   ActionProposal endpoints, меняет только local DB state and never starts
   provider execution, external writes, or LLM.
+  Теперь bulk review backed by admin-only backend endpoints
+  `POST .../actions/proposals/bulk-approve` and `bulk-reject`, которые dedupe
+  requested IDs and return per-proposal successes/failures with counts.
   Bulk approve/reject устойчив к частичным сбоям: каждый переход settle-ится
-  независимо (не fail-fast), успешные локальные изменения всегда сохраняются и
+  независимо на backend, успешные локальные изменения всегда сохраняются и
   мержатся, неуспешные остаются выбранными для повторной попытки, а частичный/
   полный сбой показывается inline без скрытия загруженного списка
-  (`summarizeBulkOutcome`).
+  (`summarizeBulkResponse`).
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
@@ -327,6 +330,27 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-02` — **Bulk ActionProposal backend endpoints.** Добавлен local-only
+  backend contract for bulk review:
+  `POST /api/v1/workspaces/{workspace_id}/actions/proposals/bulk-approve` and
+  `/bulk-reject`. Endpoints admin-only, dedupe requested proposal IDs, process
+  each local transition independently, and return `proposals` successes,
+  per-proposal `failures`, `succeeded_count`, `failed_count`, `is_live=false`,
+  `execution_started=false`, and warnings. Web bulk controls now call these
+  endpoints once per bulk action instead of orchestrating one request per card;
+  `summarizeBulkResponse` preserves partial-success UI semantics. Added backend
+  tests for partial approve with 409/404 failures, bulk reject with duplicate ID
+  dedupe, RBAC rejection for member, plus web API client tests for paths/bodies.
+  Provider execution, external writes and LLM are not started. Изменены
+  `app/api/actions.py`, `tests/test_action_proposals_api.py`, `web/lib/api.ts`,
+  `web/lib/types.ts`, `web/components/ActionProposalsPanel.tsx`,
+  `web/tests/action-proposals.test.tsx`, `PROGRESS.md`, `docs/CHANGELOG.md`,
+  `docs/TODO.md`. Checks: targeted action API tests **25 passed**, `npm test`
+  **119 passed**, `npm run typecheck`, `npm run lint`, `npm run build`,
+  `uv run ruff check .`, docs tests **16 passed**, `uv run pytest -q`
+  **403 passed / 1 warning**, `git diff --check`, tracked/staged secret scans
+  green. Commit local-only; push не делался.
+
 - `2026-07-02` — **Bulk local review hardening (partial-failure safety).**
   Проверка предыдущего bulk-review куска выявила data-loss баг: массовое
   approve/reject использовало fail-fast `Promise.all`, и при частичном сбое
@@ -336,7 +360,7 @@ DONE строго = есть код + проходящий тест/рабочи
   независимо, успешные локальные переходы всегда мержатся в state, из выбора
   снимаются только успешные (неуспешные остаются выбранными для повторной
   попытки), а частичный/полный сбой показывается inline без скрытия списка.
-  Добавлен чистый экспортируемый `summarizeBulkOutcome` + behavioral тесты и
+  Добавлен чистый экспортируемый bulk summary helper + behavioral тесты и
   inline-alert рендер-тест. Provider execution, external writes и LLM
   по-прежнему не запускаются. Изменены
   `web/components/ActionProposalsPanel.tsx`, `web/lib/messages.ts`,

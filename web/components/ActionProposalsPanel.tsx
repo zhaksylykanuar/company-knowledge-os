@@ -4,6 +4,8 @@ import { type FormEvent, useEffect, useState } from "react";
 
 import {
   approveActionProposal,
+  bulkApproveActionProposals,
+  bulkRejectActionProposals,
   createActionProposal,
   fetchActionProposals,
   rejectActionProposal
@@ -12,9 +14,9 @@ import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   ActionProposal,
+  ActionProposalBulkResponse,
   ActionProposalEvidenceRef,
   ActionProposalListResponse,
-  ActionProposalMutationResponse,
   ActionProposalType,
   ActionTargetProvider
 } from "../lib/types";
@@ -288,34 +290,23 @@ export function ActionProposalsPanel() {
     setSuccessMessage(null);
     setPendingMutation(mutation);
     try {
-      // Bulk transitions are independent local DB mutations. Use allSettled so a
-      // single failure (e.g. a proposal already transitioned elsewhere) never
-      // discards the local updates the backend already applied for the ones that
-      // succeeded.
-      const settled = await Promise.all(
-        proposalsToMutate.map((proposal) =>
-          (mutation === "bulk-approve"
-            ? approveActionProposal(workspaceId, proposal.id)
-            : rejectActionProposal(workspaceId, proposal.id, {
-                reason: M.actionsPanel.rejectReason
-              })
-          )
-            .then((response) => ({ id: proposal.id, ok: true as const, response }))
-            .catch((caught: unknown) => ({
-              id: proposal.id,
-              ok: false as const,
-              message:
-                caught instanceof Error ? caught.message : M.common.requestFailed
-            }))
-        )
-      );
-      const outcome = summarizeBulkOutcome(settled);
+      const proposalIds = proposalsToMutate.map((proposal) => proposal.id);
+      const response =
+        mutation === "bulk-approve"
+          ? await bulkApproveActionProposals(workspaceId, {
+              proposal_ids: proposalIds
+            })
+          : await bulkRejectActionProposals(workspaceId, {
+              proposal_ids: proposalIds,
+              reason: M.actionsPanel.rejectReason
+            });
+      const outcome = summarizeBulkResponse(response);
       if (outcome.succeeded.length > 0) {
         setData((current) =>
           mergeUpdatedProposals(
             current,
-            outcome.succeeded.map((entry) => entry.response.proposal),
-            outcome.succeeded.flatMap((entry) => entry.response.warnings)
+            outcome.succeeded,
+            response.warnings
           )
         );
       }
@@ -1317,31 +1308,22 @@ function isBulkMutationPending(pendingMutation: PendingMutation): boolean {
   return pendingMutation === "bulk-approve" || pendingMutation === "bulk-reject";
 }
 
-type BulkMutationSettled =
-  | { id: string; ok: true; response: ActionProposalMutationResponse }
-  | { id: string; ok: false; message: string };
-
 type BulkOutcome = {
-  succeeded: { id: string; response: ActionProposalMutationResponse }[];
+  succeeded: ActionProposal[];
   failed: { id: string; message: string }[];
   succeededIds: string[];
   firstFailureMessage: string | null;
 };
 
-function summarizeBulkOutcome(results: BulkMutationSettled[]): BulkOutcome {
-  const succeeded: { id: string; response: ActionProposalMutationResponse }[] = [];
-  const failed: { id: string; message: string }[] = [];
-  for (const result of results) {
-    if (result.ok) {
-      succeeded.push({ id: result.id, response: result.response });
-    } else {
-      failed.push({ id: result.id, message: result.message });
-    }
-  }
+function summarizeBulkResponse(response: ActionProposalBulkResponse): BulkOutcome {
+  const failed = response.failures.map((failure) => ({
+    id: failure.proposal_id,
+    message: failure.detail
+  }));
   return {
-    succeeded,
+    succeeded: response.proposals,
     failed,
-    succeededIds: succeeded.map((entry) => entry.id),
+    succeededIds: response.proposals.map((proposal) => proposal.id),
     firstFailureMessage: failed[0]?.message ?? null
   };
 }
@@ -1500,4 +1482,4 @@ function payloadStringList(
   );
 }
 
-export { DEFAULT_CREATE_FORM, summarizeBulkOutcome };
+export { DEFAULT_CREATE_FORM, summarizeBulkResponse };
