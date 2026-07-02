@@ -380,19 +380,7 @@ export function ActionExecutionControlsView({
       ) : null}
 
       {displayedAuditEvents.length > 0 ? (
-        <ul className="meta-list" aria-label={T.executionAuditFor(proposal.title)}>
-          {displayedAuditEvents.map((event) => (
-            <li key={event.id}>
-              {event.event_type}: {event.message} ({event.created_at})
-              {event.status === "blocked" || event.external_result_id === null
-                ? M.actionExecution.auditNoExternalWrite
-                : ""}
-              {event.event_type.startsWith("execution_")
-                ? M.actionExecution.auditRecorded
-                : ""}
-            </li>
-          ))}
-        </ul>
+        <AuditEventList events={displayedAuditEvents} proposalTitle={proposal.title} />
       ) : null}
 
       {preview?.warnings.length ? (
@@ -402,6 +390,64 @@ export function ActionExecutionControlsView({
           ))}
         </ul>
       ) : null}
+    </section>
+  );
+}
+
+function AuditEventList({
+  events,
+  proposalTitle
+}: {
+  events: ActionExecutionAuditEvent[];
+  proposalTitle: string;
+}) {
+  return (
+    <section className="work-section" aria-label={T.executionAuditFor(proposalTitle)}>
+      <h3>{M.actionExecution.auditTitle}</h3>
+      <div className="work-list">
+        {events.map((event) => (
+          <article className="work-item" key={event.id}>
+            <div className="work-item-main">
+              <span className="badge">{event.status}</span>
+              <h4>{event.event_type}</h4>
+            </div>
+            <p className="muted">{event.message}</p>
+            <dl className="work-meta">
+              <div>
+                <dt>{M.actionExecution.auditCreated}</dt>
+                <dd>{event.created_at}</dd>
+              </div>
+              <div>
+                <dt>{M.actionExecution.auditActor}</dt>
+                <dd>{event.actor}</dd>
+              </div>
+              <div>
+                <dt>{M.actionExecution.auditProvider}</dt>
+                <dd>{event.provider ?? M.common.none}</dd>
+              </div>
+              <div>
+                <dt>{M.actionExecution.auditAction}</dt>
+                <dd>{event.action ?? M.common.none}</dd>
+              </div>
+              <div>
+                <dt>{M.actionExecution.auditExternalWrite}</dt>
+                <dd>{event.external_result_id ? M.actionsPanel.executionReported : M.common.none}</dd>
+              </div>
+            </dl>
+            {event.external_result_url ? (
+              <SourceLink url={event.external_result_url}>
+                {M.actionExecution.openGithubIssue}
+              </SourceLink>
+            ) : null}
+            {event.external_result_id === null ? (
+              <p className="muted">{M.actionExecution.auditNoExternalWrite.trim()}</p>
+            ) : null}
+            {event.event_type.startsWith("execution_") ? (
+              <p className="muted">{M.actionExecution.auditRecorded.trim()}</p>
+            ) : null}
+          </article>
+        ))}
+      </div>
     </section>
   );
 }

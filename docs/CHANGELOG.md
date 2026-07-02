@@ -50,6 +50,9 @@
 - Added local status filters to the ActionProposals review panel so proposed,
   approved, rejected, and all local proposals can be reviewed without extra
   provider calls or backend state changes.
+- Reworked the action execution audit UI into a structured local timeline with
+  status, event, provider/action, timestamp, and external-write boundary per
+  event, keeping raw provider payloads hidden.
 
 ## 2026-06-30
 

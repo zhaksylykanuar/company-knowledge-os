@@ -352,6 +352,9 @@ test("renders approved previewable state and dry-run preview details", () => {
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /FounderOS follow-up/);
   assert.ok(html.includes(M.actionExecution.externalDisabled));
+  assert.ok(html.includes(M.actionExecution.auditTitle));
+  assert.ok(html.includes(M.actionExecution.auditProvider));
+  assert.ok(html.includes(M.actionExecution.auditExternalWrite));
   assert.match(html, /execution_preview_generated/);
   assert.ok(html.includes(M.actionExecution.auditRecorded));
   assert.ok(html.includes(T.evidenceAttached(1)));
@@ -375,6 +378,7 @@ test("renders persisted audit events and local receipt", () => {
   });
   assert.ok(html.includes(M.actionExecution.receiptLabel));
   assert.ok(html.includes(M.actionExecution.receiptProviderResult));
+  assert.ok(html.includes(M.actionExecution.auditTitle));
   assert.match(html, /none/);
   assert.match(html, /execution_confirmation_received_but_disabled/);
   assert.ok(html.includes(M.actionExecution.auditNoExternalWrite));

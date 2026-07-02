@@ -47,6 +47,11 @@
   Фильтр работает только по уже загруженным local proposals, не делает provider
   calls, не меняет backend state и помогает разбирать `internal_todo` proposals,
   созданные из briefing evidence.
+- **Action execution audit readability (НОВОЕ):** `ActionExecutionControls`
+  теперь показывает audit events как структурированный локальный timeline
+  (status/event/message/provider/action/external write) вместо плотной строки.
+  No-write boundary отображается на уровне audit event; provider writes по-прежнему
+  не запускаются без отдельного live execution path/confirmation.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo

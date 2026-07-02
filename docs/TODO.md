@@ -48,6 +48,8 @@ Implemented foundations:
 - ActionProposals review now has local status filters/counts for proposed,
   approved, rejected, and all proposals; filtering does not call providers or
   mutate backend state.
+- Action execution audit events render as structured local timeline entries with
+  explicit external-write boundary and no raw provider payload dumps.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -80,9 +82,9 @@ Done when:
 
 1. **Action review polish (local approval only).**
    Briefing items can now create local `internal_todo` proposals with evidence.
-   Local status filters are in place. Next: improve execution preview/audit
-   readability and evidence drawer defaults without provider writes or AI
-   generation.
+   Local status filters and structured execution audit timeline are in place.
+   Next: improve evidence drawer defaults and proposal grouping while keeping
+   provider writes and AI generation disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade
