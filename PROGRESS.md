@@ -330,6 +330,30 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-02` — **Independent verification of bulk ActionProposal API chunk.**
+  Re-derived requirements from objective (large local-only chunk, no external
+  writes, reads allowed, docs + green gates) and audited the just-committed bulk
+  review work against the real worktree instead of trusting the summary.
+  Confirmed: FastAPI route ordering is correct (`/proposals/bulk-approve` and
+  `/bulk-reject` are declared before the dynamic `/proposals/{proposal_id}`, so
+  `bulk-*` is never parsed as a UUID); `approve_action_proposal`/
+  `reject_action_proposal` raise not-found/transition errors before any DB
+  mutation, so a failed item in the bulk loop never corrupts the shared session
+  and the single final `commit()` persists only succeeded transitions; endpoints
+  keep `is_live=false`/`execution_started=false` and never call providers/LLM;
+  `summarizeBulkOutcome`→`summarizeBulkResponse` rename has no stale references;
+  `mergeUpdatedProposals` (array) powers the bulk path while singular per-card
+  approve/reject stay intact. Test boundary is intentional: harness uses
+  `renderToStaticMarkup` with no jsdom, so container handlers are covered
+  indirectly via the pure `summarizeBulkResponse`, the API client tests, and the
+  backend endpoint tests; adding a stateful container test would require new
+  jsdom/testing-library infra (flagged, intentionally not added to avoid scope
+  creep). Independently re-ran gates: `npm test` **119 passed**,
+  `npm run typecheck`, `npm run lint`, `npm run build`, `uv run ruff check .`,
+  docs tests **16 passed**, `uv run pytest -q` **403 passed / 1 warning**,
+  `git diff --check`, tracked/staged secret scans green; working tree clean,
+  branch ahead 11, nothing pushed. No external writes performed.
+
 - `2026-07-02` — **Bulk ActionProposal backend endpoints.** Добавлен local-only
   backend contract for bulk review:
   `POST /api/v1/workspaces/{workspace_id}/actions/proposals/bulk-approve` and
