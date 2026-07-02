@@ -35,6 +35,10 @@
   shows the configured organization's repositories instead of retained
   source-event or legacy fallback rows; the helper reads only the non-secret
   target-org setting from env files and does not read or print GitHub tokens.
+- Added a dashboard Source Coverage panel backed by the existing Company Brain
+  endpoint. It summarizes canonical repository/work/evidence counts and clearly
+  labels live provider reads and LLM generation as deferred/off without making
+  provider calls or AI calls.
 
 ## 2026-06-30
 

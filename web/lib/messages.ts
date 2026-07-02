@@ -499,6 +499,57 @@ export const M = {
     placeholder: "Выберите источник, чтобы увидеть провайдера, источник, запись и URL."
   },
 
+  sourceCoverage: {
+    eyebrow: "Покрытие источников",
+    title: "Что FounderOS уже знает",
+    badgeDeterministic: "Без ИИ / без provider calls",
+    loading: "Загрузка покрытия источников",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — покрытие источников недоступно.",
+    unavailableTitle: "Покрытие источников недоступно",
+    unavailableDescription: "Панель не смогла загрузить покрытие источников.",
+    emptyTitle: "Источники ещё не загружены",
+    emptyDescription:
+      "В этом рабочем пространстве пока нет канонических записей. Подготовьте локальную поверхность источников или запустите подтверждённую read-only синхронизацию позже.",
+    intro:
+      "Сводка показывает только уже сохранённые канонические данные рабочего пространства. Живые provider-запросы и LLM здесь не запускаются.",
+    summaryLabel: "Сводка покрытия источников",
+    repositoriesTitle: "Repo",
+    repositoriesDescription:
+      "Канонические GitHub-репозитории, уже сохранённые в рабочем пространстве.",
+    workTitle: "Работа",
+    workDescription: "Открытые задачи и PR из канонического GitHub-пути.",
+    evidenceTitle: "Evidence",
+    evidenceDescription: "Источник-ссылки, возвращённые для текущей выборки Company Brain.",
+    modeTitle: "Режим",
+    modeDescription: "Текущий экран читает локальную БД и не делает live provider calls.",
+    modeLive: "Live",
+    modeLocal: "Local DB",
+    detailsLabel: "Детали покрытия источников",
+    detailsTitle: "Статус источников",
+    repositoriesLabel: "GitHub репозитории",
+    repositoriesEmpty: "Канонические repo rows пока отсутствуют.",
+    liveProviderLabel: "Живой провайдер",
+    liveProviderEnabledDescription:
+      "Backend capability сообщает, что live provider sync доступен, но этот экран сам его не запускает.",
+    liveProviderDeferredDescription:
+      "Real GitHub provider read отложен и запускается только отдельным подтверждённым действием.",
+    llmLabel: "LLM / AI",
+    llmEnabledDescription:
+      "Capability включён, но этот экран не генерирует текст и не мутирует данные через LLM.",
+    llmOffDescription:
+      "LLM briefing/extraction сейчас выключены; экран полностью детерминированный.",
+    evidenceLabel: "Evidence refs",
+    evidenceEmpty:
+      "Для текущей выборки Company Brain отдельные source refs не вернулись; unsupported claims не добавляются.",
+    statusReady: "Готово",
+    statusEmpty: "Пусто",
+    statusDeferred: "Отложено",
+    statusEnabled: "Включено",
+    statusOff: "Выключено",
+    statusNeedsEvidence: "Нужно evidence"
+  },
+
   companyBrain: {
     eyebrow: "Мозг компании",
     title: "Состояние GitHub, подтверждённое источниками",
@@ -594,6 +645,12 @@ export const T = {
     `Последняя активность: ${value}.`,
   githubAppLiveSyncResult: (repos: number, issues: number, prs: number, status: string) =>
     `Синхронизировано через GitHub App: репозиториев — ${repos}, задач — ${issues}, пулреквестов — ${prs}. Статус: ${status}.`,
+  sourceCoverageWork: (issues: number, prs: number) =>
+    `${issues} задач / ${prs} PR`,
+  sourceCoverageRepositoriesReady: (count: number) =>
+    `Каноническая поверхность GitHub готова: ${count} repo rows в локальной БД.`,
+  sourceCoverageEvidenceReady: (count: number) =>
+    `Для текущей выборки возвращено evidence refs: ${count}.`,
   connectionNotReady: (status: string) =>
     `Запись в бэкенде в статусе ${status}. Локальная нормализация требует подключённой записи GitHub.`,
   syncResultCounts: (repos: number, issues: number, prs: number, status: string) =>

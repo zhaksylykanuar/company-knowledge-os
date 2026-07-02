@@ -20,8 +20,16 @@
   показывает canonical org repo rows для `qtwin-io` из `.local/repos.json`
   (25 repos), а не retained source-event/legacy fallbacks; live read-only check
   по org env keys подтвердил тот же count без вывода секретов. Следующий лучший
-  продуктовый шаг — первый GitHub App real-provider read run только после
-  отдельного human approval.
+  продуктовый шаг — усилить Founder-facing сводку/coverage поверх уже
+  загруженных canonical данных; первый GitHub App real-provider read run — только
+  после отдельного human approval.
+- **Dashboard Source Coverage (НОВОЕ):** добавлен `SourceCoveragePanel` на
+  `/dashboard`, который использует существующий Company Brain endpoint и
+  показывает, что уже известно рабочему пространству: canonical repo count,
+  open issue/PR count, evidence refs, local/live mode, live-provider deferred
+  status и LLM off status. Панель не делает provider calls, не запускает LLM и
+  не обещает live sync; copy централизован в `web/lib/messages.ts`, тесты
+  проверяют states and no live/AI overclaim.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo

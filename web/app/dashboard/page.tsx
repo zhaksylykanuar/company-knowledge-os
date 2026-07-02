@@ -9,6 +9,7 @@ import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWo
 import { GitHubSyncControls } from "../../components/GitHubSyncControls";
 import { PageHeader } from "../../components/PageHeader";
 import { SelectedRepositorySyncControls } from "../../components/SelectedRepositorySyncControls";
+import { SourceCoveragePanel } from "../../components/SourceCoveragePanel";
 import { StatusCard } from "../../components/StatusCard";
 import { M } from "../../lib/messages";
 import { useSession } from "../../lib/session";
@@ -58,6 +59,7 @@ export default function DashboardPage() {
       <SelectedRepositorySyncControls
         onSyncComplete={() => setOperationalWorkRefresh((current) => current + 1)}
       />
+      <SourceCoveragePanel refreshSignal={operationalWorkRefresh} />
       <CompanyBrainPanel refreshSignal={operationalWorkRefresh} />
       <BriefingPanel />
       <ActionProposalsPanel />

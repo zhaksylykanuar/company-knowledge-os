@@ -194,6 +194,11 @@ textarea {
   gap: 16px;
 }
 
+.source-coverage {
+  display: grid;
+  gap: 16px;
+}
+
 .briefing-panel {
   display: grid;
   gap: 16px;

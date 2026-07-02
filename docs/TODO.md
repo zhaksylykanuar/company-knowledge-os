@@ -39,20 +39,19 @@ Implemented foundations:
   workspace B cannot see workspace A's synced canonical state/evidence. Safe
   provider error/rate-limit details surface HTTP status/message/retry metadata
   without leaking tokens or provider payloads.
-- Deterministic Company Brain and persisted deterministic Founder Briefings with
+- Deterministic Company Brain, dashboard Source Coverage over the existing
+  Company Brain endpoint, and persisted deterministic Founder Briefings with
   history and evidence refs. No LLM generation is currently implemented.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
-## Next Priority: GitHub App Real Read Run Readiness
+## Next Priority: Founder-facing coverage and briefing polish
 
-Rationale: the workspace is mostly empty until a real data source is connected.
-Do not spend the next feature slice on an LLM briefing over fixture/empty data.
-The GitHub App backend + product UI sync foundation now exists, mocked synced
-evidence is verified across Company Brain/Briefings, and safe live-read
-error/rate-limit details are exposed. Next, perform the first real read run only
-after explicit human approval, then add LLM narrative on top of validated
-records.
+Rationale: GitHub source foundation is sufficient for this phase and real
+provider reads are intentionally deferred until explicit human approval. The next
+slice should make the already-loaded canonical data more useful to the founder:
+clear source coverage, deterministic briefing polish, and next-step visibility
+without adding provider calls or LLM generation yet.
 
 Done when:
 
@@ -62,8 +61,8 @@ Done when:
 - DEC-053 remains the live-sync v0 decision: polling-only, admin-triggered,
   explicit repository scope; webhooks deferred until raw-body signature
   verification and delivery dedupe exist.
-- Repository selection/scope is minimal and read-only by default; do not add a
-  "sync everything" control.
+- Repository selection/scope stays minimal and read-only by default; do not add a
+  "sync everything" control while GitHub is deferred.
 - Sync writes through the existing idempotent normalization/upsert path.
 - Two-workspace isolation tests cover connection, sync, briefing, and evidence
   dereference behavior. ✅ covered for mocked GitHub App live sync.
@@ -73,21 +72,21 @@ Done when:
 
 ## Near-Term Backlog
 
-1. **GitHub App real read run readiness.**
-   Backend polling-only live read sync, `/github` explicit repo control, and
-   mocked synced-evidence isolation tests are in place; safe rate-limit/error
-   observability is in place. Next: run the first real scoped read sync only
-   after explicit human approval.
+1. **Briefings/Company Brain polish over canonical data.**
+   Source Coverage now shows what the workspace already knows. Next: make the
+   persisted deterministic briefing read this state more clearly and surface
+   founder-friendly next steps without adding LLM/provider calls.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade
    head`, smoke. Do not add auto-deploy or provider-write smoke without explicit
    human approval.
 
-3. **Briefings Chunk 2: LLM narrative over real evidence.**
-   Add only after real connected data exists. LLM output must be strict JSON,
-   schema-validated, evidence-backed, and persisted only after deterministic
-   validation. LLMs must not mutate production data or call providers.
+3. **GitHub App real read run readiness (deferred).**
+   Backend polling-only live read sync, `/github` explicit repo control, and
+   mocked synced-evidence isolation tests are in place; safe rate-limit/error
+   observability is in place. Run the first real scoped read sync only after
+   explicit human approval.
 
 4. **Multi-user / teammate provisioning.**
    Add invite/provisioning flow after single-founder auth/session behavior is
