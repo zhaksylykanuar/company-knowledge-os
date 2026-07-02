@@ -388,6 +388,17 @@ export const M = {
     originFilterBriefing: "Из сводки",
     originFilterGithub: "GitHub задачи",
     originFilterInternal: "Internal todo",
+    bulkTitle: "Массовая локальная проверка",
+    bulkLabel: "Массовые локальные действия с предложениями",
+    bulkDescription:
+      "Выбор применяется только к видимым предложениям в статусе «Нужно решение». Массовое действие меняет локальный статус и не запускает внешнее выполнение.",
+    bulkSelectVisible: "Выбрать видимые ожидающие",
+    bulkClearSelection: "Снять выбор",
+    bulkApproveSelected: "Одобрить выбранные локально",
+    bulkApproving: "Одобрение выбранных",
+    bulkRejectSelected: "Отклонить выбранные локально",
+    bulkRejecting: "Отклонение выбранных",
+    bulkSelectProposal: "Выбрать для локальной проверки",
     listTitle: "Локальные предложения",
     noProposals: "Бэкенд не вернул предложений.",
     noProposalsForFilter: "Для выбранного фильтра локальных предложений нет.",
@@ -686,6 +697,12 @@ export const T = {
   actionsCapability: () =>
     "Локальное одобрение: доступно. Внешнее выполнение: отключено в этом интерфейсе. " +
     "Живые записи у провайдера: здесь не запускаются. Генерация ИИ: здесь не используется.",
+  actionsBulkSelection: (selected: number, visible: number) =>
+    `Выбрано: ${selected}. Видимых ожидающих: ${visible}.`,
+  actionsBulkApproveSuccess: (count: number) =>
+    `Локально одобрено выбранных предложений: ${count}. Внешнее выполнение не запускалось.`,
+  actionsBulkRejectSuccess: (count: number) =>
+    `Локально отклонено выбранных предложений: ${count}. Внешнее выполнение не запускалось.`,
   // GitHub work count-card descriptions
   workIssuesDescription: (state: string) =>
     `${state}: записи задач GitHub из канонического пути бэкенда.`,

@@ -13,7 +13,7 @@ import {
   fetchActionProposals,
   rejectActionProposal
 } from "../lib/api";
-import { M } from "../lib/messages";
+import { M, T } from "../lib/messages";
 import type {
   ActionProposal,
   ActionProposalListResponse,
@@ -184,10 +184,16 @@ function renderPanel(
       onReject={props.onReject}
       onRetry={props.onRetry}
       onOriginFilterChange={props.onOriginFilterChange}
+      onBulkApprove={props.onBulkApprove}
+      onBulkReject={props.onBulkReject}
+      onClearSelectedProposals={props.onClearSelectedProposals}
       onSelectEvidence={props.onSelectEvidence}
+      onSelectVisibleProposed={props.onSelectVisibleProposed}
       onStatusFilterChange={props.onStatusFilterChange}
+      onToggleProposalSelection={props.onToggleProposalSelection}
       pendingMutation={props.pendingMutation ?? null}
       originFilter={props.originFilter ?? "all"}
+      selectedProposalIds={props.selectedProposalIds ?? []}
       selectedEvidence={props.selectedEvidence ?? null}
       selectedEvidenceTitle={props.selectedEvidenceTitle ?? null}
       selectedEvidenceCount={props.selectedEvidenceCount ?? null}
@@ -486,6 +492,54 @@ test("origin filtering updates grouped evidence default without provider calls",
   assert.ok(internalHtml.includes(M.evidence.contextDefault));
   assert.doesNotMatch(internalHtml, /Review synced GitHub work before approving actions/);
   assert.doesNotMatch(internalHtml, /href="https:\/\/github.com\/qtwin-io\/founderos-api/);
+});
+
+test("renders bulk local review controls for visible proposed proposals only", () => {
+  const html = renderPanel({
+    data: groupedList,
+    onBulkApprove: () => undefined,
+    onBulkReject: () => undefined,
+    onClearSelectedProposals: () => undefined,
+    onSelectVisibleProposed: () => undefined,
+    onToggleProposalSelection: () => undefined,
+    statusFilter: "all"
+  });
+  assert.ok(html.includes(M.actionsPanel.bulkTitle));
+  assert.ok(html.includes(M.actionsPanel.bulkDescription));
+  assert.ok(html.includes(M.actionsPanel.bulkSelectVisible));
+  assert.ok(html.includes(M.actionsPanel.bulkApproveSelected));
+  assert.ok(html.includes(M.actionsPanel.bulkRejectSelected));
+  assert.ok(html.includes(T.actionsBulkSelection(0, 3)));
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /external write performed/i);
+  assert.doesNotMatch(html, /created GitHub issue/i);
+});
+
+test("bulk local review controls show selected counts and pending labels", () => {
+  const html = renderPanel({
+    data: groupedList,
+    pendingMutation: "bulk-approve",
+    selectedProposalIds: ["proposal-1", "proposal-4"],
+    statusFilter: "proposed"
+  });
+  assert.ok(html.includes(T.actionsBulkSelection(2, 3)));
+  assert.ok(html.includes(M.actionsPanel.bulkApproving));
+  assert.ok(html.includes(M.actionsPanel.bulkRejectSelected));
+  assert.match(html, /checked=""/);
+});
+
+test("bulk origin/status intersections select only currently visible proposed proposals", () => {
+  const html = renderPanel({
+    data: groupedList,
+    originFilter: "briefing",
+    selectedProposalIds: ["proposal-4"],
+    statusFilter: "proposed"
+  });
+  assert.ok(html.includes(T.actionsBulkSelection(1, 1)));
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 1);
+  assert.match(html, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(html, /Manual internal follow-up/);
+  assert.doesNotMatch(html, /Approved local proposal/);
 });
 
 test("defaults evidence drawer to first visible proposal evidence", () => {

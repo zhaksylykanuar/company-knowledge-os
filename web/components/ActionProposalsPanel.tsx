@@ -29,7 +29,13 @@ type ProposalKind = "github_issue" | "internal_todo";
 type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
 type ProposalOrigin = "briefing" | "github" | "internal";
 type ProposalOriginFilter = "all" | ProposalOrigin;
-type PendingMutation = "create" | `approve:${string}` | `reject:${string}` | null;
+type BulkMutation = "bulk-approve" | "bulk-reject";
+type PendingMutation =
+  | "create"
+  | BulkMutation
+  | `approve:${string}`
+  | `reject:${string}`
+  | null;
 type EvidenceSelection = {
   evidence: ActionProposalEvidenceRef;
   title: string;
@@ -66,14 +72,20 @@ type ActionProposalsPanelViewProps = {
   onRefreshProposals?: () => void;
   onRetry?: () => void;
   onOriginFilterChange?: (filter: ProposalOriginFilter) => void;
+  onBulkApprove?: () => void;
+  onBulkReject?: () => void;
+  onClearSelectedProposals?: () => void;
   onSelectEvidence?: (
     evidence: ActionProposalEvidenceRef,
     title: string,
     count?: number
   ) => void;
+  onSelectVisibleProposed?: () => void;
   onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
+  onToggleProposalSelection?: (proposalId: string) => void;
   pendingMutation: PendingMutation;
   originFilter?: ProposalOriginFilter;
+  selectedProposalIds?: string[];
   selectedEvidence: ActionProposalEvidenceRef | null;
   selectedEvidenceTitle?: string | null;
   selectedEvidenceCount?: number | null;
@@ -103,6 +115,7 @@ export function ActionProposalsPanel() {
     useState<ActionProposalEvidenceRef | null>(null);
   const [selectedEvidenceTitle, setSelectedEvidenceTitle] = useState<string | null>(null);
   const [selectedEvidenceCount, setSelectedEvidenceCount] = useState<number | null>(null);
+  const [selectedProposalIds, setSelectedProposalIds] = useState<string[]>([]);
   const [status, setStatus] = useState<PanelStatus>("loading");
   const [originFilter, setOriginFilter] = useState<ProposalOriginFilter>("all");
   const [statusFilter, setStatusFilter] = useState<ProposalStatusFilter>("proposed");
@@ -140,6 +153,17 @@ export function ActionProposalsPanel() {
       cancelled = true;
     };
   }, [workspaceId, reloadKey]);
+
+  useEffect(() => {
+    const visibleProposedIds = visibleProposedProposalIds(
+      data?.proposals ?? [],
+      statusFilter,
+      originFilter
+    );
+    setSelectedProposalIds((current) =>
+      pruneProposalSelection(current, visibleProposedIds)
+    );
+  }, [data, originFilter, statusFilter]);
 
   function updateCreateForm(
     field: keyof ActionProposalCreateFormState,
@@ -224,6 +248,76 @@ export function ActionProposalsPanel() {
     }
   }
 
+  function toggleProposalSelection(proposalId: string) {
+    setSelectedProposalIds((current) =>
+      current.includes(proposalId)
+        ? current.filter((existingId) => existingId !== proposalId)
+        : [...current, proposalId]
+    );
+  }
+
+  function selectVisibleProposed() {
+    setSelectedProposalIds(
+      visibleProposedProposalIds(data?.proposals ?? [], statusFilter, originFilter)
+    );
+  }
+
+  async function approveSelected() {
+    await mutateSelectedProposals("bulk-approve");
+  }
+
+  async function rejectSelected() {
+    await mutateSelectedProposals("bulk-reject");
+  }
+
+  async function mutateSelectedProposals(mutation: BulkMutation) {
+    if (!workspaceId) {
+      setStatus("missing");
+      return;
+    }
+    const proposalsToMutate = selectedProposalsForBulkMutation(
+      data?.proposals ?? [],
+      selectedProposalIds
+    );
+    if (proposalsToMutate.length === 0) {
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setPendingMutation(mutation);
+    try {
+      const responses = await Promise.all(
+        proposalsToMutate.map((proposal) =>
+          mutation === "bulk-approve"
+            ? approveActionProposal(workspaceId, proposal.id)
+            : rejectActionProposal(workspaceId, proposal.id, {
+                reason: M.actionsPanel.rejectReason
+              })
+        )
+      );
+      setData((current) =>
+        mergeUpdatedProposals(
+          current,
+          responses.map((response) => response.proposal),
+          responses.flatMap((response) => response.warnings)
+        )
+      );
+      setSelectedProposalIds([]);
+      setStatus("ready");
+      setSuccessMessage(
+        mutation === "bulk-approve"
+          ? T.actionsBulkApproveSuccess(responses.length)
+          : T.actionsBulkRejectSuccess(responses.length)
+      );
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
+      setStatus("error");
+    } finally {
+      setPendingMutation(null);
+    }
+  }
+
   return (
     <ActionProposalsPanelView
       createForm={createForm}
@@ -241,14 +335,20 @@ export function ActionProposalsPanel() {
       onRefreshProposals={() => setReloadKey((current) => current + 1)}
       onRetry={() => setReloadKey((current) => current + 1)}
       onOriginFilterChange={setOriginFilter}
+      onBulkApprove={approveSelected}
+      onBulkReject={rejectSelected}
+      onClearSelectedProposals={() => setSelectedProposalIds([])}
       onSelectEvidence={(evidence, title, count) => {
         setSelectedEvidence(evidence);
         setSelectedEvidenceTitle(title);
         setSelectedEvidenceCount(typeof count === "number" ? count : null);
       }}
+      onSelectVisibleProposed={selectVisibleProposed}
       onStatusFilterChange={setStatusFilter}
+      onToggleProposalSelection={toggleProposalSelection}
       pendingMutation={pendingMutation}
       originFilter={originFilter}
+      selectedProposalIds={selectedProposalIds}
       selectedEvidence={selectedEvidence}
       selectedEvidenceTitle={selectedEvidenceTitle}
       selectedEvidenceCount={selectedEvidenceCount}
@@ -271,10 +371,16 @@ export function ActionProposalsPanelView({
   onRefreshProposals,
   onRetry,
   onOriginFilterChange,
+  onBulkApprove,
+  onBulkReject,
+  onClearSelectedProposals,
   onSelectEvidence,
+  onSelectVisibleProposed,
   onStatusFilterChange,
+  onToggleProposalSelection,
   pendingMutation,
   originFilter = "all",
+  selectedProposalIds = [],
   selectedEvidence,
   selectedEvidenceTitle = null,
   selectedEvidenceCount = null,
@@ -288,6 +394,11 @@ export function ActionProposalsPanelView({
     statusFilteredProposals,
     originFilter
   );
+  const visibleProposedIds = proposedProposalIds(filteredProposals);
+  const visibleProposedCount = visibleProposedIds.length;
+  const selectedProposedCount = selectedProposalIds.filter((proposalId) =>
+    visibleProposedIds.includes(proposalId)
+  ).length;
   const groups = groupProposalsByOrigin(filteredProposals);
   const orderedProposals = groups.flatMap((group) => group.proposals);
   const defaultEvidenceSelection = firstEvidenceSelection(orderedProposals);
@@ -404,6 +515,16 @@ export function ActionProposalsPanelView({
             proposals={statusFilteredProposals}
           />
 
+          <BulkReviewControls
+            onApproveSelected={onBulkApprove}
+            onClearSelection={onClearSelectedProposals}
+            onRejectSelected={onBulkReject}
+            onSelectVisibleProposed={onSelectVisibleProposed}
+            pendingMutation={pendingMutation}
+            selectedCount={selectedProposedCount}
+            visibleProposedCount={visibleProposedCount}
+          />
+
           <section className="work-columns">
             <ProposalList
               groups={groups}
@@ -411,7 +532,9 @@ export function ActionProposalsPanelView({
               onReject={onReject}
               onRefreshProposals={onRefreshProposals}
               onSelectEvidence={onSelectEvidence}
+              onToggleProposalSelection={onToggleProposalSelection}
               pendingMutation={pendingMutation}
+              selectedProposalIds={selectedProposalIds}
               totalProposals={proposals.length}
               visibleProposals={filteredProposals.length}
             />
@@ -581,13 +704,83 @@ function ActionOriginFilter({
   );
 }
 
+function BulkReviewControls({
+  onApproveSelected,
+  onClearSelection,
+  onRejectSelected,
+  onSelectVisibleProposed,
+  pendingMutation,
+  selectedCount,
+  visibleProposedCount
+}: {
+  onApproveSelected?: () => void;
+  onClearSelection?: () => void;
+  onRejectSelected?: () => void;
+  onSelectVisibleProposed?: () => void;
+  pendingMutation: PendingMutation;
+  selectedCount: number;
+  visibleProposedCount: number;
+}) {
+  const bulkPending = isBulkMutationPending(pendingMutation);
+  const hasSelection = selectedCount > 0;
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.bulkLabel}>
+      <h3>{M.actionsPanel.bulkTitle}</h3>
+      <p className="muted">{M.actionsPanel.bulkDescription}</p>
+      <p className="muted">
+        {T.actionsBulkSelection(selectedCount, visibleProposedCount)}
+      </p>
+      <div className="actions-row">
+        <button
+          className="button secondary"
+          disabled={bulkPending || visibleProposedCount === 0}
+          onClick={onSelectVisibleProposed}
+          type="button"
+        >
+          {M.actionsPanel.bulkSelectVisible}
+        </button>
+        <button
+          className="button secondary"
+          disabled={bulkPending || !hasSelection}
+          onClick={onClearSelection}
+          type="button"
+        >
+          {M.actionsPanel.bulkClearSelection}
+        </button>
+        <button
+          className="button"
+          disabled={bulkPending || !hasSelection}
+          onClick={onApproveSelected}
+          type="button"
+        >
+          {pendingMutation === "bulk-approve"
+            ? M.actionsPanel.bulkApproving
+            : M.actionsPanel.bulkApproveSelected}
+        </button>
+        <button
+          className="button secondary"
+          disabled={bulkPending || !hasSelection}
+          onClick={onRejectSelected}
+          type="button"
+        >
+          {pendingMutation === "bulk-reject"
+            ? M.actionsPanel.bulkRejecting
+            : M.actionsPanel.bulkRejectSelected}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function ProposalList({
   groups,
   onApprove,
   onReject,
   onRefreshProposals,
   onSelectEvidence,
+  onToggleProposalSelection,
   pendingMutation,
+  selectedProposalIds,
   totalProposals,
   visibleProposals
 }: {
@@ -600,10 +793,13 @@ function ProposalList({
     title: string,
     count?: number
   ) => void;
+  onToggleProposalSelection?: (proposalId: string) => void;
   pendingMutation: PendingMutation;
+  selectedProposalIds: string[];
   totalProposals: number;
   visibleProposals: number;
 }) {
+  const bulkPending = isBulkMutationPending(pendingMutation);
   return (
     <section className="work-section" aria-label={M.actionsPanel.listTitle}>
       <h3>{M.actionsPanel.listTitle}</h3>
@@ -630,6 +826,12 @@ function ProposalList({
               {group.proposals.map((proposal) => (
                 <article className="work-item" key={proposal.id}>
                   <div className="work-item-main">
+                    <ProposalSelectionControl
+                      disabled={bulkPending}
+                      isSelected={selectedProposalIds.includes(proposal.id)}
+                      onToggle={onToggleProposalSelection}
+                      proposal={proposal}
+                    />
                     <span className="badge">{proposal.status}</span>
                     {group.origin === "briefing" ? (
                       <span className="badge badge-origin">
@@ -694,6 +896,33 @@ function ProposalList({
         ))}
       </div>
     </section>
+  );
+}
+
+function ProposalSelectionControl({
+  disabled,
+  isSelected,
+  onToggle,
+  proposal
+}: {
+  disabled: boolean;
+  isSelected: boolean;
+  onToggle?: (proposalId: string) => void;
+  proposal: ActionProposal;
+}) {
+  if (!isProposalProposed(proposal)) {
+    return null;
+  }
+  return (
+    <label className="proposal-selection">
+      <input
+        checked={isSelected}
+        disabled={disabled}
+        onChange={() => onToggle?.(proposal.id)}
+        type="checkbox"
+      />
+      <span>{M.actionsPanel.bulkSelectProposal}</span>
+    </label>
   );
 }
 
@@ -864,11 +1093,12 @@ function ProposalActions({
 
   const approvePending = pendingMutation === `approve:${proposal.id}`;
   const rejectPending = pendingMutation === `reject:${proposal.id}`;
+  const bulkPending = isBulkMutationPending(pendingMutation);
   return (
     <div className="actions-row">
       <button
         className="button"
-        disabled={approvePending || rejectPending}
+        disabled={approvePending || rejectPending || bulkPending}
         onClick={() => onApprove?.(proposal.id)}
         type="button"
       >
@@ -876,7 +1106,7 @@ function ProposalActions({
       </button>
       <button
         className="button secondary"
-        disabled={approvePending || rejectPending}
+        disabled={approvePending || rejectPending || bulkPending}
         onClick={() => onReject?.(proposal.id)}
         type="button"
       >
@@ -974,8 +1204,74 @@ function mergeUpdatedProposal(
   };
 }
 
+function mergeUpdatedProposals(
+  current: ActionProposalListResponse | null,
+  proposals: ActionProposal[],
+  warnings: string[]
+): ActionProposalListResponse | null {
+  if (!current) {
+    return null;
+  }
+  const updates = new Map(proposals.map((proposal) => [proposal.id, proposal]));
+  return {
+    ...current,
+    proposals: current.proposals.map((existing) => updates.get(existing.id) ?? existing),
+    warnings
+  };
+}
+
 function countByStatus(proposals: ActionProposal[], status: string): number {
   return proposals.filter((proposal) => proposal.status === status).length;
+}
+
+function isProposalProposed(proposal: ActionProposal): boolean {
+  return proposal.status === "proposed";
+}
+
+function proposedProposalIds(proposals: ActionProposal[]): string[] {
+  return proposals.filter(isProposalProposed).map((proposal) => proposal.id);
+}
+
+function visibleProposedProposalIds(
+  proposals: ActionProposal[],
+  statusFilter: ProposalStatusFilter,
+  originFilter: ProposalOriginFilter
+): string[] {
+  return proposedProposalIds(
+    filterProposalsByOrigin(
+      filterProposalsByStatus(proposals, statusFilter),
+      originFilter
+    )
+  );
+}
+
+function pruneProposalSelection(
+  proposalIds: string[],
+  visibleProposedIds: string[]
+): string[] {
+  const next = proposalIds.filter((proposalId) =>
+    visibleProposedIds.includes(proposalId)
+  );
+  if (
+    next.length === proposalIds.length &&
+    next.every((proposalId, index) => proposalId === proposalIds[index])
+  ) {
+    return proposalIds;
+  }
+  return next;
+}
+
+function selectedProposalsForBulkMutation(
+  proposals: ActionProposal[],
+  proposalIds: string[]
+): ActionProposal[] {
+  return proposals.filter(
+    (proposal) => proposalIds.includes(proposal.id) && isProposalProposed(proposal)
+  );
+}
+
+function isBulkMutationPending(pendingMutation: PendingMutation): boolean {
+  return pendingMutation === "bulk-approve" || pendingMutation === "bulk-reject";
 }
 
 function filterProposalsByStatus(

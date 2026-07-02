@@ -62,6 +62,11 @@ Implemented foundations:
   briefing-derived, GitHub issue, internal todo) composed with the existing
   status filter. Counts are computed within the current status focus and no
   provider calls, backend mutations, external writes, or LLM calls are started.
+- ActionProposals review has bulk local review controls for visible `proposed`
+  proposals in the current status/origin filter intersection: select visible,
+  clear selection, approve selected locally, or reject selected locally. Hidden,
+  approved, and rejected proposals are not selected or mutated; provider
+  execution and external writes remain disabled.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -98,8 +103,10 @@ Done when:
    Evidence drawer defaults, origin grouping (briefing/GitHub/internal) with an
    origin badge, briefing `internal_todo` payload detail, and evidence
    drawer default-vs-manual context + evidence-ref count are in place. A local
-   origin filter now composes with the status filter. Next: consider bulk local
-   review actions while keeping provider writes and AI generation disabled.
+   origin filter now composes with the status filter, and bulk local approve/
+   reject controls are available for visible `proposed` proposals. Next: polish
+   post-bulk review feedback/history if needed while keeping provider writes and
+   AI generation disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

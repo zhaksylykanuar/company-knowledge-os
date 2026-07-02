@@ -23,6 +23,12 @@
   current status focus, and the evidence drawer default follows the final
   visible result set without provider calls, backend mutations, external writes,
   or LLM calls.
+- Added bulk local ActionProposal review controls. Users can select all visible
+  `proposed` proposals in the current status/origin filter intersection, clear
+  the selection, and locally approve or reject the selected proposals through the
+  existing local ActionProposal endpoints. Selection is pruned to visible
+  `proposed` items so hidden, approved, or rejected proposals are not mutated by
+  accident; provider execution, external writes, and LLM calls are not started.
 
 ## 2026-07-01
 

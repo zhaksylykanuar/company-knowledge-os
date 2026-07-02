@@ -249,6 +249,15 @@ textarea {
   margin: 0;
 }
 
+.proposal-selection {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 13px;
+  gap: 6px;
+  justify-self: start;
+}
+
 .badge-origin {
   background: var(--warning-soft);
   color: var(--warning);

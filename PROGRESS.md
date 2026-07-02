@@ -76,6 +76,14 @@
   видимой выборки. Фильтр работает только на уже загруженном local list, не
   делает backend provider calls, не мутирует state и не запускает external
   execution/LLM.
+- **Action proposal bulk local review (НОВОЕ):** добавлены массовые локальные
+  действия в `ActionProposalsPanel`: выбрать все видимые `proposed` предложения
+  в текущем пересечении status/origin фильтров, снять выбор, локально одобрить
+  выбранные или локально отклонить выбранные. Selection intentionally pruned to
+  visible `proposed` proposals so hidden/approved/rejected карточки не
+  затрагиваются случайно. Bulk approve/reject использует существующие локальные
+  ActionProposal endpoints, меняет только local DB state and never starts
+  provider execution, external writes, or LLM.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
@@ -313,6 +321,22 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-02` — **Action review polish: bulk local review.** Добавлены
+  массовые локальные действия в `ActionProposalsPanel`: выбрать все видимые
+  `proposed` предложения в текущем пересечении status/origin фильтров, снять
+  выбор, локально одобрить выбранные или локально отклонить выбранные. Selection
+  автоматически ограничен видимыми `proposed` proposals, поэтому скрытые,
+  approved/rejected карточки не мутируются случайно. Bulk approve/reject
+  вызывает только существующие local ActionProposal approve/reject endpoints,
+  не запускает provider execution, external writes или LLM; success copy явно
+  сообщает, что внешнее выполнение не запускалось. Изменены
+  `web/components/ActionProposalsPanel.tsx`, `web/lib/messages.ts`,
+  `web/app/globals.css`, `web/tests/action-proposals.test.tsx`, `PROGRESS.md`,
+  `docs/CHANGELOG.md`, `docs/TODO.md`. Checks: `npm test` **115 passed**,
+  `npm run typecheck`, `npm run lint`, `npm run build`,
+  `uv run ruff check .`, `uv run pytest -q`, docs tests, `git diff --check`,
+  tracked/staged secret scans green. Commit local-only; push не делался.
 
 - `2026-07-02` — **Action review polish: local origin filter.** Добавлен второй
   фильтр в `ActionProposalsPanel`: «Источник предложения» (все источники / из
