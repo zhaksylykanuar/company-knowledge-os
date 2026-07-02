@@ -61,6 +61,11 @@
   evidence ref from the visible items with briefing-specific context and counts.
   Manual evidence selection still overrides the default. No provider calls,
   external writes, or LLM calls are started.
+- Enriched the Founder Briefing history cards with local coverage summaries and
+  deltas against the currently open briefing. History now shows repo/work/evidence
+  coverage and local/live mode per saved summary, plus item/evidence deltas when
+  a briefing is open. This uses only the already-loaded persisted briefing
+  summaries and starts no provider calls, external writes, or LLM calls.
 
 ## 2026-07-01
 

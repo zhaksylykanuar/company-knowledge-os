@@ -348,7 +348,10 @@ export const M = {
     failed: "Не удалось загрузить историю сводок.",
     open: "Открыть",
     current: "Открыта",
-    itemsLabel: "пунктов"
+    itemsLabel: "пунктов",
+    coverageLabel: "Coverage",
+    deltaLabel: "Изменение к открытой",
+    noDelta: "Откройте сводку, чтобы сравнить историю."
   },
 
   actionsPage: {
@@ -689,6 +692,16 @@ export const T = {
   // Briefing history entry meta: "<n> пунктов · <when>"
   briefingHistoryMeta: (count: number, when: string) =>
     `${count} ${M.briefingHistory.itemsLabel} · ${when}`,
+  briefingHistoryCoverage: (
+    repos: number,
+    issues: number,
+    prs: number,
+    evidence: number,
+    mode: string
+  ) =>
+    `${repos} repo · ${issues} задач / ${prs} PR · evidence ${evidence} · ${mode}`,
+  briefingHistoryDelta: (itemsDelta: number, evidenceDelta: number) =>
+    `Пункты ${formatSignedDelta(itemsDelta)} · evidence ${formatSignedDelta(evidenceDelta)}`,
   // Briefing capability line
   briefingCapability: (ai: boolean, live: boolean) =>
     `Ручная детерминированная сводка. Сводка ИИ: ${ai ? M.common.enabled : M.common.notEnabled}. ` +
@@ -768,3 +781,10 @@ export const T = {
   selectedPrRepoDetail: (prs: number, open: number, closed: number, merged: number) =>
     `пулреквестов — ${prs} (открытых ${open} / закрытых ${closed} / слитых ${merged})`
 } as const;
+
+function formatSignedDelta(value: number): string {
+  if (value > 0) {
+    return `+${value}`;
+  }
+  return String(value);
+}

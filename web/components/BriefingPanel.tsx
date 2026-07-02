@@ -36,6 +36,11 @@ type BriefingEvidenceSelection = {
   title: string;
   count: number;
 };
+type BriefingHistoryReference = {
+  id: string;
+  itemCount: number;
+  evidenceRefs: number;
+};
 
 type BriefingPanelViewProps = {
   actionError?: string | null;
@@ -395,6 +400,7 @@ export function BriefingPanelView({
           activeBriefingId={activeBriefingId}
           history={history}
           onOpenBriefing={onOpenBriefing}
+          reference={briefing ? briefingHistoryReferenceFromBriefing(briefing) : null}
         />
       ) : null}
     </section>
@@ -404,11 +410,13 @@ export function BriefingPanelView({
 function BriefingHistorySection({
   activeBriefingId,
   history,
-  onOpenBriefing
+  onOpenBriefing,
+  reference
 }: {
   activeBriefingId: string | null;
   history: BriefingSummary[];
   onOpenBriefing?: (briefingId: string) => void;
+  reference?: BriefingHistoryReference | null;
 }) {
   return (
     <section className="work-section briefing-history" aria-label={M.briefingHistory.title}>
@@ -426,6 +434,26 @@ function BriefingHistorySection({
               <p className="muted">
                 {T.briefingHistoryMeta(entry.item_count, entry.created_at)}
               </p>
+              <dl className="work-meta">
+                <div>
+                  <dt>{M.briefingHistory.coverageLabel}</dt>
+                  <dd>
+                    {T.briefingHistoryCoverage(
+                      entry.signals.coverage.canonical_repositories,
+                      entry.signals.coverage.open_issues,
+                      entry.signals.coverage.open_pull_requests,
+                      entry.signals.coverage.evidence_refs,
+                      entry.signals.coverage.is_live
+                        ? M.briefingPanel.modeLive
+                        : M.briefingPanel.modeLocal
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{M.briefingHistory.deltaLabel}</dt>
+                  <dd>{briefingHistoryDeltaText(entry, reference)}</dd>
+                </div>
+              </dl>
               <div className="actions-row">
                 <button
                   className="button secondary"
@@ -478,6 +506,29 @@ function BriefingCategoryFilterControl({
         ))}
       </div>
     </section>
+  );
+}
+
+function briefingHistoryReferenceFromBriefing(
+  briefing: FounderBriefingResponse["briefing"]
+): BriefingHistoryReference {
+  return {
+    evidenceRefs: briefing.signals.coverage.evidence_refs,
+    id: briefing.id,
+    itemCount: briefing.items.length
+  };
+}
+
+function briefingHistoryDeltaText(
+  entry: BriefingSummary,
+  reference?: BriefingHistoryReference | null
+): string {
+  if (!reference) {
+    return M.briefingHistory.noDelta;
+  }
+  return T.briefingHistoryDelta(
+    entry.item_count - reference.itemCount,
+    entry.signals.coverage.evidence_refs - reference.evidenceRefs
   );
 }
 

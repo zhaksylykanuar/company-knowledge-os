@@ -404,6 +404,49 @@ test("lists saved briefings newest-first from the history endpoint", async () =>
 });
 
 test("renders briefing history with open buttons", () => {
+  const historySignals = {
+    github: sampleBriefing.briefing.signals.github,
+    coverage: {
+      ...sampleBriefing.briefing.signals.coverage,
+      canonical_repositories: 2,
+      evidence_refs: 4,
+      open_issues: 5,
+      open_pull_requests: 1
+    }
+  };
+  const history = [
+    {
+      id: "briefing-2",
+      created_at: "2026-06-25T10:00:00+00:00",
+      generated_at: "2026-06-25T10:00:00+00:00",
+      generated_by: "deterministic_v0",
+      title: "Founder Briefing",
+      summary: "Newer briefing.",
+      item_count: 3,
+      signals: historySignals
+    }
+  ];
+  const html = renderPanel({ activeBriefingId: "briefing-1", history, status: "success" });
+  assert.ok(html.includes(M.briefingHistory.title));
+  assert.ok(html.includes(M.briefingHistory.open));
+  assert.ok(html.includes(T.briefingHistoryMeta(3, "2026-06-25T10:00:00+00:00")));
+  assert.ok(html.includes(M.briefingHistory.coverageLabel));
+  assert.ok(
+    html.includes(
+      T.briefingHistoryCoverage(2, 5, 1, 4, M.briefingPanel.modeLocal)
+    )
+  );
+  assert.ok(html.includes(M.briefingHistory.deltaLabel));
+  assert.ok(html.includes(T.briefingHistoryDelta(1, 3)));
+  assert.doesNotMatch(html, /provider call started/i);
+});
+
+test("renders empty briefing history hint when there is no history", () => {
+  const html = renderPanel({ data: null, history: [], status: "empty" });
+  assert.ok(html.includes(M.briefingHistory.empty));
+});
+
+test("renders briefing history comparison fallback when no briefing is open", () => {
   const history = [
     {
       id: "briefing-2",
@@ -416,13 +459,7 @@ test("renders briefing history with open buttons", () => {
       signals: sampleBriefing.briefing.signals
     }
   ];
-  const html = renderPanel({ activeBriefingId: "briefing-1", history, status: "success" });
-  assert.ok(html.includes(M.briefingHistory.title));
-  assert.ok(html.includes(M.briefingHistory.open));
-  assert.ok(html.includes(T.briefingHistoryMeta(3, "2026-06-25T10:00:00+00:00")));
-});
-
-test("renders empty briefing history hint when there is no history", () => {
-  const html = renderPanel({ data: null, history: [], status: "empty" });
-  assert.ok(html.includes(M.briefingHistory.empty));
+  const html = renderPanel({ data: null, history, status: "empty" });
+  assert.ok(html.includes(M.briefingHistory.noDelta));
+  assert.ok(html.includes(T.briefingHistoryCoverage(1, 2, 3, 1, M.briefingPanel.modeLocal)));
 });

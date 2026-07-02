@@ -48,6 +48,11 @@
   provider calls/LLM. `EvidenceDrawer` для сводки по умолчанию показывает первый
   evidence ref из видимых пунктов, с briefing-specific default/manual context и
   evidence-ref count; ручной выбор evidence сохраняет приоритет над default.
+- **Briefing history comparison (НОВОЕ):** карточки истории сводок теперь
+  показывают persisted coverage summary (repos/open work/evidence/mode) and
+  item/evidence deltas against the currently open briefing when available. Это
+  local-only comparison over already loaded briefing summaries; no provider
+  calls, external writes, or LLM.
 - **Action review polish (НОВОЕ):** в `ActionProposalsPanel` добавлен локальный
   status filter (“Нужно решение” / “Одобрено” / “Отклонено” / “Все”) с counts.
   Фильтр работает только по уже загруженным local proposals, не делает provider
@@ -344,6 +349,20 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-02` — **Founder Briefing history coverage comparison.** Added richer
+  local history cards for persisted Founder Briefings: each saved briefing
+  summary now shows coverage (repo count, open issues/PRs, evidence refs, local/
+  live mode) and, when a briefing is open, item/evidence deltas against that
+  open briefing. If no briefing is open, the history card shows a safe
+  comparison fallback. This reads only already loaded `BriefingSummary.signals`
+  from the history endpoint and starts no provider calls, external writes, or
+  LLM. Changed `web/components/BriefingPanel.tsx`, `web/lib/messages.ts`,
+  `web/tests/briefing.test.tsx`, docs. Checks: `npm test` **128 passed**,
+  `npm run typecheck`, `npm run lint`, `npm run build`, `uv run ruff check .`,
+  docs tests **16 passed**, `uv run pytest -q` **403 passed / 1 warning**,
+  `git diff --check`, tracked/staged secret scans green. Commit local-only;
+  push не делался.
 
 - `2026-07-02` — **Verification + coverage: briefing category filter empty
   state.** Independently re-derived the objective requirements and audited the
