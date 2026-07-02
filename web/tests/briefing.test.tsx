@@ -66,6 +66,16 @@ const sampleBriefing: FounderBriefingResponse = {
         repository_count: 1,
         queued_sync_jobs: 0,
         latest_sync_job_status: "success"
+      },
+      coverage: {
+        canonical_repositories: 1,
+        open_issues: 2,
+        open_pull_requests: 3,
+        evidence_refs: 1,
+        is_live: false,
+        llm_used: false,
+        live_provider_sync: false,
+        local_sync: true
       }
     },
     warnings: ["Founder Briefing v0 is deterministic and does not use an LLM."]
@@ -83,6 +93,16 @@ const emptyBriefing: FounderBriefingResponse = {
         repository_count: 0,
         queued_sync_jobs: 0,
         latest_sync_job_status: null
+      },
+      coverage: {
+        canonical_repositories: 0,
+        open_issues: 0,
+        open_pull_requests: 0,
+        evidence_refs: 0,
+        is_live: false,
+        llm_used: false,
+        live_provider_sync: false,
+        local_sync: true
       }
     },
     warnings: ["No evidence refs were available for this workspace."]
@@ -194,9 +214,11 @@ test("renders deterministic briefing sections and summary", () => {
   assert.ok(html.includes(M.briefingPanel.title));
   assert.ok(html.includes(M.briefingPanel.intro));
   assert.ok(html.includes(M.briefingPanel.reposTitle));
-  assert.ok(html.includes(M.briefingPanel.queuedTitle));
-  assert.ok(html.includes(M.briefingPanel.latestSyncTitle));
-  assert.ok(html.includes(M.briefingPanel.aiTitle));
+  assert.ok(html.includes(M.briefingPanel.workTitle));
+  assert.ok(html.includes(M.briefingPanel.evidenceTitle));
+  assert.ok(html.includes(M.briefingPanel.modeTitle));
+  assert.ok(html.includes("2 задач / 3 PR"));
+  assert.ok(html.includes(M.briefingPanel.modeLocal));
   assert.match(html, /Repository inventory is available/);
   assert.match(html, /Briefing is deterministic/);
   assert.match(html, /91%/);

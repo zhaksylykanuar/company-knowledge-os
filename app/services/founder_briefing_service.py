@@ -17,6 +17,7 @@ from app.db.integration_models import (
     SYNC_JOB_STATUS_RUNNING,
     SyncJob,
 )
+from app.services.company_brain_github_read_service import build_workspace_company_brain
 from app.services.github_connection_service import get_github_connection_status
 
 BRIEFING_TITLE = "Founder Briefing"
@@ -50,6 +51,7 @@ async def generate_manual_founder_briefing(
         "queued_sync_jobs": 0,
         "latest_sync_job_status": None,
     }
+    coverage_signals = _empty_coverage_signals()
 
     if not options.include_github:
         warnings.append("GitHub briefing signals were disabled by request.")
@@ -74,6 +76,17 @@ async def generate_manual_founder_briefing(
             items.append(repository_item)
             warnings.extend(repository_warnings)
 
+            coverage_item, coverage_signals = await _source_coverage_item(
+                session,
+                workspace_id=workspace_id,
+                limit=options.limit,
+            )
+            github_signals["repository_count"] = max(
+                int(github_signals["repository_count"]),
+                int(coverage_signals["canonical_repositories"]),
+            )
+            items.append(coverage_item)
+
         if options.include_sync_jobs:
             sync_items, sync_signals = await _github_sync_items(
                 session,
@@ -92,7 +105,7 @@ async def generate_manual_founder_briefing(
         for item_warning in item.get("warnings", [])
         if isinstance(item_warning, str)
     )
-    summary = _summary(github_signals)
+    summary = _summary(github_signals, coverage_signals)
     return {
         "briefing": {
             "title": BRIEFING_TITLE,
@@ -103,7 +116,7 @@ async def generate_manual_founder_briefing(
             "llm_used": False,
             "persistence": BRIEFING_PERSISTENCE_TRANSIENT,
             "items": items,
-            "signals": {"github": github_signals},
+            "signals": {"github": github_signals, "coverage": coverage_signals},
             "warnings": _dedupe_warnings(warnings),
         }
     }
@@ -234,6 +247,96 @@ async def _github_repository_item(
         ),
         len(repositories),
         list(result.warnings),
+    )
+
+
+async def _source_coverage_item(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    limit: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    brain = await build_workspace_company_brain(
+        session=session,
+        workspace_id=workspace_id,
+        limit=limit,
+    )
+    summary = brain.get("summary") if isinstance(brain.get("summary"), Mapping) else {}
+    capabilities = (
+        brain.get("capabilities") if isinstance(brain.get("capabilities"), Mapping) else {}
+    )
+    repositories = brain.get("repositories") if isinstance(brain.get("repositories"), list) else []
+    evidence = brain.get("evidence") if isinstance(brain.get("evidence"), list) else []
+
+    repository_count = int(summary.get("repositories") or 0)
+    open_issues = int(summary.get("open_issues") or 0)
+    open_pull_requests = int(summary.get("open_pull_requests") or 0)
+    evidence_refs = _coverage_evidence_refs(evidence, repositories)
+    coverage_signals = {
+        "canonical_repositories": repository_count,
+        "open_issues": open_issues,
+        "open_pull_requests": open_pull_requests,
+        "evidence_refs": len(evidence_refs),
+        "is_live": bool(brain.get("is_live")),
+        "llm_used": bool(brain.get("llm_used")),
+        "live_provider_sync": bool(capabilities.get("live_provider_sync")),
+        "local_sync": bool(capabilities.get("local_sync")),
+    }
+
+    has_coverage = repository_count + open_issues + open_pull_requests > 0
+    related_entities = [
+        str(repo.get("full_name") or repo.get("name"))
+        for repo in repositories[: min(5, len(repositories))]
+        if isinstance(repo, Mapping) and (repo.get("full_name") or repo.get("name"))
+    ]
+    if not has_coverage:
+        return (
+            _item(
+                item_id="source-coverage",
+                category="next_step",
+                title="Source coverage is still empty",
+                summary=(
+                    "Company Brain has no canonical repositories, open issues, "
+                    "or open pull requests for this workspace yet."
+                ),
+                severity="medium",
+                confidence=0.8,
+                evidence_refs=[],
+                recommended_next_step=(
+                    "Prepare local source coverage or approve a scoped read-only "
+                    "provider sync later."
+                ),
+                warnings=["source coverage empty"],
+            ),
+            coverage_signals,
+        )
+
+    work_summary = (
+        f"open_issues={open_issues}, open_pull_requests={open_pull_requests}"
+    )
+    return (
+        _item(
+            item_id="source-coverage",
+            category="status",
+            title="Canonical source coverage is available",
+            summary=(
+                "Company Brain coverage is local and deterministic: "
+                f"repositories={repository_count}, {work_summary}, "
+                f"evidence_refs={len(evidence_refs)}, "
+                f"live_provider_sync={coverage_signals['live_provider_sync']}, "
+                f"llm_used={coverage_signals['llm_used']}."
+            ),
+            severity="low",
+            confidence=1.0,
+            evidence_refs=evidence_refs,
+            related_entities=related_entities,
+            recommended_next_step=(
+                "Use this coverage to review deterministic briefing items; "
+                "run live provider reads only after explicit approval."
+            ),
+            warnings=[] if evidence_refs else ["source coverage has no evidence refs"],
+        ),
+        coverage_signals,
     )
 
 
@@ -437,13 +540,75 @@ def _collect_repo_evidence_refs(repositories: list[Mapping[str, Any]]) -> list[d
     return refs[:20]
 
 
-def _summary(github_signals: Mapping[str, Any]) -> str:
+def _empty_coverage_signals() -> dict[str, Any]:
+    return {
+        "canonical_repositories": 0,
+        "open_issues": 0,
+        "open_pull_requests": 0,
+        "evidence_refs": 0,
+        "is_live": False,
+        "llm_used": False,
+        "live_provider_sync": False,
+        "local_sync": False,
+    }
+
+
+def _coverage_evidence_refs(
+    evidence: list[Any],
+    repositories: list[Any],
+) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for raw_ref in evidence:
+        if not isinstance(raw_ref, Mapping):
+            continue
+        ref = {
+            "kind": _safe_text(raw_ref.get("kind")) or "company_brain_evidence",
+            "source": _safe_text(raw_ref.get("source")) or "company_brain",
+            "ref": _safe_text(raw_ref.get("label")) or _safe_text(raw_ref.get("id")),
+            "url": _safe_url(raw_ref.get("url")),
+        }
+        if ref["ref"] and ref not in refs:
+            refs.append(ref)
+
+    if refs:
+        return refs[:20]
+
+    for raw_repo in repositories:
+        if not isinstance(raw_repo, Mapping):
+            continue
+        ref_text = _safe_text(raw_repo.get("full_name")) or _safe_text(
+            raw_repo.get("id")
+        )
+        ref = {
+            "kind": "canonical_repository",
+            "source": "local_db",
+            "ref": ref_text,
+            "url": _safe_url(raw_repo.get("source_url")),
+        }
+        if ref["ref"] and ref not in refs:
+            refs.append(ref)
+    return refs[:20]
+
+
+def _summary(
+    github_signals: Mapping[str, Any],
+    coverage_signals: Mapping[str, Any],
+) -> str:
+    coverage_suffix = ""
+    if coverage_signals:
+        coverage_suffix = (
+            f" open_issues={coverage_signals.get('open_issues')}, "
+            f"open_pull_requests={coverage_signals.get('open_pull_requests')}, "
+            f"evidence_refs={coverage_signals.get('evidence_refs')}, "
+            f"mode={'live' if coverage_signals.get('is_live') else 'local_db'}."
+        )
     return (
         "GitHub signals: "
         f"connection={github_signals.get('connection_status')}, "
         f"repositories={github_signals.get('repository_count')}, "
         f"queued_sync_jobs={github_signals.get('queued_sync_jobs')}, "
         f"latest_sync_job={github_signals.get('latest_sync_job_status')}."
+        f"{coverage_suffix}"
     )
 
 

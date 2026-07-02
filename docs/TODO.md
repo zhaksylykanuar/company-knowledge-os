@@ -41,7 +41,8 @@ Implemented foundations:
   without leaking tokens or provider payloads.
 - Deterministic Company Brain, dashboard Source Coverage over the existing
   Company Brain endpoint, and persisted deterministic Founder Briefings with
-  history and evidence refs. No LLM generation is currently implemented.
+  history, evidence refs, and local source-coverage signals. No LLM generation
+  is currently implemented.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -72,10 +73,10 @@ Done when:
 
 ## Near-Term Backlog
 
-1. **Briefings/Company Brain polish over canonical data.**
-   Source Coverage now shows what the workspace already knows. Next: make the
-   persisted deterministic briefing read this state more clearly and surface
-   founder-friendly next steps without adding LLM/provider calls.
+1. **Actions over briefing evidence (local approval only).**
+   Source Coverage and deterministic Briefings now expose local coverage state.
+   Next: make local ActionProposals easier to create/review from briefing items
+   without provider writes or AI generation.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

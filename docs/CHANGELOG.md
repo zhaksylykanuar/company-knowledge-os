@@ -39,6 +39,10 @@
   endpoint. It summarizes canonical repository/work/evidence counts and clearly
   labels live provider reads and LLM generation as deferred/off without making
   provider calls or AI calls.
+- Extended deterministic Founder Briefings with local source-coverage signals
+  and a `source-coverage` briefing item derived from Company Brain. Briefing UI
+  now summarizes canonical repos, open work, evidence refs, and local/live mode
+  without adding provider writes, provider reads, or LLM calls.
 
 ## 2026-06-30
 

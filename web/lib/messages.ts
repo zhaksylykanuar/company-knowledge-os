@@ -298,7 +298,15 @@ export const M = {
       "Ручная детерминированная сводка по записям компании, подтверждённым источниками. Генерация ИИ, живая синхронизация провайдера и выполнение действий не используются.",
     summaryLabel: "Сводка показателей",
     reposTitle: "Репозитории",
-    reposDescription: "Репозитории GitHub в сигналах детерминированной сводки.",
+    reposDescription: "Canonical repo rows, доступные детерминированной сводке.",
+    workTitle: "Работа",
+    workDescription: "Открытые задачи и PR в Company Brain coverage.",
+    evidenceTitle: "Evidence",
+    evidenceDescription: "Evidence refs, доступные этой сводке.",
+    modeTitle: "Режим",
+    modeDescription: "Локальное/живое чтение и LLM boundary для сводки.",
+    modeLocal: "Local DB",
+    modeLive: "Live",
     queuedTitle: "Задания синхронизации в очереди",
     queuedDescription: "Локальные задания синхронизации GitHub в очереди.",
     latestSyncTitle: "Последняя синхронизация",
@@ -614,6 +622,8 @@ export const T = {
     `Ручная детерминированная сводка. Сводка ИИ: ${ai ? M.common.enabled : M.common.notEnabled}. ` +
     `Живая синхронизация провайдера: ${live ? M.common.enabled : M.common.notEnabled}. ` +
     `Внешние действия: здесь не выполняются.`,
+  briefingCoverageWork: (issues: number, prs: number) =>
+    `${issues} задач / ${prs} PR`,
   // Company Brain capability line
   brainCapability: (
     localSync: boolean,

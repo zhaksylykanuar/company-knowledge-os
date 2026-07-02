@@ -76,8 +76,22 @@ class FounderBriefingGitHubSignalsRead(BaseModel):
     latest_sync_job_status: str | None = None
 
 
+class FounderBriefingCoverageSignalsRead(BaseModel):
+    canonical_repositories: int = 0
+    open_issues: int = 0
+    open_pull_requests: int = 0
+    evidence_refs: int = 0
+    is_live: bool = False
+    llm_used: bool = False
+    live_provider_sync: bool = False
+    local_sync: bool = False
+
+
 class FounderBriefingSignalsRead(BaseModel):
     github: FounderBriefingGitHubSignalsRead
+    coverage: FounderBriefingCoverageSignalsRead = Field(
+        default_factory=FounderBriefingCoverageSignalsRead
+    )
 
 
 class PersistedBriefingRead(BaseModel):

@@ -113,6 +113,17 @@ export type BriefingGitHubSignals = {
   latest_sync_job_status: string | null;
 };
 
+export type BriefingCoverageSignals = {
+  canonical_repositories: number;
+  open_issues: number;
+  open_pull_requests: number;
+  evidence_refs: number;
+  is_live: boolean;
+  llm_used: boolean;
+  live_provider_sync: boolean;
+  local_sync: boolean;
+};
+
 export type FounderBriefingResponse = {
   briefing: {
     id: string;
@@ -128,6 +139,7 @@ export type FounderBriefingResponse = {
     items: FounderBriefingItem[];
     signals: {
       github: BriefingGitHubSignals;
+      coverage: BriefingCoverageSignals;
     };
     warnings: string[];
   };
@@ -143,6 +155,7 @@ export type BriefingSummary = {
   item_count: number;
   signals: {
     github: BriefingGitHubSignals;
+    coverage: BriefingCoverageSignals;
   };
 };
 

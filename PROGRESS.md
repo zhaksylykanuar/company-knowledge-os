@@ -30,6 +30,13 @@
   status и LLM off status. Панель не делает provider calls, не запускает LLM и
   не обещает live sync; copy централизован в `web/lib/messages.ts`, тесты
   проверяют states and no live/AI overclaim.
+- **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
+  теперь добавляет `signals.coverage` и item `source-coverage` из локального
+  Company Brain state: canonical repositories, open issues/PRs, evidence refs,
+  local/live mode, live-provider sync flag and LLM flag. Persisted briefings
+  остаются backward-compatible через default coverage model; UI cards теперь
+  показывают coverage/work/evidence/mode вместо sync-job-centric summary.
+  Никаких provider calls, external writes или LLM calls не добавлено.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo

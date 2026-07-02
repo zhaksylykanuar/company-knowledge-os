@@ -10,6 +10,7 @@ from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
+import app.services.founder_briefing_service as founder_briefing_service
 import app.services.github_repository_read_service as github_repository_read_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
@@ -458,6 +459,103 @@ async def test_manual_briefing_preserves_repository_evidence_refs(monkeypatch) -
         assert repo_item["evidence_refs"][0]["ref"] == "local-snap-1"
         assert "qtwin-io/founderos-api" in repo_item["related_entities"]
         assert not any("No evidence refs" in warning for warning in repo_item["warnings"])
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_manual_briefing_includes_source_coverage_signals_and_item(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    async def fake_company_brain(**_kwargs):
+        return {
+            "workspace_id": _kwargs["workspace_id"],
+            "mode": "github_first_canonical",
+            "source": "canonical_github_company_brain",
+            "summary": {
+                "repositories": 25,
+                "open_issues": 2,
+                "open_pull_requests": 3,
+                "closed_issues": 1,
+                "merged_pull_requests": 4,
+            },
+            "repositories": [
+                {
+                    "id": "repo-row-1",
+                    "name": "base-collector",
+                    "full_name": "qtwin-io/base-collector",
+                    "source_url": "https://github.com/qtwin-io/base-collector",
+                }
+            ],
+            "work": {"issues": [], "pull_requests": [], "recent": []},
+            "evidence": [
+                {
+                    "id": "repo-source-1:0",
+                    "kind": "repository_inventory_snapshot",
+                    "source": "canonical_source_record",
+                    "label": "qtwin-io/base-collector",
+                    "url": "https://github.com/qtwin-io/base-collector",
+                    "record_type": "repository",
+                    "record_id": "repo-row-1",
+                }
+            ],
+            "capabilities": {
+                "live_github_oauth": False,
+                "live_provider_sync": False,
+                "local_sync": True,
+                "llm_briefing": False,
+            },
+            "is_live": False,
+            "llm_used": False,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+    monkeypatch.setattr(
+        founder_briefing_service,
+        "build_workspace_company_brain",
+        fake_company_brain,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={},
+            )
+
+        assert response.status_code == 200, response.text
+        briefing = response.json()["briefing"]
+        coverage = briefing["signals"]["coverage"]
+        assert coverage["canonical_repositories"] == 25
+        assert coverage["open_issues"] == 2
+        assert coverage["open_pull_requests"] == 3
+        assert coverage["evidence_refs"] == 1
+        assert coverage["is_live"] is False
+        assert coverage["llm_used"] is False
+        assert coverage["live_provider_sync"] is False
+        coverage_item = next(
+            item for item in briefing["items"] if item["id"] == "source-coverage"
+        )
+        assert coverage_item["category"] == "status"
+        assert "repositories=25" in coverage_item["summary"]
+        assert "live_provider_sync=False" in coverage_item["summary"]
+        assert coverage_item["evidence_refs"][0]["ref"] == "qtwin-io/base-collector"
+        assert coverage_item["recommended_next_step"]
     finally:
         await _cleanup_briefing_fixture(marker)
 

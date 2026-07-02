@@ -154,6 +154,7 @@ export function BriefingPanelView({
   status
 }: BriefingPanelViewProps) {
   const briefing = data?.briefing ?? null;
+  const coverage = briefing?.signals.coverage ?? null;
   const isGenerating = status === "loading";
   const showHistory = status !== "missing" && status !== "unsupported";
 
@@ -220,22 +221,27 @@ export function BriefingPanelView({
             <StatusCard
               description={M.briefingPanel.reposDescription}
               title={M.briefingPanel.reposTitle}
-              value={String(briefing.signals.github.repository_count)}
+              value={String(
+                coverage?.canonical_repositories ?? briefing.signals.github.repository_count
+              )}
             />
             <StatusCard
-              description={M.briefingPanel.queuedDescription}
-              title={M.briefingPanel.queuedTitle}
-              value={String(briefing.signals.github.queued_sync_jobs)}
+              description={M.briefingPanel.workDescription}
+              title={M.briefingPanel.workTitle}
+              value={T.briefingCoverageWork(
+                coverage?.open_issues ?? 0,
+                coverage?.open_pull_requests ?? 0
+              )}
             />
             <StatusCard
-              description={M.briefingPanel.latestSyncDescription}
-              title={M.briefingPanel.latestSyncTitle}
-              value={briefing.signals.github.latest_sync_job_status ?? M.briefingPanel.latestSyncNone}
+              description={M.briefingPanel.evidenceDescription}
+              title={M.briefingPanel.evidenceTitle}
+              value={String(coverage?.evidence_refs ?? 0)}
             />
             <StatusCard
-              description={M.briefingPanel.aiDescription}
-              title={M.briefingPanel.aiTitle}
-              value={briefing.llm_used ? M.briefingPanel.aiValue : M.briefingPanel.storedValue}
+              description={M.briefingPanel.modeDescription}
+              title={M.briefingPanel.modeTitle}
+              value={coverage?.is_live ? M.briefingPanel.modeLive : M.briefingPanel.modeLocal}
             />
           </section>
           <section className="callout" aria-label={M.briefingPanel.capabilityTitle}>
