@@ -66,6 +66,12 @@
   coverage and local/live mode per saved summary, plus item/evidence deltas when
   a briefing is open. This uses only the already-loaded persisted briefing
   summaries and starts no provider calls, external writes, or LLM calls.
+- Cross-linked Founder Briefing items with existing local ActionProposals. The
+  briefing screen now reads local proposal state, shows linked action counts by
+  status, blocks blind duplicate local action creation for items that already
+  have an open action, and links to `/actions` with briefing/proposed filters.
+  This is local/read-only apart from the already existing `internal_todo`
+  creation control and does not start provider calls, external writes, or LLM.
 
 ## 2026-07-01
 

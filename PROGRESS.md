@@ -53,6 +53,14 @@
   item/evidence deltas against the currently open briefing when available. Это
   local-only comparison over already loaded briefing summaries; no provider
   calls, external writes, or LLM.
+- **Briefing ↔ Action cross-links (НОВОЕ):** `BriefingPanel` теперь
+  дополнительно читает локальные `ActionProposal` rows и связывает уже созданные
+  briefing-derived действия обратно с пунктами текущей сводки по
+  `briefing_item_key`/`briefing_item_id`. В сводке видны counts по статусам
+  действий, кнопка создания блокируется для пунктов с открытым локальным
+  действием, а переход «Открыть действия» ведёт в `/actions` с фокусом
+  `origin=briefing&status=proposed`. Всё local/read-only кроме уже существующей
+  кнопки создания `internal_todo`: без provider calls, external writes и LLM.
 - **Action review polish (НОВОЕ):** в `ActionProposalsPanel` добавлен локальный
   status filter (“Нужно решение” / “Одобрено” / “Отклонено” / “Все”) с counts.
   Фильтр работает только по уже загруженным local proposals, не делает provider

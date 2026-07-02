@@ -333,8 +333,15 @@ export const M = {
       "Источник по умолчанию из первого видимого пункта сводки. Выберите другой источник, чтобы закрепить его.",
     evidenceManualContext:
       "Источник выбран вручную. Нажмите «Закрыть», чтобы вернуться к источнику по умолчанию для видимых пунктов.",
+    actionSummaryTitle: "Локальные действия из сводки",
+    actionSummaryDescription:
+      "Сводка читает уже созданные локальные предложения и не запускает provider calls, внешние записи или LLM.",
+    actionSummaryEmpty:
+      "По видимым пунктам сводки ещё нет локальных предложений действий.",
+    openActions: "Открыть действия",
     actionCreate: "Создать локальное действие",
     actionCreating: "Создание локального действия",
+    actionAlreadyCreated: "Действие уже создано",
     actionCreateSuccess:
       "Локальное действие создано. Проверьте его в блоке «Действия» перед одобрением.",
     storedValue: "Сохранено"
@@ -702,6 +709,26 @@ export const T = {
     `${repos} repo · ${issues} задач / ${prs} PR · evidence ${evidence} · ${mode}`,
   briefingHistoryDelta: (itemsDelta: number, evidenceDelta: number) =>
     `Пункты ${formatSignedDelta(itemsDelta)} · evidence ${formatSignedDelta(evidenceDelta)}`,
+  briefingActionSummary: (
+    total: number,
+    proposed: number,
+    approved: number,
+    rejected: number,
+    executed: number,
+    failed: number
+  ) =>
+    `Связано действий: ${total} · нужно решение ${proposed} · одобрено ${approved} · ` +
+    `отклонено ${rejected} · выполнено ${executed} · ошибки ${failed}`,
+  briefingItemActionSummary: (
+    total: number,
+    proposed: number,
+    approved: number,
+    rejected: number,
+    executed: number,
+    failed: number
+  ) =>
+    `Локальные действия по пункту: ${total} · нужно решение ${proposed} · ` +
+    `одобрено ${approved} · отклонено ${rejected} · выполнено ${executed} · ошибки ${failed}`,
   // Briefing capability line
   briefingCapability: (ai: boolean, live: boolean) =>
     `Ручная детерминированная сводка. Сводка ИИ: ${ai ? M.common.enabled : M.common.notEnabled}. ` +

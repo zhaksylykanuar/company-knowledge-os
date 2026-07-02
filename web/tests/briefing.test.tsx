@@ -11,7 +11,11 @@ import {
   listBriefings
 } from "../lib/api";
 import { M, T } from "../lib/messages";
-import type { BriefingListResponse, FounderBriefingResponse } from "../lib/types";
+import type {
+  ActionProposal,
+  BriefingListResponse,
+  FounderBriefingResponse
+} from "../lib/types";
 import { BriefingPanelView } from "../components/BriefingPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 
@@ -109,6 +113,35 @@ const emptyBriefing: FounderBriefingResponse = {
   }
 };
 
+const briefingActionProposal: ActionProposal = {
+  action_type: "internal_todo",
+  approved_at: null,
+  approved_by_user_id: null,
+  briefing_item_id: null,
+  created_at: "2026-06-24T10:05:00+00:00",
+  created_by: "user",
+  created_by_user_id: null,
+  description: "Review synced GitHub work before approving actions.",
+  evidence_refs: sampleBriefing.briefing.items[0]?.evidence_refs ?? [],
+  execution_started: false,
+  id: "proposal-briefing-1",
+  is_live: false,
+  payload: {
+    briefing_item_key: "repo-coverage",
+    category: "repository",
+    source: "briefing_item"
+  },
+  rejected_at: null,
+  rejected_by_user_id: null,
+  rejection_reason: null,
+  status: "proposed",
+  target_provider: "internal",
+  title: "Review synced GitHub work before approving actions.",
+  updated_at: "2026-06-24T10:05:00+00:00",
+  warnings: [],
+  workspace_id: "workspace-123"
+};
+
 function renderPanel(
   props: Partial<Parameters<typeof BriefingPanelView>[0]> = {}
 ): string {
@@ -119,6 +152,8 @@ function renderPanel(
       error={props.error ?? null}
       history={props.history ?? []}
       actionError={props.actionError ?? null}
+      actionLoadError={props.actionLoadError ?? null}
+      actionProposals={props.actionProposals ?? []}
       actionSuccessMessage={props.actionSuccessMessage ?? null}
       categoryFilter={props.categoryFilter ?? "all"}
       onCloseEvidence={props.onCloseEvidence}
@@ -297,6 +332,22 @@ test("renders local action proposal controls for briefing items", () => {
   assert.ok(html.includes(M.briefingPanel.actionCreateSuccess));
   assert.doesNotMatch(html, /GitHub issue created/);
   assert.doesNotMatch(html, /external write performed/i);
+});
+
+test("cross-links existing local actions back to briefing items", () => {
+  const html = renderPanel({
+    actionProposals: [briefingActionProposal],
+    onCreateActionFromItem: () => undefined
+  });
+
+  assert.ok(html.includes(M.briefingPanel.actionSummaryTitle));
+  assert.ok(html.includes(T.briefingActionSummary(1, 1, 0, 0, 0, 0)));
+  assert.ok(html.includes(T.briefingItemActionSummary(1, 1, 0, 0, 0, 0)));
+  assert.ok(html.includes(M.briefingPanel.actionAlreadyCreated));
+  assert.ok(html.includes(M.briefingPanel.openActions));
+  assert.match(html, /href="\/actions\?origin=briefing&amp;status=proposed"/);
+  assert.doesNotMatch(html, /provider write/i);
+  assert.doesNotMatch(html, /LLM call/i);
 });
 
 test("renders empty briefing payload without fake claims", () => {

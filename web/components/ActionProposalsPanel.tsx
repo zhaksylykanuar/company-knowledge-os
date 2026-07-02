@@ -60,6 +60,11 @@ type ActionProposalCreateFormState = {
   title: string;
 };
 
+type ActionProposalsPanelProps = {
+  initialOriginFilter?: string | null;
+  initialStatusFilter?: string | null;
+};
+
 type ActionProposalsPanelViewProps = {
   createForm: ActionProposalCreateFormState;
   data: ActionProposalListResponse | null;
@@ -105,7 +110,10 @@ const DEFAULT_CREATE_FORM: ActionProposalCreateFormState = {
   title: ""
 };
 
-export function ActionProposalsPanel() {
+export function ActionProposalsPanel({
+  initialOriginFilter = null,
+  initialStatusFilter = null
+}: ActionProposalsPanelProps = {}) {
   const workspaceId = useWorkspaceId();
   const [data, setData] = useState<ActionProposalListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -120,9 +128,18 @@ export function ActionProposalsPanel() {
   const [selectedEvidenceCount, setSelectedEvidenceCount] = useState<number | null>(null);
   const [selectedProposalIds, setSelectedProposalIds] = useState<string[]>([]);
   const [status, setStatus] = useState<PanelStatus>("loading");
-  const [originFilter, setOriginFilter] = useState<ProposalOriginFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<ProposalStatusFilter>("proposed");
+  const [originFilter, setOriginFilter] = useState<ProposalOriginFilter>(
+    normalizeOriginFilter(initialOriginFilter)
+  );
+  const [statusFilter, setStatusFilter] = useState<ProposalStatusFilter>(
+    normalizeStatusFilter(initialStatusFilter)
+  );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOriginFilter(normalizeOriginFilter(initialOriginFilter));
+    setStatusFilter(normalizeStatusFilter(initialStatusFilter));
+  }, [initialOriginFilter, initialStatusFilter]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -704,6 +721,30 @@ function ActionStatusFilter({
       </div>
     </section>
   );
+}
+
+function normalizeStatusFilter(value: string | null | undefined): ProposalStatusFilter {
+  if (
+    value === "all" ||
+    value === "approved" ||
+    value === "proposed" ||
+    value === "rejected"
+  ) {
+    return value;
+  }
+  return "proposed";
+}
+
+function normalizeOriginFilter(value: string | null | undefined): ProposalOriginFilter {
+  if (
+    value === "all" ||
+    value === "briefing" ||
+    value === "github" ||
+    value === "internal"
+  ) {
+    return value;
+  }
+  return "all";
 }
 
 function ActionOriginFilter({

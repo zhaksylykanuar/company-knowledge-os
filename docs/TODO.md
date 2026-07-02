@@ -89,6 +89,11 @@ Implemented foundations:
   (repos/open work/evidence/mode) and item/evidence deltas against the currently
   open briefing when one is loaded. This is local comparison over already-loaded
   history data only.
+- Founder Briefing now cross-links local `ActionProposal` rows back to briefing
+  items, shows per-item/action-status counts, avoids blind duplicate local
+  action creation when an open action already exists, and links into `/actions`
+  with briefing/proposed focus. This reads local DB state only and starts no
+  provider calls, external writes, or LLM calls.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -137,8 +142,11 @@ Done when:
 2. **Founder-facing briefing polish.**
    Deterministic briefing cards, source coverage signals, item category filter,
    default evidence drawer, richer history comparison, and briefing-to-local-
-   action bridge are in place. Next: consider action/state cross-links or
-   deployment readiness while keeping provider writes and AI generation disabled.
+   action bridge are in place. Briefing/action cross-links are now in place:
+   existing local actions are summarized on briefing items, duplicate creation is
+   guarded for open actions, and `/actions` can open with briefing/proposed
+   focus. Next: consider deployment readiness or richer repository/audit import
+   views while keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade
