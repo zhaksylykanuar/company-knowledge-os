@@ -112,6 +112,26 @@ const briefingProposal: ActionProposal = {
   ]
 };
 
+const manualInternalProposal: ActionProposal = {
+  ...proposedProposal,
+  id: "proposal-5",
+  target_provider: "internal",
+  action_type: "internal_todo",
+  title: "Manual internal follow-up",
+  description: "A manually created local todo.",
+  payload: {
+    note: "Manual local review note"
+  },
+  evidence_refs: [
+    {
+      kind: "internal_note",
+      source: "founderos",
+      ref: "manual-note-1",
+      url: null
+    }
+  ]
+};
+
 const sampleList: ActionProposalListResponse = {
   count: 3,
   is_live: false,
@@ -120,9 +140,15 @@ const sampleList: ActionProposalListResponse = {
 };
 
 const groupedList: ActionProposalListResponse = {
-  count: 4,
+  count: 5,
   is_live: false,
-  proposals: [proposedProposal, approvedProposal, rejectedProposal, briefingProposal],
+  proposals: [
+    proposedProposal,
+    approvedProposal,
+    rejectedProposal,
+    briefingProposal,
+    manualInternalProposal
+  ],
   warnings: []
 };
 
@@ -157,9 +183,11 @@ function renderPanel(
       onCreateFormChange={props.onCreateFormChange}
       onReject={props.onReject}
       onRetry={props.onRetry}
+      onOriginFilterChange={props.onOriginFilterChange}
       onSelectEvidence={props.onSelectEvidence}
       onStatusFilterChange={props.onStatusFilterChange}
       pendingMutation={props.pendingMutation ?? null}
+      originFilter={props.originFilter ?? "all"}
       selectedEvidence={props.selectedEvidence ?? null}
       selectedEvidenceTitle={props.selectedEvidenceTitle ?? null}
       selectedEvidenceCount={props.selectedEvidenceCount ?? null}
@@ -408,6 +436,58 @@ test("filters loaded local proposals without changing provider state", () => {
   assert.doesNotMatch(rejectedHtml, /Create follow-up GitHub issue/);
 });
 
+test("filters loaded proposals by local origin on top of status", () => {
+  const proposedHtml = renderPanel({
+    data: groupedList,
+    onOriginFilterChange: () => undefined,
+    statusFilter: "proposed"
+  });
+  assert.ok(proposedHtml.includes(M.actionsPanel.originFilterTitle));
+  assert.ok(proposedHtml.includes(M.actionsPanel.originFilterDescription));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.originFilterAll} · 3`));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.originFilterBriefing} · 1`));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.originFilterGithub} · 1`));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.originFilterInternal} · 1`));
+  assert.doesNotMatch(proposedHtml, /provider call started/i);
+
+  const briefingHtml = renderPanel({
+    data: groupedList,
+    originFilter: "briefing",
+    statusFilter: "proposed"
+  });
+  assert.ok(briefingHtml.includes(`${M.actionsPanel.groupBriefingTitle} · 1`));
+  assert.match(briefingHtml, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(briefingHtml, /Create follow-up GitHub issue/);
+  assert.doesNotMatch(briefingHtml, /Manual internal follow-up/);
+});
+
+test("shows empty state for origin and status intersections with no local proposals", () => {
+  const html = renderPanel({
+    data: groupedList,
+    originFilter: "briefing",
+    statusFilter: "rejected"
+  });
+  assert.ok(html.includes(M.actionsPanel.noProposalsForFilter));
+  assert.ok(html.includes(`${M.actionsPanel.originFilterAll} · 1`));
+  assert.ok(html.includes(`${M.actionsPanel.originFilterBriefing} · 0`));
+  assert.doesNotMatch(html, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(html, /Create follow-up GitHub issue/);
+});
+
+test("origin filtering updates grouped evidence default without provider calls", () => {
+  const internalHtml = renderPanel({
+    data: groupedList,
+    originFilter: "internal",
+    statusFilter: "proposed"
+  });
+  assert.ok(internalHtml.includes(`${M.actionsPanel.groupInternalTitle} · 1`));
+  assert.match(internalHtml, /Manual internal follow-up/);
+  assert.match(internalHtml, /manual-note-1/);
+  assert.ok(internalHtml.includes(M.evidence.contextDefault));
+  assert.doesNotMatch(internalHtml, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(internalHtml, /href="https:\/\/github.com\/qtwin-io\/founderos-api/);
+});
+
 test("defaults evidence drawer to first visible proposal evidence", () => {
   const proposedHtml = renderPanel({ statusFilter: "proposed" });
   assert.ok(proposedHtml.includes(M.evidence.title));
@@ -468,8 +548,7 @@ test("groups proposals by origin with per-group counts", () => {
   const html = renderPanel({ data: groupedList, statusFilter: "all" });
   assert.ok(html.includes(`${M.actionsPanel.groupBriefingTitle} · 1`));
   assert.ok(html.includes(`${M.actionsPanel.groupGithubTitle} · 3`));
-  // No manually-created internal todo in this fixture, so that group is omitted.
-  assert.doesNotMatch(html, new RegExp(`${M.actionsPanel.groupInternalTitle} ·`));
+  assert.ok(html.includes(`${M.actionsPanel.groupInternalTitle} · 1`));
   assert.ok(html.includes(M.actionsPanel.groupBriefingDescription));
   // The briefing-derived proposal gets an explicit origin badge.
   assert.ok(html.includes(M.actionsPanel.originBriefingBadge));

@@ -58,6 +58,10 @@ Implemented foundations:
   `internal_todo` payload metadata (item key, category, severity, next step,
   related entities), and the evidence drawer shows a default-vs-manual context
   hint plus an evidence-ref count.
+- ActionProposals review now also has a local origin filter (all sources,
+  briefing-derived, GitHub issue, internal todo) composed with the existing
+  status filter. Counts are computed within the current status focus and no
+  provider calls, backend mutations, external writes, or LLM calls are started.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -93,9 +97,9 @@ Done when:
    Local status filters and structured execution audit timeline are in place.
    Evidence drawer defaults, origin grouping (briefing/GitHub/internal) with an
    origin badge, briefing `internal_todo` payload detail, and evidence
-   drawer default-vs-manual context + evidence-ref count are in place. Next:
-   consider bulk local review actions or per-origin filtering while keeping
-   provider writes and AI generation disabled.
+   drawer default-vs-manual context + evidence-ref count are in place. A local
+   origin filter now composes with the status filter. Next: consider bulk local
+   review actions while keeping provider writes and AI generation disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

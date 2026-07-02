@@ -68,6 +68,14 @@
   показывает ключ пункта сводки, категорию, важность, рекомендуемый следующий
   шаг и связанные сущности; raw payload dumps и secret-like ключи не выводятся.
   Всё local-only: без provider calls, external writes и LLM.
+- **Action proposal origin filter (НОВОЕ):** `ActionProposalsPanel` теперь
+  добавляет второй локальный фильтр «Источник предложения» поверх status-фильтра:
+  все источники / из сводки / GitHub задачи / internal todo. Counts считаются
+  внутри текущего status-фокуса, список и группы показывают только пересечение
+  фильтров, а default evidence drawer берёт первый evidence ref из финальной
+  видимой выборки. Фильтр работает только на уже загруженном local list, не
+  делает backend provider calls, не мутирует state и не запускает external
+  execution/LLM.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
@@ -305,6 +313,21 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-02` — **Action review polish: local origin filter.** Добавлен второй
+  фильтр в `ActionProposalsPanel`: «Источник предложения» (все источники / из
+  сводки / GitHub задачи / internal todo), который применяется поверх текущего
+  status-фильтра. Counts считаются внутри выбранного status-фокуса, список и
+  origin-группы показывают только пересечение фильтров, а default
+  `EvidenceDrawer` берёт первый evidence ref из финальной видимой выборки.
+  Это client-side local-only ergonomics поверх уже загруженного списка:
+  provider calls, backend state mutations, external execution и LLM не
+  запускаются. Изменены `web/components/ActionProposalsPanel.tsx`,
+  `web/lib/messages.ts`, `web/tests/action-proposals.test.tsx`,
+  `PROGRESS.md`, `docs/CHANGELOG.md`, `docs/TODO.md`. Checks:
+  `npm test` **112 passed**, `npm run typecheck`, `npm run lint`,
+  `npm run build`, `uv run ruff check .`, `uv run pytest -q`, `git diff --check`,
+  and tracked/staged secret scans green. Commit local-only; push не делался.
 
 - `2026-07-02` — **Action review polish: origin grouping + evidence drawer UX +
   briefing payload detail.** Продолжение local-only action review ergonomics.

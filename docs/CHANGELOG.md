@@ -17,6 +17,12 @@
   item key, category, severity, recommended next step, and related entities) in
   the ActionProposals detail view instead of only repository/title/note, without
   exposing raw payload dumps or secret-like keys.
+- Added a local ActionProposals origin filter that composes with the existing
+  status filter. Users can focus on all sources, briefing-derived proposals,
+  GitHub issue proposals, or internal todos; counts are computed within the
+  current status focus, and the evidence drawer default follows the final
+  visible result set without provider calls, backend mutations, external writes,
+  or LLM calls.
 
 ## 2026-07-01
 

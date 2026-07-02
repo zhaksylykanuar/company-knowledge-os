@@ -28,6 +28,7 @@ type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupp
 type ProposalKind = "github_issue" | "internal_todo";
 type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
 type ProposalOrigin = "briefing" | "github" | "internal";
+type ProposalOriginFilter = "all" | ProposalOrigin;
 type PendingMutation = "create" | `approve:${string}` | `reject:${string}` | null;
 type EvidenceSelection = {
   evidence: ActionProposalEvidenceRef;
@@ -64,6 +65,7 @@ type ActionProposalsPanelViewProps = {
   onReject?: (proposalId: string) => void;
   onRefreshProposals?: () => void;
   onRetry?: () => void;
+  onOriginFilterChange?: (filter: ProposalOriginFilter) => void;
   onSelectEvidence?: (
     evidence: ActionProposalEvidenceRef,
     title: string,
@@ -71,6 +73,7 @@ type ActionProposalsPanelViewProps = {
   ) => void;
   onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
   pendingMutation: PendingMutation;
+  originFilter?: ProposalOriginFilter;
   selectedEvidence: ActionProposalEvidenceRef | null;
   selectedEvidenceTitle?: string | null;
   selectedEvidenceCount?: number | null;
@@ -101,6 +104,7 @@ export function ActionProposalsPanel() {
   const [selectedEvidenceTitle, setSelectedEvidenceTitle] = useState<string | null>(null);
   const [selectedEvidenceCount, setSelectedEvidenceCount] = useState<number | null>(null);
   const [status, setStatus] = useState<PanelStatus>("loading");
+  const [originFilter, setOriginFilter] = useState<ProposalOriginFilter>("all");
   const [statusFilter, setStatusFilter] = useState<ProposalStatusFilter>("proposed");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -236,6 +240,7 @@ export function ActionProposalsPanel() {
       onReject={reject}
       onRefreshProposals={() => setReloadKey((current) => current + 1)}
       onRetry={() => setReloadKey((current) => current + 1)}
+      onOriginFilterChange={setOriginFilter}
       onSelectEvidence={(evidence, title, count) => {
         setSelectedEvidence(evidence);
         setSelectedEvidenceTitle(title);
@@ -243,6 +248,7 @@ export function ActionProposalsPanel() {
       }}
       onStatusFilterChange={setStatusFilter}
       pendingMutation={pendingMutation}
+      originFilter={originFilter}
       selectedEvidence={selectedEvidence}
       selectedEvidenceTitle={selectedEvidenceTitle}
       selectedEvidenceCount={selectedEvidenceCount}
@@ -264,9 +270,11 @@ export function ActionProposalsPanelView({
   onReject,
   onRefreshProposals,
   onRetry,
+  onOriginFilterChange,
   onSelectEvidence,
   onStatusFilterChange,
   pendingMutation,
+  originFilter = "all",
   selectedEvidence,
   selectedEvidenceTitle = null,
   selectedEvidenceCount = null,
@@ -275,7 +283,11 @@ export function ActionProposalsPanelView({
   successMessage = null
 }: ActionProposalsPanelViewProps) {
   const proposals = data?.proposals ?? [];
-  const filteredProposals = filterProposals(proposals, statusFilter);
+  const statusFilteredProposals = filterProposalsByStatus(proposals, statusFilter);
+  const filteredProposals = filterProposalsByOrigin(
+    statusFilteredProposals,
+    originFilter
+  );
   const groups = groupProposalsByOrigin(filteredProposals);
   const orderedProposals = groups.flatMap((group) => group.proposals);
   const defaultEvidenceSelection = firstEvidenceSelection(orderedProposals);
@@ -384,6 +396,12 @@ export function ActionProposalsPanelView({
             activeFilter={statusFilter}
             onChange={onStatusFilterChange}
             proposals={proposals}
+          />
+
+          <ActionOriginFilter
+            activeFilter={originFilter}
+            onChange={onOriginFilterChange}
+            proposals={statusFilteredProposals}
           />
 
           <section className="work-columns">
@@ -524,6 +542,38 @@ function ActionStatusFilter({
             type="button"
           >
             {filterLabel(filter)} · {filterCount(proposals, filter)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ActionOriginFilter({
+  activeFilter,
+  onChange,
+  proposals
+}: {
+  activeFilter: ProposalOriginFilter;
+  onChange?: (filter: ProposalOriginFilter) => void;
+  proposals: ActionProposal[];
+}) {
+  const filters: ProposalOriginFilter[] = ["all", "briefing", "github", "internal"];
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.originFilterLabel}>
+      <h3>{M.actionsPanel.originFilterTitle}</h3>
+      <p className="muted">{M.actionsPanel.originFilterDescription}</p>
+      <div className="segmented" role="tablist" aria-label={M.actionsPanel.originFilterLabel}>
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {originFilterLabel(filter)} · {originFilterCount(proposals, filter)}
           </button>
         ))}
       </div>
@@ -928,7 +978,7 @@ function countByStatus(proposals: ActionProposal[], status: string): number {
   return proposals.filter((proposal) => proposal.status === status).length;
 }
 
-function filterProposals(
+function filterProposalsByStatus(
   proposals: ActionProposal[],
   filter: ProposalStatusFilter
 ): ActionProposal[] {
@@ -936,6 +986,16 @@ function filterProposals(
     return proposals;
   }
   return proposals.filter((proposal) => proposal.status === filter);
+}
+
+function filterProposalsByOrigin(
+  proposals: ActionProposal[],
+  filter: ProposalOriginFilter
+): ActionProposal[] {
+  if (filter === "all") {
+    return proposals;
+  }
+  return proposals.filter((proposal) => proposalOrigin(proposal) === filter);
 }
 
 function filterCount(
@@ -956,6 +1016,29 @@ function filterLabel(filter: ProposalStatusFilter): string {
     return M.actionsPanel.filterRejected;
   }
   return M.actionsPanel.filterAll;
+}
+
+function originFilterCount(
+  proposals: ActionProposal[],
+  filter: ProposalOriginFilter
+): number {
+  if (filter === "all") {
+    return proposals.length;
+  }
+  return proposals.filter((proposal) => proposalOrigin(proposal) === filter).length;
+}
+
+function originFilterLabel(filter: ProposalOriginFilter): string {
+  if (filter === "briefing") {
+    return M.actionsPanel.originFilterBriefing;
+  }
+  if (filter === "github") {
+    return M.actionsPanel.originFilterGithub;
+  }
+  if (filter === "internal") {
+    return M.actionsPanel.originFilterInternal;
+  }
+  return M.actionsPanel.originFilterAll;
 }
 
 function firstEvidenceSelection(
