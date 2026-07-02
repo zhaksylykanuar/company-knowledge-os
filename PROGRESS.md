@@ -30,6 +30,13 @@
   status и LLM off status. Панель не делает provider calls, не запускает LLM и
   не обещает live sync; copy централизован в `web/lib/messages.ts`, тесты
   проверяют states and no live/AI overclaim.
+- **Private-beta readiness dashboard (НОВОЕ):** на `/dashboard` добавлен
+  `PrivateBetaReadinessPanel`, который читает только существующий Company Brain
+  endpoint и показывает ручной readiness-чеклист перед private-beta запуском:
+  canonical data/evidence, session login boundary, manual deploy runbook,
+  deferred GitHub provider read, external writes off и LLM off/available
+  boundary. Панель не деплоит, не пушит, не запускает provider calls, provider
+  writes или LLM; tests cover ready/needs-data/live-capability labels.
 - **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
   теперь добавляет `signals.coverage` и item `source-coverage` из локального
   Company Brain state: canonical repositories, open issues/PRs, evidence refs,

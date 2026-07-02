@@ -72,6 +72,11 @@
   have an open action, and links to `/actions` with briefing/proposed filters.
   This is local/read-only apart from the already existing `internal_todo`
   creation control and does not start provider calls, external writes, or LLM.
+- Added a dashboard private-beta readiness panel backed by the existing
+  Company Brain endpoint. It shows canonical data/evidence readiness, session
+  login boundary, manual deploy runbook status, deferred GitHub provider reads,
+  external-writes-off, and LLM boundary without deploying, pushing, calling
+  providers, performing external writes, or invoking LLM.
 
 ## 2026-07-01
 

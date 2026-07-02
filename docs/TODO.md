@@ -94,6 +94,11 @@ Implemented foundations:
   action creation when an open action already exists, and links into `/actions`
   with briefing/proposed focus. This reads local DB state only and starts no
   provider calls, external writes, or LLM calls.
+- Dashboard now includes a local private-beta readiness panel backed by the
+  existing Company Brain endpoint. It summarizes canonical data/evidence,
+  session-auth boundary, manual deploy runbook, deferred provider reads,
+  external-writes-off, and LLM boundary without deploying, pushing, calling
+  providers, performing external writes, or invoking LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -149,9 +154,10 @@ Done when:
    views while keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
-  Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade
-  head`, smoke. Do not add auto-deploy or provider-write smoke without explicit
-  human approval.
+  Dashboard now surfaces a local private-beta readiness checklist, but actual
+  production launch still uses the manual Railway runbooks: backup, deploy,
+  manual `alembic upgrade head`, smoke. Do not add auto-deploy or
+  provider-write smoke without explicit human approval.
 
 4. **GitHub App real read run readiness (deferred).**
   Backend polling-only live read sync, `/github` explicit repo control, and

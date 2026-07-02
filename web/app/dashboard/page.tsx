@@ -8,6 +8,7 @@ import { CompanyBrainPanel } from "../../components/CompanyBrainPanel";
 import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWorkPanel";
 import { GitHubSyncControls } from "../../components/GitHubSyncControls";
 import { PageHeader } from "../../components/PageHeader";
+import { PrivateBetaReadinessPanel } from "../../components/PrivateBetaReadinessPanel";
 import { SelectedRepositorySyncControls } from "../../components/SelectedRepositorySyncControls";
 import { SourceCoveragePanel } from "../../components/SourceCoveragePanel";
 import { StatusCard } from "../../components/StatusCard";
@@ -60,6 +61,7 @@ export default function DashboardPage() {
         onSyncComplete={() => setOperationalWorkRefresh((current) => current + 1)}
       />
       <SourceCoveragePanel refreshSignal={operationalWorkRefresh} />
+      <PrivateBetaReadinessPanel refreshSignal={operationalWorkRefresh} />
       <CompanyBrainPanel refreshSignal={operationalWorkRefresh} />
       <BriefingPanel />
       <ActionProposalsPanel />

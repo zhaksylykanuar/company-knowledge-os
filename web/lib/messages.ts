@@ -640,6 +640,61 @@ export const M = {
     statusNeedsEvidence: "Нужно evidence"
   },
 
+  privateBetaReadiness: {
+    eyebrow: "Private beta",
+    title: "Готовность к ручному запуску",
+    badgeManual: "Manual / no external writes",
+    loading: "Загрузка готовности private beta",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — готовность private beta недоступна.",
+    unavailableTitle: "Готовность private beta недоступна",
+    unavailableDescription: "Панель не смогла загрузить локальные данные готовности.",
+    intro:
+      "Панель показывает только локальные условия для ручного private-beta запуска. Она не деплоит, не пушит, не запускает provider writes и не вызывает LLM.",
+    summaryLabel: "Сводка готовности private beta",
+    dataTitle: "Данные",
+    dataDescription: "Канонические repo/evidence уже есть в локальной БД.",
+    externalWritesTitle: "External writes",
+    externalWritesDescription: "Записи во внешние сервисы остаются отключёнными.",
+    externalWritesValue: "Отключены",
+    deployTitle: "Deploy",
+    deployDescription: "Только ручной runbook + smoke gate.",
+    deployValue: "Manual",
+    aiTitle: "LLM",
+    aiDescription: "AI generation для сводок/действий не запускается.",
+    aiValue: "Off",
+    detailsLabel: "Чеклист готовности private beta",
+    detailsTitle: "Чеклист перед ручным запуском",
+    dataLabel: "Канонические данные и evidence",
+    dataNeedsEvidenceDescription:
+      "Нужно иметь хотя бы один canonical repo row и evidence ref перед уверенным smoke/readiness выводом.",
+    sessionLabel: "Сессионный логин",
+    sessionDescription:
+      "Продуктовый UI работает через first-party session cookie; operator key не отправляется браузером.",
+    manualDeployLabel: "Manual deploy runbook",
+    manualDeployDescription:
+      "Railway/private-beta deploy остаётся ручным: backup, deploy, alembic upgrade head и smoke выполняются человеком.",
+    providerReadLabel: "GitHub provider read",
+    providerReadAvailableDescription:
+      "Backend capability допускает live provider read, но эта панель сама его не запускает.",
+    providerReadDeferredDescription:
+      "Первый real-provider read остаётся отдельным scoped action с явным подтверждением; здесь он не запускается.",
+    externalWritesLabel: "Внешние записи",
+    externalWritesOffDescription:
+      "GitHub/Jira/прочие provider writes не запускаются из readiness/dashboard path.",
+    llmLabel: "LLM / AI generation",
+    llmAvailableDescription:
+      "Capability включён, но readiness не вызывает LLM и не мутирует данные через AI.",
+    llmOffDescription:
+      "LLM briefing/extraction выключены; readiness основан на детерминированных локальных данных.",
+    statusReady: "Готово",
+    statusNeedsData: "Нужны данные",
+    statusManual: "Ручной",
+    statusAvailable: "Доступно",
+    statusDeferred: "Отложено",
+    statusOff: "Выключено"
+  },
+
   companyBrain: {
     eyebrow: "Мозг компании",
     title: "Состояние GitHub, подтверждённое источниками",
@@ -788,6 +843,12 @@ export const T = {
     `Каноническая поверхность GitHub готова: ${count} repo rows в локальной БД.`,
   sourceCoverageEvidenceReady: (count: number) =>
     `Для текущей выборки возвращено evidence refs: ${count}.`,
+  privateBetaReadinessDataReady: (
+    repositories: number,
+    evidenceRefs: number,
+    openWork: number
+  ) =>
+    `Локальная база содержит ${repositories} repo rows, evidence refs: ${evidenceRefs}, открытая работа: ${openWork}.`,
   connectionNotReady: (status: string) =>
     `Запись в бэкенде в статусе ${status}. Локальная нормализация требует подключённой записи GitHub.`,
   syncResultCounts: (repos: number, issues: number, prs: number, status: string) =>
