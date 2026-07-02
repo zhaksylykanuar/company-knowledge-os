@@ -47,6 +47,9 @@
   create an `internal_todo` proposal carrying that item's summary and evidence
   refs for later local approval, without creating GitHub issues or executing
   external writes.
+- Added local status filters to the ActionProposals review panel so proposed,
+  approved, rejected, and all local proposals can be reviewed without extra
+  provider calls or backend state changes.
 
 ## 2026-06-30
 

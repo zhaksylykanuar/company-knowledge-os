@@ -120,9 +120,11 @@ function renderPanel(
       onReject={props.onReject}
       onRetry={props.onRetry}
       onSelectEvidence={props.onSelectEvidence}
+      onStatusFilterChange={props.onStatusFilterChange}
       pendingMutation={props.pendingMutation ?? null}
       selectedEvidence={props.selectedEvidence ?? null}
       selectedEvidenceTitle={props.selectedEvidenceTitle ?? null}
+      statusFilter={props.statusFilter ?? "all"}
       status={props.status ?? "ready"}
       successMessage={props.successMessage ?? null}
     />
@@ -346,6 +348,25 @@ test("renders proposal cards, statuses, evidence refs, and local-only boundary",
   assert.doesNotMatch(html, /sent to GitHub/i);
   assert.doesNotMatch(html, /created GitHub issue/i);
   assert.doesNotMatch(html, /source_events/);
+});
+
+test("filters loaded local proposals without changing provider state", () => {
+  const proposedHtml = renderPanel({
+    onStatusFilterChange: () => undefined,
+    statusFilter: "proposed"
+  });
+  assert.ok(proposedHtml.includes(M.actionsPanel.filterTitle));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.filterProposed} · 1`));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.filterAll} · 3`));
+  assert.match(proposedHtml, /Create follow-up GitHub issue/);
+  assert.doesNotMatch(proposedHtml, /Approved local proposal/);
+  assert.doesNotMatch(proposedHtml, /Rejected local proposal/);
+  assert.ok(proposedHtml.includes(M.actionsPanel.filterDescription));
+  assert.doesNotMatch(proposedHtml, /provider call started/i);
+
+  const rejectedHtml = renderPanel({ statusFilter: "rejected" });
+  assert.match(rejectedHtml, /Rejected local proposal/);
+  assert.doesNotMatch(rejectedHtml, /Create follow-up GitHub issue/);
 });
 
 test("renders create form and pending local mutations", () => {

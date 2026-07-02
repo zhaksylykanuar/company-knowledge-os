@@ -26,6 +26,7 @@ import { StatusCard } from "./StatusCard";
 
 type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupported";
 type ProposalKind = "github_issue" | "internal_todo";
+type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
 type PendingMutation = "create" | `approve:${string}` | `reject:${string}` | null;
 
 type ActionProposalCreateFormState = {
@@ -51,9 +52,11 @@ type ActionProposalsPanelViewProps = {
   onRefreshProposals?: () => void;
   onRetry?: () => void;
   onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
+  onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
   pendingMutation: PendingMutation;
   selectedEvidence: ActionProposalEvidenceRef | null;
   selectedEvidenceTitle?: string | null;
+  statusFilter?: ProposalStatusFilter;
   status: PanelStatus;
   successMessage?: string | null;
 };
@@ -79,6 +82,7 @@ export function ActionProposalsPanel() {
     useState<ActionProposalEvidenceRef | null>(null);
   const [selectedEvidenceTitle, setSelectedEvidenceTitle] = useState<string | null>(null);
   const [status, setStatus] = useState<PanelStatus>("loading");
+  const [statusFilter, setStatusFilter] = useState<ProposalStatusFilter>("proposed");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -216,9 +220,11 @@ export function ActionProposalsPanel() {
         setSelectedEvidence(evidence);
         setSelectedEvidenceTitle(title);
       }}
+      onStatusFilterChange={setStatusFilter}
       pendingMutation={pendingMutation}
       selectedEvidence={selectedEvidence}
       selectedEvidenceTitle={selectedEvidenceTitle}
+      statusFilter={statusFilter}
       status={status}
       successMessage={successMessage}
     />
@@ -237,13 +243,16 @@ export function ActionProposalsPanelView({
   onRefreshProposals,
   onRetry,
   onSelectEvidence,
+  onStatusFilterChange,
   pendingMutation,
   selectedEvidence,
   selectedEvidenceTitle = null,
+  statusFilter = "all",
   status,
   successMessage = null
 }: ActionProposalsPanelViewProps) {
   const proposals = data?.proposals ?? [];
+  const filteredProposals = filterProposals(proposals, statusFilter);
   const canCreate = canSubmitCreateForm(createForm);
 
   return (
@@ -333,6 +342,12 @@ export function ActionProposalsPanelView({
             />
           </section>
 
+          <ActionStatusFilter
+            activeFilter={statusFilter}
+            onChange={onStatusFilterChange}
+            proposals={proposals}
+          />
+
           <section className="work-columns">
             <ProposalList
               onApprove={onApprove}
@@ -340,7 +355,8 @@ export function ActionProposalsPanelView({
               onRefreshProposals={onRefreshProposals}
               onSelectEvidence={onSelectEvidence}
               pendingMutation={pendingMutation}
-              proposals={proposals}
+              proposals={filteredProposals}
+              totalProposals={proposals.length}
             />
             <EvidenceDrawer
               evidence={selectedEvidence}
@@ -442,13 +458,46 @@ function ActionProposalCreateForm({
   );
 }
 
+function ActionStatusFilter({
+  activeFilter,
+  onChange,
+  proposals
+}: {
+  activeFilter: ProposalStatusFilter;
+  onChange?: (filter: ProposalStatusFilter) => void;
+  proposals: ActionProposal[];
+}) {
+  const filters: ProposalStatusFilter[] = ["proposed", "approved", "rejected", "all"];
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.filterLabel}>
+      <h3>{M.actionsPanel.filterTitle}</h3>
+      <p className="muted">{M.actionsPanel.filterDescription}</p>
+      <div className="segmented" role="tablist" aria-label={M.actionsPanel.filterLabel}>
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {filterLabel(filter)} · {filterCount(proposals, filter)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ProposalList({
   onApprove,
   onReject,
   onRefreshProposals,
   onSelectEvidence,
   pendingMutation,
-  proposals
+  proposals,
+  totalProposals
 }: {
   onApprove?: (proposalId: string) => void;
   onReject?: (proposalId: string) => void;
@@ -456,12 +505,16 @@ function ProposalList({
   onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
   pendingMutation: PendingMutation;
   proposals: ActionProposal[];
+  totalProposals: number;
 }) {
   return (
     <section className="work-section" aria-label={M.actionsPanel.listTitle}>
       <h3>{M.actionsPanel.listTitle}</h3>
-      {proposals.length === 0 ? (
+      {proposals.length === 0 && totalProposals === 0 ? (
         <p className="muted">{M.actionsPanel.noProposals}</p>
+      ) : null}
+      {proposals.length === 0 && totalProposals > 0 ? (
+        <p className="muted">{M.actionsPanel.noProposalsForFilter}</p>
       ) : null}
       <div className="work-list">
         {proposals.map((proposal) => (
@@ -756,6 +809,36 @@ function mergeUpdatedProposal(
 
 function countByStatus(proposals: ActionProposal[], status: string): number {
   return proposals.filter((proposal) => proposal.status === status).length;
+}
+
+function filterProposals(
+  proposals: ActionProposal[],
+  filter: ProposalStatusFilter
+): ActionProposal[] {
+  if (filter === "all") {
+    return proposals;
+  }
+  return proposals.filter((proposal) => proposal.status === filter);
+}
+
+function filterCount(
+  proposals: ActionProposal[],
+  filter: ProposalStatusFilter
+): number {
+  return filter === "all" ? proposals.length : countByStatus(proposals, filter);
+}
+
+function filterLabel(filter: ProposalStatusFilter): string {
+  if (filter === "proposed") {
+    return M.actionsPanel.filterProposed;
+  }
+  if (filter === "approved") {
+    return M.actionsPanel.filterApproved;
+  }
+  if (filter === "rejected") {
+    return M.actionsPanel.filterRejected;
+  }
+  return M.actionsPanel.filterAll;
 }
 
 function actionLabel(actionType: string): string {

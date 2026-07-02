@@ -42,6 +42,11 @@
   `ActionProposal` с summary/evidence refs из briefing item. Это local DB-only:
   не создаёт GitHub issue, не запускает external execution и не пишет во внешние
   сервисы; proposal далее проверяется/одобряется в блоке “Действия”.
+- **Action review polish (НОВОЕ):** в `ActionProposalsPanel` добавлен локальный
+  status filter (“Нужно решение” / “Одобрено” / “Отклонено” / “Все”) с counts.
+  Фильтр работает только по уже загруженным local proposals, не делает provider
+  calls, не меняет backend state и помогает разбирать `internal_todo` proposals,
+  созданные из briefing evidence.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
