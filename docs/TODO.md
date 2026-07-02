@@ -99,6 +99,11 @@ Implemented foundations:
   session-auth boundary, manual deploy runbook, deferred provider reads,
   external-writes-off, and LLM boundary without deploying, pushing, calling
   providers, performing external writes, or invoking LLM.
+- `/github` now has client-side local repo-surface focus filters over the
+  already-loaded repository list: all repos, active, archived, private, and with
+  evidence refs. This helps prepare repo review/audit without provider calls,
+  bulk sync, external writes, or changing the explicit per-repository read-only
+  sync boundary.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -162,8 +167,10 @@ Done when:
 4. **GitHub App real read run readiness (deferred).**
   Backend polling-only live read sync, `/github` explicit repo control, and
   mocked synced-evidence isolation tests are in place; safe rate-limit/error
-  observability is in place. Run the first real scoped read sync only after
-  explicit human approval.
+  observability is in place. `/github` now adds local repo-surface filters so
+  the founder can focus active/private/evidence-backed repos before choosing a
+  scoped per-repo read. Run the first real scoped read sync only after explicit
+  human approval.
 
 5. **Multi-user / teammate provisioning.**
   Add invite/provisioning flow after single-founder auth/session behavior is

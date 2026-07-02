@@ -174,7 +174,18 @@ export const M = {
     repositoryListTitle: "Репозитории",
     repositoryListEmptyTitle: "Репозитории не найдены",
     repositoryListEmptyDescription:
-      "Локальная поверхность репозиториев пуста. Сначала подготовьте repository surface или подключите GitHub App."
+      "Локальная поверхность репозиториев пуста. Сначала подготовьте repository surface или подключите GitHub App.",
+    repositoryFocusTitle: "Фокус локальной repo surface",
+    repositoryFocusLabel: "Фильтр локальной поверхности репозиториев",
+    repositoryFocusDescription:
+      "Фильтр работает только по уже загруженному списку репозиториев и не запускает provider calls, bulk sync или внешние записи.",
+    repositoryFocusAll: "Все repo",
+    repositoryFocusActive: "Активные",
+    repositoryFocusArchived: "Архивные",
+    repositoryFocusPrivate: "Private",
+    repositoryFocusWithEvidence: "С evidence",
+    repositoryListNoReposForFilter:
+      "Для выбранного локального фильтра репозиториев нет."
   },
 
   githubSync: {
@@ -835,6 +846,14 @@ export const T = {
     `Источник: ${source || M.common.unknown}.`,
   githubRepositoryLastActivity: (value: string) =>
     `Последняя активность: ${value}.`,
+  githubRepositoryFocusSummary: (
+    total: number,
+    active: number,
+    archived: number,
+    privateCount: number,
+    withEvidence: number
+  ) =>
+    `Repo surface: всего ${total} · активных ${active} · архивных ${archived} · private ${privateCount} · с evidence ${withEvidence}.`,
   githubAppLiveSyncResult: (repos: number, issues: number, prs: number, status: string) =>
     `Синхронизировано через GitHub App: репозиториев — ${repos}, задач — ${issues}, пулреквестов — ${prs}. Статус: ${status}.`,
   sourceCoverageWork: (issues: number, prs: number) =>

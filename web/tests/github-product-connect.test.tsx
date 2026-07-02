@@ -9,7 +9,7 @@ import {
   fetchGitHubRepositories,
   runGitHubAppLiveSync
 } from "../lib/api";
-import { M } from "../lib/messages";
+import { M, T } from "../lib/messages";
 import type {
   GitHubAppConfigStatus,
   GitHubAppLiveSyncResponse,
@@ -89,7 +89,14 @@ const repositories: GitHubRepositoryListResponse = {
       source_url: "https://github.com/qtwin-io/company-knowledge-os",
       last_activity_at: null,
       source: "local_snapshot",
-      evidence_refs: [],
+      evidence_refs: [
+        {
+          kind: "repository_inventory_snapshot",
+          source: "github",
+          ref: "qtwin-io/company-knowledge-os",
+          url: "https://github.com/qtwin-io/company-knowledge-os"
+        }
+      ],
       metadata: {}
     },
     {
@@ -98,7 +105,7 @@ const repositories: GitHubRepositoryListResponse = {
       full_name: "qtwin-io/another-repo",
       default_branch: "main",
       visibility: "private",
-      archived: false,
+      archived: true,
       source_url: "https://github.com/qtwin-io/another-repo",
       last_activity_at: "2026-07-01T10:00:00Z",
       source: "local_snapshot",
@@ -168,6 +175,7 @@ function renderPanel(
       error={props.error ?? null}
       onRetry={props.onRetry}
       onRunRepositorySync={props.onRunRepositorySync}
+      repositoryFocus={props.repositoryFocus}
       repositorySync={props.repositorySync ?? {}}
       repositories={props.repositories ?? repositories}
       state={props.state ?? "ready"}
@@ -253,6 +261,8 @@ test("renders connected GitHub App foundation without write promises", () => {
   assert.ok(html.includes(M.githubProductConnect.writeTitle));
   assert.ok(html.includes(M.githubProductConnect.liveSyncTitle));
   assert.ok(html.includes(M.githubProductConnect.liveSyncRun));
+  assert.ok(html.includes(M.githubProductConnect.repositoryFocusTitle));
+  assert.ok(html.includes(T.githubRepositoryFocusSummary(2, 1, 1, 2, 1)));
   assert.ok(html.includes("qtwin-io/company-knowledge-os"));
   assert.ok(html.includes("qtwin-io/another-repo"));
   assert.equal(
@@ -262,6 +272,30 @@ test("renders connected GitHub App foundation without write promises", () => {
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /provider token/i);
   assert.doesNotMatch(html, /write enabled/i);
+});
+
+test("filters the loaded repository surface locally without provider calls", () => {
+  const archivedHtml = renderPanel({
+    repositoryFocus: "archived"
+  });
+  assert.ok(archivedHtml.includes(M.githubProductConnect.repositoryFocusArchived));
+  assert.ok(archivedHtml.includes("qtwin-io/another-repo"));
+  assert.doesNotMatch(archivedHtml, /qtwin-io\/company-knowledge-os/);
+  assert.equal(
+    (archivedHtml.match(new RegExp(M.githubProductConnect.liveSyncRun, "g")) ?? [])
+      .length,
+    1
+  );
+
+  const evidenceHtml = renderPanel({
+    repositoryFocus: "with_evidence"
+  });
+  assert.ok(evidenceHtml.includes(M.githubProductConnect.repositoryFocusWithEvidence));
+  assert.ok(evidenceHtml.includes("qtwin-io/company-knowledge-os"));
+  assert.doesNotMatch(evidenceHtml, /qtwin-io\/another-repo/);
+  assert.doesNotMatch(evidenceHtml, /provider read запущен/i);
+  assert.doesNotMatch(evidenceHtml, /bulk sync started/i);
+  assert.doesNotMatch(evidenceHtml, /external write performed/i);
 });
 
 test("renders missing GitHub App env contract", () => {

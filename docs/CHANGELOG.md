@@ -77,6 +77,11 @@
   login boundary, manual deploy runbook status, deferred GitHub provider reads,
   external-writes-off, and LLM boundary without deploying, pushing, calling
   providers, performing external writes, or invoking LLM.
+- Added local repo-surface focus filters to the `/github` GitHub App panel.
+  The already-loaded repository list can now be filtered by all, active,
+  archived, private, or evidence-backed repositories with summary counts. This
+  remains client-side only and does not call providers, start bulk sync, perform
+  external writes, or weaken the explicit per-repository read-only sync path.
 
 ## 2026-07-01
 

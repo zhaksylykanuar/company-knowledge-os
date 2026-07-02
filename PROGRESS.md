@@ -14,9 +14,9 @@
   identity/race debt перед live sync **закрыт** (DEC-050). GitHub App
   product-connect foundation **сделан** (DEC-052). GitHub App polling-only live
   read sync backend foundation **сделан** (DEC-053). `/github` product UI со
-  списком repo и per-repo read-only sync кнопкой **сделан**. Mocked synced
-  evidence/briefing isolation verification **сделан**. Live-read
-  observability/rate-limit handling **сделан**. Локальный `/github` теперь
+  списком repo, per-repo read-only sync кнопкой и local repo-surface focus
+  фильтрами **сделан**. Mocked synced evidence/briefing isolation verification
+  **сделан**. Live-read observability/rate-limit handling **сделан**. Локальный `/github` теперь
   показывает canonical org repo rows для `qtwin-io` из `.local/repos.json`
   (25 repos), а не retained source-event/legacy fallbacks; live read-only check
   по org env keys подтвердил тот же count без вывода секретов. Следующий лучший
@@ -37,6 +37,12 @@
   deferred GitHub provider read, external writes off и LLM off/available
   boundary. Панель не деплоит, не пушит, не запускает provider calls, provider
   writes или LLM; tests cover ready/needs-data/live-capability labels.
+- **GitHub repo-surface focus (НОВОЕ):** `/github` теперь показывает локальный
+  фокус/фильтры поверх уже загруженного списка репозиториев: все repo,
+  активные, архивные, private и с evidence refs, плюс summary counts. Фильтр
+  работает только client-side по уже полученному backend payload, не делает
+  provider calls, не запускает bulk sync и сохраняет per-repo explicit
+  read-only sync boundary.
 - **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
   теперь добавляет `signals.coverage` и item `source-coverage` из локального
   Company Brain state: canonical repositories, open issues/PRs, evidence refs,

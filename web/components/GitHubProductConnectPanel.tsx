@@ -12,6 +12,7 @@ import { useWorkspaceId } from "../lib/session";
 import type {
   GitHubAppLiveSyncResponse,
   GitHubConnectionStatusResponse,
+  GitHubRepositoryRead,
   GitHubRepositoryListResponse
 } from "../lib/types";
 import { EmptyState } from "./EmptyState";
@@ -22,6 +23,12 @@ import { StatusCard } from "./StatusCard";
 
 type ProductConnectState = "loading" | "ready" | "error" | "missing";
 type LiveSyncState = "idle" | "syncing" | "success" | "error";
+type RepositoryFocusFilter =
+  | "active"
+  | "all"
+  | "archived"
+  | "private"
+  | "with_evidence";
 type RepositorySyncStatus = {
   error: string | null;
   result: GitHubAppLiveSyncResponse | null;
@@ -32,7 +39,9 @@ type GitHubProductConnectPanelViewProps = {
   connectionStatus: GitHubConnectionStatusResponse | null;
   error: string | null;
   onRetry?: () => void;
+  onRepositoryFocusChange?: (filter: RepositoryFocusFilter) => void;
   onRunRepositorySync?: (repositoryFullName: string) => void;
+  repositoryFocus?: RepositoryFocusFilter;
   repositorySync: Record<string, RepositorySyncStatus>;
   repositories: GitHubRepositoryListResponse | null;
   state: ProductConnectState;
@@ -49,6 +58,8 @@ export function GitHubProductConnectPanel() {
   const [repositorySync, setRepositorySync] = useState<
     Record<string, RepositorySyncStatus>
   >({});
+  const [repositoryFocus, setRepositoryFocus] =
+    useState<RepositoryFocusFilter>("all");
   const [state, setState] = useState<ProductConnectState>("loading");
 
   useEffect(() => {
@@ -127,8 +138,10 @@ export function GitHubProductConnectPanel() {
     <GitHubProductConnectPanelView
       connectionStatus={connectionStatus}
       error={error}
+      onRepositoryFocusChange={setRepositoryFocus}
       onRetry={() => setReloadKey((current) => current + 1)}
       onRunRepositorySync={syncRepository}
+      repositoryFocus={repositoryFocus}
       repositorySync={repositorySync}
       repositories={repositories}
       state={state}
@@ -139,8 +152,10 @@ export function GitHubProductConnectPanel() {
 export function GitHubProductConnectPanelView({
   connectionStatus,
   error,
+  onRepositoryFocusChange,
   onRetry,
   onRunRepositorySync,
+  repositoryFocus = "all",
   repositorySync,
   repositories,
   state
@@ -150,6 +165,11 @@ export function GitHubProductConnectPanelView({
     connectionStatus?.connection_method === "github_app_installation" &&
     connectionStatus.has_connection_record;
   const repositoryItems = repositories?.repositories ?? [];
+  const filteredRepositoryItems = filterRepositoriesByFocus(
+    repositoryItems,
+    repositoryFocus
+  );
+  const repositoryStats = repositoryFocusStats(repositoryItems);
 
   return (
     <section
@@ -270,7 +290,18 @@ export function GitHubProductConnectPanelView({
                 className="stack"
               >
                 <strong>{M.githubProductConnect.repositoryListTitle}</strong>
-                {repositoryItems.map((repository) => {
+                <RepositoryFocusControl
+                  activeFilter={repositoryFocus}
+                  onChange={onRepositoryFocusChange}
+                  repositories={repositoryItems}
+                  stats={repositoryStats}
+                />
+                {filteredRepositoryItems.length === 0 ? (
+                  <p className="muted">
+                    {M.githubProductConnect.repositoryListNoReposForFilter}
+                  </p>
+                ) : null}
+                {filteredRepositoryItems.map((repository) => {
                   const sync = repositorySync[repository.full_name] ?? {
                     error: null,
                     result: null,
@@ -380,6 +411,113 @@ export function GitHubProductConnectPanelView({
       ) : null}
     </section>
   );
+}
+
+function RepositoryFocusControl({
+  activeFilter,
+  onChange,
+  repositories,
+  stats
+}: {
+  activeFilter: RepositoryFocusFilter;
+  onChange?: (filter: RepositoryFocusFilter) => void;
+  repositories: GitHubRepositoryRead[];
+  stats: ReturnType<typeof repositoryFocusStats>;
+}) {
+  const filters: RepositoryFocusFilter[] = [
+    "all",
+    "active",
+    "archived",
+    "private",
+    "with_evidence"
+  ];
+  return (
+    <section
+      className="work-section"
+      aria-label={M.githubProductConnect.repositoryFocusLabel}
+    >
+      <h3>{M.githubProductConnect.repositoryFocusTitle}</h3>
+      <p className="muted">{M.githubProductConnect.repositoryFocusDescription}</p>
+      <p className="muted">
+        {T.githubRepositoryFocusSummary(
+          repositories.length,
+          stats.active,
+          stats.archived,
+          stats.private,
+          stats.withEvidence
+        )}
+      </p>
+      <div
+        className="segmented"
+        role="tablist"
+        aria-label={M.githubProductConnect.repositoryFocusLabel}
+      >
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {repositoryFocusLabel(filter)} · {repositoryFocusCount(repositories, filter)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function repositoryFocusLabel(filter: RepositoryFocusFilter): string {
+  switch (filter) {
+    case "active":
+      return M.githubProductConnect.repositoryFocusActive;
+    case "archived":
+      return M.githubProductConnect.repositoryFocusArchived;
+    case "private":
+      return M.githubProductConnect.repositoryFocusPrivate;
+    case "with_evidence":
+      return M.githubProductConnect.repositoryFocusWithEvidence;
+    case "all":
+    default:
+      return M.githubProductConnect.repositoryFocusAll;
+  }
+}
+
+function repositoryFocusCount(
+  repositories: GitHubRepositoryRead[],
+  filter: RepositoryFocusFilter
+): number {
+  return filterRepositoriesByFocus(repositories, filter).length;
+}
+
+function filterRepositoriesByFocus(
+  repositories: GitHubRepositoryRead[],
+  filter: RepositoryFocusFilter
+): GitHubRepositoryRead[] {
+  switch (filter) {
+    case "active":
+      return repositories.filter((repository) => !repository.archived);
+    case "archived":
+      return repositories.filter((repository) => repository.archived);
+    case "private":
+      return repositories.filter((repository) => repository.visibility === "private");
+    case "with_evidence":
+      return repositories.filter((repository) => repository.evidence_refs.length > 0);
+    case "all":
+    default:
+      return repositories;
+  }
+}
+
+function repositoryFocusStats(repositories: GitHubRepositoryRead[]) {
+  return {
+    active: filterRepositoriesByFocus(repositories, "active").length,
+    archived: filterRepositoriesByFocus(repositories, "archived").length,
+    private: filterRepositoriesByFocus(repositories, "private").length,
+    withEvidence: filterRepositoriesByFocus(repositories, "with_evidence").length
+  };
 }
 
 function githubAppDescription(status: GitHubConnectionStatusResponse): string {
