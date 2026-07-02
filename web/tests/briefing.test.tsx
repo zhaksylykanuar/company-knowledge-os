@@ -257,6 +257,21 @@ test("defaults briefing evidence drawer to first visible item evidence", () => {
   assert.doesNotMatch(html, new RegExp(`>${M.common.close}<`));
 });
 
+test("shows a safe empty state when a category filter matches no items", () => {
+  const html = renderPanel({ categoryFilter: "nonexistent-category" });
+  // Filter chips still reflect the loaded briefing's real categories/counts.
+  assert.ok(html.includes(`${M.briefingPanel.itemFilterAll} · 2`));
+  // The empty intersection uses the filter-specific message, not the
+  // "backend returned no items" message.
+  assert.ok(html.includes(M.briefingPanel.noItemsForFilter));
+  assert.doesNotMatch(html, new RegExp(M.briefingPanel.noItems));
+  // No item titles render and the evidence drawer falls back to its placeholder.
+  assert.doesNotMatch(html, /Repository inventory is available/);
+  assert.doesNotMatch(html, /Briefing is deterministic/);
+  assert.ok(html.includes(M.evidence.placeholder));
+  assert.doesNotMatch(html, /provider call started/i);
+});
+
 test("keeps manual briefing evidence selection over the default", () => {
   const evidence = sampleBriefing.briefing.items[0]?.evidence_refs[0] ?? null;
   const html = renderPanel({

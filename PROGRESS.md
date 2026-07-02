@@ -345,6 +345,24 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-02` — **Verification + coverage: briefing category filter empty
+  state.** Independently re-derived the objective requirements and audited the
+  prior "briefing item focus + evidence defaults" chunk against the real
+  worktree. Confirmed correctness: `categoryFilter` resets to `all` on
+  generate/open so a stale category cannot hide a newly loaded briefing; default
+  evidence follows the filtered items; manual selection overrides default; the
+  shared `EvidenceDrawer` changes are additive/optional so `ActionProposalsPanel`
+  is unaffected; no provider calls, external writes, or LLM. Found one shipped
+  but untested branch — the `noItemsForFilter` empty state (category filter
+  matches zero items while the briefing has items) — and added a focused test
+  proving the filter-specific empty message renders, item titles are hidden, and
+  the evidence drawer falls back to its safe placeholder. Changed
+  `web/tests/briefing.test.tsx` only. Checks: `npm test` **127 passed**,
+  `npm run typecheck`, `npm run lint`, `npm run build`, `uv run ruff check .`,
+  docs tests **16 passed**, `uv run pytest -q` **403 passed / 1 warning**,
+  `git diff --check`, tracked/staged secret scans green. Commit local-only;
+  push не делался.
+
 - `2026-07-02` — **Founder Briefing item focus + evidence defaults.**
   Continued the local-only Founder-facing coverage/briefing polish. Added a
   category filter to `BriefingPanel` that works only on the currently loaded
