@@ -118,11 +118,15 @@ function renderPanel(
       data={"data" in props ? props.data ?? null : sampleBriefing}
       error={props.error ?? null}
       history={props.history ?? []}
+      actionError={props.actionError ?? null}
+      actionSuccessMessage={props.actionSuccessMessage ?? null}
       onCloseEvidence={props.onCloseEvidence}
+      onCreateActionFromItem={props.onCreateActionFromItem}
       onGenerate={props.onGenerate}
       onOpenBriefing={props.onOpenBriefing}
       onRetry={props.onRetry}
       onSelectEvidence={props.onSelectEvidence}
+      pendingActionItemId={props.pendingActionItemId ?? null}
       selectedEvidence={props.selectedEvidence ?? null}
       selectedEvidenceItemTitle={props.selectedEvidenceItemTitle ?? null}
       status={props.status ?? "success"}
@@ -222,6 +226,20 @@ test("renders deterministic briefing sections and summary", () => {
   assert.match(html, /Repository inventory is available/);
   assert.match(html, /Briefing is deterministic/);
   assert.match(html, /91%/);
+});
+
+test("renders local action proposal controls for briefing items", () => {
+  const html = renderPanel({
+    actionSuccessMessage: M.briefingPanel.actionCreateSuccess,
+    onCreateActionFromItem: () => undefined,
+    pendingActionItemId: "repo-coverage"
+  });
+
+  assert.ok(html.includes(M.briefingPanel.actionCreate));
+  assert.ok(html.includes(M.briefingPanel.actionCreating));
+  assert.ok(html.includes(M.briefingPanel.actionCreateSuccess));
+  assert.doesNotMatch(html, /GitHub issue created/);
+  assert.doesNotMatch(html, /external write performed/i);
 });
 
 test("renders empty briefing payload without fake claims", () => {

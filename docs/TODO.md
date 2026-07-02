@@ -43,6 +43,8 @@ Implemented foundations:
   Company Brain endpoint, and persisted deterministic Founder Briefings with
   history, evidence refs, and local source-coverage signals. No LLM generation
   is currently implemented.
+- Local-only ActionProposal bridge from briefing items to `internal_todo`
+  proposals; approval/execution remains local and external writes are disabled.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -73,10 +75,11 @@ Done when:
 
 ## Near-Term Backlog
 
-1. **Actions over briefing evidence (local approval only).**
-   Source Coverage and deterministic Briefings now expose local coverage state.
-   Next: make local ActionProposals easier to create/review from briefing items
-   without provider writes or AI generation.
+1. **Action review polish (local approval only).**
+   Briefing items can now create local `internal_todo` proposals with evidence.
+   Next: improve the action review surface (grouping/filtering, clearer
+   evidence drawer defaults, and local execution audit readability) without
+   provider writes or AI generation.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

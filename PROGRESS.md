@@ -37,6 +37,11 @@
   остаются backward-compatible через default coverage model; UI cards теперь
   показывают coverage/work/evidence/mode вместо sync-job-centric summary.
   Никаких provider calls, external writes или LLM calls не добавлено.
+- **Briefing → local Action bridge (НОВОЕ):** в `BriefingPanel` у каждого item
+  появилась кнопка “Создать локальное действие”, которая создаёт `internal_todo`
+  `ActionProposal` с summary/evidence refs из briefing item. Это local DB-only:
+  не создаёт GitHub issue, не запускает external execution и не пишет во внешние
+  сервисы; proposal далее проверяется/одобряется в блоке “Действия”.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo

@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { generateManualFounderBriefing, getBriefing, listBriefings } from "../lib/api";
+import {
+  createActionProposal,
+  generateManualFounderBriefing,
+  getBriefing,
+  listBriefings
+} from "../lib/api";
 import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
@@ -27,14 +32,18 @@ type BriefingStatus =
   | "unsupported";
 
 type BriefingPanelViewProps = {
+  actionError?: string | null;
+  actionSuccessMessage?: string | null;
   data: FounderBriefingResponse | null;
   error: string | null;
   history?: BriefingSummary[];
   activeBriefingId?: string | null;
+  pendingActionItemId?: string | null;
   onGenerate?: () => void;
   onRetry?: () => void;
   onOpenBriefing?: (briefingId: string) => void;
   onCloseEvidence?: () => void;
+  onCreateActionFromItem?: (item: FounderBriefingItem) => void;
   onSelectEvidence?: (evidence: BriefingEvidenceRef, itemTitle: string) => void;
   selectedEvidence: BriefingEvidenceRef | null;
   selectedEvidenceItemTitle?: string | null;
@@ -50,6 +59,9 @@ export function BriefingPanel() {
   const [selectedEvidence, setSelectedEvidence] = useState<BriefingEvidenceRef | null>(null);
   const [selectedEvidenceItemTitle, setSelectedEvidenceItemTitle] = useState<string | null>(null);
   const [status, setStatus] = useState<BriefingStatus>("loading");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
+  const [pendingActionItemId, setPendingActionItemId] = useState<string | null>(null);
 
   const refreshHistory = useCallback(async (currentWorkspaceId: string) => {
     try {
@@ -78,6 +90,8 @@ export function BriefingPanel() {
     }
 
     setError(null);
+    setActionError(null);
+    setActionSuccessMessage(null);
     setSelectedEvidence(null);
     setSelectedEvidenceItemTitle(null);
     setStatus("loading");
@@ -101,6 +115,8 @@ export function BriefingPanel() {
     }
 
     setError(null);
+    setActionError(null);
+    setActionSuccessMessage(null);
     setSelectedEvidence(null);
     setSelectedEvidenceItemTitle(null);
     setStatus("loading");
@@ -115,8 +131,44 @@ export function BriefingPanel() {
     }
   }
 
+  async function createLocalActionFromItem(item: FounderBriefingItem) {
+    if (!workspaceId) {
+      setStatus("missing");
+      return;
+    }
+
+    setActionError(null);
+    setActionSuccessMessage(null);
+    setPendingActionItemId(item.id);
+    try {
+      await createActionProposal(workspaceId, {
+        action_type: "internal_todo",
+        created_by: "user",
+        description: [item.title, item.summary].filter(Boolean).join("\n\n"),
+        evidence_refs: item.evidence_refs,
+        payload: {
+          briefing_item_key: item.id,
+          category: item.category,
+          recommended_next_step: item.recommended_next_step,
+          related_entities: item.related_entities,
+          severity: item.severity,
+          source: "briefing_item"
+        },
+        target_provider: "internal",
+        title: item.recommended_next_step ?? item.title
+      });
+      setActionSuccessMessage(M.briefingPanel.actionCreateSuccess);
+    } catch (caught: unknown) {
+      setActionError(caught instanceof Error ? caught.message : M.common.requestFailed);
+    } finally {
+      setPendingActionItemId(null);
+    }
+  }
+
   return (
     <BriefingPanelView
+      actionError={actionError}
+      actionSuccessMessage={actionSuccessMessage}
       activeBriefingId={activeBriefingId}
       data={data}
       error={error}
@@ -125,6 +177,7 @@ export function BriefingPanel() {
         setSelectedEvidence(null);
         setSelectedEvidenceItemTitle(null);
       }}
+      onCreateActionFromItem={createLocalActionFromItem}
       onGenerate={generateBriefing}
       onOpenBriefing={openBriefing}
       onRetry={generateBriefing}
@@ -132,6 +185,7 @@ export function BriefingPanel() {
         setSelectedEvidence(evidence);
         setSelectedEvidenceItemTitle(itemTitle);
       }}
+      pendingActionItemId={pendingActionItemId}
       selectedEvidence={selectedEvidence}
       selectedEvidenceItemTitle={selectedEvidenceItemTitle}
       status={status}
@@ -140,15 +194,19 @@ export function BriefingPanel() {
 }
 
 export function BriefingPanelView({
+  actionError = null,
+  actionSuccessMessage = null,
   activeBriefingId = null,
   data,
   error,
   history = [],
   onCloseEvidence,
+  onCreateActionFromItem,
   onGenerate,
   onOpenBriefing,
   onRetry,
   onSelectEvidence,
+  pendingActionItemId = null,
   selectedEvidence,
   selectedEvidenceItemTitle = null,
   status
@@ -248,10 +306,16 @@ export function BriefingPanelView({
             <strong>{M.briefingPanel.capabilityTitle}</strong>
             <p>{T.briefingCapability(briefing.llm_used, briefing.is_live)}</p>
           </section>
+          {actionSuccessMessage ? (
+            <p className="success-text">{actionSuccessMessage}</p>
+          ) : null}
+          {actionError ? <p className="error-text">{actionError}</p> : null}
           <section className="work-columns">
             <BriefingItemSection
               items={briefing.items}
+              onCreateActionFromItem={onCreateActionFromItem}
               onSelectEvidence={onSelectEvidence}
+              pendingActionItemId={pendingActionItemId}
             />
             <EvidenceDrawer
               evidence={selectedEvidence}
@@ -327,10 +391,14 @@ function BriefingHistorySection({
 
 function BriefingItemSection({
   items,
-  onSelectEvidence
+  onCreateActionFromItem,
+  onSelectEvidence,
+  pendingActionItemId
 }: {
   items: FounderBriefingItem[];
+  onCreateActionFromItem?: (item: FounderBriefingItem) => void;
   onSelectEvidence?: (evidence: BriefingEvidenceRef, itemTitle: string) => void;
+  pendingActionItemId?: string | null;
 }) {
   return (
     <section className="work-section" aria-label={M.briefingPanel.itemsSectionTitle}>
@@ -365,6 +433,18 @@ function BriefingItemSection({
               itemTitle={item.title}
               onSelectEvidence={onSelectEvidence}
             />
+            <div className="actions-row">
+              <button
+                className="button secondary"
+                disabled={!onCreateActionFromItem || pendingActionItemId === item.id}
+                onClick={() => onCreateActionFromItem?.(item)}
+                type="button"
+              >
+                {pendingActionItemId === item.id
+                  ? M.briefingPanel.actionCreating
+                  : M.briefingPanel.actionCreate}
+              </button>
+            </div>
             {item.related_entities.length > 0 ? (
               <p className="muted">{T.related(item.related_entities.join(", "))}</p>
             ) : null}

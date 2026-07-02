@@ -43,6 +43,10 @@
   and a `source-coverage` briefing item derived from Company Brain. Briefing UI
   now summarizes canonical repos, open work, evidence refs, and local/live mode
   without adding provider writes, provider reads, or LLM calls.
+- Added a local-only Briefing → ActionProposal bridge: each briefing item can
+  create an `internal_todo` proposal carrying that item's summary and evidence
+  refs for later local approval, without creating GitHub issues or executing
+  external writes.
 
 ## 2026-06-30
 
