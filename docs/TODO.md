@@ -53,6 +53,11 @@ Implemented foundations:
 - ActionProposals evidence drawer defaults to the first evidence ref in the
   current local review filter and falls back to a safe placeholder when no
   evidence exists.
+- ActionProposals review groups proposals by origin (briefing item, GitHub
+  issue, internal todo) with counts and an origin badge, surfaces briefing
+  `internal_todo` payload metadata (item key, category, severity, next step,
+  related entities), and the evidence drawer shows a default-vs-manual context
+  hint plus an evidence-ref count.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -86,8 +91,11 @@ Done when:
 1. **Action review polish (local approval only).**
    Briefing items can now create local `internal_todo` proposals with evidence.
    Local status filters and structured execution audit timeline are in place.
-   Evidence drawer defaults are in place. Next: improve proposal grouping and
-   review ergonomics while keeping provider writes and AI generation disabled.
+   Evidence drawer defaults, origin grouping (briefing/GitHub/internal) with an
+   origin badge, briefing `internal_todo` payload detail, and evidence
+   drawer default-vs-manual context + evidence-ref count are in place. Next:
+   consider bulk local review actions or per-origin filtering while keeping
+   provider writes and AI generation disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

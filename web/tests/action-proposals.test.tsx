@@ -81,11 +81,49 @@ const rejectedProposal: ActionProposal = {
   title: "Rejected local proposal"
 };
 
+const briefingProposal: ActionProposal = {
+  ...proposedProposal,
+  id: "proposal-4",
+  target_provider: "internal",
+  action_type: "internal_todo",
+  title: "Review synced GitHub work before approving actions",
+  description: "Repository inventory is available\n\nOne canonical repo is visible.",
+  payload: {
+    briefing_item_key: "repo-coverage",
+    category: "repository",
+    recommended_next_step: "Review synced GitHub work before approving actions.",
+    related_entities: ["qtwin-io/founderos-api", "qtwin-io/founderos-web"],
+    severity: "info",
+    source: "briefing_item"
+  },
+  evidence_refs: [
+    {
+      kind: "repository_inventory_snapshot",
+      source: "github",
+      ref: "qtwin-io/founderos-api",
+      url: "https://github.com/qtwin-io/founderos-api"
+    },
+    {
+      kind: "repository_inventory_snapshot",
+      source: "github",
+      ref: "qtwin-io/founderos-web",
+      url: "https://github.com/qtwin-io/founderos-web"
+    }
+  ]
+};
+
 const sampleList: ActionProposalListResponse = {
   count: 3,
   is_live: false,
   proposals: [proposedProposal, approvedProposal, rejectedProposal],
   warnings: ["Action proposal API is local-only and does not execute provider actions."]
+};
+
+const groupedList: ActionProposalListResponse = {
+  count: 4,
+  is_live: false,
+  proposals: [proposedProposal, approvedProposal, rejectedProposal, briefingProposal],
+  warnings: []
 };
 
 const emptyList: ActionProposalListResponse = {
@@ -124,6 +162,7 @@ function renderPanel(
       pendingMutation={props.pendingMutation ?? null}
       selectedEvidence={props.selectedEvidence ?? null}
       selectedEvidenceTitle={props.selectedEvidenceTitle ?? null}
+      selectedEvidenceCount={props.selectedEvidenceCount ?? null}
       statusFilter={props.statusFilter ?? "all"}
       status={props.status ?? "ready"}
       successMessage={props.successMessage ?? null}
@@ -423,4 +462,60 @@ test("renders proposal evidence drawer details without raw payload dumps", () =>
   assert.ok(html.includes(M.evidence.noSnippet));
   assert.doesNotMatch(html, /provider_response/);
   assert.doesNotMatch(html, /access_token/);
+});
+
+test("groups proposals by origin with per-group counts", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "all" });
+  assert.ok(html.includes(`${M.actionsPanel.groupBriefingTitle} · 1`));
+  assert.ok(html.includes(`${M.actionsPanel.groupGithubTitle} · 3`));
+  // No manually-created internal todo in this fixture, so that group is omitted.
+  assert.doesNotMatch(html, new RegExp(`${M.actionsPanel.groupInternalTitle} ·`));
+  assert.ok(html.includes(M.actionsPanel.groupBriefingDescription));
+  // The briefing-derived proposal gets an explicit origin badge.
+  assert.ok(html.includes(M.actionsPanel.originBriefingBadge));
+  assert.match(html, /Review synced GitHub work before approving actions/);
+});
+
+test("omits empty origin groups for the active filter", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "rejected" });
+  // Only the rejected internal-todo-less github proposal remains, so no briefing group.
+  assert.doesNotMatch(html, new RegExp(`${M.actionsPanel.groupBriefingTitle} ·`));
+  assert.doesNotMatch(html, new RegExp(`${M.actionsPanel.groupInternalTitle} ·`));
+  assert.ok(html.includes(`${M.actionsPanel.groupGithubTitle} · 1`));
+});
+
+test("renders briefing internal_todo payload metadata", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "proposed" });
+  assert.ok(html.includes(M.actionsPanel.payloadBriefingItem));
+  assert.match(html, /repo-coverage/);
+  assert.ok(html.includes(M.actionsPanel.payloadCategory));
+  assert.ok(html.includes(M.actionsPanel.payloadSeverity));
+  assert.ok(html.includes(M.actionsPanel.payloadNextStep));
+  assert.ok(html.includes(M.actionsPanel.payloadRelatedEntities));
+  assert.match(html, /qtwin-io\/founderos-api, qtwin-io\/founderos-web/);
+  // Bridge marker keys should not leak as raw payload dumps.
+  assert.doesNotMatch(html, /"source":\s*"briefing_item"/);
+});
+
+test("evidence drawer shows contextual default hint and evidence count", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "proposed" });
+  assert.ok(html.includes(M.evidence.contextDefault));
+  assert.ok(html.includes(M.evidence.countLabel));
+  // Briefing proposal is first in grouped order and carries two evidence refs.
+  assert.match(html, /qtwin-io\/founderos-api/);
+  assert.doesNotMatch(html, new RegExp(`>${M.common.close}<`));
+});
+
+test("evidence drawer marks manual selection and keeps a close affordance", () => {
+  const manualEvidence = proposedProposal.evidence_refs[0] ?? null;
+  const html = renderPanel({
+    data: groupedList,
+    onCloseEvidence: () => undefined,
+    selectedEvidence: manualEvidence,
+    selectedEvidenceCount: 1,
+    selectedEvidenceTitle: "Create follow-up GitHub issue",
+    statusFilter: "all"
+  });
+  assert.ok(html.includes(M.evidence.contextManual));
+  assert.match(html, new RegExp(`>${M.common.close}<`));
 });

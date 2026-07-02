@@ -57,6 +57,17 @@
   локального фильтра proposals, если пользователь ещё не выбрал источник вручную.
   Для фильтров без evidence остаётся безопасный placeholder; raw payloads/secrets
   не рендерятся, provider calls не запускаются.
+- **Action proposal grouping + drawer/detail polish (НОВОЕ):** в
+  `ActionProposalsPanel` отфильтрованные proposals теперь группируются по
+  источнику (из пунктов сводки / задачи GitHub / внутренние) с counts и
+  описаниями; briefing-derived proposals помечаются бейджем «Из сводки»
+  (определяется по `briefing_item_id` или payload-маркеру `source=briefing_item`).
+  `EvidenceDrawer` получил необязательные контекст-подсказку (default vs manual)
+  и счётчик evidence refs, а evidence-по-умолчанию берётся из первого видимого
+  proposal в порядке групп. Payload-рендерер для `internal_todo` из сводки теперь
+  показывает ключ пункта сводки, категорию, важность, рекомендуемый следующий
+  шаг и связанные сущности; raw payload dumps и secret-like ключи не выводятся.
+  Всё local-only: без provider calls, external writes и LLM.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
@@ -294,6 +305,25 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-02` — **Action review polish: origin grouping + evidence drawer UX +
+  briefing payload detail.** Продолжение local-only action review ergonomics.
+  `ActionProposalsPanel` теперь группирует отфильтрованные proposals по
+  источнику (из пунктов сводки / задачи GitHub / внутренние) с counts и
+  описаниями, помечает briefing-derived proposals бейджем «Из сводки»
+  (по `briefing_item_id` или payload-маркеру `source=briefing_item`), а
+  evidence-по-умолчанию берётся из первого видимого proposal в порядке групп.
+  `EvidenceDrawer` получил необязательные context-подсказку (default vs manual)
+  и счётчик evidence refs (backward-compatible, `BriefingPanel` не менялся).
+  Payload-рендерер для `internal_todo` из сводки теперь показывает ключ пункта
+  сводки, категорию, важность, рекомендуемый следующий шаг и связанные сущности;
+  raw payload dumps и secret-like ключи не выводятся. Всё local-only: без
+  provider calls, external writes и LLM. Изменены `web/lib/messages.ts`,
+  `web/components/EvidenceDrawer.tsx`, `web/components/ActionProposalsPanel.tsx`,
+  `web/app/globals.css`, `web/tests/action-proposals.test.tsx`. Checks:
+  `npm test` **109 passed**, `npm run typecheck`, `npm run lint`,
+  `npm run build`, `uv run ruff check .`, и `uv run pytest -q` зелёные.
+  Push не делался (branch ahead; внешние записи запрещены текущим objective).
 
 - `2026-07-01` — **Local admin provisioning script import fix.**
   Fixed `scripts/create_admin_user.py` direct execution from repo root by adding

@@ -412,7 +412,22 @@ export const M = {
     actionsRejectedNote: "Отклонено локально. Внешнее действие не запускалось.",
     actionsOtherNote: "Статус возвращён бэкендом. Этот интерфейс не выполнял работу у провайдера.",
     actionLabelCreateIssue: "Создать задачу GitHub",
-    actionLabelInternalTodo: "Внутренняя задача"
+    actionLabelInternalTodo: "Внутренняя задача",
+    groupsLabel: "Группы предложений по источнику",
+    groupBriefingTitle: "Из пунктов сводки",
+    groupBriefingDescription:
+      "Локальные действия, созданные из evidence пунктов сводки.",
+    groupGithubTitle: "Предложения задач GitHub",
+    groupGithubDescription:
+      "Локальные предложения будущих задач GitHub. Запись в GitHub здесь не выполняется.",
+    groupInternalTitle: "Внутренние задачи",
+    groupInternalDescription: "Внутренние локальные задачи, созданные вручную.",
+    originBriefingBadge: "Из сводки",
+    payloadBriefingItem: "Ключ пункта сводки",
+    payloadCategory: "Категория",
+    payloadSeverity: "Важность",
+    payloadNextStep: "Рекомендуемый следующий шаг",
+    payloadRelatedEntities: "Связанные сущности"
   },
 
   actionCreate: {
@@ -523,7 +538,12 @@ export const M = {
     noSnippet: "Бэкенд не вернул фрагмент.",
     unknownSource: "Неизвестный источник",
     noRecordId: "Идентификатор записи не возвращён",
-    placeholder: "Выберите источник, чтобы увидеть провайдера, источник, запись и URL."
+    placeholder: "Выберите источник, чтобы увидеть провайдера, источник, запись и URL.",
+    contextTitle: "Контекст",
+    contextDefault:
+      "Источник по умолчанию из первого видимого предложения. Выберите другой, чтобы закрепить его.",
+    contextManual: "Источник выбран вручную. Нажмите «Закрыть», чтобы вернуться к варианту по умолчанию.",
+    countLabel: "Источников у предложения"
   },
 
   sourceCoverage: {

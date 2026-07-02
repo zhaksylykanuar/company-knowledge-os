@@ -1,5 +1,23 @@
 # FounderOS Changelog
 
+## 2026-07-02
+
+### Changed
+
+- Grouped the ActionProposals review list by proposal origin (from briefing
+  items, GitHub issue proposals, and internal todos) with per-group counts and
+  descriptions, and marked briefing-derived proposals with an explicit origin
+  badge. Grouping is applied on top of the existing local status filter and
+  makes no provider calls or backend state changes.
+- Extended the shared evidence drawer with an optional contextual hint that
+  distinguishes a default (first visible proposal) source from a manually
+  selected one, plus an optional evidence-ref count. The briefing panel usage is
+  unchanged and no raw payloads or secrets are rendered.
+- Rendered briefing-derived `internal_todo` proposal payload metadata (briefing
+  item key, category, severity, recommended next step, and related entities) in
+  the ActionProposals detail view instead of only repository/title/note, without
+  exposing raw payload dumps or secret-like keys.
+
 ## 2026-07-01
 
 ### Changed

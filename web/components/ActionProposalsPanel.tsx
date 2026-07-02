@@ -27,10 +27,19 @@ import { StatusCard } from "./StatusCard";
 type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupported";
 type ProposalKind = "github_issue" | "internal_todo";
 type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
+type ProposalOrigin = "briefing" | "github" | "internal";
 type PendingMutation = "create" | `approve:${string}` | `reject:${string}` | null;
 type EvidenceSelection = {
   evidence: ActionProposalEvidenceRef;
   title: string;
+  count: number;
+};
+
+type ProposalGroup = {
+  origin: ProposalOrigin;
+  title: string;
+  description: string;
+  proposals: ActionProposal[];
 };
 
 type ActionProposalCreateFormState = {
@@ -55,11 +64,16 @@ type ActionProposalsPanelViewProps = {
   onReject?: (proposalId: string) => void;
   onRefreshProposals?: () => void;
   onRetry?: () => void;
-  onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
+  onSelectEvidence?: (
+    evidence: ActionProposalEvidenceRef,
+    title: string,
+    count?: number
+  ) => void;
   onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
   pendingMutation: PendingMutation;
   selectedEvidence: ActionProposalEvidenceRef | null;
   selectedEvidenceTitle?: string | null;
+  selectedEvidenceCount?: number | null;
   statusFilter?: ProposalStatusFilter;
   status: PanelStatus;
   successMessage?: string | null;
@@ -85,6 +99,7 @@ export function ActionProposalsPanel() {
   const [selectedEvidence, setSelectedEvidence] =
     useState<ActionProposalEvidenceRef | null>(null);
   const [selectedEvidenceTitle, setSelectedEvidenceTitle] = useState<string | null>(null);
+  const [selectedEvidenceCount, setSelectedEvidenceCount] = useState<number | null>(null);
   const [status, setStatus] = useState<PanelStatus>("loading");
   const [statusFilter, setStatusFilter] = useState<ProposalStatusFilter>("proposed");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -214,20 +229,23 @@ export function ActionProposalsPanel() {
       onCloseEvidence={() => {
         setSelectedEvidence(null);
         setSelectedEvidenceTitle(null);
+        setSelectedEvidenceCount(null);
       }}
       onCreate={submitCreate}
       onCreateFormChange={updateCreateForm}
       onReject={reject}
       onRefreshProposals={() => setReloadKey((current) => current + 1)}
       onRetry={() => setReloadKey((current) => current + 1)}
-      onSelectEvidence={(evidence, title) => {
+      onSelectEvidence={(evidence, title, count) => {
         setSelectedEvidence(evidence);
         setSelectedEvidenceTitle(title);
+        setSelectedEvidenceCount(typeof count === "number" ? count : null);
       }}
       onStatusFilterChange={setStatusFilter}
       pendingMutation={pendingMutation}
       selectedEvidence={selectedEvidence}
       selectedEvidenceTitle={selectedEvidenceTitle}
+      selectedEvidenceCount={selectedEvidenceCount}
       statusFilter={statusFilter}
       status={status}
       successMessage={successMessage}
@@ -251,17 +269,28 @@ export function ActionProposalsPanelView({
   pendingMutation,
   selectedEvidence,
   selectedEvidenceTitle = null,
+  selectedEvidenceCount = null,
   statusFilter = "all",
   status,
   successMessage = null
 }: ActionProposalsPanelViewProps) {
   const proposals = data?.proposals ?? [];
   const filteredProposals = filterProposals(proposals, statusFilter);
-  const defaultEvidenceSelection = firstEvidenceSelection(filteredProposals);
+  const groups = groupProposalsByOrigin(filteredProposals);
+  const orderedProposals = groups.flatMap((group) => group.proposals);
+  const defaultEvidenceSelection = firstEvidenceSelection(orderedProposals);
   const drawerEvidence = selectedEvidence ?? defaultEvidenceSelection?.evidence ?? null;
   const drawerTitle = selectedEvidence
     ? selectedEvidenceTitle
     : defaultEvidenceSelection?.title ?? null;
+  const drawerCount = selectedEvidence
+    ? selectedEvidenceCount
+    : defaultEvidenceSelection?.count ?? null;
+  const drawerSelectionMode: "default" | "manual" | null = drawerEvidence
+    ? selectedEvidence
+      ? "manual"
+      : "default"
+    : null;
   const canCreate = canSubmitCreateForm(createForm);
 
   return (
@@ -359,18 +388,21 @@ export function ActionProposalsPanelView({
 
           <section className="work-columns">
             <ProposalList
+              groups={groups}
               onApprove={onApprove}
               onReject={onReject}
               onRefreshProposals={onRefreshProposals}
               onSelectEvidence={onSelectEvidence}
               pendingMutation={pendingMutation}
-              proposals={filteredProposals}
               totalProposals={proposals.length}
+              visibleProposals={filteredProposals.length}
             />
             <EvidenceDrawer
               evidence={drawerEvidence}
+              evidenceCount={drawerCount}
               itemTitle={drawerTitle}
               onClose={selectedEvidence ? onCloseEvidence : undefined}
+              selectionMode={drawerSelectionMode}
             />
           </section>
 
@@ -500,88 +532,115 @@ function ActionStatusFilter({
 }
 
 function ProposalList({
+  groups,
   onApprove,
   onReject,
   onRefreshProposals,
   onSelectEvidence,
   pendingMutation,
-  proposals,
-  totalProposals
+  totalProposals,
+  visibleProposals
 }: {
+  groups: ProposalGroup[];
   onApprove?: (proposalId: string) => void;
   onReject?: (proposalId: string) => void;
   onRefreshProposals?: () => void;
-  onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
+  onSelectEvidence?: (
+    evidence: ActionProposalEvidenceRef,
+    title: string,
+    count?: number
+  ) => void;
   pendingMutation: PendingMutation;
-  proposals: ActionProposal[];
   totalProposals: number;
+  visibleProposals: number;
 }) {
   return (
     <section className="work-section" aria-label={M.actionsPanel.listTitle}>
       <h3>{M.actionsPanel.listTitle}</h3>
-      {proposals.length === 0 && totalProposals === 0 ? (
+      {visibleProposals === 0 && totalProposals === 0 ? (
         <p className="muted">{M.actionsPanel.noProposals}</p>
       ) : null}
-      {proposals.length === 0 && totalProposals > 0 ? (
+      {visibleProposals === 0 && totalProposals > 0 ? (
         <p className="muted">{M.actionsPanel.noProposalsForFilter}</p>
       ) : null}
-      <div className="work-list">
-        {proposals.map((proposal) => (
-          <article className="work-item" key={proposal.id}>
-            <div className="work-item-main">
-              <span className="badge">{proposal.status}</span>
-              <h4>{proposal.title}</h4>
+      <div className="proposal-groups" aria-label={M.actionsPanel.groupsLabel}>
+        {groups.map((group) => (
+          <section
+            className="proposal-group"
+            key={group.origin}
+            aria-label={group.title}
+          >
+            <div className="proposal-group-header">
+              <h4>
+                {group.title} · {group.proposals.length}
+              </h4>
+              <p className="muted">{group.description}</p>
             </div>
-            {proposal.description ? (
-              <p className="muted">{proposal.description}</p>
-            ) : null}
-            <dl className="work-meta">
-              <div>
-                <dt>{M.actionsPanel.metaTarget}</dt>
-                <dd>{proposal.target_provider}</dd>
-              </div>
-              <div>
-                <dt>{M.actionsPanel.metaAction}</dt>
-                <dd>{actionLabel(proposal.action_type)}</dd>
-              </div>
-              <div>
-                <dt>{M.actionsPanel.metaStatus}</dt>
-                <dd>{proposal.status}</dd>
-              </div>
-              <div>
-                <dt>{M.actionsPanel.metaExecution}</dt>
-                <dd>
-                  {proposal.execution_started
-                    ? M.actionsPanel.executionReported
-                    : M.actionsPanel.executionNotExecuted}
-                </dd>
-              </div>
-            </dl>
-            <ProposalPayloadDetails proposal={proposal} />
-            <ProposalAuditDetails proposal={proposal} />
-            <ActionEvidenceButtons
-              evidenceRefs={proposal.evidence_refs}
-              onSelectEvidence={onSelectEvidence}
-              proposalTitle={proposal.title}
-            />
-            <ProposalActions
-              onApprove={onApprove}
-              onReject={onReject}
-              pendingMutation={pendingMutation}
-              proposal={proposal}
-            />
-            <ActionExecutionControls
-              onRefresh={onRefreshProposals}
-              proposal={proposal}
-            />
-            {proposal.warnings.length > 0 ? (
-              <ul className="meta-list">
-                {proposal.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            ) : null}
-          </article>
+            <div className="work-list">
+              {group.proposals.map((proposal) => (
+                <article className="work-item" key={proposal.id}>
+                  <div className="work-item-main">
+                    <span className="badge">{proposal.status}</span>
+                    {group.origin === "briefing" ? (
+                      <span className="badge badge-origin">
+                        {M.actionsPanel.originBriefingBadge}
+                      </span>
+                    ) : null}
+                    <h4>{proposal.title}</h4>
+                  </div>
+                  {proposal.description ? (
+                    <p className="muted">{proposal.description}</p>
+                  ) : null}
+                  <dl className="work-meta">
+                    <div>
+                      <dt>{M.actionsPanel.metaTarget}</dt>
+                      <dd>{proposal.target_provider}</dd>
+                    </div>
+                    <div>
+                      <dt>{M.actionsPanel.metaAction}</dt>
+                      <dd>{actionLabel(proposal.action_type)}</dd>
+                    </div>
+                    <div>
+                      <dt>{M.actionsPanel.metaStatus}</dt>
+                      <dd>{proposal.status}</dd>
+                    </div>
+                    <div>
+                      <dt>{M.actionsPanel.metaExecution}</dt>
+                      <dd>
+                        {proposal.execution_started
+                          ? M.actionsPanel.executionReported
+                          : M.actionsPanel.executionNotExecuted}
+                      </dd>
+                    </div>
+                  </dl>
+                  <ProposalPayloadDetails proposal={proposal} />
+                  <ProposalAuditDetails proposal={proposal} />
+                  <ActionEvidenceButtons
+                    evidenceRefs={proposal.evidence_refs}
+                    onSelectEvidence={onSelectEvidence}
+                    proposalTitle={proposal.title}
+                  />
+                  <ProposalActions
+                    onApprove={onApprove}
+                    onReject={onReject}
+                    pendingMutation={pendingMutation}
+                    proposal={proposal}
+                  />
+                  <ActionExecutionControls
+                    onRefresh={onRefreshProposals}
+                    proposal={proposal}
+                  />
+                  {proposal.warnings.length > 0 ? (
+                    <ul className="meta-list">
+                      {proposal.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
     </section>
@@ -592,8 +651,23 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
   const repository = payloadString(proposal.payload, "repository_full_name");
   const issueTitle = payloadString(proposal.payload, "title");
   const note = payloadString(proposal.payload, "note");
+  const briefingItemKey = payloadString(proposal.payload, "briefing_item_key");
+  const category = payloadString(proposal.payload, "category");
+  const severity = payloadString(proposal.payload, "severity");
+  const nextStep = payloadString(proposal.payload, "recommended_next_step");
+  const relatedEntities = payloadStringList(proposal.payload, "related_entities");
 
-  if (!repository && !issueTitle && !note) {
+  const hasDetails =
+    repository ||
+    issueTitle ||
+    note ||
+    briefingItemKey ||
+    category ||
+    severity ||
+    nextStep ||
+    relatedEntities.length > 0;
+
+  if (!hasDetails) {
     return <p className="muted">{M.actionsPanel.payloadNone}</p>;
   }
 
@@ -615,6 +689,36 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
         <div>
           <dt>{M.actionsPanel.payloadInternalNote}</dt>
           <dd>{note}</dd>
+        </div>
+      ) : null}
+      {briefingItemKey ? (
+        <div>
+          <dt>{M.actionsPanel.payloadBriefingItem}</dt>
+          <dd>{briefingItemKey}</dd>
+        </div>
+      ) : null}
+      {category ? (
+        <div>
+          <dt>{M.actionsPanel.payloadCategory}</dt>
+          <dd>{category}</dd>
+        </div>
+      ) : null}
+      {severity ? (
+        <div>
+          <dt>{M.actionsPanel.payloadSeverity}</dt>
+          <dd>{severity}</dd>
+        </div>
+      ) : null}
+      {nextStep ? (
+        <div>
+          <dt>{M.actionsPanel.payloadNextStep}</dt>
+          <dd>{nextStep}</dd>
+        </div>
+      ) : null}
+      {relatedEntities.length > 0 ? (
+        <div>
+          <dt>{M.actionsPanel.payloadRelatedEntities}</dt>
+          <dd>{relatedEntities.join(", ")}</dd>
         </div>
       ) : null}
     </dl>
@@ -660,7 +764,11 @@ function ActionEvidenceButtons({
   proposalTitle
 }: {
   evidenceRefs: ActionProposalEvidenceRef[];
-  onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
+  onSelectEvidence?: (
+    evidence: ActionProposalEvidenceRef,
+    title: string,
+    count?: number
+  ) => void;
   proposalTitle: string;
 }) {
   if (evidenceRefs.length === 0) {
@@ -673,7 +781,7 @@ function ActionEvidenceButtons({
         <button
           className="button secondary"
           key={`${evidence.kind}-${evidence.source}-${evidence.ref}-${index}`}
-          onClick={() => onSelectEvidence?.(evidence, proposalTitle)}
+          onClick={() => onSelectEvidence?.(evidence, proposalTitle, evidenceRefs.length)}
           type="button"
         >
           {T.evidenceButton(evidence.ref)}
@@ -856,10 +964,61 @@ function firstEvidenceSelection(
   for (const proposal of proposals) {
     const evidence = proposal.evidence_refs[0];
     if (evidence) {
-      return { evidence, title: proposal.title };
+      return {
+        evidence,
+        title: proposal.title,
+        count: proposal.evidence_refs.length
+      };
     }
   }
   return null;
+}
+
+function proposalOrigin(proposal: ActionProposal): ProposalOrigin {
+  if (
+    proposal.briefing_item_id !== null ||
+    payloadString(proposal.payload, "source") === "briefing_item"
+  ) {
+    return "briefing";
+  }
+  if (proposal.action_type === "create_github_issue") {
+    return "github";
+  }
+  return "internal";
+}
+
+function groupProposalsByOrigin(proposals: ActionProposal[]): ProposalGroup[] {
+  const order: ProposalOrigin[] = ["briefing", "github", "internal"];
+  const meta: Record<ProposalOrigin, { title: string; description: string }> = {
+    briefing: {
+      title: M.actionsPanel.groupBriefingTitle,
+      description: M.actionsPanel.groupBriefingDescription
+    },
+    github: {
+      title: M.actionsPanel.groupGithubTitle,
+      description: M.actionsPanel.groupGithubDescription
+    },
+    internal: {
+      title: M.actionsPanel.groupInternalTitle,
+      description: M.actionsPanel.groupInternalDescription
+    }
+  };
+  const buckets: Record<ProposalOrigin, ActionProposal[]> = {
+    briefing: [],
+    github: [],
+    internal: []
+  };
+  for (const proposal of proposals) {
+    buckets[proposalOrigin(proposal)].push(proposal);
+  }
+  return order
+    .filter((origin) => buckets[origin].length > 0)
+    .map((origin) => ({
+      origin,
+      title: meta[origin].title,
+      description: meta[origin].description,
+      proposals: buckets[origin]
+    }));
 }
 
 function actionLabel(actionType: string): string {
@@ -875,6 +1034,19 @@ function actionLabel(actionType: string): string {
 function payloadString(payload: Record<string, unknown>, key: string): string | null {
   const value = payload[key];
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+function payloadStringList(
+  payload: Record<string, unknown>,
+  key: string
+): string[] {
+  const value = payload[key];
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (entry): entry is string => typeof entry === "string" && entry.trim().length > 0
+  );
 }
 
 export { DEFAULT_CREATE_FORM };

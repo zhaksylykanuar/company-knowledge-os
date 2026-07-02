@@ -230,6 +230,34 @@ textarea {
   gap: 10px;
 }
 
+.proposal-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.proposal-group {
+  display: grid;
+  gap: 10px;
+}
+
+.proposal-group-header {
+  display: grid;
+  gap: 2px;
+}
+
+.proposal-group-header h4 {
+  margin: 0;
+}
+
+.badge-origin {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.evidence-context {
+  font-size: 13px;
+}
+
 .work-item {
   border: 1px solid var(--border);
   border-radius: var(--radius);
