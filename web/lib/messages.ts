@@ -703,6 +703,15 @@ export const T = {
     `Локально одобрено выбранных предложений: ${count}. Внешнее выполнение не запускалось.`,
   actionsBulkRejectSuccess: (count: number) =>
     `Локально отклонено выбранных предложений: ${count}. Внешнее выполнение не запускалось.`,
+  actionsBulkApprovePartial: (succeeded: number, failed: number) =>
+    `Локально одобрено: ${succeeded}. Не удалось: ${failed}. ` +
+    `Успешные локальные изменения сохранены; внешнее выполнение не запускалось.`,
+  actionsBulkRejectPartial: (succeeded: number, failed: number) =>
+    `Локально отклонено: ${succeeded}. Не удалось: ${failed}. ` +
+    `Успешные локальные изменения сохранены; внешнее выполнение не запускалось.`,
+  actionsBulkAllFailed: (failed: number) =>
+    `Не удалось обработать выбранные предложения: ${failed}. ` +
+    `Локальные статусы не изменены; внешнее выполнение не запускалось.`,
   // GitHub work count-card descriptions
   workIssuesDescription: (state: string) =>
     `${state}: записи задач GitHub из канонического пути бэкенда.`,

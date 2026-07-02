@@ -14,6 +14,7 @@ import type {
   ActionProposal,
   ActionProposalEvidenceRef,
   ActionProposalListResponse,
+  ActionProposalMutationResponse,
   ActionProposalType,
   ActionTargetProvider
 } from "../lib/types";
@@ -287,29 +288,65 @@ export function ActionProposalsPanel() {
     setSuccessMessage(null);
     setPendingMutation(mutation);
     try {
-      const responses = await Promise.all(
+      // Bulk transitions are independent local DB mutations. Use allSettled so a
+      // single failure (e.g. a proposal already transitioned elsewhere) never
+      // discards the local updates the backend already applied for the ones that
+      // succeeded.
+      const settled = await Promise.all(
         proposalsToMutate.map((proposal) =>
-          mutation === "bulk-approve"
+          (mutation === "bulk-approve"
             ? approveActionProposal(workspaceId, proposal.id)
             : rejectActionProposal(workspaceId, proposal.id, {
                 reason: M.actionsPanel.rejectReason
               })
+          )
+            .then((response) => ({ id: proposal.id, ok: true as const, response }))
+            .catch((caught: unknown) => ({
+              id: proposal.id,
+              ok: false as const,
+              message:
+                caught instanceof Error ? caught.message : M.common.requestFailed
+            }))
         )
       );
-      setData((current) =>
-        mergeUpdatedProposals(
-          current,
-          responses.map((response) => response.proposal),
-          responses.flatMap((response) => response.warnings)
-        )
+      const outcome = summarizeBulkOutcome(settled);
+      if (outcome.succeeded.length > 0) {
+        setData((current) =>
+          mergeUpdatedProposals(
+            current,
+            outcome.succeeded.map((entry) => entry.response.proposal),
+            outcome.succeeded.flatMap((entry) => entry.response.warnings)
+          )
+        );
+      }
+      // Only clear the proposals that actually transitioned; keep failed ones
+      // selected so the reviewer can retry them.
+      setSelectedProposalIds((current) =>
+        current.filter((proposalId) => !outcome.succeededIds.includes(proposalId))
       );
-      setSelectedProposalIds([]);
       setStatus("ready");
-      setSuccessMessage(
-        mutation === "bulk-approve"
-          ? T.actionsBulkApproveSuccess(responses.length)
-          : T.actionsBulkRejectSuccess(responses.length)
-      );
+      if (outcome.failed.length === 0) {
+        setSuccessMessage(
+          mutation === "bulk-approve"
+            ? T.actionsBulkApproveSuccess(outcome.succeeded.length)
+            : T.actionsBulkRejectSuccess(outcome.succeeded.length)
+        );
+      } else if (outcome.succeeded.length === 0) {
+        setError(T.actionsBulkAllFailed(outcome.failed.length));
+      } else {
+        setSuccessMessage(
+          mutation === "bulk-approve"
+            ? T.actionsBulkApprovePartial(
+                outcome.succeeded.length,
+                outcome.failed.length
+              )
+            : T.actionsBulkRejectPartial(
+                outcome.succeeded.length,
+                outcome.failed.length
+              )
+        );
+        setError(outcome.firstFailureMessage ?? M.common.requestFailed);
+      }
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       setStatus("error");
@@ -442,6 +479,12 @@ export function ActionProposalsPanelView({
       />
 
       {successMessage ? <p className="success-text">{successMessage}</p> : null}
+
+      {error && status !== "error" ? (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {status === "loading" ? <LoadingState label={M.actionsPanel.loading} /> : null}
 
@@ -1274,6 +1317,35 @@ function isBulkMutationPending(pendingMutation: PendingMutation): boolean {
   return pendingMutation === "bulk-approve" || pendingMutation === "bulk-reject";
 }
 
+type BulkMutationSettled =
+  | { id: string; ok: true; response: ActionProposalMutationResponse }
+  | { id: string; ok: false; message: string };
+
+type BulkOutcome = {
+  succeeded: { id: string; response: ActionProposalMutationResponse }[];
+  failed: { id: string; message: string }[];
+  succeededIds: string[];
+  firstFailureMessage: string | null;
+};
+
+function summarizeBulkOutcome(results: BulkMutationSettled[]): BulkOutcome {
+  const succeeded: { id: string; response: ActionProposalMutationResponse }[] = [];
+  const failed: { id: string; message: string }[] = [];
+  for (const result of results) {
+    if (result.ok) {
+      succeeded.push({ id: result.id, response: result.response });
+    } else {
+      failed.push({ id: result.id, message: result.message });
+    }
+  }
+  return {
+    succeeded,
+    failed,
+    succeededIds: succeeded.map((entry) => entry.id),
+    firstFailureMessage: failed[0]?.message ?? null
+  };
+}
+
 function filterProposalsByStatus(
   proposals: ActionProposal[],
   filter: ProposalStatusFilter
@@ -1428,4 +1500,4 @@ function payloadStringList(
   );
 }
 
-export { DEFAULT_CREATE_FORM };
+export { DEFAULT_CREATE_FORM, summarizeBulkOutcome };

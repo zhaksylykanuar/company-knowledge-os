@@ -29,6 +29,12 @@
   existing local ActionProposal endpoints. Selection is pruned to visible
   `proposed` items so hidden, approved, or rejected proposals are not mutated by
   accident; provider execution, external writes, and LLM calls are not started.
+- Hardened bulk local ActionProposal review against partial failures: each
+  approve/reject is settled independently so already-applied local transitions
+  are preserved and merged even if another proposal in the batch fails, the
+  reviewer keeps only the failed proposals selected for retry, and a partial or
+  total failure is surfaced inline without hiding the loaded list. Still no
+  provider execution, external writes, or LLM calls.
 
 ## 2026-07-01
 

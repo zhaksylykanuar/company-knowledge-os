@@ -21,7 +21,8 @@ import type {
 } from "../lib/types";
 import {
   ActionProposalsPanelView,
-  DEFAULT_CREATE_FORM
+  DEFAULT_CREATE_FORM,
+  summarizeBulkOutcome
 } from "../components/ActionProposalsPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 
@@ -540,6 +541,53 @@ test("bulk origin/status intersections select only currently visible proposed pr
   assert.match(html, /Review synced GitHub work before approving actions/);
   assert.doesNotMatch(html, /Manual internal follow-up/);
   assert.doesNotMatch(html, /Approved local proposal/);
+});
+
+test("summarizeBulkOutcome partitions settled bulk results and keeps first failure", () => {
+  const okOne: ActionProposalMutationResponse = {
+    ...mutationResponse,
+    proposal: { ...approvedProposal, id: "proposal-1" }
+  };
+  const okTwo: ActionProposalMutationResponse = {
+    ...mutationResponse,
+    proposal: { ...approvedProposal, id: "proposal-4" }
+  };
+  const outcome = summarizeBulkOutcome([
+    { id: "proposal-1", ok: true, response: okOne },
+    { id: "proposal-9", ok: false, message: "action proposal is not in proposed status" },
+    { id: "proposal-4", ok: true, response: okTwo }
+  ]);
+
+  assert.deepEqual(outcome.succeededIds, ["proposal-1", "proposal-4"]);
+  assert.equal(outcome.succeeded.length, 2);
+  assert.equal(outcome.failed.length, 1);
+  assert.equal(outcome.failed[0]?.id, "proposal-9");
+  assert.equal(outcome.firstFailureMessage, "action proposal is not in proposed status");
+});
+
+test("summarizeBulkOutcome reports no failure message when all succeed", () => {
+  const outcome = summarizeBulkOutcome([
+    { id: "proposal-1", ok: true, response: mutationResponse }
+  ]);
+  assert.equal(outcome.failed.length, 0);
+  assert.equal(outcome.firstFailureMessage, null);
+  assert.deepEqual(outcome.succeededIds, ["proposal-1"]);
+});
+
+test("renders inline partial bulk failure without hiding the loaded list", () => {
+  const html = renderPanel({
+    data: groupedList,
+    error: T.actionsBulkApprovePartial(2, 1),
+    status: "ready",
+    successMessage: T.actionsBulkApprovePartial(2, 1)
+  });
+  // Inline alert is shown while the list stays visible (status stays "ready").
+  assert.match(html, /role="alert"/);
+  assert.match(html, /Не удалось: 1/);
+  assert.match(html, /Успешные локальные изменения сохранены/);
+  assert.match(html, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(html, new RegExp(M.actionsPanel.unavailableTitle));
+  assert.doesNotMatch(html, /external write performed/i);
 });
 
 test("defaults evidence drawer to first visible proposal evidence", () => {

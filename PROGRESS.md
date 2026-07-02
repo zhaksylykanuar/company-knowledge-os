@@ -84,6 +84,11 @@
   затрагиваются случайно. Bulk approve/reject использует существующие локальные
   ActionProposal endpoints, меняет только local DB state and never starts
   provider execution, external writes, or LLM.
+  Bulk approve/reject устойчив к частичным сбоям: каждый переход settle-ится
+  независимо (не fail-fast), успешные локальные изменения всегда сохраняются и
+  мержатся, неуспешные остаются выбранными для повторной попытки, а частичный/
+  полный сбой показывается inline без скрытия загруженного списка
+  (`summarizeBulkOutcome`).
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
@@ -321,6 +326,25 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-02` — **Bulk local review hardening (partial-failure safety).**
+  Проверка предыдущего bulk-review куска выявила data-loss баг: массовое
+  approve/reject использовало fail-fast `Promise.all`, и при частичном сбое
+  (например, одно предложение уже переведено в другом табе → 409) catch-ветка
+  сбрасывала уже применённые бэкендом локальные изменения и прятала весь список
+  через `status="error"`. Исправлено: каждый approve/reject теперь settle-ится
+  независимо, успешные локальные переходы всегда мержатся в state, из выбора
+  снимаются только успешные (неуспешные остаются выбранными для повторной
+  попытки), а частичный/полный сбой показывается inline без скрытия списка.
+  Добавлен чистый экспортируемый `summarizeBulkOutcome` + behavioral тесты и
+  inline-alert рендер-тест. Provider execution, external writes и LLM
+  по-прежнему не запускаются. Изменены
+  `web/components/ActionProposalsPanel.tsx`, `web/lib/messages.ts`,
+  `web/tests/action-proposals.test.tsx`, `PROGRESS.md`, `docs/CHANGELOG.md`.
+  Checks: `npm test` **118 passed**, `npm run typecheck`, `npm run lint`,
+  `npm run build`, `uv run ruff check .`, `uv run pytest -q`, docs tests,
+  `git diff --check`, tracked/staged secret scans green. Commit local-only;
+  push не делался.
 
 - `2026-07-02` — **Action review polish: bulk local review.** Добавлены
   массовые локальные действия в `ActionProposalsPanel`: выбрать все видимые
