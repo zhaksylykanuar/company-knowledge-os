@@ -80,6 +80,11 @@ Implemented foundations:
   proposal (approved or rejected, GitHub or internal) via a read-only
   "load decision history" control, so the persisted trail is reachable without
   going through the approved-GitHub-issue execution preview.
+- Founder Briefing UI now has a local item category filter and a default
+  evidence drawer selection from the first visible item, with briefing-specific
+  default/manual context and evidence-ref counts. This works only on the loaded
+  deterministic briefing and starts no provider calls, external writes, or LLM
+  calls.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -125,20 +130,26 @@ Done when:
   Founder-facing coverage/briefing polish or deployment readiness while keeping
   provider writes and AI generation disabled.
 
-2. **First auth-session production deploy.**
-   Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade
-   head`, smoke. Do not add auto-deploy or provider-write smoke without explicit
-   human approval.
+2. **Founder-facing briefing polish.**
+   Deterministic briefing cards, source coverage signals, item category filter,
+   default evidence drawer, and briefing-to-local-action bridge are in place.
+   Next: consider richer history comparison or action/state cross-links while
+   keeping provider writes and AI generation disabled.
 
-3. **GitHub App real read run readiness (deferred).**
-   Backend polling-only live read sync, `/github` explicit repo control, and
-   mocked synced-evidence isolation tests are in place; safe rate-limit/error
-   observability is in place. Run the first real scoped read sync only after
-   explicit human approval.
+3. **First auth-session production deploy.**
+  Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade
+  head`, smoke. Do not add auto-deploy or provider-write smoke without explicit
+  human approval.
 
-4. **Multi-user / teammate provisioning.**
-   Add invite/provisioning flow after single-founder auth/session behavior is
-   deployed and stable.
+4. **GitHub App real read run readiness (deferred).**
+  Backend polling-only live read sync, `/github` explicit repo control, and
+  mocked synced-evidence isolation tests are in place; safe rate-limit/error
+  observability is in place. Run the first real scoped read sync only after
+  explicit human approval.
+
+5. **Multi-user / teammate provisioning.**
+  Add invite/provisioning flow after single-founder auth/session behavior is
+  deployed and stable.
 
 ## Known Debts / Watch List
 

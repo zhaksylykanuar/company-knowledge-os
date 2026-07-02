@@ -42,6 +42,12 @@
   `ActionProposal` с summary/evidence refs из briefing item. Это local DB-only:
   не создаёт GitHub issue, не запускает external execution и не пишет во внешние
   сервисы; proposal далее проверяется/одобряется в блоке “Действия”.
+- **Briefing item focus + evidence defaults (НОВОЕ):** `BriefingPanel` теперь
+  умеет локально фильтровать пункты сводки по категории в уже загруженной
+  deterministic briefing, показывает counts по категориям и не запускает
+  provider calls/LLM. `EvidenceDrawer` для сводки по умолчанию показывает первый
+  evidence ref из видимых пунктов, с briefing-specific default/manual context и
+  evidence-ref count; ручной выбор evidence сохраняет приоритет над default.
 - **Action review polish (НОВОЕ):** в `ActionProposalsPanel` добавлен локальный
   status filter (“Нужно решение” / “Одобрено” / “Отклонено” / “Все”) с counts.
   Фильтр работает только по уже загруженным local proposals, не делает provider
@@ -338,6 +344,22 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-02` — **Founder Briefing item focus + evidence defaults.**
+  Continued the local-only Founder-facing coverage/briefing polish. Added a
+  category filter to `BriefingPanel` that works only on the currently loaded
+  deterministic briefing items, with counts for all categories and no provider
+  calls/LLM. The briefing evidence drawer now defaults to the first evidence ref
+  from the visible filtered items, shows briefing-specific default/manual
+  context copy and an evidence-ref count, and still lets manual evidence
+  selection override the default. Empty filter intersections show a safe
+  placeholder/no-items message and no unsupported claims. Changed
+  `web/components/BriefingPanel.tsx`, `web/components/EvidenceDrawer.tsx`,
+  `web/lib/messages.ts`, `web/tests/briefing.test.tsx`, docs. Checks:
+  `npm test` **126 passed**, `npm run typecheck`, `npm run lint`,
+  `npm run build`, `uv run ruff check .`, docs tests **16 passed**,
+  `uv run pytest -q` **403 passed / 1 warning**, `git diff --check`,
+  tracked/staged secret scans green. Commit local-only; push не делался.
 
 - `2026-07-02` — **Surface local decision history in the UI (verification +
   gap fix).** Independently re-derived the objective requirements and audited the

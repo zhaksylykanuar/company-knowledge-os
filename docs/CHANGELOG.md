@@ -55,6 +55,12 @@
   approved-GitHub-issue execution preview, so decision history was unreachable
   for rejected or internal proposals. Read-only; no provider calls, external
   writes, or LLM.
+- Added local category filtering and default evidence selection to the Founder
+  Briefing UI. Briefing items can now be focused by category within the already
+  loaded deterministic briefing, and the evidence drawer defaults to the first
+  evidence ref from the visible items with briefing-specific context and counts.
+  Manual evidence selection still overrides the default. No provider calls,
+  external writes, or LLM calls are started.
 
 ## 2026-07-01
 

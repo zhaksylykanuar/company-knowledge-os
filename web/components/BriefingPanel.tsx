@@ -30,6 +30,12 @@ type BriefingStatus =
   | "ready"
   | "success"
   | "unsupported";
+type BriefingCategoryFilter = "all" | string;
+type BriefingEvidenceSelection = {
+  evidence: BriefingEvidenceRef;
+  title: string;
+  count: number;
+};
 
 type BriefingPanelViewProps = {
   actionError?: string | null;
@@ -41,12 +47,19 @@ type BriefingPanelViewProps = {
   pendingActionItemId?: string | null;
   onGenerate?: () => void;
   onRetry?: () => void;
+  onCategoryFilterChange?: (filter: BriefingCategoryFilter) => void;
   onOpenBriefing?: (briefingId: string) => void;
   onCloseEvidence?: () => void;
   onCreateActionFromItem?: (item: FounderBriefingItem) => void;
-  onSelectEvidence?: (evidence: BriefingEvidenceRef, itemTitle: string) => void;
+  onSelectEvidence?: (
+    evidence: BriefingEvidenceRef,
+    itemTitle: string,
+    count?: number
+  ) => void;
+  categoryFilter?: BriefingCategoryFilter;
   selectedEvidence: BriefingEvidenceRef | null;
   selectedEvidenceItemTitle?: string | null;
+  selectedEvidenceCount?: number | null;
   status: BriefingStatus;
 };
 
@@ -58,10 +71,12 @@ export function BriefingPanel() {
   const [activeBriefingId, setActiveBriefingId] = useState<string | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<BriefingEvidenceRef | null>(null);
   const [selectedEvidenceItemTitle, setSelectedEvidenceItemTitle] = useState<string | null>(null);
+  const [selectedEvidenceCount, setSelectedEvidenceCount] = useState<number | null>(null);
   const [status, setStatus] = useState<BriefingStatus>("loading");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [pendingActionItemId, setPendingActionItemId] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<BriefingCategoryFilter>("all");
 
   const refreshHistory = useCallback(async (currentWorkspaceId: string) => {
     try {
@@ -94,6 +109,8 @@ export function BriefingPanel() {
     setActionSuccessMessage(null);
     setSelectedEvidence(null);
     setSelectedEvidenceItemTitle(null);
+    setSelectedEvidenceCount(null);
+    setCategoryFilter("all");
     setStatus("loading");
     try {
       const payload = await generateManualFounderBriefing(workspaceId);
@@ -119,6 +136,8 @@ export function BriefingPanel() {
     setActionSuccessMessage(null);
     setSelectedEvidence(null);
     setSelectedEvidenceItemTitle(null);
+    setSelectedEvidenceCount(null);
+    setCategoryFilter("all");
     setStatus("loading");
     try {
       const payload = await getBriefing(workspaceId, briefingId);
@@ -176,18 +195,23 @@ export function BriefingPanel() {
       onCloseEvidence={() => {
         setSelectedEvidence(null);
         setSelectedEvidenceItemTitle(null);
+        setSelectedEvidenceCount(null);
       }}
+      onCategoryFilterChange={setCategoryFilter}
       onCreateActionFromItem={createLocalActionFromItem}
       onGenerate={generateBriefing}
       onOpenBriefing={openBriefing}
       onRetry={generateBriefing}
-      onSelectEvidence={(evidence, itemTitle) => {
+      onSelectEvidence={(evidence, itemTitle, count) => {
         setSelectedEvidence(evidence);
         setSelectedEvidenceItemTitle(itemTitle);
+        setSelectedEvidenceCount(typeof count === "number" ? count : null);
       }}
+      categoryFilter={categoryFilter}
       pendingActionItemId={pendingActionItemId}
       selectedEvidence={selectedEvidence}
       selectedEvidenceItemTitle={selectedEvidenceItemTitle}
+      selectedEvidenceCount={selectedEvidenceCount}
       status={status}
     />
   );
@@ -197,9 +221,11 @@ export function BriefingPanelView({
   actionError = null,
   actionSuccessMessage = null,
   activeBriefingId = null,
+  categoryFilter = "all",
   data,
   error,
   history = [],
+  onCategoryFilterChange,
   onCloseEvidence,
   onCreateActionFromItem,
   onGenerate,
@@ -209,10 +235,26 @@ export function BriefingPanelView({
   pendingActionItemId = null,
   selectedEvidence,
   selectedEvidenceItemTitle = null,
+  selectedEvidenceCount = null,
   status
 }: BriefingPanelViewProps) {
   const briefing = data?.briefing ?? null;
   const coverage = briefing?.signals.coverage ?? null;
+  const items = briefing?.items ?? [];
+  const filteredItems = filterBriefingItemsByCategory(items, categoryFilter);
+  const defaultEvidenceSelection = firstBriefingEvidenceSelection(filteredItems);
+  const drawerEvidence = selectedEvidence ?? defaultEvidenceSelection?.evidence ?? null;
+  const drawerTitle = selectedEvidence
+    ? selectedEvidenceItemTitle
+    : defaultEvidenceSelection?.title ?? null;
+  const drawerCount = selectedEvidence
+    ? selectedEvidenceCount
+    : defaultEvidenceSelection?.count ?? null;
+  const drawerSelectionMode: "default" | "manual" | null = drawerEvidence
+    ? selectedEvidence
+      ? "manual"
+      : "default"
+    : null;
   const isGenerating = status === "loading";
   const showHistory = status !== "missing" && status !== "unsupported";
 
@@ -310,17 +352,32 @@ export function BriefingPanelView({
             <p className="success-text">{actionSuccessMessage}</p>
           ) : null}
           {actionError ? <p className="error-text">{actionError}</p> : null}
+          <BriefingCategoryFilterControl
+            activeFilter={categoryFilter}
+            items={items}
+            onChange={onCategoryFilterChange}
+          />
           <section className="work-columns">
             <BriefingItemSection
-              items={briefing.items}
+              items={filteredItems}
               onCreateActionFromItem={onCreateActionFromItem}
               onSelectEvidence={onSelectEvidence}
               pendingActionItemId={pendingActionItemId}
+              totalItems={items.length}
             />
             <EvidenceDrawer
-              evidence={selectedEvidence}
-              itemTitle={selectedEvidenceItemTitle}
+              evidence={drawerEvidence}
+              evidenceCount={drawerCount}
+              itemTitle={drawerTitle}
               onClose={selectedEvidence ? onCloseEvidence : undefined}
+              selectionDescription={
+                drawerSelectionMode === "manual"
+                  ? M.briefingPanel.evidenceManualContext
+                  : drawerSelectionMode === "default"
+                    ? M.briefingPanel.evidenceDefaultContext
+                    : null
+              }
+              selectionMode={drawerSelectionMode}
             />
           </section>
           {briefing.warnings.length > 0 ? (
@@ -389,22 +446,66 @@ function BriefingHistorySection({
   );
 }
 
+function BriefingCategoryFilterControl({
+  activeFilter,
+  items,
+  onChange
+}: {
+  activeFilter: BriefingCategoryFilter;
+  items: FounderBriefingItem[];
+  onChange?: (filter: BriefingCategoryFilter) => void;
+}) {
+  const filters = briefingCategoryFilters(items);
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <section className="work-section" aria-label={M.briefingPanel.itemFilterLabel}>
+      <h3>{M.briefingPanel.itemFilterTitle}</h3>
+      <p className="muted">{M.briefingPanel.itemFilterDescription}</p>
+      <div className="segmented" role="tablist" aria-label={M.briefingPanel.itemFilterLabel}>
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {briefingCategoryFilterLabel(filter)} · {briefingCategoryFilterCount(items, filter)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function BriefingItemSection({
   items,
   onCreateActionFromItem,
   onSelectEvidence,
-  pendingActionItemId
+  pendingActionItemId,
+  totalItems
 }: {
   items: FounderBriefingItem[];
   onCreateActionFromItem?: (item: FounderBriefingItem) => void;
-  onSelectEvidence?: (evidence: BriefingEvidenceRef, itemTitle: string) => void;
+  onSelectEvidence?: (
+    evidence: BriefingEvidenceRef,
+    itemTitle: string,
+    count?: number
+  ) => void;
   pendingActionItemId?: string | null;
+  totalItems: number;
 }) {
   return (
     <section className="work-section" aria-label={M.briefingPanel.itemsSectionTitle}>
       <h3>{M.briefingPanel.itemsSectionTitle}</h3>
-      {items.length === 0 ? (
+      {items.length === 0 && totalItems === 0 ? (
         <p className="muted">{M.briefingPanel.noItems}</p>
+      ) : null}
+      {items.length === 0 && totalItems > 0 ? (
+        <p className="muted">{M.briefingPanel.noItemsForFilter}</p>
       ) : null}
       <div className="work-list">
         {items.map((item) => (
@@ -469,7 +570,11 @@ function EvidenceButtons({
 }: {
   evidenceRefs: BriefingEvidenceRef[];
   itemTitle: string;
-  onSelectEvidence?: (evidence: BriefingEvidenceRef, itemTitle: string) => void;
+  onSelectEvidence?: (
+    evidence: BriefingEvidenceRef,
+    itemTitle: string,
+    count?: number
+  ) => void;
 }) {
   if (evidenceRefs.length === 0) {
     return <p className="muted">{M.briefingPanel.noEvidenceRef}</p>;
@@ -480,7 +585,7 @@ function EvidenceButtons({
         <button
           className="button secondary"
           key={`${evidence.kind}-${evidence.ref}`}
-          onClick={() => onSelectEvidence?.(evidence, itemTitle)}
+          onClick={() => onSelectEvidence?.(evidence, itemTitle, evidenceRefs.length)}
           type="button"
         >
           {T.evidenceButton(evidence.ref)}
@@ -488,4 +593,54 @@ function EvidenceButtons({
       ))}
     </div>
   );
+}
+
+function briefingCategoryFilters(items: FounderBriefingItem[]): BriefingCategoryFilter[] {
+  const categories = Array.from(
+    new Set(
+      items
+        .map((item) => item.category.trim())
+        .filter((category) => category.length > 0)
+    )
+  );
+  return ["all", ...categories];
+}
+
+function briefingCategoryFilterLabel(filter: BriefingCategoryFilter): string {
+  return filter === "all" ? M.briefingPanel.itemFilterAll : filter;
+}
+
+function briefingCategoryFilterCount(
+  items: FounderBriefingItem[],
+  filter: BriefingCategoryFilter
+): number {
+  return filter === "all"
+    ? items.length
+    : items.filter((item) => item.category === filter).length;
+}
+
+function filterBriefingItemsByCategory(
+  items: FounderBriefingItem[],
+  filter: BriefingCategoryFilter
+): FounderBriefingItem[] {
+  if (filter === "all") {
+    return items;
+  }
+  return items.filter((item) => item.category === filter);
+}
+
+function firstBriefingEvidenceSelection(
+  items: FounderBriefingItem[]
+): BriefingEvidenceSelection | null {
+  for (const item of items) {
+    const evidence = item.evidence_refs[0];
+    if (evidence) {
+      return {
+        count: item.evidence_refs.length,
+        evidence,
+        title: item.title
+      };
+    }
+  }
+  return null;
 }

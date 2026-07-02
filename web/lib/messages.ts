@@ -317,12 +317,22 @@ export const M = {
     aiValue: "ИИ",
     capabilityTitle: "Текущий режим возможностей",
     itemsSectionTitle: "Пункты сводки",
+    itemFilterTitle: "Фокус пунктов сводки",
+    itemFilterLabel: "Фильтр пунктов сводки по категории",
+    itemFilterDescription:
+      "Фильтр работает только по уже загруженной детерминированной сводке и не запускает provider calls или LLM.",
+    itemFilterAll: "Все категории",
     noItems: "Бэкенд не вернул пунктов сводки.",
+    noItemsForFilter: "Для выбранной категории пунктов сводки нет.",
     metaSeverity: "Важность",
     metaConfidence: "Уверенность",
     metaNextStep: "Рекомендуемый следующий шаг",
     noNextStep: "Следующий шаг не указан",
     noEvidenceRef: "Системный детерминированный факт; отдельный источник не возвращён.",
+    evidenceDefaultContext:
+      "Источник по умолчанию из первого видимого пункта сводки. Выберите другой источник, чтобы закрепить его.",
+    evidenceManualContext:
+      "Источник выбран вручную. Нажмите «Закрыть», чтобы вернуться к источнику по умолчанию для видимых пунктов.",
     actionCreate: "Создать локальное действие",
     actionCreating: "Создание локального действия",
     actionCreateSuccess:

@@ -120,7 +120,9 @@ function renderPanel(
       history={props.history ?? []}
       actionError={props.actionError ?? null}
       actionSuccessMessage={props.actionSuccessMessage ?? null}
+      categoryFilter={props.categoryFilter ?? "all"}
       onCloseEvidence={props.onCloseEvidence}
+      onCategoryFilterChange={props.onCategoryFilterChange}
       onCreateActionFromItem={props.onCreateActionFromItem}
       onGenerate={props.onGenerate}
       onOpenBriefing={props.onOpenBriefing}
@@ -128,6 +130,7 @@ function renderPanel(
       onSelectEvidence={props.onSelectEvidence}
       pendingActionItemId={props.pendingActionItemId ?? null}
       selectedEvidence={props.selectedEvidence ?? null}
+      selectedEvidenceCount={props.selectedEvidenceCount ?? null}
       selectedEvidenceItemTitle={props.selectedEvidenceItemTitle ?? null}
       status={props.status ?? "success"}
     />
@@ -226,6 +229,45 @@ test("renders deterministic briefing sections and summary", () => {
   assert.match(html, /Repository inventory is available/);
   assert.match(html, /Briefing is deterministic/);
   assert.match(html, /91%/);
+});
+
+test("filters briefing items by local category without provider calls", () => {
+  const html = renderPanel({
+    categoryFilter: "system_fact",
+    onCategoryFilterChange: () => undefined
+  });
+
+  assert.ok(html.includes(M.briefingPanel.itemFilterTitle));
+  assert.ok(html.includes(M.briefingPanel.itemFilterDescription));
+  assert.ok(html.includes(`${M.briefingPanel.itemFilterAll} · 2`));
+  assert.ok(html.includes("repository · 1"));
+  assert.ok(html.includes("system_fact · 1"));
+  assert.match(html, /Briefing is deterministic/);
+  assert.doesNotMatch(html, /Repository inventory is available/);
+  assert.doesNotMatch(html, /provider call started/i);
+});
+
+test("defaults briefing evidence drawer to first visible item evidence", () => {
+  const html = renderPanel({ categoryFilter: "repository" });
+  assert.ok(html.includes(M.evidence.title));
+  assert.ok(html.includes(M.briefingPanel.evidenceDefaultContext));
+  assert.ok(html.includes(M.evidence.countLabel));
+  assert.match(html, /qtwin-io\/founderos-api/);
+  assert.ok(html.includes(M.common.openSource));
+  assert.doesNotMatch(html, new RegExp(`>${M.common.close}<`));
+});
+
+test("keeps manual briefing evidence selection over the default", () => {
+  const evidence = sampleBriefing.briefing.items[0]?.evidence_refs[0] ?? null;
+  const html = renderPanel({
+    selectedEvidence: evidence,
+    selectedEvidenceCount: 1,
+    selectedEvidenceItemTitle: "Repository inventory is available",
+    onCloseEvidence: () => undefined
+  });
+
+  assert.ok(html.includes(M.briefingPanel.evidenceManualContext));
+  assert.match(html, new RegExp(`>${M.common.close}<`));
 });
 
 test("renders local action proposal controls for briefing items", () => {

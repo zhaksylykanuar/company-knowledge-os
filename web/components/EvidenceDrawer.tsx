@@ -7,6 +7,7 @@ type EvidenceDrawerProps = {
   itemTitle?: string | null;
   onClose?: () => void;
   selectionMode?: "default" | "manual" | null;
+  selectionDescription?: string | null;
   evidenceCount?: number | null;
 };
 
@@ -15,6 +16,7 @@ export function EvidenceDrawer({
   itemTitle = null,
   onClose,
   selectionMode = null,
+  selectionDescription = null,
   evidenceCount = null
 }: EvidenceDrawerProps) {
   return (
@@ -33,9 +35,10 @@ export function EvidenceDrawer({
 
       {evidence && selectionMode ? (
         <p className="muted evidence-context">
-          {selectionMode === "manual"
-            ? M.evidence.contextManual
-            : M.evidence.contextDefault}
+          {selectionDescription ??
+            (selectionMode === "manual"
+              ? M.evidence.contextManual
+              : M.evidence.contextDefault)}
         </p>
       ) : null}
 
