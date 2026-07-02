@@ -30,7 +30,7 @@ import { StatusCard } from "./StatusCard";
 type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupported";
 type ProposalKind = "github_issue" | "internal_todo";
 type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
-type ProposalOrigin = "briefing" | "github" | "internal";
+type ProposalOrigin = "audit" | "briefing" | "github" | "internal";
 type ProposalOriginFilter = "all" | ProposalOrigin;
 type BulkMutation = "bulk-approve" | "bulk-reject";
 type PendingMutation =
@@ -738,6 +738,7 @@ function normalizeStatusFilter(value: string | null | undefined): ProposalStatus
 function normalizeOriginFilter(value: string | null | undefined): ProposalOriginFilter {
   if (
     value === "all" ||
+    value === "audit" ||
     value === "briefing" ||
     value === "github" ||
     value === "internal"
@@ -756,7 +757,13 @@ function ActionOriginFilter({
   onChange?: (filter: ProposalOriginFilter) => void;
   proposals: ActionProposal[];
 }) {
-  const filters: ProposalOriginFilter[] = ["all", "briefing", "github", "internal"];
+  const filters: ProposalOriginFilter[] = [
+    "all",
+    "audit",
+    "briefing",
+    "github",
+    "internal"
+  ];
   return (
     <section className="work-section" aria-label={M.actionsPanel.originFilterLabel}>
       <h3>{M.actionsPanel.originFilterTitle}</h3>
@@ -908,6 +915,11 @@ function ProposalList({
                       proposal={proposal}
                     />
                     <span className="badge">{proposal.status}</span>
+                    {group.origin === "audit" ? (
+                      <span className="badge badge-origin">
+                        {M.actionsPanel.originAuditBadge}
+                      </span>
+                    ) : null}
                     {group.origin === "briefing" ? (
                       <span className="badge badge-origin">
                         {M.actionsPanel.originBriefingBadge}
@@ -1010,6 +1022,8 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
   const severity = payloadString(proposal.payload, "severity");
   const nextStep = payloadString(proposal.payload, "recommended_next_step");
   const relatedEntities = payloadStringList(proposal.payload, "related_entities");
+  const auditArea = payloadString(proposal.payload, "area_candidate");
+  const auditActivity = payloadString(proposal.payload, "activity_bucket");
 
   const hasDetails =
     repository ||
@@ -1019,6 +1033,8 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
     category ||
     severity ||
     nextStep ||
+    auditArea ||
+    auditActivity ||
     relatedEntities.length > 0;
 
   if (!hasDetails) {
@@ -1067,6 +1083,18 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
         <div>
           <dt>{M.actionsPanel.payloadNextStep}</dt>
           <dd>{nextStep}</dd>
+        </div>
+      ) : null}
+      {auditArea ? (
+        <div>
+          <dt>{M.actionsPanel.payloadAuditArea}</dt>
+          <dd>{auditArea}</dd>
+        </div>
+      ) : null}
+      {auditActivity ? (
+        <div>
+          <dt>{M.actionsPanel.payloadAuditActivity}</dt>
+          <dd>{auditActivity}</dd>
         </div>
       ) : null}
       {relatedEntities.length > 0 ? (
@@ -1420,6 +1448,9 @@ function originFilterCount(
 }
 
 function originFilterLabel(filter: ProposalOriginFilter): string {
+  if (filter === "audit") {
+    return M.actionsPanel.originFilterAudit;
+  }
   if (filter === "briefing") {
     return M.actionsPanel.originFilterBriefing;
   }
@@ -1449,6 +1480,9 @@ function firstEvidenceSelection(
 }
 
 function proposalOrigin(proposal: ActionProposal): ProposalOrigin {
+  if (payloadString(proposal.payload, "source") === "repo_audit") {
+    return "audit";
+  }
   if (
     proposal.briefing_item_id !== null ||
     payloadString(proposal.payload, "source") === "briefing_item"
@@ -1462,8 +1496,12 @@ function proposalOrigin(proposal: ActionProposal): ProposalOrigin {
 }
 
 function groupProposalsByOrigin(proposals: ActionProposal[]): ProposalGroup[] {
-  const order: ProposalOrigin[] = ["briefing", "github", "internal"];
+  const order: ProposalOrigin[] = ["audit", "briefing", "github", "internal"];
   const meta: Record<ProposalOrigin, { title: string; description: string }> = {
+    audit: {
+      title: M.actionsPanel.groupAuditTitle,
+      description: M.actionsPanel.groupAuditDescription
+    },
     briefing: {
       title: M.actionsPanel.groupBriefingTitle,
       description: M.actionsPanel.groupBriefingDescription
@@ -1478,6 +1516,7 @@ function groupProposalsByOrigin(proposals: ActionProposal[]): ProposalGroup[] {
     }
   };
   const buckets: Record<ProposalOrigin, ActionProposal[]> = {
+    audit: [],
     briefing: [],
     github: [],
     internal: []

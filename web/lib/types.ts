@@ -655,3 +655,80 @@ export type GitHubSelectedRepositorySyncResult = {
   issues: GitHubSelectedIssueSyncResponse | null;
   pull_requests: GitHubSelectedPullRequestSyncResponse | null;
 };
+
+// --- Repository Audit (deterministic, read-only over local discovery snapshot) ---
+
+export type RepoAuditSourceSnapshot = {
+  available: boolean;
+  status: string;
+  path: string | null;
+  snapshot_id: string | null;
+  snapshot_age_seconds: number | null;
+  freshness_status?: string;
+  freshness_label_ru?: string;
+  repo_count?: number;
+  message_ru?: string;
+};
+
+export type RepoAuditSummaryCard = {
+  key: string;
+  label_ru: string;
+  value: number | string;
+  detail_ru: string;
+};
+
+export type RepoAuditRepoFact = {
+  name: string;
+  full_name: string;
+  org: string | null;
+  description_status: string;
+  archived: boolean;
+  fork: boolean;
+  private: boolean;
+  visibility: string;
+  default_branch: string | null;
+  pushed_at: string | null;
+  days_since_last_push: number | null;
+  activity_bucket: string;
+  primary_language: string | null;
+  stack_candidate: string;
+  ci_detected: boolean;
+  tests_detected: boolean;
+  license_status: string;
+  readme_status: string;
+  owner_candidate_status: string;
+  area_candidate: string | null;
+  area_confidence: number | null;
+  needs_founder_confirm: boolean;
+  risks: string[];
+  unknowns: string[];
+  evidence_refs: string[];
+};
+
+export type RepoAuditGuardrails = {
+  preview_only: boolean;
+  computed: boolean;
+  db_written: boolean;
+  network_calls: boolean;
+  external_writes: boolean;
+  github_writes: boolean;
+  jira_writes: boolean;
+  obsidian_written: boolean;
+};
+
+export type RepoAuditResponse = {
+  status: string;
+  preview_only: boolean;
+  computed: boolean;
+  db_written: boolean;
+  network_calls: boolean;
+  generated_at: string | null;
+  source_snapshot: RepoAuditSourceSnapshot;
+  repo_count: number;
+  catalog_count: number;
+  repo_facts: RepoAuditRepoFact[];
+  summary_cards: RepoAuditSummaryCard[];
+  risk_summary: Record<string, number>;
+  area_candidate_counts: Record<string, number>;
+  guardrails: RepoAuditGuardrails;
+};

@@ -82,6 +82,17 @@
   archived, private, or evidence-backed repositories with summary counts. This
   remains client-side only and does not call providers, start bulk sync, perform
   external writes, or weaken the explicit per-repository read-only sync path.
+- Surfaced the deterministic repository audit in the founder UI. The existing
+  `GET /api/v1/founder/company-brain/repo-audit` (computed locally from the
+  GitHub discovery snapshot, no network, no writes) was previously unreachable
+  from the product UI; a new `/audit` page and `RepositoryAuditPanel` now render
+  per-repo audit facts, risk flags, summary counts, guardrails, and local focus
+  filters (all/risks/stale/needs-confirm). Each repo can spawn an
+  `internal_todo` ActionProposal marked `source=repo_audit` with audit evidence
+  refs. ActionProposals review gained an `audit` origin (filter, group, badge,
+  payload detail) plus cross-links back to repositories. This is read-only apart
+  from the local proposal write and starts no provider calls, external writes,
+  or LLM.
 
 ## 2026-07-01
 

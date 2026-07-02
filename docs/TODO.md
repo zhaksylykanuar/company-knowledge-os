@@ -104,6 +104,12 @@ Implemented foundations:
   evidence refs. This helps prepare repo review/audit without provider calls,
   bulk sync, external writes, or changing the explicit per-repository read-only
   sync boundary.
+- `/audit` now surfaces the deterministic repository audit (all repos) that was
+  already computed by `load_repo_audit()` but previously had no UI. It shows
+  per-repo facts, risk flags, summary counts, guardrails, and local focus
+  filters, and can create local `internal_todo` ActionProposals
+  (`source=repo_audit`) per repository. ActionProposals review has a matching
+  `audit` origin. Read-only: no network calls, provider writes, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

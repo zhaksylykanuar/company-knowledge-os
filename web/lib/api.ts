@@ -29,7 +29,8 @@ import type {
   GitHubSelectedIssueSyncResponse,
   GitHubSelectedPullRequestSyncRequest,
   GitHubSelectedPullRequestSyncResponse,
-  GitHubSelectedRepositorySyncResult
+  GitHubSelectedRepositorySyncResult,
+  RepoAuditResponse
 } from "./types";
 
 // Same-origin base: the browser calls the web origin, and next.config.mjs
@@ -129,6 +130,16 @@ export async function fetchCompanyBrain(
     buildWorkspaceCompanyBrainPath(workspaceId),
     options
   );
+}
+
+export function buildRepoAuditPath(): string {
+  return "/api/v1/founder/company-brain/repo-audit";
+}
+
+export async function fetchRepoAudit(
+  options: ApiFetchOptions = {}
+): Promise<RepoAuditResponse> {
+  return apiFetch<RepoAuditResponse>(buildRepoAuditPath(), options);
 }
 
 export function buildWorkspaceManualBriefingPath(workspaceId: string): string {

@@ -16,6 +16,7 @@ export const M = {
     home: "Главная",
     dashboard: "Панель",
     github: "GitHub",
+    audit: "Аудит репо",
     briefings: "Сводки",
     actions: "Действия",
     settings: "Настройки"
@@ -416,6 +417,7 @@ export const M = {
     originFilterDescription:
       "Источник фильтруется поверх выбранного статуса и не запускает provider calls.",
     originFilterAll: "Все источники",
+    originFilterAudit: "Из аудита репо",
     originFilterBriefing: "Из сводки",
     originFilterGithub: "GitHub задачи",
     originFilterInternal: "Internal todo",
@@ -464,6 +466,9 @@ export const M = {
     actionLabelCreateIssue: "Создать задачу GitHub",
     actionLabelInternalTodo: "Внутренняя задача",
     groupsLabel: "Группы предложений по источнику",
+    groupAuditTitle: "Из аудита репозиториев",
+    groupAuditDescription:
+      "Локальные действия, созданные из детерминированного аудита репозиториев (read-only).",
     groupBriefingTitle: "Из пунктов сводки",
     groupBriefingDescription:
       "Локальные действия, созданные из evidence пунктов сводки.",
@@ -472,11 +477,14 @@ export const M = {
       "Локальные предложения будущих задач GitHub. Запись в GitHub здесь не выполняется.",
     groupInternalTitle: "Внутренние задачи",
     groupInternalDescription: "Внутренние локальные задачи, созданные вручную.",
+    originAuditBadge: "Из аудита",
     originBriefingBadge: "Из сводки",
     payloadBriefingItem: "Ключ пункта сводки",
     payloadCategory: "Категория",
     payloadSeverity: "Важность",
     payloadNextStep: "Рекомендуемый следующий шаг",
+    payloadAuditArea: "Область-кандидат (аудит)",
+    payloadAuditActivity: "Активность репозитория (аудит)",
     payloadRelatedEntities: "Связанные сущности"
   },
 
@@ -706,6 +714,66 @@ export const M = {
     statusOff: "Выключено"
   },
 
+  repoAudit: {
+    eyebrow: "Аудит репозиториев",
+    title: "Полный аудит всех репозиториев",
+    badgeDeterministic: "Deterministic / read-only / no external writes",
+    loading: "Загрузка аудита репозиториев",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — аудит репозиториев недоступен.",
+    unavailableTitle: "Аудит репозиториев недоступен",
+    unavailableDescription: "Панель не смогла загрузить детерминированный аудит репозиториев.",
+    emptyTitle: "Аудит репозиториев пуст",
+    emptyDescription:
+      "Локальный снимок GitHub discovery не дал репозиториев для аудита. Подготовьте снимок и вернитесь сюда.",
+    intro:
+      "Детерминированный аудит всех репозиториев организации из локального снимка discovery. Он вычисляется локально: без сетевых вызовов, LLM и записей во внешние сервисы. Отдельный полный аудит другой моделью можно импортировать позже как результат.",
+    summaryLabel: "Сводка аудита репозиториев",
+    guardrailsTitle: "Границы аудита",
+    guardrailsSummary:
+      "preview-only, вычислено локально, БД не менялась, сетевых вызовов нет, внешних записей нет.",
+    snapshotTitle: "Локальный снимок",
+    snapshotUnavailable: "Локальный снимок discovery недоступен.",
+    reposTitle: "Репозитории",
+    reposDescription: "Репозитории, вычисленные из локального снимка discovery.",
+    riskTitle: "Риск-флаги",
+    riskDescription: "Суммарные детерминированные риск-флаги по всем репозиториям.",
+    listTitle: "Репозитории под аудитом",
+    listLabel: "Список репозиториев под аудитом",
+    focusLabel: "Фильтр аудита репозиториев",
+    focusTitle: "Фокус аудита",
+    focusDescription:
+      "Фильтр работает только по уже вычисленному аудиту и не запускает сетевые вызовы, provider-запросы или LLM.",
+    focusAll: "Все",
+    focusRisks: "С рисками",
+    focusStale: "Неактивные",
+    focusNeedsConfirm: "Нужно подтверждение",
+    noReposForFilter: "Для выбранного фильтра репозиториев нет.",
+    metaVisibility: "Видимость",
+    metaActivity: "Активность",
+    metaArea: "Область-кандидат",
+    metaStack: "Стек",
+    metaReadme: "README",
+    metaTests: "Тесты",
+    metaCi: "CI",
+    metaEvidence: "Источники",
+    risksLabel: "Риск-флаги",
+    unknownsLabel: "Неизвестно",
+    createAction: "Создать локальное действие из аудита",
+    creatingAction: "Создание локального действия",
+    actionAlreadyCreated: "Действие уже создано",
+    createActionSuccess:
+      "Локальное действие из аудита создано. Проверьте его в блоке «Действия» перед одобрением.",
+    createActionError: "Не удалось создать локальное действие из аудита.",
+    openActions: "Открыть действия",
+    noRisks: "Детерминированные риск-флаги не обнаружены.",
+    linkedActionsTitle: "Локальные действия из аудита",
+    linkedActionsEmpty:
+      "По репозиториям аудита ещё нет локальных предложений действий.",
+    boundaryNote:
+      "Read-only: аудит и создание локального действия не пишут во внешние сервисы, не вызывают провайдеров и не используют LLM."
+  },
+
   companyBrain: {
     eyebrow: "Мозг компании",
     title: "Состояние GitHub, подтверждённое источниками",
@@ -862,6 +930,15 @@ export const T = {
     `Каноническая поверхность GitHub готова: ${count} repo rows в локальной БД.`,
   sourceCoverageEvidenceReady: (count: number) =>
     `Для текущей выборки возвращено evidence refs: ${count}.`,
+  repoAuditSnapshot: (repoCount: number, status: string) =>
+    `Снимок: репозиториев ${repoCount} · статус ${status}.`,
+  repoAuditActivity: (bucket: string, daysSincePush: number | null) =>
+    daysSincePush === null
+      ? `Активность: ${bucket}.`
+      : `Активность: ${bucket} · дней с последнего push: ${daysSincePush}.`,
+  repoAuditRiskCount: (count: number) => `Риск-флагов: ${count}.`,
+  repoAuditLinkedActions: (total: number, proposed: number, decided: number) =>
+    `Связано локальных действий: ${total} · нужно решение ${proposed} · решено ${decided}.`,
   privateBetaReadinessDataReady: (
     repositories: number,
     evidenceRefs: number,

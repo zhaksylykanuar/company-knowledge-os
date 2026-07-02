@@ -137,6 +137,29 @@ const manualInternalProposal: ActionProposal = {
   ]
 };
 
+const auditProposal: ActionProposal = {
+  ...proposedProposal,
+  id: "proposal-6",
+  target_provider: "internal",
+  action_type: "internal_todo",
+  title: "Repo audit follow-up: qtwin-io/base-collector",
+  description: "Repository: qtwin-io/base-collector",
+  payload: {
+    source: "repo_audit",
+    repository_full_name: "qtwin-io/base-collector",
+    area_candidate: "OPS",
+    activity_bucket: "stale"
+  },
+  evidence_refs: [
+    {
+      kind: "repo_audit_fact",
+      source: "repo_audit",
+      ref: "github_discovery_snapshot:repos.json:base-collector:metadata",
+      url: null
+    }
+  ]
+};
+
 const sampleList: ActionProposalListResponse = {
   count: 3,
   is_live: false,
@@ -562,6 +585,24 @@ test("filters loaded proposals by local origin on top of status", () => {
   assert.match(briefingHtml, /Review synced GitHub work before approving actions/);
   assert.doesNotMatch(briefingHtml, /Create follow-up GitHub issue/);
   assert.doesNotMatch(briefingHtml, /Manual internal follow-up/);
+});
+
+test("groups and badges repo-audit-derived proposals under the audit origin", () => {
+  const auditList: ActionProposalListResponse = {
+    ...sampleList,
+    proposals: [auditProposal],
+    count: 1
+  };
+  const auditHtml = renderPanel({
+    data: auditList,
+    originFilter: "audit",
+    statusFilter: "proposed"
+  });
+  assert.ok(auditHtml.includes(`${M.actionsPanel.originFilterAudit} · 1`));
+  assert.ok(auditHtml.includes(`${M.actionsPanel.groupAuditTitle} · 1`));
+  assert.ok(auditHtml.includes(M.actionsPanel.originAuditBadge));
+  assert.ok(auditHtml.includes("qtwin-io/base-collector"));
+  assert.doesNotMatch(auditHtml, /provider call started/i);
 });
 
 test("shows empty state for origin and status intersections with no local proposals", () => {

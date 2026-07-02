@@ -43,6 +43,18 @@
   работает только client-side по уже полученному backend payload, не делает
   provider calls, не запускает bulk sync и сохраняет per-repo explicit
   read-only sync boundary.
+- **Repository Audit surface + audit→local-action loop (НОВОЕ):** ранее
+  существовавший, но не выведенный в UI детерминированный аудит всех репо
+  (`load_repo_audit()` → `GET /api/v1/founder/company-brain/repo-audit`) теперь
+  доступен во фронтенде: новая страница `/audit` и `RepositoryAuditPanel`
+  показывают per-repo facts (visibility/activity/area/stack/readme/tests/ci/
+  evidence), summary counts, risk-флаги, guardrails (preview-only, no network,
+  no external writes) и локальные focus-фильтры (все/с рисками/неактивные/
+  нужно подтверждение). Кнопка «Создать локальное действие из аудита» создаёт
+  `internal_todo` `ActionProposal` c payload-маркером `source=repo_audit` и
+  evidence refs из аудита; `ActionProposalsPanel` получил новый origin `audit`
+  (фильтр/группа/бейдж/payload-detail) и cross-link обратно на репозитории.
+  Всё read-only: без сетевых вызовов, provider writes и LLM.
 - **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
   теперь добавляет `signals.coverage` и item `source-coverage` из локального
   Company Brain state: canonical repositories, open issues/PRs, evidence refs,
