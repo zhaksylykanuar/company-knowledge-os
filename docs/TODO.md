@@ -72,6 +72,10 @@ Implemented foundations:
   partial-success semantics, rather than frontend-only one-request-per-card
   orchestration. The endpoints dedupe IDs and never start provider execution,
   external writes, or LLM calls.
+- Local ActionProposal approve/reject decisions (single and bulk successes) now
+  append sanitized no-write audit events to the existing per-proposal timeline,
+  so post-bulk review history is visible without creating `ActionExecution`
+  rows or calling providers.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -110,9 +114,10 @@ Done when:
    drawer default-vs-manual context + evidence-ref count are in place. A local
    origin filter now composes with the status filter, and bulk local approve/
    reject controls are available for visible `proposed` proposals through
-   backend bulk endpoints with partial-success results. Next: polish post-bulk
-   review feedback/history if needed while keeping provider writes and AI
-   generation disabled.
+   backend bulk endpoints with partial-success results. Local approve/reject
+   decisions now write no-provider audit events to the existing timeline. Next:
+   continue Founder-facing coverage/briefing polish or deployment readiness
+   while keeping provider writes and AI generation disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

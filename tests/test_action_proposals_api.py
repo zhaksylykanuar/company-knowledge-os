@@ -10,6 +10,8 @@ from sqlalchemy import delete, func, select, text
 
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.action_models import (
+    ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
+    ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
     ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_PROPOSAL_STATUS_PROPOSED,
     ACTION_PROPOSAL_STATUS_REJECTED,
@@ -493,6 +495,11 @@ async def test_owner_admin_can_approve_without_execution(
                 headers=_headers(),
                 params={"owner_email": actor_email},
             )
+            audit_response = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/audit",
+                headers=_headers(),
+                params={"owner_email": actor_email},
+            )
 
         assert response.status_code == 200
         body = response.json()
@@ -501,6 +508,18 @@ async def test_owner_admin_can_approve_without_execution(
         assert body["is_live"] is False
         assert any("deferred" in warning for warning in body["warnings"])
         assert await _count(ActionExecution) == executions_before
+        assert audit_response.status_code == 200, audit_response.text
+        audit = audit_response.json()
+        assert audit["events"][0]["event_type"] == ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED
+        assert audit["events"][0]["status"] == "recorded"
+        assert audit["events"][0]["provider"] == ACTION_TARGET_PROVIDER_GITHUB
+        assert audit["events"][0]["action"] == ACTION_TYPE_CREATE_GITHUB_ISSUE
+        assert audit["events"][0]["external_execution_enabled"] is False
+        assert audit["events"][0]["confirmation_received"] is False
+        assert audit["events"][0]["event_metadata"]["decision"] == "approved"
+        assert audit["events"][0]["event_metadata"]["bulk"] is False
+        assert audit["receipt"]["external_write_performed"] is False
+        assert audit["receipt"]["provider_result"] == "none"
     finally:
         await _cleanup_action_fixture(marker)
 
@@ -633,6 +652,11 @@ async def test_bulk_approve_partially_succeeds_without_execution(monkeypatch) ->
                     ]
                 },
             )
+            approve_me_audit = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approve_me['id']}/audit",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
 
         assert response.status_code == 200, response.text
         body = response.json()
@@ -648,6 +672,16 @@ async def test_bulk_approve_partially_succeeds_without_execution(monkeypatch) ->
         assert any("deferred" in warning for warning in body["warnings"])
         assert any("does not execute provider actions" in warning for warning in body["warnings"])
         assert await _count(ActionExecution) == executions_before
+        assert approve_me_audit.status_code == 200, approve_me_audit.text
+        approve_audit = approve_me_audit.json()
+        assert (
+            approve_audit["events"][0]["event_type"]
+            == ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED
+        )
+        assert approve_audit["events"][0]["event_metadata"]["decision"] == "approved"
+        assert approve_audit["events"][0]["event_metadata"]["bulk"] is True
+        assert approve_audit["events"][0]["external_execution_enabled"] is False
+        assert approve_audit["receipt"]["external_write_performed"] is False
     finally:
         await _cleanup_action_fixture(marker)
 
@@ -678,6 +712,11 @@ async def test_bulk_reject_succeeds_without_execution(monkeypatch) -> None:
                     "reason": "Not now",
                 },
             )
+            first_audit = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{first['id']}/audit",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
 
         assert response.status_code == 200, response.text
         body = response.json()
@@ -696,6 +735,16 @@ async def test_bulk_reject_succeeds_without_execution(monkeypatch) -> None:
             proposal["rejection_reason"] for proposal in body["proposals"]
         } == {"Not now"}
         assert await _count(ActionExecution) == executions_before
+        assert first_audit.status_code == 200, first_audit.text
+        first_audit_body = first_audit.json()
+        assert (
+            first_audit_body["events"][0]["event_type"]
+            == ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED
+        )
+        assert first_audit_body["events"][0]["event_metadata"]["decision"] == "rejected"
+        assert first_audit_body["events"][0]["event_metadata"]["bulk"] is True
+        assert first_audit_body["events"][0]["external_execution_enabled"] is False
+        assert first_audit_body["receipt"]["external_write_performed"] is False
     finally:
         await _cleanup_action_fixture(marker)
 

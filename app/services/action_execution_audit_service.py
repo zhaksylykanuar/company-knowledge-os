@@ -181,6 +181,8 @@ def _safe_text(value: str | None, *, fallback: str, limit: int) -> str:
 def _event_order_case():
     return case(
         {
+            "action_proposal_approved_locally": 1,
+            "action_proposal_rejected_locally": 2,
             "execution_preview_generated": 10,
             "execution_preview_blocked": 11,
             "execution_unsupported": 12,

@@ -18,6 +18,8 @@ from app.db.action_models import (
     ACTION_EXECUTION_EVENT_CONFIRMATION_RECEIVED_BUT_DISABLED,
     ACTION_EXECUTION_EVENT_PREVIEW_BLOCKED,
     ACTION_EXECUTION_EVENT_PREVIEW_GENERATED,
+    ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
+    ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
     ACTION_EXECUTION_EVENT_STATUS_BLOCKED,
     ACTION_EXECUTION_EVENT_STATUS_RECORDED,
     ACTION_EXECUTION_EVENT_STATUS_UNSUPPORTED,
@@ -409,6 +411,13 @@ async def bulk_approve_action_proposals_endpoint(
                     proposal_id=proposal_id,
                     approved_by_user_id=access.workspace_membership.user.id,
                 )
+                await _record_local_review_event(
+                    session,
+                    proposal=proposal,
+                    event_type=ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
+                    decision="approved",
+                    bulk=True,
+                )
                 proposals.append(
                     ActionProposalRead.model_validate(
                         serialize_action_proposal(proposal)
@@ -458,6 +467,13 @@ async def bulk_reject_action_proposals_endpoint(
                     proposal_id=proposal_id,
                     rejected_by_user_id=access.workspace_membership.user.id,
                     reason=payload.reason,
+                )
+                await _record_local_review_event(
+                    session,
+                    proposal=proposal,
+                    event_type=ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
+                    decision="rejected",
+                    bulk=True,
                 )
                 proposals.append(
                     ActionProposalRead.model_validate(
@@ -527,6 +543,13 @@ async def approve_action_proposal_endpoint(
                 proposal_id=proposal_id,
                 approved_by_user_id=access.workspace_membership.user.id,
             )
+            await _record_local_review_event(
+                session,
+                proposal=proposal,
+                event_type=ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
+                decision="approved",
+                bulk=False,
+            )
             await session.commit()
         except ActionProposalNotFoundError as exc:
             await session.rollback()
@@ -567,6 +590,13 @@ async def reject_action_proposal_endpoint(
                 proposal_id=proposal_id,
                 rejected_by_user_id=access.workspace_membership.user.id,
                 reason=payload.reason,
+            )
+            await _record_local_review_event(
+                session,
+                proposal=proposal,
+                event_type=ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
+                decision="rejected",
+                bulk=False,
             )
             await session.commit()
         except ActionProposalNotFoundError as exc:
@@ -884,6 +914,51 @@ async def _record_execute_block_event(
         },
         error_code=error_code,
         error_message=error_message,
+    )
+
+
+async def _record_local_review_event(
+    session: Any,
+    *,
+    proposal: Any,
+    event_type: str,
+    decision: str,
+    bulk: bool,
+) -> None:
+    decided_at = (
+        proposal.approved_at
+        if decision == "approved"
+        else proposal.rejected_at
+    ) or proposal.updated_at
+    await append_execution_event(
+        session,
+        workspace_id=proposal.workspace_id,
+        action_proposal_id=proposal.id,
+        event_type=event_type,
+        actor="workspace_admin",
+        status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+        message=(
+            f"Action proposal {decision} locally. "
+            "No external write occurred."
+        ),
+        idempotency_key=execution_event_idempotency_key(
+            workspace_id=proposal.workspace_id,
+            action_proposal_id=proposal.id,
+            event_type=event_type,
+            external_execution_enabled=False,
+            confirmation_received=False,
+            reason=f"{decision}:{decided_at}:{'bulk' if bulk else 'single'}",
+        ),
+        provider=proposal.target_provider,
+        action=proposal.action_type,
+        external_execution_enabled=False,
+        confirmation_received=False,
+        event_metadata={
+            "bulk": bulk,
+            "decision": decision,
+            "external_execution_enabled": False,
+            "proposal_status": proposal.status,
+        },
     )
 
 

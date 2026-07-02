@@ -509,7 +509,7 @@ export const M = {
     yes: "да",
     no: "нет",
     createdIssue: "Задача GitHub создана. Квитанция выполнения записана.",
-    auditTitle: "Локальный аудит выполнения",
+    auditTitle: "Локальный аудит решений и выполнения",
     auditCreated: "Время",
     auditActor: "Актор",
     auditProvider: "Провайдер",

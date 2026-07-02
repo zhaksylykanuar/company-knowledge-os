@@ -42,6 +42,11 @@
   partial success semantics, and never start provider execution, external
   writes, or LLM calls. The web bulk review controls now use these endpoints
   instead of issuing one request per proposal.
+- Added local review decision audit events for ActionProposals. Single and bulk
+  local approve/reject successes append sanitized audit events to the existing
+  per-proposal audit timeline, with explicit no-external-write metadata and no
+  `ActionExecution` rows or provider calls. The UI audit copy now labels the
+  timeline as decisions and execution.
 
 ## 2026-07-01
 

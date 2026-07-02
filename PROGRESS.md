@@ -92,6 +92,11 @@
   мержатся, неуспешные остаются выбранными для повторной попытки, а частичный/
   полный сбой показывается inline без скрытия загруженного списка
   (`summarizeBulkResponse`).
+  Single and bulk successful local approve/reject decisions now append sanitized
+  no-write audit events to the existing per-proposal audit timeline
+  (`action_proposal_approved_locally` / `action_proposal_rejected_locally`);
+  no `ActionExecution` rows, provider calls, external writes, or LLM calls are
+  created.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
@@ -329,6 +334,27 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-02` — **Local ActionProposal review audit events.** Added local
+  decision audit events for successful single and bulk ActionProposal
+  approve/reject transitions. Events reuse the existing append-only
+  `ActionExecutionEvent` timeline with event types
+  `action_proposal_approved_locally` and `action_proposal_rejected_locally`,
+  actor `workspace_admin`, `status=recorded`, sanitized metadata
+  (`decision`, `bulk`, `proposal_status`, `external_execution_enabled=false`),
+  and message “No external write occurred.” Failed bulk items get no event
+  because they do not mutate. Updated event ordering so local review decisions
+  appear before execution preview/execution events; audit UI copy now says
+  “Локальный аудит решений и выполнения”. No `ActionExecution` rows are
+  created, provider execution is not started, external writes are not performed,
+  and LLM is not used. Added backend assertions for single approve audit,
+  bulk approve partial success audit, bulk reject audit, and updated execution
+  audit expectations. Checks: targeted action/execution audit tests
+  **63 passed**, `npm test` **119 passed**, `npm run typecheck`,
+  `npm run lint`, `npm run build`, `uv run ruff check .`, docs tests
+  **16 passed**, `uv run pytest -q` **403 passed / 1 warning**,
+  `git diff --check`, tracked/staged secret scans green. Commit local-only;
+  push не делался.
 
 - `2026-07-02` — **Independent verification of bulk ActionProposal API chunk.**
   Re-derived requirements from objective (large local-only chunk, no external

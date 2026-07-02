@@ -424,7 +424,14 @@ async def _stored_execution_events(proposal_id: str | UUID) -> list[ActionExecut
                 )
             )
         ).scalars()
-        return sorted(list(rows), key=_execution_event_sort_key)
+        return sorted(
+            [
+                event
+                for event in rows
+                if str(event.event_type).startswith("execution_")
+            ],
+            key=_execution_event_sort_key,
+        )
 
 
 def _execution_event_sort_key(event: ActionExecutionEvent) -> tuple:
@@ -528,17 +535,21 @@ async def test_execution_preview_is_dry_run_when_external_writes_disabled(
         assert body["preview"]["repository"] == "qtwin-io/founderos-api"
         assert body["preview"]["title"] == "FounderOS follow-up"
         assert body["preview"]["evidence_refs"][0]["ref"] == "qtwin-io/founderos-api"
-        assert body["audit"][0]["event_type"] == "execution_preview_generated"
-        assert body["audit"][0]["event"] == "execution_preview_generated"
-        assert body["audit"][0]["status"] == "recorded"
-        assert body["audit"][0]["provider"] == "github"
+        assert body["audit"][0]["event_type"] == "action_proposal_approved_locally"
         assert body["audit"][0]["external_execution_enabled"] is False
         assert body["audit"][0]["confirmation_received"] is False
-        assert body["audit"][0]["external_result_id"] is None
-        assert body["audit"][0]["external_result_url"] is None
-        assert body["audit"][0]["event_metadata"]["evidence_refs_count"] == 1
+        assert body["audit"][0]["event_metadata"]["decision"] == "approved"
+        assert body["audit"][1]["event_type"] == "execution_preview_generated"
+        assert body["audit"][1]["event"] == "execution_preview_generated"
+        assert body["audit"][1]["status"] == "recorded"
+        assert body["audit"][1]["provider"] == "github"
+        assert body["audit"][1]["external_execution_enabled"] is False
+        assert body["audit"][1]["confirmation_received"] is False
+        assert body["audit"][1]["external_result_id"] is None
+        assert body["audit"][1]["external_result_url"] is None
+        assert body["audit"][1]["event_metadata"]["evidence_refs_count"] == 1
         assert "Created through approved action execution" not in str(
-            body["audit"][0]["event_metadata"]
+            body["audit"][1]["event_metadata"]
         )
         assert body["warnings"] == [
             "Execution preview is dry-run only and does not call GitHub."
@@ -563,7 +574,10 @@ async def test_execution_preview_is_dry_run_when_external_writes_disabled(
         )
         assert audit_response.status_code == 200, audit_response.text
         audit = audit_response.json()
-        assert audit["events"][0]["event_type"] == "execution_preview_generated"
+        assert [event["event_type"] for event in audit["events"]] == [
+            "action_proposal_approved_locally",
+            "execution_preview_generated",
+        ]
         assert audit["receipt"]["provider"] == "github"
         assert audit["receipt"]["provider_result"] == "none"
         assert audit["receipt"]["external_write_performed"] is False
@@ -943,6 +957,7 @@ async def test_owner_admin_can_execute_approved_github_issue(
         assert audit_response.status_code == 200, audit_response.text
         audit = audit_response.json()
         assert [event["event_type"] for event in audit["events"]] == [
+            "action_proposal_approved_locally",
             "execution_confirmation_received",
             "execution_started",
             "execution_succeeded",
@@ -1110,6 +1125,7 @@ async def test_sync_execution_result_reads_issue_into_product_state(
         assert audit_response.status_code == 200, audit_response.text
         event_types = [event["event_type"] for event in audit_response.json()["events"]]
         assert event_types == [
+            "action_proposal_approved_locally",
             "execution_confirmation_received",
             "execution_started",
             "execution_succeeded",
