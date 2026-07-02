@@ -67,6 +67,19 @@ const approvedProposal: ActionProposal = {
   title: "Approved local proposal"
 };
 
+const rejectedInternalProposal: ActionProposal = {
+  ...proposedProposal,
+  action_type: "internal_todo",
+  id: "proposal-3",
+  payload: { note: "Local internal follow-up" },
+  rejected_at: "2026-06-25T01:07:00+06:00",
+  rejected_by_user_id: "user-3",
+  rejection_reason: "Not needed",
+  status: "rejected",
+  target_provider: "internal",
+  title: "Rejected internal proposal"
+};
+
 function auditEvent(
   overrides: Partial<ActionExecutionAuditEvent> = {}
 ): ActionExecutionAuditEvent {
@@ -178,10 +191,12 @@ function renderControls(
       error={props.error ?? null}
       executeResult={props.executeResult ?? null}
       isExecutePending={props.isExecutePending ?? false}
+      isHistoryPending={props.isHistoryPending ?? false}
       isPreviewPending={props.isPreviewPending ?? false}
       onConfirmationChange={props.onConfirmationChange}
       onConnectionIdChange={props.onConnectionIdChange}
       onExecute={props.onExecute}
+      onLoadHistory={props.onLoadHistory}
       onPreview={props.onPreview}
       preview={props.preview ?? null}
       proposal={props.proposal ?? approvedProposal}
@@ -338,6 +353,42 @@ test("renders not-approved execution state without execute controls", () => {
   const html = renderControls({ proposal: proposedProposal });
   assert.ok(html.includes(M.actionExecution.approveFirst));
   assert.ok(!html.includes(M.actionExecution.execute));
+});
+
+test("offers decision-history control for a rejected internal proposal", () => {
+  const html = renderControls({
+    onLoadHistory: () => undefined,
+    proposal: rejectedInternalProposal
+  });
+  // Rejected proposals are not approvable, so the approve-first hint is shown
+  // (the preview button is gated to approved proposals).
+  assert.ok(html.includes(M.actionExecution.approveFirst));
+  // But the recorded local decision history must still be reachable.
+  assert.ok(html.includes(M.actionExecution.historyLoad));
+});
+
+test("offers decision-history control for an approved proposal", () => {
+  const html = renderControls({
+    onLoadHistory: () => undefined,
+    onPreview: () => undefined,
+    proposal: approvedProposal
+  });
+  assert.ok(html.includes(M.actionExecution.preview));
+  assert.ok(html.includes(M.actionExecution.historyLoad));
+});
+
+test("hides decision-history control until a decision is recorded", () => {
+  const html = renderControls({ proposal: proposedProposal });
+  assert.ok(!html.includes(M.actionExecution.historyLoad));
+});
+
+test("shows pending state while decision history loads", () => {
+  const html = renderControls({
+    isHistoryPending: true,
+    onLoadHistory: () => undefined,
+    proposal: rejectedInternalProposal
+  });
+  assert.ok(html.includes(M.actionExecution.historyLoading));
 });
 
 test("renders approved previewable state and dry-run preview details", () => {

@@ -47,6 +47,14 @@
   per-proposal audit timeline, with explicit no-external-write metadata and no
   `ActionExecution` rows or provider calls. The UI audit copy now labels the
   timeline as decisions and execution.
+- Surfaced the recorded decision history in the UI for any decided proposal.
+  `ActionExecutionControls` now shows a "Показать историю решений" control for
+  approved or rejected proposals (including internal/briefing-derived ones) that
+  loads the persisted per-proposal audit trail through the existing read-only
+  audit endpoint. Previously the authoritative trail was only fetched via the
+  approved-GitHub-issue execution preview, so decision history was unreachable
+  for rejected or internal proposals. Read-only; no provider calls, external
+  writes, or LLM.
 
 ## 2026-07-01
 

@@ -30,10 +30,12 @@ type ActionExecutionControlsViewProps = {
   error: string | null;
   executeResult: ActionExecutionResponse | null;
   isExecutePending: boolean;
+  isHistoryPending: boolean;
   isPreviewPending: boolean;
   onConfirmationChange?: (checked: boolean) => void;
   onConnectionIdChange?: (value: string) => void;
   onExecute?: () => void;
+  onLoadHistory?: () => void;
   onPreview?: () => void;
   preview: ActionExecutionPreviewResponse | null;
   proposal: ActionProposal;
@@ -53,6 +55,7 @@ export function ActionExecutionControls({
   const [executeResult, setExecuteResult] = useState<ActionExecutionResponse | null>(null);
   const [isExecutePending, setIsExecutePending] = useState(false);
   const [isPreviewPending, setIsPreviewPending] = useState(false);
+  const [isHistoryPending, setIsHistoryPending] = useState(false);
   const [preview, setPreview] = useState<ActionExecutionPreviewResponse | null>(null);
   const [receipt, setReceipt] = useState<ActionExecutionReceipt | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -61,6 +64,25 @@ export function ActionExecutionControls({
     const response = await fetchActionProposalAudit(workspaceId, proposal.id);
     setAuditEvents(response.events);
     setReceipt(response.receipt);
+  }
+
+  async function loadHistory() {
+    if (!workspaceId) {
+      setError(M.actionExecution.noWorkspacePreview);
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setIsHistoryPending(true);
+    try {
+      await refreshAudit(workspaceId);
+      setSuccessMessage(M.actionExecution.historyLoaded);
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
+    } finally {
+      setIsHistoryPending(false);
+    }
   }
 
   async function previewExecution() {
@@ -140,10 +162,12 @@ export function ActionExecutionControls({
       error={error}
       executeResult={executeResult}
       isExecutePending={isExecutePending}
+      isHistoryPending={isHistoryPending}
       isPreviewPending={isPreviewPending}
       onConfirmationChange={setConfirmationChecked}
       onConnectionIdChange={setConnectionId}
       onExecute={executeWithConfirmation}
+      onLoadHistory={loadHistory}
       onPreview={previewExecution}
       preview={preview}
       proposal={proposal}
@@ -160,10 +184,12 @@ export function ActionExecutionControlsView({
   error,
   executeResult,
   isExecutePending,
+  isHistoryPending,
   isPreviewPending,
   onConfirmationChange,
   onConnectionIdChange,
   onExecute,
+  onLoadHistory,
   onPreview,
   preview,
   proposal,
@@ -171,6 +197,7 @@ export function ActionExecutionControlsView({
   successMessage = null
 }: ActionExecutionControlsViewProps) {
   const isApproved = proposal.status === "approved";
+  const hasRecordedDecision = Boolean(proposal.approved_at || proposal.rejected_at);
   const externalExecutionEnabled = Boolean(
     preview?.capabilities.external_execution && preview.capabilities.live_provider_write
   );
@@ -215,6 +242,19 @@ export function ActionExecutionControlsView({
           {isPreviewPending ? M.actionExecution.preparingPreview : M.actionExecution.preview}
         </button>
       )}
+
+      {hasRecordedDecision ? (
+        <button
+          className="button secondary"
+          disabled={isHistoryPending}
+          onClick={onLoadHistory}
+          type="button"
+        >
+          {isHistoryPending
+            ? M.actionExecution.historyLoading
+            : M.actionExecution.historyLoad}
+        </button>
+      ) : null}
 
       {error ? <p className="state error">{error}</p> : null}
       {successMessage ? <p className="success-text">{successMessage}</p> : null}

@@ -76,6 +76,10 @@ Implemented foundations:
   append sanitized no-write audit events to the existing per-proposal timeline,
   so post-bulk review history is visible without creating `ActionExecution`
   rows or calling providers.
+- The ActionProposals UI can load that recorded decision history for any decided
+  proposal (approved or rejected, GitHub or internal) via a read-only
+  "load decision history" control, so the persisted trail is reachable without
+  going through the approved-GitHub-issue execution preview.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -114,10 +118,12 @@ Done when:
    drawer default-vs-manual context + evidence-ref count are in place. A local
    origin filter now composes with the status filter, and bulk local approve/
    reject controls are available for visible `proposed` proposals through
-   backend bulk endpoints with partial-success results. Local approve/reject
-   decisions now write no-provider audit events to the existing timeline. Next:
-   continue Founder-facing coverage/briefing polish or deployment readiness
-   while keeping provider writes and AI generation disabled.
+  backend bulk endpoints with partial-success results. Local approve/reject
+  decisions now write no-provider audit events to the existing timeline, and the
+  UI can load that decision history for any decided proposal (approved or
+  rejected, GitHub or internal) via a read-only control. Next: continue
+  Founder-facing coverage/briefing polish or deployment readiness while keeping
+  provider writes and AI generation disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

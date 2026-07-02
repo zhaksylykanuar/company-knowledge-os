@@ -97,6 +97,10 @@
   (`action_proposal_approved_locally` / `action_proposal_rejected_locally`);
   no `ActionExecution` rows, provider calls, external writes, or LLM calls are
   created.
+  UI: `ActionExecutionControls` can load that recorded decision history for any
+  decided proposal (approved or rejected, GitHub or internal) via a read-only
+  «Показать историю решений» control, so the persisted trail is reachable
+  without going through the approved-GitHub-issue execution preview.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
@@ -334,6 +338,26 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-02` — **Surface local decision history in the UI (verification +
+  gap fix).** Independently re-derived the objective requirements and audited the
+  prior "local ActionProposal review audit events" chunk against the real
+  worktree. Backend event recording and receipt logic were correct
+  (`_receipt_from_events` ignores the no-write decision events, so receipts stay
+  `provider_result="none"`, `external_write_performed=false`). Found a real
+  end-to-end scope gap: the persisted decision trail was only fetched in the UI
+  via the approved-GitHub-issue execution preview, so recorded decisions were
+  unreachable for rejected or internal/briefing proposals. Fix: added a
+  read-only "Показать историю решений" control in `ActionExecutionControls` that
+  loads the per-proposal audit trail via the existing audit endpoint for any
+  proposal with a recorded decision (`approved_at` or `rejected_at`), independent
+  of approvable/GitHub gating. Read-only: no provider calls, external writes, or
+  LLM. Changed `web/components/ActionExecutionControls.tsx`, `web/lib/messages.ts`,
+  `web/tests/action-execution.test.tsx`, `docs/CHANGELOG.md`, `docs/TODO.md`,
+  `PROGRESS.md`. Checks: `npm test` **123 passed**, `npm run typecheck`,
+  `npm run lint`, `npm run build`, `uv run ruff check .`, docs tests
+  **16 passed**, `uv run pytest -q` **403 passed / 1 warning**, `git diff --check`,
+  tracked/staged secret scans green. Commit local-only; push не делался.
 
 - `2026-07-02` — **Local ActionProposal review audit events.** Added local
   decision audit events for successful single and bulk ActionProposal
