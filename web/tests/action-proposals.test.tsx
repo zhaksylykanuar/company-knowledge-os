@@ -369,6 +369,20 @@ test("filters loaded local proposals without changing provider state", () => {
   assert.doesNotMatch(rejectedHtml, /Create follow-up GitHub issue/);
 });
 
+test("defaults evidence drawer to first visible proposal evidence", () => {
+  const proposedHtml = renderPanel({ statusFilter: "proposed" });
+  assert.ok(proposedHtml.includes(M.evidence.title));
+  assert.ok(proposedHtml.includes(M.evidence.source));
+  assert.match(proposedHtml, /qtwin-io\/founderos-api#issue\/42/);
+  assert.ok(proposedHtml.includes(M.common.openSource));
+  // Default evidence is contextual and not an explicit selection, so no close button.
+  assert.doesNotMatch(proposedHtml, new RegExp(`>${M.common.close}<`));
+
+  const rejectedHtml = renderPanel({ statusFilter: "rejected" });
+  assert.ok(rejectedHtml.includes(M.evidence.placeholder));
+  assert.doesNotMatch(rejectedHtml, /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/);
+});
+
 test("renders create form and pending local mutations", () => {
   const html = renderPanel({
     createForm: {

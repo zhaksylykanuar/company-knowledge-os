@@ -50,6 +50,9 @@ Implemented foundations:
   mutate backend state.
 - Action execution audit events render as structured local timeline entries with
   explicit external-write boundary and no raw provider payload dumps.
+- ActionProposals evidence drawer defaults to the first evidence ref in the
+  current local review filter and falls back to a safe placeholder when no
+  evidence exists.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -83,8 +86,8 @@ Done when:
 1. **Action review polish (local approval only).**
    Briefing items can now create local `internal_todo` proposals with evidence.
    Local status filters and structured execution audit timeline are in place.
-   Next: improve evidence drawer defaults and proposal grouping while keeping
-   provider writes and AI generation disabled.
+   Evidence drawer defaults are in place. Next: improve proposal grouping and
+   review ergonomics while keeping provider writes and AI generation disabled.
 
 2. **First auth-session production deploy.**
    Use the manual Railway runbooks: backup, deploy, manual `alembic upgrade

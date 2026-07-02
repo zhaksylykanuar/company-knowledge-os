@@ -53,6 +53,9 @@
 - Reworked the action execution audit UI into a structured local timeline with
   status, event, provider/action, timestamp, and external-write boundary per
   event, keeping raw provider payloads hidden.
+- Defaulted the ActionProposals evidence drawer to the first evidence ref in
+  the current local review filter, while keeping a safe placeholder for
+  evidence-free proposals and avoiding provider calls.
 
 ## 2026-06-30
 

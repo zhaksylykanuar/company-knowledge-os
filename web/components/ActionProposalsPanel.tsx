@@ -28,6 +28,10 @@ type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupp
 type ProposalKind = "github_issue" | "internal_todo";
 type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
 type PendingMutation = "create" | `approve:${string}` | `reject:${string}` | null;
+type EvidenceSelection = {
+  evidence: ActionProposalEvidenceRef;
+  title: string;
+};
 
 type ActionProposalCreateFormState = {
   description: string;
@@ -253,6 +257,11 @@ export function ActionProposalsPanelView({
 }: ActionProposalsPanelViewProps) {
   const proposals = data?.proposals ?? [];
   const filteredProposals = filterProposals(proposals, statusFilter);
+  const defaultEvidenceSelection = firstEvidenceSelection(filteredProposals);
+  const drawerEvidence = selectedEvidence ?? defaultEvidenceSelection?.evidence ?? null;
+  const drawerTitle = selectedEvidence
+    ? selectedEvidenceTitle
+    : defaultEvidenceSelection?.title ?? null;
   const canCreate = canSubmitCreateForm(createForm);
 
   return (
@@ -359,8 +368,8 @@ export function ActionProposalsPanelView({
               totalProposals={proposals.length}
             />
             <EvidenceDrawer
-              evidence={selectedEvidence}
-              itemTitle={selectedEvidenceTitle}
+              evidence={drawerEvidence}
+              itemTitle={drawerTitle}
               onClose={selectedEvidence ? onCloseEvidence : undefined}
             />
           </section>
@@ -839,6 +848,18 @@ function filterLabel(filter: ProposalStatusFilter): string {
     return M.actionsPanel.filterRejected;
   }
   return M.actionsPanel.filterAll;
+}
+
+function firstEvidenceSelection(
+  proposals: ActionProposal[]
+): EvidenceSelection | null {
+  for (const proposal of proposals) {
+    const evidence = proposal.evidence_refs[0];
+    if (evidence) {
+      return { evidence, title: proposal.title };
+    }
+  }
+  return null;
 }
 
 function actionLabel(actionType: string): string {

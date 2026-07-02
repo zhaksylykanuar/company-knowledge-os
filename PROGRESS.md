@@ -52,6 +52,11 @@
   (status/event/message/provider/action/external write) вместо плотной строки.
   No-write boundary отображается на уровне audit event; provider writes по-прежнему
   не запускаются без отдельного live execution path/confirmation.
+- **Action evidence drawer defaults (НОВОЕ):** в `ActionProposalsPanel`
+  evidence drawer теперь автоматически показывает первый evidence ref из текущего
+  локального фильтра proposals, если пользователь ещё не выбрал источник вручную.
+  Для фильтров без evidence остаётся безопасный placeholder; raw payloads/secrets
+  не рендерятся, provider calls не запускаются.
 - **Local `/github` org repo inventory fix (НОВОЕ):**
   `scripts/ingest_local_org_repositories.py` продвигает локальный org snapshot
   в canonical `Repository` rows для workspace, чтобы `/github` брал список repo
