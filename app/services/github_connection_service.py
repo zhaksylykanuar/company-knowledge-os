@@ -516,6 +516,113 @@ def github_app_config_status(config: Settings = settings) -> dict[str, Any]:
     }
 
 
+GITHUB_APP_REAL_READ_RUN_READY = "ready"
+GITHUB_APP_REAL_READ_RUN_BLOCKED = "blocked"
+
+
+def github_app_real_read_run_readiness(
+    *,
+    connection_status: dict[str, Any],
+    local_repository_count: int,
+    config: Settings = settings,
+) -> dict[str, Any]:
+    """Report offline readiness for the first approved GitHub App real read run.
+
+    This is a pure, deterministic check. It performs no provider calls, opens no
+    network connection, and never returns secret values — only presence booleans,
+    the concrete blocker list, and the exact next human step. It composes the
+    existing ``github_app_config_status`` env-presence check with the recorded
+    installation-connection state and the already-loaded local repository surface
+    so a human can confirm the milestone is executable before running it.
+    """
+
+    app_config = github_app_config_status(config=config)
+    connection_method = connection_status.get("connection_method")
+    has_app_installation_connection = (
+        connection_status.get("has_connection_record", False)
+        and connection_method == GITHUB_APP_CONNECTION_METHOD
+    )
+    connection_state = connection_status.get("status")
+    installation_connected = (
+        has_app_installation_connection
+        and connection_state == INTEGRATION_CONNECTION_STATUS_CONNECTED
+    )
+    has_repository_surface = local_repository_count > 0
+
+    blockers: list[str] = []
+    if not app_config["configured"]:
+        blockers.append("github_app_env_incomplete")
+    if not has_app_installation_connection:
+        blockers.append("github_app_installation_connection_missing")
+    elif not installation_connected:
+        blockers.append("github_app_installation_connection_not_connected")
+    if not has_repository_surface:
+        blockers.append("local_repository_surface_empty")
+
+    ready = not blockers
+    next_step = _github_app_real_read_run_next_step(
+        ready=ready,
+        app_configured=app_config["configured"],
+        has_app_installation_connection=has_app_installation_connection,
+        installation_connected=installation_connected,
+        has_repository_surface=has_repository_surface,
+    )
+
+    return {
+        "status": (
+            GITHUB_APP_REAL_READ_RUN_READY if ready else GITHUB_APP_REAL_READ_RUN_BLOCKED
+        ),
+        "ready": ready,
+        "app_env_configured": app_config["configured"],
+        "app_missing_env": list(app_config["missing_env"]),
+        "has_app_installation_connection": has_app_installation_connection,
+        "installation_connected": installation_connected,
+        "local_repository_surface_available": has_repository_surface,
+        "local_repository_count": local_repository_count,
+        "blockers": blockers,
+        "requires_human_approval": True,
+        "provider_read_started": False,
+        "provider_writes_enabled": False,
+        "next_step": next_step,
+    }
+
+
+def _github_app_real_read_run_next_step(
+    *,
+    ready: bool,
+    app_configured: bool,
+    has_app_installation_connection: bool,
+    installation_connected: bool,
+    has_repository_surface: bool,
+) -> str:
+    if not app_configured:
+        return (
+            "Configure the GitHub App environment (app id, slug/setup url, private key) "
+            "before attempting a real read run."
+        )
+    if not has_app_installation_connection:
+        return (
+            "Record a workspace-scoped GitHub App installation connection via "
+            "POST .../github/connections/app-installation before a real read run."
+        )
+    if not installation_connected:
+        return (
+            "Bring the GitHub App installation connection to a connected state "
+            "before a real read run."
+        )
+    if not has_repository_surface:
+        return (
+            "Load at least one local repository row (e.g. from .local/repos.json) "
+            "so the scoped read has an explicit target."
+        )
+    if ready:
+        return (
+            "Readiness checks pass. A human may run one explicitly scoped read sync via "
+            "POST .../github/connections/app-installation/sync with explicit repositories."
+        )
+    return "Resolve the listed blockers before a real read run."
+
+
 def _github_app_setup_url(*, config: Settings, app_slug: str | None) -> str | None:
     configured_url = _safe_url(config.github_app_setup_url)
     if configured_url is not None:

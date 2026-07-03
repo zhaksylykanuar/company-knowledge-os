@@ -229,8 +229,15 @@ Done when:
   mocked synced-evidence isolation tests are in place; safe rate-limit/error
   observability is in place. `/github` now adds local repo-surface filters so
   the founder can focus active/private/evidence-backed repos before choosing a
-  scoped per-repo read. Run the first real scoped read sync only after explicit
-  human approval.
+  scoped per-repo read. An offline readiness gate now exists (DEC-054):
+  `github_app_real_read_run_readiness()`, the presence-only preflight
+  `scripts/github_app_real_read_run_preflight.py`, offline unit tests, and the
+  runbook `docs/deploy/github-app-first-real-read-run.md`. Current state
+  (verified): the real read run is externally blocked — GitHub App env is unset
+  and `api.github.com` is unreachable in this environment; the local repo surface
+  (25) is present. Next (human): set GitHub App credentials, record the
+  installation connection, then run one explicit scoped read sync only after
+  explicit human approval.
 
 5. **Multi-user / teammate provisioning.**
   Add invite/provisioning flow after single-founder auth/session behavior is

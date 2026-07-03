@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Added an offline readiness gate for the first approved GitHub App real read
+  run (DEC-054): a pure `github_app_real_read_run_readiness()` function, a safe
+  presence-only CLI `scripts/github_app_real_read_run_preflight.py`, offline unit
+  tests, and a human-approved read-only runbook
+  `docs/deploy/github-app-first-real-read-run.md`. The readiness check performs
+  no provider calls, opens no network connection, and emits no secret values;
+  the real read run itself remains the existing human-triggered, repository-scoped
+  sync endpoint.
 - Added deterministic "what to check next" guidance to the `/dashboard`
   source-coverage panel. The panel now derives local next steps from the already
   loaded Company Brain payload for canonical data readiness, evidence gaps,

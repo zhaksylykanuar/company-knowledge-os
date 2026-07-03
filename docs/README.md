@@ -38,6 +38,7 @@ recovering deleted context.
 
 - [`deploy/private-beta.md`](deploy/private-beta.md) - manual private-beta deployment, migration, rollback, CORS, env-name, and smoke procedure.
 - [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md) - concrete Railway split-service dry-run plan and placeholder env templates.
+- [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - manual, human-approved, read-only runbook for the first GitHub App real-provider read run, gated by an offline preflight.
 
 ## Required Control Docs
 

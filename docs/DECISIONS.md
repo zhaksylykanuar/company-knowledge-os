@@ -1215,6 +1215,35 @@ Consequences:
 - A future webhook slice must add raw-body signature verification and delivery
   dedupe before any webhook payload mutates local canonical state.
 
+## DEC-054 - First GitHub App Real Read Run Is Gated By An Offline Readiness Preflight
+
+Decision (2026-07-03): the first approved GitHub App real-provider read run is
+gated by a deterministic, offline readiness check before any provider call. A
+pure function `github_app_real_read_run_readiness()` composes the existing
+`github_app_config_status()` env-presence check with the recorded
+installation-connection state and the already-loaded local repository surface,
+and returns a status (`ready`/`blocked`), a concrete blocker list, and the exact
+next human step. A companion CLI, `scripts/github_app_real_read_run_preflight.py`,
+and the runbook `docs/deploy/github-app-first-real-read-run.md` let a human
+confirm the run is executable and then perform it manually.
+
+Rationale: the authoritative MVP milestone
+(`founderOS_MASTER_PLAYBOOK.md` §1.4) is real GitHub data flowing end-to-end, and
+ROADMAP Phases 2/3/4 all name this same next step. The run itself is externally
+gated on GitHub App credentials and network that are not present in every
+environment, so the aligned, verifiable work is a safe readiness gate rather than
+more fixture-only dashboard polish (which Phase 5 explicitly warns against).
+
+Consequences:
+
+- The readiness function and preflight perform no provider calls, open no
+  network connection, and never emit secret values — only presence booleans,
+  blocker codes, and the next step.
+- The real read run remains the existing human-approved, repository-scoped
+  `POST .../github/connections/app-installation/sync` (DEC-053); this decision
+  adds a gate, not a new write or automation path.
+- Provider writes, auto-deploy, and LLM remain out of scope for this path.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

@@ -23,6 +23,18 @@
   продуктовый шаг — усилить Founder-facing сводку/coverage поверх уже
   загруженных canonical данных; первый GitHub App real-provider read run — только
   после отдельного human approval.
+- **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
+  offline, детерминированный gate перед первым approved real read run:
+  чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
+  `scripts/github_app_real_read_run_preflight.py` (только presence-флаги, без
+  значений секретов) + offline unit-тесты + human-approved read-only runbook
+  `docs/deploy/github-app-first-real-read-run.md`. Сам real read run остаётся
+  существующим human-triggered scoped `POST .../app-installation/sync`
+  (DEC-053). **Проверено независимо:** сейчас real read run внешне заблокирован —
+  GitHub App env (`FOUNDEROS_GITHUB_APP_ID` / `..._PRIVATE_KEY`) не задан и
+  сеть до `api.github.com` в этой среде недоступна; локальная поверхность репо
+  (25 из `.local/repos.json`) присутствует. Preflight сообщает точный next step;
+  выполнить run должен человек после установки credentials.
 - **Dashboard Source Coverage (НОВОЕ):** добавлен `SourceCoveragePanel` на
   `/dashboard`, который использует существующий Company Brain endpoint и
   показывает, что уже известно рабочему пространству: canonical repo count,
