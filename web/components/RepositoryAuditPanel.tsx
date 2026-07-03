@@ -12,6 +12,7 @@ import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   ActionProposal,
+  RepoAuditImportFailure,
   RepoAuditImportPreview,
   RepoAuditImportFindingRequest,
   RepoAuditRepoFact,
@@ -217,16 +218,14 @@ export function RepositoryAuditPanel() {
         T.repoAuditImportResult(proposals.length, failed)
       );
       if (failed > 0) {
-        const nextFailures = new Map<number, string>();
-        const stillSelected = new Set<number>();
-        for (const failure of response.failures) {
-          const previewKey = submittedKeys[failure.index];
-          if (previewKey === undefined) {
-            continue;
-          }
-          nextFailures.set(previewKey, failure.detail);
-          stillSelected.add(previewKey);
-        }
+        const nextFailures = mapRepoAuditImportFailuresToPreviewKeys(
+          response.failures,
+          submittedKeys
+        );
+        const stillSelected =
+          nextFailures.size > 0
+            ? new Set(nextFailures.keys())
+            : new Set(submittedKeys);
         setImportFailuresByKey(nextFailures);
         setImportSelectionOverride(stillSelected);
         setExternalAuditImportError(M.repoAudit.importPartialFailure);
@@ -929,6 +928,21 @@ export function buildRepoAuditImportPreview(raw: string): RepoAuditImportPreview
     };
   });
   return { parseError: null, findings };
+}
+
+export function mapRepoAuditImportFailuresToPreviewKeys(
+  failures: RepoAuditImportFailure[],
+  submittedKeys: number[]
+): Map<number, string> {
+  const result = new Map<number, string>();
+  for (const failure of failures) {
+    const previewKey = submittedKeys[failure.index];
+    if (previewKey === undefined) {
+      continue;
+    }
+    result.set(previewKey, failure.detail);
+  }
+  return result;
 }
 
 export function parseExternalAuditFindings(raw: string): RepoAuditImportFindingRequest[] {

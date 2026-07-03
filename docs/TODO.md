@@ -121,9 +121,9 @@ Implemented foundations:
 - The `/audit` import form now previews parsed findings before import with
   per-finding valid/invalid status mirroring the backend rules, select-all-valid
   and clear-selection controls, and inline per-finding backend failures after a
-  partial import (only failed rows stay selected for retry, pasted text is
-  preserved). Preview and selection are client-side only: no provider calls,
-  external writes, or LLM.
+  partial import, including subset-selection index remapping (only failed rows
+  stay selected for retry, pasted text is preserved). Preview and selection are
+  client-side only: no provider calls, external writes, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

@@ -11,11 +11,11 @@
   `evidence_ref`), and shows per-finding validation issues. Reviewers can
   select all valid findings or clear the selection, and only selected valid
   findings are submitted. After a partial backend import, per-finding backend
-  failures are shown inline on the matching preview rows and only the failed
-  rows stay selected for retry while the pasted text is preserved. Secret-like
-  fragments are still redacted in the preview, and the import continues to write
-  only local `internal_todo` ActionProposals with no provider calls, external
-  writes, or LLM.
+  failures are shown inline on the matching preview rows (including when only a
+  selected subset was submitted) and only the failed rows stay selected for retry
+  while the pasted text is preserved. Secret-like fragments are still redacted in
+  the preview, and the import continues to write only local `internal_todo`
+  ActionProposals with no provider calls, external writes, or LLM.
 
 ## 2026-07-02
 

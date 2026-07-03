@@ -10,6 +10,7 @@ import {
 } from "../lib/api";
 import {
   buildRepoAuditImportPreview,
+  mapRepoAuditImportFailuresToPreviewKeys,
   parseExternalAuditFindings,
   RepositoryAuditPanelView
 } from "../components/RepositoryAuditPanel";
@@ -369,6 +370,33 @@ test("truncates import preview to the first 50 findings", () => {
   }));
   const preview = buildRepoAuditImportPreview(JSON.stringify(findings));
   assert.equal(preview.findings.length, 50);
+});
+
+test("maps backend import failures from submitted indices back to preview rows", () => {
+  const failures = mapRepoAuditImportFailuresToPreviewKeys(
+    [
+      {
+        index: 1,
+        repository_full_name: "qtwin-io/selected-second",
+        status_code: 400,
+        detail: "repo-audit import finding requires evidence_refs"
+      },
+      {
+        index: 5,
+        repository_full_name: "qtwin-io/out-of-range",
+        status_code: 400,
+        detail: "ignored"
+      }
+    ],
+    [0, 2]
+  );
+
+  assert.equal(failures.size, 1);
+  assert.equal(
+    failures.get(2),
+    "repo-audit import finding requires evidence_refs"
+  );
+  assert.equal(failures.has(1), false);
 });
 
 test("renders import preview with selection controls and inline backend failures", () => {
