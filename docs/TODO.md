@@ -118,6 +118,12 @@ Implemented foundations:
   and `evidence_refs`; known secret-like fragments in imported text are
   redacted. This is local-only and starts no provider calls, external writes,
   or LLM.
+- The `/audit` import form now previews parsed findings before import with
+  per-finding valid/invalid status mirroring the backend rules, select-all-valid
+  and clear-selection controls, and inline per-finding backend failures after a
+  partial import (only failed rows stay selected for retry, pasted text is
+  preserved). Preview and selection are client-side only: no provider calls,
+  external writes, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -169,8 +175,12 @@ Done when:
    action bridge are in place. Briefing/action cross-links are now in place:
    existing local actions are summarized on briefing items, duplicate creation is
    guarded for open actions, and `/actions` can open with briefing/proposed
-   focus. Next: consider deployment readiness or richer repository/audit import
-   views while keeping provider writes and AI generation disabled.
+   focus. The `/audit` external-import UX is now hardened with a pre-import
+   preview, per-finding validity, select-all-valid/clear controls, and inline
+   per-finding backend failures. Next: consider deployment readiness, richer
+   audit-origin action rendering (deterministic vs imported), or a dashboard
+   card linking to `/audit`, while keeping provider writes and AI generation
+   disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist, but actual

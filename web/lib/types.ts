@@ -290,6 +290,18 @@ export type RepoAuditImportResponse = {
   warnings: string[];
 };
 
+export type RepoAuditImportPreviewFinding = {
+  key: number;
+  finding: RepoAuditImportFindingRequest;
+  valid: boolean;
+  issues: string[];
+};
+
+export type RepoAuditImportPreview = {
+  parseError: string | null;
+  findings: RepoAuditImportPreviewFinding[];
+};
+
 export type ActionProposalRejectRequest = {
   reason?: string | null;
 };

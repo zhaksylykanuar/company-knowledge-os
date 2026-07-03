@@ -787,7 +787,22 @@ export const M = {
       "Импорт не содержит валидных findings с repository_full_name в формате owner/repo и evidence_refs.",
     importFailed: "Импорт внешнего аудита не удался.",
     importPartialFailure:
-      "Часть findings не удалось сохранить локально; успешные local proposals сохранены."
+      "Часть findings не удалось сохранить локально; успешные local proposals сохранены.",
+    importPreviewTitle: "Предпросмотр findings перед импортом",
+    importPreviewEmpty:
+      "Вставьте JSON выше, чтобы увидеть предпросмотр findings перед импортом.",
+    importPreviewValidBadge: "Готово к импорту",
+    importPreviewInvalidBadge: "Не пройдёт валидацию",
+    importSelectAllValid: "Выбрать все валидные",
+    importClearSelection: "Снять выбор",
+    importSelectFinding: "Выбрать для импорта",
+    importNoValidSelected:
+      "Не выбрано ни одного валидного finding для импорта.",
+    importBackendFailureLabel: "Бэкенд отклонил finding",
+    importIssueNotObject: "Элемент не является объектом finding.",
+    importIssueRepoFormat:
+      "repository_full_name должен быть в формате owner/repo.",
+    importIssueEvidence: "Нужен хотя бы один evidence_ref."
   },
 
   companyBrain: {
@@ -957,6 +972,8 @@ export const T = {
     `Связано локальных действий: ${total} · нужно решение ${proposed} · решено ${decided}.`,
   repoAuditImportResult: (created: number, failed: number) =>
     `Импортировано локальных предложений из внешнего аудита: ${created}. Не удалось: ${failed}.`,
+  repoAuditImportPreview: (total: number, valid: number, selected: number) =>
+    `Разобрано findings: ${total} · валидных ${valid} · выбрано ${selected}.`,
   privateBetaReadinessDataReady: (
     repositories: number,
     evidenceRefs: number,

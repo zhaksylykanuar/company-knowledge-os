@@ -9,6 +9,7 @@ import {
   importRepoAuditFindings
 } from "../lib/api";
 import {
+  buildRepoAuditImportPreview,
   parseExternalAuditFindings,
   RepositoryAuditPanelView
 } from "../components/RepositoryAuditPanel";
@@ -154,6 +155,14 @@ function renderPanel(
       data={"data" in props ? props.data ?? null : sampleAudit}
       error={props.error ?? null}
       focus={props.focus ?? "all"}
+      externalAuditText={props.externalAuditText ?? ""}
+      importPreview={props.importPreview}
+      importFailuresByKey={props.importFailuresByKey}
+      importSelectedKeys={props.importSelectedKeys}
+      importValidCount={props.importValidCount}
+      onClearImportSelection={props.onClearImportSelection}
+      onSelectAllValidImportFindings={props.onSelectAllValidImportFindings}
+      onToggleImportFinding={props.onToggleImportFinding}
       onCreateAction={props.onCreateAction}
       onFocusChange={props.onFocusChange}
       onRetry={props.onRetry}
@@ -300,6 +309,104 @@ test("rejects external audit imports without finding objects", () => {
     /findings/
   );
   assert.throws(() => parseExternalAuditFindings("{not-json"), /JSON/);
+});
+
+test("builds a non-throwing import preview with per-finding validity", () => {
+  const empty = buildRepoAuditImportPreview("   ");
+  assert.equal(empty.parseError, null);
+  assert.equal(empty.findings.length, 0);
+
+  const invalidJson = buildRepoAuditImportPreview("{not-json");
+  assert.equal(invalidJson.parseError, M.repoAudit.importInvalidJson);
+  assert.equal(invalidJson.findings.length, 0);
+
+  const noFindings = buildRepoAuditImportPreview(JSON.stringify({ findings: [] }));
+  assert.equal(noFindings.parseError, M.repoAudit.importNoFindings);
+
+  const preview = buildRepoAuditImportPreview(
+    JSON.stringify([
+      {
+        repository_full_name: "qtwin-io/base-collector",
+        summary: "CI не найден; token=SHOULD_NOT_PERSIST",
+        evidence_refs: ["external-audit:base-collector:ci"]
+      },
+      {
+        repository_full_name: "invalid-name",
+        summary: "Нет владельца",
+        evidence_refs: ["external-audit:x"]
+      },
+      {
+        repository_full_name: "qtwin-io/no-evidence",
+        summary: "Без источников",
+        evidence_refs: []
+      },
+      "not-object"
+    ])
+  );
+  assert.equal(preview.parseError, null);
+  assert.equal(preview.findings.length, 4);
+
+  const [first, second, third, fourth] = preview.findings;
+  assert.equal(first?.valid, true);
+  assert.equal(first?.key, 0);
+  assert.doesNotMatch(first?.finding.summary ?? "", /SHOULD_NOT_PERSIST/);
+
+  assert.equal(second?.valid, false);
+  assert.ok(second?.issues.includes(M.repoAudit.importIssueRepoFormat));
+
+  assert.equal(third?.valid, false);
+  assert.ok(third?.issues.includes(M.repoAudit.importIssueEvidence));
+
+  assert.equal(fourth?.valid, false);
+  assert.ok(fourth?.issues.includes(M.repoAudit.importIssueNotObject));
+});
+
+test("truncates import preview to the first 50 findings", () => {
+  const findings = Array.from({ length: 55 }, (_unused, index) => ({
+    repository_full_name: `qtwin-io/repo-${index}`,
+    summary: "ok",
+    evidence_refs: [`external-audit:repo-${index}`]
+  }));
+  const preview = buildRepoAuditImportPreview(JSON.stringify(findings));
+  assert.equal(preview.findings.length, 50);
+});
+
+test("renders import preview with selection controls and inline backend failures", () => {
+  const preview = buildRepoAuditImportPreview(
+    JSON.stringify([
+      {
+        repository_full_name: "qtwin-io/base-collector",
+        title: "Проверить CI",
+        summary: "CI не найден",
+        evidence_refs: ["external-audit:base-collector:ci"]
+      },
+      {
+        repository_full_name: "invalid-name",
+        summary: "Нет владельца",
+        evidence_refs: ["external-audit:x"]
+      }
+    ])
+  );
+  const html = renderPanel({
+    importPreview: preview,
+    importSelectedKeys: new Set([0]),
+    importValidCount: 1,
+    importFailuresByKey: new Map([[0, "repository_full_name must be in owner/repo format"]]),
+    onToggleImportFinding: () => undefined,
+    onSelectAllValidImportFindings: () => undefined,
+    onClearImportSelection: () => undefined
+  });
+  assert.ok(html.includes(M.repoAudit.importPreviewTitle));
+  assert.ok(html.includes(M.repoAudit.importPreviewValidBadge));
+  assert.ok(html.includes(M.repoAudit.importPreviewInvalidBadge));
+  assert.ok(html.includes(M.repoAudit.importSelectAllValid));
+  assert.ok(html.includes(M.repoAudit.importClearSelection));
+  assert.ok(html.includes(T.repoAuditImportPreview(2, 1, 1)));
+  assert.ok(html.includes(M.repoAudit.importBackendFailureLabel));
+  assert.ok(html.includes(M.repoAudit.importIssueRepoFormat));
+  // The valid finding's checkbox is checked and the invalid finding's is disabled.
+  assert.match(html, /<input type="checkbox" checked=""/);
+  assert.match(html, /<input disabled="" type="checkbox"\/>/);
 });
 
 test("renders loading, missing, empty, and error states safely", () => {

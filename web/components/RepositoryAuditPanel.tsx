@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   createActionProposal,
@@ -12,6 +12,7 @@ import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   ActionProposal,
+  RepoAuditImportPreview,
   RepoAuditImportFindingRequest,
   RepoAuditRepoFact,
   RepoAuditResponse
@@ -27,6 +28,11 @@ type AuditFocusFilter = "all" | "needs_confirm" | "risks" | "stale";
 const ACTIONS_AUDIT_FOCUS_HREF = "/actions?origin=audit&status=proposed";
 const SECRET_TEXT_PATTERN =
   /\b(token|password|secret|api[_-]?key|private[_-]?key)\s*[:=]\s*[^\s,;]+/gi;
+const REPO_FULL_NAME_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const EMPTY_IMPORT_PREVIEW: RepoAuditImportPreview = {
+  parseError: null,
+  findings: []
+};
 
 type RepositoryAuditPanelViewProps = {
   actionError?: string | null;
@@ -38,6 +44,13 @@ type RepositoryAuditPanelViewProps = {
   externalAuditImportError?: string | null;
   externalAuditImportSuccess?: string | null;
   externalAuditText?: string;
+  importPreview?: RepoAuditImportPreview;
+  importFailuresByKey?: Map<number, string>;
+  importSelectedKeys?: Set<number>;
+  importValidCount?: number;
+  onClearImportSelection?: () => void;
+  onSelectAllValidImportFindings?: () => void;
+  onToggleImportFinding?: (key: number) => void;
   isImportingExternalAudit?: boolean;
   onExternalAuditTextChange?: (value: string) => void;
   onImportExternalAudit?: (event: FormEvent<HTMLFormElement>) => void;
@@ -63,6 +76,27 @@ export function RepositoryAuditPanel() {
   const [externalAuditText, setExternalAuditText] = useState("");
   const [isImportingExternalAudit, setIsImportingExternalAudit] = useState(false);
   const [pendingRepo, setPendingRepo] = useState<string | null>(null);
+  const [importSelectionOverride, setImportSelectionOverride] = useState<Set<number> | null>(
+    null
+  );
+  const [importFailuresByKey, setImportFailuresByKey] = useState<Map<number, string>>(
+    () => new Map()
+  );
+
+  const importPreview = useMemo(
+    () => buildRepoAuditImportPreview(externalAuditText),
+    [externalAuditText]
+  );
+  const validImportKeys = useMemo(
+    () => importPreview.findings.filter((item) => item.valid).map((item) => item.key),
+    [importPreview]
+  );
+  const selectedImportKeys = useMemo(() => {
+    if (importSelectionOverride === null) {
+      return new Set(validImportKeys);
+    }
+    return new Set(validImportKeys.filter((key) => importSelectionOverride.has(key)));
+  }, [importSelectionOverride, validImportKeys]);
 
   const refreshActionProposals = useCallback(async (currentWorkspaceId: string) => {
     try {
@@ -155,10 +189,19 @@ export function RepositoryAuditPanel() {
 
     setExternalAuditImportError(null);
     setExternalAuditImportSuccess(null);
+    const selectedFindings = importPreview.findings.filter((item) =>
+      selectedImportKeys.has(item.key)
+    );
+    if (selectedFindings.length === 0) {
+      setExternalAuditImportError(M.repoAudit.importNoValidSelected);
+      return;
+    }
     setIsImportingExternalAudit(true);
+    setImportFailuresByKey(new Map());
     try {
+      const submittedKeys = selectedFindings.map((item) => item.key);
       const response = await importRepoAuditFindings(workspaceId, {
-        findings: parseExternalAuditFindings(externalAuditText)
+        findings: selectedFindings.map((item) => item.finding)
       });
       const proposals = response.proposals;
       const failed = response.failed_count;
@@ -174,9 +217,23 @@ export function RepositoryAuditPanel() {
         T.repoAuditImportResult(proposals.length, failed)
       );
       if (failed > 0) {
+        const nextFailures = new Map<number, string>();
+        const stillSelected = new Set<number>();
+        for (const failure of response.failures) {
+          const previewKey = submittedKeys[failure.index];
+          if (previewKey === undefined) {
+            continue;
+          }
+          nextFailures.set(previewKey, failure.detail);
+          stillSelected.add(previewKey);
+        }
+        setImportFailuresByKey(nextFailures);
+        setImportSelectionOverride(stillSelected);
         setExternalAuditImportError(M.repoAudit.importPartialFailure);
       } else {
         setExternalAuditText("");
+        setImportSelectionOverride(null);
+        setImportFailuresByKey(new Map());
       }
     } catch (caught: unknown) {
       setExternalAuditImportError(
@@ -185,6 +242,35 @@ export function RepositoryAuditPanel() {
     } finally {
       setIsImportingExternalAudit(false);
     }
+  }
+
+  function handleExternalAuditTextChange(value: string) {
+    setExternalAuditText(value);
+    setImportSelectionOverride(null);
+    setImportFailuresByKey(new Map());
+    setExternalAuditImportError(null);
+    setExternalAuditImportSuccess(null);
+  }
+
+  function toggleImportFinding(key: number) {
+    setImportSelectionOverride((current) => {
+      const base = current ?? new Set(validImportKeys);
+      const next = new Set(base);
+      if (next.has(key)) {
+        next.delete(key);
+      } else if (validImportKeys.includes(key)) {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function selectAllValidImportFindings() {
+    setImportSelectionOverride(new Set(validImportKeys));
+  }
+
+  function clearImportSelection() {
+    setImportSelectionOverride(new Set());
   }
 
   return (
@@ -197,10 +283,17 @@ export function RepositoryAuditPanel() {
       externalAuditImportError={externalAuditImportError}
       externalAuditImportSuccess={externalAuditImportSuccess}
       externalAuditText={externalAuditText}
+      importPreview={importPreview}
+      importFailuresByKey={importFailuresByKey}
+      importSelectedKeys={selectedImportKeys}
+      importValidCount={validImportKeys.length}
+      onClearImportSelection={clearImportSelection}
+      onSelectAllValidImportFindings={selectAllValidImportFindings}
+      onToggleImportFinding={toggleImportFinding}
       focus={focus}
       isImportingExternalAudit={isImportingExternalAudit}
       onCreateAction={createLocalActionFromRepo}
-      onExternalAuditTextChange={setExternalAuditText}
+      onExternalAuditTextChange={handleExternalAuditTextChange}
       onFocusChange={setFocus}
       onImportExternalAudit={importExternalAudit}
       onRetry={() => setReloadKey((current) => current + 1)}
@@ -219,6 +312,13 @@ export function RepositoryAuditPanelView({
   externalAuditImportError = null,
   externalAuditImportSuccess = null,
   externalAuditText = "",
+  importPreview = EMPTY_IMPORT_PREVIEW,
+  importFailuresByKey,
+  importSelectedKeys,
+  importValidCount = 0,
+  onClearImportSelection,
+  onSelectAllValidImportFindings,
+  onToggleImportFinding,
   focus = "all",
   isImportingExternalAudit = false,
   onCreateAction,
@@ -331,10 +431,17 @@ export function RepositoryAuditPanelView({
 
           <ExternalAuditImportForm
             error={externalAuditImportError}
+            failuresByKey={importFailuresByKey}
             isImporting={isImportingExternalAudit}
             onChange={onExternalAuditTextChange}
+            onClearSelection={onClearImportSelection}
+            onSelectAllValid={onSelectAllValidImportFindings}
             onSubmit={onImportExternalAudit}
+            onToggleFinding={onToggleImportFinding}
+            preview={importPreview}
+            selectedKeys={importSelectedKeys}
             successMessage={externalAuditImportSuccess}
+            validCount={importValidCount}
             value={externalAuditText}
           />
 
@@ -353,19 +460,36 @@ export function RepositoryAuditPanelView({
 
 function ExternalAuditImportForm({
   error,
+  failuresByKey,
   isImporting,
   onChange,
+  onClearSelection,
+  onSelectAllValid,
   onSubmit,
+  onToggleFinding,
+  preview,
+  selectedKeys,
   successMessage,
+  validCount,
   value
 }: {
   error: string | null;
+  failuresByKey?: Map<number, string>;
   isImporting: boolean;
   onChange?: (value: string) => void;
+  onClearSelection?: () => void;
+  onSelectAllValid?: () => void;
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
+  onToggleFinding?: (key: number) => void;
+  preview: RepoAuditImportPreview;
+  selectedKeys?: Set<number>;
   successMessage: string | null;
+  validCount: number;
   value: string;
 }) {
+  const selected = selectedKeys ?? new Set<number>();
+  const failures = failuresByKey ?? new Map<number, string>();
+  const selectedCount = selected.size;
   return (
     <form className="form" onSubmit={onSubmit}>
       <h3>{M.repoAudit.importTitle}</h3>
@@ -380,13 +504,129 @@ function ExternalAuditImportForm({
           value={value}
         />
       </div>
-      <button className="button" disabled={isImporting || !value.trim()} type="submit">
+      <ExternalAuditImportPreview
+        failures={failures}
+        onClearSelection={onClearSelection}
+        onSelectAllValid={onSelectAllValid}
+        onToggleFinding={onToggleFinding}
+        preview={preview}
+        selected={selected}
+        selectedCount={selectedCount}
+        validCount={validCount}
+      />
+      <button
+        className="button"
+        disabled={isImporting || selectedCount === 0}
+        type="submit"
+      >
         {isImporting ? M.repoAudit.importing : M.repoAudit.importSubmit}
       </button>
       <p className="muted">{M.repoAudit.importBoundary}</p>
       {successMessage ? <p className="success-text">{successMessage}</p> : null}
       {error ? <p className="error-text">{error}</p> : null}
     </form>
+  );
+}
+
+function ExternalAuditImportPreview({
+  failures,
+  onClearSelection,
+  onSelectAllValid,
+  onToggleFinding,
+  preview,
+  selected,
+  selectedCount,
+  validCount
+}: {
+  failures: Map<number, string>;
+  onClearSelection?: () => void;
+  onSelectAllValid?: () => void;
+  onToggleFinding?: (key: number) => void;
+  preview: RepoAuditImportPreview;
+  selected: Set<number>;
+  selectedCount: number;
+  validCount: number;
+}) {
+  const hasText = preview.parseError !== null || preview.findings.length > 0;
+  return (
+    <section className="work-section" aria-label={M.repoAudit.importPreviewTitle}>
+      <h4>{M.repoAudit.importPreviewTitle}</h4>
+      {!hasText ? <p className="muted">{M.repoAudit.importPreviewEmpty}</p> : null}
+      {preview.parseError ? <p className="error-text">{preview.parseError}</p> : null}
+      {preview.findings.length > 0 ? (
+        <>
+          <p className="muted">
+            {T.repoAuditImportPreview(
+              preview.findings.length,
+              validCount,
+              selectedCount
+            )}
+          </p>
+          <div className="actions-row">
+            <button
+              className="button secondary"
+              disabled={!onSelectAllValid || validCount === 0}
+              onClick={onSelectAllValid}
+              type="button"
+            >
+              {M.repoAudit.importSelectAllValid}
+            </button>
+            <button
+              className="button secondary"
+              disabled={!onClearSelection || selectedCount === 0}
+              onClick={onClearSelection}
+              type="button"
+            >
+              {M.repoAudit.importClearSelection}
+            </button>
+          </div>
+          <div className="work-list">
+            {preview.findings.map((item) => {
+              const failureDetail = failures.get(item.key);
+              return (
+                <article className="work-item" key={item.key}>
+                  <div className="work-item-main">
+                    <span className={`badge${item.valid ? "" : " badge-origin"}`}>
+                      {item.valid
+                        ? M.repoAudit.importPreviewValidBadge
+                        : M.repoAudit.importPreviewInvalidBadge}
+                    </span>
+                    <h5>
+                      {item.finding.repository_full_name ||
+                        item.finding.title ||
+                        M.common.unknown}
+                    </h5>
+                  </div>
+                  {item.finding.title ? (
+                    <p className="muted">{item.finding.title}</p>
+                  ) : null}
+                  <p className="muted">
+                    {M.repoAudit.metaEvidence}: {item.finding.evidence_refs?.length ?? 0}
+                  </p>
+                  {item.issues.length > 0 ? (
+                    <p className="muted">{item.issues.join(" ")}</p>
+                  ) : null}
+                  {failureDetail ? (
+                    <p className="error-text">
+                      {M.repoAudit.importBackendFailureLabel}: {failureDetail}
+                    </p>
+                  ) : null}
+                  <label className="proposal-selection">
+                    <input
+                      checked={selected.has(item.key)}
+                      disabled={!item.valid || !onToggleFinding}
+                      onChange={() => onToggleFinding?.(item.key)}
+                      type="checkbox"
+                    />
+                    <span>{M.repoAudit.importSelectFinding}</span>
+                  </label>
+                </article>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -638,6 +878,57 @@ function countLinkedDecided(byRepo: Map<string, ActionProposal[]>): number {
     ).length;
   }
   return total;
+}
+
+export function buildRepoAuditImportPreview(raw: string): RepoAuditImportPreview {
+  if (!raw.trim()) {
+    return { parseError: null, findings: [] };
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return { parseError: M.repoAudit.importInvalidJson, findings: [] };
+  }
+  const rawFindings = Array.isArray(payload)
+    ? payload
+    : isRecord(payload) && Array.isArray(payload.findings)
+      ? payload.findings
+      : null;
+  if (rawFindings === null || rawFindings.length === 0) {
+    return { parseError: M.repoAudit.importNoFindings, findings: [] };
+  }
+  const findings = rawFindings.slice(0, 50).map((item, index) => {
+    const issues: string[] = [];
+    if (!isRecord(item)) {
+      return {
+        key: index,
+        finding: {
+          repository_full_name: "",
+          evidence_refs: [] as string[]
+        },
+        valid: false,
+        issues: [M.repoAudit.importIssueNotObject]
+      };
+    }
+    const finding = normalizeExternalAuditFinding(item) ?? {
+      repository_full_name: "",
+      evidence_refs: [] as string[]
+    };
+    if (!REPO_FULL_NAME_PATTERN.test(finding.repository_full_name)) {
+      issues.push(M.repoAudit.importIssueRepoFormat);
+    }
+    if (!finding.evidence_refs || finding.evidence_refs.length === 0) {
+      issues.push(M.repoAudit.importIssueEvidence);
+    }
+    return {
+      key: index,
+      finding,
+      valid: issues.length === 0,
+      issues
+    };
+  });
+  return { parseError: null, findings };
 }
 
 export function parseExternalAuditFindings(raw: string): RepoAuditImportFindingRequest[] {

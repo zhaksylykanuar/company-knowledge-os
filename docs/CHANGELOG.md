@@ -1,5 +1,22 @@
 # FounderOS Changelog
 
+## 2026-07-03
+
+### Changed
+
+- Hardened the external repo-audit import UX on `/audit`. The paste-JSON form
+  now renders a non-throwing local preview of parsed findings before import,
+  marks each finding valid/invalid against the same rules the backend enforces
+  (`repository_full_name` in `owner/repo` format plus at least one
+  `evidence_ref`), and shows per-finding validation issues. Reviewers can
+  select all valid findings or clear the selection, and only selected valid
+  findings are submitted. After a partial backend import, per-finding backend
+  failures are shown inline on the matching preview rows and only the failed
+  rows stay selected for retry while the pasted text is preserved. Secret-like
+  fragments are still redacted in the preview, and the import continues to write
+  only local `internal_todo` ActionProposals with no provider calls, external
+  writes, or LLM.
+
 ## 2026-07-02
 
 ### Changed

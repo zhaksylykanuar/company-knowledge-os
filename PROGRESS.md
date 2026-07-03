@@ -64,6 +64,17 @@
   `repository_full_name` в формате `owner/repo` и `evidence_refs`, редактирует
   secret-like fragments в известных текстовых полях, пишет только локальные
   proposals и не вызывает provider APIs, external writes или LLM.
+- **Repo-audit import UX hardening (НОВОЕ):** форма импорта на `/audit` теперь
+  показывает локальный предпросмотр разобранных findings до импорта: каждый
+  finding помечается валидным/невалидным по тем же правилам, что и backend
+  (`repository_full_name` в формате `owner/repo` + непустые `evidence_refs`), с
+  описанием проблем по каждому пункту. Появились контролы «выбрать все валидные»
+  и «снять выбор»; импортируются только выбранные валидные findings. После
+  частичного импорта per-finding backend-ошибки показываются inline на
+  соответствующих строках предпросмотра, выбранными остаются только упавшие
+  findings (для повторной попытки), а вставленный JSON сохраняется. Предпросмотр
+  редактирует secret-like fragments и не делает provider calls, external writes
+  или LLM; импорт по-прежнему пишет только локальные `internal_todo` proposals.
 - **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
   теперь добавляет `signals.coverage` и item `source-coverage` из локального
   Company Brain state: canonical repositories, open issues/PRs, evidence refs,
