@@ -31,6 +31,13 @@ type ReadinessItem = {
   status: string;
 };
 
+type RunbookItem = {
+  description: string;
+  id: string;
+  label: string;
+  status: string;
+};
+
 export function PrivateBetaReadinessPanel({
   refreshSignal = 0
 }: PrivateBetaReadinessPanelProps) {
@@ -153,6 +160,7 @@ export function PrivateBetaReadinessPanelView({
             />
           </section>
           <ReadinessList items={readinessItems(data, summary)} />
+          <ManualRunbookList items={manualRunbookItems()} />
           {data?.warnings.length ? (
             <ul className="meta-list" aria-label={M.common.warnings}>
               {data.warnings.map((warning) => (
@@ -181,6 +189,27 @@ function ReadinessList({ items }: { items: ReadinessItem[] }) {
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+function ManualRunbookList({ items }: { items: RunbookItem[] }) {
+  return (
+    <section className="work-section" aria-label={M.privateBetaReadiness.runbookLabel}>
+      <h3>{M.privateBetaReadiness.runbookTitle}</h3>
+      <p className="muted">{M.privateBetaReadiness.runbookDescription}</p>
+      <div className="work-list">
+        {items.map((item) => (
+          <article className="work-item" key={item.id}>
+            <div className="work-item-main">
+              <span className="badge">{item.status}</span>
+              <h4>{item.label}</h4>
+            </div>
+            <p className="muted">{item.description}</p>
+          </article>
+        ))}
+      </div>
+      <p className="muted">{M.privateBetaReadiness.runbookBoundary}</p>
     </section>
   );
 }
@@ -257,6 +286,47 @@ function readinessItems(
       status: llmBriefing
         ? M.privateBetaReadiness.statusAvailable
         : M.privateBetaReadiness.statusOff
+    }
+  ];
+}
+
+function manualRunbookItems(): RunbookItem[] {
+  return [
+    {
+      description: M.privateBetaReadiness.runbookLocalGateDescription,
+      id: "local-gates",
+      label: M.privateBetaReadiness.runbookLocalGateLabel,
+      status: M.privateBetaReadiness.runbookStatusLocalGate
+    },
+    {
+      description: M.privateBetaReadiness.runbookBackupDescription,
+      id: "postgres-backup",
+      label: M.privateBetaReadiness.runbookBackupLabel,
+      status: M.privateBetaReadiness.runbookStatusManual
+    },
+    {
+      description: M.privateBetaReadiness.runbookMigrationDescription,
+      id: "manual-migration",
+      label: M.privateBetaReadiness.runbookMigrationLabel,
+      status: M.privateBetaReadiness.runbookStatusManual
+    },
+    {
+      description: M.privateBetaReadiness.runbookServicesDescription,
+      id: "split-services",
+      label: M.privateBetaReadiness.runbookServicesLabel,
+      status: M.privateBetaReadiness.runbookStatusManual
+    },
+    {
+      description: M.privateBetaReadiness.runbookSmokeDescription,
+      id: "read-only-smoke",
+      label: M.privateBetaReadiness.runbookSmokeLabel,
+      status: M.privateBetaReadiness.runbookStatusReadOnly
+    },
+    {
+      description: M.privateBetaReadiness.runbookRollbackDescription,
+      id: "rollback",
+      label: M.privateBetaReadiness.runbookRollbackLabel,
+      status: M.privateBetaReadiness.runbookStatusRollback
     }
   ];
 }

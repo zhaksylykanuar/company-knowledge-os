@@ -71,6 +71,15 @@ test("renders private beta readiness from local canonical data only", () => {
   assert.ok(html.includes(M.privateBetaReadiness.providerReadDeferredDescription));
   assert.ok(html.includes(M.privateBetaReadiness.externalWritesOffDescription));
   assert.ok(html.includes(M.privateBetaReadiness.llmOffDescription));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookTitle));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookDescription));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookLocalGateLabel));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookBackupLabel));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookMigrationLabel));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookServicesLabel));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookSmokeLabel));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookRollbackLabel));
+  assert.ok(html.includes(M.privateBetaReadiness.runbookBoundary));
   assert.doesNotMatch(html, /deploy started/i);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /LLM generated/i);

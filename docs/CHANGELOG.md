@@ -36,6 +36,13 @@
   action-proposal counts are supplementary and never break the deterministic
   audit summary if they fail to load. The panel is client-side/local only: no
   provider calls, external writes, or LLM.
+- Expanded the private-beta readiness panel with a manual deploy/smoke runbook
+  checklist. The dashboard now shows the explicit human-run phases from the
+  deploy docs (local gates, Postgres backup, manual Alembic migration, split
+  backend/frontend services, read-only smoke, and rollback boundary) without
+  starting any command. This remains a local/read-only dashboard aid: no deploy,
+  push, provider call, external write, production data mutation, or LLM is
+  performed.
 
 ## 2026-07-02
 

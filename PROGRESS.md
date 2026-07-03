@@ -37,6 +37,14 @@
   deferred GitHub provider read, external writes off и LLM off/available
   boundary. Панель не деплоит, не пушит, не запускает provider calls, provider
   writes или LLM; tests cover ready/needs-data/live-capability labels.
+- **Manual deploy/smoke runbook checklist (НОВОЕ):** `PrivateBetaReadinessPanel`
+  теперь дополнительно показывает структурированную карту ручного запуска из
+  deploy docs: local gates, Postgres backup, manual migration, split backend/
+  frontend services, read-only smoke и rollback boundary. Это только
+  founder-facing checklist внутри dashboard: UI не запускает команды, не
+  деплоит, не пушит, не вызывает провайдеров, не делает external writes и не
+  меняет production data. Tests assert runbook steps and no deploy/write/LLM
+  overclaim.
 - **GitHub repo-surface focus (НОВОЕ):** `/github` теперь показывает локальный
   фокус/фильтры поверх уже загруженного списка репозиториев: все repo,
   активные, архивные, private и с evidence refs, плюс summary counts. Фильтр

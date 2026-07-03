@@ -137,6 +137,11 @@ Implemented foundations:
   `/actions?origin=audit` (including `audit_source` focus). Counts are
   supplementary and never break the deterministic summary; no provider calls,
   external writes, or LLM.
+- The private-beta readiness panel now includes a manual deploy/smoke runbook
+  checklist from the deploy docs: local gates, Postgres backup, manual
+  migration, split backend/frontend services, read-only smoke, and rollback
+  boundary. It is display-only and starts no deploy, push, provider call,
+  external write, production data mutation, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -194,14 +199,16 @@ Done when:
    deterministic vs imported audit-origin proposals with a local subfilter,
    badges, query focus, and richer payload metadata, and `/dashboard` now has a
    repository-audit overview panel that links into `/audit` and the audit
-   actions focus. Next: consider deployment readiness or richer founder-facing
-   coverage, while keeping provider writes and AI generation disabled.
+   actions focus. The private-beta readiness panel now also displays the manual
+   deploy/smoke runbook phases without executing them. Next: consider richer
+   founder-facing coverage or teammate provisioning after deploy stability,
+   while keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
-  Dashboard now surfaces a local private-beta readiness checklist, but actual
-  production launch still uses the manual Railway runbooks: backup, deploy,
-  manual `alembic upgrade head`, smoke. Do not add auto-deploy or
-  provider-write smoke without explicit human approval.
+  Dashboard now surfaces a local private-beta readiness checklist plus manual
+  deploy/smoke runbook phases, but actual production launch still uses the
+  manual Railway runbooks: backup, deploy, manual `alembic upgrade head`, smoke.
+  Do not add auto-deploy or provider-write smoke without explicit human approval.
 
 4. **GitHub App real read run readiness (deferred).**
   Backend polling-only live read sync, `/github` explicit repo control, and

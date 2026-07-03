@@ -705,6 +705,34 @@ export const M = {
     manualDeployLabel: "Manual deploy runbook",
     manualDeployDescription:
       "Railway/private-beta deploy остаётся ручным: backup, deploy, alembic upgrade head и smoke выполняются человеком.",
+    runbookLabel: "Manual deploy/smoke runbook",
+    runbookTitle: "Ручной runbook запуска",
+    runbookDescription:
+      "Короткая карта ручного запуска из docs/deploy/private-beta.md. Эта панель только показывает шаги и не выполняет команды.",
+    runbookStatusLocalGate: "Local gate",
+    runbookStatusManual: "Manual",
+    runbookStatusReadOnly: "Read-only",
+    runbookStatusRollback: "Rollback",
+    runbookLocalGateLabel: "Локальные gates",
+    runbookLocalGateDescription:
+      "Перед deploy вручную запустить secret scan, ruff, backend pytest, frontend tests/build/typecheck/lint и убедиться, что worktree не содержит unrelated changes.",
+    runbookBackupLabel: "Backup перед миграцией",
+    runbookBackupDescription:
+      "Перед private-beta migration человек создаёт backup managed Postgres и проверяет restore path в hosting UI.",
+    runbookMigrationLabel: "Миграция вручную",
+    runbookMigrationDescription:
+      "После backup выполнить alembic upgrade head вручную против private-beta Postgres; реальные database URLs не писать в docs/logs.",
+    runbookServicesLabel: "Backend + frontend services",
+    runbookServicesDescription:
+      "Запустить backend Uvicorn и frontend Next.js как отдельные services; GitHub writes, provider-write smoke и LLM остаются выключенными.",
+    runbookSmokeLabel: "Read-only smoke",
+    runbookSmokeDescription:
+      "Проверить health, login, dashboard, /github, /audit, /actions и evidence views read-only; не запускать provider writes или execute paths.",
+    runbookRollbackLabel: "Rollback boundary",
+    runbookRollbackDescription:
+      "Rollback остаётся ручным: остановить services/вернуть commit и восстановить Postgres из backup при data-impacting migration failure.",
+    runbookBoundary:
+      "Runbook checklist — только навигация и контрольный список. Он не деплоит, не пушит, не вызывает провайдеров и не меняет production data.",
     providerReadLabel: "GitHub provider read",
     providerReadAvailableDescription:
       "Backend capability допускает live provider read, но эта панель сама его не запускает.",
