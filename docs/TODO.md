@@ -110,6 +110,12 @@ Implemented foundations:
   filters, and can create local `internal_todo` ActionProposals
   (`source=repo_audit`) per repository. ActionProposals review has a matching
   `audit` origin. Read-only: no network calls, provider writes, or LLM.
+- `/audit` can now import structured JSON findings from an external/full
+  repo-audit result into local `internal_todo` ActionProposals
+  (`source=repo_audit_import`). Valid findings must include
+  `repository_full_name` (`owner/repo`) and `evidence_refs`; known secret-like
+  fragments in imported text are redacted. This is local-only and starts no
+  provider calls, external writes, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

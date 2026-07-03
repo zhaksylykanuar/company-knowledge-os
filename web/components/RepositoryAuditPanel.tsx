@@ -1,11 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { createActionProposal, fetchActionProposals, fetchRepoAudit } from "../lib/api";
 import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
-import type { ActionProposal, RepoAuditRepoFact, RepoAuditResponse } from "../lib/types";
+import type {
+  ActionProposal,
+  ActionProposalCreateRequest,
+  RepoAuditRepoFact,
+  RepoAuditResponse
+} from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
@@ -15,6 +20,19 @@ type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready";
 type AuditFocusFilter = "all" | "needs_confirm" | "risks" | "stale";
 
 const ACTIONS_AUDIT_FOCUS_HREF = "/actions?origin=audit&status=proposed";
+const SECRET_TEXT_PATTERN =
+  /\b(token|password|secret|api[_-]?key|private[_-]?key)\s*[:=]\s*[^\s,;]+/gi;
+
+type ExternalAuditFinding = {
+  area_candidate: string | null;
+  evidence_refs: string[];
+  recommended_next_step: string | null;
+  repository_full_name: string;
+  risks: string[];
+  severity: string | null;
+  summary: string;
+  title: string;
+};
 
 type RepositoryAuditPanelViewProps = {
   actionError?: string | null;
@@ -23,6 +41,12 @@ type RepositoryAuditPanelViewProps = {
   data: RepoAuditResponse | null;
   error: string | null;
   focus?: AuditFocusFilter;
+  externalAuditImportError?: string | null;
+  externalAuditImportSuccess?: string | null;
+  externalAuditText?: string;
+  isImportingExternalAudit?: boolean;
+  onExternalAuditTextChange?: (value: string) => void;
+  onImportExternalAudit?: (event: FormEvent<HTMLFormElement>) => void;
   onCreateAction?: (repo: RepoAuditRepoFact) => void;
   onFocusChange?: (focus: AuditFocusFilter) => void;
   onRetry?: () => void;
@@ -40,6 +64,10 @@ export function RepositoryAuditPanel() {
   const [actionProposals, setActionProposals] = useState<ActionProposal[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
+  const [externalAuditImportError, setExternalAuditImportError] = useState<string | null>(null);
+  const [externalAuditImportSuccess, setExternalAuditImportSuccess] = useState<string | null>(null);
+  const [externalAuditText, setExternalAuditText] = useState("");
+  const [isImportingExternalAudit, setIsImportingExternalAudit] = useState(false);
   const [pendingRepo, setPendingRepo] = useState<string | null>(null);
 
   const refreshActionProposals = useCallback(async (currentWorkspaceId: string) => {
@@ -125,6 +153,54 @@ export function RepositoryAuditPanel() {
     }
   }
 
+  async function importExternalAudit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!workspaceId) {
+      return;
+    }
+
+    setExternalAuditImportError(null);
+    setExternalAuditImportSuccess(null);
+    setIsImportingExternalAudit(true);
+    try {
+      const findings = parseExternalAuditFindings(externalAuditText);
+      const results = await Promise.allSettled(
+        findings.map((finding) =>
+          createActionProposal(
+            workspaceId,
+            buildExternalAuditActionRequest(finding)
+          )
+        )
+      );
+      const proposals = results
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => result.value.proposal);
+      const failed = results.length - proposals.length;
+      if (proposals.length > 0) {
+        setActionProposals((current) => [
+          ...proposals,
+          ...current.filter(
+            (proposal) => !proposals.some((created) => created.id === proposal.id)
+          )
+        ]);
+      }
+      setExternalAuditImportSuccess(
+        T.repoAuditImportResult(proposals.length, failed)
+      );
+      if (failed > 0) {
+        setExternalAuditImportError(M.repoAudit.importPartialFailure);
+      } else {
+        setExternalAuditText("");
+      }
+    } catch (caught: unknown) {
+      setExternalAuditImportError(
+        caught instanceof Error ? caught.message : M.repoAudit.importFailed
+      );
+    } finally {
+      setIsImportingExternalAudit(false);
+    }
+  }
+
   return (
     <RepositoryAuditPanelView
       actionError={actionError}
@@ -132,9 +208,15 @@ export function RepositoryAuditPanel() {
       actionSuccessMessage={actionSuccessMessage}
       data={data}
       error={error}
+      externalAuditImportError={externalAuditImportError}
+      externalAuditImportSuccess={externalAuditImportSuccess}
+      externalAuditText={externalAuditText}
       focus={focus}
+      isImportingExternalAudit={isImportingExternalAudit}
       onCreateAction={createLocalActionFromRepo}
+      onExternalAuditTextChange={setExternalAuditText}
       onFocusChange={setFocus}
+      onImportExternalAudit={importExternalAudit}
       onRetry={() => setReloadKey((current) => current + 1)}
       pendingRepo={pendingRepo}
       status={status}
@@ -148,9 +230,15 @@ export function RepositoryAuditPanelView({
   actionSuccessMessage = null,
   data,
   error,
+  externalAuditImportError = null,
+  externalAuditImportSuccess = null,
+  externalAuditText = "",
   focus = "all",
+  isImportingExternalAudit = false,
   onCreateAction,
+  onExternalAuditTextChange,
   onFocusChange,
+  onImportExternalAudit,
   onRetry,
   pendingRepo = null,
   status
@@ -255,6 +343,15 @@ export function RepositoryAuditPanelView({
 
           <AuditFocusControl activeFilter={focus} onChange={onFocusChange} repoFacts={repoFacts} />
 
+          <ExternalAuditImportForm
+            error={externalAuditImportError}
+            isImporting={isImportingExternalAudit}
+            onChange={onExternalAuditTextChange}
+            onSubmit={onImportExternalAudit}
+            successMessage={externalAuditImportSuccess}
+            value={externalAuditText}
+          />
+
           <RepoAuditList
             linkedByRepo={linkedByRepo}
             onCreateAction={onCreateAction}
@@ -265,6 +362,45 @@ export function RepositoryAuditPanelView({
         </>
       ) : null}
     </section>
+  );
+}
+
+function ExternalAuditImportForm({
+  error,
+  isImporting,
+  onChange,
+  onSubmit,
+  successMessage,
+  value
+}: {
+  error: string | null;
+  isImporting: boolean;
+  onChange?: (value: string) => void;
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
+  successMessage: string | null;
+  value: string;
+}) {
+  return (
+    <form className="form" onSubmit={onSubmit}>
+      <h3>{M.repoAudit.importTitle}</h3>
+      <p className="muted">{M.repoAudit.importDescription}</p>
+      <div className="field">
+        <label htmlFor="external-repo-audit-json">{M.repoAudit.importLabel}</label>
+        <textarea
+          id="external-repo-audit-json"
+          maxLength={20000}
+          onChange={(event) => onChange?.(event.target.value)}
+          placeholder={M.repoAudit.importPlaceholder}
+          value={value}
+        />
+      </div>
+      <button className="button" disabled={isImporting || !value.trim()} type="submit">
+        {isImporting ? M.repoAudit.importing : M.repoAudit.importSubmit}
+      </button>
+      <p className="muted">{M.repoAudit.importBoundary}</p>
+      {successMessage ? <p className="success-text">{successMessage}</p> : null}
+      {error ? <p className="error-text">{error}</p> : null}
+    </form>
   );
 }
 
@@ -466,7 +602,7 @@ function auditActionsByRepository(
 ): Map<string, ActionProposal[]> {
   const byRepo = new Map<string, ActionProposal[]>();
   for (const proposal of proposals) {
-    if (proposalPayloadString(proposal.payload, "source") !== "repo_audit") {
+    if (!isAuditProposalSource(proposalPayloadString(proposal.payload, "source"))) {
       continue;
     }
     const repo = proposalPayloadString(proposal.payload, "repository_full_name");
@@ -478,6 +614,10 @@ function auditActionsByRepository(
     byRepo.set(repo, existing);
   }
   return byRepo;
+}
+
+function isAuditProposalSource(source: string | null): boolean {
+  return source === "repo_audit" || source === "repo_audit_import";
 }
 
 function proposalPayloadString(
@@ -512,4 +652,119 @@ function countLinkedDecided(byRepo: Map<string, ActionProposal[]>): number {
     ).length;
   }
   return total;
+}
+
+export function parseExternalAuditFindings(raw: string): ExternalAuditFinding[] {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw);
+  } catch (caught) {
+    throw new Error(M.repoAudit.importInvalidJson);
+  }
+  const rawFindings =
+    Array.isArray(payload)
+      ? payload
+      : isRecord(payload) && Array.isArray(payload.findings)
+        ? payload.findings
+        : [];
+  const findings = rawFindings
+    .map((item) => normalizeExternalAuditFinding(item))
+    .filter((item): item is ExternalAuditFinding => item !== null);
+  if (findings.length === 0) {
+    throw new Error(M.repoAudit.importNoFindings);
+  }
+  return findings.slice(0, 50);
+}
+
+export function buildExternalAuditActionRequest(
+  finding: ExternalAuditFinding
+): ActionProposalCreateRequest {
+  const risks = finding.risks.slice(0, 20);
+  return {
+    action_type: "internal_todo",
+    created_by: "user",
+    description: [
+      `Репозиторий: ${finding.repository_full_name}`,
+      finding.summary,
+      finding.recommended_next_step
+        ? `Рекомендуемый следующий шаг: ${finding.recommended_next_step}`
+        : null,
+      risks.length > 0 ? `Риски: ${risks.join(", ")}` : null
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    evidence_refs: finding.evidence_refs.slice(0, 20).map((ref) => ({
+      kind: "repo_audit_external",
+      source: "external_repo_audit_import",
+      ref,
+      url: null
+    })),
+    payload: {
+      source: "repo_audit_import",
+      repository_full_name: finding.repository_full_name,
+      severity: finding.severity ?? undefined,
+      area_candidate: finding.area_candidate ?? undefined,
+      recommended_next_step: finding.recommended_next_step ?? undefined,
+      related_entities: risks
+    },
+    target_provider: "internal",
+    title: finding.title
+  };
+}
+
+function normalizeExternalAuditFinding(value: unknown): ExternalAuditFinding | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const repository = safeImportedText(value.repository_full_name, "", 160);
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+    return null;
+  }
+  const evidenceRefs = importedStringList(value.evidence_refs, 20, 500);
+  if (evidenceRefs.length === 0) {
+    return null;
+  }
+  const title = safeImportedText(
+    value.title,
+    `External repo audit follow-up: ${repository}`,
+    500
+  );
+  const summary = safeImportedText(value.summary, "External audit finding.", 2000);
+  return {
+    area_candidate: optionalImportedText(value.area_candidate, 80),
+    evidence_refs: evidenceRefs,
+    recommended_next_step: optionalImportedText(value.recommended_next_step, 1000),
+    repository_full_name: repository,
+    risks: importedStringList(value.risks, 20, 120),
+    severity: optionalImportedText(value.severity, 40),
+    summary,
+    title
+  };
+}
+
+function importedStringList(value: unknown, maxItems: number, limit: number): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => safeImportedText(item, "", limit))
+    .filter((item) => item.length > 0)
+    .slice(0, maxItems);
+}
+
+function optionalImportedText(value: unknown, limit: number): string | null {
+  const text = safeImportedText(value, "", limit);
+  return text.length > 0 ? text : null;
+}
+
+function safeImportedText(value: unknown, fallback: string, limit: number): string {
+  const raw = typeof value === "string" ? value : fallback;
+  return raw
+    .replace(SECRET_TEXT_PATTERN, "$1=[redacted]")
+    .trim()
+    .slice(0, limit);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

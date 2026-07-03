@@ -55,6 +55,13 @@
   evidence refs из аудита; `ActionProposalsPanel` получил новый origin `audit`
   (фильтр/группа/бейдж/payload-detail) и cross-link обратно на репозитории.
   Всё read-only: без сетевых вызовов, provider writes и LLM.
+- **External repo-audit import (НОВОЕ):** `/audit` теперь также принимает JSON
+  findings от внешнего/другого аудита (массив или `{ findings: [...] }`) и
+  детерминированно превращает валидные entries в локальные `internal_todo`
+  `ActionProposal` rows с `source=repo_audit_import`. Импорт требует
+  `repository_full_name` в формате `owner/repo` и `evidence_refs`, редактирует
+  secret-like fragments в известных текстовых полях, пишет только локальные
+  proposals и не вызывает provider APIs, external writes или LLM.
 - **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
   теперь добавляет `signals.coverage` и item `source-coverage` из локального
   Company Brain state: canonical repositories, open issues/PRs, evidence refs,

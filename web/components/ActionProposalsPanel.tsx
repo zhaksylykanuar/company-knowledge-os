@@ -1480,12 +1480,13 @@ function firstEvidenceSelection(
 }
 
 function proposalOrigin(proposal: ActionProposal): ProposalOrigin {
-  if (payloadString(proposal.payload, "source") === "repo_audit") {
+  const source = payloadString(proposal.payload, "source");
+  if (source === "repo_audit" || source === "repo_audit_import") {
     return "audit";
   }
   if (
     proposal.briefing_item_id !== null ||
-    payloadString(proposal.payload, "source") === "briefing_item"
+    source === "briefing_item"
   ) {
     return "briefing";
   }

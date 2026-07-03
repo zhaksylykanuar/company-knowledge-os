@@ -771,7 +771,23 @@ export const M = {
     linkedActionsEmpty:
       "По репозиториям аудита ещё нет локальных предложений действий.",
     boundaryNote:
-      "Read-only: аудит и создание локального действия не пишут во внешние сервисы, не вызывают провайдеров и не используют LLM."
+      "Read-only: аудит и создание локального действия не пишут во внешние сервисы, не вызывают провайдеров и не используют LLM.",
+    importTitle: "Импорт результата внешнего аудита",
+    importDescription:
+      "Вставьте JSON от другой модели, чтобы превратить findings в локальные internal_todo proposals. Поддерживается массив findings или объект { findings: [...] }.",
+    importLabel: "JSON findings",
+    importPlaceholder:
+      "[{\"repository_full_name\":\"qtwin-io/base-collector\",\"title\":\"Проверить CI\",\"summary\":\"CI не найден\",\"risks\":[\"ci_not_detected\"],\"evidence_refs\":[\"audit:base-collector:ci\"]}]",
+    importSubmit: "Импортировать локальные действия",
+    importing: "Импорт локальных действий",
+    importBoundary:
+      "Импорт пишет только локальные ActionProposal rows; внешние сервисы, provider calls и LLM не запускаются. Secret-like fragments в известных полях редактируются.",
+    importInvalidJson: "JSON импорта не распознан.",
+    importNoFindings:
+      "Импорт не содержит валидных findings с repository_full_name в формате owner/repo и evidence_refs.",
+    importFailed: "Импорт внешнего аудита не удался.",
+    importPartialFailure:
+      "Часть findings не удалось сохранить локально; успешные local proposals сохранены."
   },
 
   companyBrain: {
@@ -939,6 +955,8 @@ export const T = {
   repoAuditRiskCount: (count: number) => `Риск-флагов: ${count}.`,
   repoAuditLinkedActions: (total: number, proposed: number, decided: number) =>
     `Связано локальных действий: ${total} · нужно решение ${proposed} · решено ${decided}.`,
+  repoAuditImportResult: (created: number, failed: number) =>
+    `Импортировано локальных предложений из внешнего аудита: ${created}. Не удалось: ${failed}.`,
   privateBetaReadinessDataReady: (
     repositories: number,
     evidenceRefs: number,

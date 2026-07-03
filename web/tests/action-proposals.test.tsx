@@ -145,7 +145,7 @@ const auditProposal: ActionProposal = {
   title: "Repo audit follow-up: qtwin-io/base-collector",
   description: "Repository: qtwin-io/base-collector",
   payload: {
-    source: "repo_audit",
+    source: "repo_audit_import",
     repository_full_name: "qtwin-io/base-collector",
     area_candidate: "OPS",
     activity_bucket: "stale"

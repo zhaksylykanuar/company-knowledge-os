@@ -4,7 +4,11 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { buildRepoAuditPath } from "../lib/api";
-import { RepositoryAuditPanelView } from "../components/RepositoryAuditPanel";
+import {
+  buildExternalAuditActionRequest,
+  parseExternalAuditFindings,
+  RepositoryAuditPanelView
+} from "../components/RepositoryAuditPanel";
 import { M, T } from "../lib/messages";
 import type { ActionProposal, RepoAuditResponse } from "../lib/types";
 
@@ -121,7 +125,7 @@ const auditProposal: ActionProposal = {
   id: "proposal-audit-1",
   is_live: false,
   payload: {
-    source: "repo_audit",
+    source: "repo_audit_import",
     repository_full_name: "qtwin-io/base-collector",
     activity_bucket: "stale"
   },
@@ -175,6 +179,8 @@ test("renders deterministic repo audit summary and per-repo facts", () => {
   // Copy explicitly states LLM is NOT used; assert the boundary note is present
   // rather than asserting the token never appears.
   assert.ok(html.includes(M.repoAudit.boundaryNote));
+  assert.ok(html.includes(M.repoAudit.importTitle));
+  assert.ok(html.includes(M.repoAudit.importBoundary));
   assert.doesNotMatch(html, /LLM generated/i);
 });
 
@@ -197,6 +203,45 @@ test("cross-links existing local audit actions to repos and blocks duplicates", 
   assert.ok(html.includes(M.repoAudit.actionAlreadyCreated));
   assert.ok(html.includes(M.repoAudit.openActions));
   assert.match(html, /href="\/actions\?origin=audit&amp;status=proposed"/);
+});
+
+test("parses external repo-audit findings into sanitized local proposal requests", () => {
+  const findings = parseExternalAuditFindings(
+    JSON.stringify({
+      findings: [
+        {
+          repository_full_name: "qtwin-io/base-collector",
+          title: "Проверить CI token=SHOULD_NOT_PERSIST",
+          summary: "CI не найден; password=SHOULD_NOT_PERSIST",
+          severity: "high",
+          risks: ["ci_not_detected"],
+          evidence_refs: ["external-audit:base-collector:ci"],
+          recommended_next_step: "Добавить CI"
+        }
+      ]
+    })
+  );
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0]?.repository_full_name, "qtwin-io/base-collector");
+  assert.match(findings[0]?.title ?? "", /token=\[redacted\]/);
+  assert.match(findings[0]?.summary ?? "", /password=\[redacted\]/);
+
+  const request = buildExternalAuditActionRequest(findings[0]);
+  assert.equal(request.target_provider, "internal");
+  assert.equal(request.action_type, "internal_todo");
+  assert.equal(request.payload?.source, "repo_audit_import");
+  assert.equal(request.payload?.repository_full_name, "qtwin-io/base-collector");
+  assert.equal(request.evidence_refs?.[0]?.source, "external_repo_audit_import");
+  assert.doesNotMatch(request.description ?? "", /SHOULD_NOT_PERSIST/);
+});
+
+test("rejects external audit imports without valid owner/repo findings", () => {
+  assert.throws(
+    () => parseExternalAuditFindings(JSON.stringify({ findings: [{ title: "No repo" }] })),
+    new RegExp("owner/repo")
+  );
+  assert.throws(() => parseExternalAuditFindings("{not-json"), /JSON/);
 });
 
 test("renders loading, missing, empty, and error states safely", () => {
