@@ -29,7 +29,11 @@
   open issue/PR count, evidence refs, local/live mode, live-provider deferred
   status и LLM off status. Панель не делает provider calls, не запускает LLM и
   не обещает live sync; copy централизован в `web/lib/messages.ts`, тесты
-  проверяют states and no live/AI overclaim.
+  проверяют states and no live/AI overclaim. Панель дополнительно показывает
+  локальную разбивку по уже загруженному Company Brain payload: закрытая работа
+  (closed issues / merged PRs), счётчик недавней активности, repo с source refs
+  vs без них и evidence-разбивку по типу (kind). Разбивка не добавляет новых
+  endpoints/provider calls/LLM и остаётся детерминированной read-only.
 - **Private-beta readiness dashboard (НОВОЕ):** на `/dashboard` добавлен
   `PrivateBetaReadinessPanel`, который читает только существующий Company Brain
   endpoint и показывает ручной readiness-чеклист перед private-beta запуском:

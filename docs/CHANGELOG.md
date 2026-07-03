@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Enriched the `/dashboard` source-coverage panel with a local breakdown built
+  only from the already-loaded Company Brain payload: closed issues / merged PRs,
+  recent activity count, repositories with vs. without source refs, and an
+  evidence-by-kind breakdown. No new endpoints, provider calls, external writes,
+  or LLM are added; the panel stays deterministic and read-only.
 - Hardened the external repo-audit import UX on `/audit`. The paste-JSON form
   now renders a non-throwing local preview of parsed findings before import,
   marks each finding valid/invalid against the same rules the backend enforces

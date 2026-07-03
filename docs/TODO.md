@@ -142,6 +142,11 @@ Implemented foundations:
   migration, split backend/frontend services, read-only smoke, and rollback
   boundary. It is display-only and starts no deploy, push, provider call,
   external write, production data mutation, or LLM.
+- The `/dashboard` source-coverage panel now also shows a local breakdown from
+  the already-loaded Company Brain payload: closed work (closed issues / merged
+  PRs), recent-activity count, repositories with vs. without source refs, and
+  evidence counts by kind. No new endpoints, provider calls, external writes, or
+  LLM are added.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -200,9 +205,11 @@ Done when:
    badges, query focus, and richer payload metadata, and `/dashboard` now has a
    repository-audit overview panel that links into `/audit` and the audit
    actions focus. The private-beta readiness panel now also displays the manual
-   deploy/smoke runbook phases without executing them. Next: consider richer
-   founder-facing coverage or teammate provisioning after deploy stability,
-   while keeping provider writes and AI generation disabled.
+   deploy/smoke runbook phases without executing them. The `/dashboard` source-
+   coverage panel now also has a local breakdown (closed work, recent activity,
+   repos with/without source refs, evidence-by-kind). Next: consider further
+   founder-facing coverage/next-step polish or teammate provisioning after
+   deploy stability, while keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

@@ -668,7 +668,20 @@ export const M = {
     statusDeferred: "Отложено",
     statusEnabled: "Включено",
     statusOff: "Выключено",
-    statusNeedsEvidence: "Нужно evidence"
+    statusNeedsEvidence: "Нужно evidence",
+    breakdownLabel: "Разбивка покрытия источников",
+    breakdownTitle: "Что уже покрыто",
+    closedWorkTitle: "Закрытая работа",
+    closedWorkDescription:
+      "Закрытые задачи и слитые PR из канонического GitHub-пути.",
+    recentTitle: "Недавняя активность",
+    recentDescription:
+      "Недавно обновлённые задачи/PR в текущей выборке Company Brain.",
+    evidenceKindsTitle: "Evidence по типу",
+    evidenceKindsDescription:
+      "Локальная разбивка уже полученных source refs по типу (kind). Без provider calls и без LLM.",
+    evidenceKindsEmpty:
+      "Типы evidence пока недоступны: отдельные source refs не вернулись."
   },
 
   privateBetaReadiness: {
@@ -1041,6 +1054,14 @@ export const T = {
     `Каноническая поверхность GitHub готова: ${count} repo rows в локальной БД.`,
   sourceCoverageEvidenceReady: (count: number) =>
     `Для текущей выборки возвращено evidence refs: ${count}.`,
+  sourceCoverageClosedWork: (closedIssues: number, mergedPrs: number) =>
+    `${closedIssues} задач / ${mergedPrs} PR`,
+  sourceCoverageEvidenceKind: (kind: string, count: number) =>
+    `${kind}: ${count}`,
+  sourceCoverageReposWithEvidence: (withRefs: number, total: number) =>
+    `Repo с source refs: ${withRefs} из ${total}.`,
+  sourceCoverageReposWithoutEvidence: (withoutRefs: number) =>
+    `Repo без source refs: ${withoutRefs} — для них нужно ещё evidence.`,
   repoAuditSnapshot: (repoCount: number, status: string) =>
     `Снимок: репозиториев ${repoCount} · статус ${status}.`,
   repoAuditActivity: (bucket: string, daysSincePush: number | null) =>

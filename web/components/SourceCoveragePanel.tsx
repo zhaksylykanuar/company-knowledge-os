@@ -31,6 +31,11 @@ type CoverageItem = {
   status: string;
 };
 
+type EvidenceKindCount = {
+  kind: string;
+  count: number;
+};
+
 export function SourceCoveragePanel({ refreshSignal = 0 }: SourceCoveragePanelProps) {
   const workspaceId = useWorkspaceId();
   const [data, setData] = useState<CompanyBrainResponse | null>(null);
@@ -154,6 +159,7 @@ export function SourceCoveragePanelView({
             />
           </section>
           <CoverageList items={coverageItems(data)} />
+          <CoverageBreakdown data={data} />
           {data.warnings.length > 0 ? (
             <ul className="meta-list" aria-label={M.common.warnings}>
               {data.warnings.map((warning) => (
@@ -184,6 +190,68 @@ function CoverageList({ items }: { items: CoverageItem[] }) {
       </div>
     </section>
   );
+}
+
+function CoverageBreakdown({ data }: { data: CompanyBrainResponse }) {
+  const reposWithRefs = data.repositories.filter(
+    (repository) => repository.source_refs.length > 0
+  ).length;
+  const reposWithoutRefs = data.repositories.length - reposWithRefs;
+  const evidenceKinds = evidenceKindCounts(data.evidence);
+
+  return (
+    <section className="work-section" aria-label={M.sourceCoverage.breakdownLabel}>
+      <h3>{M.sourceCoverage.breakdownTitle}</h3>
+      <section className="grid" aria-label={M.sourceCoverage.breakdownLabel}>
+        <StatusCard
+          description={M.sourceCoverage.closedWorkDescription}
+          title={M.sourceCoverage.closedWorkTitle}
+          value={T.sourceCoverageClosedWork(
+            data.summary.closed_issues,
+            data.summary.merged_pull_requests
+          )}
+        />
+        <StatusCard
+          description={M.sourceCoverage.recentDescription}
+          title={M.sourceCoverage.recentTitle}
+          value={String(data.work.recent.length)}
+        />
+      </section>
+      {data.repositories.length > 0 ? (
+        <ul className="meta-list" aria-label={M.sourceCoverage.repositoriesLabel}>
+          <li>{T.sourceCoverageReposWithEvidence(reposWithRefs, data.repositories.length)}</li>
+          {reposWithoutRefs > 0 ? (
+            <li>{T.sourceCoverageReposWithoutEvidence(reposWithoutRefs)}</li>
+          ) : null}
+        </ul>
+      ) : null}
+      <h4>{M.sourceCoverage.evidenceKindsTitle}</h4>
+      <p className="muted">{M.sourceCoverage.evidenceKindsDescription}</p>
+      {evidenceKinds.length > 0 ? (
+        <ul className="meta-list" aria-label={M.sourceCoverage.evidenceKindsTitle}>
+          {evidenceKinds.map((entry) => (
+            <li key={entry.kind}>
+              {T.sourceCoverageEvidenceKind(entry.kind, entry.count)}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">{M.sourceCoverage.evidenceKindsEmpty}</p>
+      )}
+    </section>
+  );
+}
+
+function evidenceKindCounts(
+  evidence: CompanyBrainResponse["evidence"]
+): EvidenceKindCount[] {
+  const counts = new Map<string, number>();
+  for (const ref of evidence) {
+    counts.set(ref.kind, (counts.get(ref.kind) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([kind, count]) => ({ kind, count }))
+    .sort((a, b) => (b.count - a.count) || a.kind.localeCompare(b.kind));
 }
 
 function coverageItems(data: CompanyBrainResponse): CoverageItem[] {
