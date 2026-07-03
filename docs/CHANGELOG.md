@@ -26,6 +26,16 @@
   bulk selection, and default evidence drawer all follow the final visible
   subset and remain client-side/local only: no provider calls, external writes,
   or LLM.
+- Added a repository-audit overview panel to `/dashboard`. It reads the existing
+  local deterministic repo-audit endpoint plus local ActionProposals and
+  summarizes the audit loop: repository count, total risk flags, discovery
+  snapshot, and audit-derived action counts (total / deterministic / imported /
+  proposed). It deep-links into `/audit` and
+  `/actions?origin=audit&status=proposed` (plus
+  `audit_source=deterministic|imported` when such actions exist). The
+  action-proposal counts are supplementary and never break the deterministic
+  audit summary if they fail to load. The panel is client-side/local only: no
+  provider calls, external writes, or LLM.
 
 ## 2026-07-02
 

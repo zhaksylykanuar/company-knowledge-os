@@ -130,6 +130,13 @@ Implemented foundations:
   and query support (`audit_source=deterministic|imported`) while bulk selection
   and the evidence drawer follow the final visible subset. No provider calls,
   external writes, or LLM are started.
+- `/dashboard` now has a repository-audit overview panel that reads the existing
+  local repo-audit endpoint plus local ActionProposals and shows repository
+  count, total risk flags, discovery snapshot, and audit-derived action counts
+  (total/deterministic/imported/proposed) with deep-links into `/audit` and
+  `/actions?origin=audit` (including `audit_source` focus). Counts are
+  supplementary and never break the deterministic summary; no provider calls,
+  external writes, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -185,9 +192,10 @@ Done when:
    preview, per-finding validity, select-all-valid/clear controls, and inline
    per-finding backend failures. `/actions` also now distinguishes
    deterministic vs imported audit-origin proposals with a local subfilter,
-   badges, query focus, and richer payload metadata. Next: consider deployment
-   readiness or a dashboard card linking to `/audit`, while keeping provider
-   writes and AI generation disabled.
+   badges, query focus, and richer payload metadata, and `/dashboard` now has a
+   repository-audit overview panel that links into `/audit` and the audit
+   actions focus. Next: consider deployment readiness or richer founder-facing
+   coverage, while keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist, but actual

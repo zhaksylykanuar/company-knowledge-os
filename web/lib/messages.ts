@@ -817,6 +817,46 @@ export const M = {
     importIssueEvidence: "Нужен хотя бы один evidence_ref."
   },
 
+  repoAuditOverview: {
+    eyebrow: "Аудит репозиториев",
+    title: "Обзор аудита и локальных действий",
+    badge: "Deterministic / read-only",
+    loading: "Загрузка обзора аудита репозиториев",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — обзор аудита недоступен.",
+    unavailableTitle: "Обзор аудита недоступен",
+    unavailableDescription:
+      "Панель не смогла загрузить детерминированный аудит репозиториев.",
+    intro:
+      "Сводка по детерминированному аудиту всех репозиториев и локальным действиям, созданным из аудита. Считается локально из уже загруженных данных: без сетевых вызовов, provider-запросов, external writes и LLM.",
+    summaryLabel: "Сводка обзора аудита",
+    reposTitle: "Репозитории",
+    reposDescription: "Репозитории в детерминированном аудите из локального снимка discovery.",
+    riskTitle: "Риск-флаги",
+    riskDescription: "Суммарные детерминированные риск-флаги по всем репозиториям.",
+    snapshotTitle: "Локальный снимок",
+    snapshotDescription: "Репозитории в текущем снимке GitHub discovery.",
+    actionsTitle: "Действия из аудита",
+    actionsDescription: "Локальные предложения, созданные из аудита (детерминированные + импортированные).",
+    actionsBreakdownLabel: "Действия из аудита по источнику",
+    actionsDeterministicTitle: "Детерминированные",
+    actionsDeterministicDescription:
+      "Локальные действия из детерминированного аудита репозиториев (source=repo_audit).",
+    actionsImportedTitle: "Импортированные",
+    actionsImportedDescription:
+      "Локальные действия из импортированного внешнего аудита (source=repo_audit_import).",
+    actionsProposedTitle: "Нужно решение",
+    actionsProposedDescription: "Действия из аудита в статусе «предложено», ожидающие локальной проверки.",
+    boundaryNote:
+      "Read-only: обзор не пишет во внешние сервисы, не вызывает провайдеров и не использует LLM.",
+    openAudit: "Открыть аудит репозиториев",
+    openAuditActions: "Открыть действия из аудита",
+    openDeterministicActions: "Детерминированные действия",
+    openImportedActions: "Импортированные действия",
+    emptyActionsHint:
+      "Локальных действий из аудита пока нет. Создайте их на странице аудита из per-repo фактов или импорта внешнего аудита."
+  },
+
   companyBrain: {
     eyebrow: "Мозг компании",
     title: "Состояние GitHub, подтверждённое источниками",
@@ -986,6 +1026,13 @@ export const T = {
     `Импортировано локальных предложений из внешнего аудита: ${created}. Не удалось: ${failed}.`,
   repoAuditImportPreview: (total: number, valid: number, selected: number) =>
     `Разобрано findings: ${total} · валидных ${valid} · выбрано ${selected}.`,
+  repoAuditOverviewActions: (
+    total: number,
+    deterministic: number,
+    imported: number,
+    proposed: number
+  ) =>
+    `Действий из аудита: ${total} · детерминированных ${deterministic} · импортированных ${imported} · нужно решение ${proposed}.`,
   privateBetaReadinessDataReady: (
     repositories: number,
     evidenceRefs: number,

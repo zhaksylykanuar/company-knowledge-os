@@ -87,6 +87,16 @@
   dump. `audit_source` query param поддержан на `/actions`, bulk selection and
   default evidence drawer follow the final visible subset. Всё local-only:
   backend/provider calls, external writes и LLM не добавлены.
+- **Dashboard ↔ audit overview (НОВОЕ):** на `/dashboard` добавлена панель
+  `RepositoryAuditOverviewPanel`, которая читает уже существующие локальные
+  endpoints (`GET /founder/company-brain/repo-audit` + local ActionProposals) и
+  показывает сводку аудит-петли: repo_count, суммарные risk-флаги, снимок
+  discovery и счётчики локальных действий из аудита (всего / детерминированных /
+  импортированных / нужно решение). Панель даёт deep-links в `/audit` и
+  `/actions?origin=audit&status=proposed` (+ `audit_source=deterministic` и
+  `audit_source=imported`, когда такие действия есть). ActionProposals-счётчики
+  supplementary: их сбой не ломает детерминированный audit overview. Всё
+  local/read-only: без provider calls, external writes и LLM.
 - **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
   теперь добавляет `signals.coverage` и item `source-coverage` из локального
   Company Brain state: canonical repositories, open issues/PRs, evidence refs,
