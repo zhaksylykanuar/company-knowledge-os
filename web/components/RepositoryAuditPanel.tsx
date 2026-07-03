@@ -2,12 +2,17 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
-import { createActionProposal, fetchActionProposals, fetchRepoAudit } from "../lib/api";
+import {
+  createActionProposal,
+  fetchActionProposals,
+  fetchRepoAudit,
+  importRepoAuditFindings
+} from "../lib/api";
 import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   ActionProposal,
-  ActionProposalCreateRequest,
+  RepoAuditImportFindingRequest,
   RepoAuditRepoFact,
   RepoAuditResponse
 } from "../lib/types";
@@ -22,17 +27,6 @@ type AuditFocusFilter = "all" | "needs_confirm" | "risks" | "stale";
 const ACTIONS_AUDIT_FOCUS_HREF = "/actions?origin=audit&status=proposed";
 const SECRET_TEXT_PATTERN =
   /\b(token|password|secret|api[_-]?key|private[_-]?key)\s*[:=]\s*[^\s,;]+/gi;
-
-type ExternalAuditFinding = {
-  area_candidate: string | null;
-  evidence_refs: string[];
-  recommended_next_step: string | null;
-  repository_full_name: string;
-  risks: string[];
-  severity: string | null;
-  summary: string;
-  title: string;
-};
 
 type RepositoryAuditPanelViewProps = {
   actionError?: string | null;
@@ -163,19 +157,11 @@ export function RepositoryAuditPanel() {
     setExternalAuditImportSuccess(null);
     setIsImportingExternalAudit(true);
     try {
-      const findings = parseExternalAuditFindings(externalAuditText);
-      const results = await Promise.allSettled(
-        findings.map((finding) =>
-          createActionProposal(
-            workspaceId,
-            buildExternalAuditActionRequest(finding)
-          )
-        )
-      );
-      const proposals = results
-        .filter((result) => result.status === "fulfilled")
-        .map((result) => result.value.proposal);
-      const failed = results.length - proposals.length;
+      const response = await importRepoAuditFindings(workspaceId, {
+        findings: parseExternalAuditFindings(externalAuditText)
+      });
+      const proposals = response.proposals;
+      const failed = response.failed_count;
       if (proposals.length > 0) {
         setActionProposals((current) => [
           ...proposals,
@@ -654,7 +640,7 @@ function countLinkedDecided(byRepo: Map<string, ActionProposal[]>): number {
   return total;
 }
 
-export function parseExternalAuditFindings(raw: string): ExternalAuditFinding[] {
+export function parseExternalAuditFindings(raw: string): RepoAuditImportFindingRequest[] {
   let payload: unknown;
   try {
     payload = JSON.parse(raw);
@@ -669,61 +655,21 @@ export function parseExternalAuditFindings(raw: string): ExternalAuditFinding[] 
         : [];
   const findings = rawFindings
     .map((item) => normalizeExternalAuditFinding(item))
-    .filter((item): item is ExternalAuditFinding => item !== null);
+    .filter((item): item is RepoAuditImportFindingRequest => item !== null);
   if (findings.length === 0) {
     throw new Error(M.repoAudit.importNoFindings);
   }
   return findings.slice(0, 50);
 }
 
-export function buildExternalAuditActionRequest(
-  finding: ExternalAuditFinding
-): ActionProposalCreateRequest {
-  const risks = finding.risks.slice(0, 20);
-  return {
-    action_type: "internal_todo",
-    created_by: "user",
-    description: [
-      `Репозиторий: ${finding.repository_full_name}`,
-      finding.summary,
-      finding.recommended_next_step
-        ? `Рекомендуемый следующий шаг: ${finding.recommended_next_step}`
-        : null,
-      risks.length > 0 ? `Риски: ${risks.join(", ")}` : null
-    ]
-      .filter(Boolean)
-      .join("\n"),
-    evidence_refs: finding.evidence_refs.slice(0, 20).map((ref) => ({
-      kind: "repo_audit_external",
-      source: "external_repo_audit_import",
-      ref,
-      url: null
-    })),
-    payload: {
-      source: "repo_audit_import",
-      repository_full_name: finding.repository_full_name,
-      severity: finding.severity ?? undefined,
-      area_candidate: finding.area_candidate ?? undefined,
-      recommended_next_step: finding.recommended_next_step ?? undefined,
-      related_entities: risks
-    },
-    target_provider: "internal",
-    title: finding.title
-  };
-}
-
-function normalizeExternalAuditFinding(value: unknown): ExternalAuditFinding | null {
+function normalizeExternalAuditFinding(
+  value: unknown
+): RepoAuditImportFindingRequest | null {
   if (!isRecord(value)) {
     return null;
   }
   const repository = safeImportedText(value.repository_full_name, "", 160);
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
-    return null;
-  }
   const evidenceRefs = importedStringList(value.evidence_refs, 20, 500);
-  if (evidenceRefs.length === 0) {
-    return null;
-  }
   const title = safeImportedText(
     value.title,
     `External repo audit follow-up: ${repository}`,

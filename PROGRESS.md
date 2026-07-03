@@ -57,8 +57,10 @@
   Всё read-only: без сетевых вызовов, provider writes и LLM.
 - **External repo-audit import (НОВОЕ):** `/audit` теперь также принимает JSON
   findings от внешнего/другого аудита (массив или `{ findings: [...] }`) и
+  через backend endpoint `POST .../actions/proposals/import-repo-audit`
   детерминированно превращает валидные entries в локальные `internal_todo`
-  `ActionProposal` rows с `source=repo_audit_import`. Импорт требует
+  `ActionProposal` rows с `source=repo_audit_import` and per-finding partial
+  failures. Импорт требует
   `repository_full_name` в формате `owner/repo` и `evidence_refs`, редактирует
   secret-like fragments в известных текстовых полях, пишет только локальные
   proposals и не вызывает provider APIs, external writes или LLM.

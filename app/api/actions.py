@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any
 from uuid import UUID
 
@@ -26,7 +27,9 @@ from app.db.action_models import (
     ACTION_EXECUTION_EVENT_UNSUPPORTED,
     ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_TARGET_PROVIDER_GITHUB,
+    ACTION_TARGET_PROVIDER_INTERNAL,
     ACTION_TYPE_CREATE_GITHUB_ISSUE,
+    ACTION_TYPE_INTERNAL_TODO,
 )
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN, MEMBERSHIP_ROLE_MEMBER
@@ -83,6 +86,15 @@ ACTION_EXECUTION_PREVIEW_WARNING = (
 ACTION_EXECUTION_NO_EVIDENCE_WARNING = (
     "Proposal has no evidence refs; preview preserves that absence."
 )
+REPO_AUDIT_IMPORT_WARNING = (
+    "Repo-audit import created local ActionProposal rows only; no provider calls, "
+    "external writes, or LLM calls were started."
+)
+REPO_FULL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+SECRET_TEXT_RE = re.compile(
+    r"\b(token|password|secret|api[_-]?key|private[_-]?key)\s*[:=]\s*[^\s,;]+",
+    re.IGNORECASE,
+)
 
 
 class ActionProposalCreateRequest(BaseModel):
@@ -112,6 +124,25 @@ class ActionProposalBulkRequest(BaseModel):
 
 class ActionProposalBulkRejectRequest(ActionProposalBulkRequest):
     reason: str | None = Field(default=None, max_length=1000)
+
+
+class RepoAuditImportFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    repository_full_name: str = Field(default="", max_length=160)
+    title: str | None = Field(default=None, max_length=500)
+    summary: str = Field(default="External audit finding.", max_length=2000)
+    severity: str | None = Field(default=None, max_length=40)
+    risks: list[str] = Field(default_factory=list, max_length=20)
+    evidence_refs: list[str] = Field(default_factory=list, max_length=50)
+    recommended_next_step: str | None = Field(default=None, max_length=1000)
+    area_candidate: str | None = Field(default=None, max_length=80)
+
+
+class RepoAuditImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    findings: list[RepoAuditImportFinding] = Field(min_length=1, max_length=50)
 
 
 class ActionProposalExecuteRequest(BaseModel):
@@ -176,6 +207,23 @@ class ActionProposalBulkFailureRead(BaseModel):
 class ActionProposalBulkResponse(BaseModel):
     proposals: list[ActionProposalRead]
     failures: list[ActionProposalBulkFailureRead]
+    succeeded_count: int
+    failed_count: int
+    is_live: bool
+    execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RepoAuditImportFailureRead(BaseModel):
+    index: int
+    repository_full_name: str | None = None
+    status_code: int
+    detail: str
+
+
+class RepoAuditImportResponse(BaseModel):
+    proposals: list[ActionProposalRead]
+    failures: list[RepoAuditImportFailureRead]
     succeeded_count: int
     failed_count: int
     is_live: bool
@@ -388,6 +436,54 @@ async def list_action_proposal_endpoint(
         count=len(proposals),
         is_live=False,
         warnings=[ACTION_PROPOSAL_NO_EXECUTION_WARNING],
+    )
+
+
+@router.post(
+    "/proposals/import-repo-audit",
+    response_model=RepoAuditImportResponse,
+)
+async def import_repo_audit_action_proposals_endpoint(
+    workspace_id: UUID,
+    payload: RepoAuditImportRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_MEMBER)),
+) -> RepoAuditImportResponse:
+    proposals: list[ActionProposalRead] = []
+    failures: list[RepoAuditImportFailureRead] = []
+    async with AsyncSessionLocal() as session:
+        for index, finding in enumerate(payload.findings):
+            try:
+                action_input = _repo_audit_import_action_input(finding)
+                proposal = await create_action_proposal(
+                    session,
+                    workspace_id=workspace_id,
+                    created_by_user_id=access.workspace_membership.user.id,
+                    payload=action_input,
+                )
+                proposals.append(
+                    ActionProposalRead.model_validate(
+                        serialize_action_proposal(proposal)
+                    )
+                )
+            except ActionProposalError as exc:
+                failures.append(
+                    RepoAuditImportFailureRead(
+                        index=index,
+                        repository_full_name=finding.repository_full_name,
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=exc.detail,
+                    )
+                )
+        await session.commit()
+
+    return RepoAuditImportResponse(
+        proposals=proposals,
+        failures=failures,
+        succeeded_count=len(proposals),
+        failed_count=len(failures),
+        is_live=False,
+        execution_started=False,
+        warnings=[REPO_AUDIT_IMPORT_WARNING, ACTION_PROPOSAL_NO_EXECUTION_WARNING],
     )
 
 
@@ -1200,6 +1296,100 @@ def _bulk_response(
         execution_started=False,
         warnings=warnings,
     )
+
+
+def _repo_audit_import_action_input(
+    finding: RepoAuditImportFinding,
+) -> ActionProposalCreateInput:
+    repository_full_name = _redact_import_text(finding.repository_full_name, limit=160)
+    if not REPO_FULL_NAME_RE.fullmatch(repository_full_name):
+        raise ActionProposalError("repository_full_name must be in owner/repo format")
+    evidence_refs = _imported_strings(finding.evidence_refs, limit=500, max_items=50)
+    if not evidence_refs:
+        raise ActionProposalError("repo-audit import finding requires evidence_refs")
+    risks = _imported_strings(finding.risks, limit=120, max_items=20)
+    title = _redact_import_text(
+        finding.title or f"External repo audit follow-up: {repository_full_name}",
+        limit=500,
+    )
+    summary = _redact_import_text(finding.summary, limit=2000)
+    recommended_next_step = _optional_redacted_text(
+        finding.recommended_next_step, limit=1000
+    )
+    area_candidate = _optional_redacted_text(finding.area_candidate, limit=80)
+    severity = _optional_redacted_text(finding.severity, limit=40)
+    return ActionProposalCreateInput(
+        target_provider=ACTION_TARGET_PROVIDER_INTERNAL,
+        action_type=ACTION_TYPE_INTERNAL_TODO,
+        title=title,
+        description=_repo_audit_import_description(
+            repository_full_name=repository_full_name,
+            summary=summary,
+            risks=risks,
+            recommended_next_step=recommended_next_step,
+        ),
+        payload={
+            "source": "repo_audit_import",
+            "repository_full_name": repository_full_name,
+            "severity": severity,
+            "area_candidate": area_candidate,
+            "recommended_next_step": recommended_next_step,
+            "related_entities": risks,
+        },
+        evidence_refs=[
+            {
+                "kind": "repo_audit_external",
+                "source": "external_repo_audit_import",
+                "ref": ref,
+                "url": None,
+            }
+            for ref in evidence_refs
+        ],
+        created_by="user",
+    )
+
+
+def _repo_audit_import_description(
+    *,
+    repository_full_name: str,
+    summary: str,
+    risks: list[str],
+    recommended_next_step: str | None,
+) -> str:
+    parts = [
+        f"Репозиторий: {repository_full_name}",
+        summary,
+    ]
+    if recommended_next_step:
+        parts.append(f"Рекомендуемый следующий шаг: {recommended_next_step}")
+    if risks:
+        parts.append(f"Риски: {', '.join(risks)}")
+    return "\n".join(parts)
+
+
+def _imported_strings(
+    values: list[str],
+    *,
+    limit: int,
+    max_items: int,
+) -> list[str]:
+    result: list[str] = []
+    for value in values[:max_items]:
+        text = _redact_import_text(value, limit=limit)
+        if text:
+            result.append(text)
+    return result
+
+
+def _optional_redacted_text(value: str | None, *, limit: int) -> str | None:
+    if value is None:
+        return None
+    text = _redact_import_text(value, limit=limit)
+    return text or None
+
+
+def _redact_import_text(value: str, *, limit: int) -> str:
+    return SECRET_TEXT_RE.sub(r"\1=[redacted]", value).strip()[:limit]
 
 
 def _unique_proposal_ids(proposal_ids: list[UUID]) -> list[UUID]:

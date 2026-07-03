@@ -3,9 +3,12 @@ import test from "node:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { buildRepoAuditPath } from "../lib/api";
 import {
-  buildExternalAuditActionRequest,
+  buildRepoAuditPath,
+  buildWorkspaceRepoAuditImportPath,
+  importRepoAuditFindings
+} from "../lib/api";
+import {
   parseExternalAuditFindings,
   RepositoryAuditPanelView
 } from "../components/RepositoryAuditPanel";
@@ -162,6 +165,65 @@ function renderPanel(
 
 test("builds the founder repo-audit path", () => {
   assert.equal(buildRepoAuditPath(), "/api/v1/founder/company-brain/repo-audit");
+  assert.equal(
+    buildWorkspaceRepoAuditImportPath("workspace-123"),
+    "/api/v1/workspaces/workspace-123/actions/proposals/import-repo-audit"
+  );
+});
+
+test("posts external repo-audit findings through the backend import endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals/import-repo-audit"
+    );
+    assert.equal(init?.method, "POST");
+    assert.equal(
+      init?.body,
+      JSON.stringify({
+        findings: [
+          {
+            repository_full_name: "qtwin-io/base-collector",
+            summary: "CI не найден",
+            evidence_refs: ["external-audit:base-collector:ci"]
+          }
+        ]
+      })
+    );
+    return new Response(
+      JSON.stringify({
+        proposals: [auditProposal],
+        failures: [],
+        succeeded_count: 1,
+        failed_count: 0,
+        is_live: false,
+        execution_started: false,
+        warnings: ["local-only"]
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const payload = await importRepoAuditFindings("workspace-123", {
+      findings: [
+        {
+          repository_full_name: "qtwin-io/base-collector",
+          summary: "CI не найден",
+          evidence_refs: ["external-audit:base-collector:ci"]
+        }
+      ]
+    });
+    assert.equal(payload.succeeded_count, 1);
+    assert.equal(payload.failed_count, 0);
+    assert.equal(payload.proposals[0]?.payload.source, "repo_audit_import");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("renders deterministic repo audit summary and per-repo facts", () => {
@@ -227,19 +289,15 @@ test("parses external repo-audit findings into sanitized local proposal requests
   assert.match(findings[0]?.title ?? "", /token=\[redacted\]/);
   assert.match(findings[0]?.summary ?? "", /password=\[redacted\]/);
 
-  const request = buildExternalAuditActionRequest(findings[0]);
-  assert.equal(request.target_provider, "internal");
-  assert.equal(request.action_type, "internal_todo");
-  assert.equal(request.payload?.source, "repo_audit_import");
-  assert.equal(request.payload?.repository_full_name, "qtwin-io/base-collector");
-  assert.equal(request.evidence_refs?.[0]?.source, "external_repo_audit_import");
-  assert.doesNotMatch(request.description ?? "", /SHOULD_NOT_PERSIST/);
+  assert.equal(findings[0]?.repository_full_name, "qtwin-io/base-collector");
+  assert.equal(findings[0]?.evidence_refs?.[0], "external-audit:base-collector:ci");
+  assert.doesNotMatch(findings[0]?.summary ?? "", /SHOULD_NOT_PERSIST/);
 });
 
-test("rejects external audit imports without valid owner/repo findings", () => {
+test("rejects external audit imports without finding objects", () => {
   assert.throws(
-    () => parseExternalAuditFindings(JSON.stringify({ findings: [{ title: "No repo" }] })),
-    new RegExp("owner/repo")
+    () => parseExternalAuditFindings(JSON.stringify({ findings: ["not-object"] })),
+    /findings/
   );
   assert.throws(() => parseExternalAuditFindings("{not-json"), /JSON/);
 });

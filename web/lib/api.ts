@@ -30,6 +30,8 @@ import type {
   GitHubSelectedPullRequestSyncRequest,
   GitHubSelectedPullRequestSyncResponse,
   GitHubSelectedRepositorySyncResult,
+  RepoAuditImportRequest,
+  RepoAuditImportResponse,
   RepoAuditResponse
 } from "./types";
 
@@ -268,6 +270,12 @@ export function buildWorkspaceActionProposalBulkRejectPath(workspaceId: string):
   return `${buildWorkspaceActionProposalsCollectionPath(workspaceId)}/bulk-reject`;
 }
 
+export function buildWorkspaceRepoAuditImportPath(workspaceId: string): string {
+  return `${buildWorkspaceActionProposalsCollectionPath(
+    workspaceId
+  )}/import-repo-audit`;
+}
+
 export function buildWorkspaceActionProposalExecutionPreviewPath(
   workspaceId: string,
   proposalId: string
@@ -388,6 +396,23 @@ export async function bulkRejectActionProposals(
       body: JSON.stringify({
         proposal_ids: request.proposal_ids,
         reason: request.reason ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function importRepoAuditFindings(
+  workspaceId: string,
+  request: RepoAuditImportRequest,
+  options: ApiFetchOptions = {}
+): Promise<RepoAuditImportResponse> {
+  return apiFetch<RepoAuditImportResponse>(
+    buildWorkspaceRepoAuditImportPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        findings: request.findings
       }),
       method: "POST"
     }

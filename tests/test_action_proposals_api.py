@@ -324,6 +324,109 @@ async def test_viewer_cannot_create_proposal(monkeypatch) -> None:
         await _cleanup_action_fixture(marker)
 
 
+async def test_repo_audit_import_creates_local_internal_todos_with_evidence(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/import-repo-audit",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "findings": [
+                        {
+                            "repository_full_name": "qtwin-io/base-collector",
+                            "title": "Проверить CI token=placeholder",
+                            "summary": "CI не найден; password=placeholder",
+                            "severity": "high",
+                            "risks": ["ci_not_detected"],
+                            "evidence_refs": [
+                                "external-audit:base-collector:ci"
+                            ],
+                            "recommended_next_step": "Добавить CI",
+                            "area_candidate": "OPS",
+                        },
+                        {
+                            "repository_full_name": "bad repo",
+                            "summary": "invalid repo identity",
+                            "evidence_refs": ["external-audit:bad"],
+                        },
+                        {
+                            "repository_full_name": "qtwin-io/no-evidence",
+                            "summary": "missing evidence",
+                            "evidence_refs": [" "],
+                        },
+                    ]
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["succeeded_count"] == 1
+        assert payload["failed_count"] == 2
+        assert payload["is_live"] is False
+        assert payload["execution_started"] is False
+        proposal = payload["proposals"][0]
+        assert proposal["target_provider"] == ACTION_TARGET_PROVIDER_INTERNAL
+        assert proposal["action_type"] == ACTION_TYPE_INTERNAL_TODO
+        assert proposal["payload"]["source"] == "repo_audit_import"
+        assert proposal["payload"]["repository_full_name"] == "qtwin-io/base-collector"
+        assert proposal["evidence_refs"][0]["source"] == "external_repo_audit_import"
+        assert "token=[redacted]" in proposal["title"]
+        assert "password=[redacted]" in proposal["description"]
+        assert "placeholder" not in proposal["title"]
+        assert "placeholder" not in proposal["description"]
+        assert {
+            failure["detail"] for failure in payload["failures"]
+        } == {
+            "repository_full_name must be in owner/repo format",
+            "repo-audit import finding requires evidence_refs",
+        }
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_repo_audit_import_requires_member_role(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        viewer_email = await _add_workspace_user(
+            created["workspace"]["id"],
+            marker,
+            role=MEMBERSHIP_ROLE_VIEWER,
+            suffix="viewer",
+        )
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/import-repo-audit",
+                headers=_headers(),
+                params={"owner_email": viewer_email},
+                json={
+                    "findings": [
+                        {
+                            "repository_full_name": "qtwin-io/base-collector",
+                            "summary": "CI не найден",
+                            "evidence_refs": ["external-audit:base-collector:ci"],
+                        }
+                    ]
+                },
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "insufficient workspace role"}
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
 @pytest.mark.parametrize(
     ("payload", "expected_status", "expected_detail"),
     [

@@ -258,6 +258,38 @@ export type ActionProposalBulkResponse = {
   warnings: string[];
 };
 
+export type RepoAuditImportFindingRequest = {
+  repository_full_name: string;
+  title?: string | null;
+  summary?: string;
+  severity?: string | null;
+  risks?: string[];
+  evidence_refs?: string[];
+  recommended_next_step?: string | null;
+  area_candidate?: string | null;
+};
+
+export type RepoAuditImportRequest = {
+  findings: RepoAuditImportFindingRequest[];
+};
+
+export type RepoAuditImportFailure = {
+  index: number;
+  repository_full_name: string | null;
+  status_code: number;
+  detail: string;
+};
+
+export type RepoAuditImportResponse = {
+  proposals: ActionProposal[];
+  failures: RepoAuditImportFailure[];
+  succeeded_count: number;
+  failed_count: number;
+  is_live: boolean;
+  execution_started: boolean;
+  warnings: string[];
+};
+
 export type ActionProposalRejectRequest = {
   reason?: string | null;
 };

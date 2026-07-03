@@ -95,11 +95,13 @@
   or LLM.
 - Added a structured external repo-audit import path on `/audit`. Users can
   paste JSON findings from another/full audit result (array or
-  `{ findings: [...] }`), and valid entries with `repository_full_name` plus
-  `evidence_refs` become local `internal_todo` ActionProposals marked
-  `source=repo_audit_import`. The parser ignores invalid entries, redacts
-  known secret-like fragments in imported text fields, writes only local
-  proposals, and starts no provider calls, external writes, or LLM.
+  `{ findings: [...] }`), and the backend endpoint
+  `POST .../actions/proposals/import-repo-audit` turns valid entries with
+  `repository_full_name` plus `evidence_refs` into local `internal_todo`
+  ActionProposals marked `source=repo_audit_import` with per-finding partial
+  failures. The import path redacts known secret-like fragments in imported
+  text fields, writes only local proposals, and starts no provider calls,
+  external writes, or LLM.
 
 ## 2026-07-01
 
