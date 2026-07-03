@@ -124,6 +124,12 @@ Implemented foundations:
   partial import, including subset-selection index remapping (only failed rows
   stay selected for retry, pasted text is preserved). Preview and selection are
   client-side only: no provider calls, external writes, or LLM.
+- `/actions` now separates audit-origin proposals by audit source: deterministic
+  local repo audit vs imported external audit. The audit origin filter has a
+  local audit-source subfilter, source-specific badges, richer payload metadata,
+  and query support (`audit_source=deterministic|imported`) while bulk selection
+  and the evidence drawer follow the final visible subset. No provider calls,
+  external writes, or LLM are started.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -177,10 +183,11 @@ Done when:
    guarded for open actions, and `/actions` can open with briefing/proposed
    focus. The `/audit` external-import UX is now hardened with a pre-import
    preview, per-finding validity, select-all-valid/clear controls, and inline
-   per-finding backend failures. Next: consider deployment readiness, richer
-   audit-origin action rendering (deterministic vs imported), or a dashboard
-   card linking to `/audit`, while keeping provider writes and AI generation
-   disabled.
+   per-finding backend failures. `/actions` also now distinguishes
+   deterministic vs imported audit-origin proposals with a local subfilter,
+   badges, query focus, and richer payload metadata. Next: consider deployment
+   readiness or a dashboard card linking to `/audit`, while keeping provider
+   writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist, but actual

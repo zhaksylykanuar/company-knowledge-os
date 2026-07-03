@@ -142,19 +142,45 @@ const auditProposal: ActionProposal = {
   id: "proposal-6",
   target_provider: "internal",
   action_type: "internal_todo",
-  title: "Repo audit follow-up: qtwin-io/base-collector",
+  title: "Imported repo audit follow-up: qtwin-io/base-collector",
   description: "Repository: qtwin-io/base-collector",
   payload: {
     source: "repo_audit_import",
     repository_full_name: "qtwin-io/base-collector",
     area_candidate: "OPS",
-    activity_bucket: "stale"
+    recommended_next_step: "Add CI before private beta.",
+    related_entities: ["ci_not_detected", "tests_not_detected"],
+    severity: "high"
+  },
+  evidence_refs: [
+    {
+      kind: "repo_audit_external",
+      source: "external_repo_audit_import",
+      ref: "external-audit:base-collector:ci",
+      url: null
+    }
+  ]
+};
+
+const deterministicAuditProposal: ActionProposal = {
+  ...proposedProposal,
+  id: "proposal-7",
+  target_provider: "internal",
+  action_type: "internal_todo",
+  title: "Repo audit follow-up: qtwin-io/local-service",
+  description: "Repository: qtwin-io/local-service",
+  payload: {
+    source: "repo_audit",
+    repository_full_name: "qtwin-io/local-service",
+    activity_bucket: "stale",
+    area_candidate: "CORE",
+    related_entities: ["readme_missing"]
   },
   evidence_refs: [
     {
       kind: "repo_audit_fact",
       source: "repo_audit",
-      ref: "github_discovery_snapshot:repos.json:base-collector:metadata",
+      ref: "github_discovery_snapshot:repos.json:local-service:metadata",
       url: null
     }
   ]
@@ -217,9 +243,11 @@ function renderPanel(
       onClearSelectedProposals={props.onClearSelectedProposals}
       onSelectEvidence={props.onSelectEvidence}
       onSelectVisibleProposed={props.onSelectVisibleProposed}
+      onAuditSourceFilterChange={props.onAuditSourceFilterChange}
       onStatusFilterChange={props.onStatusFilterChange}
       onToggleProposalSelection={props.onToggleProposalSelection}
       pendingMutation={props.pendingMutation ?? null}
+      auditSourceFilter={props.auditSourceFilter ?? "all"}
       originFilter={props.originFilter ?? "all"}
       selectedProposalIds={props.selectedProposalIds ?? []}
       selectedEvidence={props.selectedEvidence ?? null}
@@ -590,19 +618,64 @@ test("filters loaded proposals by local origin on top of status", () => {
 test("groups and badges repo-audit-derived proposals under the audit origin", () => {
   const auditList: ActionProposalListResponse = {
     ...sampleList,
-    proposals: [auditProposal],
-    count: 1
+    proposals: [deterministicAuditProposal, auditProposal],
+    count: 2
   };
   const auditHtml = renderPanel({
     data: auditList,
     originFilter: "audit",
     statusFilter: "proposed"
   });
-  assert.ok(auditHtml.includes(`${M.actionsPanel.originFilterAudit} · 1`));
-  assert.ok(auditHtml.includes(`${M.actionsPanel.groupAuditTitle} · 1`));
+  assert.ok(auditHtml.includes(`${M.actionsPanel.originFilterAudit} · 2`));
+  assert.ok(auditHtml.includes(`${M.actionsPanel.groupAuditTitle} · 2`));
   assert.ok(auditHtml.includes(M.actionsPanel.originAuditBadge));
+  assert.ok(auditHtml.includes(M.actionsPanel.originAuditDeterministicBadge));
+  assert.ok(auditHtml.includes(M.actionsPanel.originAuditImportedBadge));
+  assert.ok(auditHtml.includes(M.actionsPanel.auditSourceFilterTitle));
+  assert.ok(auditHtml.includes(`${M.actionsPanel.auditSourceFilterAll} · 2`));
+  assert.ok(
+    auditHtml.includes(`${M.actionsPanel.auditSourceFilterDeterministic} · 1`)
+  );
+  assert.ok(auditHtml.includes(`${M.actionsPanel.auditSourceFilterImported} · 1`));
+  assert.ok(auditHtml.includes("qtwin-io/local-service"));
   assert.ok(auditHtml.includes("qtwin-io/base-collector"));
+  assert.ok(auditHtml.includes(M.actionsPanel.payloadAuditSource));
+  assert.ok(auditHtml.includes(M.actionsPanel.auditSourceImported));
+  assert.ok(auditHtml.includes("Add CI before private beta."));
+  assert.ok(auditHtml.includes("ci_not_detected, tests_not_detected"));
   assert.doesNotMatch(auditHtml, /provider call started/i);
+});
+
+test("filters audit-origin proposals by deterministic or imported source locally", () => {
+  const auditList: ActionProposalListResponse = {
+    ...sampleList,
+    proposals: [deterministicAuditProposal, auditProposal, briefingProposal],
+    count: 3
+  };
+  const importedHtml = renderPanel({
+    auditSourceFilter: "imported",
+    data: auditList,
+    onAuditSourceFilterChange: () => undefined,
+    originFilter: "audit",
+    statusFilter: "proposed"
+  });
+
+  assert.ok(importedHtml.includes(`${M.actionsPanel.groupAuditTitle} · 1`));
+  assert.ok(importedHtml.includes("qtwin-io/base-collector"));
+  assert.doesNotMatch(importedHtml, /qtwin-io\/local-service/);
+  assert.doesNotMatch(importedHtml, /Review synced GitHub work/);
+  assert.ok(importedHtml.includes(M.actionsPanel.auditSourceImported));
+
+  const deterministicHtml = renderPanel({
+    auditSourceFilter: "deterministic",
+    data: auditList,
+    originFilter: "audit",
+    statusFilter: "proposed"
+  });
+  assert.ok(deterministicHtml.includes("qtwin-io/local-service"));
+  assert.doesNotMatch(deterministicHtml, /qtwin-io\/base-collector/);
+  assert.ok(deterministicHtml.includes(M.actionsPanel.auditSourceDeterministic));
+  assert.doesNotMatch(deterministicHtml, /provider call started/i);
 });
 
 test("shows empty state for origin and status intersections with no local proposals", () => {

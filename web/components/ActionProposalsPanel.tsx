@@ -32,6 +32,8 @@ type ProposalKind = "github_issue" | "internal_todo";
 type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
 type ProposalOrigin = "audit" | "briefing" | "github" | "internal";
 type ProposalOriginFilter = "all" | ProposalOrigin;
+type ProposalAuditSource = "deterministic" | "imported";
+type ProposalAuditSourceFilter = "all" | ProposalAuditSource;
 type BulkMutation = "bulk-approve" | "bulk-reject";
 type PendingMutation =
   | "create"
@@ -61,6 +63,7 @@ type ActionProposalCreateFormState = {
 };
 
 type ActionProposalsPanelProps = {
+  initialAuditSourceFilter?: string | null;
   initialOriginFilter?: string | null;
   initialStatusFilter?: string | null;
 };
@@ -92,6 +95,8 @@ type ActionProposalsPanelViewProps = {
   onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
   onToggleProposalSelection?: (proposalId: string) => void;
   pendingMutation: PendingMutation;
+  auditSourceFilter?: ProposalAuditSourceFilter;
+  onAuditSourceFilterChange?: (filter: ProposalAuditSourceFilter) => void;
   originFilter?: ProposalOriginFilter;
   selectedProposalIds?: string[];
   selectedEvidence: ActionProposalEvidenceRef | null;
@@ -111,6 +116,7 @@ const DEFAULT_CREATE_FORM: ActionProposalCreateFormState = {
 };
 
 export function ActionProposalsPanel({
+  initialAuditSourceFilter = null,
   initialOriginFilter = null,
   initialStatusFilter = null
 }: ActionProposalsPanelProps = {}) {
@@ -128,6 +134,10 @@ export function ActionProposalsPanel({
   const [selectedEvidenceCount, setSelectedEvidenceCount] = useState<number | null>(null);
   const [selectedProposalIds, setSelectedProposalIds] = useState<string[]>([]);
   const [status, setStatus] = useState<PanelStatus>("loading");
+  const [auditSourceFilter, setAuditSourceFilter] =
+    useState<ProposalAuditSourceFilter>(
+      normalizeAuditSourceFilter(initialAuditSourceFilter)
+    );
   const [originFilter, setOriginFilter] = useState<ProposalOriginFilter>(
     normalizeOriginFilter(initialOriginFilter)
   );
@@ -137,9 +147,10 @@ export function ActionProposalsPanel({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    setAuditSourceFilter(normalizeAuditSourceFilter(initialAuditSourceFilter));
     setOriginFilter(normalizeOriginFilter(initialOriginFilter));
     setStatusFilter(normalizeStatusFilter(initialStatusFilter));
-  }, [initialOriginFilter, initialStatusFilter]);
+  }, [initialAuditSourceFilter, initialOriginFilter, initialStatusFilter]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -178,12 +189,13 @@ export function ActionProposalsPanel({
     const visibleProposedIds = visibleProposedProposalIds(
       data?.proposals ?? [],
       statusFilter,
-      originFilter
+      originFilter,
+      auditSourceFilter
     );
     setSelectedProposalIds((current) =>
       pruneProposalSelection(current, visibleProposedIds)
     );
-  }, [data, originFilter, statusFilter]);
+  }, [auditSourceFilter, data, originFilter, statusFilter]);
 
   function updateCreateForm(
     field: keyof ActionProposalCreateFormState,
@@ -278,7 +290,12 @@ export function ActionProposalsPanel({
 
   function selectVisibleProposed() {
     setSelectedProposalIds(
-      visibleProposedProposalIds(data?.proposals ?? [], statusFilter, originFilter)
+      visibleProposedProposalIds(
+        data?.proposals ?? [],
+        statusFilter,
+        originFilter,
+        auditSourceFilter
+      )
     );
   }
 
@@ -389,9 +406,11 @@ export function ActionProposalsPanel({
         setSelectedEvidenceCount(typeof count === "number" ? count : null);
       }}
       onSelectVisibleProposed={selectVisibleProposed}
+      onAuditSourceFilterChange={setAuditSourceFilter}
       onStatusFilterChange={setStatusFilter}
       onToggleProposalSelection={toggleProposalSelection}
       pendingMutation={pendingMutation}
+      auditSourceFilter={auditSourceFilter}
       originFilter={originFilter}
       selectedProposalIds={selectedProposalIds}
       selectedEvidence={selectedEvidence}
@@ -421,9 +440,11 @@ export function ActionProposalsPanelView({
   onClearSelectedProposals,
   onSelectEvidence,
   onSelectVisibleProposed,
+  onAuditSourceFilterChange,
   onStatusFilterChange,
   onToggleProposalSelection,
   pendingMutation,
+  auditSourceFilter = "all",
   originFilter = "all",
   selectedProposalIds = [],
   selectedEvidence,
@@ -435,10 +456,14 @@ export function ActionProposalsPanelView({
 }: ActionProposalsPanelViewProps) {
   const proposals = data?.proposals ?? [];
   const statusFilteredProposals = filterProposalsByStatus(proposals, statusFilter);
-  const filteredProposals = filterProposalsByOrigin(
+  const originFilteredProposals = filterProposalsByOrigin(
     statusFilteredProposals,
     originFilter
   );
+  const filteredProposals =
+    originFilter === "audit"
+      ? filterProposalsByAuditSource(originFilteredProposals, auditSourceFilter)
+      : originFilteredProposals;
   const visibleProposedIds = proposedProposalIds(filteredProposals);
   const visibleProposedCount = visibleProposedIds.length;
   const selectedProposedCount = selectedProposalIds.filter((proposalId) =>
@@ -565,6 +590,14 @@ export function ActionProposalsPanelView({
             onChange={onOriginFilterChange}
             proposals={statusFilteredProposals}
           />
+
+          {originFilter === "audit" ? (
+            <ActionAuditSourceFilter
+              activeFilter={auditSourceFilter}
+              onChange={onAuditSourceFilterChange}
+              proposals={statusFilteredProposals}
+            />
+          ) : null}
 
           <BulkReviewControls
             onApproveSelected={onBulkApprove}
@@ -748,6 +781,15 @@ function normalizeOriginFilter(value: string | null | undefined): ProposalOrigin
   return "all";
 }
 
+function normalizeAuditSourceFilter(
+  value: string | null | undefined
+): ProposalAuditSourceFilter {
+  if (value === "deterministic" || value === "imported" || value === "all") {
+    return value;
+  }
+  return "all";
+}
+
 function ActionOriginFilter({
   activeFilter,
   onChange,
@@ -779,6 +821,42 @@ function ActionOriginFilter({
             type="button"
           >
             {originFilterLabel(filter)} · {originFilterCount(proposals, filter)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ActionAuditSourceFilter({
+  activeFilter,
+  onChange,
+  proposals
+}: {
+  activeFilter: ProposalAuditSourceFilter;
+  onChange?: (filter: ProposalAuditSourceFilter) => void;
+  proposals: ActionProposal[];
+}) {
+  const filters: ProposalAuditSourceFilter[] = ["all", "deterministic", "imported"];
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.auditSourceFilterLabel}>
+      <h3>{M.actionsPanel.auditSourceFilterTitle}</h3>
+      <p className="muted">{M.actionsPanel.auditSourceFilterDescription}</p>
+      <div
+        className="segmented"
+        role="tablist"
+        aria-label={M.actionsPanel.auditSourceFilterLabel}
+      >
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {auditSourceFilterLabel(filter)} · {auditSourceFilterCount(proposals, filter)}
           </button>
         ))}
       </div>
@@ -916,9 +994,14 @@ function ProposalList({
                     />
                     <span className="badge">{proposal.status}</span>
                     {group.origin === "audit" ? (
-                      <span className="badge badge-origin">
-                        {M.actionsPanel.originAuditBadge}
-                      </span>
+                      <>
+                        <span className="badge badge-origin">
+                          {M.actionsPanel.originAuditBadge}
+                        </span>
+                        <span className="badge badge-origin">
+                          {auditSourceBadge(proposal)}
+                        </span>
+                      </>
                     ) : null}
                     {group.origin === "briefing" ? (
                       <span className="badge badge-origin">
@@ -1014,6 +1097,7 @@ function ProposalSelectionControl({
 }
 
 function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
+  const auditSource = proposalAuditSource(proposal);
   const repository = payloadString(proposal.payload, "repository_full_name");
   const issueTitle = payloadString(proposal.payload, "title");
   const note = payloadString(proposal.payload, "note");
@@ -1026,6 +1110,7 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
   const auditActivity = payloadString(proposal.payload, "activity_bucket");
 
   const hasDetails =
+    auditSource !== null ||
     repository ||
     issueTitle ||
     note ||
@@ -1043,6 +1128,12 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
 
   return (
     <dl className="work-meta">
+      {auditSource ? (
+        <div>
+          <dt>{M.actionsPanel.payloadAuditSource}</dt>
+          <dd>{auditSourceLabel(auditSource)}</dd>
+        </div>
+      ) : null}
       {repository ? (
         <div>
           <dt>{M.actionsPanel.payloadRepository}</dt>
@@ -1338,14 +1429,18 @@ function proposedProposalIds(proposals: ActionProposal[]): string[] {
 function visibleProposedProposalIds(
   proposals: ActionProposal[],
   statusFilter: ProposalStatusFilter,
-  originFilter: ProposalOriginFilter
+  originFilter: ProposalOriginFilter,
+  auditSourceFilter: ProposalAuditSourceFilter
 ): string[] {
-  return proposedProposalIds(
-    filterProposalsByOrigin(
-      filterProposalsByStatus(proposals, statusFilter),
-      originFilter
-    )
+  const originFilteredProposals = filterProposalsByOrigin(
+    filterProposalsByStatus(proposals, statusFilter),
+    originFilter
   );
+  const filteredProposals =
+    originFilter === "audit"
+      ? filterProposalsByAuditSource(originFilteredProposals, auditSourceFilter)
+      : originFilteredProposals;
+  return proposedProposalIds(filteredProposals);
 }
 
 function pruneProposalSelection(
@@ -1417,6 +1512,16 @@ function filterProposalsByOrigin(
   return proposals.filter((proposal) => proposalOrigin(proposal) === filter);
 }
 
+function filterProposalsByAuditSource(
+  proposals: ActionProposal[],
+  filter: ProposalAuditSourceFilter
+): ActionProposal[] {
+  if (filter === "all") {
+    return proposals.filter((proposal) => proposalOrigin(proposal) === "audit");
+  }
+  return proposals.filter((proposal) => proposalAuditSource(proposal) === filter);
+}
+
 function filterCount(
   proposals: ActionProposal[],
   filter: ProposalStatusFilter
@@ -1463,6 +1568,40 @@ function originFilterLabel(filter: ProposalOriginFilter): string {
   return M.actionsPanel.originFilterAll;
 }
 
+function auditSourceFilterCount(
+  proposals: ActionProposal[],
+  filter: ProposalAuditSourceFilter
+): number {
+  if (filter === "all") {
+    return proposals.filter((proposal) => proposalOrigin(proposal) === "audit").length;
+  }
+  return proposals.filter((proposal) => proposalAuditSource(proposal) === filter).length;
+}
+
+function auditSourceFilterLabel(filter: ProposalAuditSourceFilter): string {
+  if (filter === "deterministic") {
+    return M.actionsPanel.auditSourceFilterDeterministic;
+  }
+  if (filter === "imported") {
+    return M.actionsPanel.auditSourceFilterImported;
+  }
+  return M.actionsPanel.auditSourceFilterAll;
+}
+
+function auditSourceLabel(source: ProposalAuditSource): string {
+  return source === "imported"
+    ? M.actionsPanel.auditSourceImported
+    : M.actionsPanel.auditSourceDeterministic;
+}
+
+function auditSourceBadge(proposal: ActionProposal): string {
+  const source = proposalAuditSource(proposal);
+  if (source === "imported") {
+    return M.actionsPanel.originAuditImportedBadge;
+  }
+  return M.actionsPanel.originAuditDeterministicBadge;
+}
+
 function firstEvidenceSelection(
   proposals: ActionProposal[]
 ): EvidenceSelection | null {
@@ -1480,10 +1619,10 @@ function firstEvidenceSelection(
 }
 
 function proposalOrigin(proposal: ActionProposal): ProposalOrigin {
-  const source = payloadString(proposal.payload, "source");
-  if (source === "repo_audit" || source === "repo_audit_import") {
+  if (proposalAuditSource(proposal) !== null) {
     return "audit";
   }
+  const source = payloadString(proposal.payload, "source");
   if (
     proposal.briefing_item_id !== null ||
     source === "briefing_item"
@@ -1494,6 +1633,17 @@ function proposalOrigin(proposal: ActionProposal): ProposalOrigin {
     return "github";
   }
   return "internal";
+}
+
+function proposalAuditSource(proposal: ActionProposal): ProposalAuditSource | null {
+  const source = payloadString(proposal.payload, "source");
+  if (source === "repo_audit") {
+    return "deterministic";
+  }
+  if (source === "repo_audit_import") {
+    return "imported";
+  }
+  return null;
 }
 
 function groupProposalsByOrigin(proposals: ActionProposal[]): ProposalGroup[] {

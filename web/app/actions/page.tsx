@@ -8,6 +8,7 @@ type ActionsPageProps = {
 
 export default async function ActionsPage({ searchParams }: ActionsPageProps) {
   const params = searchParams ? await searchParams : {};
+  const auditSource = firstSearchParam(params.audit_source);
   const origin = firstSearchParam(params.origin);
   const status = firstSearchParam(params.status);
 
@@ -19,6 +20,7 @@ export default async function ActionsPage({ searchParams }: ActionsPageProps) {
         description={M.actionsPage.description}
       />
       <ActionProposalsPanel
+        initialAuditSourceFilter={auditSource}
         initialOriginFilter={origin}
         initialStatusFilter={status}
       />

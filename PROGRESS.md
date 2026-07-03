@@ -76,6 +76,17 @@
   findings (для повторной попытки), а вставленный JSON сохраняется. Предпросмотр
   редактирует secret-like fragments и не делает provider calls, external writes
   или LLM; импорт по-прежнему пишет только локальные `internal_todo` proposals.
+- **Audit-origin action review polish (НОВОЕ):** `/actions` теперь различает
+  локальные предложения из детерминированного repo audit (`source=repo_audit`) и
+  импортированного внешнего аудита (`source=repo_audit_import`). Внутри origin
+  filter «Из аудита репо» появился client-side подфильтр «Тип аудита»:
+  все audit findings / детерминированный аудит / импортированный аудит. Карточки
+  audit proposals получили отдельные badges для local deterministic vs external
+  import, а payload details теперь показывают тип аудита вместе с repository,
+  severity, area, recommended next step и risk/related entities без raw payload
+  dump. `audit_source` query param поддержан на `/actions`, bulk selection and
+  default evidence drawer follow the final visible subset. Всё local-only:
+  backend/provider calls, external writes и LLM не добавлены.
 - **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
   теперь добавляет `signals.coverage` и item `source-coverage` из локального
   Company Brain state: canonical repositories, open issues/PRs, evidence refs,

@@ -16,6 +16,16 @@
   while the pasted text is preserved. Secret-like fragments are still redacted in
   the preview, and the import continues to write only local `internal_todo`
   ActionProposals with no provider calls, external writes, or LLM.
+- Polished audit-origin action review on `/actions`. Audit-derived local
+  proposals now distinguish deterministic repository-audit findings
+  (`source=repo_audit`) from imported external-audit findings
+  (`source=repo_audit_import`) with a local "audit source" subfilter,
+  source-specific badges, and richer payload metadata (audit type, repository,
+  severity, area, recommended next step, and risk/related entities) without raw
+  payload dumps. The new `/actions?origin=audit&audit_source=...` query focus,
+  bulk selection, and default evidence drawer all follow the final visible
+  subset and remain client-side/local only: no provider calls, external writes,
+  or LLM.
 
 ## 2026-07-02
 
