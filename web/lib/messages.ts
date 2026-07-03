@@ -681,7 +681,33 @@ export const M = {
     evidenceKindsDescription:
       "Локальная разбивка уже полученных source refs по типу (kind). Без provider calls и без LLM.",
     evidenceKindsEmpty:
-      "Типы evidence пока недоступны: отдельные source refs не вернулись."
+      "Типы evidence пока недоступны: отдельные source refs не вернулись.",
+    nextStepsLabel: "Следующие шаги покрытия источников",
+    nextStepsTitle: "Что проверить дальше",
+    nextStepDataLabel: "Каноническая поверхность",
+    nextStepDataMissingDescription:
+      "Сначала нужен хотя бы один canonical repo row. Подготовьте локальную поверхность источников или запустите отдельно подтверждённый scoped read-only sync.",
+    nextStepEvidenceLabel: "Evidence gaps",
+    nextStepEvidenceReadyDescription:
+      "Evidence refs есть у текущей выборки; unsupported claims не добавляются.",
+    nextStepEvidenceMissingDescription:
+      "Company Brain вернул данные без source refs. Следующий шаг — восстановить evidence перед любыми выводами или действиями.",
+    nextStepWorkLabel: "Открытая работа",
+    nextStepNoOpenWorkDescription:
+      "Открытой работы в текущей canonical выборке нет; можно перейти к readiness/deploy checklist.",
+    nextStepProviderLabel: "Live provider read",
+    nextStepProviderEnabledDescription:
+      "Capability доступен, но запуск остаётся отдельным подтверждённым scoped действием, а не автоматикой dashboard.",
+    nextStepProviderDeferredDescription:
+      "Real GitHub provider read отложен; dashboard только показывает локальную картину и не запускает sync.",
+    nextStepAiLabel: "AI boundary",
+    nextStepAiEnabledDescription:
+      "Capability включён, но coverage next steps остаются deterministic и не генерируют новые claims.",
+    nextStepAiOffDescription:
+      "LLM выключен; любые будущие AI outputs должны быть strict JSON, validated and evidence-backed.",
+    statusNeedsData: "Нужны данные",
+    statusReview: "К разбору",
+    statusBoundary: "Boundary"
   },
 
   privateBetaReadiness: {
@@ -1062,6 +1088,12 @@ export const T = {
     `Repo с source refs: ${withRefs} из ${total}.`,
   sourceCoverageReposWithoutEvidence: (withoutRefs: number) =>
     `Repo без source refs: ${withoutRefs} — для них нужно ещё evidence.`,
+  sourceCoverageNextStepDataReady: (repositories: number) =>
+    `Canonical repo rows уже есть: ${repositories}. Следующий шаг — смотреть gaps и открытые work items.`,
+  sourceCoverageNextStepEvidenceGaps: (withoutRefs: number) =>
+    `Repo без source refs: ${withoutRefs}. Следующий шаг — восстановить/подтвердить evidence перед claims.`,
+  sourceCoverageNextStepOpenWork: (openItems: number) =>
+    `Открытых задач/PR: ${openItems}. Следующий шаг — разбирать их через локальные actions/review без provider writes.`,
   repoAuditSnapshot: (repoCount: number, status: string) =>
     `Снимок: репозиториев ${repoCount} · статус ${status}.`,
   repoAuditActivity: (bucket: string, daysSincePush: number | null) =>

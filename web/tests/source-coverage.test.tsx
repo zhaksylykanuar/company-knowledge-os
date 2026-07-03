@@ -233,3 +233,47 @@ test("breakdown stays safe with no repositories or evidence and makes no live/AI
   assert.doesNotMatch(html, /provider read запущен/i);
   assert.doesNotMatch(html, /ИИ сгенерировал/i);
 });
+
+test("renders deterministic source coverage next steps from local payload", () => {
+  const html = renderPanel({ data: breakdownCoverage });
+
+  assert.ok(html.includes(M.sourceCoverage.nextStepsTitle));
+  assert.ok(html.includes(M.sourceCoverage.nextStepDataLabel));
+  assert.ok(html.includes(T.sourceCoverageNextStepDataReady(2)));
+  assert.ok(html.includes(M.sourceCoverage.nextStepEvidenceLabel));
+  assert.ok(html.includes(T.sourceCoverageNextStepEvidenceGaps(1)));
+  assert.ok(html.includes(M.sourceCoverage.nextStepWorkLabel));
+  assert.ok(html.includes(T.sourceCoverageNextStepOpenWork(5)));
+  assert.ok(html.includes(M.sourceCoverage.nextStepProviderDeferredDescription));
+  assert.ok(html.includes(M.sourceCoverage.nextStepAiOffDescription));
+});
+
+test("next steps call out missing evidence and no-open-work without starting providers or AI", () => {
+  const html = renderPanel({
+    data: {
+      ...breakdownCoverage,
+      summary: {
+        ...breakdownCoverage.summary,
+        open_issues: 0,
+        open_pull_requests: 0
+      },
+      evidence: [],
+      repositories: breakdownCoverage.repositories.map((repository) => ({
+        ...repository,
+        source_refs: []
+      })),
+      capabilities: {
+        ...breakdownCoverage.capabilities,
+        live_provider_sync: true,
+        llm_briefing: true
+      }
+    }
+  });
+
+  assert.ok(html.includes(M.sourceCoverage.nextStepEvidenceMissingDescription));
+  assert.ok(html.includes(M.sourceCoverage.nextStepNoOpenWorkDescription));
+  assert.ok(html.includes(M.sourceCoverage.nextStepProviderEnabledDescription));
+  assert.ok(html.includes(M.sourceCoverage.nextStepAiEnabledDescription));
+  assert.doesNotMatch(html, /provider read запущен/i);
+  assert.doesNotMatch(html, /ИИ сгенерировал/i);
+});

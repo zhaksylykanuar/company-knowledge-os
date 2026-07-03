@@ -2,8 +2,8 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая ветка `main`. Локальные коммиты не пушить без явного запроса
-> человека.
+> Текущая фактическая ветка `feat/github-app-connect-foundation` (локально ahead
+> origin). Локальные коммиты не пушить без явного запроса человека.
 
 ---
 
@@ -33,7 +33,10 @@
   локальную разбивку по уже загруженному Company Brain payload: закрытая работа
   (closed issues / merged PRs), счётчик недавней активности, repo с source refs
   vs без них и evidence-разбивку по типу (kind). Разбивка не добавляет новых
-  endpoints/provider calls/LLM и остаётся детерминированной read-only.
+  endpoints/provider calls/LLM и остаётся детерминированной read-only. Теперь
+  там же есть блок deterministic next steps: canonical data readiness, evidence
+  gaps, open-work review, live-provider boundary и AI boundary — всё вычисляется
+  из уже загруженного payload и ничего не запускает.
 - **Private-beta readiness dashboard (НОВОЕ):** на `/dashboard` добавлен
   `PrivateBetaReadinessPanel`, который читает только существующий Company Brain
   endpoint и показывает ручной readiness-чеклист перед private-beta запуском:

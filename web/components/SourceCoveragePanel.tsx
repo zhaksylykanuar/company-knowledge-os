@@ -160,6 +160,7 @@ export function SourceCoveragePanelView({
           </section>
           <CoverageList items={coverageItems(data)} />
           <CoverageBreakdown data={data} />
+          <CoverageNextSteps items={coverageNextSteps(data)} />
           {data.warnings.length > 0 ? (
             <ul className="meta-list" aria-label={M.common.warnings}>
               {data.warnings.map((warning) => (
@@ -193,9 +194,7 @@ function CoverageList({ items }: { items: CoverageItem[] }) {
 }
 
 function CoverageBreakdown({ data }: { data: CompanyBrainResponse }) {
-  const reposWithRefs = data.repositories.filter(
-    (repository) => repository.source_refs.length > 0
-  ).length;
+  const reposWithRefs = repositoriesWithSourceRefs(data);
   const reposWithoutRefs = data.repositories.length - reposWithRefs;
   const evidenceKinds = evidenceKindCounts(data.evidence);
 
@@ -240,6 +239,93 @@ function CoverageBreakdown({ data }: { data: CompanyBrainResponse }) {
       )}
     </section>
   );
+}
+
+function CoverageNextSteps({ items }: { items: CoverageItem[] }) {
+  return (
+    <section className="work-section" aria-label={M.sourceCoverage.nextStepsLabel}>
+      <h3>{M.sourceCoverage.nextStepsTitle}</h3>
+      <div className="work-list">
+        {items.map((item) => (
+          <article className="work-item" key={item.id}>
+            <div className="work-item-main">
+              <span className="badge">{item.status}</span>
+              <h4>{item.label}</h4>
+            </div>
+            <p className="muted">{item.description}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function coverageNextSteps(data: CompanyBrainResponse): CoverageItem[] {
+  const reposWithRefs = repositoriesWithSourceRefs(data);
+  const reposWithoutRefs = data.repositories.length - reposWithRefs;
+  const openWork = data.summary.open_issues + data.summary.open_pull_requests;
+
+  return [
+    {
+      description:
+        data.summary.repositories > 0
+          ? T.sourceCoverageNextStepDataReady(data.summary.repositories)
+          : M.sourceCoverage.nextStepDataMissingDescription,
+      id: "next-data",
+      label: M.sourceCoverage.nextStepDataLabel,
+      status:
+        data.summary.repositories > 0
+          ? M.sourceCoverage.statusReady
+          : M.sourceCoverage.statusNeedsData
+    },
+    {
+      description:
+        data.evidence.length === 0
+          ? M.sourceCoverage.nextStepEvidenceMissingDescription
+          : reposWithoutRefs > 0
+            ? T.sourceCoverageNextStepEvidenceGaps(reposWithoutRefs)
+            : M.sourceCoverage.nextStepEvidenceReadyDescription,
+      id: "next-evidence",
+      label: M.sourceCoverage.nextStepEvidenceLabel,
+      status:
+        data.evidence.length > 0 && reposWithoutRefs === 0
+          ? M.sourceCoverage.statusReady
+          : M.sourceCoverage.statusNeedsEvidence
+    },
+    {
+      description:
+        openWork > 0
+          ? T.sourceCoverageNextStepOpenWork(openWork)
+          : M.sourceCoverage.nextStepNoOpenWorkDescription,
+      id: "next-work",
+      label: M.sourceCoverage.nextStepWorkLabel,
+      status: openWork > 0 ? M.sourceCoverage.statusReview : M.sourceCoverage.statusReady
+    },
+    {
+      description: data.capabilities.live_provider_sync
+        ? M.sourceCoverage.nextStepProviderEnabledDescription
+        : M.sourceCoverage.nextStepProviderDeferredDescription,
+      id: "next-provider",
+      label: M.sourceCoverage.nextStepProviderLabel,
+      status: data.capabilities.live_provider_sync
+        ? M.sourceCoverage.statusBoundary
+        : M.sourceCoverage.statusDeferred
+    },
+    {
+      description: data.capabilities.llm_briefing
+        ? M.sourceCoverage.nextStepAiEnabledDescription
+        : M.sourceCoverage.nextStepAiOffDescription,
+      id: "next-ai",
+      label: M.sourceCoverage.nextStepAiLabel,
+      status: data.capabilities.llm_briefing
+        ? M.sourceCoverage.statusBoundary
+        : M.sourceCoverage.statusOff
+    }
+  ];
+}
+
+function repositoriesWithSourceRefs(data: CompanyBrainResponse): number {
+  return data.repositories.filter((repository) => repository.source_refs.length > 0).length;
 }
 
 function evidenceKindCounts(

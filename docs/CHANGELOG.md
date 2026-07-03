@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Added deterministic "what to check next" guidance to the `/dashboard`
+  source-coverage panel. The panel now derives local next steps from the already
+  loaded Company Brain payload for canonical data readiness, evidence gaps,
+  open-work review, live-provider boundaries, and AI boundaries. This remains
+  read-only dashboard copy: no new endpoint, provider call, external write,
+  deploy, or LLM is started.
 - Enriched the `/dashboard` source-coverage panel with a local breakdown built
   only from the already-loaded Company Brain payload: closed issues / merged PRs,
   recent activity count, repositories with vs. without source refs, and an

@@ -147,6 +147,11 @@ Implemented foundations:
   PRs), recent-activity count, repositories with vs. without source refs, and
   evidence counts by kind. No new endpoints, provider calls, external writes, or
   LLM are added.
+- The same source-coverage panel now derives deterministic "what to check next"
+  guidance from the already-loaded Company Brain payload: canonical data
+  readiness, evidence gaps, open-work review, live-provider boundary, and AI
+  boundary. It is display-only and starts no sync, provider call, external write,
+  deploy, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -207,9 +212,11 @@ Done when:
    actions focus. The private-beta readiness panel now also displays the manual
    deploy/smoke runbook phases without executing them. The `/dashboard` source-
    coverage panel now also has a local breakdown (closed work, recent activity,
-   repos with/without source refs, evidence-by-kind). Next: consider further
-   founder-facing coverage/next-step polish or teammate provisioning after
-   deploy stability, while keeping provider writes and AI generation disabled.
+   repos with/without source refs, evidence-by-kind) plus deterministic next-step
+   guidance for data/evidence/open-work/provider/AI boundaries. Next: consider
+   further founder-facing coverage polish, teammate provisioning after deploy
+   stability, or the first explicitly approved scoped provider read while keeping
+   provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual
