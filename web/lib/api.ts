@@ -164,7 +164,8 @@ export async function provisionWorkspaceMember(
         email: request.email,
         name: request.name || null,
         role: request.role,
-        initial_password: request.initialPassword ? request.initialPassword : null
+        initial_password: request.initialPassword ? request.initialPassword : null,
+        create_setup_link: request.createSetupLink ?? false
       }),
       method: "POST"
     }

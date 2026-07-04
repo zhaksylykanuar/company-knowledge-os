@@ -140,7 +140,8 @@ Missing:
 
 - First human-approved real-provider read run.
 - LLM briefing narrative over real connected data.
-- Multi-user / teammate provisioning beyond the single seeded founder.
+- Email-delivered invites / SSO. Local teammate membership provisioning and
+  one-time setup links exist, but external invite delivery is still deferred.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
 
@@ -200,14 +201,14 @@ Done:
 Missing:
 
 - Tailwind/shadcn or final product UI system.
-- Self-serve workspace onboarding / multi-user invite (today the single founder
-  is seeded via `scripts/create_admin_user.py`).
+- Self-serve workspace onboarding / email-delivered multi-user invite. Local
+  owner/admin teammate provisioning, `/settings` team UI, and one-time
+  `/setup-password` links exist.
 - Browser/product E2E coverage.
 - Selected repository issue and PR sync now have read-only product UI controls
   in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
   allowlisted repository at a time without external writes.
-- GitHub App live-read observability/first real read run and multi-user invites
-  remain missing.
+- First GitHub App real read run and email/SSO invite delivery remain missing.
 
 Next step: keep product UI honest while GitHub App live-read observability and
 real-run readiness are added; do not add browser-stored operator credentials.

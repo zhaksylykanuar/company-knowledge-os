@@ -37,6 +37,7 @@ export type WorkspaceMemberProvisionRequest = {
   name?: string | null;
   role: Exclude<WorkspaceMemberRole, "owner">;
   initialPassword?: string | null;
+  createSetupLink?: boolean;
 };
 
 export type WorkspaceMemberProvisionResponse = {
@@ -44,6 +45,9 @@ export type WorkspaceMemberProvisionResponse = {
   external_invite_sent: boolean;
   provider_write_performed: boolean;
   login_credential_set: boolean;
+  setup_link_generated: boolean;
+  setup_url_path: string | null;
+  setup_token_expires_at: string | null;
   warnings: string[];
 };
 

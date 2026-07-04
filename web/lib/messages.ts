@@ -51,7 +51,15 @@ export const M = {
     signingIn: "Выполняется вход…",
     loginFailedGeneric: "Неверная почта или пароль.",
     loginFailedLocked: "Слишком много неудачных попыток. Попробуйте позже.",
-    loginFailedUnknown: "Не удалось войти."
+    loginFailedUnknown: "Не удалось войти.",
+    setupTitle: "Задать пароль",
+    setupSubtitle:
+      "Введите новый локальный пароль по одноразовой ссылке приглашения.",
+    setupPassword: "Новый пароль",
+    setupSubmit: "Задать пароль и войти",
+    setupSubmitting: "Настройка…",
+    setupMissingToken: "Ссылка настройки пароля недействительна или неполная.",
+    setupFailed: "Не удалось задать пароль. Проверьте ссылку или запросите новую."
   },
 
   home: {
@@ -618,6 +626,9 @@ export const M = {
     teamProvisionPassword: "Начальный пароль (необязательно, минимум 8 символов)",
     teamProvisionPasswordHint:
       "Задайте начальный локальный пароль, чтобы участник мог войти. Он сможет сменить его в разделе «Сменить пароль». Пароль не отправляется по email.",
+    teamProvisionSetupLink: "Создать одноразовую setup-ссылку вместо пароля",
+    teamProvisionSetupLinkHint:
+      "Ссылка появится один раз после создания участника. Скопируйте её teammate вручную; email не отправляется.",
     teamProvisionSubmit: "Добавить участника",
     teamProvisioning: "Добавление…",
     teamProvisionSuccess: "Локальный участник добавлен. Email invite не отправлялся.",
@@ -625,6 +636,10 @@ export const M = {
       "Локальный участник добавлен с начальным паролем — он может войти и затем сменить пароль. Email invite не отправлялся.",
     teamProvisionSuccessNoLogin:
       "Локальный участник добавлен без пароля — задайте начальный пароль, чтобы он мог войти. Email invite не отправлялся.",
+    teamProvisionSetupLinkGenerated:
+      "Одноразовая setup-ссылка создана. Скопируйте её сейчас — raw token не хранится.",
+    teamProvisionSetupLinkLabel: "Setup-ссылка",
+    teamProvisionSetupLinkExpires: "Истекает",
     teamProvisionError: "Не удалось добавить участника.",
     teamProvisionForbidden:
       "Добавлять участников могут только owner/admin текущего workspace.",

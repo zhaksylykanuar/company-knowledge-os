@@ -110,10 +110,11 @@ async def test_login_wrong_password_is_generic_401_without_cookie() -> None:
 
 async def test_login_unknown_email_is_same_generic_401() -> None:
     # No account enumeration: unknown email yields the same generic failure.
+    email = f"nobody-{uuid4().hex}@example.test"
     async with _client() as client:
         response = await client.post(
             "/api/v1/auth/login",
-            json={"email": "nobody@example.test", "password": "x"},
+            json={"email": email, "password": "x"},
         )
     assert response.status_code == 401
     assert response.json()["detail"] == GENERIC_LOGIN_FAILURE

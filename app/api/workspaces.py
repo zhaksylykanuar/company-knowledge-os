@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime
 import re
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,6 +23,10 @@ from app.db.identity_models import (
     Membership,
     User,
     Workspace,
+)
+from app.services.account_setup_service import (
+    AccountSetupTokenError,
+    create_account_setup_token,
 )
 from app.services.identity_service import (
     IdentityAccessError,
@@ -114,6 +120,7 @@ class WorkspaceMemberProvisionRequest(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     role: str = Field(default=MEMBERSHIP_ROLE_MEMBER)
     initial_password: str | None = Field(default=None, min_length=8, max_length=1024)
+    create_setup_link: bool = Field(default=False)
 
     @field_validator("email")
     @classmethod
@@ -142,6 +149,9 @@ class WorkspaceMemberProvisionResponse(BaseModel):
     external_invite_sent: bool
     provider_write_performed: bool
     login_credential_set: bool
+    setup_link_generated: bool
+    setup_url_path: str | None
+    setup_token_expires_at: datetime | None
     warnings: list[str]
 
 
@@ -308,6 +318,8 @@ async def provision_workspace_team_member(
         if payload.initial_password is not None
         else None
     )
+    setup_url_path: str | None = None
+    setup_token_expires_at: datetime | None = None
     async with AsyncSessionLocal() as session:
         try:
             member = await provision_workspace_member(
@@ -318,6 +330,20 @@ async def provision_workspace_team_member(
                 role=payload.role,
                 initial_password_hash=initial_password_hash,
             )
+            if (
+                payload.create_setup_link
+                and initial_password_hash is None
+                and member.user.password_hash is None
+            ):
+                setup_token = await create_account_setup_token(
+                    session,
+                    user_id=member.user.id,
+                    created_by_user_id=access.workspace_membership.user.id,
+                )
+                setup_url_path = (
+                    f"/setup-password?token={quote(setup_token.raw_token, safe='')}"
+                )
+                setup_token_expires_at = setup_token.row.expires_at
             await session.commit()
         except IdentityConflictError as exc:
             await session.rollback()
@@ -331,28 +357,46 @@ async def provision_workspace_team_member(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=str(exc),
             ) from exc
+        except AccountSetupTokenError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+    warnings: list[str] = []
     if payload.initial_password is not None and not member.login_credential_set:
-        warning = (
+        warnings.append(
             "Local teammate membership created; the existing account already had a "
             "password, so no credential was changed. No email invite or external "
             "provider write was sent."
         )
     elif member.login_credential_set:
-        warning = (
+        warnings.append(
             "Local teammate membership created with an initial local password; the "
             "teammate can sign in and should change it. No email invite or external "
             "provider write was sent."
         )
     else:
-        warning = (
+        warnings.append(
             "Local teammate membership created without a login password; set an "
             "initial password so the teammate can sign in. No email invite or "
             "external provider write was sent."
+        )
+    if setup_url_path is not None:
+        warnings.append(
+            "One-time setup link generated; copy it for the teammate. The raw token is not stored and no email was sent."
+        )
+    elif payload.create_setup_link and setup_url_path is None:
+        warnings.append(
+            "Setup link was requested but not generated because the account already has a password or an initial password was set."
         )
     return WorkspaceMemberProvisionResponse(
         member=_workspace_member_read(member),
         external_invite_sent=False,
         provider_write_performed=False,
         login_credential_set=member.login_credential_set,
-        warnings=[warning],
+        setup_link_generated=setup_url_path is not None,
+        setup_url_path=setup_url_path,
+        setup_token_expires_at=setup_token_expires_at,
+        warnings=warnings,
     )

@@ -16,6 +16,10 @@ from app.api.auth import is_local_like_env, require_session
 from app.core.config import settings
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import USER_STATUS_ACTIVE, User
+from app.services.account_setup_service import (
+    AccountSetupTokenError,
+    complete_account_setup_token,
+)
 from app.services.identity_service import get_user_by_email, list_workspaces_for_user
 from app.services.login_throttle_service import (
     locked_until as login_locked_until,
@@ -43,6 +47,11 @@ class LoginRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
+    new_password: str
+
+
+class SetupPasswordRequest(BaseModel):
+    token: str
     new_password: str
 
 
@@ -149,6 +158,43 @@ async def me(user: User = Depends(require_session)) -> dict:
         "user": _user_payload(user),
         "workspaces": await _workspaces_payload(user.id),
     }
+
+
+@router.post("/setup-password")
+async def setup_password(
+    payload: SetupPasswordRequest,
+    request: Request,
+    response: Response,
+) -> dict:
+    if not payload.new_password or len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="new password must be at least 8 characters",
+        )
+    async with AsyncSessionLocal() as session:
+        try:
+            user = await complete_account_setup_token(
+                session,
+                raw_token=payload.token,
+                password_hash=hash_password(payload.new_password),
+            )
+            raw_token, _session_row = await create_session(
+                session,
+                user.id,
+                user_agent=request.headers.get("user-agent"),
+                ip_address=_client_ip(request),
+            )
+            user_payload = _user_payload(user)
+            await session.commit()
+        except AccountSetupTokenError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
+    _set_session_cookie(response, raw_token)
+    return {"status": "ok", "user": user_payload}
 
 
 @router.post("/change-password")

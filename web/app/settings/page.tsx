@@ -26,6 +26,8 @@ type SettingsTeamPanelViewProps = {
   provisionError: string | null;
   provisionMessage: string | null;
   provisionPending: boolean;
+  setupLinkExpiresAt: string | null;
+  setupLinkUrl: string | null;
   status: MembersStatus;
   workspaceName: string | null;
 };
@@ -54,6 +56,8 @@ export default function SettingsPage() {
   const [provisionError, setProvisionError] = useState<string | null>(null);
   const [provisionMessage, setProvisionMessage] = useState<string | null>(null);
   const [provisionPending, setProvisionPending] = useState(false);
+  const [setupLinkUrl, setSetupLinkUrl] = useState<string | null>(null);
+  const [setupLinkExpiresAt, setSetupLinkExpiresAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -116,6 +120,8 @@ export default function SettingsPage() {
     }
     setProvisionError(null);
     setProvisionMessage(null);
+    setSetupLinkUrl(null);
+    setSetupLinkExpiresAt(null);
     setProvisionPending(true);
     try {
       const response = await provisionWorkspaceMember(workspaceId, request);
@@ -125,10 +131,17 @@ export default function SettingsPage() {
       ]);
       setMembersStatus("ready");
       setProvisionMessage(
-        response.login_credential_set
+        response.setup_link_generated
+          ? M.settings.teamProvisionSetupLinkGenerated
+          : response.login_credential_set
           ? M.settings.teamProvisionSuccessWithLogin
           : M.settings.teamProvisionSuccessNoLogin
       );
+      if (response.setup_url_path) {
+        const base = typeof window !== "undefined" ? window.location.origin : "";
+        setSetupLinkUrl(`${base}${response.setup_url_path}`);
+        setSetupLinkExpiresAt(response.setup_token_expires_at);
+      }
       return true;
     } catch (caught: unknown) {
       setProvisionError(
@@ -167,6 +180,8 @@ export default function SettingsPage() {
         provisionError={provisionError}
         provisionMessage={provisionMessage}
         provisionPending={provisionPending}
+        setupLinkExpiresAt={setupLinkExpiresAt}
+        setupLinkUrl={setupLinkUrl}
         status={membersStatus}
         workspaceName={workspace?.name ?? null}
       />
@@ -219,6 +234,8 @@ export function SettingsTeamPanelView({
   provisionError,
   provisionMessage,
   provisionPending,
+  setupLinkExpiresAt,
+  setupLinkUrl,
   status,
   workspaceName
 }: SettingsTeamPanelViewProps) {
@@ -227,6 +244,7 @@ export function SettingsTeamPanelView({
   const [role, setRole] =
     useState<WorkspaceMemberProvisionRequest["role"]>("member");
   const [initialPassword, setInitialPassword] = useState("");
+  const [createSetupLink, setCreateSetupLink] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -237,13 +255,15 @@ export function SettingsTeamPanelView({
       email,
       name: name.trim() ? name : null,
       role,
-      initialPassword: initialPassword.trim() ? initialPassword : null
+      initialPassword: initialPassword.trim() ? initialPassword : null,
+      createSetupLink: createSetupLink && !initialPassword.trim()
     });
     if (succeeded) {
       setEmail("");
       setName("");
       setRole("member");
       setInitialPassword("");
+      setCreateSetupLink(false);
     }
   }
 
@@ -353,7 +373,27 @@ export function SettingsTeamPanelView({
             />
             <p className="muted">{M.settings.teamProvisionPasswordHint}</p>
           </div>
+          <label className="checkbox-row">
+            <input
+              checked={createSetupLink}
+              onChange={(event) => setCreateSetupLink(event.target.checked)}
+              type="checkbox"
+            />
+            <span>{M.settings.teamProvisionSetupLink}</span>
+          </label>
+          <p className="muted">{M.settings.teamProvisionSetupLinkHint}</p>
           {provisionMessage ? <p className="success-text">{provisionMessage}</p> : null}
+          {setupLinkUrl ? (
+            <div className="callout" aria-label={M.settings.teamProvisionSetupLinkLabel}>
+              <strong>{M.settings.teamProvisionSetupLinkLabel}</strong>
+              <p className="muted">{setupLinkUrl}</p>
+              {setupLinkExpiresAt ? (
+                <p className="muted">
+                  {M.settings.teamProvisionSetupLinkExpires}: {setupLinkExpiresAt}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           {provisionError ? (
             <p className="error-text" role="alert">
               {provisionError}

@@ -12,8 +12,9 @@ type AppShellProps = {
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
 
-  // /login is public — render it bare, outside the authenticated chrome/gate.
-  if (pathname === "/login") {
+  // /login and /setup-password are public — render them bare, outside the
+  // authenticated chrome/gate.
+  if (pathname === "/login" || pathname === "/setup-password") {
     return <>{children}</>;
   }
 

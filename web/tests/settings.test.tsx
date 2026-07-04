@@ -52,6 +52,8 @@ function renderTeamPanel(
       provisionError={props.provisionError ?? null}
       provisionMessage={props.provisionMessage ?? null}
       provisionPending={props.provisionPending ?? false}
+      setupLinkExpiresAt={props.setupLinkExpiresAt ?? null}
+      setupLinkUrl={props.setupLinkUrl ?? null}
       status={props.status ?? "ready"}
       workspaceName={props.workspaceName ?? "FounderOS"}
     />
@@ -92,9 +94,25 @@ test("exposes an optional initial-password field so a teammate can sign in", () 
 
   assert.ok(html.includes(M.settings.teamProvisionPassword));
   assert.ok(html.includes(M.settings.teamProvisionPasswordHint));
+  assert.ok(html.includes(M.settings.teamProvisionSetupLink));
+  assert.ok(html.includes(M.settings.teamProvisionSetupLinkHint));
   assert.ok(html.includes('type="password"'));
   assert.match(html, /minlength="8"/i);
   assert.ok(html.includes('id="team-member-password"'));
+});
+
+test("renders generated one-time setup link for manual teammate onboarding", () => {
+  const html = renderTeamPanel({
+    provisionMessage: M.settings.teamProvisionSetupLinkGenerated,
+    setupLinkExpiresAt: "2026-07-12T00:00:00Z",
+    setupLinkUrl: "https://founderos.example/setup-password?token=one-time-token"
+  });
+
+  assert.ok(html.includes(M.settings.teamProvisionSetupLinkGenerated));
+  assert.ok(html.includes(M.settings.teamProvisionSetupLinkLabel));
+  assert.ok(html.includes("https://founderos.example/setup-password?token=one-time-token"));
+  assert.ok(html.includes(M.settings.teamProvisionSetupLinkExpires));
+  assert.ok(html.includes("2026-07-12T00:00:00Z"));
 });
 
 test("hides provisioning form for non-admin workspace roles", () => {

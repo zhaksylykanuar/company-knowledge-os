@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added local one-time account setup links for teammate onboarding (DEC-055).
+  Admin provisioning can generate a `/setup-password` link without sending
+  email or calling an identity provider; the database stores only the sha256
+  token hash in `account_setup_tokens`. The public setup page consumes the token
+  once, lets the teammate set a local password, signs them in, and rejects token
+  reuse. Full pytest now uses a unique unknown-login email to avoid stale
+  login-throttle state between full-suite runs.
 - Enabled provisioned teammates to actually sign in (DEC-055). The workspace
   members endpoint and `/settings` provisioning form now accept an optional
   initial local password (min length 8) that is Argon2-hashed for a brand-new

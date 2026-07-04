@@ -32,9 +32,10 @@
   существующим human-triggered scoped `POST .../app-installation/sync`
   (DEC-053). **Проверено независимо:** сейчас real read run внешне заблокирован —
   GitHub App env (`FOUNDEROS_GITHUB_APP_ID` / `..._PRIVATE_KEY`) не задан и
-  сеть до `api.github.com` в этой среде недоступна; локальная поверхность репо
-  (25 из `.local/repos.json`) присутствует. Preflight сообщает точный next step;
-  выполнить run должен человек после установки credentials.
+  installation connection не записан; сеть до `api.github.com` теперь доступна
+  (`HTTP 200` без auth), локальная поверхность репо (25 из `.local/repos.json`)
+  присутствует. Preflight сообщает точный next step; выполнить run должен
+  человек после установки credentials.
 - **Teammate provisioning foundation (НОВОЕ, DEC-055):** добавлен первый
   multi-user slice без внешних сервисов: `GET /workspaces/{id}/members`
   возвращает local workspace members, а `POST /workspaces/{id}/members`
@@ -45,8 +46,11 @@
   Provisioning принимает необязательный `initial_password` (min 8): для нового
   локального пользователя он Argon2-хэшируется, так что teammate **реально может
   войти** и затем сменить пароль (`login_credential_set` в ответе). Пароль
-  существующего пользователя никогда не перезаписывается. Email invites/reset/SSO
-  остаются следующим отдельным slice.
+  существующего пользователя никогда не перезаписывается. Добавлен self-service
+  setup-token flow без email/provider writes: `account_setup_tokens` хранит
+  только sha256 token hash, `/setup-password` позволяет teammate по one-time
+  ссылке задать пароль и войти, повторное использование token отклоняется. Email
+  invites/reset/SSO остаются следующим отдельным slice.
   `/settings` теперь показывает участников workspace и форму локального
   добавления teammate для owner/admin с тем же no-email/no-provider-write
   boundary; viewer/member видят read-only состояние.

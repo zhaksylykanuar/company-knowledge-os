@@ -85,3 +85,18 @@ export async function changePassword(
     throw new Error("change password failed");
   }
 }
+
+export async function setupPassword(token: string, newPassword: string): Promise<void> {
+  const response = await fetch("/api/v1/auth/setup-password", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      token,
+      new_password: newPassword
+    })
+  });
+  if (!response.ok) {
+    throw new Error("setup password failed");
+  }
+}

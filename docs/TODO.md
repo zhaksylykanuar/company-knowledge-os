@@ -234,8 +234,9 @@ Done when:
   `scripts/github_app_real_read_run_preflight.py`, offline unit tests, and the
   runbook `docs/deploy/github-app-first-real-read-run.md`. Current state
   (verified): the real read run is externally blocked — GitHub App env is unset
-  and `api.github.com` is unreachable in this environment; the local repo surface
-  (25) is present. Next (human): set GitHub App credentials, record the
+  and the installation connection is not recorded; unauthenticated network to
+  `api.github.com` is reachable and the local repo surface (25) is present. Next
+  (human): set GitHub App credentials, record the
   installation connection, then run one explicit scoped read sync only after
   explicit human approval.
 
@@ -249,9 +250,10 @@ Done when:
   copy; viewer/member roles see read-only state. Provisioning now accepts an
   optional initial local password (min 8) so a newly created teammate can
   actually log in and then change it; existing users' passwords are never
-  overwritten. Next: add a self-service invite/password-reset flow (email or
-  one-time link) so teammates can onboard without an admin-set password, after
-  deploy stability.
+  overwritten. A local self-service setup-link flow now exists: admins can create
+  a one-time `/setup-password` link, only the token hash is stored, the teammate
+  sets a password and is signed in, and token reuse is rejected. Next: add email
+  delivery or password-reset delivery after deploy stability.
 
 ## Known Debts / Watch List
 

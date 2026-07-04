@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import (
+    AccountSetupToken,
     MEMBERSHIP_ROLE_ADMIN,
     MEMBERSHIP_ROLE_MEMBER,
     MEMBERSHIP_ROLE_OWNER,
@@ -26,6 +27,7 @@ from app.services.identity_service import (
     role_allows,
 )
 from app.services.password_service import hash_password
+from app.services.account_setup_service import hash_setup_token
 
 
 def _headers() -> dict[str, str]:
@@ -482,6 +484,80 @@ async def test_provisioned_member_with_initial_password_can_log_in(monkeypatch) 
         assert login.status_code == 200, login.text
         assert login.json()["user"]["email"] == teammate_email
         assert teammate_password not in login.text
+
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_provisioned_member_setup_link_is_one_time_and_hash_only(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = f"workspace-{marker}@example.test"
+        teammate_email = f"workspace-{marker}-setup@example.test"
+        teammate_password = "setup-link-pass-123"
+
+        async with _async_client() as client:
+            provisioned = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "email": teammate_email,
+                    "name": "Setup Teammate",
+                    "role": MEMBERSHIP_ROLE_MEMBER,
+                    "create_setup_link": True,
+                },
+            )
+
+        assert provisioned.status_code == 201, provisioned.text
+        body = provisioned.json()
+        assert body["login_credential_set"] is False
+        assert body["setup_link_generated"] is True
+        assert body["setup_url_path"].startswith("/setup-password?token=")
+        assert body["setup_token_expires_at"] is not None
+        raw_token = body["setup_url_path"].split("token=", 1)[1]
+        assert raw_token
+
+        # Only the token hash is persisted; the raw token never appears in DB.
+        async with AsyncSessionLocal() as session:
+            raw_match = await session.scalar(
+                select(AccountSetupToken).where(AccountSetupToken.token_hash == raw_token)
+            )
+            hash_match = await session.scalar(
+                select(AccountSetupToken).where(
+                    AccountSetupToken.token_hash == hash_setup_token(raw_token)
+                )
+            )
+        assert raw_match is None
+        assert hash_match is not None
+
+        async with _async_client() as client:
+            setup = await client.post(
+                "/api/v1/auth/setup-password",
+                json={"token": raw_token, "new_password": teammate_password},
+            )
+            reuse = await client.post(
+                "/api/v1/auth/setup-password",
+                json={"token": raw_token, "new_password": "other-password-123"},
+            )
+            login = await client.post(
+                "/api/v1/auth/login",
+                json={"email": teammate_email, "password": teammate_password},
+            )
+
+        assert setup.status_code == 200, setup.text
+        assert setup.json()["user"]["email"] == teammate_email
+        assert raw_token not in setup.text
+        assert teammate_password not in setup.text
+        assert reuse.status_code == 400
+        assert login.status_code == 200, login.text
 
     finally:
         await _cleanup_workspace_contract_fixture(marker)

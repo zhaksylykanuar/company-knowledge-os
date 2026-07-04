@@ -1271,6 +1271,13 @@ Consequences:
   change it; the response reports `login_credential_set`. If no password is
   supplied, the membership is still created but the teammate cannot log in until
   a password is set.
+- Provisioning may instead create a one-time setup link. The new
+  `account_setup_tokens` table stores only `sha256(raw_token)`, purpose,
+  expiration, and consumed timestamp; the raw token is returned once in the API
+  response as a `/setup-password?token=...` path and is never persisted. The
+  public setup endpoint consumes the token exactly once, sets an Argon2-hashed
+  local password, creates the teammate's browser session, and rejects reuse or
+  expired tokens.
 - The initial password is only ever applied to a brand-new user that has no
   password yet. Provisioning never overwrites an existing user's password, so a
   workspace admin cannot hijack an existing account's credentials by
@@ -1278,8 +1285,9 @@ Consequences:
 - Duplicate memberships are rejected, disabled users cannot be provisioned, and
   viewers/members cannot provision others because the endpoint requires admin
   workspace role.
-- Email invites, password-reset links, and SSO remain a later slice; this
-  decision only enables an admin-set initial local password.
+- Email delivery, password-reset email delivery, and SSO remain later slices;
+  this decision enables local admin-set initial passwords and local one-time
+  setup links without external writes.
 
 ## ASK - Open Questions For The Human (not decided)
 
