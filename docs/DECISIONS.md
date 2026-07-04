@@ -1244,6 +1244,34 @@ Consequences:
   adds a gate, not a new write or automation path.
 - Provider writes, auto-deploy, and LLM remain out of scope for this path.
 
+## DEC-055 - Teammate Provisioning Starts As Local Workspace Membership Only
+
+Decision (2026-07-03): the first teammate-provisioning slice creates and lists
+local workspace memberships only. Workspace owners/admins may create a local
+`User` row and `Membership` row through `POST
+/api/v1/workspaces/{workspace_id}/members` with role `admin`, `member`, or
+`viewer`; listing is available through `GET
+/api/v1/workspaces/{workspace_id}/members`. The endpoint does not send email,
+does not call an identity provider, does not create external accounts, and does
+not grant `owner` (owner remains bootstrap-only).
+
+Rationale: the MVP needs multi-user/team readiness, but email invites,
+password-reset flows, SSO, and external identity-provider writes are bigger
+security/product slices. A local membership foundation lets the product
+represent teammates and enforce workspace role gates without adding external
+writes or new migrations.
+
+Consequences:
+
+- Provisioning returns `external_invite_sent: false` and
+  `provider_write_performed: false` explicitly.
+- Existing active users can be attached to a workspace; a newly created local
+  user still needs a future invite/password-onboarding flow before self-service
+  login.
+- Duplicate memberships are rejected, disabled users cannot be provisioned, and
+  viewers/members cannot provision others because the endpoint requires admin
+  workspace role.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

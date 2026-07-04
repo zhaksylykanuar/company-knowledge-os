@@ -35,6 +35,14 @@
   сеть до `api.github.com` в этой среде недоступна; локальная поверхность репо
   (25 из `.local/repos.json`) присутствует. Preflight сообщает точный next step;
   выполнить run должен человек после установки credentials.
+- **Teammate provisioning foundation (НОВОЕ, DEC-055):** добавлен первый
+  multi-user slice без внешних сервисов: `GET /workspaces/{id}/members`
+  возвращает local workspace members, а `POST /workspaces/{id}/members`
+  позволяет owner/admin создать local `User` + `Membership` с ролью
+  `admin|member|viewer`. `owner` остаётся bootstrap-only; duplicate membership,
+  disabled users и viewer/member self-provisioning отклоняются. Endpoint явно
+  возвращает `external_invite_sent=false` и `provider_write_performed=false`:
+  email invites/password onboarding/SSO остаются следующим отдельным slice.
 - **Dashboard Source Coverage (НОВОЕ):** добавлен `SourceCoveragePanel` на
   `/dashboard`, который использует существующий Company Brain endpoint и
   показывает, что уже известно рабочему пространству: canonical repo count,

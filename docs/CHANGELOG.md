@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Added the first local teammate-provisioning foundation (DEC-055). Workspace
+  owners/admins can list members and create local `admin`/`member`/`viewer`
+  memberships through workspace-scoped endpoints without sending email, calling
+  an identity provider, granting `owner`, or performing external writes. Tests
+  cover listing/provisioning, duplicate handling, disabled-user rejection, and
+  role gating.
 - Added an offline readiness gate for the first approved GitHub App real read
   run (DEC-054): a pure `github_app_real_read_run_readiness()` function, a safe
   presence-only CLI `scripts/github_app_real_read_run_preflight.py`, offline unit

@@ -13,6 +13,7 @@ from app.db.identity_models import (
     MEMBERSHIP_ROLE_MEMBER,
     MEMBERSHIP_ROLE_OWNER,
     MEMBERSHIP_ROLE_VIEWER,
+    USER_STATUS_DISABLED,
     Membership,
     User,
     Workspace,
@@ -231,6 +232,209 @@ async def test_workspace_detail_requires_membership_access(monkeypatch) -> None:
     finally:
         await _cleanup_workspace_contract_fixture(marker)
         await _cleanup_workspace_contract_fixture(other_marker)
+
+
+async def test_workspace_members_can_be_listed_and_provisioned_locally(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = f"workspace-{marker}@example.test"
+        teammate_email = f"workspace-{marker}-teammate@example.test"
+
+        async with _async_client() as client:
+            before = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+            provisioned = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "email": teammate_email,
+                    "name": "Teammate",
+                    "role": MEMBERSHIP_ROLE_MEMBER,
+                },
+            )
+            after = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+
+        assert before.status_code == 200
+        assert [member["membership"]["role"] for member in before.json()["members"]] == [
+            MEMBERSHIP_ROLE_OWNER
+        ]
+
+        assert provisioned.status_code == 201, provisioned.text
+        body = provisioned.json()
+        assert body["member"]["user"]["email"] == teammate_email
+        assert body["member"]["user"]["name"] == "Teammate"
+        assert body["member"]["membership"]["role"] == MEMBERSHIP_ROLE_MEMBER
+        assert body["external_invite_sent"] is False
+        assert body["provider_write_performed"] is False
+        assert "external provider write" in body["warnings"][0]
+
+        assert after.status_code == 200
+        members = after.json()["members"]
+        assert {member["user"]["email"] for member in members} == {
+            owner_email,
+            teammate_email,
+        }
+
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_workspace_member_provisioning_rejects_duplicate_membership(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = f"workspace-{marker}@example.test"
+        teammate_email = f"workspace-{marker}-duplicate@example.test"
+        payload = {
+            "email": teammate_email,
+            "name": "Duplicate",
+            "role": MEMBERSHIP_ROLE_VIEWER,
+        }
+
+        async with _async_client() as client:
+            first = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json=payload,
+            )
+            duplicate = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json=payload,
+            )
+
+        assert first.status_code == 201, first.text
+        assert duplicate.status_code == 409
+        assert duplicate.json() == {"detail": "workspace membership already exists"}
+
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_workspace_member_provisioning_requires_admin_role(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = f"workspace-{marker}@example.test"
+        viewer_email = f"workspace-{marker}-viewer@example.test"
+
+        async with _async_client() as client:
+            viewer = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "email": viewer_email,
+                    "name": "Viewer",
+                    "role": MEMBERSHIP_ROLE_VIEWER,
+                },
+            )
+            forbidden = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": viewer_email},
+                json={
+                    "email": f"workspace-{marker}-other@example.test",
+                    "role": MEMBERSHIP_ROLE_MEMBER,
+                },
+            )
+
+        assert viewer.status_code == 201, viewer.text
+        assert forbidden.status_code == 403
+        assert forbidden.json() == {"detail": "insufficient workspace role"}
+
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_workspace_member_provisioning_rejects_disabled_user(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = f"workspace-{marker}@example.test"
+        disabled_email = f"workspace-{marker}-disabled@example.test"
+        async with AsyncSessionLocal() as session:
+            session.add(
+                User(
+                    email=disabled_email,
+                    name="Disabled",
+                    status=USER_STATUS_DISABLED,
+                )
+            )
+            await session.commit()
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "email": disabled_email,
+                    "role": MEMBERSHIP_ROLE_MEMBER,
+                },
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "user disabled"}
+
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_workspace_member_provisioning_rejects_owner_role(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/members",
+                headers=_headers(),
+                params={"owner_email": f"workspace-{marker}@example.test"},
+                json={
+                    "email": f"workspace-{marker}-owner@example.test",
+                    "role": MEMBERSHIP_ROLE_OWNER,
+                },
+            )
+
+        assert response.status_code == 422
+
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
 
 
 @pytest.mark.parametrize(

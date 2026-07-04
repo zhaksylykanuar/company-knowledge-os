@@ -139,6 +139,59 @@ async def create_membership(
     return membership, True
 
 
+async def list_workspace_members(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+) -> list[WorkspaceMembership]:
+    rows = (
+        await session.execute(
+            select(User, Workspace, Membership)
+            .join(Membership, Membership.user_id == User.id)
+            .join(Workspace, Workspace.id == Membership.workspace_id)
+            .where(Workspace.id == workspace_id)
+            .order_by(Membership.created_at.asc(), User.email.asc())
+        )
+    ).all()
+    return [
+        WorkspaceMembership(user=user, workspace=workspace, membership=membership)
+        for user, workspace, membership in rows
+    ]
+
+
+async def provision_workspace_member(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    email: str,
+    name: str | None,
+    role: str = MEMBERSHIP_ROLE_MEMBER,
+) -> WorkspaceMembership:
+    if role == MEMBERSHIP_ROLE_OWNER:
+        raise IdentityAccessError("owner role is bootstrap-only")
+    if role not in ROLE_ORDER:
+        raise IdentityAccessError("unsupported membership role")
+
+    workspace = await session.get(Workspace, workspace_id)
+    if workspace is None:
+        raise IdentityAccessError("workspace not found")
+
+    user, _created = await get_or_create_user_by_email(session, email=email, name=name)
+    if user.status == USER_STATUS_DISABLED:
+        raise IdentityAccessError("user disabled")
+
+    membership, membership_created = await create_membership(
+        session,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        role=role,
+    )
+    if not membership_created:
+        raise IdentityConflictError("workspace membership already exists")
+
+    return WorkspaceMembership(user=user, workspace=workspace, membership=membership)
+
+
 async def bootstrap_workspace_for_owner(
     session: AsyncSession,
     *,

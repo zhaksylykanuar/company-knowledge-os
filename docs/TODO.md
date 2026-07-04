@@ -240,8 +240,13 @@ Done when:
   explicit human approval.
 
 5. **Multi-user / teammate provisioning.**
-  Add invite/provisioning flow after single-founder auth/session behavior is
-  deployed and stable.
+  Local teammate membership foundation is in place (DEC-055):
+  owners/admins can list workspace members and create local `admin`/`member`/
+  `viewer` memberships without sending email, calling an identity provider, or
+  granting `owner`. Duplicate memberships, disabled users, and non-admin
+  provisioning are rejected. Next: add product UI in Settings and a separate
+  invite/password-onboarding flow so newly provisioned teammates can self-service
+  login after deploy stability.
 
 ## Known Debts / Watch List
 
