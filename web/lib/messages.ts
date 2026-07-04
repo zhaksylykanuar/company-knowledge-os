@@ -615,9 +615,16 @@ export const M = {
     teamProvisionEmail: "Email участника",
     teamProvisionName: "Имя (необязательно)",
     teamProvisionRole: "Роль",
+    teamProvisionPassword: "Начальный пароль (необязательно, минимум 8 символов)",
+    teamProvisionPasswordHint:
+      "Задайте начальный локальный пароль, чтобы участник мог войти. Он сможет сменить его в разделе «Сменить пароль». Пароль не отправляется по email.",
     teamProvisionSubmit: "Добавить участника",
     teamProvisioning: "Добавление…",
     teamProvisionSuccess: "Локальный участник добавлен. Email invite не отправлялся.",
+    teamProvisionSuccessWithLogin:
+      "Локальный участник добавлен с начальным паролем — он может войти и затем сменить пароль. Email invite не отправлялся.",
+    teamProvisionSuccessNoLogin:
+      "Локальный участник добавлен без пароля — задайте начальный пароль, чтобы он мог войти. Email invite не отправлялся.",
     teamProvisionError: "Не удалось добавить участника.",
     teamProvisionForbidden:
       "Добавлять участников могут только owner/admin текущего workspace.",

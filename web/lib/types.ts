@@ -36,12 +36,14 @@ export type WorkspaceMemberProvisionRequest = {
   email: string;
   name?: string | null;
   role: Exclude<WorkspaceMemberRole, "owner">;
+  initialPassword?: string | null;
 };
 
 export type WorkspaceMemberProvisionResponse = {
   member: WorkspaceMember;
   external_invite_sent: boolean;
   provider_write_performed: boolean;
+  login_credential_set: boolean;
   warnings: string[];
 };
 

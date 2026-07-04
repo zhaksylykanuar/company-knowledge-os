@@ -13,6 +13,7 @@ from app.db.identity_models import (
     MEMBERSHIP_ROLE_MEMBER,
     MEMBERSHIP_ROLE_OWNER,
     MEMBERSHIP_ROLE_VIEWER,
+    USER_STATUS_ACTIVE,
     USER_STATUS_DISABLED,
     Membership,
     User,
@@ -24,6 +25,7 @@ from app.services.identity_service import (
     ensure_role_allows,
     role_allows,
 )
+from app.services.password_service import hash_password
 
 
 def _headers() -> dict[str, str]:
@@ -281,6 +283,7 @@ async def test_workspace_members_can_be_listed_and_provisioned_locally(
         assert body["member"]["membership"]["role"] == MEMBERSHIP_ROLE_MEMBER
         assert body["external_invite_sent"] is False
         assert body["provider_write_performed"] is False
+        assert body["login_credential_set"] is False
         assert "external provider write" in body["warnings"][0]
 
         assert after.status_code == 200
@@ -432,6 +435,105 @@ async def test_workspace_member_provisioning_rejects_owner_role(monkeypatch) -> 
             )
 
         assert response.status_code == 422
+
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_provisioned_member_with_initial_password_can_log_in(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = f"workspace-{marker}@example.test"
+        teammate_email = f"workspace-{marker}-login@example.test"
+        teammate_password = "teammate-initial-pass-123"
+
+        async with _async_client() as client:
+            provisioned = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "email": teammate_email,
+                    "name": "Login Teammate",
+                    "role": MEMBERSHIP_ROLE_MEMBER,
+                    "initial_password": teammate_password,
+                },
+            )
+            login = await client.post(
+                "/api/v1/auth/login",
+                json={"email": teammate_email, "password": teammate_password},
+            )
+
+        assert provisioned.status_code == 201, provisioned.text
+        body = provisioned.json()
+        assert body["login_credential_set"] is True
+        assert body["external_invite_sent"] is False
+        assert body["provider_write_performed"] is False
+        assert teammate_password not in provisioned.text
+
+        # The provisioned teammate can actually authenticate with the initial
+        # password: this is what makes teammate provisioning a real product flow
+        # rather than a dead-end membership row.
+        assert login.status_code == 200, login.text
+        assert login.json()["user"]["email"] == teammate_email
+        assert teammate_password not in login.text
+
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_provisioning_does_not_overwrite_existing_user_password(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = f"workspace-{marker}@example.test"
+        existing_email = f"workspace-{marker}-existing@example.test"
+        original_password = "original-existing-pass-123"
+        attempted_password = "attacker-set-pass-456"
+
+        # Seed an existing active user that already has a password.
+        async with AsyncSessionLocal() as session:
+            session.add(
+                User(
+                    email=existing_email,
+                    name="Existing",
+                    status=USER_STATUS_ACTIVE,
+                    password_hash=hash_password(original_password),
+                )
+            )
+            await session.commit()
+
+        async with _async_client() as client:
+            provisioned = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "email": existing_email,
+                    "role": MEMBERSHIP_ROLE_MEMBER,
+                    "initial_password": attempted_password,
+                },
+            )
+            login_original = await client.post(
+                "/api/v1/auth/login",
+                json={"email": existing_email, "password": original_password},
+            )
+
+        assert provisioned.status_code == 201, provisioned.text
+        # Provisioning must not have overwritten the existing password.
+        assert provisioned.json()["login_credential_set"] is False
+        assert login_original.status_code == 200, login_original.text
 
     finally:
         await _cleanup_workspace_contract_fixture(marker)

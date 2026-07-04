@@ -246,9 +246,12 @@ Done when:
   granting `owner`. Duplicate memberships, disabled users, and non-admin
   provisioning are rejected. `/settings` now surfaces the local members list and
   owner/admin local-provisioning form with explicit no-email/no-provider-write
-  copy; viewer/member roles see read-only state. Next: add a separate
-  invite/password-onboarding flow so newly provisioned teammates can self-service
-  login after deploy stability.
+  copy; viewer/member roles see read-only state. Provisioning now accepts an
+  optional initial local password (min 8) so a newly created teammate can
+  actually log in and then change it; existing users' passwords are never
+  overwritten. Next: add a self-service invite/password-reset flow (email or
+  one-time link) so teammates can onboard without an admin-set password, after
+  deploy stability.
 
 ## Known Debts / Watch List
 

@@ -87,6 +87,16 @@ test("renders local workspace members and provisioning boundary", () => {
   assert.doesNotMatch(html, /identity provider write/i);
 });
 
+test("exposes an optional initial-password field so a teammate can sign in", () => {
+  const html = renderTeamPanel();
+
+  assert.ok(html.includes(M.settings.teamProvisionPassword));
+  assert.ok(html.includes(M.settings.teamProvisionPasswordHint));
+  assert.ok(html.includes('type="password"'));
+  assert.match(html, /minlength="8"/i);
+  assert.ok(html.includes('id="team-member-password"'));
+});
+
 test("hides provisioning form for non-admin workspace roles", () => {
   const html = renderTeamPanel({ canProvision: false });
 

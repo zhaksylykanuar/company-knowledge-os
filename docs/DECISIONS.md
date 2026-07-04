@@ -1265,12 +1265,21 @@ Consequences:
 
 - Provisioning returns `external_invite_sent: false` and
   `provider_write_performed: false` explicitly.
-- Existing active users can be attached to a workspace; a newly created local
-  user still needs a future invite/password-onboarding flow before self-service
-  login.
+- Provisioning accepts an optional `initial_password` (min length 8). When a
+  brand-new local user is created, that password is Argon2-hashed via the
+  existing password service so the teammate can sign in immediately and then
+  change it; the response reports `login_credential_set`. If no password is
+  supplied, the membership is still created but the teammate cannot log in until
+  a password is set.
+- The initial password is only ever applied to a brand-new user that has no
+  password yet. Provisioning never overwrites an existing user's password, so a
+  workspace admin cannot hijack an existing account's credentials by
+  re-provisioning it.
 - Duplicate memberships are rejected, disabled users cannot be provisioned, and
   viewers/members cannot provision others because the endpoint requires admin
   workspace role.
+- Email invites, password-reset links, and SSO remain a later slice; this
+  decision only enables an admin-set initial local password.
 
 ## ASK - Open Questions For The Human (not decided)
 

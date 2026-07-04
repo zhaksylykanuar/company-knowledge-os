@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Enabled provisioned teammates to actually sign in (DEC-055). The workspace
+  members endpoint and `/settings` provisioning form now accept an optional
+  initial local password (min length 8) that is Argon2-hashed for a brand-new
+  user, and the response reports `login_credential_set`. An existing user's
+  password is never overwritten, so re-provisioning cannot hijack an account.
+  Still no email invite, identity-provider write, or external write is performed.
 - Added product UI for local teammate provisioning in `/settings`. The page now
   lists workspace members and lets owner/admin users create local
   `admin`/`member`/`viewer` memberships through the existing workspace members

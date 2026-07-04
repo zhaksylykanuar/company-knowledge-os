@@ -41,8 +41,12 @@
   позволяет owner/admin создать local `User` + `Membership` с ролью
   `admin|member|viewer`. `owner` остаётся bootstrap-only; duplicate membership,
   disabled users и viewer/member self-provisioning отклоняются. Endpoint явно
-  возвращает `external_invite_sent=false` и `provider_write_performed=false`:
-  email invites/password onboarding/SSO остаются следующим отдельным slice.
+  возвращает `external_invite_sent=false` и `provider_write_performed=false`.
+  Provisioning принимает необязательный `initial_password` (min 8): для нового
+  локального пользователя он Argon2-хэшируется, так что teammate **реально может
+  войти** и затем сменить пароль (`login_credential_set` в ответе). Пароль
+  существующего пользователя никогда не перезаписывается. Email invites/reset/SSO
+  остаются следующим отдельным slice.
   `/settings` теперь показывает участников workspace и форму локального
   добавления teammate для owner/admin с тем же no-email/no-provider-write
   boundary; viewer/member видят read-only состояние.

@@ -163,7 +163,8 @@ export async function provisionWorkspaceMember(
       body: JSON.stringify({
         email: request.email,
         name: request.name || null,
-        role: request.role
+        role: request.role,
+        initial_password: request.initialPassword ? request.initialPassword : null
       }),
       method: "POST"
     }

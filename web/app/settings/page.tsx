@@ -124,7 +124,11 @@ export default function SettingsPage() {
         response.member
       ]);
       setMembersStatus("ready");
-      setProvisionMessage(M.settings.teamProvisionSuccess);
+      setProvisionMessage(
+        response.login_credential_set
+          ? M.settings.teamProvisionSuccessWithLogin
+          : M.settings.teamProvisionSuccessNoLogin
+      );
       return true;
     } catch (caught: unknown) {
       setProvisionError(
@@ -222,6 +226,7 @@ export function SettingsTeamPanelView({
   const [name, setName] = useState("");
   const [role, setRole] =
     useState<WorkspaceMemberProvisionRequest["role"]>("member");
+  const [initialPassword, setInitialPassword] = useState("");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -231,12 +236,14 @@ export function SettingsTeamPanelView({
     const succeeded = await onProvision({
       email,
       name: name.trim() ? name : null,
-      role
+      role,
+      initialPassword: initialPassword.trim() ? initialPassword : null
     });
     if (succeeded) {
       setEmail("");
       setName("");
       setRole("member");
+      setInitialPassword("");
     }
   }
 
@@ -331,6 +338,20 @@ export function SettingsTeamPanelView({
                 </option>
               ))}
             </select>
+          </div>
+          <div className="field">
+            <label htmlFor="team-member-password">
+              {M.settings.teamProvisionPassword}
+            </label>
+            <input
+              autoComplete="new-password"
+              id="team-member-password"
+              minLength={8}
+              onChange={(event) => setInitialPassword(event.target.value)}
+              type="password"
+              value={initialPassword}
+            />
+            <p className="muted">{M.settings.teamProvisionPasswordHint}</p>
           </div>
           {provisionMessage ? <p className="success-text">{provisionMessage}</p> : null}
           {provisionError ? (

@@ -25,6 +25,7 @@ from app.db.identity_models import (
 from app.services.identity_service import (
     IdentityAccessError,
     IdentityConflictError,
+    ProvisionedWorkspaceMember,
     WorkspaceMembership,
     bootstrap_workspace_for_owner,
     get_user_by_email,
@@ -32,6 +33,7 @@ from app.services.identity_service import (
     list_workspace_members,
     provision_workspace_member,
 )
+from app.services.password_service import hash_password
 
 
 router = APIRouter(prefix="/api/v1/workspaces", tags=["workspaces"])
@@ -111,6 +113,7 @@ class WorkspaceMemberProvisionRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     name: str | None = Field(default=None, max_length=255)
     role: str = Field(default=MEMBERSHIP_ROLE_MEMBER)
+    initial_password: str | None = Field(default=None, min_length=8, max_length=1024)
 
     @field_validator("email")
     @classmethod
@@ -138,6 +141,7 @@ class WorkspaceMemberProvisionResponse(BaseModel):
     member: WorkspaceMemberRead
     external_invite_sent: bool
     provider_write_performed: bool
+    login_credential_set: bool
     warnings: list[str]
 
 
@@ -164,7 +168,7 @@ def _membership_read(membership: Membership) -> MembershipRead:
 
 
 def _workspace_member_read(
-    workspace_membership: WorkspaceMembership,
+    workspace_membership: WorkspaceMembership | ProvisionedWorkspaceMember,
 ) -> WorkspaceMemberRead:
     return WorkspaceMemberRead(
         user=_user_read(workspace_membership.user),
@@ -299,6 +303,11 @@ async def provision_workspace_team_member(
     payload: WorkspaceMemberProvisionRequest,
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
 ) -> WorkspaceMemberProvisionResponse:
+    initial_password_hash = (
+        hash_password(payload.initial_password)
+        if payload.initial_password is not None
+        else None
+    )
     async with AsyncSessionLocal() as session:
         try:
             member = await provision_workspace_member(
@@ -307,6 +316,7 @@ async def provision_workspace_team_member(
                 email=payload.email,
                 name=payload.name,
                 role=payload.role,
+                initial_password_hash=initial_password_hash,
             )
             await session.commit()
         except IdentityConflictError as exc:
@@ -321,11 +331,28 @@ async def provision_workspace_team_member(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=str(exc),
             ) from exc
+    if payload.initial_password is not None and not member.login_credential_set:
+        warning = (
+            "Local teammate membership created; the existing account already had a "
+            "password, so no credential was changed. No email invite or external "
+            "provider write was sent."
+        )
+    elif member.login_credential_set:
+        warning = (
+            "Local teammate membership created with an initial local password; the "
+            "teammate can sign in and should change it. No email invite or external "
+            "provider write was sent."
+        )
+    else:
+        warning = (
+            "Local teammate membership created without a login password; set an "
+            "initial password so the teammate can sign in. No email invite or "
+            "external provider write was sent."
+        )
     return WorkspaceMemberProvisionResponse(
         member=_workspace_member_read(member),
         external_invite_sent=False,
         provider_write_performed=False,
-        warnings=[
-            "Local teammate membership created; no email invite, password onboarding, or external provider write was sent."
-        ],
+        login_credential_set=member.login_credential_set,
+        warnings=[warning],
     )

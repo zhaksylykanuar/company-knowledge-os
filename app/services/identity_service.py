@@ -42,6 +42,14 @@ class WorkspaceMembership:
     membership: Membership
 
 
+@dataclass(frozen=True)
+class ProvisionedWorkspaceMember:
+    user: User
+    workspace: Workspace
+    membership: Membership
+    login_credential_set: bool
+
+
 def normalize_email(email: str) -> str:
     return email.strip().lower()
 
@@ -166,7 +174,8 @@ async def provision_workspace_member(
     email: str,
     name: str | None,
     role: str = MEMBERSHIP_ROLE_MEMBER,
-) -> WorkspaceMembership:
+    initial_password_hash: str | None = None,
+) -> ProvisionedWorkspaceMember:
     if role == MEMBERSHIP_ROLE_OWNER:
         raise IdentityAccessError("owner role is bootstrap-only")
     if role not in ROLE_ORDER:
@@ -180,6 +189,14 @@ async def provision_workspace_member(
     if user.status == USER_STATUS_DISABLED:
         raise IdentityAccessError("user disabled")
 
+    # Set an initial local password only for a brand-new user that has none yet.
+    # Never overwrite an existing user's password here: that would let a
+    # workspace admin hijack another existing account's credentials.
+    login_credential_set = False
+    if initial_password_hash is not None and user.password_hash is None:
+        user.password_hash = initial_password_hash
+        login_credential_set = True
+
     membership, membership_created = await create_membership(
         session,
         workspace_id=workspace.id,
@@ -189,7 +206,12 @@ async def provision_workspace_member(
     if not membership_created:
         raise IdentityConflictError("workspace membership already exists")
 
-    return WorkspaceMembership(user=user, workspace=workspace, membership=membership)
+    return ProvisionedWorkspaceMember(
+        user=user,
+        workspace=workspace,
+        membership=membership,
+        login_credential_set=login_credential_set,
+    )
 
 
 async def bootstrap_workspace_for_owner(
