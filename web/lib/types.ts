@@ -7,6 +7,44 @@ export type ApiErrorPayload = {
 // URL is carried in request options anymore.
 export type ApiFetchOptions = RequestInit;
 
+export type WorkspaceMemberRole = "admin" | "member" | "owner" | "viewer";
+
+export type WorkspaceMemberUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  status: string;
+};
+
+export type WorkspaceMemberMembership = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: WorkspaceMemberRole;
+};
+
+export type WorkspaceMember = {
+  user: WorkspaceMemberUser;
+  membership: WorkspaceMemberMembership;
+};
+
+export type WorkspaceMembersResponse = {
+  members: WorkspaceMember[];
+};
+
+export type WorkspaceMemberProvisionRequest = {
+  email: string;
+  name?: string | null;
+  role: Exclude<WorkspaceMemberRole, "owner">;
+};
+
+export type WorkspaceMemberProvisionResponse = {
+  member: WorkspaceMember;
+  external_invite_sent: boolean;
+  provider_write_performed: boolean;
+  warnings: string[];
+};
+
 export type GitHubOperationalWorkState = "open" | "closed" | "merged" | "all";
 
 export type CompanyBrainSourceRef = {

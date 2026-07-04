@@ -598,7 +598,35 @@ export const M = {
     changePassword: "Сменить пароль",
     changing: "Смена пароля…",
     changeSuccess: "Пароль изменён. На других устройствах выполнен выход.",
-    changeError: "Не удалось сменить пароль. Проверьте текущий пароль."
+    changeError: "Не удалось сменить пароль. Проверьте текущий пароль.",
+    teamTitle: "Команда рабочего пространства",
+    teamDescription:
+      "Локальные участники workspace. Этот экран не отправляет email-инвайты, не вызывает identity provider и не делает external writes.",
+    teamLoading: "Загрузка участников",
+    teamUnavailableTitle: "Участники недоступны",
+    teamUnavailableDescription: "Не удалось загрузить локальных участников workspace.",
+    teamNoWorkspace: "У аккаунта пока нет workspace — участников показать нельзя.",
+    teamEmpty: "В этом workspace пока нет участников.",
+    teamMemberStatus: "Статус",
+    teamMemberRole: "Роль",
+    teamProvisionTitle: "Добавить участника локально",
+    teamProvisionDescription:
+      "Создаёт только локальные User + Membership. Пароль, email invite и self-service onboarding остаются отдельным шагом.",
+    teamProvisionEmail: "Email участника",
+    teamProvisionName: "Имя (необязательно)",
+    teamProvisionRole: "Роль",
+    teamProvisionSubmit: "Добавить участника",
+    teamProvisioning: "Добавление…",
+    teamProvisionSuccess: "Локальный участник добавлен. Email invite не отправлялся.",
+    teamProvisionError: "Не удалось добавить участника.",
+    teamProvisionForbidden:
+      "Добавлять участников могут только owner/admin текущего workspace.",
+    teamBoundary:
+      "Boundary: local DB only — external_invite_sent=false, provider_write_performed=false.",
+    roleOwner: "Owner",
+    roleAdmin: "Admin",
+    roleMember: "Member",
+    roleViewer: "Viewer"
   },
 
   evidence: {

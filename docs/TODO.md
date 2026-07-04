@@ -244,7 +244,9 @@ Done when:
   owners/admins can list workspace members and create local `admin`/`member`/
   `viewer` memberships without sending email, calling an identity provider, or
   granting `owner`. Duplicate memberships, disabled users, and non-admin
-  provisioning are rejected. Next: add product UI in Settings and a separate
+  provisioning are rejected. `/settings` now surfaces the local members list and
+  owner/admin local-provisioning form with explicit no-email/no-provider-write
+  copy; viewer/member roles see read-only state. Next: add a separate
   invite/password-onboarding flow so newly provisioned teammates can self-service
   login after deploy stability.
 

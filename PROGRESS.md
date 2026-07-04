@@ -43,6 +43,9 @@
   disabled users и viewer/member self-provisioning отклоняются. Endpoint явно
   возвращает `external_invite_sent=false` и `provider_write_performed=false`:
   email invites/password onboarding/SSO остаются следующим отдельным slice.
+  `/settings` теперь показывает участников workspace и форму локального
+  добавления teammate для owner/admin с тем же no-email/no-provider-write
+  boundary; viewer/member видят read-only состояние.
 - **Dashboard Source Coverage (НОВОЕ):** добавлен `SourceCoveragePanel` на
   `/dashboard`, который использует существующий Company Brain endpoint и
   показывает, что уже известно рабочему пространству: canonical repo count,

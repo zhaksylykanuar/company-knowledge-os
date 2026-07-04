@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Added product UI for local teammate provisioning in `/settings`. The page now
+  lists workspace members and lets owner/admin users create local
+  `admin`/`member`/`viewer` memberships through the existing workspace members
+  API, while viewer/member roles see a read-only state. The UI explicitly states
+  that no email invite, identity-provider write, provider call, or external write
+  is performed.
 - Added the first local teammate-provisioning foundation (DEC-055). Workspace
   owners/admins can list members and create local `admin`/`member`/`viewer`
   memberships through workspace-scoped endpoints without sending email, calling

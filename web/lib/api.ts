@@ -32,7 +32,10 @@ import type {
   GitHubSelectedRepositorySyncResult,
   RepoAuditImportRequest,
   RepoAuditImportResponse,
-  RepoAuditResponse
+  RepoAuditResponse,
+  WorkspaceMemberProvisionRequest,
+  WorkspaceMemberProvisionResponse,
+  WorkspaceMembersResponse
 } from "./types";
 
 // Same-origin base: the browser calls the web origin, and next.config.mjs
@@ -131,6 +134,39 @@ export async function fetchCompanyBrain(
   return apiFetch<CompanyBrainResponse>(
     buildWorkspaceCompanyBrainPath(workspaceId),
     options
+  );
+}
+
+export function buildWorkspaceMembersPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/members`;
+}
+
+export async function fetchWorkspaceMembers(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<WorkspaceMembersResponse> {
+  return apiFetch<WorkspaceMembersResponse>(
+    buildWorkspaceMembersPath(workspaceId),
+    options
+  );
+}
+
+export async function provisionWorkspaceMember(
+  workspaceId: string,
+  request: WorkspaceMemberProvisionRequest,
+  options: ApiFetchOptions = {}
+): Promise<WorkspaceMemberProvisionResponse> {
+  return apiFetch<WorkspaceMemberProvisionResponse>(
+    buildWorkspaceMembersPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        email: request.email,
+        name: request.name || null,
+        role: request.role
+      }),
+      method: "POST"
+    }
   );
 }
 
