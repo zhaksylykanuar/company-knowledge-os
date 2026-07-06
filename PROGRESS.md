@@ -20,9 +20,9 @@
   показывает canonical org repo rows для `qtwin-io` из `.local/repos.json`
   (25 repos), а не retained source-event/legacy fallbacks; live read-only check
   по org env keys подтвердил тот же count без вывода секретов. Следующий лучший
-  продуктовый шаг — усилить Founder-facing сводку/coverage поверх уже
-  загруженных canonical данных; первый GitHub App real-provider read run — только
-  после отдельного human approval.
+  продуктовый шаг — richer local follow-up/action guidance поверх уже
+  загруженных Jira/Gmail/Drive briefing signals; первый GitHub App
+  real-provider read run — только после отдельного human approval.
 - **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
   offline, детерминированный gate перед первым approved real read run:
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
@@ -93,6 +93,18 @@
   превращая их в tasks. Читаются только sanitized normalized payload fields +
   source refs; raw email bodies/document contents, secrets, provider calls,
   sync, external writes и LLM не добавлены.
+- **Founder Briefing non-GitHub read-model items (НОВОЕ, DEC-064):**
+  детерминированный manual Founder Briefing теперь добавляет evidence-backed
+  items из first-class Company Brain read sections: `jira-work-items` для
+  локальных Jira issue work, `gmail-message-signals` для Gmail messages и
+  `drive-file-signals` для Drive file metadata. Это additive briefing polish:
+  данные берутся только из локального Company Brain + `source_refs`; Gmail/Drive
+  не превращаются в tasks; provider calls, sync, external writes, raw
+  email/document content, secret reads и LLM не добавлены. Проверено:
+  `UV_NO_SYNC=1 uv run ruff check .`, focused
+  `UV_NO_SYNC=1 uv run pytest -q tests/test_founder_briefing_api.py`,
+  Python import of `app.services.founder_briefing_service`, `npm test`,
+  `npm run build`, and `bash scripts/check_no_secrets.sh --tracked`.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально

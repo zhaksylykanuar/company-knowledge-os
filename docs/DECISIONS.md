@@ -1561,6 +1561,37 @@ Consequences:
 - Future work can enrich these sections into richer thread/document entities,
   but such enrichment needs separate model decisions and evidence contracts.
 
+## DEC-064 - Founder Briefing Summarizes Local Jira, Gmail, And Drive Read Models
+
+Decision (2026-07-06): the deterministic Founder Briefing now adds first-class
+local connector items from the Company Brain read model: `jira-work-items` for
+Jira issue-shaped work, `gmail-message-signals` for Gmail messages, and
+`drive-file-signals` for Drive file metadata. These items are additive to the
+existing GitHub-first and connector coverage items, and are generated only from
+already-normalized local Company Brain sections (`work.issues`,
+`communications.messages`, and `documents.files`) plus their source refs.
+
+Rationale: DEC-062/063 made Jira/Gmail/Drive visible in Company Brain, but the
+Founder Briefing still only surfaced non-GitHub data as aggregate SourceRecord
+coverage. The briefing should guide founder review from the first-class local
+read models without waiting for the LLM narrative pipeline or real provider
+reads.
+
+Consequences:
+
+- This remains local/deterministic only: no Jira/Gmail/Drive provider calls,
+  sync, external writes, secret reads, raw payload rendering, or LLM are added.
+- Jira issues are summarized as work because they already live in canonical
+  `Task(source_provider='jira')`; Gmail messages and Drive files remain separate
+  communication/document read models and are not coerced into tasks.
+- Each item carries evidence refs converted from Company Brain `source_refs`;
+  if refs are missing, the item is still emitted with an explicit warning so the
+  absence is visible before anyone creates a local follow-up action.
+- Briefing summaries use bounded normalized fields (issue key/title, message
+  subject, file name, counts) and intentionally ignore raw email bodies,
+  snippets-as-body, document content, provider payload dumps, and secret-like
+  data.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

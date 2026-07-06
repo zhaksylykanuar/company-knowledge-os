@@ -196,6 +196,11 @@ Implemented foundations:
   sections (DEC-063): `communications.messages` and `documents.files` render
   sanitized local SourceRecord payload fields with source refs, without raw
   email/document bodies, provider calls, sync, external writes, or LLM.
+- Founder Briefing now summarizes first-class non-GitHub Company Brain read
+  models (DEC-064): local Jira work, Gmail message signals, and Drive file
+  signals appear as additive evidence-backed briefing items. The generator reads
+  only local Company Brain sections/source refs and adds no provider calls,
+  sync, external writes, raw body/content rendering, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

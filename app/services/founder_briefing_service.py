@@ -88,6 +88,7 @@ async def generate_manual_founder_briefing(
             )
             items.append(coverage_item)
             items.append(_connector_source_coverage_item(brain))
+            items.extend(_non_github_company_brain_items(brain))
 
         if options.include_sync_jobs:
             sync_items, sync_signals = await _github_sync_items(
@@ -435,6 +436,158 @@ def _connector_source_coverage_item(brain: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
+def _non_github_company_brain_items(brain: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Build additive local connector briefing items from Company Brain read models.
+
+    The Company Brain read model is the boundary here: this code reads only the
+    already-normalized local projection (`work`, `communications`, `documents`)
+    and source refs. It must not inspect raw connector payloads, call providers,
+    start sync, create actions, write externally, or invoke an LLM.
+    """
+
+    items: list[dict[str, Any]] = []
+    jira_item = _jira_work_item(brain)
+    if jira_item is not None:
+        items.append(jira_item)
+    gmail_item = _gmail_messages_item(brain)
+    if gmail_item is not None:
+        items.append(gmail_item)
+    drive_item = _drive_files_item(brain)
+    if drive_item is not None:
+        items.append(drive_item)
+    return items
+
+
+def _jira_work_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
+    work = brain.get("work") if isinstance(brain.get("work"), Mapping) else {}
+    issues = [row for row in work.get("issues") or [] if isinstance(row, Mapping)]
+    jira_issues = [
+        issue
+        for issue in issues
+        if (_safe_text(issue.get("source_provider")) or "").casefold() == "jira"
+    ]
+    if not jira_issues:
+        return None
+
+    project_keys = _unique_texts(
+        _safe_text(issue.get("project_key")) for issue in jira_issues
+    )
+    issue_labels = _unique_texts(_work_item_label(issue) for issue in jira_issues)
+    evidence_refs = _company_brain_row_evidence_refs(jira_issues)
+    summary = (
+        f"Company Brain has {len(jira_issues)} local Jira issue"
+        f"{'' if len(jira_issues) == 1 else 's'} in open work."
+    )
+    if project_keys:
+        summary = f"{summary} Project scope: {', '.join(project_keys[:5])}."
+    if issue_labels:
+        summary = f"{summary} Top issues: {', '.join(issue_labels[:3])}."
+
+    return _item(
+        item_id="jira-work-items",
+        category="next_step",
+        title="Jira work is visible in Company Brain",
+        summary=summary,
+        severity="medium",
+        confidence=0.9,
+        evidence_refs=evidence_refs,
+        related_entities=issue_labels[:5] or project_keys[:5],
+        recommended_next_step=(
+            "Review local Jira issues in /jira or Company Brain and create "
+            "evidence-backed internal follow-ups where needed."
+        ),
+        warnings=[] if evidence_refs else ["jira work item source refs missing"],
+    )
+
+
+def _gmail_messages_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
+    communications = (
+        brain.get("communications")
+        if isinstance(brain.get("communications"), Mapping)
+        else {}
+    )
+    messages = [
+        row for row in communications.get("messages") or [] if isinstance(row, Mapping)
+    ]
+    if not messages:
+        return None
+
+    unread_count = sum(1 for message in messages if bool(message.get("unread")))
+    subjects = _unique_texts(
+        _safe_text(message.get("subject")) or _safe_text(message.get("message_id"))
+        for message in messages
+    )
+    evidence_refs = _company_brain_row_evidence_refs(messages)
+    summary = (
+        f"Company Brain has {len(messages)} local Gmail message"
+        f"{'' if len(messages) == 1 else 's'}; unread={unread_count}."
+    )
+    if subjects:
+        summary = f"{summary} Top subjects: {', '.join(subjects[:3])}."
+
+    has_unread = unread_count > 0
+    return _item(
+        item_id="gmail-message-signals",
+        category="next_step" if has_unread else "update",
+        title=(
+            "Unread Gmail messages need review"
+            if has_unread
+            else "Gmail messages are visible in Company Brain"
+        ),
+        summary=summary,
+        severity="medium" if has_unread else "low",
+        confidence=0.9,
+        evidence_refs=evidence_refs,
+        related_entities=subjects[:5],
+        recommended_next_step=(
+            "Review unread local Gmail messages in /gmail and create "
+            "evidence-backed internal follow-ups where needed."
+            if has_unread
+            else "Use /gmail as the local evidence surface before turning "
+            "messages into follow-up actions."
+        ),
+        warnings=[] if evidence_refs else ["gmail message source refs missing"],
+    )
+
+
+def _drive_files_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
+    documents = (
+        brain.get("documents") if isinstance(brain.get("documents"), Mapping) else {}
+    )
+    files = [row for row in documents.get("files") or [] if isinstance(row, Mapping)]
+    if not files:
+        return None
+
+    shared_count = sum(1 for file in files if bool(file.get("shared")))
+    file_names = _unique_texts(
+        _safe_text(file.get("name")) or _safe_text(file.get("file_id"))
+        for file in files
+    )
+    evidence_refs = _company_brain_row_evidence_refs(files)
+    summary = (
+        f"Company Brain has {len(files)} local Drive file"
+        f"{'' if len(files) == 1 else 's'}; shared={shared_count}."
+    )
+    if file_names:
+        summary = f"{summary} Top files: {', '.join(file_names[:3])}."
+
+    return _item(
+        item_id="drive-file-signals",
+        category="update",
+        title="Drive files are visible in Company Brain",
+        summary=summary,
+        severity="low",
+        confidence=0.9,
+        evidence_refs=evidence_refs,
+        related_entities=file_names[:5],
+        recommended_next_step=(
+            "Review local Drive file metadata in /drive and attach "
+            "evidence-backed follow-ups for important documents."
+        ),
+        warnings=[] if evidence_refs else ["drive file source refs missing"],
+    )
+
+
 async def _github_sync_items(
     session: AsyncSession,
     *,
@@ -683,6 +836,63 @@ def _coverage_evidence_refs(
         if ref["ref"] and ref not in refs:
             refs.append(ref)
     return refs[:20]
+
+
+def _company_brain_row_evidence_refs(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for row in rows:
+        raw_refs = row.get("source_refs")
+        if not isinstance(raw_refs, list):
+            raw_refs = row.get("evidence_refs")
+        if not isinstance(raw_refs, list):
+            continue
+        for raw_ref in raw_refs:
+            if not isinstance(raw_ref, Mapping):
+                continue
+            ref_text = (
+                _safe_text(raw_ref.get("label"))
+                or _safe_text(raw_ref.get("ref"))
+                or _safe_text(raw_ref.get("id"))
+            )
+            ref = {
+                "kind": _safe_text(raw_ref.get("kind")) or "source_record",
+                "source": _safe_text(raw_ref.get("source")) or "company_brain",
+                "ref": ref_text,
+                "url": _safe_url(raw_ref.get("url")),
+            }
+            if ref["ref"] and ref not in refs:
+                refs.append(ref)
+    return refs[:20]
+
+
+def _work_item_label(row: Mapping[str, Any]) -> str | None:
+    title = _safe_text(row.get("title"))
+    external_id = _safe_text(row.get("external_id"))
+    number = row.get("number")
+    issue_key = external_id or (
+        f"#{number}" if isinstance(number, int) and not isinstance(number, bool) else None
+    )
+    if issue_key and title:
+        return _clip_text(f"{issue_key}: {title}", limit=120)
+    return _clip_text(title or issue_key, limit=120)
+
+
+def _unique_texts(values: Any) -> list[str]:
+    texts: list[str] = []
+    for value in values:
+        text = _clip_text(value, limit=120)
+        if text and text not in texts:
+            texts.append(text)
+    return texts
+
+
+def _clip_text(value: Any, *, limit: int) -> str | None:
+    text = _safe_text(value)
+    if not text:
+        return None
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 1]}…"
 
 
 def _summary(

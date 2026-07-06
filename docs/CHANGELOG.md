@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added first-class local Jira/Gmail/Drive read-model items to the deterministic
+  Founder Briefing (DEC-064). The manual briefing now includes
+  `jira-work-items`, `gmail-message-signals`, and `drive-file-signals` when the
+  workspace Company Brain has local Jira issues, Gmail messages, or Drive files.
+  Items are evidence-backed from Company Brain `source_refs` and remain
+  local-only: no provider calls, sync, external writes, raw body/content payload
+  rendering, secrets, or LLM.
 - Exposed Gmail messages and Google Drive files as first-class Company Brain
   read sections (DEC-063). Company Brain now returns `communications.messages`
   and `documents.files` built from sanitized local SourceRecord payloads, and
