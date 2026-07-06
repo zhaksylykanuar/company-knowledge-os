@@ -12,8 +12,8 @@ const registry: ConnectorRegistryResponse = {
   workspace_id: "workspace-1",
   summary: {
     total: 4,
-    available: 1,
-    planned: 3,
+    available: 2,
+    planned: 2,
     connected: 1
   },
   boundary: {
@@ -37,10 +37,10 @@ const registry: ConnectorRegistryResponse = {
     {
       provider: "jira",
       name: "Jira",
-      status: "planned",
+      status: "available",
       read_only: true,
-      manage_path: null,
-      summary: "Planned minimal read-only issue import.",
+      manage_path: "/jira",
+      summary: "Local read-only issue import.",
       connection_count: 0,
       connected_count: 0,
       has_connection: false
@@ -103,6 +103,7 @@ test("renders connector registry summary and provider cards without write claims
   assert.ok(html.includes("Google Drive"));
   assert.ok(html.includes(M.connectors.boundaryNote));
   assert.ok(html.includes('href="/github"'));
+  assert.ok(html.includes('href="/jira"'));
   assert.doesNotMatch(html, /provider call started/i);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /SHOULD_NOT_LEAK/);

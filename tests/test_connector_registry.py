@@ -125,9 +125,9 @@ async def test_connector_registry_lists_mvp_connectors_without_secret_values() -
 
         assert registry["workspace_id"] == str(workspace.id)
         assert registry["summary"] == {
-            "available": 1,
+            "available": 2,
             "connected": 1,
-            "planned": 3,
+            "planned": 2,
             "total": 4,
         }
         assert registry["boundary"] == {
@@ -142,7 +142,8 @@ async def test_connector_registry_lists_mvp_connectors_without_secret_values() -
         assert by_provider["github"]["manage_path"] == "/github"
         assert by_provider["github"]["connection_count"] == 1
         assert by_provider["github"]["connected_count"] == 1
-        assert by_provider["jira"]["status"] == "planned"
+        assert by_provider["jira"]["status"] == "available"
+        assert by_provider["jira"]["manage_path"] == "/jira"
         assert by_provider["jira"]["connection_count"] == 1
         assert by_provider["jira"]["connected_count"] == 0
         assert "SHOULD_NOT_LEAK" not in str(registry)

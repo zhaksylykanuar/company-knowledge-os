@@ -1317,6 +1317,42 @@ Consequences:
 - Future connector implementations should extend this registry and keep
   workspace-scoped status visible on `/connectors`.
 
+
+## DEC-057 - Jira Connector Starts As Local Read-Only Issue Import
+
+Decision (2026-07-06): the first non-GitHub connector implementation is a
+local-only Jira issue import and read surface. The backend exposes `GET
+/api/v1/workspaces/{workspace_id}/jira/issues` and admin-only `POST
+/api/v1/workspaces/{workspace_id}/jira/issues/import`; the frontend adds `/jira`
+and the connector registry now marks Jira `available` with `/jira` as its manage
+path. The import accepts a pasted/exported JSON array (or object with
+`issues`) and persists a sanitized normalized projection into canonical
+`SourceRecord(provider='jira', record_type='issue')` and
+`Task(source_provider='jira')` rows using idempotent upserts.
+
+Rationale: GitHub real-provider reads remain externally blocked by missing
+GitHub App credentials/installation, while the MVP playbook requires minimal
+Jira/Gmail/Drive connector coverage. A local Jira import slice advances the
+connector framework without introducing OAuth, API-token handling, live provider
+reads, provider writes, or LLM behavior. It also reuses the canonical
+SourceRecord/Task spine instead of creating a parallel Jira data model.
+
+Consequences:
+
+- Jira import is local DB-only: it performs no Jira API calls, starts no sync,
+  makes no external writes, invokes no LLM, and does not read or emit encrypted
+  token fields.
+- Imported issue entries must include a valid Jira key such as `FOS-123`; invalid
+  entries are reported as per-entry failures while valid entries can still be
+  imported.
+- Persisted source payloads are normalized and sanitized: secret-like keys are
+  dropped, evidence refs are always present (provided or synthesized from the
+  Jira key/source URL), and raw provider credentials are not stored.
+- The import endpoint requires owner/admin workspace role; listing local Jira
+  issues is available to workspace members with normal workspace access.
+- Live Jira OAuth/API-token connection, background sync, webhooks, Jira writes,
+  and Company Brain aggregation across Jira/Gmail/Drive remain later slices.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

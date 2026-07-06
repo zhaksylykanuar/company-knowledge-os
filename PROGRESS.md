@@ -36,14 +36,24 @@
   (`HTTP 200` без auth), локальная поверхность репо (25 из `.local/repos.json`)
   присутствует. Preflight сообщает точный next step; выполнить run должен
   человек после установки credentials.
-- **Connector framework registry (НОВОЕ, DEC-056):** добавлен канонический
-  read-only реестр MVP-коннекторов: `GET /workspaces/{id}/connectors` и страница
+- **Connector framework registry (DEC-056):** добавлен канонический read-only
+  реестр MVP-коннекторов: `GET /workspaces/{id}/connectors` и страница
   `/connectors` показывают `github`, `jira`, `gmail`, `drive`, counts локальных
   `integration_connections`, статус `available/planned`, boundary
   (no provider calls / no sync / no external writes / no LLM / no secret reads)
-  и deep-link в `/github` для доступного GitHub пути. Jira/Gmail/Drive теперь
-  явно представлены как MVP-planned connectors, а не скрытая пустота в
-  `app/connectors/`.
+  и deep-link в доступные продуктовые пути. GitHub доступен через `/github`,
+  Jira теперь доступна через `/jira`, Gmail/Drive остаются planned.
+- **Jira local connector foundation (НОВОЕ, DEC-057):** добавлен первый
+  non-GitHub connector slice без внешних вызовов: `GET
+  /api/v1/workspaces/{workspace_id}/jira/issues` показывает локально
+  импортированные Jira issues, а admin-only `POST .../jira/issues/import`
+  принимает pasted/exported JSON (`[...]` или `{ issues: [...] }`) и
+  идемпотентно пишет sanitized canonical `SourceRecord(provider=jira,
+  record_type=issue)` + `Task(source_provider=jira)` rows с evidence refs.
+  `/jira` добавлен во фронтенд и sidebar; `/connectors` теперь помечает Jira
+  как `available`. Boundary сохранён: no Jira provider calls, no sync, no
+  external writes, no LLM, no secret reads; invalid issue entries возвращаются
+  per-entry failures, valid entries могут импортироваться.
 - **Teammate provisioning foundation (НОВОЕ, DEC-055):** добавлен первый
   multi-user slice без внешних сервисов: `GET /workspaces/{id}/members`
   возвращает local workspace members, а `POST /workspaces/{id}/members`

@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added the first minimal Jira connector implementation (DEC-057). The backend
+  now exposes local-only Jira issue list/import endpoints, and the frontend adds
+  `/jira` with a pasted/exported JSON import form. Imported issues are sanitized
+  into canonical `SourceRecord` + `Task` rows with evidence refs through
+  idempotent upserts. The path remains local DB-only: no Jira provider calls, no
+  sync, no external writes, no LLM, and no secret reads.
+
 - Added the connector framework registry (DEC-056). The backend now exposes
   `GET /api/v1/workspaces/{workspace_id}/connectors`, and the frontend adds a
   `/connectors` page plus sidebar entry. The registry lists the MVP provider set

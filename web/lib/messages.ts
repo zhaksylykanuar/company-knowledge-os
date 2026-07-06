@@ -16,6 +16,7 @@ export const M = {
     home: "Главная",
     dashboard: "Панель",
     github: "GitHub",
+    jira: "Jira",
     connectors: "Коннекторы",
     audit: "Аудит репо",
     briefings: "Сводки",
@@ -681,6 +682,51 @@ export const M = {
     plannedHint: "Появится позже; провайдер-вызовы и записи не выполняются.",
     boundaryNote:
       "Реестр вычисляется локально из уже сохранённых записей подключений. Он не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не читает секреты."
+  },
+
+
+  jira: {
+    eyebrow: "Jira",
+    title: "Jira issues",
+    description:
+      "Минимальный Jira-коннектор MVP: локальный импорт issue JSON в canonical SourceRecord/Task без provider calls, sync, external writes и LLM.",
+    badgeLocalOnly: "Local-only",
+    loading: "Загрузка Jira issues",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — Jira-коннектор недоступен.",
+    unavailableTitle: "Jira issues недоступны",
+    unavailableDescription: "Не удалось загрузить локальные Jira issues.",
+    summaryLabel: "Сводка Jira",
+    totalTitle: "Всего",
+    totalDescription: "Локально импортированные Jira issues.",
+    notDoneTitle: "Не завершено",
+    notDoneDescription: "Issues без done/closed/resolved статуса.",
+    doneTitle: "Done",
+    doneDescription: "Issues со статусом done/closed/resolved.",
+    emptyTitle: "Jira issues ещё не импортированы",
+    emptyDescription:
+      "Вставьте JSON export/payload с Jira issues. FounderOS сохранит только безопасную нормализованную проекцию.",
+    listLabel: "Список Jira issues",
+    keyLabel: "Ключ",
+    statusLabel: "Статус",
+    priorityLabel: "Приоритет",
+    dueDateLabel: "Due date",
+    updatedLabel: "Обновлено",
+    evidenceLabel: "Evidence refs",
+    importTitle: "Локальный импорт Jira JSON",
+    importDescription:
+      "Поддерживается массив issues или объект { issues: [...] }. Импорт пишет только локальную БД и не вызывает Jira API.",
+    importTextareaLabel: "Jira JSON",
+    importPlaceholder:
+      '[{"key":"FOS-123","summary":"Review onboarding","status":"To Do","url":"https://jira.example/browse/FOS-123"}]',
+    importSubmit: "Импортировать локально",
+    importing: "Импорт…",
+    importSuccess: (imported: number, failed: number) =>
+      `Импортировано: ${imported}. Ошибок: ${failed}.`,
+    importParseError: "JSON должен быть массивом issues или объектом с полем issues.",
+    boundaryNote:
+      "Jira-коннектор сейчас local-only: provider_calls=false, sync_started=false, external_writes=false, llm=false, секреты не читаются.",
+    warningsTitle: "Предупреждения"
   },
 
   evidence: {

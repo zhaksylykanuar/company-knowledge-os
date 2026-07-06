@@ -30,6 +30,9 @@ import type {
   GitHubSelectedPullRequestSyncRequest,
   GitHubSelectedPullRequestSyncResponse,
   GitHubSelectedRepositorySyncResult,
+  JiraIssueImportRequest,
+  JiraIssueImportResponse,
+  JiraIssueListResponse,
   RepoAuditImportRequest,
   RepoAuditImportResponse,
   RepoAuditResponse,
@@ -181,6 +184,43 @@ export async function provisionWorkspaceMember(
         role: request.role,
         initial_password: request.initialPassword ? request.initialPassword : null,
         create_setup_link: request.createSetupLink ?? false
+      }),
+      method: "POST"
+    }
+  );
+}
+
+
+export function buildWorkspaceJiraIssuesPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jira/issues`;
+}
+
+export function buildWorkspaceJiraImportPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jira/issues/import`;
+}
+
+export async function fetchJiraIssues(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<JiraIssueListResponse> {
+  return apiFetch<JiraIssueListResponse>(
+    buildWorkspaceJiraIssuesPath(workspaceId),
+    options
+  );
+}
+
+export async function importJiraIssues(
+  workspaceId: string,
+  request: JiraIssueImportRequest,
+  options: ApiFetchOptions = {}
+): Promise<JiraIssueImportResponse> {
+  return apiFetch<JiraIssueImportResponse>(
+    buildWorkspaceJiraImportPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        issues: request.issues,
+        connection_id: request.connectionId ?? null
       }),
       method: "POST"
     }

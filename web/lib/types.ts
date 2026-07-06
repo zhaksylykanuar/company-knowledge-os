@@ -86,6 +86,81 @@ export type ConnectorRegistryResponse = {
   boundary: ConnectorRegistryBoundary;
 };
 
+
+export type JiraEvidenceRef = {
+  kind: string;
+  source: string;
+  ref: string;
+  url: string | null;
+};
+
+export type JiraConnectorBoundary = {
+  provider_calls: boolean;
+  sync_started: boolean;
+  external_writes: boolean;
+  llm: boolean;
+  reads_secrets: boolean;
+};
+
+export type JiraIssue = {
+  task_id: string | null;
+  source_record_id: string | null;
+  key: string;
+  title: string;
+  status: string | null;
+  status_category: string | null;
+  priority: string | null;
+  due_date: string | null;
+  source_url: string | null;
+  updated_at: string | null;
+  project_key: string | null;
+  issue_type: string | null;
+  evidence_refs: JiraEvidenceRef[];
+};
+
+export type JiraIssueListCounts = {
+  total: number;
+  not_done: number;
+  done: number;
+};
+
+export type JiraIssueListResponse = {
+  workspace_id: string;
+  issues: JiraIssue[];
+  counts: JiraIssueListCounts;
+  boundary: JiraConnectorBoundary;
+  warnings: string[];
+};
+
+export type JiraIssueImportRequest = {
+  issues: Record<string, unknown>[];
+  connectionId?: string | null;
+};
+
+export type JiraIssueImportCounts = {
+  received: number;
+  imported: number;
+  failed: number;
+  source_records_created: number;
+  source_records_updated: number;
+  tasks_created: number;
+  tasks_updated: number;
+};
+
+export type JiraIssueImportFailure = {
+  index: number;
+  reason: string;
+};
+
+export type JiraIssueImportResponse = {
+  workspace_id: string;
+  counts: JiraIssueImportCounts;
+  issues: JiraIssue[];
+  failures: JiraIssueImportFailure[];
+  boundary: JiraConnectorBoundary;
+  warnings: string[];
+};
+
 export type GitHubOperationalWorkState = "open" | "closed" | "merged" | "all";
 
 export type CompanyBrainSourceRef = {

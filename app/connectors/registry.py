@@ -47,12 +47,13 @@ CONNECTOR_DESCRIPTORS: tuple[ConnectorDescriptor, ...] = (
     ConnectorDescriptor(
         provider=INTEGRATION_PROVIDER_JIRA,
         name="Jira",
-        status=CONNECTOR_STATUS_PLANNED,
+        status=CONNECTOR_STATUS_AVAILABLE,
         read_only=True,
-        manage_path=None,
+        manage_path="/jira",
         summary=(
-            "Planned minimal read-only issue import in MVP scope. Not implemented "
-            "yet; no provider calls or writes are performed."
+            "Local read-only issue import into canonical SourceRecord/Task state. "
+            "The MVP path accepts pasted/exported Jira issue JSON only; no provider "
+            "calls or writes are performed."
         ),
     ),
     ConnectorDescriptor(

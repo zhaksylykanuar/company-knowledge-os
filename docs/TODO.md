@@ -13,7 +13,7 @@ first.
 Implemented foundations:
 
 - FastAPI backend with canonical `/api/v1` routes, async SQLAlchemy/Postgres,
-  Alembic migrations, and one current Alembic head (`e8f9a0b1c2d3`).
+  Alembic migrations, and one current Alembic head (`e9a0b1c2d3e4`).
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -156,7 +156,14 @@ Implemented foundations:
   /workspaces/{id}/connectors` and `/connectors` show the MVP provider set
   (`github`, `jira`, `gmail`, `drive`), local connection counts, available vs.
   planned status, and read-only/no-provider-call/no-secret-read boundaries.
-  GitHub links to `/github`; Jira/Gmail/Drive are explicitly planned.
+  GitHub links to `/github`, Jira links to `/jira`, and Gmail/Drive are
+  explicitly planned.
+- Jira local connector foundation is now in place (DEC-057): `GET
+  /workspaces/{id}/jira/issues`, admin-only `POST
+  /workspaces/{id}/jira/issues/import`, and `/jira` support local-only
+  pasted/exported issue JSON import into canonical `SourceRecord` + `Task` rows
+  with evidence refs. No Jira provider call, sync, external write, LLM, or
+  secret read is performed.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -219,9 +226,10 @@ Done when:
    coverage panel now also has a local breakdown (closed work, recent activity,
    repos with/without source refs, evidence-by-kind) plus deterministic next-step
    guidance for data/evidence/open-work/provider/AI boundaries. `/connectors`
-   now surfaces the MVP connector registry for GitHub/Jira/Gmail/Drive. Next:
-   implement the first minimal non-GitHub read-only connector (likely Jira issue
-   import) or run the first explicitly approved scoped GitHub provider read when
+   now surfaces the MVP connector registry for GitHub/Jira/Gmail/Drive, and
+   `/jira` provides the first local-only Jira issue import/list path. Next:
+   implement minimal Gmail or Google Drive read-only/local import foundation,
+   or run the first explicitly approved scoped GitHub provider read when
    credentials are available, while keeping provider writes and AI generation
    disabled.
 
