@@ -243,8 +243,12 @@ function BrainWorkSection({
             </div>
             <dl className="work-meta">
               <div>
-                <dt>{M.companyBrain.metaRepository}</dt>
-                <dd>{item.repository_full_name ?? M.companyBrain.unknownRepository}</dd>
+                <dt>{M.companyBrain.metaProvider}</dt>
+                <dd>{item.source_provider ?? M.common.unknown}</dd>
+              </div>
+              <div>
+                <dt>{M.companyBrain.metaScope}</dt>
+                <dd>{workItemScope(item)}</dd>
               </div>
               <div>
                 <dt>{M.companyBrain.metaState}</dt>
@@ -263,6 +267,15 @@ function BrainWorkSection({
         ))}
       </div>
     </section>
+  );
+}
+
+function workItemScope(item: CompanyBrainWorkItem): string {
+  return (
+    item.repository_full_name ??
+    item.project_key ??
+    item.repository_external_id ??
+    M.companyBrain.unknownRepository
   );
 }
 

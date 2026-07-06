@@ -443,6 +443,88 @@ async def test_workspace_company_brain_includes_local_connector_source_record_co
         await _cleanup(marker)
 
 
+async def test_workspace_company_brain_reads_jira_tasks_as_work_items(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        now = datetime(2026, 7, 6, 10, 0, tzinfo=timezone.utc)
+        async with AsyncSessionLocal() as session:
+            source_record = SourceRecord(
+                workspace_id=workspace_id,
+                provider="jira",
+                external_id=f"FOS-{marker[:6]}",
+                record_type="issue",
+                source_url="https://jira.example/browse/FOS-123",
+                payload={
+                    "evidence_refs": [
+                        {
+                            "kind": "jira_issue",
+                            "source": "jira",
+                            "ref": f"FOS-{marker[:6]}",
+                            "url": "https://jira.example/browse/FOS-123",
+                        }
+                    ],
+                    "api_token": "SHOULD_NOT_LEAK",
+                },
+                payload_hash=f"jira-task-hash-{marker}",
+                observed_at=now,
+                source_updated_at=now,
+            )
+            session.add(source_record)
+            await session.flush()
+            session.add(
+                Task(
+                    workspace_id=workspace_id,
+                    source_provider="jira",
+                    source_record_id=source_record.id,
+                    external_id=f"FOS-{marker[:6]}",
+                    title="Review private beta onboarding",
+                    status="To Do",
+                    source_url="https://jira.example/browse/FOS-123",
+                    task_metadata={
+                        "jira_object_type": "issue",
+                        "key": f"FOS-{marker[:6]}",
+                        "project_key": "FOS",
+                        "status_category": "not_done",
+                    },
+                    source_updated_at=now,
+                )
+            )
+            await session.commit()
+
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/company-brain",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["summary"]["open_issues"] == 1
+        assert body["summary"]["closed_issues"] == 0
+        assert body["summary"]["open_pull_requests"] == 0
+        jira_issue = body["work"]["issues"][0]
+        assert jira_issue["source_provider"] == "jira"
+        assert jira_issue["title"] == "Review private beta onboarding"
+        assert jira_issue["project_key"] == "FOS"
+        assert jira_issue["repository_full_name"] is None
+        assert jira_issue["source_refs"][0]["kind"] == "jira_issue"
+        assert body["work"]["recent"][0]["source_provider"] == "jira"
+        assert body["evidence"][0]["source"] == "jira"
+        serialized = json.dumps(body, sort_keys=True)
+        assert "SHOULD_NOT_LEAK" not in serialized
+
+    finally:
+        await _cleanup(marker)
+
+
 async def test_workspace_company_brain_reads_canonical_github_evidence(
     monkeypatch,
 ) -> None:

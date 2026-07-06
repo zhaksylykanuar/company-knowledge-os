@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Promoted local Jira issues into Company Brain work items (DEC-062). Workspace
+  Company Brain now includes canonical Jira `Task(source_provider='jira')` rows
+  in `work.issues`, `work.recent`, issue summary counts, and evidence, with
+  optional work-item `source_provider` and `project_key` fields for the UI. This
+  is local/deterministic only: no Jira provider calls, sync, external writes,
+  raw payload rendering, or LLM.
 - Added a deterministic connector source-coverage item to the Founder Briefing
   (DEC-061). The manual briefing now surfaces a `connector-source-coverage`
   item from the Company Brain `source_records` aggregate so local

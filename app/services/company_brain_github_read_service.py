@@ -13,6 +13,7 @@ from app.db.canonical_models import (
     PULL_REQUEST_STATE_OPEN,
     SOURCE_RECORD_PROVIDER_GITHUB,
     TASK_PROVIDER_GITHUB,
+    TASK_PROVIDER_JIRA,
     PullRequest,
     Repository,
     SourceRecord,
@@ -30,7 +31,9 @@ async def build_workspace_company_brain(
     limit: int = 10,
 ) -> dict[str, Any]:
     repositories = await _repositories(session=session, workspace_id=workspace_id)
-    tasks = await _github_issue_tasks(session=session, workspace_id=workspace_id)
+    github_tasks = await _github_issue_tasks(session=session, workspace_id=workspace_id)
+    jira_tasks = await _jira_issue_tasks(session=session, workspace_id=workspace_id)
+    tasks = [*github_tasks, *jira_tasks]
     pull_requests = await _pull_requests(session=session, workspace_id=workspace_id)
     source_record_coverage = await _source_record_coverage(
         session=session,
@@ -220,6 +223,32 @@ async def _github_issue_tasks(
     return tasks
 
 
+async def _jira_issue_tasks(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+) -> list[Task]:
+    rows = (
+        await session.execute(
+            select(Task)
+            .where(Task.workspace_id == workspace_id)
+            .where(Task.source_provider == TASK_PROVIDER_JIRA)
+            .order_by(Task.source_updated_at.desc().nullslast(), Task.updated_at.desc())
+        )
+    ).scalars()
+    tasks: list[Task] = []
+    seen_issue_keys: set[str] = set()
+    for task in rows:
+        if not _is_jira_issue(task):
+            continue
+        issue_key = _issue_identity_key(task)
+        if issue_key in seen_issue_keys:
+            continue
+        seen_issue_keys.add(issue_key)
+        tasks.append(task)
+    return tasks
+
+
 async def _pull_requests(
     *,
     session: AsyncSession,
@@ -252,6 +281,7 @@ async def _source_records_by_external_id(
     *,
     session: AsyncSession,
     workspace_id: UUID,
+    provider: str = SOURCE_RECORD_PROVIDER_GITHUB,
     record_type: str,
     external_ids: list[str | None],
 ) -> dict[str, SourceRecord]:
@@ -260,11 +290,11 @@ async def _source_records_by_external_id(
         return {}
     rows = (
         await session.execute(
-            select(SourceRecord)
-            .where(SourceRecord.workspace_id == workspace_id)
-            .where(SourceRecord.provider == SOURCE_RECORD_PROVIDER_GITHUB)
-            .where(SourceRecord.record_type == record_type)
-            .where(SourceRecord.external_id.in_(selected_ids))
+                select(SourceRecord)
+                .where(SourceRecord.workspace_id == workspace_id)
+                .where(SourceRecord.provider == provider)
+                .where(SourceRecord.record_type == record_type)
+                .where(SourceRecord.external_id.in_(selected_ids))
         )
     ).scalars()
     return {row.external_id: row for row in rows}
@@ -291,25 +321,36 @@ async def _source_records_for_tasks(
         ).scalars()
         by_id = {row.id: row for row in rows}
 
-    by_external_id = await _source_records_by_external_id(
-        session=session,
-        workspace_id=workspace_id,
-        record_type="issue",
-        external_ids=[task.external_id for task in tasks],
-    )
+    external_ids_by_provider: dict[str, list[str | None]] = {}
+    for task in tasks:
+        external_ids_by_provider.setdefault(task.source_provider, []).append(task.external_id)
+    by_external_id: dict[tuple[str, str | None], SourceRecord] = {}
+    for provider, external_ids in external_ids_by_provider.items():
+        provider_records = await _source_records_by_external_id(
+            session=session,
+            workspace_id=workspace_id,
+            provider=provider,
+            record_type="issue",
+            external_ids=external_ids,
+        )
+        by_external_id.update(
+            {(provider, external_id): record for external_id, record in provider_records.items()}
+        )
     return {
-        task.id: by_id.get(task.source_record_id) or by_external_id.get(task.external_id)
+        task.id: by_id.get(task.source_record_id)
+        or by_external_id.get((task.source_provider, task.external_id))
         for task in tasks
-        if by_id.get(task.source_record_id) or by_external_id.get(task.external_id)
+        if by_id.get(task.source_record_id)
+        or by_external_id.get((task.source_provider, task.external_id))
     }
 
 
 def _open_issues(tasks: list[Task]) -> list[Task]:
-    return [task for task in tasks if task.status == PULL_REQUEST_STATE_OPEN]
+    return [task for task in tasks if _is_open_issue_task(task)]
 
 
 def _closed_issues(tasks: list[Task]) -> list[Task]:
-    return [task for task in tasks if task.status == "closed"]
+    return [task for task in tasks if _is_done_issue_task(task)]
 
 
 def _issue_identity_key(task: Task) -> str:
@@ -375,12 +416,14 @@ def _issue_payload(
     return {
         "id": task.id,
         "type": "issue",
+        "source_provider": task.source_provider,
         "external_id": task.external_id,
         "number": _safe_int(metadata.get("number")),
         "title": task.title,
         "state": task.status,
         "repository_full_name": _safe_text(metadata.get("repository_full_name")),
         "repository_external_id": _safe_text(metadata.get("repository_external_id")),
+        "project_key": _safe_text(metadata.get("project_key")),
         "source_url": _safe_url(task.source_url),
         "updated_at": task.source_updated_at or task.updated_at,
         "source_refs": _source_refs(source_record),
@@ -395,12 +438,14 @@ def _pull_request_payload(
     return {
         "id": pull_request.id,
         "type": "pull_request",
+        "source_provider": SOURCE_RECORD_PROVIDER_GITHUB,
         "external_id": pull_request.external_id,
         "number": pull_request.number,
         "title": pull_request.title,
         "state": pull_request.state,
         "repository_full_name": repository.full_name if repository else None,
         "repository_external_id": repository.external_id if repository else None,
+        "project_key": None,
         "source_url": _safe_url(pull_request.source_url),
         "updated_at": pull_request.updated_at_source or pull_request.created_at,
         "source_refs": _source_refs(source_record),
@@ -437,6 +482,32 @@ def _recent_work(
 def _is_github_issue(task: Task) -> bool:
     metadata = task.task_metadata if isinstance(task.task_metadata, Mapping) else {}
     return metadata.get("github_object_type") == "issue"
+
+
+def _is_jira_issue(task: Task) -> bool:
+    metadata = task.task_metadata if isinstance(task.task_metadata, Mapping) else {}
+    return metadata.get("jira_object_type") == "issue"
+
+
+def _is_open_issue_task(task: Task) -> bool:
+    if task.source_provider == TASK_PROVIDER_GITHUB:
+        return task.status == PULL_REQUEST_STATE_OPEN
+    if task.source_provider == TASK_PROVIDER_JIRA:
+        return not _is_done_issue_task(task)
+    return False
+
+
+def _is_done_issue_task(task: Task) -> bool:
+    if task.source_provider == TASK_PROVIDER_GITHUB:
+        return task.status == "closed"
+    if task.source_provider == TASK_PROVIDER_JIRA:
+        metadata = task.task_metadata if isinstance(task.task_metadata, Mapping) else {}
+        category = _safe_text(metadata.get("status_category"))
+        if category == "done":
+            return True
+        status = (_safe_text(task.status) or "").casefold()
+        return status in {"closed", "done", "resolved"}
+    return False
 
 
 def _source_refs(source_record: SourceRecord | None) -> list[dict[str, Any]]:

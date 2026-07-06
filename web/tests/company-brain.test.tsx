@@ -249,6 +249,58 @@ test("renders summary counts, repositories, issues, and PRs", () => {
   assert.match(html, /Merge PR 8/);
 });
 
+test("renders Jira issues as first-class Company Brain work items", () => {
+  const html = renderPanel({
+    data: {
+      ...sampleBrain,
+      summary: {
+        ...sampleBrain.summary,
+        open_issues: 2
+      },
+      work: {
+        ...sampleBrain.work,
+        issues: [
+          ...sampleBrain.work.issues,
+          {
+            id: "jira-task-1",
+            type: "issue",
+            source_provider: "jira",
+            external_id: "FOS-123",
+            number: null,
+            title: "Review private beta onboarding",
+            state: "To Do",
+            repository_full_name: null,
+            repository_external_id: null,
+            project_key: "FOS",
+            source_url: "https://jira.example/browse/FOS-123",
+            updated_at: "2026-07-06T10:00:00+00:00",
+            source_refs: [
+              {
+                id: "jira-source-1:0",
+                kind: "jira_issue",
+                source: "jira",
+                label: "FOS-123",
+                url: "https://jira.example/browse/FOS-123",
+                record_type: "issue",
+                record_id: "jira-source-1"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  });
+
+  assert.match(html, /Review private beta onboarding/);
+  assert.ok(html.includes(M.companyBrain.metaProvider));
+  assert.match(html, /jira/);
+  assert.ok(html.includes(M.companyBrain.metaScope));
+  assert.match(html, /FOS/);
+  assert.match(html, /FOS-123/);
+  assert.doesNotMatch(html, /provider call started/i);
+  assert.doesNotMatch(html, /external write performed/i);
+});
+
 test("renders evidence and source refs without fake company facts", () => {
   const html = renderPanel();
   assert.ok(html.includes(M.companyBrain.evidenceSection));

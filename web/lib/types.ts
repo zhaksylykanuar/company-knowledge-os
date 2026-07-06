@@ -355,12 +355,14 @@ export type CompanyBrainRepository = {
 export type CompanyBrainWorkItem = {
   id: string;
   type: "issue" | "pull_request";
+  source_provider?: string | null;
   external_id: string | null;
   number: number | null;
   title: string;
   state: string | null;
   repository_full_name: string | null;
   repository_external_id: string | null;
+  project_key?: string | null;
   source_url: string | null;
   updated_at: string | null;
   source_refs: CompanyBrainSourceRef[];

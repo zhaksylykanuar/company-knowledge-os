@@ -188,6 +188,10 @@ Implemented foundations:
   local Jira/Gmail/Drive imports are visible in the briefing flow (not only on
   the dashboard). Aggregate-only: no raw payloads, provider calls, sync,
   external writes, or LLM.
+- Company Brain now promotes task-shaped local Jira records (DEC-062):
+  canonical `Task(source_provider='jira')` rows appear in `work.issues`,
+  `work.recent`, issue summary counts, and evidence with provider/project scope.
+  Gmail/Drive remain SourceRecord coverage until first-class models exist.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -254,11 +258,12 @@ Done when:
    `/jira`, `/gmail`, and `/drive` provide local-only connector import/list
    paths. Company Brain/Dashboard source coverage now also exposes aggregate
    local connector SourceRecord counts, and the deterministic Founder Briefing
-   now includes a connector-source-coverage item (DEC-061). Next: normalize
-   non-GitHub connector records into Company Brain work items (so Jira/Gmail/
-   Drive appear as first-class entities, not only aggregate counts), or run the
-   first explicitly approved scoped GitHub provider read when credentials are
-   available, while keeping provider writes and AI generation disabled.
+   now includes a connector-source-coverage item (DEC-061). Jira issues are now
+   first-class Company Brain work items (DEC-062). Next: introduce first-class
+   Company Brain read models for Gmail messages and Drive files (do not coerce
+   them into tasks), or run the first explicitly approved scoped GitHub provider
+   read when credentials are available, while keeping provider writes and AI
+   generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

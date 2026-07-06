@@ -73,12 +73,14 @@ class CompanyBrainRepositoryRead(BaseModel):
 class CompanyBrainWorkItemRead(BaseModel):
     id: UUID
     type: Literal["issue", "pull_request"]
+    source_provider: str | None = None
     external_id: str | None = None
     number: int | None = None
     title: str
     state: str | None = None
     repository_full_name: str | None = None
     repository_external_id: str | None = None
+    project_key: str | None = None
     source_url: str | None = None
     updated_at: datetime | None = None
     source_refs: list[CompanyBrainSourceRefRead] = Field(default_factory=list)

@@ -1496,7 +1496,40 @@ Consequences:
   new item is additive.
 - Full cross-provider normalization into Company Brain work items and richer
   briefing narrative remain later slices; this is a deterministic visibility
-  bridge, not an LLM briefing pipeline.
+  bridge, not an LLM briefing pipeline. DEC-062 later promotes the task-shaped
+  Jira subset into Company Brain work items.
+
+## DEC-062 - Company Brain Promotes Local Jira Issues Into Work Items
+
+Decision (2026-07-06): workspace Company Brain now treats local canonical Jira
+`Task(source_provider='jira')` rows as first-class issue work items. Jira issues
+appear in `work.issues`, `work.recent`, source evidence, and open/closed issue
+summary counts alongside GitHub issues. The response adds optional
+`source_provider` and `project_key` fields on work items so the UI can render
+Jira project scope without pretending the item belongs to a GitHub repository.
+
+Rationale: DEC-057 made Jira issue import write canonical `Task` rows, while
+DEC-060/061 exposed non-GitHub records only as aggregate SourceRecord coverage.
+Jira issues are task-shaped and already satisfy the canonical Task contract, so
+promoting them into Company Brain work items advances the MVP goal of seeing
+work from multiple connectors in one founder-facing view. Gmail messages and
+Drive files are not task-shaped, so they remain SourceRecord coverage until a
+separate first-class model is introduced.
+
+Consequences:
+
+- Jira work-item promotion is local/deterministic only: no Jira provider calls,
+  sync, external writes, LLM, raw payload rendering, or secret reads are added.
+- GitHub issue semantics remain stable: only GitHub tasks with status `open`
+  count as open, while closed GitHub tasks count as closed. Jira tasks count as
+  closed/done when their metadata `status_category` is `done` (or status is
+  closed/done/resolved); otherwise they are visible as open work.
+- Company Brain `work.issues` can now contain both GitHub and Jira rows. Current
+  UI labels each work item with provider and scope (`repository_full_name` for
+  GitHub, `project_key` for Jira).
+- Gmail and Drive first-class entity/read models remain later slices; they must
+  not be forced into `Task` or work-item semantics without an explicit model
+  decision.
 
 ## ASK - Open Questions For The Human (not decided)
 

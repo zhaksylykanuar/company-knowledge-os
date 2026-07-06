@@ -76,6 +76,15 @@
   external writes и LLM; при отсутствии записей item становится `next_step` с
   предупреждением. Существующие briefing item ids/shape сохранены, item
   additive.
+- **Jira first-class Company Brain work items (НОВОЕ, DEC-062):** локальные
+  canonical `Task(source_provider=jira)` rows теперь попадают в workspace
+  Company Brain `work.issues`, `work.recent`, issue summary counts and evidence.
+  `CompanyBrainWorkItem` получил optional `source_provider` и `project_key`, а
+  UI показывает provider + scope (GitHub repo или Jira project) вместо
+  GitHub-only repository label. Boundary сохранён: no Jira provider calls, no
+  sync, no external writes, no raw payload rendering, no LLM. Gmail/Drive не
+  притворяются task/work items и остаются SourceRecord coverage до отдельной
+  entity/model decision.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально
