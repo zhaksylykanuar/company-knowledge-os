@@ -1465,6 +1465,39 @@ Consequences:
   Drive remain later slices; this decision is a visibility bridge, not a full
   cross-provider reasoning model.
 
+## DEC-061 - Founder Briefing Surfaces Connector SourceRecord Coverage
+
+Decision (2026-07-06): the deterministic Founder Briefing now includes a
+`connector-source-coverage` item derived from the additive Company Brain
+`source_records` aggregate (DEC-060). It summarizes local canonical
+`SourceRecord` coverage across GitHub/Jira/Gmail/Drive (total, by provider, by
+record type) so imported Jira/Gmail/Drive records are visible in the primary
+founder-facing briefing flow, not only on the dashboard coverage panel. The
+briefing now fetches Company Brain once per generation and feeds both the
+existing GitHub-first `source-coverage` item and the new connector item.
+
+Rationale: DEC-057/058/059 added local connector imports and DEC-060 surfaced
+their aggregate on the dashboard, but a founder generating a briefing still saw
+only GitHub-shaped coverage, leaving non-GitHub connector data invisible in the
+briefing itself. Adding a deterministic connector-coverage item advances MVP
+founder-facing visibility without provider calls, sync, external writes, or LLM.
+
+Consequences:
+
+- The item is aggregate-only: it reports counts by provider and record type, not
+  raw source payloads, snippets, email bodies, document contents, secrets, or
+  provider responses.
+- When no connector SourceRecord rows exist, the item is a `next_step` with a
+  "connector source coverage empty" warning; otherwise it is a `status` item
+  with evidence refs keyed on `provider:count`.
+- Company Brain is now queried once per briefing generation and shared between
+  the GitHub-first coverage item and the connector item, avoiding a duplicate
+  read; the existing briefing item ids/shape remain backward-compatible and the
+  new item is additive.
+- Full cross-provider normalization into Company Brain work items and richer
+  briefing narrative remain later slices; this is a deterministic visibility
+  bridge, not an LLM briefing pipeline.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

@@ -560,6 +560,139 @@ async def test_manual_briefing_includes_source_coverage_signals_and_item(
         await _cleanup_briefing_fixture(marker)
 
 
+async def test_manual_briefing_includes_connector_source_coverage_item(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    async def fake_company_brain(**_kwargs):
+        return {
+            "workspace_id": _kwargs["workspace_id"],
+            "mode": "github_first_canonical",
+            "source": "canonical_github_company_brain",
+            "summary": {
+                "repositories": 1,
+                "open_issues": 0,
+                "open_pull_requests": 0,
+                "closed_issues": 0,
+                "merged_pull_requests": 0,
+            },
+            "source_records": {
+                "total": 3,
+                "by_provider": [
+                    {"provider": "drive", "count": 1},
+                    {"provider": "gmail", "count": 1},
+                    {"provider": "jira", "count": 1},
+                ],
+                "by_record_type": [
+                    {"record_type": "file", "count": 1},
+                    {"record_type": "issue", "count": 1},
+                    {"record_type": "message", "count": 1},
+                ],
+            },
+            "repositories": [],
+            "work": {"issues": [], "pull_requests": [], "recent": []},
+            "evidence": [],
+            "capabilities": {
+                "live_github_oauth": False,
+                "live_provider_sync": False,
+                "local_sync": True,
+                "llm_briefing": False,
+            },
+            "is_live": False,
+            "llm_used": False,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+    monkeypatch.setattr(
+        founder_briefing_service,
+        "build_workspace_company_brain",
+        fake_company_brain,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={},
+            )
+
+        assert response.status_code == 200, response.text
+        briefing = response.json()["briefing"]
+        connector_item = next(
+            item
+            for item in briefing["items"]
+            if item["id"] == "connector-source-coverage"
+        )
+        assert connector_item["category"] == "status"
+        assert "total=3" in connector_item["summary"]
+        assert "jira=1" in connector_item["summary"]
+        assert "gmail=1" in connector_item["summary"]
+        assert "drive=1" in connector_item["summary"]
+        assert "message=1" in connector_item["summary"]
+        assert set(connector_item["related_entities"]) == {"drive", "gmail", "jira"}
+        assert connector_item["recommended_next_step"]
+        assert connector_item["evidence_refs"]
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_manual_briefing_connector_source_coverage_empty_state(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={},
+            )
+
+        assert response.status_code == 200, response.text
+        connector_item = next(
+            item
+            for item in response.json()["briefing"]["items"]
+            if item["id"] == "connector-source-coverage"
+        )
+        assert connector_item["category"] == "next_step"
+        assert any(
+            "connector source coverage empty" in warning
+            for warning in connector_item["warnings"]
+        )
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
 async def test_manual_briefing_warns_when_repository_evidence_missing(
     monkeypatch,
 ) -> None:

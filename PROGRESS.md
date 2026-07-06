@@ -65,6 +65,17 @@
   writes или LLM. GitHub-first `summary/repositories/work/evidence` контракт
   сохранён; это visibility bridge для локальных коннекторов, а не full
   cross-provider reasoning model.
+- **Founder Briefing connector coverage item (НОВОЕ, DEC-061):**
+  детерминированный manual Founder Briefing теперь добавляет item
+  `connector-source-coverage` из Company Brain `source_records` aggregate
+  (DEC-060): total + by_provider + by_record_type по GitHub/Jira/Gmail/Drive,
+  так что импортированные Jira/Gmail/Drive записи видны в самом briefing flow, а
+  не только на dashboard. Company Brain читается один раз за генерацию и
+  используется и существующим GitHub-first `source-coverage` item, и новым
+  connector item. Aggregate-only: без raw payloads, provider calls, sync,
+  external writes и LLM; при отсутствии записей item становится `next_step` с
+  предупреждением. Существующие briefing item ids/shape сохранены, item
+  additive.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально

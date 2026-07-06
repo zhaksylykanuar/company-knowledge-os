@@ -183,6 +183,11 @@ Implemented foundations:
   provider counts, and record-type counts across GitHub/Jira/Gmail/Drive are
   visible without exposing raw payloads, email bodies, document contents,
   provider calls, sync, external writes, or LLM.
+- The deterministic Founder Briefing now includes a `connector-source-coverage`
+  item (DEC-061) built from the Company Brain `source_records` aggregate, so
+  local Jira/Gmail/Drive imports are visible in the briefing flow (not only on
+  the dashboard). Aggregate-only: no raw payloads, provider calls, sync,
+  external writes, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -248,9 +253,11 @@ Done when:
    now surfaces the MVP connector registry for GitHub/Jira/Gmail/Drive, and
    `/jira`, `/gmail`, and `/drive` provide local-only connector import/list
    paths. Company Brain/Dashboard source coverage now also exposes aggregate
-   local connector SourceRecord counts. Next: carry non-GitHub source coverage
-   into deterministic Founder Briefing signals/items, or run the first
-   explicitly approved scoped GitHub provider read when credentials are
+   local connector SourceRecord counts, and the deterministic Founder Briefing
+   now includes a connector-source-coverage item (DEC-061). Next: normalize
+   non-GitHub connector records into Company Brain work items (so Jira/Gmail/
+   Drive appear as first-class entities, not only aggregate counts), or run the
+   first explicitly approved scoped GitHub provider read when credentials are
    available, while keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**

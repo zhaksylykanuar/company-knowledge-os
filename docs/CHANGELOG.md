@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added a deterministic connector source-coverage item to the Founder Briefing
+  (DEC-061). The manual briefing now surfaces a `connector-source-coverage`
+  item from the Company Brain `source_records` aggregate so local
+  Jira/Gmail/Drive imports are visible in the briefing flow, not only on the
+  dashboard. Company Brain is fetched once per generation and shared with the
+  existing GitHub-first coverage item. Aggregate-only: no raw payloads, provider
+  calls, sync, external writes, or LLM.
 - Added local connector SourceRecord coverage to the workspace Company Brain
   payload and dashboard Source Coverage panel (DEC-060). Company Brain now
   returns aggregate `source_records` counts by provider and record type so

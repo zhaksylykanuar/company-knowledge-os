@@ -76,16 +76,18 @@ async def generate_manual_founder_briefing(
             items.append(repository_item)
             warnings.extend(repository_warnings)
 
-            coverage_item, coverage_signals = await _source_coverage_item(
-                session,
+            brain = await build_workspace_company_brain(
+                session=session,
                 workspace_id=workspace_id,
                 limit=options.limit,
             )
+            coverage_item, coverage_signals = _source_coverage_item(brain)
             github_signals["repository_count"] = max(
                 int(github_signals["repository_count"]),
                 int(coverage_signals["canonical_repositories"]),
             )
             items.append(coverage_item)
+            items.append(_connector_source_coverage_item(brain))
 
         if options.include_sync_jobs:
             sync_items, sync_signals = await _github_sync_items(
@@ -250,17 +252,9 @@ async def _github_repository_item(
     )
 
 
-async def _source_coverage_item(
-    session: AsyncSession,
-    *,
-    workspace_id: UUID,
-    limit: int,
+def _source_coverage_item(
+    brain: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    brain = await build_workspace_company_brain(
-        session=session,
-        workspace_id=workspace_id,
-        limit=limit,
-    )
     summary = brain.get("summary") if isinstance(brain.get("summary"), Mapping) else {}
     capabilities = (
         brain.get("capabilities") if isinstance(brain.get("capabilities"), Mapping) else {}
@@ -337,6 +331,107 @@ async def _source_coverage_item(
             warnings=[] if evidence_refs else ["source coverage has no evidence refs"],
         ),
         coverage_signals,
+    )
+
+
+def _connector_source_coverage_item(brain: Mapping[str, Any]) -> dict[str, Any]:
+    """Deterministic briefing item summarizing local connector SourceRecord coverage.
+
+    Reads only the additive ``source_records`` aggregate already computed by
+    Company Brain (DEC-060). It surfaces Jira/Gmail/Drive (and GitHub) local
+    import coverage in the founder-facing briefing without provider calls, sync,
+    external writes, or LLM, and without exposing raw payloads.
+    """
+
+    source_records = (
+        brain.get("source_records")
+        if isinstance(brain.get("source_records"), Mapping)
+        else {}
+    )
+    total = int(source_records.get("total") or 0)
+    by_provider = [
+        entry
+        for entry in (source_records.get("by_provider") or [])
+        if isinstance(entry, Mapping)
+    ]
+    by_record_type = [
+        entry
+        for entry in (source_records.get("by_record_type") or [])
+        if isinstance(entry, Mapping)
+    ]
+    non_github_providers = [
+        _safe_text(entry.get("provider"))
+        for entry in by_provider
+        if _safe_text(entry.get("provider"))
+        and _safe_text(entry.get("provider")) != INTEGRATION_PROVIDER_GITHUB
+    ]
+
+    if total <= 0:
+        return _item(
+            item_id="connector-source-coverage",
+            category="next_step",
+            title="No connector source records imported yet",
+            summary=(
+                "No canonical SourceRecord rows exist for this workspace across "
+                "GitHub/Jira/Gmail/Drive."
+            ),
+            severity="medium",
+            confidence=0.8,
+            evidence_refs=[],
+            recommended_next_step=(
+                "Import local Jira/Gmail/Drive records or run an approved GitHub "
+                "read to populate connector coverage."
+            ),
+            warnings=["connector source coverage empty"],
+        )
+
+    provider_summary = ", ".join(
+        f"{_safe_text(entry.get('provider')) or 'unknown'}={int(entry.get('count') or 0)}"
+        for entry in by_provider
+    )
+    record_type_summary = ", ".join(
+        f"{_safe_text(entry.get('record_type')) or 'unknown'}={int(entry.get('count') or 0)}"
+        for entry in by_record_type
+    )
+    evidence_refs = [
+        {
+            "kind": "connector_source_coverage",
+            "source": "company_brain",
+            "ref": f"{_safe_text(entry.get('provider')) or 'unknown'}:{int(entry.get('count') or 0)}",
+            "url": None,
+        }
+        for entry in by_provider
+    ]
+    if non_github_providers:
+        next_step = (
+            "Review imported "
+            f"{', '.join(sorted(set(non_github_providers)))} records; connector "
+            "coverage stays local until aggregation into Company Brain work items."
+        )
+    else:
+        next_step = (
+            "Import local Jira/Gmail/Drive records to broaden connector coverage "
+            "beyond GitHub."
+        )
+    return _item(
+        item_id="connector-source-coverage",
+        category="status",
+        title="Connector source coverage is available",
+        summary=(
+            "Local connector SourceRecord coverage is deterministic: "
+            f"total={total}; by_provider: {provider_summary or 'none'}; "
+            f"by_record_type: {record_type_summary or 'none'}."
+        ),
+        severity="low",
+        confidence=1.0,
+        evidence_refs=evidence_refs,
+        related_entities=[
+            _safe_text(entry.get("provider"))
+            for entry in by_provider
+            if _safe_text(entry.get("provider"))
+        ],
+        recommended_next_step=next_step,
+        warnings=[],
     )
 
 
