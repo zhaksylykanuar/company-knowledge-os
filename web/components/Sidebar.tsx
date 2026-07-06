@@ -11,6 +11,7 @@ const links = [
   { href: "/github", label: M.nav.github },
   { href: "/jira", label: M.nav.jira },
   { href: "/gmail", label: M.nav.gmail },
+  { href: "/drive", label: M.nav.drive },
   { href: "/connectors", label: M.nav.connectors },
   { href: "/audit", label: M.nav.audit },
   { href: "/briefings", label: M.nav.briefings },

@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Added the third minimal connector implementation: Google Drive (DEC-059). The
+  backend now exposes local-only Drive file list/import endpoints, and the
+  frontend adds `/drive` with a pasted/exported JSON import form. Imported file
+  metadata is sanitized into canonical `SourceRecord` rows (file record type)
+  with evidence refs through idempotent upserts; raw document bodies are not
+  persisted. The path remains local DB-only: no Drive provider calls, no sync,
+  no external writes, no LLM, and no secret reads. The connector registry now
+  marks Google Drive `available`.
 - Added a second minimal connector implementation: Gmail (DEC-058). The backend
   now exposes local-only Gmail message list/import endpoints, and the frontend
   adds `/gmail` with a pasted/exported JSON import form. Imported messages are
@@ -18,13 +26,13 @@
   into canonical `SourceRecord` + `Task` rows with evidence refs through
   idempotent upserts. The path remains local DB-only: no Jira provider calls, no
   sync, no external writes, no LLM, and no secret reads.
-
 - Added the connector framework registry (DEC-056). The backend now exposes
   `GET /api/v1/workspaces/{workspace_id}/connectors`, and the frontend adds a
   `/connectors` page plus sidebar entry. The registry lists the MVP provider set
-  (GitHub, Jira, Gmail, Google Drive), shows local connection counts, marks
-  GitHub available and the others planned, and explicitly remains read-only: no
-  provider calls, sync, external writes, LLM, or secret reads.
+  (GitHub, Jira, Gmail, Google Drive), shows local connection counts, and
+  explicitly remains read-only: no provider calls, sync, external writes, LLM,
+  or secret reads. GitHub was available at introduction; Jira, Gmail, and Drive
+  were later made available through DEC-057/058/059.
 
 ## 2026-07-03
 

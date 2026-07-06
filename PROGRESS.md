@@ -42,7 +42,20 @@
   `integration_connections`, статус `available/planned`, boundary
   (no provider calls / no sync / no external writes / no LLM / no secret reads)
   и deep-link в доступные продуктовые пути. GitHub доступен через `/github`,
-  Jira через `/jira`, Gmail через `/gmail`; Google Drive остаётся planned.
+  Jira через `/jira`, Gmail через `/gmail`, Google Drive через `/drive`;
+  весь MVP provider set теперь имеет локальную product surface.
+- **Google Drive local connector foundation (НОВОЕ, DEC-059):** добавлен
+  третий non-GitHub connector slice без внешних вызовов: `GET
+  /api/v1/workspaces/{workspace_id}/drive/files` показывает локально
+  импортированную Drive file metadata, а admin-only `POST
+  .../drive/files/import` принимает pasted/exported JSON (`[...]` или
+  `{ files: [...] }`) и идемпотентно пишет sanitized canonical
+  `SourceRecord(provider=drive, record_type=file)` rows с evidence refs (без
+  `Task` и без raw document body). `/drive` добавлен во фронтенд и sidebar;
+  `/connectors` теперь помечает Google Drive как `available`. Boundary
+  сохранён: no Drive provider calls, no sync, no external writes, no LLM,
+  no secret reads; invalid entries возвращаются per-entry failures, valid
+  entries могут импортироваться.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально
@@ -457,7 +470,7 @@ DONE строго = есть код + проходящий тест/рабочи
 *Gate: Jira / Gmail / Drive / Documents видны в Brain.*
 - [x] FOS-JIRA-01 — Jira connector minimal (local-only) — DONE via DEC-057. Local read-only issue import/list at `/jira` and `app/services/jira_connector_service.py` / `app/api/jira.py`. Live Jira OAuth/API-token provider sync remains deferred.
 - [x] FOS-GMAIL-01 — Gmail connector minimal (local-only) — DONE via DEC-058. Local read-only message import/list at `/gmail` and `app/services/gmail_connector_service.py` / `app/api/gmail.py`. Live Gmail OAuth/API-token provider sync remains deferred.
-- [ ] FOS-019 — Drive connector minimal — frozen until after GitHub. No active `app/connectors/google_drive.py` or `web/app/drive` exists.
+- [x] FOS-019 — Drive connector minimal (local-only) — DONE via DEC-059. Local read-only file metadata import/list at `/drive` and `app/services/drive_connector_service.py` / `app/api/drive.py`. Live Drive OAuth/API-token provider sync remains deferred.
 - [ ] FOS-DOC-01 — Documents module — post-MVP; no canonical Document CRUD (`body_markdown`, §7.11) or `web/app/documents` exists.
 
 ### CHUNK 7 — Polish + Repo Audit UI

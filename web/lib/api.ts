@@ -30,6 +30,9 @@ import type {
   GitHubSelectedPullRequestSyncRequest,
   GitHubSelectedPullRequestSyncResponse,
   GitHubSelectedRepositorySyncResult,
+  DriveFileImportRequest,
+  DriveFileImportResponse,
+  DriveFileListResponse,
   GmailMessageImportRequest,
   GmailMessageImportResponse,
   GmailMessageListResponse,
@@ -259,6 +262,42 @@ export async function importGmailMessages(
       ...options,
       body: JSON.stringify({
         messages: request.messages,
+        connection_id: request.connectionId ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export function buildWorkspaceDriveFilesPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/drive/files`;
+}
+
+export function buildWorkspaceDriveImportPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/drive/files/import`;
+}
+
+export async function fetchDriveFiles(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<DriveFileListResponse> {
+  return apiFetch<DriveFileListResponse>(
+    buildWorkspaceDriveFilesPath(workspaceId),
+    options
+  );
+}
+
+export async function importDriveFiles(
+  workspaceId: string,
+  request: DriveFileImportRequest,
+  options: ApiFetchOptions = {}
+): Promise<DriveFileImportResponse> {
+  return apiFetch<DriveFileImportResponse>(
+    buildWorkspaceDriveImportPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        files: request.files,
         connection_id: request.connectionId ?? null
       }),
       method: "POST"

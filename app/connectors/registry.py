@@ -71,12 +71,13 @@ CONNECTOR_DESCRIPTORS: tuple[ConnectorDescriptor, ...] = (
     ConnectorDescriptor(
         provider=INTEGRATION_PROVIDER_DRIVE,
         name="Google Drive",
-        status=CONNECTOR_STATUS_PLANNED,
+        status=CONNECTOR_STATUS_AVAILABLE,
         read_only=True,
-        manage_path=None,
+        manage_path="/drive",
         summary=(
-            "Planned minimal read-only document import in MVP scope. Not "
-            "implemented yet; no provider calls or writes are performed."
+            "Local read-only file metadata import into canonical SourceRecord "
+            "state. The MVP path accepts pasted/exported Drive file JSON only "
+            "(no raw document body); no provider calls or writes are performed."
         ),
     ),
 )

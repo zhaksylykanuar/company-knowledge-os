@@ -1312,8 +1312,9 @@ Consequences:
 - The registry is read-only: it performs no provider calls, starts no sync,
   makes no external writes, runs no LLM, and does not read or emit encrypted
   token fields.
-- GitHub is marked `available` with `/github` as its manage path; Jira, Gmail,
-  and Google Drive are marked `planned` but explicitly in MVP scope.
+- At introduction, GitHub is marked `available` with `/github` as its manage
+  path; Jira, Gmail, and Google Drive are marked `planned` but explicitly in MVP
+  scope. DEC-057/058/059 later make Jira/Gmail/Drive locally available.
 - Future connector implementations should extend this registry and keep
   workspace-scoped status visible on `/connectors`.
 
@@ -1393,6 +1394,45 @@ Consequences:
 - Live Gmail OAuth/API-token connection, background sync, thread aggregation,
   Gmail writes, and Company Brain aggregation across Jira/Gmail/Drive remain
   later slices.
+
+## DEC-059 - Google Drive Connector Starts As Local Read-Only File Metadata Import
+
+Decision (2026-07-06): the third non-GitHub connector implementation is a
+local-only Google Drive file metadata import and read surface, completing the
+MVP connector-set local surfaces started by DEC-056/057/058. The backend exposes
+`GET /api/v1/workspaces/{workspace_id}/drive/files` and admin-only `POST
+/api/v1/workspaces/{workspace_id}/drive/files/import`; the frontend adds
+`/drive` and the connector registry now marks Google Drive `available` with
+`/drive` as its manage path. The import accepts a pasted/exported JSON array (or
+object with `files`) and persists a sanitized normalized metadata projection into
+canonical `SourceRecord(provider='drive', record_type='file')` rows using
+idempotent upserts.
+
+Rationale: GitHub real-provider reads remain externally blocked by missing
+GitHub App credentials/installation, while the MVP playbook (§1.5) requires
+minimal Jira/Gmail/Drive connector coverage. Adding Drive after Jira and Gmail
+closes the MVP provider registry's local product surface without introducing
+OAuth, API-token handling, live provider reads, provider writes, or LLM behavior.
+
+Consequences:
+
+- Drive import is local DB-only: it performs no Google Drive API calls, starts no
+  sync, makes no external writes, invokes no LLM, and does not read or emit
+  encrypted token fields.
+- Drive files are not tasks, so they persist to `SourceRecord` only (no `Task`
+  row), like Gmail and unlike Jira.
+- Raw document bodies/content are intentionally not persisted; only a narrow
+  evidence-backed metadata projection (name, MIME type, owners, folder/path,
+  sharing flag, modified timestamp, source URL) is stored. Secret-like keys are
+  dropped and evidence refs are always present (provided or synthesized from the
+  file id/source URL).
+- Imported file entries must include a file id; invalid entries are reported as
+  per-entry failures while valid entries can still be imported.
+- The import endpoint requires owner/admin workspace role; listing local Drive
+  files is available to workspace members with normal workspace access.
+- Live Google Drive OAuth/API-token connection, background sync, document body
+  extraction, Drive writes, and Company Brain aggregation across Jira/Gmail/Drive
+  remain later slices.
 
 ## ASK - Open Questions For The Human (not decided)
 

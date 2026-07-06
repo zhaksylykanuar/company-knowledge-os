@@ -18,6 +18,7 @@ export const M = {
     github: "GitHub",
     jira: "Jira",
     gmail: "Gmail",
+    drive: "Drive",
     connectors: "Коннекторы",
     audit: "Аудит репо",
     briefings: "Сводки",
@@ -685,6 +686,49 @@ export const M = {
       "Реестр вычисляется локально из уже сохранённых записей подключений. Он не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не читает секреты."
   },
 
+
+  drive: {
+    eyebrow: "Google Drive",
+    title: "Drive files",
+    description:
+      "Минимальный Google Drive-коннектор MVP: локальный импорт file metadata JSON в canonical SourceRecord (без raw document body) без provider calls, sync, external writes и LLM.",
+    badgeLocalOnly: "Local-only",
+    loading: "Загрузка Drive files",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — Drive-коннектор недоступен.",
+    unavailableTitle: "Drive files недоступны",
+    unavailableDescription: "Не удалось загрузить локальные Drive files.",
+    summaryLabel: "Сводка Drive",
+    totalTitle: "Всего",
+    totalDescription: "Локально импортированные Drive files.",
+    sharedTitle: "Shared",
+    sharedDescription: "Files с shared/public доступом в импортированной metadata.",
+    notSharedTitle: "Не shared",
+    notSharedDescription: "Files без shared/public признака.",
+    emptyTitle: "Drive files ещё не импортированы",
+    emptyDescription:
+      "Вставьте JSON export/payload с Drive files. FounderOS сохранит только безопасную metadata-проекцию без содержимого документов.",
+    listLabel: "Список Drive files",
+    ownerLabel: "Owner",
+    mimeTypeLabel: "MIME type",
+    modifiedLabel: "Изменено",
+    evidenceLabel: "Evidence refs",
+    sharedBadge: "Shared",
+    importTitle: "Локальный импорт Drive JSON",
+    importDescription:
+      "Поддерживается массив files или объект { files: [...] }. Импорт пишет только локальную БД и не вызывает Drive API.",
+    importTextareaLabel: "Drive JSON",
+    importPlaceholder:
+      '[{"id":"file-1","name":"Private beta checklist","mimeType":"application/vnd.google-apps.document","webViewLink":"https://drive.google.com/file/d/file-1/view"}]',
+    importSubmit: "Импортировать локально",
+    importing: "Импорт…",
+    importSuccess: (imported: number, failed: number) =>
+      `Импортировано: ${imported}. Ошибок: ${failed}.`,
+    importParseError: "JSON должен быть массивом files или объектом с полем files.",
+    boundaryNote:
+      "Drive-коннектор сейчас local-only: provider_calls=false, sync_started=false, external_writes=false, llm=false, секреты и raw document body не читаются/не сохраняются.",
+    warningsTitle: "Предупреждения"
+  },
 
   gmail: {
     eyebrow: "Gmail",

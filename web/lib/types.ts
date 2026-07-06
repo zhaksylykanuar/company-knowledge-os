@@ -232,6 +232,77 @@ export type GmailMessageImportResponse = {
   warnings: string[];
 };
 
+export type DriveEvidenceRef = {
+  kind: string;
+  source: string;
+  ref: string;
+  url: string | null;
+};
+
+export type DriveConnectorBoundary = {
+  provider_calls: boolean;
+  sync_started: boolean;
+  external_writes: boolean;
+  llm: boolean;
+  reads_secrets: boolean;
+};
+
+export type DriveFile = {
+  source_record_id: string | null;
+  file_id: string;
+  name: string;
+  mime_type: string | null;
+  owners: string[];
+  drive_id: string | null;
+  folder_path: string | null;
+  shared: boolean;
+  size_bytes: number | null;
+  modified_at: string | null;
+  source_url: string | null;
+  evidence_refs: DriveEvidenceRef[];
+};
+
+export type DriveFileListCounts = {
+  total: number;
+  shared: number;
+  not_shared: number;
+};
+
+export type DriveFileListResponse = {
+  workspace_id: string;
+  files: DriveFile[];
+  counts: DriveFileListCounts;
+  boundary: DriveConnectorBoundary;
+  warnings: string[];
+};
+
+export type DriveFileImportRequest = {
+  files: Record<string, unknown>[];
+  connectionId?: string | null;
+};
+
+export type DriveFileImportCounts = {
+  received: number;
+  imported: number;
+  failed: number;
+  source_records_created: number;
+  source_records_updated: number;
+};
+
+export type DriveFileImportFailure = {
+  index: number;
+  reason: string;
+};
+
+export type DriveFileImportResponse = {
+  workspace_id: string;
+  counts: DriveFileImportCounts;
+  files: DriveFile[];
+  failures: DriveFileImportFailure[];
+  boundary: DriveConnectorBoundary;
+  warnings: string[];
+};
+
 export type GitHubOperationalWorkState = "open" | "closed" | "merged" | "all";
 
 export type CompanyBrainSourceRef = {
