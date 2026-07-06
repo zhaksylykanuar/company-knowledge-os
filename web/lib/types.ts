@@ -161,6 +161,77 @@ export type JiraIssueImportResponse = {
   warnings: string[];
 };
 
+export type GmailEvidenceRef = {
+  kind: string;
+  source: string;
+  ref: string;
+  url: string | null;
+};
+
+export type GmailConnectorBoundary = {
+  provider_calls: boolean;
+  sync_started: boolean;
+  external_writes: boolean;
+  llm: boolean;
+  reads_secrets: boolean;
+};
+
+export type GmailMessage = {
+  source_record_id: string | null;
+  message_id: string;
+  thread_id: string | null;
+  subject: string;
+  snippet: string | null;
+  from_address: string | null;
+  to_addresses: string[];
+  labels: string[];
+  unread: boolean;
+  received_at: string | null;
+  source_url: string | null;
+  evidence_refs: GmailEvidenceRef[];
+};
+
+export type GmailMessageListCounts = {
+  total: number;
+  unread: number;
+  read: number;
+};
+
+export type GmailMessageListResponse = {
+  workspace_id: string;
+  messages: GmailMessage[];
+  counts: GmailMessageListCounts;
+  boundary: GmailConnectorBoundary;
+  warnings: string[];
+};
+
+export type GmailMessageImportRequest = {
+  messages: Record<string, unknown>[];
+  connectionId?: string | null;
+};
+
+export type GmailMessageImportCounts = {
+  received: number;
+  imported: number;
+  failed: number;
+  source_records_created: number;
+  source_records_updated: number;
+};
+
+export type GmailMessageImportFailure = {
+  index: number;
+  reason: string;
+};
+
+export type GmailMessageImportResponse = {
+  workspace_id: string;
+  counts: GmailMessageImportCounts;
+  messages: GmailMessage[];
+  failures: GmailMessageImportFailure[];
+  boundary: GmailConnectorBoundary;
+  warnings: string[];
+};
+
 export type GitHubOperationalWorkState = "open" | "closed" | "merged" | "all";
 
 export type CompanyBrainSourceRef = {

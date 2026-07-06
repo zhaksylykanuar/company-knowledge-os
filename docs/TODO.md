@@ -157,13 +157,19 @@ Implemented foundations:
   (`github`, `jira`, `gmail`, `drive`), local connection counts, available vs.
   planned status, and read-only/no-provider-call/no-secret-read boundaries.
   GitHub links to `/github`, Jira links to `/jira`, and Gmail/Drive are
-  explicitly planned.
+  now available; Google Drive remains explicitly planned.
 - Jira local connector foundation is now in place (DEC-057): `GET
   /workspaces/{id}/jira/issues`, admin-only `POST
   /workspaces/{id}/jira/issues/import`, and `/jira` support local-only
   pasted/exported issue JSON import into canonical `SourceRecord` + `Task` rows
   with evidence refs. No Jira provider call, sync, external write, LLM, or
   secret read is performed.
+- Gmail local connector foundation is now in place (DEC-058): `GET
+  /workspaces/{id}/gmail/messages`, admin-only `POST
+  /workspaces/{id}/gmail/messages/import`, and `/gmail` support local-only
+  pasted/exported message JSON import into canonical `SourceRecord` (message
+  record type) rows with evidence refs and no persisted raw body. No Gmail
+  provider call, sync, external write, LLM, or secret read is performed.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -227,11 +233,11 @@ Done when:
    repos with/without source refs, evidence-by-kind) plus deterministic next-step
    guidance for data/evidence/open-work/provider/AI boundaries. `/connectors`
    now surfaces the MVP connector registry for GitHub/Jira/Gmail/Drive, and
-   `/jira` provides the first local-only Jira issue import/list path. Next:
-   implement minimal Gmail or Google Drive read-only/local import foundation,
-   or run the first explicitly approved scoped GitHub provider read when
-   credentials are available, while keeping provider writes and AI generation
-   disabled.
+   `/jira` and `/gmail` provide the first two local-only connector import/list
+   paths. Next: implement the minimal Google Drive read-only/local import
+   foundation to complete the MVP connector set, or run the first explicitly
+   approved scoped GitHub provider read when credentials are available, while
+   keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

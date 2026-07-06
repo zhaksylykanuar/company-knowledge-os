@@ -59,12 +59,13 @@ CONNECTOR_DESCRIPTORS: tuple[ConnectorDescriptor, ...] = (
     ConnectorDescriptor(
         provider=INTEGRATION_PROVIDER_GMAIL,
         name="Gmail",
-        status=CONNECTOR_STATUS_PLANNED,
+        status=CONNECTOR_STATUS_AVAILABLE,
         read_only=True,
-        manage_path=None,
+        manage_path="/gmail",
         summary=(
-            "Planned minimal read-only message import in MVP scope. Not "
-            "implemented yet; no provider calls or writes are performed."
+            "Local read-only message import into canonical SourceRecord state. "
+            "The MVP path accepts pasted/exported Gmail message JSON only (no raw "
+            "body); no provider calls or writes are performed."
         ),
     ),
     ConnectorDescriptor(
@@ -79,4 +80,3 @@ CONNECTOR_DESCRIPTORS: tuple[ConnectorDescriptor, ...] = (
         ),
     ),
 )
-

@@ -17,6 +17,7 @@ export const M = {
     dashboard: "Панель",
     github: "GitHub",
     jira: "Jira",
+    gmail: "Gmail",
     connectors: "Коннекторы",
     audit: "Аудит репо",
     briefings: "Сводки",
@@ -684,6 +685,49 @@ export const M = {
       "Реестр вычисляется локально из уже сохранённых записей подключений. Он не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не читает секреты."
   },
 
+
+  gmail: {
+    eyebrow: "Gmail",
+    title: "Gmail messages",
+    description:
+      "Минимальный Gmail-коннектор MVP: локальный импорт message JSON в canonical SourceRecord (без raw body) без provider calls, sync, external writes и LLM.",
+    badgeLocalOnly: "Local-only",
+    loading: "Загрузка Gmail messages",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — Gmail-коннектор недоступен.",
+    unavailableTitle: "Gmail messages недоступны",
+    unavailableDescription: "Не удалось загрузить локальные Gmail messages.",
+    summaryLabel: "Сводка Gmail",
+    totalTitle: "Всего",
+    totalDescription: "Локально импортированные Gmail messages.",
+    unreadTitle: "Непрочитанные",
+    unreadDescription: "Messages с меткой UNREAD.",
+    readTitle: "Прочитанные",
+    readDescription: "Messages без метки UNREAD.",
+    emptyTitle: "Gmail messages ещё не импортированы",
+    emptyDescription:
+      "Вставьте JSON export/payload с Gmail messages. FounderOS сохранит только безопасную нормализованную проекцию без тела письма.",
+    listLabel: "Список Gmail messages",
+    fromLabel: "От",
+    labelsLabel: "Метки",
+    receivedLabel: "Получено",
+    evidenceLabel: "Evidence refs",
+    unreadBadge: "Непрочитано",
+    importTitle: "Локальный импорт Gmail JSON",
+    importDescription:
+      "Поддерживается массив messages или объект { messages: [...] }. Импорт пишет только локальную БД и не вызывает Gmail API.",
+    importTextareaLabel: "Gmail JSON",
+    importPlaceholder:
+      '[{"id":"msg-1","subject":"Investor follow-up","from":"founder@example.com","labels":["INBOX","UNREAD"]}]',
+    importSubmit: "Импортировать локально",
+    importing: "Импорт…",
+    importSuccess: (imported: number, failed: number) =>
+      `Импортировано: ${imported}. Ошибок: ${failed}.`,
+    importParseError: "JSON должен быть массивом messages или объектом с полем messages.",
+    boundaryNote:
+      "Gmail-коннектор сейчас local-only: provider_calls=false, sync_started=false, external_writes=false, llm=false, секреты и raw body не читаются/не сохраняются.",
+    warningsTitle: "Предупреждения"
+  },
 
   jira: {
     eyebrow: "Jira",

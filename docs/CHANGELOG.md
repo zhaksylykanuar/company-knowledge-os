@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Added a second minimal connector implementation: Gmail (DEC-058). The backend
+  now exposes local-only Gmail message list/import endpoints, and the frontend
+  adds `/gmail` with a pasted/exported JSON import form. Imported messages are
+  sanitized into canonical `SourceRecord` rows (message record type) with
+  evidence refs through idempotent upserts; raw email bodies are not persisted.
+  The path remains local DB-only: no Gmail provider calls, no sync, no external
+  writes, no LLM, and no secret reads. The connector registry now marks Gmail
+  `available`.
 - Added the first minimal Jira connector implementation (DEC-057). The backend
   now exposes local-only Jira issue list/import endpoints, and the frontend adds
   `/jira` with a pasted/exported JSON import form. Imported issues are sanitized

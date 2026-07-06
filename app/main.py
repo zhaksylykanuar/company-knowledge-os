@@ -13,6 +13,7 @@ from app.api.connectors import router as connectors_router
 from app.api.dev import router as dev_router
 from app.api.github import router as github_router
 from app.api.jira import router as jira_router
+from app.api.gmail import router as gmail_router
 from app.api.health import router as health_router
 from app.api.workspace_company_brain import router as workspace_company_brain_router
 from app.api.workspaces import router as workspaces_router
@@ -58,6 +59,7 @@ app.include_router(workspaces_router, dependencies=protected_api_dependencies)
 app.include_router(connectors_router, dependencies=protected_api_dependencies)
 app.include_router(github_router, dependencies=protected_api_dependencies)
 app.include_router(jira_router, dependencies=protected_api_dependencies)
+app.include_router(gmail_router, dependencies=protected_api_dependencies)
 app.include_router(workspace_company_brain_router, dependencies=protected_api_dependencies)
 app.include_router(briefings_router, dependencies=protected_api_dependencies)
 app.include_router(actions_router, dependencies=protected_api_dependencies)

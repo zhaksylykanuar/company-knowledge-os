@@ -125,9 +125,9 @@ async def test_connector_registry_lists_mvp_connectors_without_secret_values() -
 
         assert registry["workspace_id"] == str(workspace.id)
         assert registry["summary"] == {
-            "available": 2,
+            "available": 3,
             "connected": 1,
-            "planned": 2,
+            "planned": 1,
             "total": 4,
         }
         assert registry["boundary"] == {

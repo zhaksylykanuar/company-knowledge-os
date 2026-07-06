@@ -1353,6 +1353,47 @@ Consequences:
 - Live Jira OAuth/API-token connection, background sync, webhooks, Jira writes,
   and Company Brain aggregation across Jira/Gmail/Drive remain later slices.
 
+## DEC-058 - Gmail Connector Starts As Local Read-Only Message Import
+
+Decision (2026-07-06): the second non-GitHub connector implementation is a
+local-only Gmail message import and read surface, mirroring the DEC-057 Jira
+slice. The backend exposes `GET
+/api/v1/workspaces/{workspace_id}/gmail/messages` and admin-only `POST
+/api/v1/workspaces/{workspace_id}/gmail/messages/import`; the frontend adds
+`/gmail` and the connector registry now marks Gmail `available` with `/gmail` as
+its manage path. The import accepts a pasted/exported JSON array (or object with
+`messages`) and persists a sanitized normalized projection into canonical
+`SourceRecord(provider='gmail', record_type='message')` rows using idempotent
+upserts.
+
+Rationale: GitHub real-provider reads remain externally blocked by missing
+GitHub App credentials/installation, while the MVP playbook (§1.5) requires
+minimal Jira/Gmail/Drive connector coverage. Extending the connector framework
+with Gmail after Jira advances MVP scope without introducing OAuth, API-token
+handling, live provider reads, provider writes, or LLM behavior, and it proves
+the framework generalizes beyond task-shaped providers.
+
+Consequences:
+
+- Gmail import is local DB-only: it performs no Gmail API calls, starts no sync,
+  makes no external writes, invokes no LLM, and does not read or emit encrypted
+  token fields.
+- Gmail messages are not tasks, so they persist to `SourceRecord` only (no
+  `Task` row), unlike the Jira slice. This keeps the canonical `Task` table
+  provider-scoped to `github`/`jira`/`internal`.
+- Raw email bodies are intentionally not persisted; only a narrow evidence-
+  backed projection (subject, participants, labels, dates, and a bounded
+  provider-supplied snippet) is stored. Secret-like keys are dropped and
+  evidence refs are always present (provided or synthesized from the message
+  id/source URL).
+- Imported message entries must include a message id; invalid entries are
+  reported as per-entry failures while valid entries can still be imported.
+- The import endpoint requires owner/admin workspace role; listing local Gmail
+  messages is available to workspace members with normal workspace access.
+- Live Gmail OAuth/API-token connection, background sync, thread aggregation,
+  Gmail writes, and Company Brain aggregation across Jira/Gmail/Drive remain
+  later slices.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

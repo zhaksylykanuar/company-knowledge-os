@@ -30,6 +30,9 @@ import type {
   GitHubSelectedPullRequestSyncRequest,
   GitHubSelectedPullRequestSyncResponse,
   GitHubSelectedRepositorySyncResult,
+  GmailMessageImportRequest,
+  GmailMessageImportResponse,
+  GmailMessageListResponse,
   JiraIssueImportRequest,
   JiraIssueImportResponse,
   JiraIssueListResponse,
@@ -220,6 +223,42 @@ export async function importJiraIssues(
       ...options,
       body: JSON.stringify({
         issues: request.issues,
+        connection_id: request.connectionId ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export function buildWorkspaceGmailMessagesPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/gmail/messages`;
+}
+
+export function buildWorkspaceGmailImportPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/gmail/messages/import`;
+}
+
+export async function fetchGmailMessages(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GmailMessageListResponse> {
+  return apiFetch<GmailMessageListResponse>(
+    buildWorkspaceGmailMessagesPath(workspaceId),
+    options
+  );
+}
+
+export async function importGmailMessages(
+  workspaceId: string,
+  request: GmailMessageImportRequest,
+  options: ApiFetchOptions = {}
+): Promise<GmailMessageImportResponse> {
+  return apiFetch<GmailMessageImportResponse>(
+    buildWorkspaceGmailImportPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        messages: request.messages,
         connection_id: request.connectionId ?? null
       }),
       method: "POST"
