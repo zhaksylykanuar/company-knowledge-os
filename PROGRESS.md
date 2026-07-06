@@ -116,10 +116,11 @@
   и UI bulk control в BriefingPanel. Member+ user может сгенерировать локальные
   `internal_todo` `ActionProposal` rows из evidence-backed Jira/Gmail/Drive
   briefing items (`jira-work-items`, `gmail-message-signals`,
-  `drive-file-signals`). Missing-evidence items skip’аются, existing open
-  actions по тому же `briefing_id + briefing_item_key` skip’аются (включая
-  старые per-item UI actions), чтобы не создавать blind duplicates. Всё local DB
-  only: no provider calls, no sync, no external writes, no secret reads, no LLM.
+  `drive-file-signals`) и теперь также из `internal-document-context` (DEC-069).
+  Missing-evidence items skip’аются, existing open actions по тому же
+  `briefing_id + briefing_item_key` skip’аются (включая старые per-item UI
+  actions), чтобы не создавать blind duplicates. Всё local DB only: no provider
+  calls, no sync, no external writes, no secret reads, no LLM.
   Проверено: focused backend `tests/test_founder_briefing_api.py` ✅ 25 passed,
   frontend `npm test` ✅ 181 passed (после UI/API helper), plus ruff/imports.
 - **Founder Briefing internal document context (НОВОЕ, DEC-067):**
@@ -617,6 +618,24 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-07` — **Internal document context → local ActionProposals (DEC-069).**
+  Extended persisted Founder Briefing action generation so
+  `internal-document-context` joins the existing Jira/Gmail/Drive actionable
+  briefing items. The existing local-only endpoint
+  `POST /api/v1/workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
+  can now create an evidence-backed `internal_todo` ActionProposal from
+  persisted internal-document context, while missing evidence and existing open
+  actions for the same `briefing_id + briefing_item_key` are still skipped.
+  This closes the local document→briefing→action-review loop without provider
+  calls, sync, external writes, raw document body copying, secret reads, or LLM.
+  Checks: focused action-generation test ✅, focused briefing suite
+  `tests/test_founder_briefing_api.py` ✅ 26 passed, full backend
+  `uv run pytest -q` ✅ **449 passed / 1 warning**, `uv run ruff check .` ✅,
+  `uv run alembic upgrade head` + `uv run alembic check` ✅ (no drift),
+  frontend `npm test` ✅ **194 passed**, `npm run build` ✅, `npm run lint` ✅,
+  tracked secret scan ✅, `git diff --check` ✅. Commit local-only; push не
+  делался.
 
 - `2026-07-07` — **Documents in-product edit/delete wiring (DEC-066/DEC-068).**
   Independent completion audit against playbook §1.5 ("internal documents")

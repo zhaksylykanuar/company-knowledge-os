@@ -206,7 +206,10 @@ Implemented foundations:
   briefing items into local `internal_todo` ActionProposal rows through the
   backend endpoint and Briefing UI bulk control. Missing evidence and existing
   open actions are skipped; no provider calls, sync, external writes, secret
-  reads, or LLM are started.
+  reads, or LLM are started. Internal document context now participates in the
+  same bridge (DEC-069): `internal-document-context` can create a local
+  evidence-backed follow-up ActionProposal when a persisted briefing item has
+  document evidence refs, without copying raw document body text.
 - Internal Documents module is now implemented (DEC-066): workspace-scoped
   `Document` CRUD + search API (`/api/v1/workspaces/{id}/documents`), a
   `/documents` frontend page (list/search/create/detail), and Company Brain
@@ -291,11 +294,12 @@ Done when:
    local connector SourceRecord counts, and the deterministic Founder Briefing
    now includes a connector-source-coverage item (DEC-061). Jira issues are now
    first-class Company Brain work items (DEC-062), and Gmail/Drive have
-   first-class read sections (DEC-063). Next: enrich deterministic Founder
-   Briefing/action proposal generation from these first-class non-GitHub read
-   models, or run the first explicitly approved scoped GitHub provider read when
-   credentials are available, while keeping provider writes and AI generation
-   disabled.
+   first-class read sections (DEC-063). Internal document context can now also
+   generate a local evidence-backed ActionProposal through the same persisted
+   briefing bridge (DEC-069). Next: enrich deterministic action review around
+   these generated local proposals, or run the first explicitly approved scoped
+   GitHub provider read when credentials are available, while keeping provider
+   writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

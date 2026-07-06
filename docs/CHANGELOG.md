@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Extended briefing-derived local action generation to internal document context
+  (DEC-069). The persisted briefing
+  `POST /workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
+  endpoint now treats `internal-document-context` as an evidence-backed
+  actionable item alongside Jira/Gmail/Drive briefing signals, creating a local
+  `internal_todo` ActionProposal when evidence exists and skipping duplicate
+  open actions for the same briefing item. Local-only: no provider calls, sync,
+  external writes, raw document body copying, secret reads, or LLM.
 - Wired in-product edit and delete for internal Documents (DEC-066/DEC-068).
   The `/documents` detail view now exposes an inline edit form (title, markdown
   body, tags, status) backed by the existing `PATCH

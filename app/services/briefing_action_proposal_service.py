@@ -31,6 +31,7 @@ BRIEFING_ACTION_PROPOSAL_NOT_FOUND = "briefing not found"
 BRIEFING_ACTION_PROPOSAL_SOURCE = "briefing_non_github_signal"
 
 ACTIONABLE_NON_GITHUB_BRIEFING_ITEM_KEYS = {
+    "internal-document-context",
     "jira-work-items",
     "gmail-message-signals",
     "drive-file-signals",
@@ -74,8 +75,9 @@ async def generate_action_proposals_from_briefing(
     """Create local internal-todo proposals from actionable persisted briefing items.
 
     This is a deterministic bridge from Founder Briefing to ActionProposal for
-    the non-GitHub read-model items added in DEC-064. It reads only persisted
-    briefing rows/evidence, writes only local ``ActionProposal`` rows, skips
+    the non-GitHub read-model items added in DEC-064 plus the internal-document
+    context item from DEC-067/069. It reads only persisted briefing
+    rows/evidence, writes only local ``ActionProposal`` rows, skips
     missing-evidence items, and never starts provider calls, external writes,
     sync, or LLM work.
     """

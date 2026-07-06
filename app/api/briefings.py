@@ -240,8 +240,8 @@ async def generate_briefing_action_proposals_route(
 
     This endpoint is deterministic and local-only: it reads the persisted
     briefing, creates local ActionProposal rows for evidence-backed
-    Jira/Gmail/Drive briefing items, skips duplicates/missing evidence, and does
-    not execute provider actions.
+    Jira/Gmail/Drive/internal-document briefing items, skips duplicates/missing
+    evidence, and does not execute provider actions.
     """
 
     _ = access

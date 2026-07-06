@@ -1739,6 +1739,40 @@ Consequences:
 - NormalizedEntity linkage remains a later slice; this decision only adds the
   first local document history layer required by §4.7.
 
+## DEC-069 - Internal Document Context Can Generate Local Action Proposals
+
+Decision (2026-07-07): the persisted Founder Briefing → local ActionProposal
+bridge now treats `internal-document-context` as an actionable evidence-backed
+briefing item, alongside the Jira/Gmail/Drive read-model signal items from
+DEC-065. When the item has evidence refs, the existing
+`POST /api/v1/workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
+endpoint may create a local `ActionProposal(target_provider='internal',
+action_type='internal_todo')` for it. Duplicate detection remains scoped to the
+same persisted briefing and briefing item key, so repeated generation skips an
+existing open document-context action instead of creating blind duplicates.
+
+Rationale: DEC-067 originally made internal documents briefing context only, but
+after DEC-066/068 made documents editable, versioned, and visible in the product,
+the founder still had no one-click way to route evidence-backed document context
+into the existing local action review queue. Extending the existing deterministic
+bridge closes that local MVP loop without adding a new action system or waiting
+for an LLM narrative.
+
+Consequences:
+
+- This supersedes the DEC-067 consequence that the bulk action generation
+  whitelist is limited to Jira/Gmail/Drive signal items.
+- The generated proposal is local-only: no provider call, sync, external write,
+  secret read, or LLM is started, and approval/execution remains in the existing
+  local ActionProposal review flow.
+- Missing evidence still skips the item. The action uses the persisted
+  `BriefingItem.evidence_refs`; it does not copy raw document markdown/body text
+  into the proposal.
+- The proposal payload keeps the existing briefing-derived shape
+  (`source='briefing_non_github_signal'`, `briefing_id`, `briefing_item_key`,
+  category/severity/related_entities), so the current `/actions` review UI and
+  duplicate handling continue to work.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

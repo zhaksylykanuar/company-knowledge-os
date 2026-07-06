@@ -1289,6 +1289,26 @@ async def test_generate_briefing_action_proposals_from_non_github_items(
                             }
                         ],
                     }
+                ],
+                "notes": [
+                    {
+                        "document_id": "doc-source-1",
+                        "title": "Private beta checklist",
+                        "status": "published",
+                        "tags": ["beta", "launch"],
+                        "excerpt": "Review onboarding blockers before launch.",
+                        "source_refs": [
+                            {
+                                "id": "doc-source-1:0",
+                                "kind": "internal_document",
+                                "source": "documents",
+                                "label": "Private beta checklist",
+                                "url": None,
+                                "record_type": "document",
+                                "record_id": "doc-source-1",
+                            }
+                        ],
+                    }
                 ]
             },
             "evidence": [],
@@ -1369,7 +1389,7 @@ async def test_generate_briefing_action_proposals_from_non_github_items(
 
         assert generated_actions.status_code == 200, generated_actions.text
         payload = generated_actions.json()
-        assert payload["created_count"] == 2
+        assert payload["created_count"] == 3
         assert payload["skipped_count"] == 1
         assert payload["is_live"] is False
         assert payload["execution_started"] is False
@@ -1399,6 +1419,7 @@ async def test_generate_briefing_action_proposals_from_non_github_items(
         }
         assert {proposal["payload"]["briefing_item_key"] for proposal in proposals} == {
             "drive-file-signals",
+            "internal-document-context",
             "jira-work-items",
         }
         assert all(proposal["briefing_item_id"] for proposal in proposals)
@@ -1407,7 +1428,7 @@ async def test_generate_briefing_action_proposals_from_non_github_items(
         assert repeated.status_code == 200, repeated.text
         repeated_payload = repeated.json()
         assert repeated_payload["created_count"] == 0
-        assert repeated_payload["skipped_count"] == 3
+        assert repeated_payload["skipped_count"] == 4
         assert {item["reason"] for item in repeated_payload["skipped"]} == {
             "open_action_exists"
         }
