@@ -613,6 +613,19 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **DocumentVersion no-op PATCH hardening (DEC-068).**
+  Hardened the version-history semantics after the initial DEC-068 slice: empty
+  or idempotent PATCH requests now remain successful no-ops and do not append
+  duplicate `DocumentVersion` revisions or rewrite update metadata. Effective
+  updates still append the next immutable version. Docs were reconciled to make
+  the no-op behavior explicit. Local-only: no provider calls, external writes,
+  secret reads, or LLM. Checks: focused backend `tests/test_documents_api.py` ✅
+  10 passed; full backend `uv run pytest -q` ✅ **449 passed / 1 warning**;
+  `uv run ruff check .` ✅; `uv run alembic upgrade head` +
+  `uv run alembic check` ✅ (single head `f2b3c4d5e6f7`, no drift); frontend
+  `npm test` ✅ **190 passed**, `npm run build` ✅, `npm run lint` ✅; tracked
+  secret scan ✅; `git diff --check` ✅. Commit local-only; push не делался.
+
 - `2026-07-07` — **Internal DocumentVersion history (DEC-068).**
   Continued the Documents module after DEC-066/067: added immutable local
   `DocumentVersion` snapshots with migration `f2b3c4d5e6f7`; create writes v1,
