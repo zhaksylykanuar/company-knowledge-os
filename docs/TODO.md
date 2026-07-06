@@ -201,6 +201,12 @@ Implemented foundations:
   signals appear as additive evidence-backed briefing items. The generator reads
   only local Company Brain sections/source refs and adds no provider calls,
   sync, external writes, raw body/content rendering, or LLM.
+- Persisted Founder Briefings can now generate local non-GitHub action
+  proposals (DEC-065): member+ users can turn evidence-backed Jira/Gmail/Drive
+  briefing items into local `internal_todo` ActionProposal rows through the
+  backend endpoint and Briefing UI bulk control. Missing evidence and existing
+  open actions are skipped; no provider calls, sync, external writes, secret
+  reads, or LLM are started.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

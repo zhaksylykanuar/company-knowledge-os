@@ -363,11 +363,15 @@ export const M = {
     actionSummaryEmpty:
       "По видимым пунктам сводки ещё нет локальных предложений действий.",
     openActions: "Открыть действия",
+    actionGenerate: "Сгенерировать локальные действия из сводки",
+    actionGeneratingFromBriefing: "Генерация локальных действий",
     actionCreate: "Создать локальное действие",
     actionCreating: "Создание локального действия",
     actionAlreadyCreated: "Действие уже создано",
     actionCreateSuccess:
       "Локальное действие создано. Проверьте его в блоке «Действия» перед одобрением.",
+    actionGenerateSuccess:
+      "Локальные действия из сводки сгенерированы. Проверьте их в блоке «Действия» перед одобрением.",
     storedValue: "Сохранено"
   },
 
@@ -1240,6 +1244,8 @@ export const T = {
   ) =>
     `Связано действий: ${total} · нужно решение ${proposed} · одобрено ${approved} · ` +
     `отклонено ${rejected} · выполнено ${executed} · ошибки ${failed}`,
+  briefingActionGenerateResult: (created: number, skipped: number) =>
+    `Создано локальных действий: ${created} · пропущено: ${skipped}`,
   briefingItemActionSummary: (
     total: number,
     proposed: number,

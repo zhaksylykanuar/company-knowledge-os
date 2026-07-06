@@ -4,9 +4,11 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  buildWorkspaceBriefingActionProposalsPath,
   buildWorkspaceBriefingPath,
   buildWorkspaceBriefingsPath,
   buildWorkspaceManualBriefingPath,
+  generateBriefingActionProposals,
   generateManualFounderBriefing,
   listBriefings
 } from "../lib/api";
@@ -159,11 +161,13 @@ function renderPanel(
       onCloseEvidence={props.onCloseEvidence}
       onCategoryFilterChange={props.onCategoryFilterChange}
       onCreateActionFromItem={props.onCreateActionFromItem}
+      onGenerateActionsFromBriefing={props.onGenerateActionsFromBriefing}
       onGenerate={props.onGenerate}
       onOpenBriefing={props.onOpenBriefing}
       onRetry={props.onRetry}
       onSelectEvidence={props.onSelectEvidence}
       pendingActionItemId={props.pendingActionItemId ?? null}
+      pendingBriefingActionGeneration={props.pendingBriefingActionGeneration ?? false}
       selectedEvidence={props.selectedEvidence ?? null}
       selectedEvidenceCount={props.selectedEvidenceCount ?? null}
       selectedEvidenceItemTitle={props.selectedEvidenceItemTitle ?? null}
@@ -177,6 +181,52 @@ test("builds the manual briefing URL", () => {
     buildWorkspaceManualBriefingPath("workspace-123"),
     "/api/v1/workspaces/workspace-123/briefings/manual"
   );
+});
+
+test("builds and posts the briefing action proposal generation URL", async () => {
+  assert.equal(
+    buildWorkspaceBriefingActionProposalsPath("workspace-123", "briefing-1"),
+    "/api/v1/workspaces/workspace-123/briefings/briefing-1/action-proposals"
+  );
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/briefings/briefing-1/action-proposals"
+    );
+    assert.equal(init?.method, "POST");
+    assert.equal(init?.body, undefined);
+    return new Response(
+      JSON.stringify({
+        created_count: 1,
+        execution_started: false,
+        is_live: false,
+        proposals: [briefingActionProposal],
+        skipped: [],
+        skipped_count: 0,
+        warnings: ["local-only"]
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const payload = await generateBriefingActionProposals(
+      "workspace-123",
+      "briefing-1",
+      {}
+    );
+    assert.equal(payload.is_live, false);
+    assert.equal(payload.execution_started, false);
+    assert.equal(payload.created_count, 1);
+    assert.equal(payload.proposals[0]?.payload.briefing_item_key, "repo-coverage");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("posts deterministic manual briefing request", async () => {
@@ -328,10 +378,21 @@ test("renders local action proposal controls for briefing items", () => {
   });
 
   assert.ok(html.includes(M.briefingPanel.actionCreate));
+  assert.ok(html.includes(M.briefingPanel.actionGenerate));
   assert.ok(html.includes(M.briefingPanel.actionCreating));
   assert.ok(html.includes(M.briefingPanel.actionCreateSuccess));
   assert.doesNotMatch(html, /GitHub issue created/);
   assert.doesNotMatch(html, /external write performed/i);
+});
+
+test("renders pending briefing action generation control", () => {
+  const html = renderPanel({
+    onGenerateActionsFromBriefing: () => undefined,
+    pendingBriefingActionGeneration: true
+  });
+
+  assert.ok(html.includes(M.briefingPanel.actionGeneratingFromBriefing));
+  assert.doesNotMatch(html, /provider call started/i);
 });
 
 test("cross-links existing local actions back to briefing items", () => {

@@ -564,6 +564,22 @@ export type ActionProposal = {
   warnings: string[];
 };
 
+export type BriefingActionProposalSkippedItem = {
+  item_key: string;
+  title: string;
+  reason: string;
+};
+
+export type BriefingActionProposalGenerationResponse = {
+  proposals: ActionProposal[];
+  skipped: BriefingActionProposalSkippedItem[];
+  created_count: number;
+  skipped_count: number;
+  is_live: boolean;
+  execution_started: boolean;
+  warnings: string[];
+};
+
 export type ActionProposalListRequest = {
   status?: ActionProposalStatus | string;
   target_provider?: ActionTargetProvider | string;

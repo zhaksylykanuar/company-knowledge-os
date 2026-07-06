@@ -6,8 +6,23 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.api.workspace_auth import WorkspaceAccess, require_workspace_access
+from app.api.workspace_auth import (
+    WorkspaceAccess,
+    require_workspace_access,
+    require_workspace_role,
+)
 from app.db.base import AsyncSessionLocal
+from app.db.identity_models import MEMBERSHIP_ROLE_MEMBER
+from app.services.action_proposal_service import (
+    ACTION_PROPOSAL_NO_EXECUTION_WARNING,
+    serialize_action_proposal,
+)
+from app.services.briefing_action_proposal_service import (
+    BRIEFING_ACTION_PROPOSAL_GENERATION_WARNING,
+    BRIEFING_ACTION_PROPOSAL_NOT_FOUND,
+    BriefingActionProposalNotFoundError,
+    generate_action_proposals_from_briefing,
+)
 from app.services.briefing_persistence_service import (
     count_briefings,
     get_briefing,
@@ -134,6 +149,47 @@ class BriefingListResponse(BaseModel):
     count: int
 
 
+class BriefingGeneratedActionProposalRead(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    briefing_item_id: UUID | None = None
+    target_provider: str
+    action_type: str
+    title: str
+    description: str | None = None
+    payload: dict
+    status: str
+    evidence_refs: list[dict]
+    created_by: str
+    created_by_user_id: UUID | None = None
+    approved_by_user_id: UUID | None = None
+    approved_at: datetime | None = None
+    rejected_by_user_id: UUID | None = None
+    rejected_at: datetime | None = None
+    rejection_reason: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    is_live: bool
+    execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class BriefingActionProposalSkippedItemRead(BaseModel):
+    item_key: str
+    title: str
+    reason: str
+
+
+class BriefingActionProposalGenerationResponse(BaseModel):
+    proposals: list[BriefingGeneratedActionProposalRead] = Field(default_factory=list)
+    skipped: list[BriefingActionProposalSkippedItemRead] = Field(default_factory=list)
+    created_count: int
+    skipped_count: int
+    is_live: bool
+    execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
 @router.post("/manual", response_model=PersistedBriefingResponse)
 async def generate_manual_founder_briefing_route(
     workspace_id: UUID,
@@ -169,6 +225,69 @@ async def generate_manual_founder_briefing_route(
         data = serialize_briefing(briefing)
         await session.commit()
     return PersistedBriefingResponse.model_validate({"briefing": data})
+
+
+@router.post(
+    "/{briefing_id}/action-proposals",
+    response_model=BriefingActionProposalGenerationResponse,
+)
+async def generate_briefing_action_proposals_route(
+    workspace_id: UUID,
+    briefing_id: UUID,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_MEMBER)),
+) -> BriefingActionProposalGenerationResponse:
+    """Create local internal-todo proposals from actionable persisted briefing items.
+
+    This endpoint is deterministic and local-only: it reads the persisted
+    briefing, creates local ActionProposal rows for evidence-backed
+    Jira/Gmail/Drive briefing items, skips duplicates/missing evidence, and does
+    not execute provider actions.
+    """
+
+    _ = access
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await generate_action_proposals_from_briefing(
+                session,
+                workspace_id=workspace_id,
+                briefing_id=briefing_id,
+            )
+            proposals = [
+                BriefingGeneratedActionProposalRead.model_validate(
+                    serialize_action_proposal(proposal)
+                )
+                for proposal in result.proposals
+            ]
+            skipped = [
+                BriefingActionProposalSkippedItemRead.model_validate(
+                    {
+                        "item_key": item.item_key,
+                        "title": item.title,
+                        "reason": item.reason,
+                    }
+                )
+                for item in result.skipped
+            ]
+            await session.commit()
+        except BriefingActionProposalNotFoundError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=BRIEFING_ACTION_PROPOSAL_NOT_FOUND,
+            ) from exc
+
+    return BriefingActionProposalGenerationResponse(
+        proposals=proposals,
+        skipped=skipped,
+        created_count=len(proposals),
+        skipped_count=len(skipped),
+        is_live=False,
+        execution_started=False,
+        warnings=[
+            BRIEFING_ACTION_PROPOSAL_GENERATION_WARNING,
+            ACTION_PROPOSAL_NO_EXECUTION_WARNING,
+        ],
+    )
 
 
 @router.get("", response_model=BriefingListResponse)

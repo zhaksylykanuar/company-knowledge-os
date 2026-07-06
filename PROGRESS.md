@@ -20,9 +20,9 @@
   показывает canonical org repo rows для `qtwin-io` из `.local/repos.json`
   (25 repos), а не retained source-event/legacy fallbacks; live read-only check
   по org env keys подтвердил тот же count без вывода секретов. Следующий лучший
-  продуктовый шаг — richer local follow-up/action guidance поверх уже
-  загруженных Jira/Gmail/Drive briefing signals; первый GitHub App
-  real-provider read run — только после отдельного human approval.
+  продуктовый шаг — вывести generated non-GitHub local ActionProposals в более
+  богатую review/execution-readiness петлю или двигать первый approved
+  GitHub App real-provider read run после отдельного human approval.
 - **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
   offline, детерминированный gate перед первым approved real read run:
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
@@ -110,6 +110,18 @@
   `UV_NO_SYNC=1 uv run alembic check` ✅ (no new ops), `npm test` ✅ 179,
   `npm run build` ✅, `npm run lint`/typecheck ✅,
   `bash scripts/check_no_secrets.sh --tracked` ✅.
+- **Briefing → local non-GitHub ActionProposals (НОВОЕ, DEC-065):**
+  persisted Founder Briefing теперь имеет local-only backend bridge
+  `POST /api/v1/workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
+  и UI bulk control в BriefingPanel. Member+ user может сгенерировать локальные
+  `internal_todo` `ActionProposal` rows из evidence-backed Jira/Gmail/Drive
+  briefing items (`jira-work-items`, `gmail-message-signals`,
+  `drive-file-signals`). Missing-evidence items skip’аются, existing open
+  actions по тому же `briefing_id + briefing_item_key` skip’аются (включая
+  старые per-item UI actions), чтобы не создавать blind duplicates. Всё local DB
+  only: no provider calls, no sync, no external writes, no secret reads, no LLM.
+  Проверено: focused backend `tests/test_founder_briefing_api.py` ✅ 25 passed,
+  frontend `npm test` ✅ 181 passed (после UI/API helper), plus ruff/imports.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально

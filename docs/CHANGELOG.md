@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Added deterministic local action-proposal generation from persisted Founder
+  Briefings (DEC-065). The backend now exposes
+  `POST /workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
+  to create evidence-backed local `internal_todo` ActionProposal rows from the
+  Jira/Gmail/Drive briefing items, and the Briefing UI has a bulk local action
+  generation control. The path skips missing-evidence items and existing open
+  actions for the same briefing item (including older per-item UI actions) and
+  remains local-only: no provider calls, sync, external writes, secret reads, or
+  LLM.
 - Added first-class local Jira/Gmail/Drive read-model items to the deterministic
   Founder Briefing (DEC-064). The manual briefing now includes
   `jira-work-items`, `gmail-message-signals`, and `drive-file-signals` when the

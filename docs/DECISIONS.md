@@ -1598,6 +1598,44 @@ Consequences:
   explicitly scoped with "in view" so a truncated slice never implies a false
   workspace-wide total.
 
+## DEC-065 - Persisted Briefings Can Generate Local Non-GitHub Action Proposals
+
+Decision (2026-07-06): persisted Founder Briefings now have a local-only action
+proposal generation endpoint:
+`POST /api/v1/workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`.
+The endpoint creates local `ActionProposal(target_provider='internal',
+action_type='internal_todo')` rows for the DEC-064 non-GitHub briefing items
+(`jira-work-items`, `gmail-message-signals`, and `drive-file-signals`) when
+those items have evidence refs. The Briefing UI exposes this as a bulk local
+action generation control next to the existing per-item local action button.
+
+Rationale: the MVP path requires a founder to go from Company Brain/Briefing
+signals to human-reviewed action proposals. Before this decision, the UI could
+manually create one local action per visible briefing item, but there was no
+backend deterministic bridge from a saved briefing to evidence-backed local
+proposals for the new Jira/Gmail/Drive read-model signals. A backend endpoint
+makes the flow reproducible, testable, and workspace-scoped without waiting for
+LLM generation or provider execution.
+
+Consequences:
+
+- Generation is local DB-only: it reads persisted `Briefing` / `BriefingItem`
+  rows and writes only local `ActionProposal` rows. It performs no provider
+  calls, starts no sync, makes no external writes, reads no secrets, and invokes
+  no LLM.
+- Items without `evidence_refs` are skipped with `missing_evidence_refs`; local
+  proposals are created only from evidence-backed briefing items.
+- Existing open actions for the same `briefing_id + briefing_item_key` are
+  skipped with `open_action_exists`, including actions previously created by the
+  older per-item UI path (`source='briefing_item'`). This prevents blind
+  duplicates while allowing a rejected/failed action to be regenerated later.
+- Generated proposals are `created_by='system'`, carry the persisted
+  `briefing_item_id`, preserve the stable `briefing_item_key` in payload for UI
+  cross-linking, and include only sanitized summary/category/severity/
+  related-entity metadata plus copied evidence refs.
+- The endpoint requires member-or-higher workspace role. Viewers can still read
+  briefings but cannot create local proposals.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

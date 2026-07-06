@@ -13,6 +13,15 @@ from sqlalchemy.orm import selectinload
 import app.services.founder_briefing_service as founder_briefing_service
 import app.services.github_repository_read_service as github_repository_read_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
+from app.db.action_models import (
+    ACTION_CREATED_BY_SYSTEM,
+    ACTION_PROPOSAL_STATUS_PROPOSED,
+    ACTION_TARGET_PROVIDER_INTERNAL,
+    ACTION_TYPE_INTERNAL_TODO,
+    ActionExecution,
+    ActionExecutionEvent,
+    ActionProposal,
+)
 from app.db.base import AsyncSessionLocal
 from app.db.briefing_models import Briefing, BriefingItem
 from app.db.identity_models import (
@@ -83,6 +92,29 @@ async def _cleanup_briefing_fixture(marker: str) -> None:
             ).scalars()
         )
         if workspace_ids:
+            proposal_ids = list(
+                (
+                    await session.execute(
+                        select(ActionProposal.id).where(
+                            ActionProposal.workspace_id.in_(workspace_ids)
+                        )
+                    )
+                ).scalars()
+            )
+            if proposal_ids:
+                await session.execute(
+                    delete(ActionExecutionEvent).where(
+                        ActionExecutionEvent.action_proposal_id.in_(proposal_ids)
+                    )
+                )
+                await session.execute(
+                    delete(ActionExecution).where(
+                        ActionExecution.action_proposal_id.in_(proposal_ids)
+                    )
+                )
+                await session.execute(
+                    delete(ActionProposal).where(ActionProposal.id.in_(proposal_ids))
+                )
             briefing_ids = list(
                 (
                     await session.execute(
@@ -1015,6 +1047,297 @@ async def test_manual_briefing_non_github_items_report_true_total_not_visible_sl
         # Visible-only signals stay explicitly scoped to the view.
         assert "unread=1 in view" in gmail_item["summary"]
         assert "shared=0 in view" in drive_item["summary"]
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_generate_briefing_action_proposals_from_non_github_items(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    async def fake_company_brain(**_kwargs):
+        return {
+            "workspace_id": _kwargs["workspace_id"],
+            "mode": "github_first_canonical",
+            "source": "canonical_github_company_brain",
+            "summary": {
+                "repositories": 1,
+                "open_issues": 1,
+                "open_pull_requests": 0,
+                "closed_issues": 0,
+                "merged_pull_requests": 0,
+            },
+            "source_records": {
+                "total": 3,
+                "by_provider": [
+                    {"provider": "drive", "count": 1},
+                    {"provider": "gmail", "count": 1},
+                    {"provider": "jira", "count": 1},
+                ],
+                "by_record_type": [
+                    {"record_type": "file", "count": 1},
+                    {"record_type": "issue", "count": 1},
+                    {"record_type": "message", "count": 1},
+                ],
+            },
+            "repositories": [],
+            "work": {
+                "issues": [
+                    {
+                        "id": "jira-task-1",
+                        "type": "issue",
+                        "source_provider": "jira",
+                        "external_id": "OPS-12",
+                        "number": None,
+                        "title": "Resolve onboarding blocker",
+                        "state": "todo",
+                        "repository_full_name": None,
+                        "project_key": "OPS",
+                        "source_url": "https://jira.example.test/browse/OPS-12",
+                        "source_refs": [
+                            {
+                                "id": "jira-source-1:0",
+                                "kind": "jira_issue",
+                                "source": "jira",
+                                "label": "OPS-12",
+                                "url": "https://jira.example.test/browse/OPS-12",
+                                "record_type": "issue",
+                                "record_id": "jira-source-1",
+                            }
+                        ],
+                    }
+                ],
+                "pull_requests": [],
+                "recent": [],
+            },
+            "communications": {
+                "messages": [
+                    {
+                        "source_record_id": "gmail-source-1",
+                        "message_id": "msg-1",
+                        "thread_id": "thread-1",
+                        "subject": "Customer escalation",
+                        "snippet": "snippet",
+                        "from_address": "customer@example.test",
+                        "to_addresses": ["founder@example.test"],
+                        "labels": ["UNREAD"],
+                        "unread": True,
+                        "received_at": "2026-07-06T08:00:00+00:00",
+                        "source_url": "https://mail.example.test/msg-1",
+                        "source_refs": [
+                            {
+                                "id": "gmail-source-1:0",
+                                "kind": "gmail_message",
+                                "source": "gmail",
+                                "label": "msg-1",
+                                "url": "https://mail.example.test/msg-1",
+                                "record_type": "message",
+                                "record_id": "gmail-source-1",
+                            }
+                        ],
+                    }
+                ]
+            },
+            "documents": {
+                "files": [
+                    {
+                        "source_record_id": "drive-source-1",
+                        "file_id": "file-1",
+                        "name": "Q3 plan",
+                        "mime_type": "application/pdf",
+                        "owners": ["founder@example.test"],
+                        "shared": True,
+                        "modified_at": "2026-07-06T09:00:00+00:00",
+                        "source_url": "https://drive.example.test/file-1",
+                        "source_refs": [
+                            {
+                                "id": "drive-source-1:0",
+                                "kind": "drive_file",
+                                "source": "drive",
+                                "label": "file-1",
+                                "url": "https://drive.example.test/file-1",
+                                "record_type": "file",
+                                "record_id": "drive-source-1",
+                            }
+                        ],
+                    }
+                ]
+            },
+            "evidence": [],
+            "capabilities": {
+                "live_github_oauth": False,
+                "live_provider_sync": False,
+                "local_sync": True,
+                "llm_briefing": False,
+            },
+            "is_live": False,
+            "llm_used": False,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+    monkeypatch.setattr(
+        founder_briefing_service,
+        "build_workspace_company_brain",
+        fake_company_brain,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+
+        async with _async_client() as client:
+            generated_response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={},
+            )
+            assert generated_response.status_code == 200, generated_response.text
+            briefing = generated_response.json()["briefing"]
+            gmail_item = next(
+                item
+                for item in briefing["items"]
+                if item["id"] == "gmail-message-signals"
+            )
+
+            # Simulate a user-created UI action for one item. The deterministic
+            # generator must treat it as an existing open action and avoid a
+            # duplicate, even though the source marker differs.
+            manual_action = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/actions/proposals",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "target_provider": ACTION_TARGET_PROVIDER_INTERNAL,
+                    "action_type": ACTION_TYPE_INTERNAL_TODO,
+                    "title": "Manual Gmail follow-up",
+                    "payload": {
+                        "source": "briefing_item",
+                        "briefing_id": briefing["id"],
+                        "briefing_item_key": "gmail-message-signals",
+                    },
+                    "evidence_refs": gmail_item["evidence_refs"],
+                    "created_by": "user",
+                },
+            )
+            assert manual_action.status_code == 201, manual_action.text
+
+            generated_actions = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/{briefing['id']}/action-proposals",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+            repeated = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/{briefing['id']}/action-proposals",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+
+        assert generated_actions.status_code == 200, generated_actions.text
+        payload = generated_actions.json()
+        assert payload["created_count"] == 2
+        assert payload["skipped_count"] == 1
+        assert payload["is_live"] is False
+        assert payload["execution_started"] is False
+        assert "does not execute provider actions" in " ".join(payload["warnings"])
+        assert {item["reason"] for item in payload["skipped"]} == {
+            "open_action_exists"
+        }
+        assert payload["skipped"][0]["item_key"] == "gmail-message-signals"
+        proposals = payload["proposals"]
+        assert {proposal["target_provider"] for proposal in proposals} == {
+            ACTION_TARGET_PROVIDER_INTERNAL
+        }
+        assert {proposal["action_type"] for proposal in proposals} == {
+            ACTION_TYPE_INTERNAL_TODO
+        }
+        assert {proposal["created_by"] for proposal in proposals} == {
+            ACTION_CREATED_BY_SYSTEM
+        }
+        assert {proposal["status"] for proposal in proposals} == {
+            ACTION_PROPOSAL_STATUS_PROPOSED
+        }
+        assert {proposal["payload"]["source"] for proposal in proposals} == {
+            "briefing_non_github_signal"
+        }
+        assert {proposal["payload"]["briefing_id"] for proposal in proposals} == {
+            briefing["id"]
+        }
+        assert {proposal["payload"]["briefing_item_key"] for proposal in proposals} == {
+            "drive-file-signals",
+            "jira-work-items",
+        }
+        assert all(proposal["briefing_item_id"] for proposal in proposals)
+        assert all(proposal["evidence_refs"] for proposal in proposals)
+
+        assert repeated.status_code == 200, repeated.text
+        repeated_payload = repeated.json()
+        assert repeated_payload["created_count"] == 0
+        assert repeated_payload["skipped_count"] == 3
+        assert {item["reason"] for item in repeated_payload["skipped"]} == {
+            "open_action_exists"
+        }
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_generate_briefing_action_proposals_requires_member_role(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([])
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        viewer_email = await _add_workspace_user(
+            workspace_id,
+            marker,
+            role=MEMBERSHIP_ROLE_VIEWER,
+            suffix="viewer-actions",
+        )
+
+        async with _async_client() as client:
+            generated_response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={},
+            )
+            assert generated_response.status_code == 200, generated_response.text
+            briefing_id = generated_response.json()["briefing"]["id"]
+
+            response = await client.post(
+                f"/api/v1/workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals",
+                headers=_headers(),
+                params={"owner_email": viewer_email},
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "insufficient workspace role"}
     finally:
         await _cleanup_briefing_fixture(marker)
 

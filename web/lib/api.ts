@@ -13,6 +13,7 @@ import type {
   ActionProposalRejectRequest,
   ApiErrorPayload,
   ApiFetchOptions,
+  BriefingActionProposalGenerationResponse,
   BriefingListResponse,
   CompanyBrainResponse,
   FounderBriefingRequest,
@@ -362,6 +363,13 @@ export function buildWorkspaceBriefingPath(
   )}/briefings/${encodeURIComponent(briefingId)}`;
 }
 
+export function buildWorkspaceBriefingActionProposalsPath(
+  workspaceId: string,
+  briefingId: string
+): string {
+  return `${buildWorkspaceBriefingPath(workspaceId, briefingId)}/action-proposals`;
+}
+
 export async function listBriefings(
   workspaceId: string,
   request: { limit?: number; offset?: number } = {},
@@ -381,6 +389,20 @@ export async function getBriefing(
   return apiFetch<FounderBriefingResponse>(
     buildWorkspaceBriefingPath(workspaceId, briefingId),
     options
+  );
+}
+
+export async function generateBriefingActionProposals(
+  workspaceId: string,
+  briefingId: string,
+  options: ApiFetchOptions = {}
+): Promise<BriefingActionProposalGenerationResponse> {
+  return apiFetch<BriefingActionProposalGenerationResponse>(
+    buildWorkspaceBriefingActionProposalsPath(workspaceId, briefingId),
+    {
+      ...options,
+      method: "POST"
+    }
   );
 }
 

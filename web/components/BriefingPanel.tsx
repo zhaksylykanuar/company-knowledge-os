@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   createActionProposal,
   fetchActionProposals,
+  generateBriefingActionProposals,
   generateManualFounderBriefing,
   getBriefing,
   listBriefings
@@ -70,12 +71,14 @@ type BriefingPanelViewProps = {
   onOpenBriefing?: (briefingId: string) => void;
   onCloseEvidence?: () => void;
   onCreateActionFromItem?: (item: FounderBriefingItem) => void;
+  onGenerateActionsFromBriefing?: () => void;
   onSelectEvidence?: (
     evidence: BriefingEvidenceRef,
     itemTitle: string,
     count?: number
   ) => void;
   categoryFilter?: BriefingCategoryFilter;
+  pendingBriefingActionGeneration?: boolean;
   selectedEvidence: BriefingEvidenceRef | null;
   selectedEvidenceItemTitle?: string | null;
   selectedEvidenceCount?: number | null;
@@ -97,6 +100,8 @@ export function BriefingPanel() {
   const [actionProposals, setActionProposals] = useState<ActionProposal[]>([]);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [pendingActionItemId, setPendingActionItemId] = useState<string | null>(null);
+  const [pendingBriefingActionGeneration, setPendingBriefingActionGeneration] =
+    useState(false);
   const [categoryFilter, setCategoryFilter] = useState<BriefingCategoryFilter>("all");
 
   const refreshHistory = useCallback(async (currentWorkspaceId: string) => {
@@ -226,6 +231,43 @@ export function BriefingPanel() {
     }
   }
 
+  async function generateLocalActionsFromBriefing() {
+    if (!workspaceId) {
+      setStatus("missing");
+      return;
+    }
+    if (!activeBriefingId) {
+      return;
+    }
+
+    setActionError(null);
+    setActionSuccessMessage(null);
+    setPendingBriefingActionGeneration(true);
+    try {
+      const payload = await generateBriefingActionProposals(
+        workspaceId,
+        activeBriefingId
+      );
+      setActionProposals((current) => [
+        ...payload.proposals,
+        ...current.filter(
+          (proposal) =>
+            !payload.proposals.some((created) => created.id === proposal.id)
+        )
+      ]);
+      setActionSuccessMessage(
+        `${M.briefingPanel.actionGenerateSuccess} ${T.briefingActionGenerateResult(
+          payload.created_count,
+          payload.skipped_count
+        )}`
+      );
+    } catch (caught: unknown) {
+      setActionError(caught instanceof Error ? caught.message : M.common.requestFailed);
+    } finally {
+      setPendingBriefingActionGeneration(false);
+    }
+  }
+
   return (
     <BriefingPanelView
       actionError={actionError}
@@ -243,6 +285,7 @@ export function BriefingPanel() {
       }}
       onCategoryFilterChange={setCategoryFilter}
       onCreateActionFromItem={createLocalActionFromItem}
+      onGenerateActionsFromBriefing={generateLocalActionsFromBriefing}
       onGenerate={generateBriefing}
       onOpenBriefing={openBriefing}
       onRetry={generateBriefing}
@@ -253,6 +296,7 @@ export function BriefingPanel() {
       }}
       categoryFilter={categoryFilter}
       pendingActionItemId={pendingActionItemId}
+      pendingBriefingActionGeneration={pendingBriefingActionGeneration}
       selectedEvidence={selectedEvidence}
       selectedEvidenceItemTitle={selectedEvidenceItemTitle}
       selectedEvidenceCount={selectedEvidenceCount}
@@ -274,11 +318,13 @@ export function BriefingPanelView({
   onCategoryFilterChange,
   onCloseEvidence,
   onCreateActionFromItem,
+  onGenerateActionsFromBriefing,
   onGenerate,
   onOpenBriefing,
   onRetry,
   onSelectEvidence,
   pendingActionItemId = null,
+  pendingBriefingActionGeneration = false,
   selectedEvidence,
   selectedEvidenceItemTitle = null,
   selectedEvidenceCount = null,
@@ -405,6 +451,9 @@ export function BriefingPanelView({
           {actionError ? <p className="error-text">{actionError}</p> : null}
           <BriefingActionSummaryPanel
             actionLoadError={actionLoadError}
+            canGenerateActions={Boolean(activeBriefingId)}
+            onGenerateActionsFromBriefing={onGenerateActionsFromBriefing}
+            pendingGeneration={pendingBriefingActionGeneration}
             summaries={actionSummaries}
             totalLinkedActions={totalLinkedActions}
           />
@@ -461,10 +510,16 @@ export function BriefingPanelView({
 
 function BriefingActionSummaryPanel({
   actionLoadError,
+  canGenerateActions,
+  onGenerateActionsFromBriefing,
+  pendingGeneration,
   summaries,
   totalLinkedActions
 }: {
   actionLoadError: string | null;
+  canGenerateActions: boolean;
+  onGenerateActionsFromBriefing?: () => void;
+  pendingGeneration: boolean;
   summaries: Map<string, BriefingActionSummary>;
   totalLinkedActions: number;
 }) {
@@ -504,11 +559,21 @@ function BriefingActionSummaryPanel({
       </p>
       <p className="muted">{M.briefingPanel.actionSummaryDescription}</p>
       {actionLoadError ? <p className="error-text">{actionLoadError}</p> : null}
-      <p>
+      <div className="actions-row">
+        <button
+          className="button secondary"
+          disabled={!canGenerateActions || !onGenerateActionsFromBriefing || pendingGeneration}
+          onClick={onGenerateActionsFromBriefing}
+          type="button"
+        >
+          {pendingGeneration
+            ? M.briefingPanel.actionGeneratingFromBriefing
+            : M.briefingPanel.actionGenerate}
+        </button>
         <a className="button secondary" href={ACTIONS_BRIEFING_FOCUS_HREF}>
           {M.briefingPanel.openActions}
         </a>
-      </p>
+      </div>
     </section>
   );
 }
