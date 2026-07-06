@@ -11,6 +11,10 @@
   entities directly (playbook "See Company Brain entities") instead of only
   scrolling the dashboard. No new data path: read-only, no provider calls, sync,
   external writes, secret reads, or LLM.
+- Added a client-side entity-type focus filter to the normalized-entities panel
+  (DEC-071 polish). The founder can switch between all entities and each
+  `entity_type` in the already-loaded projection; filtering is local-only and
+  starts no provider call, sync, external write, or LLM.
 - Added a read-only normalized-entities projection API (DEC-070, MVP §1.5 /
   §6.9). New service `company_brain_entities_read_service.py` and endpoint
   `GET /api/v1/workspaces/{workspace_id}/company-brain/entities` flatten the

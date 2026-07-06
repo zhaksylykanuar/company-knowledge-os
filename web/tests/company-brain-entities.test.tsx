@@ -3,7 +3,10 @@ import test from "node:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { NormalizedEntitiesPanelView } from "../components/NormalizedEntitiesPanel";
+import {
+  NormalizedEntitiesPanelView,
+  filterEntitiesByType
+} from "../components/NormalizedEntitiesPanel";
 import {
   buildWorkspaceCompanyBrainEntitiesPath,
   fetchCompanyBrainEntities
@@ -164,12 +167,24 @@ test("renders normalized entities list and boundary copy", () => {
   const html = renderPanel();
   assert.ok(html.includes(M.companyBrainEntities.title));
   assert.ok(html.includes(M.companyBrainEntities.badgeProjection));
+  assert.ok(html.includes(M.companyBrainEntities.filterTitle));
+  assert.ok(html.includes(`${M.companyBrainEntities.filterAll} · 3`));
+  assert.ok(html.includes("repository · 1"));
+  assert.ok(html.includes("document · 1"));
   assert.ok(html.includes("qtwin-io/founderos-api"));
   assert.ok(html.includes("Investigate issue 42"));
   assert.ok(html.includes("Private beta checklist"));
   assert.ok(html.includes(M.companyBrainEntities.boundaryNote));
   assert.doesNotMatch(html, /provider call started/i);
   assert.doesNotMatch(html, /LLM used/i);
+});
+
+test("filters normalized entities by type locally", () => {
+  assert.equal(filterEntitiesByType(sampleEntities.entities, "all").length, 3);
+  const documents = filterEntitiesByType(sampleEntities.entities, "document");
+  assert.equal(documents.length, 1);
+  assert.equal(documents[0]?.title, "Private beta checklist");
+  assert.deepEqual(filterEntitiesByType(sampleEntities.entities, "missing_type"), []);
 });
 
 test("renders normalized entities empty and error states", () => {

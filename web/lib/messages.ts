@@ -1315,6 +1315,12 @@ export const M = {
     evidenceTitle: "Evidence",
     evidenceDescription: "Уникальные source_refs, привязанные к сущностям.",
     listLabel: "Список normalized entities",
+    filterTitle: "Фокус сущностей",
+    filterLabel: "Фильтр normalized entities по типу",
+    filterDescription:
+      "Фильтр работает только по уже загруженному локальному списку entities и не запускает provider calls.",
+    filterAll: "Все",
+    noEntitiesForFilter: "Для выбранного типа сущностей ничего не найдено.",
     typeBreakdownTitle: "По типам",
     providerBreakdownTitle: "По источникам",
     noEvidence: "Для текущих сущностей source_refs не возвращены.",

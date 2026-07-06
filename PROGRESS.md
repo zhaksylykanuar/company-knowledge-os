@@ -619,6 +619,19 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **Normalized entities type focus filter (DEC-071 polish).**
+  Added a client-side `entity_type` focus filter to `NormalizedEntitiesPanel` so
+  the dedicated `/company-brain` view can scale beyond a flat all-entities list.
+  Founder can switch between all entities and each projected type using the
+  already-loaded local response; no backend call, provider call, sync, external
+  write, secret read, or LLM is started. Checks: focused frontend
+  test/typecheck (`npm test -- --test-name-pattern=normalized entities`) ✅ 201
+  passed, `uv run ruff check .` ✅, focused entities API tests ✅ 3 passed, full
+  backend `uv run pytest -q` ✅ **452 passed / 1 warning**, `uv run alembic
+  check` ✅ (no drift), tracked secret scan ✅, `git diff --check` ✅,
+  frontend `npm test` ✅ **201 passed**, `npm run build` ✅ (`/company-brain`
+  route present), `npm run lint` ✅. Commit local-only; push не делался.
+
 - `2026-07-07` — **Dedicated Company Brain view (DEC-071).**
   Independent MVP-flow audit (§1.4 "See Company Brain entities" / §1.5
   "Company Brain view") found Company Brain + normalized entities existed only

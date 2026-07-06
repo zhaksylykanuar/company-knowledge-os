@@ -27,8 +27,9 @@ Implemented foundations:
 - A dedicated navigable Company Brain view is now in place (DEC-071): the
   `/company-brain` page + sidebar entry compose the Company Brain and
   normalized-entities panels so the founder can reach the MVP "See Company Brain
-  entities" step directly. Read-only; no new data path, provider calls, sync,
-  external writes, or LLM.
+  entities" step directly. The normalized-entities panel also has a client-side
+  `entity_type` focus filter over the already-loaded projection. Read-only; no
+  new data path, provider calls, sync, external writes, or LLM.
 - Email+password founder login on server-side sessions (Argon2id, httpOnly
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with

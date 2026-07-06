@@ -5,7 +5,11 @@ import { useEffect, useState } from "react";
 import { fetchCompanyBrainEntities } from "../lib/api";
 import { M } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
-import type { CompanyBrainSourceRef, NormalizedEntitiesResponse, NormalizedEntity } from "../lib/types";
+import type {
+  CompanyBrainSourceRef,
+  NormalizedEntitiesResponse,
+  NormalizedEntity
+} from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
@@ -81,6 +85,12 @@ export function NormalizedEntitiesPanelView({
   onRetry,
   status
 }: NormalizedEntitiesPanelViewProps) {
+  const [entityTypeFilter, setEntityTypeFilter] = useState<string>("all");
+  const filteredEntities =
+    data && status === "ready"
+      ? filterEntitiesByType(data.entities, entityTypeFilter)
+      : [];
+
   return (
     <section className="panel normalized-entities" aria-labelledby="normalized-entities-title">
       <div className="section-header">
@@ -145,7 +155,13 @@ export function NormalizedEntitiesPanelView({
             />
           </section>
           <BreakdownSection data={data} />
-          <EntitiesList entities={data.entities} />
+          <EntityTypeFilterControls
+            activeFilter={entityTypeFilter}
+            entities={data.entities}
+            onChange={setEntityTypeFilter}
+            typeCounts={data.summary.by_entity_type}
+          />
+          <EntitiesList entities={filteredEntities} />
           <EntityEvidence evidence={data.evidence} />
           <p className="muted">{M.companyBrainEntities.boundaryNote}</p>
           {data.warnings.length > 0 ? (
@@ -157,6 +173,49 @@ export function NormalizedEntitiesPanelView({
           ) : null}
         </>
       ) : null}
+    </section>
+  );
+}
+
+type EntityTypeCount = NormalizedEntitiesResponse["summary"]["by_entity_type"][number];
+
+function EntityTypeFilterControls({
+  activeFilter,
+  entities,
+  onChange,
+  typeCounts
+}: {
+  activeFilter: string;
+  entities: NormalizedEntity[];
+  onChange: (filter: string) => void;
+  typeCounts: EntityTypeCount[];
+}) {
+  const filters = [
+    { count: entities.length, label: M.companyBrainEntities.filterAll, value: "all" },
+    ...typeCounts.map((row) => ({
+      count: row.count,
+      label: row.entity_type,
+      value: row.entity_type
+    }))
+  ];
+  return (
+    <section className="work-section" aria-label={M.companyBrainEntities.filterLabel}>
+      <h3>{M.companyBrainEntities.filterTitle}</h3>
+      <p className="muted">{M.companyBrainEntities.filterDescription}</p>
+      <div className="segmented" role="tablist" aria-label={M.companyBrainEntities.filterLabel}>
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter.value}
+            className={activeFilter === filter.value ? "active" : ""}
+            key={filter.value}
+            onClick={() => onChange(filter.value)}
+            role="tab"
+            type="button"
+          >
+            {filter.label} · {filter.count}
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
@@ -188,6 +247,9 @@ function EntitiesList({ entities }: { entities: NormalizedEntity[] }) {
   return (
     <section className="work-section" aria-label={M.companyBrainEntities.listLabel}>
       <h3>{M.companyBrainEntities.listLabel}</h3>
+      {entities.length === 0 ? (
+        <p className="muted">{M.companyBrainEntities.noEntitiesForFilter}</p>
+      ) : null}
       <div className="work-list">
         {entities.map((entity) => (
           <article className="work-item" key={entity.key}>
@@ -222,6 +284,16 @@ function EntitiesList({ entities }: { entities: NormalizedEntity[] }) {
       </div>
     </section>
   );
+}
+
+export function filterEntitiesByType(
+  entities: NormalizedEntity[],
+  filter: string
+): NormalizedEntity[] {
+  if (filter === "all") {
+    return entities;
+  }
+  return entities.filter((entity) => entity.entity_type === filter);
 }
 
 function EntityEvidence({ evidence }: { evidence: CompanyBrainSourceRef[] }) {
