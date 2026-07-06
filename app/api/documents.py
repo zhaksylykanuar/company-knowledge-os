@@ -23,8 +23,10 @@ from app.services.document_service import (
     create_document,
     delete_document,
     get_document,
+    list_document_versions,
     list_documents,
     serialize_document,
+    serialize_document_version,
     update_document,
 )
 
@@ -59,6 +61,21 @@ class DocumentRead(DocumentSummaryRead):
     body_text: str = ""
 
 
+class DocumentVersionRead(BaseModel):
+    id: UUID
+    workspace_id: UUID
+    document_id: UUID
+    version_number: int
+    title: str
+    body_markdown: str = ""
+    body_text: str = ""
+    status: str
+    tags: list[str] = Field(default_factory=list)
+    created_by_user_id: UUID | None = None
+    created_at: datetime
+    excerpt: str = ""
+
+
 class DocumentListResponse(BaseModel):
     workspace_id: UUID
     documents: list[DocumentSummaryRead] = Field(default_factory=list)
@@ -68,6 +85,14 @@ class DocumentListResponse(BaseModel):
 
 class DocumentResponse(BaseModel):
     document: DocumentRead
+    boundary: DocumentBoundaryRead = Field(default_factory=DocumentBoundaryRead)
+
+
+class DocumentVersionsResponse(BaseModel):
+    workspace_id: UUID
+    document_id: UUID
+    versions: list[DocumentVersionRead] = Field(default_factory=list)
+    count: int
     boundary: DocumentBoundaryRead = Field(default_factory=DocumentBoundaryRead)
 
 
@@ -178,6 +203,38 @@ async def get_document_route(
         data = serialize_document(document)
     return DocumentResponse.model_validate(
         {"document": data, "boundary": DocumentBoundaryRead().model_dump()}
+    )
+
+
+@router.get("/{document_id}/versions", response_model=DocumentVersionsResponse)
+async def list_document_versions_route(
+    document_id: UUID,
+    limit: int = Query(default=50, ge=1, le=100),
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> DocumentVersionsResponse:
+    workspace_id = access.workspace_membership.workspace.id
+    async with AsyncSessionLocal() as session:
+        try:
+            versions = await list_document_versions(
+                session,
+                workspace_id=workspace_id,
+                document_id=document_id,
+                limit=limit,
+            )
+        except DocumentNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.detail,
+            ) from exc
+        data = [serialize_document_version(version) for version in versions]
+    return DocumentVersionsResponse.model_validate(
+        {
+            "workspace_id": workspace_id,
+            "document_id": document_id,
+            "versions": data,
+            "count": len(data),
+            "boundary": DocumentBoundaryRead().model_dump(),
+        }
     )
 
 

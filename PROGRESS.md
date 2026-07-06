@@ -131,6 +131,13 @@
   `body_markdown`/body text не копируются. Local-only: no provider calls, sync,
   external writes, secret reads или LLM. Проверено: focused
   `tests/test_founder_briefing_api.py` ✅ 26 passed.
+- **Internal DocumentVersion history (НОВОЕ, DEC-068):** internal Documents
+  теперь сохраняют immutable local history snapshots: version 1 на create и
+  новая version на каждый successful update. Добавлены
+  `document_versions` + migration `f2b3c4d5e6f7`, read-only endpoint
+  `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/versions`, и
+  compact version list в `/documents` detail. Local-only: no provider calls,
+  external writes, secret reads или LLM.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально
@@ -549,16 +556,17 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] FOS-GMAIL-01 — Gmail connector minimal (local-only) — DONE via DEC-058. Local read-only message import/list at `/gmail` and `app/services/gmail_connector_service.py` / `app/api/gmail.py`. Live Gmail OAuth/API-token provider sync remains deferred.
 - [x] FOS-019 — Drive connector minimal (local-only) — DONE via DEC-059. Local read-only file metadata import/list at `/drive` and `app/services/drive_connector_service.py` / `app/api/drive.py`. Live Drive OAuth/API-token provider sync remains deferred.
 - [x] FOS-DOC-01 — Documents module — DONE via DEC-066. Canonical workspace-scoped
-  `Document` model (`app/db/document_models.py`) + migration `f1a2b3c4d5e6`,
-  member-gated CRUD + search service/API (`app/services/document_service.py`,
-  `app/api/documents.py`: `GET/POST /workspaces/{id}/documents`,
-  `GET/PATCH/DELETE /documents/{id}`), `body_markdown` + deterministic
-  `body_text` projection, and `/documents` frontend page (list/search/create/
-  detail) + sidebar. Non-archived documents appear in Company Brain
-  `documents.notes` with evidence. `DocumentVersion`/NormalizedEntity linkage
-  deferred. Manual Founder Briefing now consumes `documents.notes` as
-  `internal-document-context` (DEC-067). Local-only: no provider calls,
-  external writes, secret reads, or LLM.
+  `Document` model (`app/db/document_models.py`) + migrations `f1a2b3c4d5e6`
+  and `f2b3c4d5e6f7`, member-gated CRUD + search service/API
+  (`app/services/document_service.py`, `app/api/documents.py`: `GET/POST
+  /workspaces/{id}/documents`, `GET/PATCH/DELETE /documents/{id}`,
+  `GET /documents/{id}/versions`), `body_markdown` + deterministic `body_text`
+  projection, immutable local `DocumentVersion` history (DEC-068), and
+  `/documents` frontend page (list/search/create/detail/version history) +
+  sidebar. Non-archived documents appear in Company Brain `documents.notes` with
+  evidence. Manual Founder Briefing consumes `documents.notes` as
+  `internal-document-context` (DEC-067). NormalizedEntity linkage deferred.
+  Local-only: no provider calls, external writes, secret reads, or LLM.
 
 ### CHUNK 7 — Polish + Repo Audit UI
 *Gate: нет dead-end состояний; repo audit виден в UI.*
@@ -603,6 +611,20 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-07` — **Internal DocumentVersion history (DEC-068).**
+  Continued the Documents module after DEC-066/067: added immutable local
+  `DocumentVersion` snapshots with migration `f2b3c4d5e6f7`; create writes v1,
+  every successful update appends the next version. Added read-only
+  `/api/v1/workspaces/{workspace_id}/documents/{document_id}/versions` and a
+  compact version list in `/documents` detail. Viewer can read history; writes
+  stay member-gated. Local-only: no provider calls, external writes, secret
+  reads, or LLM. Checks: focused backend `tests/test_documents_api.py` ✅
+  9 passed; full backend `uv run pytest -q` ✅ **448 passed / 1 warning**;
+  `uv run ruff check .` ✅; `uv run alembic upgrade head` + `uv run alembic
+  check` ✅ (single head `f2b3c4d5e6f7`, no drift); frontend `npm test` ✅
+  **190 passed**, `npm run build` ✅ (`/documents` present), tracked secret scan
+  ✅. Commit local-only; push не делался.
 
 - `2026-07-06` — **Founder Briefing internal document context (DEC-067).**
   Continued after the internal Documents module: Company Brain already exposed

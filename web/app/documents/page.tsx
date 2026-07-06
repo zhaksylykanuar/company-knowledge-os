@@ -7,6 +7,7 @@ import { StatusCard } from "../../components/StatusCard";
 import {
   createDocument,
   fetchDocument,
+  fetchDocumentVersions,
   fetchDocuments
 } from "../../lib/api";
 import { M } from "../../lib/messages";
@@ -14,7 +15,8 @@ import { useWorkspaceId } from "../../lib/session";
 import type {
   DocumentDetail,
   DocumentListResponse,
-  DocumentSummary
+  DocumentSummary,
+  DocumentVersion
 } from "../../lib/types";
 
 type PanelStatus = "error" | "loading" | "missing" | "ready";
@@ -28,6 +30,7 @@ export default function DocumentsPage() {
   const [activeSearch, setActiveSearch] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [selected, setSelected] = useState<DocumentDetail | null>(null);
+  const [selectedVersions, setSelectedVersions] = useState<DocumentVersion[]>([]);
   const [createTitle, setCreateTitle] = useState("");
   const [createBody, setCreateBody] = useState("");
   const [createTags, setCreateTags] = useState("");
@@ -73,8 +76,12 @@ export default function DocumentsPage() {
         return;
       }
       try {
-        const payload = await fetchDocument(workspaceId, documentId);
+        const [payload, versions] = await Promise.all([
+          fetchDocument(workspaceId, documentId),
+          fetchDocumentVersions(workspaceId, documentId)
+        ]);
         setSelected(payload.document);
+        setSelectedVersions(versions.versions);
       } catch (caught: unknown) {
         setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       }
@@ -143,10 +150,14 @@ export default function DocumentsPage() {
           setActiveSearch("");
         }}
         onSearchSubmit={() => setActiveSearch(search.trim())}
-        onCloseDetail={() => setSelected(null)}
+        onCloseDetail={() => {
+          setSelected(null);
+          setSelectedVersions([]);
+        }}
         onRetry={() => setReloadKey((current) => current + 1)}
         search={search}
         selected={selected}
+        selectedVersions={selectedVersions}
         status={status}
       />
     </>
@@ -176,6 +187,7 @@ type DocumentsPanelViewProps = {
   onRetry?: () => void;
   search: string;
   selected: DocumentDetail | null;
+  selectedVersions: DocumentVersion[];
   status: PanelStatus;
 };
 
@@ -202,6 +214,7 @@ export function DocumentsPanelView({
   onRetry,
   search,
   selected,
+  selectedVersions,
   status
 }: DocumentsPanelViewProps) {
   const documents = data?.documents ?? [];
@@ -304,7 +317,11 @@ export function DocumentsPanelView({
           )}
 
           {selected ? (
-            <DocumentDetailView document={selected} onCloseDetail={onCloseDetail} />
+            <DocumentDetailView
+              document={selected}
+              onCloseDetail={onCloseDetail}
+              versions={selectedVersions}
+            />
           ) : null}
 
           <DocumentCreateForm
@@ -368,10 +385,12 @@ function DocumentCard({
 
 function DocumentDetailView({
   document,
-  onCloseDetail
+  onCloseDetail,
+  versions
 }: {
   document: DocumentDetail;
   onCloseDetail?: () => void;
+  versions: DocumentVersion[];
 }) {
   return (
     <section className="callout" aria-label={document.title}>
@@ -386,6 +405,19 @@ function DocumentDetailView({
       </div>
       <h4>{M.documents.detailBodyLabel}</h4>
       <pre className="document-body">{document.body_markdown}</pre>
+      <h4>{M.documents.versionHistoryTitle}</h4>
+      {versions.length === 0 ? (
+        <p className="muted">{M.documents.versionHistoryEmpty}</p>
+      ) : (
+        <ol className="meta-list">
+          {versions.map((version) => (
+            <li key={version.id}>
+              {M.documents.versionLabel(version.version_number)} · {version.title} ·{" "}
+              {version.status} · {version.created_at}
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }

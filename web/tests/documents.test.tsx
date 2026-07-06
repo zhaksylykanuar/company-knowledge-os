@@ -6,13 +6,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { DocumentsPanelView, parseTags } from "../app/documents/page";
 import {
   buildWorkspaceDocumentPath,
+  buildWorkspaceDocumentVersionsPath,
   buildWorkspaceDocumentsCollectionPath,
   buildWorkspaceDocumentsPath,
   createDocument,
-  deleteDocument
+  deleteDocument,
+  fetchDocumentVersions
 } from "../lib/api";
 import { M } from "../lib/messages";
-import type { DocumentDetail, DocumentListResponse } from "../lib/types";
+import type { DocumentDetail, DocumentListResponse, DocumentVersion } from "../lib/types";
 
 const documentList: DocumentListResponse = {
   workspace_id: "workspace-1",
@@ -57,6 +59,37 @@ const documentDetail: DocumentDetail = {
   body_text: "Launch\n\nShip beta."
 };
 
+const documentVersions: DocumentVersion[] = [
+  {
+    id: "version-2",
+    workspace_id: "workspace-1",
+    document_id: "doc-1",
+    version_number: 2,
+    title: "Launch Plan v2",
+    body_markdown: "# Launch v2",
+    body_text: "Launch v2",
+    status: "published",
+    tags: ["launch"],
+    created_by_user_id: "user-1",
+    created_at: "2026-07-06T11:00:00Z",
+    excerpt: "Launch v2"
+  },
+  {
+    id: "version-1",
+    workspace_id: "workspace-1",
+    document_id: "doc-1",
+    version_number: 1,
+    title: "Launch Plan",
+    body_markdown: "# Launch",
+    body_text: "Launch",
+    status: "draft",
+    tags: ["launch"],
+    created_by_user_id: "user-1",
+    created_at: "2026-07-06T10:00:00Z",
+    excerpt: "Launch"
+  }
+];
+
 function renderPanel(
   props: Partial<Parameters<typeof DocumentsPanelView>[0]> = {}
 ): string {
@@ -77,6 +110,7 @@ function renderPanel(
       onRetry={props.onRetry}
       search={props.search ?? ""}
       selected={props.selected ?? null}
+      selectedVersions={props.selectedVersions ?? []}
       status={props.status ?? "ready"}
     />
   );
@@ -90,6 +124,10 @@ test("builds document API paths", () => {
   assert.equal(
     buildWorkspaceDocumentPath("workspace-1", "doc-1"),
     "/api/v1/workspaces/workspace-1/documents/doc-1"
+  );
+  assert.equal(
+    buildWorkspaceDocumentVersionsPath("workspace-1", "doc-1"),
+    "/api/v1/workspaces/workspace-1/documents/doc-1/versions"
   );
   assert.equal(
     buildWorkspaceDocumentsPath("workspace-1", { search: "runway", limit: 10 }),
@@ -141,6 +179,35 @@ test("creates a document through the POST client without external writes", async
   }
 });
 
+test("fetches document version history through the GET client", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-1/documents/doc-1/versions"
+    );
+    assert.equal(init?.method, undefined);
+    return new Response(
+      JSON.stringify({
+        boundary: documentList.boundary,
+        count: 2,
+        document_id: "doc-1",
+        versions: documentVersions,
+        workspace_id: "workspace-1"
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 200 }
+    );
+  }) as typeof fetch;
+  try {
+    const payload = await fetchDocumentVersions("workspace-1", "doc-1");
+    assert.equal(payload.count, 2);
+    assert.equal(payload.versions[0]?.version_number, 2);
+    assert.equal(payload.boundary.llm, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("deletes a document through the DELETE client (204)", async () => {
   const originalFetch = globalThis.fetch;
   let calledMethod: string | undefined;
@@ -175,10 +242,17 @@ test("renders empty state when there are no documents", () => {
 });
 
 test("renders selected document detail with markdown body", () => {
-  const html = renderPanel({ selected: documentDetail, onCloseDetail: () => undefined });
+  const html = renderPanel({
+    selected: documentDetail,
+    selectedVersions: documentVersions,
+    onCloseDetail: () => undefined
+  });
   assert.ok(html.includes(M.documents.detailBodyLabel));
   assert.match(html, /# Launch/);
   assert.ok(html.includes(M.documents.detailBackToList));
+  assert.ok(html.includes(M.documents.versionHistoryTitle));
+  assert.ok(html.includes(M.documents.versionLabel(2)));
+  assert.ok(html.includes("Launch Plan v2"));
 });
 
 test("renders missing and error states safely", () => {

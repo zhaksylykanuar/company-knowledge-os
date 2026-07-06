@@ -741,7 +741,10 @@ export const M = {
     boundaryNote:
       "Документы local-only: provider_calls=false, external_writes=false, llm=false, секреты не читаются.",
     detailBackToList: "К списку документов",
-    detailBodyLabel: "Содержимое"
+    detailBodyLabel: "Содержимое",
+    versionHistoryTitle: "История версий",
+    versionHistoryEmpty: "Версии документа ещё не записаны.",
+    versionLabel: (version: number) => `Версия ${version}`
   },
 
   drive: {

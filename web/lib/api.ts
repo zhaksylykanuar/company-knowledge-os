@@ -39,6 +39,7 @@ import type {
   DocumentListResponse,
   DocumentResponse,
   DocumentUpdateRequest,
+  DocumentVersionsResponse,
   GmailMessageImportRequest,
   GmailMessageImportResponse,
   GmailMessageListResponse,
@@ -345,6 +346,13 @@ export function buildWorkspaceDocumentPath(
   )}/documents/${encodeURIComponent(documentId)}`;
 }
 
+export function buildWorkspaceDocumentVersionsPath(
+  workspaceId: string,
+  documentId: string
+): string {
+  return `${buildWorkspaceDocumentPath(workspaceId, documentId)}/versions`;
+}
+
 export async function fetchDocuments(
   workspaceId: string,
   request: DocumentListRequest = {},
@@ -363,6 +371,17 @@ export async function fetchDocument(
 ): Promise<DocumentResponse> {
   return apiFetch<DocumentResponse>(
     buildWorkspaceDocumentPath(workspaceId, documentId),
+    options
+  );
+}
+
+export async function fetchDocumentVersions(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<DocumentVersionsResponse> {
+  return apiFetch<DocumentVersionsResponse>(
+    buildWorkspaceDocumentVersionsPath(workspaceId, documentId),
     options
   );
 }

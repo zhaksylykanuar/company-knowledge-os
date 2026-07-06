@@ -13,7 +13,7 @@ first.
 Implemented foundations:
 
 - FastAPI backend with canonical `/api/v1` routes, async SQLAlchemy/Postgres,
-  Alembic migrations, and one current Alembic head (`e9a0b1c2d3e4`).
+  Alembic migrations, and one current Alembic head (`f2b3c4d5e6f7`).
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -214,8 +214,10 @@ Implemented foundations:
   plus a deterministic plain-text projection; no provider calls, external
   writes, secret reads, or LLM. Founder Briefing now also surfaces those notes
   as `internal-document-context` (DEC-067), without copying raw markdown/body
-  text. `DocumentVersion` history and NormalizedEntity linkage remain later
-  slices.
+  text. Document version history is now implemented (DEC-068): create/update
+  append immutable local `DocumentVersion` snapshots, the API exposes
+  `/documents/{document_id}/versions`, and `/documents` detail renders version
+  history. NormalizedEntity linkage remains a later slice.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

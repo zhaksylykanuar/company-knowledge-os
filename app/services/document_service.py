@@ -21,6 +21,7 @@ from app.db.document_models import (
     DOCUMENT_STATUS_DRAFT,
     DOCUMENT_STATUSES,
     Document,
+    DocumentVersion,
 )
 
 DOCUMENT_NOT_FOUND = "document not found"
@@ -155,6 +156,11 @@ async def create_document(
     )
     session.add(document)
     await session.flush()
+    await _append_document_version(
+        session,
+        document=document,
+        created_by_user_id=created_by_user_id,
+    )
     await session.refresh(document)
     return document
 
@@ -183,6 +189,11 @@ async def update_document(
         document.status = _normalized_status(payload.status)
     document.updated_by_user_id = updated_by_user_id
     await session.flush()
+    await _append_document_version(
+        session,
+        document=document,
+        created_by_user_id=updated_by_user_id,
+    )
     await session.refresh(document)
     return document
 
@@ -241,6 +252,33 @@ async def delete_document(
     await session.flush()
 
 
+async def list_document_versions(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    document_id: UUID,
+    limit: int = 50,
+) -> list[DocumentVersion]:
+    document = await get_document(
+        session,
+        workspace_id=workspace_id,
+        document_id=document_id,
+    )
+    if document is None:
+        raise DocumentNotFoundError(DOCUMENT_NOT_FOUND)
+    return list(
+        (
+            await session.execute(
+                select(DocumentVersion)
+                .where(DocumentVersion.workspace_id == workspace_id)
+                .where(DocumentVersion.document_id == document_id)
+                .order_by(DocumentVersion.version_number.desc())
+                .limit(max(1, min(limit, 100)))
+            )
+        ).scalars()
+    )
+
+
 def serialize_document(document: Document, *, include_body: bool = True) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "id": document.id,
@@ -260,11 +298,58 @@ def serialize_document(document: Document, *, include_body: bool = True) -> dict
     return payload
 
 
+def serialize_document_version(version: DocumentVersion) -> dict[str, Any]:
+    return {
+        "id": version.id,
+        "workspace_id": version.workspace_id,
+        "document_id": version.document_id,
+        "version_number": version.version_number,
+        "title": version.title,
+        "body_markdown": version.body_markdown,
+        "body_text": version.body_text,
+        "status": version.status,
+        "tags": list(version.tags or []),
+        "created_by_user_id": version.created_by_user_id,
+        "created_at": version.created_at,
+        "excerpt": _excerpt(version.body_text),
+    }
+
+
 def _excerpt(body_text: str, *, limit: int = 240) -> str:
     text = (body_text or "").strip().replace("\n", " ")
     if len(text) <= limit:
         return text
     return f"{text[: limit - 1]}…"
+
+
+async def _append_document_version(
+    session: AsyncSession,
+    *,
+    document: Document,
+    created_by_user_id: UUID | None,
+) -> DocumentVersion:
+    latest_version = int(
+        await session.scalar(
+            select(func.max(DocumentVersion.version_number)).where(
+                DocumentVersion.document_id == document.id
+            )
+        )
+        or 0
+    )
+    version = DocumentVersion(
+        workspace_id=document.workspace_id,
+        document_id=document.id,
+        version_number=latest_version + 1,
+        title=document.title,
+        body_markdown=document.body_markdown,
+        body_text=document.body_text,
+        status=document.status,
+        tags=list(document.tags or []),
+        created_by_user_id=created_by_user_id,
+    )
+    session.add(version)
+    await session.flush()
+    return version
 
 
 async def _get_document_or_raise(

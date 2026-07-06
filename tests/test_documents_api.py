@@ -6,7 +6,7 @@ from sqlalchemy import delete, select
 
 from app.api.auth import settings
 from app.db.base import AsyncSessionLocal
-from app.db.document_models import Document
+from app.db.document_models import Document, DocumentVersion
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_OWNER,
     MEMBERSHIP_ROLE_VIEWER,
@@ -88,6 +88,11 @@ async def _cleanup(marker: str) -> None:
             ).scalars()
         )
         if workspace_ids:
+            await session.execute(
+                delete(DocumentVersion).where(
+                    DocumentVersion.workspace_id.in_(workspace_ids)
+                )
+            )
             await session.execute(
                 delete(Document).where(Document.workspace_id.in_(workspace_ids))
             )
@@ -182,6 +187,71 @@ async def test_update_document_reprojects_body_text(monkeypatch) -> None:
             assert body["status"] == "archived"
             assert "new content here" in body["body_text"]
             assert body["title"] == "Draft"  # unchanged partial update
+    finally:
+        await _cleanup(marker)
+
+
+async def test_document_versions_capture_create_and_update_history(monkeypatch) -> None:
+    marker = uuid4().hex[:10]
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        user, workspace = await _seed_workspace(marker)
+        viewer = await _seed_viewer(workspace, marker)
+        async with _client() as client:
+            created = await client.post(
+                f"/api/v1/workspaces/{workspace.id}/documents",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={
+                    "title": "Launch Plan",
+                    "body_markdown": "first **draft**",
+                    "tags": ["launch"],
+                    "status": "draft",
+                },
+            )
+            assert created.status_code == 201, created.text
+            document_id = created.json()["document"]["id"]
+
+            updated = await client.patch(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={
+                    "title": "Launch Plan v2",
+                    "body_markdown": "second **draft**",
+                    "tags": ["launch", "beta"],
+                    "status": "published",
+                },
+            )
+            assert updated.status_code == 200, updated.text
+
+            versions = await client.get(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}/versions",
+                headers=_headers(),
+                params={"owner_email": viewer.email},
+            )
+            assert versions.status_code == 200, versions.text
+
+        payload = versions.json()
+        assert payload["count"] == 2
+        assert payload["boundary"] == {
+            "provider_calls": False,
+            "external_writes": False,
+            "llm": False,
+            "reads_secrets": False,
+        }
+        assert [version["version_number"] for version in payload["versions"]] == [2, 1]
+        latest, first = payload["versions"]
+        assert latest["title"] == "Launch Plan v2"
+        assert latest["status"] == "published"
+        assert latest["tags"] == ["launch", "beta"]
+        assert "second draft" in latest["body_text"]
+        assert first["title"] == "Launch Plan"
+        assert first["status"] == "draft"
+        assert first["tags"] == ["launch"]
+        assert "first draft" in first["body_text"]
+        assert first["created_by_user_id"] == str(user.id)
     finally:
         await _cleanup(marker)
 

@@ -1707,6 +1707,38 @@ Consequences:
 - The item is context, not a task/follow-up signal, so the DEC-065 bulk action
   generation whitelist remains limited to Jira/Gmail/Drive signal items.
 
+## DEC-068 - Internal Documents Keep Local Version History
+
+Decision (2026-07-07): internal Documents now append immutable local
+``DocumentVersion`` snapshots on create and every successful update. The
+workspace-scoped ``document_versions`` table (migration ``f2b3c4d5e6f7``)
+stores version number, title, body markdown, deterministic body text, status,
+tags, author, and created timestamp. The Documents API exposes read-only version
+history at
+``GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/versions``, and
+the ``/documents`` detail view displays a compact version list.
+
+Rationale: the playbook Documents flow (§4.7) names ``DocumentVersion`` as part
+of the document data path. DEC-066 intentionally deferred version history to
+ship CRUD/search/Brain first; adding immutable snapshots now closes that
+document-lineage gap while keeping the current editable ``Document`` row as the
+source of truth.
+
+Consequences:
+
+- Version history is local DB-only: it does not call providers, does not perform
+  external writes, reads no secrets, and invokes no LLM.
+- Version 1 is written at document creation; version N+1 is written after each
+  successful update. Versions are ordered newest-first by ``version_number`` in
+  the read API.
+- The latest ``Document`` row remains the editable canonical state. Versions are
+  immutable snapshots for review/audit/history and are deleted by database
+  cascade when the document or workspace is deleted.
+- Viewers may read version history through the same workspace access boundary
+  used for document detail, while create/update/delete remain member-gated.
+- NormalizedEntity linkage remains a later slice; this decision only adds the
+  first local document history layer required by §4.7.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

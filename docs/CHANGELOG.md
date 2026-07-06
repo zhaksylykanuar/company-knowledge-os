@@ -1,5 +1,18 @@
 # FounderOS Changelog
 
+## 2026-07-07
+
+### Changed
+
+- Added local version history for internal Documents (DEC-068). New
+  `document_versions` table + migration `f2b3c4d5e6f7` records an immutable
+  snapshot on document create and every successful update, preserving title,
+  markdown body, deterministic body text, status, tags, author, and version
+  number. The Documents API now exposes
+  `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/versions`, and
+  `/documents` detail renders a compact version history. Local-only: no provider
+  calls, external writes, secret reads, or LLM.
+
 ## 2026-07-06
 
 ### Changed

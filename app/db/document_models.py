@@ -20,9 +20,11 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     JSON,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -107,4 +109,70 @@ class Document(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class DocumentVersion(Base):
+    """Immutable snapshot of one document revision (§4.7 DocumentVersion).
+
+    Versions are local-only audit/history records. Version 1 is created with the
+    document; each successful update appends the next version number. The latest
+    ``Document`` row stays the editable source of truth, while versions preserve
+    prior/current authored markdown and deterministic plain-text projection.
+    """
+
+    __tablename__ = "document_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "version_number",
+            name="uq_document_versions_document_version_number",
+        ),
+        Index(
+            "ix_document_versions_workspace_document_created",
+            "workspace_id",
+            "document_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "workspaces.id",
+            name="fk_document_versions_workspace_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "documents.id",
+            name="fk_document_versions_document_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
+    version_number: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(500))
+    body_markdown: Mapped[str] = mapped_column(Text, default="")
+    body_text: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20))
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    created_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            name="fk_document_versions_created_by_user_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
     )

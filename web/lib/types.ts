@@ -607,6 +607,21 @@ export type DocumentDetail = DocumentSummary & {
   body_text: string;
 };
 
+export type DocumentVersion = {
+  id: string;
+  workspace_id: string;
+  document_id: string;
+  version_number: number;
+  title: string;
+  body_markdown: string;
+  body_text: string;
+  status: DocumentStatus | string;
+  tags: string[];
+  created_by_user_id: string | null;
+  created_at: string;
+  excerpt: string;
+};
+
 export type DocumentListResponse = {
   workspace_id: string;
   documents: DocumentSummary[];
@@ -616,6 +631,14 @@ export type DocumentListResponse = {
 
 export type DocumentResponse = {
   document: DocumentDetail;
+  boundary: DocumentBoundary;
+};
+
+export type DocumentVersionsResponse = {
+  workspace_id: string;
+  document_id: string;
+  versions: DocumentVersion[];
+  count: number;
   boundary: DocumentBoundary;
 };
 
