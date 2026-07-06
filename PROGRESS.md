@@ -551,7 +551,11 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ### CHUNK 7 — Polish + Repo Audit UI
 *Gate: нет dead-end состояний; repo audit виден в UI.*
-- [~] FOS-RA-01 — Repo Audit UI — backend `app/services/repo_audit.py` есть; страницы `web/app/repo-audit` нет
+- [x] FOS-RA-01 — Repo Audit UI — DONE. Backend `app/services/repo_audit.py` +
+  `GET /api/v1/founder/company-brain/repo-audit`; UI реализован как
+  `web/app/audit/page.tsx` (`/audit`): per-repo facts/evidence, summary counts,
+  risk flags, local focus filters, external-audit JSON import с preview, и
+  audit→local-action loop. Read-only: без сетевых вызовов, provider writes и LLM.
 - [ ] FOS-P — Polish (errors/retries/empty/filters/evidence UX) — UI на уровне scaffold, не сделано
 
 ### CHUNK 8 — Testing Gate + Deploy
