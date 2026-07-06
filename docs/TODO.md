@@ -212,8 +212,10 @@ Implemented foundations:
   `/documents` frontend page (list/search/create/detail), and Company Brain
   `documents.notes` integration with evidence. Documents store `body_markdown`
   plus a deterministic plain-text projection; no provider calls, external
-  writes, secret reads, or LLM. `DocumentVersion` history and NormalizedEntity
-  linkage remain later slices.
+  writes, secret reads, or LLM. Founder Briefing now also surfaces those notes
+  as `internal-document-context` (DEC-067), without copying raw markdown/body
+  text. `DocumentVersion` history and NormalizedEntity linkage remain later
+  slices.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

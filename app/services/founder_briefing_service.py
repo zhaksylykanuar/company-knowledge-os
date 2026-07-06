@@ -456,6 +456,9 @@ def _non_github_company_brain_items(brain: Mapping[str, Any]) -> list[dict[str, 
     drive_item = _drive_files_item(brain, provider_totals.get("drive", 0))
     if drive_item is not None:
         items.append(drive_item)
+    internal_documents_item = _internal_documents_item(brain)
+    if internal_documents_item is not None:
+        items.append(internal_documents_item)
     return items
 
 
@@ -640,6 +643,54 @@ def _drive_files_item(
             "evidence-backed follow-ups for important documents."
         ),
         warnings=[] if evidence_refs else ["drive file source refs missing"],
+    )
+
+
+def _internal_documents_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
+    documents = (
+        brain.get("documents") if isinstance(brain.get("documents"), Mapping) else {}
+    )
+    notes = [row for row in documents.get("notes") or [] if isinstance(row, Mapping)]
+    if not notes:
+        return None
+
+    titles = _unique_texts(
+        _safe_text(note.get("title")) or _safe_text(note.get("document_id"))
+        for note in notes
+    )
+    statuses = _unique_texts(_safe_text(note.get("status")) for note in notes)
+    tag_names = _unique_texts(
+        tag
+        for note in notes
+        for tag in _safe_string_values(note.get("tags"), limit=20)
+    )
+    evidence_refs = _company_brain_row_evidence_refs(notes)
+    visible = len(notes)
+    summary = (
+        f"Company Brain shows {visible} internal document"
+        f"{'' if visible == 1 else 's'} as briefing context."
+    )
+    if titles:
+        summary = f"{summary} Top documents: {', '.join(titles[:3])}."
+    if statuses:
+        summary = f"{summary} Statuses in view: {', '.join(statuses[:5])}."
+    if tag_names:
+        summary = f"{summary} Tags in view: {', '.join(tag_names[:5])}."
+
+    return _item(
+        item_id="internal-document-context",
+        category="update",
+        title="Internal documents are available as briefing context",
+        summary=summary,
+        severity="low",
+        confidence=0.9,
+        evidence_refs=evidence_refs,
+        related_entities=titles[:5],
+        recommended_next_step=(
+            "Review internal documents in /documents; use their evidence-backed "
+            "context when interpreting briefing items."
+        ),
+        warnings=[] if evidence_refs else ["internal document source refs missing"],
     )
 
 
@@ -939,6 +990,17 @@ def _unique_texts(values: Any) -> list[str]:
         if text and text not in texts:
             texts.append(text)
     return texts
+
+
+def _safe_string_values(value: Any, *, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    values: list[str] = []
+    for item in value[:limit]:
+        text = _clip_text(item, limit=120)
+        if text and text not in values:
+            values.append(text)
+    return values
 
 
 def _clip_text(value: Any, *, limit: int) -> str | None:

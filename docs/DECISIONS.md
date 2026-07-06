@@ -1679,6 +1679,34 @@ Consequences:
   remain later slices; this decision delivers the CRUD + search + Brain surface
   the MVP acceptance criteria require ("Docs appear in Company Brain").
 
+## DEC-067 - Founder Briefing Surfaces Internal Document Context
+
+Decision (2026-07-06): the deterministic Founder Briefing now adds an
+`internal-document-context` item when workspace Company Brain contains internal
+documents under `documents.notes` (DEC-066). The item summarizes the visible
+internal document context (count, top titles, statuses, tags) and carries
+evidence refs converted from the Company Brain `source_refs` for those document
+rows.
+
+Rationale: DEC-066 made internal documents first-class and visible in Company
+Brain, but the playbook Documents flow (§4.7) also says "Briefing can use
+document as context." Adding a deterministic briefing item closes that local MVP
+loop without waiting for an LLM narrative pipeline.
+
+Consequences:
+
+- The item reads only the already-normalized Company Brain `documents.notes`
+  slice; it does not query raw `body_markdown`, call providers, start sync,
+  create actions, read secrets, or invoke an LLM.
+- The item does not copy raw markdown or body text into the briefing payload.
+  It uses bounded normalized metadata (titles, statuses, tags) plus
+  evidence refs; full document reading remains in `/documents` and Company
+  Brain.
+- If document source refs are missing, the item is emitted with an explicit
+  warning so evidence gaps remain visible.
+- The item is context, not a task/follow-up signal, so the DEC-065 bulk action
+  generation whitelist remains limited to Jira/Gmail/Drive signal items.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

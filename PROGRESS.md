@@ -122,6 +122,15 @@
   only: no provider calls, no sync, no external writes, no secret reads, no LLM.
   Проверено: focused backend `tests/test_founder_briefing_api.py` ✅ 25 passed,
   frontend `npm test` ✅ 181 passed (после UI/API helper), plus ruff/imports.
+- **Founder Briefing internal document context (НОВОЕ, DEC-067):**
+  deterministic manual Founder Briefing теперь добавляет item
+  `internal-document-context` из Company Brain `documents.notes` (DEC-066), так
+  что внутренние документы не только видны в Brain, но и используются как
+  founder-facing briefing context. Item показывает bounded metadata (count, top
+  titles, statuses, tags) + internal document evidence refs; raw
+  `body_markdown`/body text не копируются. Local-only: no provider calls, sync,
+  external writes, secret reads или LLM. Проверено: focused
+  `tests/test_founder_briefing_api.py` ✅ 26 passed.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально
@@ -547,7 +556,9 @@ DONE строго = есть код + проходящий тест/рабочи
   `body_text` projection, and `/documents` frontend page (list/search/create/
   detail) + sidebar. Non-archived documents appear in Company Brain
   `documents.notes` with evidence. `DocumentVersion`/NormalizedEntity linkage
-  deferred. Local-only: no provider calls, external writes, secret reads, or LLM.
+  deferred. Manual Founder Briefing now consumes `documents.notes` as
+  `internal-document-context` (DEC-067). Local-only: no provider calls,
+  external writes, secret reads, or LLM.
 
 ### CHUNK 7 — Polish + Repo Audit UI
 *Gate: нет dead-end состояний; repo audit виден в UI.*
@@ -592,6 +603,19 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-06` — **Founder Briefing internal document context (DEC-067).**
+  Continued after the internal Documents module: Company Brain already exposed
+  `documents.notes`, but deterministic Founder Briefing did not yet consume that
+  context. Added `internal-document-context` briefing item from Company Brain
+  document notes with internal-document evidence refs, bounded title/status/tag
+  metadata, and no raw `body_markdown`/body text copying. This closes the local
+  §4.7 loop "Briefing can use document as context" without LLM/provider calls/
+  sync/external writes/secret reads. Checks: focused briefing API **26 passed**,
+  full backend `uv run pytest -q` **447 passed / 1 warning**, `uv run ruff check
+  .` green, `uv run alembic check` no drift, frontend `npm test` **189 passed**,
+  `npm run build` green (`/documents` still present), tracked secret scan green.
+  Commit local-only; push не делался.
 
 - `2026-07-06` — **Internal Documents module (FOS-DOC-01 / DEC-066).**
   Independently re-derived the MVP scope and found that internal documents were

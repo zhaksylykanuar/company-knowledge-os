@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Added internal-document context to deterministic Founder Briefings (DEC-067).
+  Manual briefings now include `internal-document-context` when Company Brain
+  contains internal documents under `documents.notes`, with evidence refs from
+  the internal document source refs. The item uses bounded metadata (titles,
+  statuses, tags) and does not copy raw markdown/body text; local-only with no
+  provider calls, sync, external writes, secret reads, or LLM.
 - Added the internal Documents module (DEC-066, MVP §1.5 / §4.7 / §6.16 / §7.11).
   New workspace-scoped ``documents`` table + migration ``f1a2b3c4d5e6``, a
   member-gated CRUD + search API (``/api/v1/workspaces/{id}/documents`` and

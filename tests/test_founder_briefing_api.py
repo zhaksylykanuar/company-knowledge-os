@@ -867,6 +867,128 @@ async def test_manual_briefing_adds_non_github_company_brain_items(
         await _cleanup_briefing_fixture(marker)
 
 
+async def test_manual_briefing_adds_internal_document_context_item(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    async def fake_company_brain(**_kwargs):
+        return {
+            "workspace_id": _kwargs["workspace_id"],
+            "mode": "github_first_canonical",
+            "source": "canonical_github_company_brain",
+            "summary": {
+                "repositories": 1,
+                "open_issues": 0,
+                "open_pull_requests": 0,
+                "closed_issues": 0,
+                "merged_pull_requests": 0,
+            },
+            "source_records": {
+                "total": 0,
+                "by_provider": [],
+                "by_record_type": [],
+            },
+            "repositories": [],
+            "work": {"issues": [], "pull_requests": [], "recent": []},
+            "communications": {"messages": []},
+            "documents": {
+                "files": [],
+                "notes": [
+                    {
+                        "document_id": "document-1",
+                        "title": "Company Handbook",
+                        "status": "published",
+                        "tags": ["ops", "launch"],
+                        "excerpt": "This short excerpt is visible in Company Brain.",
+                        "body_markdown": "# RAW MARKDOWN SHOULD NOT LEAK",
+                        "body_text": "RAW BODY TEXT SHOULD NOT LEAK",
+                        "updated_at": "2026-07-06T10:00:00+00:00",
+                        "source_refs": [
+                            {
+                                "id": "document-1:document",
+                                "kind": "internal_document",
+                                "source": "internal",
+                                "label": "Company Handbook",
+                                "url": None,
+                                "record_type": "document",
+                                "record_id": "document-1",
+                            }
+                        ],
+                    }
+                ],
+            },
+            "evidence": [
+                {
+                    "id": "document-1:document",
+                    "kind": "internal_document",
+                    "source": "internal",
+                    "label": "Company Handbook",
+                    "url": None,
+                    "record_type": "document",
+                    "record_id": "document-1",
+                }
+            ],
+            "capabilities": {
+                "live_github_oauth": False,
+                "live_provider_sync": False,
+                "local_sync": True,
+                "llm_briefing": False,
+            },
+            "is_live": False,
+            "llm_used": False,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+    monkeypatch.setattr(
+        founder_briefing_service,
+        "build_workspace_company_brain",
+        fake_company_brain,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={},
+            )
+
+        assert response.status_code == 200, response.text
+        item = next(
+            item
+            for item in response.json()["briefing"]["items"]
+            if item["id"] == "internal-document-context"
+        )
+        assert item["category"] == "update"
+        assert "1 internal document" in item["summary"]
+        assert "Company Handbook" in item["summary"]
+        assert "published" in item["summary"]
+        assert "ops" in item["summary"]
+        assert item["evidence_refs"][0]["kind"] == "internal_document"
+        assert item["evidence_refs"][0]["source"] == "internal"
+        assert item["related_entities"] == ["Company Handbook"]
+        assert item["recommended_next_step"]
+        serialized = response.text
+        assert "RAW MARKDOWN SHOULD NOT LEAK" not in serialized
+        assert "RAW BODY TEXT SHOULD NOT LEAK" not in serialized
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
 async def test_manual_briefing_non_github_items_report_true_total_not_visible_slice(
     monkeypatch,
 ) -> None:
