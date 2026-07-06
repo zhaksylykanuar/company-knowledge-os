@@ -256,6 +256,85 @@ async def test_document_versions_capture_create_and_update_history(monkeypatch) 
         await _cleanup(marker)
 
 
+async def test_empty_or_idempotent_patch_does_not_append_document_version(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex[:10]
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        user, workspace = await _seed_workspace(marker)
+        async with _client() as client:
+            created = await client.post(
+                f"/api/v1/workspaces/{workspace.id}/documents",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={
+                    "title": "Launch Plan",
+                    "body_markdown": "first **draft**",
+                    "tags": ["launch", "beta"],
+                    "status": "draft",
+                },
+            )
+            assert created.status_code == 201, created.text
+            document_id = created.json()["document"]["id"]
+
+            empty_patch = await client.patch(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={},
+            )
+            assert empty_patch.status_code == 200, empty_patch.text
+            assert empty_patch.json()["document"]["title"] == "Launch Plan"
+
+            idempotent_patch = await client.patch(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={
+                    "title": " Launch Plan ",
+                    "body_markdown": "first **draft**",
+                    "tags": ["launch", "beta", "launch"],
+                    "status": "DRAFT",
+                },
+            )
+            assert idempotent_patch.status_code == 200, idempotent_patch.text
+
+            versions = await client.get(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}/versions",
+                headers=_headers(),
+                params={"owner_email": user.email},
+            )
+            assert versions.status_code == 200, versions.text
+            assert versions.json()["count"] == 1
+            assert [
+                version["version_number"] for version in versions.json()["versions"]
+            ] == [1]
+
+            changed_patch = await client.patch(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={"body_markdown": "second **draft**"},
+            )
+            assert changed_patch.status_code == 200, changed_patch.text
+
+            changed_versions = await client.get(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}/versions",
+                headers=_headers(),
+                params={"owner_email": user.email},
+            )
+            assert changed_versions.status_code == 200, changed_versions.text
+            assert changed_versions.json()["count"] == 2
+            assert [
+                version["version_number"]
+                for version in changed_versions.json()["versions"]
+            ] == [2, 1]
+    finally:
+        await _cleanup(marker)
+
+
 async def test_list_and_search_documents(monkeypatch) -> None:
     marker = uuid4().hex[:10]
     _set_auth(monkeypatch)

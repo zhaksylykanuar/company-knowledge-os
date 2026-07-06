@@ -178,15 +178,30 @@ async def update_document(
         workspace_id=workspace_id,
         document_id=document_id,
     )
+    changed = False
     if payload.title is not None:
-        document.title = _normalized_title(payload.title)
+        title = _normalized_title(payload.title)
+        if title != document.title:
+            document.title = title
+            changed = True
     if payload.body_markdown is not None:
-        document.body_markdown = _normalized_body(payload.body_markdown)
-        document.body_text = markdown_to_text(document.body_markdown)
+        body_markdown = _normalized_body(payload.body_markdown)
+        if body_markdown != document.body_markdown:
+            document.body_markdown = body_markdown
+            document.body_text = markdown_to_text(body_markdown)
+            changed = True
     if payload.tags is not None:
-        document.tags = _normalized_tags(payload.tags)
+        tags = _normalized_tags(payload.tags)
+        if tags != list(document.tags or []):
+            document.tags = tags
+            changed = True
     if payload.status is not None:
-        document.status = _normalized_status(payload.status)
+        status = _normalized_status(payload.status)
+        if status != document.status:
+            document.status = status
+            changed = True
+    if not changed:
+        return document
     document.updated_by_user_id = updated_by_user_id
     await session.flush()
     await _append_document_version(

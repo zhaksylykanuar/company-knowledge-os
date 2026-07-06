@@ -133,7 +133,8 @@
   `tests/test_founder_briefing_api.py` ✅ 26 passed.
 - **Internal DocumentVersion history (НОВОЕ, DEC-068):** internal Documents
   теперь сохраняют immutable local history snapshots: version 1 на create и
-  новая version на каждый successful update. Добавлены
+  новая version на каждый effective successful update; пустой или
+  идемпотентный PATCH остаётся no-op и не создаёт лишнюю revision. Добавлены
   `document_versions` + migration `f2b3c4d5e6f7`, read-only endpoint
   `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/versions`, и
   compact version list в `/documents` detail. Local-only: no provider calls,

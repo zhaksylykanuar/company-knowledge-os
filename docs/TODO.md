@@ -214,8 +214,9 @@ Implemented foundations:
   plus a deterministic plain-text projection; no provider calls, external
   writes, secret reads, or LLM. Founder Briefing now also surfaces those notes
   as `internal-document-context` (DEC-067), without copying raw markdown/body
-  text. Document version history is now implemented (DEC-068): create/update
-  append immutable local `DocumentVersion` snapshots, the API exposes
+  text. Document version history is now implemented (DEC-068): create and
+  effective updates append immutable local `DocumentVersion` snapshots, empty
+  or idempotent PATCH requests are no-ops, the API exposes
   `/documents/{document_id}/versions`, and `/documents` detail renders version
   history. NormalizedEntity linkage remains a later slice.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
