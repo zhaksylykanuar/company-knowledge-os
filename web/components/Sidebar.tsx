@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 
 import { M } from "../lib/messages";
 
-const links = [
+export const NAV_LINKS = [
   { href: "/", label: M.nav.home },
   { href: "/dashboard", label: M.nav.dashboard },
+  { href: "/company-brain", label: M.nav.companyBrain },
   { href: "/github", label: M.nav.github },
   { href: "/jira", label: M.nav.jira },
   { href: "/gmail", label: M.nav.gmail },
@@ -18,7 +19,7 @@ const links = [
   { href: "/briefings", label: M.nav.briefings },
   { href: "/actions", label: M.nav.actions },
   { href: "/settings", label: M.nav.settings }
-];
+] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -30,7 +31,7 @@ export function Sidebar() {
         <span className="brand-mode">{M.app.shellMode}</span>
       </div>
       <nav className="nav" aria-label={M.nav.primaryLabel}>
-        {links.map((link) => {
+        {NAV_LINKS.map((link) => {
           const isActive =
             link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
           return (

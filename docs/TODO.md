@@ -24,6 +24,11 @@ Implemented foundations:
   breakdowns and source refs. This is a read-only projection (no
   `NormalizedEntity` table yet; `Person` stays post-MVP per ASK-1) and starts no
   provider calls, sync, external writes, or LLM.
+- A dedicated navigable Company Brain view is now in place (DEC-071): the
+  `/company-brain` page + sidebar entry compose the Company Brain and
+  normalized-entities panels so the founder can reach the MVP "See Company Brain
+  entities" step directly. Read-only; no new data path, provider calls, sync,
+  external writes, or LLM.
 - Email+password founder login on server-side sessions (Argon2id, httpOnly
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with

@@ -1811,6 +1811,32 @@ Consequences:
 - A future physical `NormalizedEntity` table (if ASK-1 is resolved) can replace
   the projection behind the same endpoint without breaking the response shape.
 
+## DEC-071 - Company Brain Is A Dedicated Navigable View
+
+Decision (2026-07-07): the MVP "Company Brain view" (§1.5) and the main-flow step
+"See Company Brain entities" (§1.4) are delivered as a dedicated navigable
+`/company-brain` page with its own sidebar entry, not only as panels embedded in
+`/dashboard`. The page composes the existing read-only `CompanyBrainPanel` and
+`NormalizedEntitiesPanel` (DEC-070) plus a manual refresh control; it introduces
+no new data path.
+
+Rationale: the playbook flow lists "See Company Brain entities" as a distinct
+step and §1.5 lists "Company Brain view" separately from "Founder Dashboard",
+while §1.1/§1.7 require a UI-first product (no mandatory terminal use). Company
+Brain and normalized entities previously existed only as dashboard panels with
+no direct route, so a founder could not navigate to a Company Brain view. Adding
+a first-class route closes that acceptance-flow gap by reusing existing panels.
+
+Consequences:
+
+- Read-only and local-only: the page reuses the existing Company Brain and
+  normalized-entities endpoints and starts no provider calls, sync, external
+  writes, secret reads, or LLM.
+- No duplication of rendering/data logic: the page mounts the existing panel
+  components; the dashboard keeps its own panels for the at-a-glance view.
+- `Sidebar` now exports `NAV_LINKS` so navigation is unit-testable; the nav order
+  places Company Brain right after the dashboard.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

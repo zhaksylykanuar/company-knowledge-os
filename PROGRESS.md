@@ -619,6 +619,19 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **Dedicated Company Brain view (DEC-071).**
+  Independent MVP-flow audit (§1.4 "See Company Brain entities" / §1.5
+  "Company Brain view") found Company Brain + normalized entities existed only
+  as dashboard panels with no navigable route. Added a first-class
+  `/company-brain` page + sidebar entry that composes the existing read-only
+  `CompanyBrainPanel` and `NormalizedEntitiesPanel` with a manual refresh; no
+  new data path. `Sidebar` now exports `NAV_LINKS` for nav unit tests.
+  Read-only/local-only: no provider calls, sync, external writes, secret
+  reads, or LLM. Checks: frontend `npm test` ✅ **200 passed**, `npm run build`
+  ✅ (`/company-brain` route present), `npm run lint` ✅, `uv run ruff check .`
+  ✅, full backend `uv run pytest -q` ✅ **452 passed / 1 warning**, tracked
+  secret scan ✅, `git diff --check` ✅. Commit local-only; push не делался.
+
 - `2026-07-07` — **Normalized entities dashboard surface (DEC-070).**
   Added frontend access to the normalized-entities projection: new
   `NormalizedEntitiesPanel`, API helper/types for

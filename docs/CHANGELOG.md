@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added a dedicated navigable Company Brain view (DEC-071, MVP §1.4/§1.5). New
+  `/company-brain` page and sidebar entry compose the existing read-only
+  `CompanyBrainPanel` and `NormalizedEntitiesPanel` with a manual refresh, so the
+  founder can reach the canonical evidence-backed Company Brain and normalized
+  entities directly (playbook "See Company Brain entities") instead of only
+  scrolling the dashboard. No new data path: read-only, no provider calls, sync,
+  external writes, secret reads, or LLM.
 - Added a read-only normalized-entities projection API (DEC-070, MVP §1.5 /
   §6.9). New service `company_brain_entities_read_service.py` and endpoint
   `GET /api/v1/workspaces/{workspace_id}/company-brain/entities` flatten the

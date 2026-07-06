@@ -15,6 +15,7 @@ export const M = {
     primaryLabel: "Основная навигация",
     home: "Главная",
     dashboard: "Панель",
+    companyBrain: "Мозг компании",
     github: "GitHub",
     jira: "Jira",
     gmail: "Gmail",
@@ -98,6 +99,13 @@ export const M = {
         description: "Ваш аккаунт, выход и смена пароля."
       }
     }
+  },
+
+  companyBrainPage: {
+    eyebrow: "Мозг компании",
+    title: "Мозг компании",
+    description:
+      "Единый evidence-backed вид канонических данных рабочего пространства: Company Brain и normalized entities. Read-only, без provider calls, sync, external writes и LLM."
   },
 
   dashboard: {
