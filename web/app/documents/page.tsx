@@ -392,6 +392,10 @@ function DocumentDetailView({
   onCloseDetail?: () => void;
   versions: DocumentVersion[];
 }) {
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const selectedVersion =
+    versions.find((version) => version.id === selectedVersionId) ?? versions[0] ?? null;
+
   return (
     <section className="callout" aria-label={document.title}>
       <div className="section-header">
@@ -409,15 +413,61 @@ function DocumentDetailView({
       {versions.length === 0 ? (
         <p className="muted">{M.documents.versionHistoryEmpty}</p>
       ) : (
-        <ol className="meta-list">
-          {versions.map((version) => (
-            <li key={version.id}>
-              {M.documents.versionLabel(version.version_number)} · {version.title} ·{" "}
-              {version.status} · {version.created_at}
-            </li>
-          ))}
-        </ol>
+        <>
+          <ol className="meta-list">
+            {versions.map((version) => (
+              <li key={version.id}>
+                <button
+                  className="button secondary"
+                  disabled={selectedVersion?.id === version.id}
+                  onClick={() => setSelectedVersionId(version.id)}
+                  type="button"
+                >
+                  {M.documents.viewVersion}
+                </button>{" "}
+                {M.documents.versionLabel(version.version_number)} · {version.title} ·{" "}
+                {version.status} · {version.created_at}
+                {selectedVersion?.id === version.id ? (
+                  <> · {M.documents.selectedVersionBadge}</>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+          {selectedVersion ? <DocumentVersionSnapshot version={selectedVersion} /> : null}
+        </>
       )}
+    </section>
+  );
+}
+
+function DocumentVersionSnapshot({ version }: { version: DocumentVersion }) {
+  return (
+    <section className="callout" aria-label={M.documents.versionSnapshotTitle}>
+      <div className="section-header">
+        <div>
+          <span className="badge">{version.status}</span>
+          <h4>
+            {M.documents.versionSnapshotTitle}: {M.documents.versionLabel(version.version_number)}
+          </h4>
+        </div>
+      </div>
+      <dl className="work-meta">
+        <div>
+          <dt>{M.documents.statusLabel}</dt>
+          <dd>{version.status}</dd>
+        </div>
+        <div>
+          <dt>{M.documents.tagsLabel}</dt>
+          <dd>{version.tags.length > 0 ? version.tags.join(", ") : M.common.none}</dd>
+        </div>
+        <div>
+          <dt>{M.documents.versionCreatedLabel}</dt>
+          <dd>{version.created_at}</dd>
+        </div>
+      </dl>
+      <h5>{M.documents.versionSnapshotBodyLabel}</h5>
+      <pre className="document-body">{version.body_markdown}</pre>
+      <p className="muted">{M.documents.versionSnapshotBoundary}</p>
     </section>
   );
 }

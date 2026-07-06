@@ -241,7 +241,7 @@ test("renders empty state when there are no documents", () => {
   assert.ok(html.includes(M.documents.emptyDescription));
 });
 
-test("renders selected document detail with markdown body", () => {
+test("renders selected document detail with version snapshot body", () => {
   const html = renderPanel({
     selected: documentDetail,
     selectedVersions: documentVersions,
@@ -252,7 +252,14 @@ test("renders selected document detail with markdown body", () => {
   assert.ok(html.includes(M.documents.detailBackToList));
   assert.ok(html.includes(M.documents.versionHistoryTitle));
   assert.ok(html.includes(M.documents.versionLabel(2)));
+  assert.ok(html.includes(M.documents.viewVersion));
+  assert.ok(html.includes(M.documents.selectedVersionBadge));
+  assert.ok(html.includes(M.documents.versionSnapshotTitle));
+  assert.ok(html.includes(M.documents.versionSnapshotBodyLabel));
+  assert.ok(html.includes(M.documents.versionSnapshotBoundary));
   assert.ok(html.includes("Launch Plan v2"));
+  assert.ok(html.includes("# Launch v2"));
+  assert.doesNotMatch(html, /provider call started/i);
 });
 
 test("renders missing and error states safely", () => {

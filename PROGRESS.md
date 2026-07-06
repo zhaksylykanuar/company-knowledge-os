@@ -137,8 +137,9 @@
   идемпотентный PATCH остаётся no-op и не создаёт лишнюю revision. Добавлены
   `document_versions` + migration `f2b3c4d5e6f7`, read-only endpoint
   `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/versions`, и
-  compact version list в `/documents` detail. Local-only: no provider calls,
-  external writes, secret reads или LLM.
+  selectable version snapshots в `/documents` detail: founder может выбрать
+  version и увидеть её markdown snapshot + metadata. Local-only: no provider
+  calls, external writes, secret reads или LLM.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально
@@ -612,6 +613,19 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-07` — **Documents version snapshot UI polish (DEC-068).**
+  `/documents` detail now turns compact version history into selectable local
+  snapshots: each version row can be selected, and the detail pane renders that
+  version's markdown body, status, tags, and recorded timestamp. This is
+  frontend-only over the existing read-only versions API; no provider calls,
+  external writes, secret reads, migrations, or LLM were added. Checks: `npm
+  test -- --test-name-pattern=document` ✅ (current harness ran 190 tests, all
+  passed), full backend `uv run pytest -q` ✅ **449 passed / 1 warning**,
+  `uv run ruff check .` ✅, `uv run alembic upgrade head` + `uv run alembic
+  check` ✅, frontend `npm test` ✅ **190 passed**, `npm run build` ✅,
+  `npm run lint` ✅, tracked secret scan ✅, `git diff --check` ✅. Commit
+  local-only; push не делался.
 
 - `2026-07-07` — **DocumentVersion no-op PATCH hardening (DEC-068).**
   Hardened the version-history semantics after the initial DEC-068 slice: empty

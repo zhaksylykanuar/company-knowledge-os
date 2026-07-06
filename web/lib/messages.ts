@@ -744,6 +744,13 @@ export const M = {
     detailBodyLabel: "Содержимое",
     versionHistoryTitle: "История версий",
     versionHistoryEmpty: "Версии документа ещё не записаны.",
+    viewVersion: "Показать snapshot",
+    selectedVersionBadge: "выбрана",
+    versionSnapshotTitle: "Snapshot версии",
+    versionSnapshotBodyLabel: "Содержимое snapshot",
+    versionCreatedLabel: "Записана",
+    versionSnapshotBoundary:
+      "Snapshot читается из локальной истории документа: без provider calls, external writes, secret reads или LLM.",
     versionLabel: (version: number) => `Версия ${version}`
   },
 

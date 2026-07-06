@@ -11,8 +11,9 @@
   number. Empty or idempotent PATCH requests are treated as no-op updates and
   do not append duplicate history revisions. The Documents API now exposes
   `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/versions`, and
-  `/documents` detail renders a compact version history. Local-only: no provider
-  calls, external writes, secret reads, or LLM.
+  `/documents` detail now renders selectable version snapshots with markdown
+  body, status, tags, and recorded timestamp instead of only a compact list.
+  Local-only: no provider calls, external writes, secret reads, or LLM.
 
 ## 2026-07-06
 

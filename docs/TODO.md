@@ -217,8 +217,9 @@ Implemented foundations:
   text. Document version history is now implemented (DEC-068): create and
   effective updates append immutable local `DocumentVersion` snapshots, empty
   or idempotent PATCH requests are no-ops, the API exposes
-  `/documents/{document_id}/versions`, and `/documents` detail renders version
-  history. NormalizedEntity linkage remains a later slice.
+  `/documents/{document_id}/versions`, and `/documents` detail renders
+  selectable version snapshots with markdown body + metadata. NormalizedEntity
+  linkage remains a later slice.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
