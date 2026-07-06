@@ -6,9 +6,11 @@ import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
 import {
   createDocument,
+  deleteDocument,
   fetchDocument,
   fetchDocumentVersions,
-  fetchDocuments
+  fetchDocuments,
+  updateDocument
 } from "../../lib/api";
 import { M } from "../../lib/messages";
 import { useWorkspaceId } from "../../lib/session";
@@ -16,6 +18,7 @@ import type {
   DocumentDetail,
   DocumentListResponse,
   DocumentSummary,
+  DocumentUpdateRequest,
   DocumentVersion
 } from "../../lib/types";
 
@@ -38,6 +41,9 @@ export default function DocumentsPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createMessage, setCreateMessage] = useState<string | null>(null);
   const [createPending, setCreatePending] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailMessage, setDetailMessage] = useState<string | null>(null);
+  const [detailPending, setDetailPending] = useState(false);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -75,6 +81,8 @@ export default function DocumentsPage() {
       if (!workspaceId) {
         return;
       }
+      setDetailError(null);
+      setDetailMessage(null);
       try {
         const [payload, versions] = await Promise.all([
           fetchDocument(workspaceId, documentId),
@@ -87,6 +95,58 @@ export default function DocumentsPage() {
       }
     },
     [workspaceId]
+  );
+
+  const handleUpdateDocument = useCallback(
+    async (documentId: string, request: DocumentUpdateRequest) => {
+      if (!workspaceId || detailPending) {
+        return;
+      }
+      setDetailError(null);
+      setDetailMessage(null);
+      setDetailPending(true);
+      try {
+        const [payload, versions] = await Promise.all([
+          updateDocument(workspaceId, documentId, request),
+          fetchDocumentVersions(workspaceId, documentId)
+        ]);
+        setSelected(payload.document);
+        setSelectedVersions(versions.versions);
+        setDetailMessage(M.documents.updateSuccess);
+        setReloadKey((current) => current + 1);
+      } catch (caught: unknown) {
+        setDetailError(
+          caught instanceof Error ? caught.message : M.common.requestFailed
+        );
+      } finally {
+        setDetailPending(false);
+      }
+    },
+    [workspaceId, detailPending]
+  );
+
+  const handleDeleteDocument = useCallback(
+    async (documentId: string) => {
+      if (!workspaceId || detailPending) {
+        return;
+      }
+      setDetailError(null);
+      setDetailMessage(null);
+      setDetailPending(true);
+      try {
+        await deleteDocument(workspaceId, documentId);
+        setSelected(null);
+        setSelectedVersions([]);
+        setReloadKey((current) => current + 1);
+      } catch (caught: unknown) {
+        setDetailError(
+          caught instanceof Error ? caught.message : M.common.requestFailed
+        );
+      } finally {
+        setDetailPending(false);
+      }
+    },
+    [workspaceId, detailPending]
   );
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -138,11 +198,16 @@ export default function DocumentsPage() {
         createTitle={createTitle}
         data={data}
         error={error}
+        detailError={detailError}
+        detailMessage={detailMessage}
+        detailPending={detailPending}
         onCreate={handleCreate}
         onCreateBodyChange={setCreateBody}
         onCreateStatusChange={setCreateStatusValue}
         onCreateTagsChange={setCreateTags}
         onCreateTitleChange={setCreateTitle}
+        onDeleteDocument={handleDeleteDocument}
+        onUpdateDocument={handleUpdateDocument}
         onOpenDocument={openDocument}
         onSearchChange={setSearch}
         onSearchClear={() => {
@@ -153,6 +218,8 @@ export default function DocumentsPage() {
         onCloseDetail={() => {
           setSelected(null);
           setSelectedVersions([]);
+          setDetailError(null);
+          setDetailMessage(null);
         }}
         onRetry={() => setReloadKey((current) => current + 1)}
         search={search}
@@ -174,11 +241,16 @@ type DocumentsPanelViewProps = {
   createTitle: string;
   data: DocumentListResponse | null;
   error: string | null;
+  detailError: string | null;
+  detailMessage: string | null;
+  detailPending: boolean;
   onCreate?: (event: FormEvent<HTMLFormElement>) => void;
   onCreateBodyChange?: (value: string) => void;
   onCreateStatusChange?: (value: string) => void;
   onCreateTagsChange?: (value: string) => void;
   onCreateTitleChange?: (value: string) => void;
+  onDeleteDocument?: (documentId: string) => void;
+  onUpdateDocument?: (documentId: string, request: DocumentUpdateRequest) => void;
   onOpenDocument?: (documentId: string) => void;
   onSearchChange?: (value: string) => void;
   onSearchClear?: () => void;
@@ -201,11 +273,16 @@ export function DocumentsPanelView({
   createTitle,
   data,
   error,
+  detailError,
+  detailMessage,
+  detailPending,
   onCreate,
   onCreateBodyChange,
   onCreateStatusChange,
   onCreateTagsChange,
   onCreateTitleChange,
+  onDeleteDocument,
+  onUpdateDocument,
   onOpenDocument,
   onSearchChange,
   onSearchClear,
@@ -319,7 +396,12 @@ export function DocumentsPanelView({
           {selected ? (
             <DocumentDetailView
               document={selected}
+              detailError={detailError}
+              detailMessage={detailMessage}
+              detailPending={detailPending}
               onCloseDetail={onCloseDetail}
+              onDeleteDocument={onDeleteDocument}
+              onUpdateDocument={onUpdateDocument}
               versions={selectedVersions}
             />
           ) : null}
@@ -386,15 +468,40 @@ function DocumentCard({
 function DocumentDetailView({
   document,
   onCloseDetail,
+  detailError,
+  detailMessage,
+  detailPending,
+  onDeleteDocument,
+  onUpdateDocument,
   versions
 }: {
   document: DocumentDetail;
   onCloseDetail?: () => void;
+  detailError?: string | null;
+  detailMessage?: string | null;
+  detailPending?: boolean;
+  onDeleteDocument?: (documentId: string) => void;
+  onUpdateDocument?: (documentId: string, request: DocumentUpdateRequest) => void;
   versions: DocumentVersion[];
 }) {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const selectedVersion =
     versions.find((version) => version.id === selectedVersionId) ?? versions[0] ?? null;
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(document.title);
+  const [editBody, setEditBody] = useState(document.body_markdown);
+  const [editTags, setEditTags] = useState((document.tags ?? []).join(", "));
+  const [editStatus, setEditStatus] = useState(document.status);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  useEffect(() => {
+    setEditing(false);
+    setConfirmingDelete(false);
+    setEditTitle(document.title);
+    setEditBody(document.body_markdown);
+    setEditTags((document.tags ?? []).join(", "));
+    setEditStatus(document.status);
+  }, [document]);
 
   return (
     <section className="callout" aria-label={document.title}>
@@ -403,12 +510,127 @@ function DocumentDetailView({
           <span className="badge">{document.status}</span>
           <h3>{document.title}</h3>
         </div>
-        <button className="button secondary" onClick={onCloseDetail} type="button">
-          {M.documents.detailBackToList}
-        </button>
+        <div className="actions-row">
+          {onUpdateDocument && !editing ? (
+            <button
+              className="button secondary"
+              onClick={() => setEditing(true)}
+              type="button"
+            >
+              {M.documents.editDocument}
+            </button>
+          ) : null}
+          <button className="button secondary" onClick={onCloseDetail} type="button">
+            {M.documents.detailBackToList}
+          </button>
+        </div>
       </div>
+
+      {editing && onUpdateDocument ? (
+        <form
+          className="stack"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onUpdateDocument(document.id, {
+              title: editTitle.trim(),
+              body_markdown: editBody,
+              tags: parseTags(editTags),
+              status: editStatus
+            });
+          }}
+        >
+          <h4>{M.documents.editTitle}</h4>
+          <label htmlFor="documents-edit-title">{M.documents.fieldTitle}</label>
+          <input
+            id="documents-edit-title"
+            onChange={(event) => setEditTitle(event.target.value)}
+            value={editTitle}
+          />
+          <label htmlFor="documents-edit-body">{M.documents.fieldBody}</label>
+          <textarea
+            id="documents-edit-body"
+            onChange={(event) => setEditBody(event.target.value)}
+            rows={8}
+            value={editBody}
+          />
+          <label htmlFor="documents-edit-tags">{M.documents.fieldTags}</label>
+          <input
+            id="documents-edit-tags"
+            onChange={(event) => setEditTags(event.target.value)}
+            value={editTags}
+          />
+          <label htmlFor="documents-edit-status">{M.documents.fieldStatus}</label>
+          <select
+            id="documents-edit-status"
+            onChange={(event) => setEditStatus(event.target.value)}
+            value={editStatus}
+          >
+            <option value="draft">{M.documents.statusDraft}</option>
+            <option value="published">{M.documents.statusPublished}</option>
+            <option value="archived">{M.documents.statusArchived}</option>
+          </select>
+          {detailMessage ? <p className="state success">{detailMessage}</p> : null}
+          {detailError ? <p className="state error">{detailError}</p> : null}
+          <div className="actions-row">
+            <button className="button" disabled={detailPending} type="submit">
+              {detailPending ? M.documents.saving : M.documents.saveChanges}
+            </button>
+            <button
+              className="button secondary"
+              onClick={() => setEditing(false)}
+              type="button"
+            >
+              {M.documents.cancelEdit}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       <h4>{M.documents.detailBodyLabel}</h4>
       <pre className="document-body">{document.body_markdown}</pre>
+
+      {!editing && detailMessage ? (
+        <p className="state success">{detailMessage}</p>
+      ) : null}
+      {!editing && detailError ? (
+        <p className="state error">{detailError}</p>
+      ) : null}
+
+      {onDeleteDocument ? (
+        <div className="actions-row">
+          {confirmingDelete ? (
+            <>
+              <span className="muted">{M.documents.deleteConfirm}</span>
+              <button
+                className="button secondary"
+                disabled={detailPending}
+                onClick={() => onDeleteDocument(document.id)}
+                type="button"
+              >
+                {detailPending
+                  ? M.documents.deleting
+                  : M.documents.deleteConfirmYes}
+              </button>
+              <button
+                className="button secondary"
+                onClick={() => setConfirmingDelete(false)}
+                type="button"
+              >
+                {M.documents.cancelEdit}
+              </button>
+            </>
+          ) : (
+            <button
+              className="button secondary"
+              onClick={() => setConfirmingDelete(true)}
+              type="button"
+            >
+              {M.documents.deleteDocument}
+            </button>
+          )}
+        </div>
+      ) : null}
+
       <h4>{M.documents.versionHistoryTitle}</h4>
       {versions.length === 0 ? (
         <p className="muted">{M.documents.versionHistoryEmpty}</p>

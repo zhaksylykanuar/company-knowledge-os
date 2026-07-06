@@ -218,8 +218,11 @@ Implemented foundations:
   effective updates append immutable local `DocumentVersion` snapshots, empty
   or idempotent PATCH requests are no-ops, the API exposes
   `/documents/{document_id}/versions`, and `/documents` detail renders
-  selectable version snapshots with markdown body + metadata. NormalizedEntity
-  linkage remains a later slice.
+  selectable version snapshots with markdown body + metadata. The `/documents`
+  detail view now also supports in-product edit (title, body, tags, status) and
+  guarded delete through the existing PATCH/DELETE routes, so the Documents
+  module CRUD is reachable end-to-end and version history grows past version 1
+  through the UI. NormalizedEntity linkage remains a later slice.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

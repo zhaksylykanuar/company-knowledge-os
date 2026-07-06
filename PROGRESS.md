@@ -140,6 +140,10 @@
   selectable version snapshots в `/documents` detail: founder может выбрать
   version и увидеть её markdown snapshot + metadata. Local-only: no provider
   calls, external writes, secret reads или LLM.
+  `/documents` detail также поддерживает in-product edit (title/body/tags/
+  status) и guarded delete через существующие PATCH/DELETE routes, поэтому CRUD
+  внутренних документов доступен end-to-end и version history реально растёт
+  выше version 1 через UI.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально
@@ -613,6 +617,20 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-07` — **Documents in-product edit/delete wiring (DEC-066/DEC-068).**
+  Independent completion audit against playbook §1.5 ("internal documents")
+  found a real end-to-end gap: `updateDocument`/`deleteDocument` API clients and
+  backend `PATCH`/`DELETE` routes existed, but `/documents` UI had no edit or
+  delete affordance, so document CRUD was not reachable in-product and
+  DocumentVersion history could never exceed version 1 through the UI. Wired an
+  inline edit form (title/body/tags/status) and a guarded delete into the
+  `/documents` detail view over the existing routes; a successful edit refreshes
+  the document and its version history. Frontend-only; no provider calls,
+  external writes, secret reads, migrations, or LLM. Checks: `npm test` ✅ 194
+  passed (4 new), `npm run build` ✅, `npm run lint` ✅, `uv run ruff check .`
+  ✅, focused `tests/test_documents_api.py` ✅ 10 passed, tracked secret scan ✅,
+  `git diff --check` ✅. Commit local-only; push не делался.
 
 - `2026-07-07` — **Documents version snapshot UI polish (DEC-068).**
   `/documents` detail now turns compact version history into selectable local

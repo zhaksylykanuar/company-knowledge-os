@@ -11,7 +11,8 @@ import {
   buildWorkspaceDocumentsPath,
   createDocument,
   deleteDocument,
-  fetchDocumentVersions
+  fetchDocumentVersions,
+  updateDocument
 } from "../lib/api";
 import { M } from "../lib/messages";
 import type { DocumentDetail, DocumentListResponse, DocumentVersion } from "../lib/types";
@@ -104,8 +105,13 @@ function renderPanel(
       createTitle={props.createTitle ?? ""}
       data={"data" in props ? props.data ?? null : documentList}
       error={props.error ?? null}
+      detailError={props.detailError ?? null}
+      detailMessage={props.detailMessage ?? null}
+      detailPending={props.detailPending ?? false}
       onCloseDetail={props.onCloseDetail}
       onCreate={props.onCreate}
+      onDeleteDocument={props.onDeleteDocument}
+      onUpdateDocument={props.onUpdateDocument}
       onOpenDocument={props.onOpenDocument}
       onRetry={props.onRetry}
       search={props.search ?? ""}
@@ -260,6 +266,67 @@ test("renders selected document detail with version snapshot body", () => {
   assert.ok(html.includes("Launch Plan v2"));
   assert.ok(html.includes("# Launch v2"));
   assert.doesNotMatch(html, /provider call started/i);
+});
+
+test("renders edit and delete affordances when handlers are provided", () => {
+  const html = renderPanel({
+    selected: documentDetail,
+    selectedVersions: documentVersions,
+    onCloseDetail: () => undefined,
+    onUpdateDocument: () => undefined,
+    onDeleteDocument: () => undefined
+  });
+  assert.ok(html.includes(M.documents.editDocument));
+  assert.ok(html.includes(M.documents.deleteDocument));
+});
+
+test("hides edit and delete affordances when handlers are absent", () => {
+  const html = renderPanel({
+    selected: documentDetail,
+    selectedVersions: documentVersions,
+    onCloseDetail: () => undefined
+  });
+  assert.ok(!html.includes(M.documents.editDocument));
+  assert.ok(!html.includes(M.documents.deleteDocument));
+});
+
+test("shows a detail success message after a local update", () => {
+  const html = renderPanel({
+    selected: documentDetail,
+    selectedVersions: documentVersions,
+    onCloseDetail: () => undefined,
+    onUpdateDocument: () => undefined,
+    onDeleteDocument: () => undefined,
+    detailMessage: M.documents.updateSuccess
+  });
+  assert.ok(html.includes(M.documents.updateSuccess));
+});
+
+test("updates a document through the PATCH client without external writes", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-1/documents/doc-1"
+    );
+    assert.equal(init?.method, "PATCH");
+    return new Response(
+      JSON.stringify({
+        document: { ...documentDetail, title: "Launch Plan v2" },
+        boundary: documentList.boundary
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 200 }
+    );
+  }) as typeof fetch;
+  try {
+    const payload = await updateDocument("workspace-1", "doc-1", {
+      title: "Launch Plan v2"
+    });
+    assert.equal(payload.boundary.external_writes, false);
+    assert.equal(payload.document.title, "Launch Plan v2");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("renders missing and error states safely", () => {

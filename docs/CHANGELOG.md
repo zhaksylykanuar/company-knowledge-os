@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Wired in-product edit and delete for internal Documents (DEC-066/DEC-068).
+  The `/documents` detail view now exposes an inline edit form (title, markdown
+  body, tags, status) backed by the existing `PATCH
+  /api/v1/workspaces/{workspace_id}/documents/{document_id}` route and a guarded
+  delete affordance backed by the existing `DELETE` route. A successful edit
+  refreshes the document and its version history, so document version history
+  can now grow past version 1 through the product UI (previously only create was
+  reachable). Local-only: no provider calls, external writes, secret reads, or
+  LLM.
 - Added local version history for internal Documents (DEC-068). New
   `document_versions` table + migration `f2b3c4d5e6f7` records an immutable
   snapshot on document create and every successful update, preserving title,
