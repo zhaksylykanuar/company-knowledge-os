@@ -241,6 +241,11 @@ Implemented foundations:
   through the UI. NormalizedEntity linkage remains a later slice.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
+- Basic application request logging is now in place (DEC-072): a sanitized ASGI
+  `RequestLoggingMiddleware` logs method/path/status/duration at
+  `FOUNDEROS_LOG_LEVEL` (default `INFO`) without query values, headers, bodies,
+  tokens, or provider payloads. No new dependency, table, migration, provider
+  call, external write, or LLM.
 
 ## Next Priority: Founder-facing coverage and briefing polish
 

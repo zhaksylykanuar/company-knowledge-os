@@ -1837,6 +1837,36 @@ Consequences:
 - `Sidebar` now exports `NAV_LINKS` so navigation is unit-testable; the nav order
   places Company Brain right after the dashboard.
 
+## DEC-072 - Basic Logging Is Sanitized Request Logging
+
+Decision (2026-07-07): the MVP "basic logging" requirement (§1.5) is delivered as
+application-level request logging, not only as domain audit rows. `app/core/logging.py`
+adds `configure_logging()` (an idempotent, level-configurable handler on a
+dedicated `founderos` logger) and `RequestLoggingMiddleware`, an ASGI middleware
+that logs one line per HTTP request. The level is env-driven via
+`FOUNDEROS_LOG_LEVEL` / `LOG_LEVEL` (default `INFO`). `app/main.py` configures
+logging at import and startup and installs the middleware.
+
+Rationale: before this change the app had no `getLogger`/logging configuration
+and no request logging at all; the only "logging" was persisted domain audit
+trails (`AuditLog`, `ActionExecutionEvent`). §1.5 lists "basic logging" as a
+distinct MVP must-have, and the also-required "staging/prod deployment" needs
+operational request visibility. This closes that gap with a minimal, dependency-
+free standard-library logger.
+
+Consequences:
+
+- Sanitization boundary (AGENTS.md / SECURITY_BASELINE.md): the request logger
+  records only HTTP method, URL path, status code, and duration in ms. It never
+  logs query-string values, headers, cookies, request/response bodies, tokens,
+  API keys, or provider payloads, so no secret-bearing data can leak into logs.
+- The `founderos` logger sets `propagate = False` and owns its handler, so
+  configuration is deterministic across app startups and test runs and does not
+  mutate the root logger. `configure_logging` is idempotent (no duplicate
+  handlers) and falls back to `INFO` for unknown level names.
+- This is local/in-process only: it adds no provider calls, external writes,
+  secret reads, or LLM, and introduces no new dependency, table, or migration.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

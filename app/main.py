@@ -20,12 +20,20 @@ from app.api.jira import router as jira_router
 from app.api.workspace_company_brain import router as workspace_company_brain_router
 from app.api.workspaces import router as workspaces_router
 from app.core.config import resolved_cors_allowed_origins, settings
+from app.core.logging import RequestLoggingMiddleware, configure_logging
+
+# Configure basic application logging as early as possible (MVP §1.5 "basic
+# logging"): a single sanitized handler at the configured level.
+configure_logging(settings.log_level)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Fail loudly at startup if a non-local deployment is not fail-closed.
     enforce_fail_closed_auth(settings)
+    # Re-apply logging config on startup so the level reflects the current
+    # environment even if settings changed after import (e.g. in tests).
+    configure_logging(settings.log_level)
     yield
 
 
@@ -34,6 +42,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Basic request logging: method, path, status, duration — no bodies/secrets.
+app.add_middleware(RequestLoggingMiddleware)
 
 cors_allowed_origins = resolved_cors_allowed_origins(settings)
 if cors_allowed_origins:

@@ -162,6 +162,8 @@ Minimum backend env names for a private-beta candidate:
 - `REQUIRE_APPROVAL_FOR_WRITES`
 - `FOS_GITHUB_WRITE_ALLOWED_REPOS`
 - `FOS_GITHUB_SYNC_ALLOWED_REPOS`
+- `FOUNDEROS_LOG_LEVEL` (optional; default `INFO`) — level for the sanitized
+  request logger, which records method, path, status, and duration only.
 
 GitHub App product-connect env names (server-side only, required only when the
 GitHub App installation path is enabled):

@@ -619,6 +619,20 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **Basic request logging (DEC-072).**
+  Independent MVP-scope audit (§1.5) found "basic logging" was unimplemented:
+  the app had no `getLogger`, no logging config, and no request logging — only
+  domain audit rows. Added `app/core/logging.py` (`configure_logging` +
+  `RequestLoggingMiddleware`) and wired it in `app/main.py`. It logs one
+  sanitized line per HTTP request (method, path, status, duration_ms) at
+  `FOUNDEROS_LOG_LEVEL`/`LOG_LEVEL` (default INFO), never logging query values,
+  headers, cookies, bodies, tokens, or provider payloads. Local/in-process
+  only: no new dependency, table, migration, provider call, external write, or
+  LLM. Checks: `uv run ruff check .` ✅, focused `tests/test_basic_logging.py`
+  ✅ 3 passed, full backend `uv run pytest -q` ✅ **455 passed / 1 warning**,
+  `uv run alembic check` ✅ (no drift), tracked secret scan ✅,
+  `git diff --check` ✅. Commit local-only; push не делался.
+
 - `2026-07-07` — **Normalized entities type focus filter (DEC-071 polish).**
   Added a client-side `entity_type` focus filter to `NormalizedEntitiesPanel` so
   the dedicated `/company-brain` view can scale beyond a flat all-entities list.

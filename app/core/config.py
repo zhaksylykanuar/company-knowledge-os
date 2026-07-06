@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     app_env: str = "local"
     app_name: str = "company-knowledge-os"
     api_base_url: str = "http://localhost:8000"
+    # Minimum level for the application's basic request logger (MVP §1.5
+    # "basic logging"). Standard Python level name; invalid values fall back to
+    # INFO. The logger only records method, sanitized path, status, and duration
+    # — never secrets, query values, headers, or request/response bodies.
+    log_level: str = Field(
+        default="INFO",
+        validation_alias=AliasChoices("FOUNDEROS_LOG_LEVEL", "LOG_LEVEL"),
+    )
 
     # --- Local dev bootstrap (safe to surface to the browser in local) ---
     # The base URL the browser should call, the dev API key handed to the

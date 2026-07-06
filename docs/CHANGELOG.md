@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Added basic application request logging (DEC-072, MVP §1.5 "basic logging").
+  New `app/core/logging.py` provides an idempotent `configure_logging()` and a
+  `RequestLoggingMiddleware` that logs one sanitized line per HTTP request
+  (method, path, status, duration_ms) at the `FOUNDEROS_LOG_LEVEL`/`LOG_LEVEL`
+  level (default `INFO`); `app/main.py` configures it at startup and installs the
+  middleware. The logger never records query values, headers, cookies, bodies,
+  tokens, or provider payloads, so no secrets can leak. No new dependency,
+  table, migration, provider call, external write, or LLM.
 - Added a dedicated navigable Company Brain view (DEC-071, MVP §1.4/§1.5). New
   `/company-brain` page and sidebar entry compose the existing read-only
   `CompanyBrainPanel` and `NormalizedEntitiesPanel` with a manual refresh, so the
