@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Added a read-only normalized-entities projection API (DEC-070, MVP §1.5 /
+  §6.9). New service `company_brain_entities_read_service.py` and endpoint
+  `GET /api/v1/workspaces/{workspace_id}/company-brain/entities` flatten the
+  canonical Company Brain rows (repositories, issues, pull requests, Gmail
+  messages, Drive files, internal documents) into a single evidence-backed
+  `entities` list plus a by-type/by-provider summary. It builds the canonical
+  `/brain/entities` surface DEC-028 named as the trigger for revisiting
+  NormalizedEntity, without a new table/migration and without producing the
+  post-MVP `Person` entity. Read-only and local-only: no provider calls, sync,
+  external writes, secret reads, or LLM.
 - Extended briefing-derived local action generation to internal document context
   (DEC-069). The persisted briefing
   `POST /workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`

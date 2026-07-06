@@ -1773,6 +1773,41 @@ Consequences:
   category/severity/related_entities), so the current `/actions` review UI and
   duplicate handling continue to work.
 
+## DEC-070 - Normalized Entities Ship As A Read-Only Canonical Projection
+
+Decision (2026-07-07): the MVP "normalized entities" surface (§1.5, §6.9) is
+delivered as a deterministic **read-only projection API** over the existing
+canonical Company Brain rows, not as a new physical `NormalizedEntity` table.
+A new service `app/services/company_brain_entities_read_service.py` reuses
+`build_workspace_company_brain` and flattens repositories, issues, pull
+requests, Gmail messages, Drive files, and internal documents into a single
+`entities` list (each with `entity_type`, a stable `key`, `source_provider`,
+`status`, `source_url`, `updated_at`, and evidence `source_refs`), plus a
+`summary` counting by entity type and provider. It is exposed at
+`GET /api/v1/workspaces/{workspace_id}/company-brain/entities`.
+
+Rationale: DEC-028 deferred the physical `NormalizedEntity` table and said to
+revisit "when the canonical `/api/v1/.../brain/entities` API is actually built".
+That API is now the missing MVP acceptance surface ("See Company Brain
+entities"), while the durable-table design is still blocked by ASK-1 (the
+undefined `Person` entity and the "23 models" count). Projecting from
+already-canonical rows delivers the required entity view now, keeps a single
+source of truth, and stays fully reversible if/when a physical table is chosen.
+
+Consequences:
+
+- Read-only and local-only: no new table, no migration, no provider calls, no
+  sync, no external writes, no secret reads, and no LLM. The projection inherits
+  the Company Brain workspace scope, sanitized fields, and evidence refs, so raw
+  provider payloads/bodies do not leak.
+- The `Person` entity type (§6.9) is intentionally not produced (post-MVP,
+  ASK-1). Entity `key`s are `"{provider}:{entity_type}:{external_id}"` and the
+  `recent` work overlap is de-duplicated so each work item appears once.
+- Because it is a projection, the entity list changes only when the underlying
+  canonical rows change; there is no separate write path to keep in sync.
+- A future physical `NormalizedEntity` table (if ASK-1 is resolved) can replace
+  the projection behind the same endpoint without breaking the response shape.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

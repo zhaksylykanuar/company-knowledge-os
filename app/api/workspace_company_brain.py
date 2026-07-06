@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field
 
 from app.api.workspace_auth import WorkspaceAccess, require_workspace_access
 from app.db.base import AsyncSessionLocal
+from app.services.company_brain_entities_read_service import (
+    build_workspace_normalized_entities,
+)
 from app.services.company_brain_github_read_service import (
     build_workspace_company_brain,
 )
@@ -181,3 +184,84 @@ async def get_workspace_company_brain(
             workspace_id=workspace_id,
         )
     return CompanyBrainResponse.model_validate(payload)
+
+
+class NormalizedEntitySourceRefRead(BaseModel):
+    id: str
+    kind: str
+    source: str
+    label: str
+    url: str | None = None
+    record_type: str
+    record_id: UUID
+
+
+class NormalizedEntityRead(BaseModel):
+    entity_type: Literal[
+        "repository",
+        "issue",
+        "pull_request",
+        "email_message",
+        "drive_file",
+        "document",
+    ]
+    key: str
+    external_id: str
+    title: str
+    source_provider: str
+    status: str | None = None
+    source_url: str | None = None
+    updated_at: datetime | None = None
+    reference_id: UUID | None = None
+    source_refs: list[NormalizedEntitySourceRefRead] = Field(default_factory=list)
+
+
+class NormalizedEntityTypeCountRead(BaseModel):
+    entity_type: str
+    count: int
+
+
+class NormalizedEntityProviderCountRead(BaseModel):
+    source_provider: str
+    count: int
+
+
+class NormalizedEntitiesSummaryRead(BaseModel):
+    total: int = 0
+    by_entity_type: list[NormalizedEntityTypeCountRead] = Field(default_factory=list)
+    by_source_provider: list[NormalizedEntityProviderCountRead] = Field(
+        default_factory=list
+    )
+
+
+class NormalizedEntitiesResponse(BaseModel):
+    workspace_id: UUID
+    mode: Literal["github_first_canonical"]
+    source: Literal["canonical_company_brain_entities"]
+    summary: NormalizedEntitiesSummaryRead
+    entities: list[NormalizedEntityRead] = Field(default_factory=list)
+    evidence: list[NormalizedEntitySourceRefRead] = Field(default_factory=list)
+    capabilities: CompanyBrainCapabilitiesRead
+    is_live: bool
+    llm_used: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+@router.get("/entities", response_model=NormalizedEntitiesResponse)
+async def get_workspace_normalized_entities(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> NormalizedEntitiesResponse:
+    """Read-only normalized-entity projection over canonical Company Brain rows.
+
+    Deterministic and local-only: no provider calls, sync, external writes,
+    secret reads, or LLM. See DEC-070.
+    """
+
+    _ = access
+    async with AsyncSessionLocal() as session:
+        payload = await build_workspace_normalized_entities(
+            session=session,
+            workspace_id=workspace_id,
+        )
+    return NormalizedEntitiesResponse.model_validate(payload)

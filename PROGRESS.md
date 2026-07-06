@@ -619,6 +619,24 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **Normalized entities read projection (DEC-070).**
+  Independent MVP-scope audit (§1.5) found "normalized entities" was the last
+  locally-buildable must-have surface with no API. Added a deterministic
+  read-only projection: `app/services/company_brain_entities_read_service.py`
+  plus `GET /api/v1/workspaces/{workspace_id}/company-brain/entities`, which
+  flattens canonical Company Brain rows (repositories, issues, pull requests,
+  Gmail messages, Drive files, internal documents) into one evidence-backed
+  `entities` list + by-type/by-provider summary. No new table/migration (avoids
+  the open ASK-1 `Person` design), no provider calls, sync, external writes,
+  secret reads, or LLM; this satisfies the DEC-028 trigger to build the
+  canonical `/brain/entities` API. Checks: focused
+  `tests/test_company_brain_entities_api.py` ✅ 3 passed and scoped ruff ✅;
+  full gates: `uv run ruff check .` ✅, full backend `uv run pytest -q` ✅
+  **452 passed / 1 warning**, `uv run alembic upgrade head` + `uv run alembic
+  check` ✅ (no drift, no new migration), tracked secret scan ✅,
+  `git diff --check` ✅. Backend-only change (no frontend files touched). Commit
+  local-only; push не делался.
+
 - `2026-07-07` — **Internal document context → local ActionProposals (DEC-069).**
   Extended persisted Founder Briefing action generation so
   `internal-document-context` joins the existing Jira/Gmail/Drive actionable
