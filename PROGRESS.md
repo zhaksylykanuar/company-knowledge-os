@@ -100,11 +100,16 @@
   `drive-file-signals` для Drive file metadata. Это additive briefing polish:
   данные берутся только из локального Company Brain + `source_refs`; Gmail/Drive
   не превращаются в tasks; provider calls, sync, external writes, raw
-  email/document content, secret reads и LLM не добавлены. Проверено:
-  `UV_NO_SYNC=1 uv run ruff check .`, focused
-  `UV_NO_SYNC=1 uv run pytest -q tests/test_founder_briefing_api.py`,
-  Python import of `app.services.founder_briefing_service`, `npm test`,
-  `npm run build`, and `bash scripts/check_no_secrets.sh --tracked`.
+  email/document content, secret reads и LLM не добавлены. Точность под
+  truncation: read-секции Company Brain обрезаются до display-limit, поэтому
+  imported total берётся из unlimited `source_records` aggregate ("N shown of M
+  imported"), а visible-only unread/shared помечены "in view" — обрезанный slice
+  не выдаётся за workspace-wide total. Проверено (независимый прогон):
+  `UV_NO_SYNC=1 uv run ruff check .` ✅, full backend
+  `UV_NO_SYNC=1 uv run pytest -q` ✅ 436 passed / 1 warning,
+  `UV_NO_SYNC=1 uv run alembic check` ✅ (no new ops), `npm test` ✅ 179,
+  `npm run build` ✅, `npm run lint`/typecheck ✅,
+  `bash scripts/check_no_secrets.sh --tracked` ✅.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально

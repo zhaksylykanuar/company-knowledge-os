@@ -835,6 +835,190 @@ async def test_manual_briefing_adds_non_github_company_brain_items(
         await _cleanup_briefing_fixture(marker)
 
 
+async def test_manual_briefing_non_github_items_report_true_total_not_visible_slice(
+    monkeypatch,
+) -> None:
+    """Company Brain read sections are truncated to a display limit, so the item
+    summary must report the accurate imported total from the SourceRecord
+    aggregate rather than only the number of visible rows.
+    """
+
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    async def fake_repository_read(**_kwargs):
+        return _repository_result([_repository_payload()])
+
+    async def fake_company_brain(**_kwargs):
+        # Only a truncated slice of the imported rows is present in the sections,
+        # while the aggregate counts reflect the full imported volume.
+        return {
+            "workspace_id": _kwargs["workspace_id"],
+            "mode": "github_first_canonical",
+            "source": "canonical_github_company_brain",
+            "summary": {
+                "repositories": 0,
+                "open_issues": 2,
+                "open_pull_requests": 0,
+                "closed_issues": 0,
+                "merged_pull_requests": 0,
+            },
+            "source_records": {
+                "total": 67,
+                "by_provider": [
+                    {"provider": "drive", "count": 30},
+                    {"provider": "gmail", "count": 12},
+                    {"provider": "jira", "count": 25},
+                ],
+                "by_record_type": [
+                    {"record_type": "file", "count": 30},
+                    {"record_type": "issue", "count": 25},
+                    {"record_type": "message", "count": 12},
+                ],
+            },
+            "repositories": [],
+            "work": {
+                "issues": [
+                    {
+                        "id": f"jira-task-{index}",
+                        "type": "issue",
+                        "source_provider": "jira",
+                        "external_id": f"OPS-{index}",
+                        "number": None,
+                        "title": f"Jira issue {index}",
+                        "state": "todo",
+                        "repository_full_name": None,
+                        "project_key": "OPS",
+                        "source_url": f"https://jira.example.test/browse/OPS-{index}",
+                        "source_refs": [
+                            {
+                                "id": f"jira-source-{index}:0",
+                                "kind": "jira_issue",
+                                "source": "jira",
+                                "label": f"OPS-{index}",
+                                "url": f"https://jira.example.test/browse/OPS-{index}",
+                                "record_type": "issue",
+                                "record_id": f"jira-source-{index}",
+                            }
+                        ],
+                    }
+                    for index in range(1, 3)
+                ],
+                "pull_requests": [],
+                "recent": [],
+            },
+            "communications": {
+                "messages": [
+                    {
+                        "source_record_id": "gmail-source-1",
+                        "message_id": "msg-1",
+                        "thread_id": "thread-1",
+                        "subject": "Only visible message",
+                        "snippet": "snippet",
+                        "from_address": "customer@example.test",
+                        "to_addresses": ["founder@example.test"],
+                        "labels": ["UNREAD"],
+                        "unread": True,
+                        "received_at": "2026-07-06T08:00:00+00:00",
+                        "source_url": "https://mail.example.test/msg-1",
+                        "source_refs": [
+                            {
+                                "id": "gmail-source-1:0",
+                                "kind": "gmail_message",
+                                "source": "gmail",
+                                "label": "msg-1",
+                                "url": "https://mail.example.test/msg-1",
+                                "record_type": "message",
+                                "record_id": "gmail-source-1",
+                            }
+                        ],
+                    }
+                ]
+            },
+            "documents": {
+                "files": [
+                    {
+                        "source_record_id": "drive-source-1",
+                        "file_id": "file-1",
+                        "name": "Only visible file",
+                        "mime_type": "application/pdf",
+                        "owners": ["founder@example.test"],
+                        "shared": False,
+                        "modified_at": "2026-07-06T09:00:00+00:00",
+                        "source_url": "https://drive.example.test/file-1",
+                        "source_refs": [
+                            {
+                                "id": "drive-source-1:0",
+                                "kind": "drive_file",
+                                "source": "drive",
+                                "label": "file-1",
+                                "url": "https://drive.example.test/file-1",
+                                "record_type": "file",
+                                "record_id": "drive-source-1",
+                            }
+                        ],
+                    }
+                ]
+            },
+            "evidence": [],
+            "capabilities": {
+                "live_github_oauth": False,
+                "live_provider_sync": False,
+                "local_sync": True,
+                "llm_briefing": False,
+            },
+            "is_live": False,
+            "llm_used": False,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        github_repository_read_service,
+        "list_workspace_github_repositories",
+        fake_repository_read,
+    )
+    monkeypatch.setattr(
+        founder_briefing_service,
+        "build_workspace_company_brain",
+        fake_company_brain,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={},
+            )
+
+        assert response.status_code == 200, response.text
+        briefing = response.json()["briefing"]
+        jira_item = next(
+            item for item in briefing["items"] if item["id"] == "jira-work-items"
+        )
+        gmail_item = next(
+            item for item in briefing["items"] if item["id"] == "gmail-message-signals"
+        )
+        drive_item = next(
+            item for item in briefing["items"] if item["id"] == "drive-file-signals"
+        )
+        # The accurate imported totals from the aggregate must be reported, not
+        # only the visible/truncated slice counts (2/1/1).
+        assert "of 25 local Jira record" in jira_item["summary"]
+        assert "2 open Jira work item" in jira_item["summary"]
+        assert "of 12 imported" in gmail_item["summary"]
+        assert "of 30 imported" in drive_item["summary"]
+        # Visible-only signals stay explicitly scoped to the view.
+        assert "unread=1 in view" in gmail_item["summary"]
+        assert "shared=0 in view" in drive_item["summary"]
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
 async def test_manual_briefing_connector_source_coverage_empty_state(
     monkeypatch,
 ) -> None:

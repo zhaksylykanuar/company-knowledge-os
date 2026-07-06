@@ -446,19 +446,50 @@ def _non_github_company_brain_items(brain: Mapping[str, Any]) -> list[dict[str, 
     """
 
     items: list[dict[str, Any]] = []
-    jira_item = _jira_work_item(brain)
+    provider_totals = _connector_provider_totals(brain)
+    jira_item = _jira_work_item(brain, provider_totals.get("jira", 0))
     if jira_item is not None:
         items.append(jira_item)
-    gmail_item = _gmail_messages_item(brain)
+    gmail_item = _gmail_messages_item(brain, provider_totals.get("gmail", 0))
     if gmail_item is not None:
         items.append(gmail_item)
-    drive_item = _drive_files_item(brain)
+    drive_item = _drive_files_item(brain, provider_totals.get("drive", 0))
     if drive_item is not None:
         items.append(drive_item)
     return items
 
 
-def _jira_work_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
+def _connector_provider_totals(brain: Mapping[str, Any]) -> dict[str, int]:
+    """Accurate, unlimited per-provider SourceRecord totals from the aggregate.
+
+    Company Brain's `work`/`communications`/`documents` sections are truncated to
+    an internal display limit, so `len(section_rows)` is only the *visible* count.
+    The additive `source_records.by_provider` aggregate (DEC-060) is a full SQL
+    ``COUNT`` and is the correct source for the true imported total, so briefing
+    summaries never understate connector volume when more rows exist than are
+    shown.
+    """
+
+    source_records = (
+        brain.get("source_records")
+        if isinstance(brain.get("source_records"), Mapping)
+        else {}
+    )
+    totals: dict[str, int] = {}
+    for entry in source_records.get("by_provider") or []:
+        if not isinstance(entry, Mapping):
+            continue
+        provider = (_safe_text(entry.get("provider")) or "").casefold()
+        if not provider:
+            continue
+        totals[provider] = totals.get(provider, 0) + int(entry.get("count") or 0)
+    return totals
+
+
+def _jira_work_item(
+    brain: Mapping[str, Any],
+    imported_total: int,
+) -> dict[str, Any] | None:
     work = brain.get("work") if isinstance(brain.get("work"), Mapping) else {}
     issues = [row for row in work.get("issues") or [] if isinstance(row, Mapping)]
     jira_issues = [
@@ -474,10 +505,18 @@ def _jira_work_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
     )
     issue_labels = _unique_texts(_work_item_label(issue) for issue in jira_issues)
     evidence_refs = _company_brain_row_evidence_refs(jira_issues)
+    visible = len(jira_issues)
+    total_imported = max(imported_total, visible)
     summary = (
-        f"Company Brain has {len(jira_issues)} local Jira issue"
-        f"{'' if len(jira_issues) == 1 else 's'} in open work."
+        f"Company Brain shows {visible} open Jira work item"
+        f"{'' if visible == 1 else 's'}"
     )
+    if total_imported > visible:
+        summary = (
+            f"{summary} of {total_imported} local Jira record"
+            f"{'' if total_imported == 1 else 's'} imported"
+        )
+    summary = f"{summary}."
     if project_keys:
         summary = f"{summary} Project scope: {', '.join(project_keys[:5])}."
     if issue_labels:
@@ -500,7 +539,10 @@ def _jira_work_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
     )
 
 
-def _gmail_messages_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
+def _gmail_messages_item(
+    brain: Mapping[str, Any],
+    imported_total: int,
+) -> dict[str, Any] | None:
     communications = (
         brain.get("communications")
         if isinstance(brain.get("communications"), Mapping)
@@ -518,10 +560,15 @@ def _gmail_messages_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
         for message in messages
     )
     evidence_refs = _company_brain_row_evidence_refs(messages)
+    visible = len(messages)
+    total_imported = max(imported_total, visible)
     summary = (
-        f"Company Brain has {len(messages)} local Gmail message"
-        f"{'' if len(messages) == 1 else 's'}; unread={unread_count}."
+        f"Company Brain shows {visible} local Gmail message"
+        f"{'' if visible == 1 else 's'}"
     )
+    if total_imported > visible:
+        summary = f"{summary} of {total_imported} imported"
+    summary = f"{summary}; unread={unread_count} in view."
     if subjects:
         summary = f"{summary} Top subjects: {', '.join(subjects[:3])}."
 
@@ -550,7 +597,10 @@ def _gmail_messages_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
     )
 
 
-def _drive_files_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
+def _drive_files_item(
+    brain: Mapping[str, Any],
+    imported_total: int,
+) -> dict[str, Any] | None:
     documents = (
         brain.get("documents") if isinstance(brain.get("documents"), Mapping) else {}
     )
@@ -564,10 +614,15 @@ def _drive_files_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
         for file in files
     )
     evidence_refs = _company_brain_row_evidence_refs(files)
+    visible = len(files)
+    total_imported = max(imported_total, visible)
     summary = (
-        f"Company Brain has {len(files)} local Drive file"
-        f"{'' if len(files) == 1 else 's'}; shared={shared_count}."
+        f"Company Brain shows {visible} local Drive file"
+        f"{'' if visible == 1 else 's'}"
     )
+    if total_imported > visible:
+        summary = f"{summary} of {total_imported} imported"
+    summary = f"{summary}; shared={shared_count} in view."
     if file_names:
         summary = f"{summary} Top files: {', '.join(file_names[:3])}."
 

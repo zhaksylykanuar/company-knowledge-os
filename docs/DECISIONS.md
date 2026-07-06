@@ -1591,6 +1591,12 @@ Consequences:
   subject, file name, counts) and intentionally ignore raw email bodies,
   snippets-as-body, document content, provider payload dumps, and secret-like
   data.
+- Counts are truthful under truncation: Company Brain `work`/`communications`/
+  `documents` sections are capped to a display limit, so the imported total is
+  taken from the unlimited `source_records.by_provider` aggregate (DEC-060) and
+  reported as "N shown of M imported". Visible-only signals (unread/shared) are
+  explicitly scoped with "in view" so a truncated slice never implies a false
+  workspace-wide total.
 
 ## ASK - Open Questions For The Human (not decided)
 

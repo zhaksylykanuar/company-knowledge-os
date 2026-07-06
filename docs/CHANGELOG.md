@@ -10,7 +10,10 @@
   workspace Company Brain has local Jira issues, Gmail messages, or Drive files.
   Items are evidence-backed from Company Brain `source_refs` and remain
   local-only: no provider calls, sync, external writes, raw body/content payload
-  rendering, secrets, or LLM.
+  rendering, secrets, or LLM. Item summaries report the true imported total from
+  the `source_records` aggregate ("N shown of M imported") instead of only the
+  truncated visible slice, and visible-only unread/shared counts are scoped with
+  "in view" so a capped section never implies a false workspace-wide total.
 - Exposed Gmail messages and Google Drive files as first-class Company Brain
   read sections (DEC-063). Company Brain now returns `communications.messages`
   and `documents.files` built from sanitized local SourceRecord payloads, and
