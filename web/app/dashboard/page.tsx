@@ -7,6 +7,7 @@ import { BriefingPanel } from "../../components/BriefingPanel";
 import { CompanyBrainPanel } from "../../components/CompanyBrainPanel";
 import { GitHubOperationalWorkPanel } from "../../components/GitHubOperationalWorkPanel";
 import { GitHubSyncControls } from "../../components/GitHubSyncControls";
+import { NormalizedEntitiesPanel } from "../../components/NormalizedEntitiesPanel";
 import { PageHeader } from "../../components/PageHeader";
 import { PrivateBetaReadinessPanel } from "../../components/PrivateBetaReadinessPanel";
 import { RepositoryAuditOverviewPanel } from "../../components/RepositoryAuditOverviewPanel";
@@ -65,6 +66,7 @@ export default function DashboardPage() {
       <PrivateBetaReadinessPanel refreshSignal={operationalWorkRefresh} />
       <RepositoryAuditOverviewPanel refreshSignal={operationalWorkRefresh} />
       <CompanyBrainPanel refreshSignal={operationalWorkRefresh} />
+      <NormalizedEntitiesPanel refreshSignal={operationalWorkRefresh} />
       <BriefingPanel />
       <ActionProposalsPanel />
       <GitHubOperationalWorkPanel refreshSignal={operationalWorkRefresh} />

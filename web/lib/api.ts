@@ -31,6 +31,7 @@ import type {
   GitHubSelectedPullRequestSyncRequest,
   GitHubSelectedPullRequestSyncResponse,
   GitHubSelectedRepositorySyncResult,
+  NormalizedEntitiesResponse,
   DriveFileImportRequest,
   DriveFileImportResponse,
   DriveFileListResponse,
@@ -144,12 +145,26 @@ export function buildWorkspaceCompanyBrainPath(workspaceId: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-brain`;
 }
 
+export function buildWorkspaceCompanyBrainEntitiesPath(workspaceId: string): string {
+  return `${buildWorkspaceCompanyBrainPath(workspaceId)}/entities`;
+}
+
 export async function fetchCompanyBrain(
   workspaceId: string,
   options: ApiFetchOptions = {}
 ): Promise<CompanyBrainResponse> {
   return apiFetch<CompanyBrainResponse>(
     buildWorkspaceCompanyBrainPath(workspaceId),
+    options
+  );
+}
+
+export async function fetchCompanyBrainEntities(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<NormalizedEntitiesResponse> {
+  return apiFetch<NormalizedEntitiesResponse>(
+    buildWorkspaceCompanyBrainEntitiesPath(workspaceId),
     options
   );
 }

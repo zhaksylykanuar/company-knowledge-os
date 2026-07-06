@@ -14,6 +14,11 @@
   NormalizedEntity, without a new table/migration and without producing the
   post-MVP `Person` entity. Read-only and local-only: no provider calls, sync,
   external writes, secret reads, or LLM.
+- Added a dashboard UI surface for the normalized-entities projection (DEC-070).
+  New `NormalizedEntitiesPanel` fetches the entities endpoint, shows summary
+  cards, type/provider breakdowns, the evidence-backed entity list, source refs,
+  and explicit no-provider/no-LLM boundary copy. This makes the MVP "See Company
+  Brain entities" path reachable from the product UI instead of only the API.
 - Extended briefing-derived local action generation to internal document context
   (DEC-069). The persisted briefing
   `POST /workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`

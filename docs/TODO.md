@@ -19,10 +19,11 @@ Implemented foundations:
   `BriefingItem` foundations.
 - Normalized-entities read surface is now in place (DEC-070): the endpoint
   `GET /api/v1/workspaces/{id}/company-brain/entities` projects canonical
-  Company Brain rows into an evidence-backed entity list + summary. This is a
-  read-only projection (no `NormalizedEntity` table yet; `Person` stays
-  post-MVP per ASK-1) and starts no provider calls, sync, external writes, or
-  LLM.
+  Company Brain rows into an evidence-backed entity list + summary, and the
+  dashboard `NormalizedEntitiesPanel` renders that list with type/provider
+  breakdowns and source refs. This is a read-only projection (no
+  `NormalizedEntity` table yet; `Person` stays post-MVP per ASK-1) and starts no
+  provider calls, sync, external writes, or LLM.
 - Email+password founder login on server-side sessions (Argon2id, httpOnly
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with

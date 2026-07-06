@@ -1805,6 +1805,9 @@ Consequences:
   `recent` work overlap is de-duplicated so each work item appears once.
 - Because it is a projection, the entity list changes only when the underlying
   canonical rows change; there is no separate write path to keep in sync.
+- The dashboard `NormalizedEntitiesPanel` is the first product surface over the
+  endpoint, so the MVP "See Company Brain entities" path is reachable without
+  terminal/API use.
 - A future physical `NormalizedEntity` table (if ASK-1 is resolved) can replace
   the projection behind the same endpoint without breaking the response shape.
 

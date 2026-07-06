@@ -619,6 +619,21 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **Normalized entities dashboard surface (DEC-070).**
+  Added frontend access to the normalized-entities projection: new
+  `NormalizedEntitiesPanel`, API helper/types for
+  `GET /api/v1/workspaces/{workspace_id}/company-brain/entities`, dashboard
+  wiring, copy, and frontend tests. The dashboard now shows normalized entity
+  summary cards, type/provider breakdowns, entity cards, source refs, evidence,
+  and explicit read-only/no-provider/no-LLM boundary copy. This makes the MVP
+  "See Company Brain entities" path reachable from the UI, not only the API.
+  Checks: focused frontend test/typecheck ✅ (current harness ran **198
+  passed**), `uv run ruff check .` ✅, focused entities API tests ✅ 3 passed,
+  full backend `uv run pytest -q` ✅ **452 passed / 1 warning**,
+  `uv run alembic check` ✅ (no drift), tracked secret scan ✅,
+  `git diff --check` ✅, frontend `npm test` ✅ **198 passed**,
+  `npm run build` ✅, `npm run lint` ✅. Commit local-only; push не делался.
+
 - `2026-07-07` — **Normalized entities read projection (DEC-070).**
   Independent MVP-scope audit (§1.5) found "normalized entities" was the last
   locally-buildable must-have surface with no API. Added a deterministic

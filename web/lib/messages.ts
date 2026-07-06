@@ -1281,6 +1281,42 @@ export const M = {
     metaVisibility: "Видимость",
     repoBadge: "Репозиторий",
     archived: "Архивирован"
+  },
+
+  companyBrainEntities: {
+    eyebrow: "Сущности",
+    title: "Normalized entities",
+    badgeProjection: "Read-only projection",
+    loading: "Загрузка normalized entities",
+    unavailableTitle: "Сущности недоступны",
+    unavailableDescription: "Панель не смогла загрузить normalized entities.",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — normalized entities недоступны.",
+    emptyTitle: "Сущностей пока нет",
+    emptyDescription:
+      "Канонические записи ещё не синхронизированы или не импортированы. Когда Company Brain получит данные, они появятся здесь как normalized entities.",
+    intro:
+      "Read-only projection поверх Company Brain: репозитории, задачи, PR, письма, Drive files и внутренние документы в одном evidence-backed списке. Без provider calls, sync, external writes и LLM.",
+    summaryLabel: "Сводка normalized entities",
+    totalTitle: "Всего",
+    totalDescription: "Сущности из текущей canonical projection.",
+    typesTitle: "Типы",
+    typesDescription: "Разных entity_type в projection.",
+    providersTitle: "Провайдеры",
+    providersDescription: "Разных source_provider в projection.",
+    evidenceTitle: "Evidence",
+    evidenceDescription: "Уникальные source_refs, привязанные к сущностям.",
+    listLabel: "Список normalized entities",
+    typeBreakdownTitle: "По типам",
+    providerBreakdownTitle: "По источникам",
+    noEvidence: "Для текущих сущностей source_refs не возвращены.",
+    metaType: "Тип",
+    metaProvider: "Источник",
+    metaStatus: "Статус",
+    metaReference: "Reference",
+    metaUpdated: "Обновлено",
+    boundaryNote:
+      "Сущности вычисляются локально из уже сохранённых canonical rows. Панель не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не использует LLM."
   }
 } as const;
 

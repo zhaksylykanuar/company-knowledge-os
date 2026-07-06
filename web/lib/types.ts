@@ -339,6 +339,61 @@ export type CompanyBrainSourceRecordCoverage = {
   by_record_type: CompanyBrainSourceRecordTypeCount[];
 };
 
+export type NormalizedEntityType =
+  | "repository"
+  | "issue"
+  | "pull_request"
+  | "email_message"
+  | "drive_file"
+  | "document";
+
+export type NormalizedEntity = {
+  entity_type: NormalizedEntityType | string;
+  key: string;
+  external_id: string;
+  title: string;
+  source_provider: string;
+  status: string | null;
+  source_url: string | null;
+  updated_at: string | null;
+  reference_id: string | null;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type NormalizedEntityTypeCount = {
+  entity_type: string;
+  count: number;
+};
+
+export type NormalizedEntityProviderCount = {
+  source_provider: string;
+  count: number;
+};
+
+export type NormalizedEntitiesSummary = {
+  total: number;
+  by_entity_type: NormalizedEntityTypeCount[];
+  by_source_provider: NormalizedEntityProviderCount[];
+};
+
+export type NormalizedEntitiesResponse = {
+  workspace_id: string;
+  mode: "github_first_canonical";
+  source: "canonical_company_brain_entities";
+  summary: NormalizedEntitiesSummary;
+  entities: NormalizedEntity[];
+  evidence: CompanyBrainSourceRef[];
+  capabilities: {
+    live_github_oauth: boolean;
+    live_provider_sync: boolean;
+    local_sync: boolean;
+    llm_briefing: boolean;
+  };
+  is_live: boolean;
+  llm_used: boolean;
+  warnings: string[];
+};
+
 export type CompanyBrainRepository = {
   id: string;
   provider: "github";
