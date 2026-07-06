@@ -21,6 +21,7 @@ from app.db.canonical_models import (
     SourceRecord,
     Task,
 )
+from app.db.document_models import DOCUMENT_STATUS_ARCHIVED, Document
 
 COMPANY_BRAIN_GITHUB_MODE = "github_first_canonical"
 COMPANY_BRAIN_GITHUB_SOURCE = "canonical_github_company_brain"
@@ -49,6 +50,11 @@ async def build_workspace_company_brain(
         workspace_id=workspace_id,
         provider=SOURCE_RECORD_PROVIDER_DRIVE,
         record_type="file",
+        limit=limit,
+    )
+    internal_documents = await _internal_documents(
+        session=session,
+        workspace_id=workspace_id,
         limit=limit,
     )
     source_record_coverage = await _source_record_coverage(
@@ -110,6 +116,7 @@ async def build_workspace_company_brain(
         _drive_file_payload(source_record)
         for source_record in drive_file_records[:limit]
     ]
+    document_rows = [_internal_document_payload(document) for document in internal_documents]
     evidence = _unique_source_refs(
         [
             *[row["source_refs"] for row in repository_rows],
@@ -118,6 +125,7 @@ async def build_workspace_company_brain(
             *[row["source_refs"] for row in recent_rows],
             *[row["source_refs"] for row in gmail_message_rows],
             *[row["source_refs"] for row in drive_file_rows],
+            *[row["source_refs"] for row in document_rows],
         ]
     )
     summary = {
@@ -150,6 +158,7 @@ async def build_workspace_company_brain(
         },
         "documents": {
             "files": drive_file_rows,
+            "notes": document_rows,
         },
         "evidence": evidence,
         "capabilities": {
@@ -358,6 +367,28 @@ async def _source_records_by_provider_record_type(
     )
 
 
+async def _internal_documents(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    limit: int,
+) -> list[Document]:
+    # Company Brain surfaces authored internal documents that are not archived
+    # (draft/published), newest-updated first (§4.7: a saved document appears in
+    # Brain). Archived documents are intentionally excluded from the brain view.
+    return list(
+        (
+            await session.execute(
+                select(Document)
+                .where(Document.workspace_id == workspace_id)
+                .where(Document.status != DOCUMENT_STATUS_ARCHIVED)
+                .order_by(Document.updated_at.desc(), Document.id.desc())
+                .limit(limit)
+            )
+        ).scalars()
+    )
+
+
 async def _source_records_for_tasks(
     *,
     session: AsyncSession,
@@ -550,6 +581,42 @@ def _drive_file_payload(source_record: SourceRecord) -> dict[str, Any]:
         "source_url": _safe_url(file.get("source_url")) or _safe_url(source_record.source_url),
         "source_refs": _source_refs(source_record),
     }
+
+
+def _internal_document_payload(document: Document) -> dict[str, Any]:
+    # Internal documents are authored in founderOS, so their "source ref" is the
+    # local document row itself (no external provider). Raw body is not included
+    # here; the brain surfaces a short excerpt for context.
+    excerpt = _document_excerpt(document.body_text)
+    return {
+        "document_id": document.id,
+        "title": _safe_text(document.title) or "(untitled)",
+        "status": document.status,
+        "tags": _safe_string_list(document.tags),
+        "excerpt": excerpt,
+        "updated_at": document.updated_at,
+        "source_refs": [
+            {
+                "id": f"{document.id}:document",
+                "kind": "internal_document",
+                "source": "internal",
+                "label": _safe_text(document.title) or str(document.id),
+                "url": None,
+                "record_type": "document",
+                "record_id": document.id,
+            }
+        ],
+    }
+
+
+def _document_excerpt(body_text: Any, *, limit: int = 240) -> str:
+    text = _safe_text(body_text)
+    if not text:
+        return ""
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return f"{collapsed[: limit - 1]}…"
 
 
 def _recent_work(

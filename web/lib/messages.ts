@@ -19,6 +19,7 @@ export const M = {
     jira: "Jira",
     gmail: "Gmail",
     drive: "Drive",
+    documents: "Документы",
     connectors: "Коннекторы",
     audit: "Аудит репо",
     briefings: "Сводки",
@@ -690,6 +691,58 @@ export const M = {
       "Реестр вычисляется локально из уже сохранённых записей подключений. Он не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не читает секреты."
   },
 
+  documents: {
+    eyebrow: "Документы",
+    title: "Внутренние документы",
+    description:
+      "Внутренние документы founderOS: заметки, планы и справочники создаются прямо в системе, попадают в Company Brain и доступны для поиска. Без provider calls, external writes и LLM.",
+    badgeLocalOnly: "Локально",
+    loading: "Загрузка документов",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — документы недоступны.",
+    unavailableTitle: "Документы недоступны",
+    unavailableDescription: "Не удалось загрузить документы рабочего пространства.",
+    summaryLabel: "Сводка документов",
+    totalTitle: "Всего",
+    totalDescription: "Документы в текущей выборке.",
+    publishedTitle: "Опубликовано",
+    publishedDescription: "Документы со статусом published.",
+    draftTitle: "Черновики",
+    draftDescription: "Документы со статусом draft.",
+    emptyTitle: "Документов пока нет",
+    emptyDescription:
+      "Создайте первый внутренний документ через форму ниже. Он появится в Company Brain.",
+    listLabel: "Список документов",
+    statusLabel: "Статус",
+    tagsLabel: "Теги",
+    updatedLabel: "Обновлён",
+    searchLabel: "Поиск по документам",
+    searchPlaceholder: "Например: launch",
+    searchSubmit: "Искать",
+    searchClear: "Сбросить",
+    openDocument: "Открыть",
+    createTitle: "Новый документ",
+    createDescription:
+      "Документ сохраняется локально; body_markdown хранится как есть, а plain-text проекция используется для поиска и Company Brain.",
+    fieldTitle: "Заголовок",
+    fieldTitlePlaceholder: "Например: План запуска",
+    fieldBody: "Текст (Markdown)",
+    fieldBodyPlaceholder: "# Заголовок\n\nТело документа…",
+    fieldTags: "Теги (через запятую)",
+    fieldTagsPlaceholder: "launch, beta",
+    fieldStatus: "Статус",
+    statusDraft: "Черновик",
+    statusPublished: "Опубликован",
+    statusArchived: "Архив",
+    createSubmit: "Создать документ",
+    creating: "Создание…",
+    createSuccess: "Документ создан.",
+    titleRequired: "Укажите заголовок документа.",
+    boundaryNote:
+      "Документы local-only: provider_calls=false, external_writes=false, llm=false, секреты не читаются.",
+    detailBackToList: "К списку документов",
+    detailBodyLabel: "Содержимое"
+  },
 
   drive: {
     eyebrow: "Google Drive",

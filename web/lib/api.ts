@@ -34,6 +34,11 @@ import type {
   DriveFileImportRequest,
   DriveFileImportResponse,
   DriveFileListResponse,
+  DocumentCreateRequest,
+  DocumentListRequest,
+  DocumentListResponse,
+  DocumentResponse,
+  DocumentUpdateRequest,
   GmailMessageImportRequest,
   GmailMessageImportResponse,
   GmailMessageListResponse,
@@ -308,6 +313,105 @@ export async function importDriveFiles(
 
 export function buildRepoAuditPath(): string {
   return "/api/v1/founder/company-brain/repo-audit";
+}
+
+export function buildWorkspaceDocumentsPath(
+  workspaceId: string,
+  request: DocumentListRequest = {}
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(request.limit ?? 50));
+  if (request.status) {
+    params.set("status", request.status);
+  }
+  if (request.search) {
+    params.set("search", request.search);
+  }
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/documents?${params.toString()}`;
+}
+
+export function buildWorkspaceDocumentsCollectionPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/documents`;
+}
+
+export function buildWorkspaceDocumentPath(
+  workspaceId: string,
+  documentId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/documents/${encodeURIComponent(documentId)}`;
+}
+
+export async function fetchDocuments(
+  workspaceId: string,
+  request: DocumentListRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<DocumentListResponse> {
+  return apiFetch<DocumentListResponse>(
+    buildWorkspaceDocumentsPath(workspaceId, request),
+    options
+  );
+}
+
+export async function fetchDocument(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentPath(workspaceId, documentId),
+    options
+  );
+}
+
+export async function createDocument(
+  workspaceId: string,
+  request: DocumentCreateRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentsCollectionPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        title: request.title,
+        body_markdown: request.body_markdown ?? "",
+        tags: request.tags ?? [],
+        status: request.status ?? "draft"
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function updateDocument(
+  workspaceId: string,
+  documentId: string,
+  request: DocumentUpdateRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentPath(workspaceId, documentId),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "PATCH"
+    }
+  );
+}
+
+export async function deleteDocument(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<void> {
+  await apiFetch<void>(buildWorkspaceDocumentPath(workspaceId, documentId), {
+    ...options,
+    method: "DELETE"
+  });
 }
 
 export async function fetchRepoAudit(

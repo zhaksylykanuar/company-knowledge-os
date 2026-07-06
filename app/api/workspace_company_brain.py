@@ -126,8 +126,19 @@ class CompanyBrainDriveFileRead(BaseModel):
     source_refs: list[CompanyBrainSourceRefRead] = Field(default_factory=list)
 
 
+class CompanyBrainDocumentNoteRead(BaseModel):
+    document_id: UUID
+    title: str
+    status: str
+    tags: list[str] = Field(default_factory=list)
+    excerpt: str = ""
+    updated_at: datetime | None = None
+    source_refs: list[CompanyBrainSourceRefRead] = Field(default_factory=list)
+
+
 class CompanyBrainDocumentsRead(BaseModel):
     files: list[CompanyBrainDriveFileRead] = Field(default_factory=list)
+    notes: list[CompanyBrainDocumentNoteRead] = Field(default_factory=list)
 
 
 class CompanyBrainCapabilitiesRead(BaseModel):

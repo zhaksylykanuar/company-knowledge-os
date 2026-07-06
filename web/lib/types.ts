@@ -580,6 +580,65 @@ export type BriefingActionProposalGenerationResponse = {
   warnings: string[];
 };
 
+export type DocumentStatus = "draft" | "published" | "archived";
+
+export type DocumentBoundary = {
+  provider_calls: boolean;
+  external_writes: boolean;
+  llm: boolean;
+  reads_secrets: boolean;
+};
+
+export type DocumentSummary = {
+  id: string;
+  workspace_id: string;
+  title: string;
+  status: DocumentStatus | string;
+  tags: string[];
+  excerpt: string;
+  created_by_user_id: string | null;
+  updated_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DocumentDetail = DocumentSummary & {
+  body_markdown: string;
+  body_text: string;
+};
+
+export type DocumentListResponse = {
+  workspace_id: string;
+  documents: DocumentSummary[];
+  count: number;
+  boundary: DocumentBoundary;
+};
+
+export type DocumentResponse = {
+  document: DocumentDetail;
+  boundary: DocumentBoundary;
+};
+
+export type DocumentCreateRequest = {
+  title: string;
+  body_markdown?: string;
+  tags?: string[];
+  status?: DocumentStatus | string;
+};
+
+export type DocumentUpdateRequest = {
+  title?: string;
+  body_markdown?: string;
+  tags?: string[];
+  status?: DocumentStatus | string;
+};
+
+export type DocumentListRequest = {
+  status?: DocumentStatus | string;
+  search?: string;
+  limit?: number;
+};
+
 export type ActionProposalListRequest = {
   status?: ActionProposalStatus | string;
   target_provider?: ActionTargetProvider | string;

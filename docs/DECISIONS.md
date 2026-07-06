@@ -1636,6 +1636,49 @@ Consequences:
 - The endpoint requires member-or-higher workspace role. Viewers can still read
   briefings but cannot create local proposals.
 
+## DEC-066 - Internal Documents Are A First-Class Workspace Module
+
+Decision (2026-07-06): the MVP "internal documents" module (playbook §1.5, flow
+§4.7, model §6.16, endpoints §7.11) is implemented as its own canonical,
+workspace-scoped ``documents`` table with member-gated CRUD, search, and Company
+Brain integration. Unlike the read-only connector slices (Jira/Gmail/Drive) that
+ingest external provider snapshots into ``SourceRecord``, an internal document is
+authored inside founderOS, so it is a first-class internal entity rather than a
+``SourceRecord`` projection.
+
+Backend: ``app/db/document_models.py`` (``Document``), migration
+``f1a2b3c4d5e6``, ``app/services/document_service.py`` (CRUD + deterministic
+``markdown_to_text`` projection + search), and ``app/api/documents.py``
+(``GET/POST /workspaces/{id}/documents``, ``GET/PATCH/DELETE
+/workspaces/{id}/documents/{document_id}``). Company Brain now exposes
+non-archived documents under ``documents.notes`` with internal-document source
+refs that flow into the aggregate ``evidence`` list. Frontend: ``/documents``
+page (list, search, create, detail) plus a sidebar entry.
+
+Rationale: every other MVP §1.5 connector (GitHub/Jira/Gmail/Drive) already had
+a local product surface, but internal documents — a required "must have" and the
+subject of flow §4.7 — had no model, endpoint, or UI. Adding it advances the MVP
+end state (see a document in one UI and in Company Brain) without provider calls,
+external writes, or LLM.
+
+Consequences:
+
+- ``body_markdown`` is the authored source of truth; ``body_text`` is a
+  deterministic offline markdown-strip used for search and Company Brain context.
+  Both are stored (spec requires both). No renderer, network, or LLM is invoked.
+- ``status`` is constrained to ``draft | published | archived``. Company Brain
+  surfaces draft + published documents and excludes archived ones from the brain
+  view; archived documents remain retrievable through the documents API.
+- Create/update/delete require member-or-higher role; viewers get read-only
+  list/detail. All access is workspace-scoped (cross-workspace ids 404).
+- Tags are sanitized (trimmed, de-duplicated, capped); title is required and
+  bounded; body size is bounded. Documents are additive: existing Company Brain
+  consumers keep working because ``documents.notes`` is a new optional field
+  alongside the existing ``documents.files``.
+- ``DocumentVersion`` history and NormalizedEntity linkage (mentioned in §4.7)
+  remain later slices; this decision delivers the CRUD + search + Brain surface
+  the MVP acceptance criteria require ("Docs appear in Company Brain").
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

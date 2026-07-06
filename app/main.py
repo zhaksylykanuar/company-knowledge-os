@@ -11,6 +11,7 @@ from app.api.briefings import router as briefings_router
 from app.api.company_brain import router as company_brain_router
 from app.api.connectors import router as connectors_router
 from app.api.dev import router as dev_router
+from app.api.documents import router as documents_router
 from app.api.drive import router as drive_router
 from app.api.github import router as github_router
 from app.api.gmail import router as gmail_router
@@ -40,7 +41,7 @@ if cors_allowed_origins:
         CORSMiddleware,
         allow_origins=cors_allowed_origins,
         allow_credentials=settings.cors_allow_credentials,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
             "Accept",
             "Content-Type",
@@ -62,6 +63,7 @@ app.include_router(github_router, dependencies=protected_api_dependencies)
 app.include_router(jira_router, dependencies=protected_api_dependencies)
 app.include_router(gmail_router, dependencies=protected_api_dependencies)
 app.include_router(drive_router, dependencies=protected_api_dependencies)
+app.include_router(documents_router, dependencies=protected_api_dependencies)
 app.include_router(workspace_company_brain_router, dependencies=protected_api_dependencies)
 app.include_router(briefings_router, dependencies=protected_api_dependencies)
 app.include_router(actions_router, dependencies=protected_api_dependencies)

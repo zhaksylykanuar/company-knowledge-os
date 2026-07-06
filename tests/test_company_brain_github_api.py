@@ -332,7 +332,7 @@ async def test_workspace_company_brain_returns_empty_canonical_state(monkeypatch
         assert body["repositories"] == []
         assert body["work"] == {"issues": [], "pull_requests": [], "recent": []}
         assert body["communications"] == {"messages": []}
-        assert body["documents"] == {"files": []}
+        assert body["documents"] == {"files": [], "notes": []}
         assert body["evidence"] == []
         assert body["is_live"] is False
         assert body["llm_used"] is False

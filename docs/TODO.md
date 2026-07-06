@@ -207,6 +207,13 @@ Implemented foundations:
   backend endpoint and Briefing UI bulk control. Missing evidence and existing
   open actions are skipped; no provider calls, sync, external writes, secret
   reads, or LLM are started.
+- Internal Documents module is now implemented (DEC-066): workspace-scoped
+  `Document` CRUD + search API (`/api/v1/workspaces/{id}/documents`), a
+  `/documents` frontend page (list/search/create/detail), and Company Brain
+  `documents.notes` integration with evidence. Documents store `body_markdown`
+  plus a deterministic plain-text projection; no provider calls, external
+  writes, secret reads, or LLM. `DocumentVersion` history and NormalizedEntity
+  linkage remain later slices.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 

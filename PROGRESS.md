@@ -532,12 +532,22 @@ DONE строго = есть код + проходящий тест/рабочи
 - [x] FOS-022 — Selected repository issue sync — `POST /api/v1/workspaces/{workspace_id}/github/repositories/issues/sync` reads issues only from explicit read-sync allowlisted repositories, uses encrypted GitHub connection access for provider reads, creates a manual SyncJob, normalizes selected issues into canonical `SourceRecord`/`Task` + repository records, skips PR-shaped issue API records, preserves open/closed state, and keeps external writes disabled. Verified live against the approved smoke repository only; no `/execute` call and no new GitHub issue/write.
 - [x] FOS-023 — Selected repository PR sync — `POST /api/v1/workspaces/{workspace_id}/github/repositories/pull-requests/sync` reads PRs only from explicit read-sync allowlisted repositories, validates allowlist before token decrypt/provider reads, creates a manual SyncJob, normalizes selected PRs into canonical `SourceRecord`/`PullRequest` + repository records, preserves open/closed/merged state, avoids duplicate repository rows after selected issue sync, de-dupes PR read models by repository+number, and keeps external writes disabled. Verified with read-only provider mocks for the approved repository scope; no `/execute` call and no GitHub write.
 
-### CHUNK 6 — Remaining Connectors — FROZEN / POST-MVP
-*Gate: Jira / Gmail / Drive / Documents видны в Brain.*
+### CHUNK 6 — Remaining Connectors ✅ (local-only slices)
+*Gate: Jira / Gmail / Drive / Documents видны в Brain — выполнено локально
+(DEC-057/058/059/066). Live provider OAuth/sync для Jira/Gmail/Drive остаётся
+отложенным.*
 - [x] FOS-JIRA-01 — Jira connector minimal (local-only) — DONE via DEC-057. Local read-only issue import/list at `/jira` and `app/services/jira_connector_service.py` / `app/api/jira.py`. Live Jira OAuth/API-token provider sync remains deferred.
 - [x] FOS-GMAIL-01 — Gmail connector minimal (local-only) — DONE via DEC-058. Local read-only message import/list at `/gmail` and `app/services/gmail_connector_service.py` / `app/api/gmail.py`. Live Gmail OAuth/API-token provider sync remains deferred.
 - [x] FOS-019 — Drive connector minimal (local-only) — DONE via DEC-059. Local read-only file metadata import/list at `/drive` and `app/services/drive_connector_service.py` / `app/api/drive.py`. Live Drive OAuth/API-token provider sync remains deferred.
-- [ ] FOS-DOC-01 — Documents module — post-MVP; no canonical Document CRUD (`body_markdown`, §7.11) or `web/app/documents` exists.
+- [x] FOS-DOC-01 — Documents module — DONE via DEC-066. Canonical workspace-scoped
+  `Document` model (`app/db/document_models.py`) + migration `f1a2b3c4d5e6`,
+  member-gated CRUD + search service/API (`app/services/document_service.py`,
+  `app/api/documents.py`: `GET/POST /workspaces/{id}/documents`,
+  `GET/PATCH/DELETE /documents/{id}`), `body_markdown` + deterministic
+  `body_text` projection, and `/documents` frontend page (list/search/create/
+  detail) + sidebar. Non-archived documents appear in Company Brain
+  `documents.notes` with evidence. `DocumentVersion`/NormalizedEntity linkage
+  deferred. Local-only: no provider calls, external writes, secret reads, or LLM.
 
 ### CHUNK 7 — Polish + Repo Audit UI
 *Gate: нет dead-end состояний; repo audit виден в UI.*
@@ -578,6 +588,24 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-06` — **Internal Documents module (FOS-DOC-01 / DEC-066).**
+  Independently re-derived the MVP scope and found that internal documents were
+  the one §1.5 "must have" connector/module with no model, endpoint, or UI (every
+  other connector was done). Implemented the full vertical: `Document` model +
+  migration `f1a2b3c4d5e6`, member-gated CRUD + search service/API, deterministic
+  `markdown_to_text` projection, Company Brain `documents.notes` integration with
+  evidence, and a `/documents` frontend page + sidebar entry. Company Brain
+  `documents` block is additive (`files` + new `notes`), so existing consumers
+  keep working. Local-only: no provider calls, external writes, secret reads, or
+  LLM. Verified independently: `uv run ruff check .` ✅, full backend
+  `uv run pytest -q` ✅ **446 passed / 1 warning** (added
+  `tests/test_documents_api.py` 8 tests; updated one Company Brain empty-state
+  assertion for the additive `notes` field), `uv run alembic upgrade head` +
+  `uv run alembic check` ✅ (single head `f1a2b3c4d5e6`, no drift), frontend
+  `npm test` ✅ **189 passed** (+10 documents), `npm run build` ✅ (`/documents`
+  route present), `npm run lint`/typecheck ✅, `check_no_secrets.sh --tracked` ✅.
+  Commit local-only; push не делался.
 
 - `2026-07-02` — **Founder Briefing history coverage comparison.** Added richer
   local history cards for persisted Founder Briefings: each saved briefing

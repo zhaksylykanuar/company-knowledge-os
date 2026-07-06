@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Added the internal Documents module (DEC-066, MVP §1.5 / §4.7 / §6.16 / §7.11).
+  New workspace-scoped ``documents`` table + migration ``f1a2b3c4d5e6``, a
+  member-gated CRUD + search API (``/api/v1/workspaces/{id}/documents`` and
+  ``/documents/{document_id}``), and a ``/documents`` frontend page (list,
+  search, create, detail) with a sidebar entry. Documents store authored
+  ``body_markdown`` plus a deterministic plain-text projection for search, and
+  non-archived documents now appear in Company Brain under ``documents.notes``
+  with evidence refs. Local-only: no provider calls, external writes, secret
+  reads, or LLM.
 - Added deterministic local action-proposal generation from persisted Founder
   Briefings (DEC-065). The backend now exposes
   `POST /workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
