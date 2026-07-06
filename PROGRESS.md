@@ -83,8 +83,16 @@
   UI показывает provider + scope (GitHub repo или Jira project) вместо
   GitHub-only repository label. Boundary сохранён: no Jira provider calls, no
   sync, no external writes, no raw payload rendering, no LLM. Gmail/Drive не
-  притворяются task/work items и остаются SourceRecord coverage до отдельной
-  entity/model decision.
+  притворяются task/work items; для них используется отдельная read-section
+  модель (DEC-063).
+- **Gmail/Drive first-class Company Brain read sections (НОВОЕ, DEC-063):**
+  workspace Company Brain теперь возвращает `communications.messages` для
+  локальных Gmail `SourceRecord(provider=gmail, record_type=message)` rows и
+  `documents.files` для Drive `SourceRecord(provider=drive, record_type=file)`
+  rows. UI показывает отдельные секции Gmail messages и Drive files, не
+  превращая их в tasks. Читаются только sanitized normalized payload fields +
+  source refs; raw email bodies/document contents, secrets, provider calls,
+  sync, external writes и LLM не добавлены.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально

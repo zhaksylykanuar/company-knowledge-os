@@ -191,7 +191,11 @@ Implemented foundations:
 - Company Brain now promotes task-shaped local Jira records (DEC-062):
   canonical `Task(source_provider='jira')` rows appear in `work.issues`,
   `work.recent`, issue summary counts, and evidence with provider/project scope.
-  Gmail/Drive remain SourceRecord coverage until first-class models exist.
+  Gmail/Drive are not coerced into tasks.
+- Company Brain now exposes Gmail messages and Drive files as first-class read
+  sections (DEC-063): `communications.messages` and `documents.files` render
+  sanitized local SourceRecord payload fields with source refs, without raw
+  email/document bodies, provider calls, sync, external writes, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -259,11 +263,12 @@ Done when:
    paths. Company Brain/Dashboard source coverage now also exposes aggregate
    local connector SourceRecord counts, and the deterministic Founder Briefing
    now includes a connector-source-coverage item (DEC-061). Jira issues are now
-   first-class Company Brain work items (DEC-062). Next: introduce first-class
-   Company Brain read models for Gmail messages and Drive files (do not coerce
-   them into tasks), or run the first explicitly approved scoped GitHub provider
-   read when credentials are available, while keeping provider writes and AI
-   generation disabled.
+   first-class Company Brain work items (DEC-062), and Gmail/Drive have
+   first-class read sections (DEC-063). Next: enrich deterministic Founder
+   Briefing/action proposal generation from these first-class non-GitHub read
+   models, or run the first explicitly approved scoped GitHub provider read when
+   credentials are available, while keeping provider writes and AI generation
+   disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

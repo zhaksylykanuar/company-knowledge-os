@@ -113,6 +113,62 @@ const sampleBrain: CompanyBrainResponse = {
       }
     ]
   },
+  communications: {
+    messages: [
+      {
+        source_record_id: "gmail-source-1",
+        message_id: "msg-1",
+        thread_id: "thread-1",
+        subject: "Investor follow-up",
+        snippet: "Following up from imported Gmail metadata.",
+        from_address: "founder@example.test",
+        to_addresses: ["investor@example.test"],
+        labels: ["INBOX", "UNREAD"],
+        unread: true,
+        received_at: "2026-07-06T10:00:00+00:00",
+        source_url: "https://mail.google.com/mail/u/0/#inbox/msg-1",
+        source_refs: [
+          {
+            id: "gmail-source-1:0",
+            kind: "gmail_message",
+            source: "gmail",
+            label: "msg-1",
+            url: "https://mail.google.com/mail/u/0/#inbox/msg-1",
+            record_type: "message",
+            record_id: "gmail-source-1"
+          }
+        ]
+      }
+    ]
+  },
+  documents: {
+    files: [
+      {
+        source_record_id: "drive-source-1",
+        file_id: "file-1",
+        name: "Private beta checklist",
+        mime_type: "application/vnd.google-apps.document",
+        owners: ["founder@example.test"],
+        drive_id: null,
+        folder_path: null,
+        shared: true,
+        size_bytes: null,
+        modified_at: "2026-07-06T10:00:00+00:00",
+        source_url: "https://drive.google.com/file/d/file-1/view",
+        source_refs: [
+          {
+            id: "drive-source-1:0",
+            kind: "drive_file",
+            source: "drive",
+            label: "file-1",
+            url: "https://drive.google.com/file/d/file-1/view",
+            record_type: "file",
+            record_id: "drive-source-1"
+          }
+        ]
+      }
+    ]
+  },
   evidence: [
     {
       id: "repo-source-1:0",
@@ -158,6 +214,12 @@ const emptyBrain: CompanyBrainResponse = {
     issues: [],
     pull_requests: [],
     recent: []
+  },
+  communications: {
+    messages: []
+  },
+  documents: {
+    files: []
   },
   evidence: [],
   warnings: ["No canonical GitHub records have been synced for this workspace yet."]
@@ -299,6 +361,23 @@ test("renders Jira issues as first-class Company Brain work items", () => {
   assert.match(html, /FOS-123/);
   assert.doesNotMatch(html, /provider call started/i);
   assert.doesNotMatch(html, /external write performed/i);
+});
+
+test("renders Gmail messages and Drive files as first-class Company Brain sections", () => {
+  const html = renderPanel();
+
+  assert.ok(html.includes(M.companyBrain.messagesSection));
+  assert.match(html, /Investor follow-up/);
+  assert.ok(html.includes(M.companyBrain.badgeUnread));
+  assert.match(html, /founder@example.test/);
+  assert.match(html, /msg-1/);
+  assert.ok(html.includes(M.companyBrain.filesSection));
+  assert.match(html, /Private beta checklist/);
+  assert.ok(html.includes(M.companyBrain.badgeSharedFile));
+  assert.match(html, /application\/vnd.google-apps.document/);
+  assert.match(html, /file-1/);
+  assert.doesNotMatch(html, /raw body/i);
+  assert.doesNotMatch(html, /provider call started/i);
 });
 
 test("renders evidence and source refs without fake company facts", () => {

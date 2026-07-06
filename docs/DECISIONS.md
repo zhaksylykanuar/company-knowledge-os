@@ -1531,6 +1531,36 @@ Consequences:
   not be forced into `Task` or work-item semantics without an explicit model
   decision.
 
+## DEC-063 - Company Brain Exposes Gmail Messages And Drive Files As First-Class Read Sections
+
+Decision (2026-07-06): workspace Company Brain now exposes local Gmail message
+and Google Drive file records as first-class read sections without coercing them
+into tasks. Gmail `SourceRecord(provider='gmail', record_type='message')` rows
+appear under `communications.messages`; Drive
+`SourceRecord(provider='drive', record_type='file')` rows appear under
+`documents.files`. Both sections are built only from the sanitized normalized
+payloads already stored by DEC-058/059 and include source refs/evidence.
+
+Rationale: DEC-060/061 made Gmail/Drive visible as aggregate SourceRecord
+coverage, while DEC-062 promoted only Jira because Jira issues are task-shaped.
+Gmail messages and Drive files are not tasks, but they still need first-class
+founder-facing read models to satisfy the MVP direction of seeing emails and
+documents in one Company Brain surface. Separate `communications` and
+`documents` sections preserve semantics without polluting `Task`.
+
+Consequences:
+
+- This is local/deterministic only: no Gmail/Drive provider calls, sync, external
+  writes, LLM, raw body/content rendering, or secret reads are added.
+- Raw email bodies and Drive document contents remain excluded. The read model
+  renders bounded normalized fields such as subject/snippet, sender/labels,
+  file name/MIME type/owners/shared flag, source URL, and source refs.
+- Company Brain can now contain GitHub/Jira work items plus Gmail messages and
+  Drive files in separate typed sections. Existing GitHub/Jira work contracts are
+  kept backward-compatible, with `communications` and `documents` additive.
+- Future work can enrich these sections into richer thread/document entities,
+  but such enrichment needs separate model decisions and evidence contracts.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

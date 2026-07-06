@@ -92,6 +92,44 @@ class CompanyBrainWorkRead(BaseModel):
     recent: list[CompanyBrainWorkItemRead] = Field(default_factory=list)
 
 
+class CompanyBrainMessageRead(BaseModel):
+    source_record_id: UUID
+    message_id: str
+    thread_id: str | None = None
+    subject: str
+    snippet: str | None = None
+    from_address: str | None = None
+    to_addresses: list[str] = Field(default_factory=list)
+    labels: list[str] = Field(default_factory=list)
+    unread: bool = False
+    received_at: datetime | None = None
+    source_url: str | None = None
+    source_refs: list[CompanyBrainSourceRefRead] = Field(default_factory=list)
+
+
+class CompanyBrainCommunicationsRead(BaseModel):
+    messages: list[CompanyBrainMessageRead] = Field(default_factory=list)
+
+
+class CompanyBrainDriveFileRead(BaseModel):
+    source_record_id: UUID
+    file_id: str
+    name: str
+    mime_type: str | None = None
+    owners: list[str] = Field(default_factory=list)
+    drive_id: str | None = None
+    folder_path: str | None = None
+    shared: bool = False
+    size_bytes: int | None = None
+    modified_at: datetime | None = None
+    source_url: str | None = None
+    source_refs: list[CompanyBrainSourceRefRead] = Field(default_factory=list)
+
+
+class CompanyBrainDocumentsRead(BaseModel):
+    files: list[CompanyBrainDriveFileRead] = Field(default_factory=list)
+
+
 class CompanyBrainCapabilitiesRead(BaseModel):
     live_github_oauth: bool
     live_provider_sync: bool
@@ -109,6 +147,10 @@ class CompanyBrainResponse(BaseModel):
     )
     repositories: list[CompanyBrainRepositoryRead] = Field(default_factory=list)
     work: CompanyBrainWorkRead
+    communications: CompanyBrainCommunicationsRead = Field(
+        default_factory=CompanyBrainCommunicationsRead
+    )
+    documents: CompanyBrainDocumentsRead = Field(default_factory=CompanyBrainDocumentsRead)
     evidence: list[CompanyBrainSourceRefRead] = Field(default_factory=list)
     capabilities: CompanyBrainCapabilitiesRead
     is_live: bool

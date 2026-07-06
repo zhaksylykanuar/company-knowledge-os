@@ -368,6 +368,36 @@ export type CompanyBrainWorkItem = {
   source_refs: CompanyBrainSourceRef[];
 };
 
+export type CompanyBrainMessage = {
+  source_record_id: string;
+  message_id: string;
+  thread_id: string | null;
+  subject: string;
+  snippet: string | null;
+  from_address: string | null;
+  to_addresses: string[];
+  labels: string[];
+  unread: boolean;
+  received_at: string | null;
+  source_url: string | null;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type CompanyBrainDriveFile = {
+  source_record_id: string;
+  file_id: string;
+  name: string;
+  mime_type: string | null;
+  owners: string[];
+  drive_id: string | null;
+  folder_path: string | null;
+  shared: boolean;
+  size_bytes: number | null;
+  modified_at: string | null;
+  source_url: string | null;
+  source_refs: CompanyBrainSourceRef[];
+};
+
 export type CompanyBrainResponse = {
   workspace_id: string;
   mode: "github_first_canonical";
@@ -379,6 +409,12 @@ export type CompanyBrainResponse = {
     issues: CompanyBrainWorkItem[];
     pull_requests: CompanyBrainWorkItem[];
     recent: CompanyBrainWorkItem[];
+  };
+  communications?: {
+    messages: CompanyBrainMessage[];
+  };
+  documents?: {
+    files: CompanyBrainDriveFile[];
   };
   evidence: CompanyBrainSourceRef[];
   capabilities: {

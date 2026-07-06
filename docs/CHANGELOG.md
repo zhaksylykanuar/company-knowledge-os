@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Exposed Gmail messages and Google Drive files as first-class Company Brain
+  read sections (DEC-063). Company Brain now returns `communications.messages`
+  and `documents.files` built from sanitized local SourceRecord payloads, and
+  the UI renders both sections separately from tasks. This keeps Gmail/Drive out
+  of `Task` semantics while showing imported emails/documents in the founder
+  surface. Local-only: no provider calls, sync, external writes, raw body/content
+  rendering, secrets, or LLM.
 - Promoted local Jira issues into Company Brain work items (DEC-062). Workspace
   Company Brain now includes canonical Jira `Task(source_provider='jira')` rows
   in `work.issues`, `work.recent`, issue summary counts, and evidence, with

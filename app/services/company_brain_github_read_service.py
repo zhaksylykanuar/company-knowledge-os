@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.canonical_models import (
     PULL_REQUEST_STATE_MERGED,
     PULL_REQUEST_STATE_OPEN,
+    SOURCE_RECORD_PROVIDER_DRIVE,
     SOURCE_RECORD_PROVIDER_GITHUB,
+    SOURCE_RECORD_PROVIDER_GMAIL,
     TASK_PROVIDER_GITHUB,
     TASK_PROVIDER_JIRA,
     PullRequest,
@@ -35,6 +37,20 @@ async def build_workspace_company_brain(
     jira_tasks = await _jira_issue_tasks(session=session, workspace_id=workspace_id)
     tasks = [*github_tasks, *jira_tasks]
     pull_requests = await _pull_requests(session=session, workspace_id=workspace_id)
+    gmail_message_records = await _source_records_by_provider_record_type(
+        session=session,
+        workspace_id=workspace_id,
+        provider=SOURCE_RECORD_PROVIDER_GMAIL,
+        record_type="message",
+        limit=limit,
+    )
+    drive_file_records = await _source_records_by_provider_record_type(
+        session=session,
+        workspace_id=workspace_id,
+        provider=SOURCE_RECORD_PROVIDER_DRIVE,
+        record_type="file",
+        limit=limit,
+    )
     source_record_coverage = await _source_record_coverage(
         session=session,
         workspace_id=workspace_id,
@@ -86,12 +102,22 @@ async def build_workspace_company_brain(
         pull_request_source_records=pull_request_source_records,
         limit=limit,
     )
+    gmail_message_rows = [
+        _gmail_message_payload(source_record)
+        for source_record in gmail_message_records[:limit]
+    ]
+    drive_file_rows = [
+        _drive_file_payload(source_record)
+        for source_record in drive_file_records[:limit]
+    ]
     evidence = _unique_source_refs(
         [
             *[row["source_refs"] for row in repository_rows],
             *[row["source_refs"] for row in issue_rows],
             *[row["source_refs"] for row in pull_request_rows],
             *[row["source_refs"] for row in recent_rows],
+            *[row["source_refs"] for row in gmail_message_rows],
+            *[row["source_refs"] for row in drive_file_rows],
         ]
     )
     summary = {
@@ -118,6 +144,12 @@ async def build_workspace_company_brain(
             "issues": issue_rows,
             "pull_requests": pull_request_rows,
             "recent": recent_rows,
+        },
+        "communications": {
+            "messages": gmail_message_rows,
+        },
+        "documents": {
+            "files": drive_file_rows,
         },
         "evidence": evidence,
         "capabilities": {
@@ -300,6 +332,32 @@ async def _source_records_by_external_id(
     return {row.external_id: row for row in rows}
 
 
+async def _source_records_by_provider_record_type(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    provider: str,
+    record_type: str,
+    limit: int,
+) -> list[SourceRecord]:
+    return list(
+        (
+            await session.execute(
+                select(SourceRecord)
+                .where(SourceRecord.workspace_id == workspace_id)
+                .where(SourceRecord.provider == provider)
+                .where(SourceRecord.record_type == record_type)
+                .where(SourceRecord.is_deleted.is_(False))
+                .order_by(
+                    SourceRecord.source_updated_at.desc().nullslast(),
+                    SourceRecord.created_at.desc(),
+                )
+                .limit(limit)
+            )
+        ).scalars()
+    )
+
+
 async def _source_records_for_tasks(
     *,
     session: AsyncSession,
@@ -452,6 +510,48 @@ def _pull_request_payload(
     }
 
 
+def _gmail_message_payload(source_record: SourceRecord) -> dict[str, Any]:
+    payload = source_record.payload if isinstance(source_record.payload, Mapping) else {}
+    normalized = payload.get("normalized_message")
+    message = normalized if isinstance(normalized, Mapping) else {}
+    labels = _safe_string_list(message.get("labels"))
+    return {
+        "source_record_id": source_record.id,
+        "message_id": _safe_text(message.get("message_id")) or source_record.external_id,
+        "thread_id": _safe_text(message.get("thread_id")),
+        "subject": _safe_text(message.get("subject")) or "(no subject)",
+        "snippet": _safe_text(message.get("snippet")),
+        "from_address": _safe_text(message.get("from_address")),
+        "to_addresses": _safe_string_list(message.get("to_addresses")),
+        "labels": labels,
+        "unread": _safe_bool(message.get("unread"))
+        or "unread" in {label.casefold() for label in labels},
+        "received_at": source_record.source_updated_at,
+        "source_url": _safe_url(message.get("source_url")) or _safe_url(source_record.source_url),
+        "source_refs": _source_refs(source_record),
+    }
+
+
+def _drive_file_payload(source_record: SourceRecord) -> dict[str, Any]:
+    payload = source_record.payload if isinstance(source_record.payload, Mapping) else {}
+    normalized = payload.get("normalized_file")
+    file = normalized if isinstance(normalized, Mapping) else {}
+    return {
+        "source_record_id": source_record.id,
+        "file_id": _safe_text(file.get("file_id")) or source_record.external_id,
+        "name": _safe_text(file.get("name")) or f"Drive file {source_record.external_id}",
+        "mime_type": _safe_text(file.get("mime_type")),
+        "owners": _safe_string_list(file.get("owners")),
+        "drive_id": _safe_text(file.get("drive_id")),
+        "folder_path": _safe_text(file.get("folder_path")),
+        "shared": _safe_bool(file.get("shared")),
+        "size_bytes": _safe_int(file.get("size_bytes")),
+        "modified_at": source_record.source_updated_at,
+        "source_url": _safe_url(file.get("source_url")) or _safe_url(source_record.source_url),
+        "source_refs": _source_refs(source_record),
+    }
+
+
 def _recent_work(
     *,
     tasks: list[Task],
@@ -589,3 +689,18 @@ def _safe_int(value: Any) -> int | None:
     if isinstance(value, str) and value.strip().isdigit():
         return int(value.strip())
     return None
+
+
+def _safe_bool(value: Any) -> bool:
+    return bool(value) if isinstance(value, bool) else False
+
+
+def _safe_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    strings: list[str] = []
+    for item in value[:40]:
+        text = _safe_text(item)
+        if text and text not in strings:
+            strings.append(text)
+    return strings
