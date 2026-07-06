@@ -36,6 +36,8 @@ type EvidenceKindCount = {
   count: number;
 };
 
+type SourceRecordCoverage = NonNullable<CompanyBrainResponse["source_records"]>;
+
 export function SourceCoveragePanel({ refreshSignal = 0 }: SourceCoveragePanelProps) {
   const workspaceId = useWorkspaceId();
   const [data, setData] = useState<CompanyBrainResponse | null>(null);
@@ -153,6 +155,11 @@ export function SourceCoveragePanelView({
               value={String(data.evidence.length)}
             />
             <StatusCard
+              description={M.sourceCoverage.sourceRecordsDescription}
+              title={M.sourceCoverage.sourceRecordsTitle}
+              value={String(sourceRecordCoverage(data).total)}
+            />
+            <StatusCard
               description={M.sourceCoverage.modeDescription}
               title={M.sourceCoverage.modeTitle}
               value={data.is_live ? M.sourceCoverage.modeLive : M.sourceCoverage.modeLocal}
@@ -197,6 +204,7 @@ function CoverageBreakdown({ data }: { data: CompanyBrainResponse }) {
   const reposWithRefs = repositoriesWithSourceRefs(data);
   const reposWithoutRefs = data.repositories.length - reposWithRefs;
   const evidenceKinds = evidenceKindCounts(data.evidence);
+  const sourceRecords = sourceRecordCoverage(data);
 
   return (
     <section className="work-section" aria-label={M.sourceCoverage.breakdownLabel}>
@@ -236,6 +244,30 @@ function CoverageBreakdown({ data }: { data: CompanyBrainResponse }) {
         </ul>
       ) : (
         <p className="muted">{M.sourceCoverage.evidenceKindsEmpty}</p>
+      )}
+      <h4>{M.sourceCoverage.sourceRecordsByProviderTitle}</h4>
+      {sourceRecords.by_provider.length > 0 ? (
+        <ul className="meta-list" aria-label={M.sourceCoverage.sourceRecordsByProviderTitle}>
+          {sourceRecords.by_provider.map((entry) => (
+            <li key={entry.provider}>
+              {T.sourceCoverageSourceRecordProvider(entry.provider, entry.count)}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">{M.sourceCoverage.sourceRecordsEmpty}</p>
+      )}
+      <h4>{M.sourceCoverage.sourceRecordsByTypeTitle}</h4>
+      {sourceRecords.by_record_type.length > 0 ? (
+        <ul className="meta-list" aria-label={M.sourceCoverage.sourceRecordsByTypeTitle}>
+          {sourceRecords.by_record_type.map((entry) => (
+            <li key={entry.record_type}>
+              {T.sourceCoverageSourceRecordType(entry.record_type, entry.count)}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">{M.sourceCoverage.sourceRecordsEmpty}</p>
       )}
     </section>
   );
@@ -396,7 +428,12 @@ function hasSourceCoverage(data: CompanyBrainResponse): boolean {
       data.summary.open_pull_requests +
       data.summary.closed_issues +
       data.summary.merged_pull_requests +
+      sourceRecordCoverage(data).total +
       data.evidence.length >
     0
   );
+}
+
+function sourceRecordCoverage(data: CompanyBrainResponse): SourceRecordCoverage {
+  return data.source_records ?? { total: 0, by_provider: [], by_record_type: [] };
 }

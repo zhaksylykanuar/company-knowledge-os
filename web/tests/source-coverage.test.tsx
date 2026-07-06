@@ -18,6 +18,21 @@ const sampleCoverage: CompanyBrainResponse = {
     closed_issues: 1,
     merged_pull_requests: 4
   },
+  source_records: {
+    total: 4,
+    by_provider: [
+      { provider: "drive", count: 1 },
+      { provider: "github", count: 1 },
+      { provider: "gmail", count: 1 },
+      { provider: "jira", count: 1 }
+    ],
+    by_record_type: [
+      { record_type: "file", count: 1 },
+      { record_type: "issue", count: 1 },
+      { record_type: "message", count: 1 },
+      { record_type: "repository", count: 1 }
+    ]
+  },
   repositories: [],
   work: {
     issues: [],
@@ -56,6 +71,11 @@ const emptyCoverage: CompanyBrainResponse = {
     merged_pull_requests: 0
   },
   evidence: [],
+  source_records: {
+    total: 0,
+    by_provider: [],
+    by_record_type: []
+  },
   warnings: ["No canonical GitHub records have been synced for this workspace yet."]
 };
 
@@ -78,6 +98,8 @@ test("renders local source coverage counts without implying live provider or AI 
   assert.ok(html.includes(M.sourceCoverage.title));
   assert.ok(html.includes(M.sourceCoverage.repositoriesTitle));
   assert.ok(html.includes("25"));
+  assert.ok(html.includes(M.sourceCoverage.sourceRecordsTitle));
+  assert.ok(html.includes("4"));
   assert.ok(html.includes("2 задач / 3 PR"));
   assert.ok(html.includes(M.sourceCoverage.modeLocal));
   assert.ok(html.includes(M.sourceCoverage.statusDeferred));
@@ -223,6 +245,13 @@ test("renders local coverage breakdown from already loaded Company Brain payload
   assert.ok(html.includes(T.sourceCoverageReposWithoutEvidence(1)));
   assert.ok(html.includes(T.sourceCoverageEvidenceKind("repository_inventory_snapshot", 2)));
   assert.ok(html.includes(T.sourceCoverageEvidenceKind("work_item_snapshot", 1)));
+  assert.ok(html.includes(M.sourceCoverage.sourceRecordsByProviderTitle));
+  assert.ok(html.includes(T.sourceCoverageSourceRecordProvider("jira", 1)));
+  assert.ok(html.includes(T.sourceCoverageSourceRecordProvider("gmail", 1)));
+  assert.ok(html.includes(T.sourceCoverageSourceRecordProvider("drive", 1)));
+  assert.ok(html.includes(M.sourceCoverage.sourceRecordsByTypeTitle));
+  assert.ok(html.includes(T.sourceCoverageSourceRecordType("message", 1)));
+  assert.ok(html.includes(T.sourceCoverageSourceRecordType("file", 1)));
 });
 
 test("breakdown stays safe with no repositories or evidence and makes no live/AI claim", () => {

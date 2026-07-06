@@ -56,6 +56,15 @@
   сохранён: no Drive provider calls, no sync, no external writes, no LLM,
   no secret reads; invalid entries возвращаются per-entry failures, valid
   entries могут импортироваться.
+- **Company Brain connector SourceRecord coverage (НОВОЕ, DEC-060):** workspace
+  Company Brain payload теперь содержит additive `source_records` coverage block
+  (`total`, `by_provider`, `by_record_type`) по всем canonical `SourceRecord`
+  rows workspace. Dashboard `SourceCoveragePanel` показывает общий count,
+  provider breakdown (GitHub/Jira/Gmail/Drive) и record-type breakdown без raw
+  payloads, email/document bodies, secrets, provider calls, sync, external
+  writes или LLM. GitHub-first `summary/repositories/work/evidence` контракт
+  сохранён; это visibility bridge для локальных коннекторов, а не full
+  cross-provider reasoning model.
 - **Gmail local connector foundation (НОВОЕ, DEC-058):** добавлен второй
   non-GitHub connector slice без внешних вызовов: `GET
   /api/v1/workspaces/{workspace_id}/gmail/messages` показывает локально

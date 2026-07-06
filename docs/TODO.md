@@ -178,6 +178,11 @@ Implemented foundations:
   (file record type) rows with evidence refs and no persisted raw document
   body. No Drive provider call, sync, external write, LLM, or secret read is
   performed.
+- Workspace Company Brain and Dashboard Source Coverage now surface aggregate
+  local connector SourceRecord coverage (DEC-060): `source_records.total`,
+  provider counts, and record-type counts across GitHub/Jira/Gmail/Drive are
+  visible without exposing raw payloads, email bodies, document contents,
+  provider calls, sync, external writes, or LLM.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -242,10 +247,11 @@ Done when:
    guidance for data/evidence/open-work/provider/AI boundaries. `/connectors`
    now surfaces the MVP connector registry for GitHub/Jira/Gmail/Drive, and
    `/jira`, `/gmail`, and `/drive` provide local-only connector import/list
-   paths. Next: aggregate Jira/Gmail/Drive local source records into founder-
-   facing Company Brain/Dashboard coverage, or run the first explicitly approved
-   scoped GitHub provider read when credentials are available, while keeping
-   provider writes and AI generation disabled.
+   paths. Company Brain/Dashboard source coverage now also exposes aggregate
+   local connector SourceRecord counts. Next: carry non-GitHub source coverage
+   into deterministic Founder Briefing signals/items, or run the first
+   explicitly approved scoped GitHub provider read when credentials are
+   available, while keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

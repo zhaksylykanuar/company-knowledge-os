@@ -324,6 +324,11 @@ async def test_workspace_company_brain_returns_empty_canonical_state(monkeypatch
             "closed_issues": 0,
             "merged_pull_requests": 0,
         }
+        assert body["source_records"] == {
+            "by_provider": [],
+            "by_record_type": [],
+            "total": 0,
+        }
         assert body["repositories"] == []
         assert body["work"] == {"issues": [], "pull_requests": [], "recent": []}
         assert body["evidence"] == []
@@ -336,6 +341,104 @@ async def test_workspace_company_brain_returns_empty_canonical_state(monkeypatch
             "llm_briefing": False,
         }
         assert any("No canonical GitHub records" in warning for warning in body["warnings"])
+    finally:
+        await _cleanup(marker)
+
+
+async def test_workspace_company_brain_includes_local_connector_source_record_coverage(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        now = datetime(2026, 7, 6, 10, 0, tzinfo=timezone.utc)
+        async with AsyncSessionLocal() as session:
+            session.add_all(
+                [
+                    SourceRecord(
+                        workspace_id=workspace_id,
+                        provider="jira",
+                        external_id=f"FOS-{marker[:6]}",
+                        record_type="issue",
+                        source_url="https://jira.example/browse/FOS-123",
+                        payload={
+                            "evidence_refs": [
+                                {
+                                    "kind": "jira_issue",
+                                    "source": "jira",
+                                    "ref": f"FOS-{marker[:6]}",
+                                    "url": "https://jira.example/browse/FOS-123",
+                                }
+                            ],
+                            "api_token": "SHOULD_NOT_LEAK",
+                        },
+                        payload_hash=f"jira-hash-{marker}",
+                        observed_at=now,
+                        source_updated_at=now,
+                    ),
+                    SourceRecord(
+                        workspace_id=workspace_id,
+                        provider="gmail",
+                        external_id=f"gmail-{marker}",
+                        record_type="message",
+                        source_url="https://mail.google.com/mail/u/0/#inbox/msg",
+                        payload={"raw_body": "SHOULD_NOT_RENDER"},
+                        payload_hash=f"gmail-hash-{marker}",
+                        observed_at=now,
+                        source_updated_at=now,
+                    ),
+                    SourceRecord(
+                        workspace_id=workspace_id,
+                        provider="drive",
+                        external_id=f"drive-{marker}",
+                        record_type="file",
+                        source_url="https://drive.google.com/file/d/file-1/view",
+                        payload={"content": "SHOULD_NOT_RENDER"},
+                        payload_hash=f"drive-hash-{marker}",
+                        observed_at=now,
+                        source_updated_at=now,
+                    ),
+                ]
+            )
+            await session.commit()
+
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/company-brain",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["summary"] == {
+            "repositories": 0,
+            "open_issues": 0,
+            "open_pull_requests": 0,
+            "closed_issues": 0,
+            "merged_pull_requests": 0,
+        }
+        assert body["source_records"] == {
+            "total": 3,
+            "by_provider": [
+                {"provider": "drive", "count": 1},
+                {"provider": "gmail", "count": 1},
+                {"provider": "jira", "count": 1},
+            ],
+            "by_record_type": [
+                {"record_type": "file", "count": 1},
+                {"record_type": "issue", "count": 1},
+                {"record_type": "message", "count": 1},
+            ],
+        }
+        serialized = json.dumps(body, sort_keys=True)
+        assert "SHOULD_NOT_LEAK" not in serialized
+        assert "SHOULD_NOT_RENDER" not in serialized
+
     finally:
         await _cleanup(marker)
 

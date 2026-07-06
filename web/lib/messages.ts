@@ -858,6 +858,9 @@ export const M = {
     workDescription: "Открытые задачи и PR из канонического GitHub-пути.",
     evidenceTitle: "Evidence",
     evidenceDescription: "Источник-ссылки, возвращённые для текущей выборки Company Brain.",
+    sourceRecordsTitle: "Source records",
+    sourceRecordsDescription:
+      "Все canonical SourceRecord rows по GitHub/Jira/Gmail/Drive в локальной БД.",
     modeTitle: "Режим",
     modeDescription: "Текущий экран читает локальную БД и не делает live provider calls.",
     modeLive: "Live",
@@ -898,6 +901,10 @@ export const M = {
       "Локальная разбивка уже полученных source refs по типу (kind). Без provider calls и без LLM.",
     evidenceKindsEmpty:
       "Типы evidence пока недоступны: отдельные source refs не вернулись.",
+    sourceRecordsByProviderTitle: "Source records по провайдеру",
+    sourceRecordsByTypeTitle: "Source records по типу",
+    sourceRecordsEmpty:
+      "Локальные SourceRecord rows по коннекторам пока отсутствуют.",
     nextStepsLabel: "Следующие шаги покрытия источников",
     nextStepsTitle: "Что проверить дальше",
     nextStepDataLabel: "Каноническая поверхность",
@@ -1300,6 +1307,10 @@ export const T = {
     `${closedIssues} задач / ${mergedPrs} PR`,
   sourceCoverageEvidenceKind: (kind: string, count: number) =>
     `${kind}: ${count}`,
+  sourceCoverageSourceRecordProvider: (provider: string, count: number) =>
+    `${provider}: ${count}`,
+  sourceCoverageSourceRecordType: (recordType: string, count: number) =>
+    `${recordType}: ${count}`,
   sourceCoverageReposWithEvidence: (withRefs: number, total: number) =>
     `Repo с source refs: ${withRefs} из ${total}.`,
   sourceCoverageReposWithoutEvidence: (withoutRefs: number) =>

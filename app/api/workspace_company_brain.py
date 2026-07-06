@@ -37,6 +37,26 @@ class CompanyBrainSummaryRead(BaseModel):
     merged_pull_requests: int
 
 
+class CompanyBrainSourceRecordProviderCountRead(BaseModel):
+    provider: str
+    count: int
+
+
+class CompanyBrainSourceRecordTypeCountRead(BaseModel):
+    record_type: str
+    count: int
+
+
+class CompanyBrainSourceRecordCoverageRead(BaseModel):
+    total: int = 0
+    by_provider: list[CompanyBrainSourceRecordProviderCountRead] = Field(
+        default_factory=list
+    )
+    by_record_type: list[CompanyBrainSourceRecordTypeCountRead] = Field(
+        default_factory=list
+    )
+
+
 class CompanyBrainRepositoryRead(BaseModel):
     id: UUID
     provider: Literal["github"]
@@ -82,6 +102,9 @@ class CompanyBrainResponse(BaseModel):
     mode: Literal["github_first_canonical"]
     source: Literal["canonical_github_company_brain"]
     summary: CompanyBrainSummaryRead
+    source_records: CompanyBrainSourceRecordCoverageRead = Field(
+        default_factory=CompanyBrainSourceRecordCoverageRead
+    )
     repositories: list[CompanyBrainRepositoryRead] = Field(default_factory=list)
     work: CompanyBrainWorkRead
     evidence: list[CompanyBrainSourceRefRead] = Field(default_factory=list)

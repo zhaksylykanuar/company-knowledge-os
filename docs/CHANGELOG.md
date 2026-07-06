@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Added local connector SourceRecord coverage to the workspace Company Brain
+  payload and dashboard Source Coverage panel (DEC-060). Company Brain now
+  returns aggregate `source_records` counts by provider and record type so
+  local Jira/Gmail/Drive imports are visible without exposing raw payloads,
+  email bodies, document contents, secrets, provider calls, sync, external
+  writes, or LLM behavior.
 - Added the third minimal connector implementation: Google Drive (DEC-059). The
   backend now exposes local-only Drive file list/import endpoints, and the
   frontend adds `/drive` with a pasted/exported JSON import form. Imported file

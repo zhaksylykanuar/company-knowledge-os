@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.canonical_models import (
@@ -32,6 +32,10 @@ async def build_workspace_company_brain(
     repositories = await _repositories(session=session, workspace_id=workspace_id)
     tasks = await _github_issue_tasks(session=session, workspace_id=workspace_id)
     pull_requests = await _pull_requests(session=session, workspace_id=workspace_id)
+    source_record_coverage = await _source_record_coverage(
+        session=session,
+        workspace_id=workspace_id,
+    )
 
     repository_source_records = await _source_records_by_external_id(
         session=session,
@@ -105,6 +109,7 @@ async def build_workspace_company_brain(
         "mode": COMPANY_BRAIN_GITHUB_MODE,
         "source": COMPANY_BRAIN_GITHUB_SOURCE,
         "summary": summary,
+        "source_records": source_record_coverage,
         "repositories": repository_rows,
         "work": {
             "issues": issue_rows,
@@ -142,6 +147,51 @@ async def _repositories(
             )
         ).scalars()
     )
+
+
+async def _source_record_coverage(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+) -> dict[str, Any]:
+    rows = (
+        await session.execute(
+            select(
+                SourceRecord.provider,
+                SourceRecord.record_type,
+                func.count(SourceRecord.id),
+            )
+            .where(SourceRecord.workspace_id == workspace_id)
+            .where(SourceRecord.is_deleted.is_(False))
+            .group_by(SourceRecord.provider, SourceRecord.record_type)
+            .order_by(SourceRecord.provider.asc(), SourceRecord.record_type.asc())
+        )
+    ).all()
+
+    by_provider: dict[str, int] = {}
+    by_record_type: dict[str, int] = {}
+    total = 0
+    for provider, record_type, count in rows:
+        safe_provider = _safe_text(provider) or "unknown"
+        safe_record_type = _safe_text(record_type) or "unknown"
+        row_count = int(count or 0)
+        total += row_count
+        by_provider[safe_provider] = by_provider.get(safe_provider, 0) + row_count
+        by_record_type[safe_record_type] = (
+            by_record_type.get(safe_record_type, 0) + row_count
+        )
+
+    return {
+        "total": total,
+        "by_provider": [
+            {"provider": provider, "count": count}
+            for provider, count in sorted(by_provider.items())
+        ],
+        "by_record_type": [
+            {"record_type": record_type, "count": count}
+            for record_type, count in sorted(by_record_type.items())
+        ],
+    }
 
 
 async def _github_issue_tasks(

@@ -323,6 +323,22 @@ export type CompanyBrainSummary = {
   merged_pull_requests: number;
 };
 
+export type CompanyBrainSourceRecordProviderCount = {
+  provider: string;
+  count: number;
+};
+
+export type CompanyBrainSourceRecordTypeCount = {
+  record_type: string;
+  count: number;
+};
+
+export type CompanyBrainSourceRecordCoverage = {
+  total: number;
+  by_provider: CompanyBrainSourceRecordProviderCount[];
+  by_record_type: CompanyBrainSourceRecordTypeCount[];
+};
+
 export type CompanyBrainRepository = {
   id: string;
   provider: "github";
@@ -355,6 +371,7 @@ export type CompanyBrainResponse = {
   mode: "github_first_canonical";
   source: "canonical_github_company_brain";
   summary: CompanyBrainSummary;
+  source_records?: CompanyBrainSourceRecordCoverage;
   repositories: CompanyBrainRepository[];
   work: {
     issues: CompanyBrainWorkItem[];

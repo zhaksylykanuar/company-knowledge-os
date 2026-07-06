@@ -1434,6 +1434,37 @@ Consequences:
   extraction, Drive writes, and Company Brain aggregation across Jira/Gmail/Drive
   remain later slices.
 
+## DEC-060 - Company Brain Exposes Local Connector SourceRecord Coverage
+
+Decision (2026-07-06): the workspace Company Brain read model now includes an
+additive `source_records` coverage block that summarizes all canonical
+`SourceRecord` rows for the workspace across providers and record types. The
+existing GitHub-first fields (`summary`, `repositories`, `work`, `evidence`)
+remain unchanged, while `source_records.total`, `source_records.by_provider`,
+and `source_records.by_record_type` make local Jira/Gmail/Drive connector
+imports visible in founder-facing dashboard coverage.
+
+Rationale: DEC-057/058/059 added local-only Jira/Gmail/Drive connector import
+surfaces, but those records were not visible in Company Brain/Dashboard coverage
+unless they were GitHub-shaped repositories/issues/PRs. A compact SourceRecord
+coverage summary advances MVP visibility without pretending Gmail messages or
+Drive files are tasks, without changing the canonical `Task` table, and without
+adding provider calls, sync, writes, or LLM behavior.
+
+Consequences:
+
+- The `source_records` block is aggregate-only: it exposes counts by provider
+  and record type, not raw source payloads, snippets, email bodies, document
+  contents, secrets, tokens, or provider responses.
+- The existing GitHub-first Company Brain work/repository/evidence contract
+  remains backward-compatible for current consumers.
+- Dashboard Source Coverage now renders SourceRecord totals and provider/type
+  breakdowns from the already-loaded Company Brain payload. It still performs no
+  provider calls, starts no sync, makes no external writes, and invokes no LLM.
+- Full entity normalization and richer Company Brain semantics for Jira/Gmail/
+  Drive remain later slices; this decision is a visibility bridge, not a full
+  cross-provider reasoning model.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
