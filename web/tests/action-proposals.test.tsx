@@ -26,6 +26,7 @@ import type {
 import {
   ActionProposalsPanelView,
   DEFAULT_CREATE_FORM,
+  summarizeActionReviewReadiness,
   summarizeBulkResponse
 } from "../components/ActionProposalsPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
@@ -184,6 +185,13 @@ const deterministicAuditProposal: ActionProposal = {
       url: null
     }
   ]
+};
+
+const executedProposal: ActionProposal = {
+  ...approvedProposal,
+  id: "proposal-8",
+  execution_started: true,
+  title: "Executed GitHub proposal"
 };
 
 const sampleList: ActionProposalListResponse = {
@@ -569,6 +577,49 @@ test("renders proposal cards, statuses, evidence refs, and local-only boundary",
   assert.doesNotMatch(html, /sent to GitHub/i);
   assert.doesNotMatch(html, /created GitHub issue/i);
   assert.doesNotMatch(html, /source_events/);
+});
+
+test("summarizes action review readiness without starting external execution", () => {
+  const summary = summarizeActionReviewReadiness([
+    proposedProposal,
+    approvedProposal,
+    rejectedProposal,
+    briefingProposal,
+    manualInternalProposal,
+    executedProposal
+  ]);
+
+  assert.deepEqual(summary, {
+    externalResultReported: 1,
+    localOnly: 2,
+    missingEvidence: 1,
+    pendingDecision: 3,
+    previewReady: 1
+  });
+});
+
+test("renders action review readiness next steps from the loaded local list", () => {
+  const html = renderPanel({
+    data: {
+      ...groupedList,
+      count: 6,
+      proposals: [...groupedList.proposals, executedProposal]
+    },
+    statusFilter: "all"
+  });
+
+  assert.ok(html.includes(M.actionsPanel.readinessTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessDescription));
+  assert.ok(html.includes(M.actionsPanel.readinessPendingTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessPreviewTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessLocalOnlyTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessMissingEvidenceTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessExternalResultTitle));
+  assert.ok(html.includes(T.actionsReadinessNextStep(3, 1, 1, 1)));
+  assert.ok(html.includes(M.actionsPanel.readinessBoundary));
+  assert.doesNotMatch(html, /execute started by summary/i);
+  assert.doesNotMatch(html, /provider call started/i);
+  assert.doesNotMatch(html, /created GitHub issue/i);
 });
 
 test("filters loaded local proposals without changing provider state", () => {

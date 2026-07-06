@@ -123,6 +123,14 @@
   calls, no sync, no external writes, no secret reads, no LLM.
   Проверено: focused backend `tests/test_founder_briefing_api.py` ✅ 25 passed,
   frontend `npm test` ✅ 181 passed (после UI/API helper), plus ruff/imports.
+- **Action review readiness summary (НОВОЕ):** `/actions` теперь показывает
+  локальную сводку готовности review/execution по уже загруженным
+  `ActionProposal` rows: сколько предложений ждёт решения, сколько одобренных
+  GitHub issue proposals можно открыть в execution preview, сколько local-only
+  internal follow-ups, сколько предложений без `evidence_refs`, и сколько
+  предложений уже имеют reported execution receipt. Сводка даёт
+  детерминированный next-step hint и не запускает execute, sync, provider call,
+  external write, secret read или LLM.
 - **Founder Briefing internal document context (НОВОЕ, DEC-067):**
   deterministic manual Founder Briefing теперь добавляет item
   `internal-document-context` из Company Brain `documents.notes` (DEC-066), так
@@ -618,6 +626,23 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-07` — **Action review readiness summary.**
+  Added a founder-facing readiness section to `/actions` over the already
+  loaded local `ActionProposal` list: needs-decision proposals, approved GitHub
+  issue proposals ready for execution preview, local-only internal follow-ups,
+  proposals missing `evidence_refs`, and proposals with reported execution
+  receipts. The panel also returns a deterministic next-step hint so generated
+  briefing/audit/document proposals are easier to triage before any live
+  execution path. Frontend-only/local-only: no execute call, sync, provider
+  call, external write, secret read, or LLM. Files:
+  `web/components/ActionProposalsPanel.tsx`, `web/lib/messages.ts`,
+  `web/tests/action-proposals.test.tsx`, `docs/CHANGELOG.md`, `docs/TODO.md`,
+  `PROGRESS.md`. Checks: frontend `npm test` ✅ **203 passed**, `npm run build`
+  ✅, `npm run lint` ✅, backend `UV_NO_SYNC=1 uv run ruff check .` ✅, full
+  backend `UV_NO_SYNC=1 uv run pytest -q` ✅ **455 passed / 1 warning**,
+  `UV_NO_SYNC=1 uv run alembic check` ✅ (no drift), tracked secret scan ✅,
+  `git diff --check` ✅. Commit local-only; push не делался.
 
 - `2026-07-07` — **Basic request logging (DEC-072).**
   Independent MVP-scope audit (§1.5) found "basic logging" was unimplemented:

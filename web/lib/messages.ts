@@ -429,6 +429,26 @@ export const M = {
     rejectedDescription: "Локально отклонённые предложения.",
     totalTitle: "Всего",
     totalDescription: "Количество из списка бэкенда.",
+    readinessTitle: "Готовность review / execution",
+    readinessLabel: "Сводка готовности предложений к локальной проверке и предпросмотру",
+    readinessDescription:
+      "Сводка считается по уже загруженным локальным предложениям. Она не запускает execute, sync, provider calls или LLM.",
+    readinessPendingTitle: "Нужно решение",
+    readinessPendingDescription: "Предложения в статусе proposed: их надо локально одобрить или отклонить.",
+    readinessPreviewTitle: "Можно открыть preview",
+    readinessPreviewDescription:
+      "Одобренные GitHub issue proposals с evidence refs. Предпросмотр не пишет в GitHub.",
+    readinessLocalOnlyTitle: "Local-only follow-up",
+    readinessLocalOnlyDescription:
+      "Internal todo proposals: остаются локальными и не имеют внешнего execution path.",
+    readinessMissingEvidenceTitle: "Без evidence",
+    readinessMissingEvidenceDescription:
+      "Предложения без evidence refs не должны переходить в external execution path.",
+    readinessExternalResultTitle: "Есть execution receipt",
+    readinessExternalResultDescription:
+      "Бэкенд сообщил execution_started; проверяйте audit/receipt перед дальнейшими действиями.",
+    readinessBoundary:
+      "Эта сводка только помогает выбрать следующий локальный шаг; внешнее выполнение здесь не запускается.",
     filterTitle: "Фокус проверки",
     filterLabel: "Фильтр локальных предложений",
     filterDescription:
@@ -1416,6 +1436,26 @@ export const T = {
   actionsBulkAllFailed: (failed: number) =>
     `Не удалось обработать выбранные предложения: ${failed}. ` +
     `Локальные статусы не изменены; внешнее выполнение не запускалось.`,
+  actionsReadinessNextStep: (
+    pending: number,
+    previewReady: number,
+    missingEvidence: number,
+    externalResult: number
+  ) => {
+    if (pending > 0) {
+      return `Следующий шаг: локально разобрать proposed proposals (${pending}) через approve/reject; внешнее выполнение не запускать.`;
+    }
+    if (previewReady > 0) {
+      return `Следующий шаг: открыть execution preview для одобренных GitHub proposals (${previewReady}) и проверить evidence до любого live-write approval.`;
+    }
+    if (missingEvidence > 0) {
+      return `Следующий шаг: отклонить или пересоздать предложения без evidence (${missingEvidence}); unsupported claims не исполнять.`;
+    }
+    if (externalResult > 0) {
+      return `Следующий шаг: проверить execution audit/receipt для предложений с reported execution (${externalResult}).`;
+    }
+    return "Следующий шаг: новых локальных действий не требуется; дождитесь новых briefing/audit signals или live-provider approval.";
+  },
   // GitHub work count-card descriptions
   workIssuesDescription: (state: string) =>
     `${state}: записи задач GitHub из канонического пути бэкенда.`,

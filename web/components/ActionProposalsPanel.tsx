@@ -47,6 +47,14 @@ type EvidenceSelection = {
   count: number;
 };
 
+type ActionReviewReadiness = {
+  externalResultReported: number;
+  localOnly: number;
+  missingEvidence: number;
+  pendingDecision: number;
+  previewReady: number;
+};
+
 type ProposalGroup = {
   origin: ProposalOrigin;
   title: string;
@@ -579,6 +587,8 @@ export function ActionProposalsPanelView({
             />
           </section>
 
+          <ActionReviewReadinessPanel proposals={proposals} />
+
           <ActionStatusFilter
             activeFilter={statusFilter}
             onChange={onStatusFilterChange}
@@ -640,6 +650,52 @@ export function ActionProposalsPanelView({
           ) : null}
         </>
       ) : null}
+    </section>
+  );
+}
+
+function ActionReviewReadinessPanel({ proposals }: { proposals: ActionProposal[] }) {
+  const readiness = summarizeActionReviewReadiness(proposals);
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.readinessLabel}>
+      <h3>{M.actionsPanel.readinessTitle}</h3>
+      <p className="muted">{M.actionsPanel.readinessDescription}</p>
+      <section className="grid" aria-label={M.actionsPanel.readinessLabel}>
+        <StatusCard
+          description={M.actionsPanel.readinessPendingDescription}
+          title={M.actionsPanel.readinessPendingTitle}
+          value={String(readiness.pendingDecision)}
+        />
+        <StatusCard
+          description={M.actionsPanel.readinessPreviewDescription}
+          title={M.actionsPanel.readinessPreviewTitle}
+          value={String(readiness.previewReady)}
+        />
+        <StatusCard
+          description={M.actionsPanel.readinessLocalOnlyDescription}
+          title={M.actionsPanel.readinessLocalOnlyTitle}
+          value={String(readiness.localOnly)}
+        />
+        <StatusCard
+          description={M.actionsPanel.readinessMissingEvidenceDescription}
+          title={M.actionsPanel.readinessMissingEvidenceTitle}
+          value={String(readiness.missingEvidence)}
+        />
+        <StatusCard
+          description={M.actionsPanel.readinessExternalResultDescription}
+          title={M.actionsPanel.readinessExternalResultTitle}
+          value={String(readiness.externalResultReported)}
+        />
+      </section>
+      <p className="muted">
+        {T.actionsReadinessNextStep(
+          readiness.pendingDecision,
+          readiness.previewReady,
+          readiness.missingEvidence,
+          readiness.externalResultReported
+        )}
+      </p>
+      <p className="muted">{M.actionsPanel.readinessBoundary}</p>
     </section>
   );
 }
@@ -1418,6 +1474,52 @@ function countByStatus(proposals: ActionProposal[], status: string): number {
   return proposals.filter((proposal) => proposal.status === status).length;
 }
 
+function summarizeActionReviewReadiness(
+  proposals: ActionProposal[]
+): ActionReviewReadiness {
+  return proposals.reduce<ActionReviewReadiness>(
+    (summary, proposal) => {
+      if (proposal.status === "proposed") {
+        summary.pendingDecision += 1;
+      }
+      if (isPreviewReadyGithubIssueProposal(proposal)) {
+        summary.previewReady += 1;
+      }
+      if (isLocalOnlyProposal(proposal)) {
+        summary.localOnly += 1;
+      }
+      if (proposal.evidence_refs.length === 0) {
+        summary.missingEvidence += 1;
+      }
+      if (proposal.execution_started) {
+        summary.externalResultReported += 1;
+      }
+      return summary;
+    },
+    {
+      externalResultReported: 0,
+      localOnly: 0,
+      missingEvidence: 0,
+      pendingDecision: 0,
+      previewReady: 0
+    }
+  );
+}
+
+function isPreviewReadyGithubIssueProposal(proposal: ActionProposal): boolean {
+  return (
+    proposal.status === "approved" &&
+    proposal.action_type === "create_github_issue" &&
+    proposal.target_provider === "github" &&
+    proposal.evidence_refs.length > 0 &&
+    !proposal.execution_started
+  );
+}
+
+function isLocalOnlyProposal(proposal: ActionProposal): boolean {
+  return proposal.action_type === "internal_todo" || proposal.target_provider === "internal";
+}
+
 function isProposalProposed(proposal: ActionProposal): boolean {
   return proposal.status === "proposed";
 }
@@ -1713,4 +1815,8 @@ function payloadStringList(
   );
 }
 
-export { DEFAULT_CREATE_FORM, summarizeBulkResponse };
+export {
+  DEFAULT_CREATE_FORM,
+  summarizeActionReviewReadiness,
+  summarizeBulkResponse
+};

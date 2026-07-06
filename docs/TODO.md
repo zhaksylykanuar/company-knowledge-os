@@ -80,6 +80,12 @@ Implemented foundations:
   clear selection, approve selected locally, or reject selected locally. Hidden,
   approved, and rejected proposals are not selected or mutated; provider
   execution and external writes remain disabled.
+- ActionProposals review now also includes a local readiness summary over the
+  already-loaded list: needs-decision proposals, approved GitHub issue proposals
+  ready for execution preview, local-only internal follow-ups, proposals missing
+  evidence refs, and proposals with reported execution receipts. The summary
+  gives a deterministic next-step hint and starts no execute call, sync,
+  provider call, external write, or LLM.
 - Bulk local ActionProposal review is backed by admin-only backend endpoints
   (`bulk-approve` / `bulk-reject`) with per-proposal success/failure results and
   partial-success semantics, rather than frontend-only one-request-per-card
@@ -285,9 +291,13 @@ Done when:
   backend bulk endpoints with partial-success results. Local approve/reject
   decisions now write no-provider audit events to the existing timeline, and the
   UI can load that decision history for any decided proposal (approved or
-  rejected, GitHub or internal) via a read-only control. Next: continue
-  Founder-facing coverage/briefing polish or deployment readiness while keeping
-  provider writes and AI generation disabled.
+  rejected, GitHub or internal) via a read-only control. The `/actions` review
+  page now has a local readiness summary for needs-decision proposals,
+  preview-ready approved GitHub proposals, local-only follow-ups, missing
+  evidence, and reported execution receipts. Next: continue deployment
+  readiness or run the first explicitly approved scoped GitHub provider read
+  when credentials are available, while keeping provider writes and AI
+  generation disabled unless separately approved.
 
 2. **Founder-facing briefing polish.**
    Deterministic briefing cards, source coverage signals, item category filter,
@@ -314,10 +324,12 @@ Done when:
    first-class Company Brain work items (DEC-062), and Gmail/Drive have
    first-class read sections (DEC-063). Internal document context can now also
    generate a local evidence-backed ActionProposal through the same persisted
-   briefing bridge (DEC-069). Next: enrich deterministic action review around
-   these generated local proposals, or run the first explicitly approved scoped
-   GitHub provider read when credentials are available, while keeping provider
-   writes and AI generation disabled.
+   briefing bridge (DEC-069). `/actions` now turns those generated proposals into
+   a clearer local review/readiness loop with counts for pending decisions,
+   preview-ready GitHub issue proposals, local-only follow-ups, missing evidence,
+   and reported execution receipts. Next: run the first explicitly approved
+   scoped GitHub provider read when credentials are available, or continue
+   deployment readiness, while keeping provider writes and AI generation disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

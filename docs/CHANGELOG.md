@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added a founder-facing action review readiness summary to `/actions`. The
+  `ActionProposalsPanel` now computes local counts for proposals needing a
+  decision, approved GitHub issue proposals ready for execution preview,
+  local-only internal follow-ups, proposals missing evidence refs, and proposals
+  with a reported execution receipt, plus a deterministic next-step hint. This
+  is frontend-only over the already-loaded local proposal list and starts no
+  execute call, sync, provider call, external write, secret read, or LLM.
 - Added basic application request logging (DEC-072, MVP §1.5 "basic logging").
   New `app/core/logging.py` provides an idempotent `configure_logging()` and a
   `RequestLoggingMiddleware` that logs one sanitized line per HTTP request
