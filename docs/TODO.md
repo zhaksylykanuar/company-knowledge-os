@@ -152,6 +152,11 @@ Implemented foundations:
   readiness, evidence gaps, open-work review, live-provider boundary, and AI
   boundary. It is display-only and starts no sync, provider call, external write,
   deploy, or LLM.
+- Connector framework registry is now in place (DEC-056): `GET
+  /workspaces/{id}/connectors` and `/connectors` show the MVP provider set
+  (`github`, `jira`, `gmail`, `drive`), local connection counts, available vs.
+  planned status, and read-only/no-provider-call/no-secret-read boundaries.
+  GitHub links to `/github`; Jira/Gmail/Drive are explicitly planned.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
 
@@ -213,10 +218,12 @@ Done when:
    deploy/smoke runbook phases without executing them. The `/dashboard` source-
    coverage panel now also has a local breakdown (closed work, recent activity,
    repos with/without source refs, evidence-by-kind) plus deterministic next-step
-   guidance for data/evidence/open-work/provider/AI boundaries. Next: consider
-   further founder-facing coverage polish, teammate provisioning after deploy
-   stability, or the first explicitly approved scoped provider read while keeping
-   provider writes and AI generation disabled.
+   guidance for data/evidence/open-work/provider/AI boundaries. `/connectors`
+   now surfaces the MVP connector registry for GitHub/Jira/Gmail/Drive. Next:
+   implement the first minimal non-GitHub read-only connector (likely Jira issue
+   import) or run the first explicitly approved scoped GitHub provider read when
+   credentials are available, while keeping provider writes and AI generation
+   disabled.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

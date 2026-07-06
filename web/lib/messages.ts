@@ -16,6 +16,7 @@ export const M = {
     home: "Главная",
     dashboard: "Панель",
     github: "GitHub",
+    connectors: "Коннекторы",
     audit: "Аудит репо",
     briefings: "Сводки",
     actions: "Действия",
@@ -649,6 +650,37 @@ export const M = {
     roleAdmin: "Admin",
     roleMember: "Member",
     roleViewer: "Viewer"
+  },
+
+  connectors: {
+    eyebrow: "Коннекторы",
+    title: "Коннекторы источников",
+    description:
+      "Обзор коннекторов из MVP-набора (GitHub, Jira, Gmail, Google Drive). Экран только читает локальное состояние: без provider calls, external writes и LLM.",
+    badgeReadOnly: "Только чтение",
+    loading: "Загрузка коннекторов",
+    noWorkspaceDescription:
+      "У этого аккаунта пока нет рабочего пространства — коннекторы недоступны.",
+    unavailableTitle: "Коннекторы недоступны",
+    unavailableDescription: "Не удалось загрузить реестр коннекторов.",
+    summaryLabel: "Сводка коннекторов",
+    totalTitle: "Всего",
+    totalDescription: "Коннекторы в MVP-наборе.",
+    availableTitle: "Доступно",
+    availableDescription: "Есть продуктовый путь в приложении.",
+    plannedTitle: "Запланировано",
+    plannedDescription: "В MVP-scope, ещё не реализовано.",
+    connectedTitle: "Подключено",
+    connectedDescription: "Есть хотя бы одно подключение в рабочем пространстве.",
+    listLabel: "Список коннекторов",
+    statusAvailable: "Доступен",
+    statusPlanned: "Запланирован",
+    connectionsLabel: "Подключений",
+    connectedLabel: "Активных",
+    manageLink: "Открыть",
+    plannedHint: "Появится позже; провайдер-вызовы и записи не выполняются.",
+    boundaryNote:
+      "Реестр вычисляется локально из уже сохранённых записей подключений. Он не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не читает секреты."
   },
 
   evidence: {

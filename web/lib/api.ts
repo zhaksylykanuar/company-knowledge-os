@@ -33,6 +33,7 @@ import type {
   RepoAuditImportRequest,
   RepoAuditImportResponse,
   RepoAuditResponse,
+  ConnectorRegistryResponse,
   WorkspaceMemberProvisionRequest,
   WorkspaceMemberProvisionResponse,
   WorkspaceMembersResponse
@@ -139,6 +140,20 @@ export async function fetchCompanyBrain(
 
 export function buildWorkspaceMembersPath(workspaceId: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/members`;
+}
+
+export function buildWorkspaceConnectorsPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/connectors`;
+}
+
+export async function fetchWorkspaceConnectors(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorRegistryResponse> {
+  return apiFetch<ConnectorRegistryResponse>(
+    buildWorkspaceConnectorsPath(workspaceId),
+    options
+  );
 }
 
 export async function fetchWorkspaceMembers(

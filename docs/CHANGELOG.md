@@ -1,5 +1,16 @@
 # FounderOS Changelog
 
+## 2026-07-06
+
+### Changed
+
+- Added the connector framework registry (DEC-056). The backend now exposes
+  `GET /api/v1/workspaces/{workspace_id}/connectors`, and the frontend adds a
+  `/connectors` page plus sidebar entry. The registry lists the MVP provider set
+  (GitHub, Jira, Gmail, Google Drive), shows local connection counts, marks
+  GitHub available and the others planned, and explicitly remains read-only: no
+  provider calls, sync, external writes, LLM, or secret reads.
+
 ## 2026-07-03
 
 ### Changed

@@ -196,6 +196,9 @@ Done:
 - `/actions` exposes live GitHub issue execution controls only when backend
   capabilities enable them, requires explicit confirmation, and renders external
   issue receipt links only from backend success.
+- `/connectors` surfaces the MVP connector registry (GitHub/Jira/Gmail/Drive)
+  from `GET /api/v1/workspaces/{workspace_id}/connectors`, with local
+  connection counts and read-only/no-provider-call/no-secret-read boundaries.
 - Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
@@ -208,7 +211,8 @@ Missing:
 - Selected repository issue and PR sync now have read-only product UI controls
   in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
   allowlisted repository at a time without external writes.
-- First GitHub App real read run and email/SSO invite delivery remain missing.
+- First GitHub App real read run, minimal Jira/Gmail/Drive read connectors, and
+  email/SSO invite delivery remain missing.
 
 Next step: keep product UI honest while GitHub App live-read observability and
 real-run readiness are added; do not add browser-stored operator credentials.

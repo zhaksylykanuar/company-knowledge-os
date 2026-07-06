@@ -51,6 +51,41 @@ export type WorkspaceMemberProvisionResponse = {
   warnings: string[];
 };
 
+export type ConnectorStatus = "available" | "planned";
+
+export type Connector = {
+  provider: string;
+  name: string;
+  status: ConnectorStatus;
+  read_only: boolean;
+  manage_path: string | null;
+  summary: string;
+  connection_count: number;
+  connected_count: number;
+  has_connection: boolean;
+};
+
+export type ConnectorRegistrySummary = {
+  total: number;
+  available: number;
+  planned: number;
+  connected: number;
+};
+
+export type ConnectorRegistryBoundary = {
+  provider_calls: boolean;
+  external_writes: boolean;
+  llm: boolean;
+  reads_secrets: boolean;
+};
+
+export type ConnectorRegistryResponse = {
+  workspace_id: string;
+  connectors: Connector[];
+  summary: ConnectorRegistrySummary;
+  boundary: ConnectorRegistryBoundary;
+};
+
 export type GitHubOperationalWorkState = "open" | "closed" | "merged" | "all";
 
 export type CompanyBrainSourceRef = {

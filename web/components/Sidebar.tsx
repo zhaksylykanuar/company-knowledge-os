@@ -9,6 +9,7 @@ const links = [
   { href: "/", label: M.nav.home },
   { href: "/dashboard", label: M.nav.dashboard },
   { href: "/github", label: M.nav.github },
+  { href: "/connectors", label: M.nav.connectors },
   { href: "/audit", label: M.nav.audit },
   { href: "/briefings", label: M.nav.briefings },
   { href: "/actions", label: M.nav.actions },

@@ -1289,6 +1289,34 @@ Consequences:
   this decision enables local admin-set initial passwords and local one-time
   setup links without external writes.
 
+## DEC-056 - Connector Framework Registry Is The MVP Connector Spine
+
+Decision (2026-07-06): FounderOS now has a deterministic connector framework
+registry as the canonical product spine for MVP connectors. The static connector
+catalog lives in `app/connectors/registry.py`, the workspace read model lives in
+`app/services/connector_registry_service.py`, and the product surface is
+`GET /api/v1/workspaces/{workspace_id}/connectors` plus the `/connectors`
+frontend page. It exposes the MVP provider set (`github`, `jira`, `gmail`,
+`drive`) and reads existing `integration_connections` status/counts plus static
+connector descriptors only.
+
+Rationale: `founderOS_MASTER_PLAYBOOK.md` requires a connector framework plus
+minimal GitHub/Jira/Gmail/Drive connector coverage. `app/connectors/` was empty
+while provider constants already existed in the database model, so the safest
+next step is a single read-only registry surface that GitHub and future
+Jira/Gmail/Drive implementations plug into rather than a new parallel connector
+architecture.
+
+Consequences:
+
+- The registry is read-only: it performs no provider calls, starts no sync,
+  makes no external writes, runs no LLM, and does not read or emit encrypted
+  token fields.
+- GitHub is marked `available` with `/github` as its manage path; Jira, Gmail,
+  and Google Drive are marked `planned` but explicitly in MVP scope.
+- Future connector implementations should extend this registry and keep
+  workspace-scoped status visible on `/connectors`.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
