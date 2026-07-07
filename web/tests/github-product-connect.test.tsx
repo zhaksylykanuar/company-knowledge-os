@@ -16,7 +16,10 @@ import type {
   GitHubConnectionStatusResponse,
   GitHubRepositoryListResponse
 } from "../lib/types";
-import { GitHubProductConnectPanelView } from "../components/GitHubProductConnectPanel";
+import {
+  GitHubProductConnectPanelView,
+  summarizeGitHubRealReadReadiness
+} from "../components/GitHubProductConnectPanel";
 
 const appConfigured: GitHubAppConfigStatus = {
   configured: true,
@@ -75,6 +78,13 @@ const missingAppStatus: GitHubConnectionStatusResponse = {
   has_connection_record: false,
   app: appMissing,
   warnings: []
+};
+
+const disconnectedAppStatus: GitHubConnectionStatusResponse = {
+  ...connectedAppStatus,
+  status: "error",
+  last_error: "installation suspended",
+  warnings: ["GitHub connection status is error; live provider readiness is not implied"]
 };
 
 const repositories: GitHubRepositoryListResponse = {
@@ -256,6 +266,11 @@ test("renders connected GitHub App foundation without write promises", () => {
 
   assert.ok(html.includes(M.githubProductConnect.title));
   assert.ok(html.includes(M.githubProductConnect.appConnected));
+  assert.ok(html.includes(M.githubProductConnect.realReadReadinessTitle));
+  assert.ok(html.includes(M.githubProductConnect.realReadReady));
+  assert.ok(
+    html.includes(T.githubRealReadNextStep(true, true, true, true, true))
+  );
   assert.ok(html.includes("25"));
   assert.ok(html.includes(M.githubProductConnect.tokenTitle));
   assert.ok(html.includes(M.githubProductConnect.writeTitle));
@@ -272,6 +287,64 @@ test("renders connected GitHub App foundation without write promises", () => {
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /provider token/i);
   assert.doesNotMatch(html, /write enabled/i);
+});
+
+test("summarizes GitHub App real-read readiness from loaded local state", () => {
+  assert.deepEqual(
+    summarizeGitHubRealReadReadiness(connectedAppStatus, repositories),
+    {
+      appEnvConfigured: true,
+      blockers: [],
+      hasAppInstallationConnection: true,
+      installationConnected: true,
+      localRepositoryCount: 25,
+      localRepositorySurfaceAvailable: true,
+      nextStep: T.githubRealReadNextStep(true, true, true, true, true),
+      ready: true
+    }
+  );
+
+  const blocked = summarizeGitHubRealReadReadiness(missingAppStatus, {
+    ...repositories,
+    count: 0,
+    repositories: []
+  });
+  assert.equal(blocked.ready, false);
+  assert.deepEqual(blocked.blockers, [
+    "github_app_env_incomplete",
+    "github_app_installation_connection_missing",
+    "local_repository_surface_empty"
+  ]);
+  assert.equal(blocked.nextStep, T.githubRealReadNextStep(false, false, false, false, false));
+
+  const disconnected = summarizeGitHubRealReadReadiness(
+    disconnectedAppStatus,
+    repositories
+  );
+  assert.equal(disconnected.ready, false);
+  assert.deepEqual(disconnected.blockers, [
+    "github_app_installation_connection_not_connected"
+  ]);
+  assert.equal(disconnected.nextStep, T.githubRealReadNextStep(true, true, false, true, false));
+});
+
+test("renders blocked GitHub App real-read readiness without provider calls", () => {
+  const html = renderPanel({
+    connectionStatus: missingAppStatus,
+    repositories: { ...repositories, count: 0, repositories: [] }
+  });
+
+  assert.ok(html.includes(M.githubProductConnect.realReadReadinessTitle));
+  assert.ok(html.includes(M.githubProductConnect.realReadBlocked));
+  assert.ok(html.includes(M.githubProductConnect.realReadBlockersTitle));
+  assert.ok(html.includes(M.githubProductConnect.realReadBlockerEnv));
+  assert.ok(html.includes(M.githubProductConnect.realReadBlockerConnectionMissing));
+  assert.ok(html.includes(M.githubProductConnect.realReadBlockerReposEmpty));
+  assert.ok(html.includes(T.githubRealReadNextStep(false, false, false, false, false)));
+  assert.ok(html.includes(M.githubProductConnect.realReadBoundary));
+  assert.doesNotMatch(html, /provider read started/i);
+  assert.doesNotMatch(html, /external write performed/i);
+  assert.doesNotMatch(html, /installation access token/i);
 });
 
 test("filters the loaded repository surface locally without provider calls", () => {

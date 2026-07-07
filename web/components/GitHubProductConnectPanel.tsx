@@ -34,6 +34,16 @@ type RepositorySyncStatus = {
   result: GitHubAppLiveSyncResponse | null;
   state: LiveSyncState;
 };
+type GitHubRealReadReadiness = {
+  appEnvConfigured: boolean;
+  blockers: string[];
+  hasAppInstallationConnection: boolean;
+  installationConnected: boolean;
+  localRepositoryCount: number;
+  localRepositorySurfaceAvailable: boolean;
+  nextStep: string;
+  ready: boolean;
+};
 
 type GitHubProductConnectPanelViewProps = {
   connectionStatus: GitHubConnectionStatusResponse | null;
@@ -250,6 +260,11 @@ export function GitHubProductConnectPanelView({
             />
           </section>
 
+          <GitHubRealReadinessPanel
+            connectionStatus={connectionStatus}
+            repositories={repositories}
+          />
+
           {!appStatus.configured && appStatus.missing_env.length > 0 ? (
             <section className="callout">
               <strong>{M.githubProductConnect.missingEnvTitle}</strong>
@@ -413,6 +428,67 @@ export function GitHubProductConnectPanelView({
   );
 }
 
+function GitHubRealReadinessPanel({
+  connectionStatus,
+  repositories
+}: {
+  connectionStatus: GitHubConnectionStatusResponse;
+  repositories: GitHubRepositoryListResponse | null;
+}) {
+  const readiness = summarizeGitHubRealReadReadiness(connectionStatus, repositories);
+  return (
+    <section
+      className="work-section"
+      aria-label={M.githubProductConnect.realReadReadinessLabel}
+    >
+      <h3>{M.githubProductConnect.realReadReadinessTitle}</h3>
+      <p className="muted">{M.githubProductConnect.realReadReadinessDescription}</p>
+      <section className="grid" aria-label={M.githubProductConnect.realReadReadinessLabel}>
+        <StatusCard
+          description={M.githubProductConnect.realReadStatusDescription}
+          title={M.githubProductConnect.realReadStatusTitle}
+          value={
+            readiness.ready
+              ? M.githubProductConnect.realReadReady
+              : M.githubProductConnect.realReadBlocked
+          }
+        />
+        <StatusCard
+          description={M.githubProductConnect.realReadEnvDescription}
+          title={M.githubProductConnect.realReadEnvTitle}
+          value={
+            readiness.appEnvConfigured ? M.common.available : M.common.unavailable
+          }
+        />
+        <StatusCard
+          description={M.githubProductConnect.realReadInstallationDescription}
+          title={M.githubProductConnect.realReadInstallationTitle}
+          value={
+            readiness.installationConnected ? M.common.available : M.common.unavailable
+          }
+        />
+        <StatusCard
+          description={M.githubProductConnect.realReadRepoSurfaceDescription}
+          title={M.githubProductConnect.realReadRepoSurfaceTitle}
+          value={String(readiness.localRepositoryCount)}
+        />
+      </section>
+      {readiness.blockers.length > 0 ? (
+        <section className="callout">
+          <strong>{M.githubProductConnect.realReadBlockersTitle}</strong>
+          <ul className="meta-list">
+            {readiness.blockers.map((blocker) => (
+              <li key={blocker}>{githubRealReadBlockerLabel(blocker)}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <p className="muted">{readiness.nextStep}</p>
+      <p className="muted">{M.githubProductConnect.realReadBoundary}</p>
+    </section>
+  );
+}
+
 function RepositoryFocusControl({
   activeFilter,
   onChange,
@@ -520,6 +596,89 @@ function repositoryFocusStats(repositories: GitHubRepositoryRead[]) {
   };
 }
 
+function summarizeGitHubRealReadReadiness(
+  connectionStatus: GitHubConnectionStatusResponse,
+  repositories: GitHubRepositoryListResponse | null
+): GitHubRealReadReadiness {
+  const appEnvConfigured = connectionStatus.app.configured;
+  const hasAppInstallationConnection =
+    connectionStatus.has_connection_record &&
+    connectionStatus.connection_method === "github_app_installation";
+  const installationConnected =
+    hasAppInstallationConnection && connectionStatus.status === "connected";
+  const localRepositoryCount = repositories?.count ?? 0;
+  const localRepositorySurfaceAvailable = localRepositoryCount > 0;
+
+  const blockers: string[] = [];
+  if (!appEnvConfigured) {
+    blockers.push("github_app_env_incomplete");
+  }
+  if (!hasAppInstallationConnection) {
+    blockers.push("github_app_installation_connection_missing");
+  } else if (!installationConnected) {
+    blockers.push("github_app_installation_connection_not_connected");
+  }
+  if (!localRepositorySurfaceAvailable) {
+    blockers.push("local_repository_surface_empty");
+  }
+
+  const ready = blockers.length === 0;
+  return {
+    appEnvConfigured,
+    blockers,
+    hasAppInstallationConnection,
+    installationConnected,
+    localRepositoryCount,
+    localRepositorySurfaceAvailable,
+    nextStep: githubRealReadNextStep({
+      appEnvConfigured,
+      hasAppInstallationConnection,
+      installationConnected,
+      localRepositorySurfaceAvailable,
+      ready
+    }),
+    ready
+  };
+}
+
+function githubRealReadNextStep({
+  appEnvConfigured,
+  hasAppInstallationConnection,
+  installationConnected,
+  localRepositorySurfaceAvailable,
+  ready
+}: {
+  appEnvConfigured: boolean;
+  hasAppInstallationConnection: boolean;
+  installationConnected: boolean;
+  localRepositorySurfaceAvailable: boolean;
+  ready: boolean;
+}): string {
+  return T.githubRealReadNextStep(
+    appEnvConfigured,
+    hasAppInstallationConnection,
+    installationConnected,
+    localRepositorySurfaceAvailable,
+    ready
+  );
+}
+
+function githubRealReadBlockerLabel(blocker: string): string {
+  if (blocker === "github_app_env_incomplete") {
+    return M.githubProductConnect.realReadBlockerEnv;
+  }
+  if (blocker === "github_app_installation_connection_missing") {
+    return M.githubProductConnect.realReadBlockerConnectionMissing;
+  }
+  if (blocker === "github_app_installation_connection_not_connected") {
+    return M.githubProductConnect.realReadBlockerConnectionNotConnected;
+  }
+  if (blocker === "local_repository_surface_empty") {
+    return M.githubProductConnect.realReadBlockerReposEmpty;
+  }
+  return blocker;
+}
+
 function githubAppDescription(status: GitHubConnectionStatusResponse): string {
   if (status.connection_method === "github_app_installation") {
     return status.display_name ?? M.githubProductConnect.appInstallationDescription;
@@ -533,3 +692,5 @@ function githubAppDescription(status: GitHubConnectionStatusResponse): string {
 function isRepositoryFullName(value: string): boolean {
   return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value);
 }
+
+export { summarizeGitHubRealReadReadiness };

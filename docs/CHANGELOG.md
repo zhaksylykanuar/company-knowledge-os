@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added a `/github` GitHub App real-read readiness section. The product connect
+  panel now mirrors the existing offline preflight using already-loaded local UI
+  state: app env configured/missing, workspace-scoped installation connection
+  state, local repository surface count, blockers, and the next human step. The
+  section is display-only and starts no sync, provider read, provider write,
+  secret read, external write, or LLM; the actual real read remains the existing
+  explicit per-repository action after human approval.
 - Added a founder-facing action review readiness summary to `/actions`. The
   `ActionProposalsPanel` now computes local counts for proposals needing a
   decision, approved GitHub issue proposals ready for execution preview,

@@ -28,13 +28,17 @@
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
   `scripts/github_app_real_read_run_preflight.py` (только presence-флаги, без
   значений секретов) + offline unit-тесты + human-approved read-only runbook
-  `docs/deploy/github-app-first-real-read-run.md`. Сам real read run остаётся
-  существующим human-triggered scoped `POST .../app-installation/sync`
-  (DEC-053). **Проверено независимо:** сейчас real read run внешне заблокирован —
-  GitHub App env (`FOUNDEROS_GITHUB_APP_ID` / `..._PRIVATE_KEY`) не задан и
-  installation connection не записан; сеть до `api.github.com` теперь доступна
-  (`HTTP 200` без auth), локальная поверхность репо (25 из `.local/repos.json`)
-  присутствует. Preflight сообщает точный next step; выполнить run должен
+  `docs/deploy/github-app-first-real-read-run.md`. `/github` теперь также
+  показывает display-only real-read readiness section из уже загруженных
+  `connectionStatus.app` + local repository surface: env configured/missing,
+  installation connection state, repo count, blockers и next human step. Сам
+  real read run остаётся существующим human-triggered scoped
+  `POST .../app-installation/sync` (DEC-053). **Проверено независимо:** сейчас
+  real read run внешне заблокирован — GitHub App env
+  (`FOUNDEROS_GITHUB_APP_ID` / `..._PRIVATE_KEY`) не задан и installation
+  connection не записан; сеть до `api.github.com` теперь доступна (`HTTP 200`
+  без auth), локальная поверхность репо (25 из `.local/repos.json`)
+  присутствует. Preflight/UI сообщает точный next step; выполнить run должен
   человек после установки credentials.
 - **Connector framework registry (DEC-056):** добавлен канонический read-only
   реестр MVP-коннекторов: `GET /workspaces/{id}/connectors` и страница
@@ -626,6 +630,24 @@ DONE строго = есть код + проходящий тест/рабочи
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-07` — **GitHub App real-read readiness on `/github`.**
+  Added a display-only readiness section to `GitHubProductConnectPanel` that
+  mirrors the existing offline first-real-read preflight from already-loaded UI
+  state: GitHub App env configured/missing, workspace-scoped installation
+  connection state, local repository surface count, blockers, and next human
+  step. This makes the critical external blocker visible in the product before
+  any live provider run. The real read remains the existing explicit
+  per-repository GitHub App sync control after human approval; the new section
+  starts no sync, provider read, provider write, secret read, external write, or
+  LLM. Files: `web/components/GitHubProductConnectPanel.tsx`,
+  `web/lib/messages.ts`, `web/tests/github-product-connect.test.tsx`,
+  `docs/CHANGELOG.md`, `docs/TODO.md`, `PROGRESS.md`. Checks: frontend
+  `npm test` ✅ **205 passed**, `npm run build` ✅, `npm run lint` ✅, backend
+  `UV_NO_SYNC=1 uv run ruff check .` ✅, full backend
+  `UV_NO_SYNC=1 uv run pytest -q` ✅ **455 passed / 1 warning**,
+  `UV_NO_SYNC=1 uv run alembic check` ✅ (no drift), tracked secret scan ✅,
+  `git diff --check` ✅. Commit local-only; push не делался.
 
 - `2026-07-07` — **Action review readiness summary.**
   Added a founder-facing readiness section to `/actions` over the already

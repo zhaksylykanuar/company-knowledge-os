@@ -52,6 +52,11 @@ Implemented foundations:
   workspace B cannot see workspace A's synced canonical state/evidence. Safe
   provider error/rate-limit details surface HTTP status/message/retry metadata
   without leaking tokens or provider payloads.
+- `/github` also surfaces first real-read readiness from already-loaded local
+  state: GitHub App env configured/missing, workspace-scoped installation
+  connection state, local repository surface count, blockers, and the next human
+  step. This mirrors the offline preflight without starting sync, provider read,
+  provider write, secret read, external write, or LLM.
 - Deterministic Company Brain, dashboard Source Coverage over the existing
   Company Brain endpoint, and persisted deterministic Founder Briefings with
   history, evidence refs, and local source-coverage signals. No LLM generation
@@ -344,8 +349,9 @@ Done when:
   the founder can focus active/private/evidence-backed repos before choosing a
   scoped per-repo read. An offline readiness gate now exists (DEC-054):
   `github_app_real_read_run_readiness()`, the presence-only preflight
-  `scripts/github_app_real_read_run_preflight.py`, offline unit tests, and the
-  runbook `docs/deploy/github-app-first-real-read-run.md`. Current state
+  `scripts/github_app_real_read_run_preflight.py`, offline unit tests, the
+  runbook `docs/deploy/github-app-first-real-read-run.md`, and a matching
+  display-only readiness section on `/github`. Current state
   (verified): the real read run is externally blocked — GitHub App env is unset
   and the installation connection is not recorded; unauthenticated network to
   `api.github.com` is reachable and the local repo surface (25) is present. Next
