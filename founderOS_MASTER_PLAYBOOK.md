@@ -30,21 +30,27 @@
   app-installation connection state без browser PAT/секретов, just-in-time
   installation tokens без persistence, per-repository `/github` read-only sync
   controls, mocked synced-evidence isolation for Company Brain/manual Briefings,
-  safe rate-limit/error observability,
+  safe rate-limit/error observability, display-only first-real-read readiness,
   плюс human-approved guarded write-back одного GitHub issue;
-- детерминированные проекции без LLM: Company Brain и Founder Briefing считаются
-  из локальных данных и несут `evidence_refs`; ручные Founder Briefings уже
-  сохраняются в `Briefing` / `BriefingItem` с историей.
+- local-only продуктовые поверхности Jira / Gmail / Drive / Documents: pasted/exported
+  import/list flows пишут sanitized canonical `SourceRecord`/`Task`/`Document` rows
+  с evidence refs, без provider calls, sync, external writes, secret reads или LLM;
+- детерминированные проекции без LLM: Company Brain, normalized entities и Founder
+  Briefing считаются из локальных данных и несут `evidence_refs`; ручные Founder
+  Briefings сохраняются в `Briefing` / `BriefingItem` с историей и могут создавать
+  local evidence-backed `ActionProposal` rows;
+- первый local teammate provisioning/setup-link slice: owner/admin может создать
+  local teammates, выдать initial password или one-time setup link; email delivery
+  и SSO остаются deferred.
 
 Ещё **не** реализовано (остаётся видением этого плана, а не текущим кодом):
 
 - GitHub App first approved real-provider read run;
 - LLM-брифинг-пайплайн поверх уже персистентной модели;
-- продуктовые пути Jira / Gmail / Drive / Documents;
-- мультиюзер/онбординг (сейчас один основатель, заводится через
-  `scripts/create_admin_user.py`);
-- остальные страницы (`/connectors`, `/jira`, `/gmail`, ...), rate limiting,
-  webhook-подписи.
+- live Jira/Gmail/Drive provider OAuth/sync вместо local import/list;
+- self-serve workspace onboarding, email-delivered invites / password reset и SSO;
+- webhook-подписи, broad rate limiting, custom-domain/broader beta hardening и
+  first production deploy текущего auth/session состояния.
 
 ---
 

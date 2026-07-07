@@ -631,6 +631,26 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **Control docs current-state alignment.**
+  Reconciled stale high-level status text in `README.md`,
+  `founderOS_MASTER_PLAYBOOK.md`, and `docs/ROADMAP.md` so completion audits no
+  longer treat already-built local surfaces as missing. The docs now mark
+  local Jira/Gmail/Drive import/list connectors, internal Documents,
+  normalized entities, teammate provisioning/setup links, sanitized request
+  logging, the prior guarded GitHub issue live smoke, and `/github` real-read
+  readiness as implemented where appropriate, while keeping the true remaining
+  gaps explicit: first human-approved GitHub App real read, first production
+  deploy of the current auth/session build, LLM narrative, live non-GitHub
+  provider sync, email/SSO delivery, webhooks/rate limiting, custom domain, and
+  broader beta hardening. Docs-only: no code path, provider call, external
+  write, deploy, push, secret read, or LLM. Files: `README.md`,
+  `founderOS_MASTER_PLAYBOOK.md`, `docs/ROADMAP.md`, `docs/CHANGELOG.md`,
+  `PROGRESS.md`. Checks: targeted docs/private-beta contract tests
+  `UV_NO_SYNC=1 uv run pytest -q tests/test_docs_navigation_integrity.py
+  tests/test_private_beta_deploy_docs.py tests/test_private_beta_hosting_docs.py
+  tests/test_private_beta_smoke.py` ✅ **22 passed**, tracked secret scan ✅,
+  `git diff --check` ✅. Commit local-only; push не делался.
+
 - `2026-07-07` — **GitHub App real-read readiness on `/github`.**
   Added a display-only readiness section to `GitHubProductConnectPanel` that
   mirrors the existing offline first-real-read preflight from already-loaded UI

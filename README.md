@@ -26,14 +26,17 @@ Read in this order (control trio = what / where / why):
   (Argon2id, httpOnly first-party cookie via a same-origin proxy, DB login
   throttle). The operator API key remains for server/CI/admin tooling. See
   step 4 below to provision the founder account.
-- Founder Briefings now persist deterministic briefing history. GitHub App
-  product-connect plus polling-only live read-sync backend/UI foundations exist,
-  including per-repository read-only sync buttons in `/github`, mocked
-  synced-evidence isolation for Company Brain/Briefings, and safe
-  rate-limit/error observability; the remaining product gaps are the first
-  human-approved real read run, LLM briefing narrative over real connected data,
-  multi-user provisioning beyond the seeded founder, and the first production
-  deploy of the auth phase.
+- Founder Briefings persist deterministic briefing history and can generate
+  local evidence-backed ActionProposals from Jira/Gmail/Drive/document context.
+  GitHub App product-connect plus polling-only live read-sync backend/UI
+  foundations exist, including per-repository read-only sync buttons in
+  `/github`, mocked synced-evidence isolation for Company Brain/Briefings, safe
+  rate-limit/error observability, and a display-only real-read readiness panel.
+  Local Jira/Gmail/Drive import/list connectors, internal Documents, normalized
+  entities, teammate provisioning/setup links, and sanitized request logging are
+  in place. Remaining product gaps are the first human-approved GitHub App real
+  read run, LLM briefing narrative over real connected data, first production
+  deploy of the current auth/session build, and broader beta hardening.
 
 ## Local full-stack run path
 

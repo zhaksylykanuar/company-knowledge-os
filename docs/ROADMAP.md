@@ -134,6 +134,13 @@ Done:
 - Founder Briefing persistence exists: `POST .../briefings/manual` stores the
   deterministic briefing, and `GET .../briefings` / `GET .../briefings/{id}`
   expose workspace-scoped history.
+- Local Jira/Gmail/Drive connector foundations exist as import/list APIs over
+  sanitized canonical `SourceRecord`/`Task` rows, and internal Documents exist as
+  workspace-scoped CRUD/search/version-history APIs with Company Brain and
+  briefing integration. These paths are local-only and do not call providers.
+- Normalized entities are exposed as a read-only Company Brain projection API
+  (`GET .../company-brain/entities`) without a physical `NormalizedEntity`
+  table.
 - LLM paths are gated/off by default.
 
 Missing:
@@ -145,8 +152,9 @@ Missing:
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
 
-Next step: follow `../PROGRESS.md`; first GitHub App real read-run readiness
-should precede LLM briefing work because the workspace is otherwise mostly empty.
+Next step: follow `../PROGRESS.md`; the first human-approved GitHub App real
+read run and first auth-session production deploy/handoff are the main
+external gates before LLM briefing work.
 
 Definition of Done:
 
@@ -199,6 +207,13 @@ Done:
 - `/connectors` surfaces the MVP connector registry (GitHub/Jira/Gmail/Drive)
   from `GET /api/v1/workspaces/{workspace_id}/connectors`, with local
   connection counts and read-only/no-provider-call/no-secret-read boundaries.
+- `/jira`, `/gmail`, and `/drive` provide local-only import/list product paths;
+  `/documents` provides internal document CRUD/search/version history; and
+  `/company-brain` provides a dedicated Company Brain + normalized-entities
+  view.
+- `/github` shows GitHub App real-read readiness over already-loaded local
+  state, including env/installation/repo-surface blockers, without starting a
+  provider call.
 - Frontend typecheck/build/lint scripts exist and pass.
 
 Missing:
@@ -211,11 +226,13 @@ Missing:
 - Selected repository issue and PR sync now have read-only product UI controls
   in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
   allowlisted repository at a time without external writes.
-- First GitHub App real read run, minimal Jira/Gmail/Drive read connectors, and
-  email/SSO invite delivery remain missing.
+- First GitHub App real read run and email/SSO invite delivery remain missing.
+  Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
+  local-import MVP surface.
 
-Next step: keep product UI honest while GitHub App live-read observability and
-real-run readiness are added; do not add browser-stored operator credentials.
+Next step: keep product UI honest while the first GitHub App real read and
+production deploy are human-gated; do not add browser-stored operator
+credentials.
 
 Definition of Done:
 
@@ -229,8 +246,9 @@ Definition of Done:
 
 Current status: guarded product flow includes the live GitHub issue execution
 code path behind runtime config, explicit confirmation, evidence policy,
-idempotent receipt, and durable audit. Automated tests use mocked provider
-execution; manual live external-write smoke is still missing.
+idempotent receipt, and durable audit. A prior manual live GitHub issue smoke
+proved the write path; the current missing live step is the first GitHub App
+real-provider read run for the product installation path.
 
 Done:
 
@@ -278,6 +296,12 @@ Done:
   returns the existing receipt without another provider call.
 - Backend E2E smoke coverage exercises the GitHub-first path from workspace
   bootstrap through mocked approved issue execution.
+- Manual smoke previously created exactly one approved GitHub issue, synced the
+  execution result back into canonical state, and closed/synced that smoke issue
+  after explicit human approval. Private issue URLs and identifiers stay out of
+  public docs.
+- `/github` now surfaces first-real-read readiness from local state and still
+  exposes only explicit per-repository read sync controls, not a bulk sync.
 
 Missing:
 
@@ -313,8 +337,8 @@ Missing:
 
 - Edge-case handling tied to the GitHub-first E2E.
 - Token-expired handling in the product flow.
-- Action failure UI in the product frontend.
-- Filters/search/stale labels for the MVP web app.
+- More live-provider failure UX after the first real GitHub App read run.
+- Browser/product E2E coverage for the MVP web app.
 
 Next step: polish only the real connected-data path as it lands; do not polish
 fixture-only empty states into false product readiness.
@@ -341,12 +365,15 @@ Done:
   health/auth/workspace/read-model checks without provider writes.
 - FOS-025C added frontend deploy-readiness gates to CI: `npm test`, build,
   typecheck, and lint, plus backend docs/smoke/CORS/CI contract tests.
+- Current local frontend tests cover the GitHub product connect/readiness UI,
+  action readiness, normalized entities, local connectors, documents, and
+  dashboard readiness surfaces.
 
 Missing:
 
 - Browser/product GitHub-first E2E tests.
 - Deployed/full-stack smoke after auth-session deployment.
-- Manual QA checklist for MVP.
+- Manual QA checklist for MVP private-beta handoff.
 
 Next step: add focused tests with each implementation slice; do not add broad
 test scaffolding before the relevant feature exists.
@@ -393,12 +420,14 @@ Done:
   revocable sessions (httpOnly first-party cookie via a same-origin proxy,
   Argon2id, DB login throttle). Secret encryption is fail-closed outside local
   (`FOUNDEROS_SECRET_ENCRYPTION_KEY`).
+- Sanitized request logging is in place for application request lines
+  (method/path/status/duration only) with `FOUNDEROS_LOG_LEVEL`/`LOG_LEVEL`.
 
 Missing:
 
 - First production deploy of the auth phase (the Railway rehearsal predates it);
   founder account provisioning + `FOUNDEROS_API_PROXY_TARGET` wiring in prod.
-- GitHub App live read sync path for private-beta users.
+- First human-approved GitHub App live read sync run for private-beta users.
 - Custom domain decision and setup.
 - Worker service if/when queue runtime exists.
 - Broader beta monitoring/alerting and backup verification.

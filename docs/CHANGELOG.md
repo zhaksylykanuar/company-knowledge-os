@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Aligned high-level control docs with the current implemented state. README,
+  `founderOS_MASTER_PLAYBOOK.md`, and `docs/ROADMAP.md` no longer describe
+  local Jira/Gmail/Drive/Documents, teammate provisioning/setup links,
+  normalized entities, request logging, or the prior guarded GitHub issue live
+  smoke as missing; they now distinguish those completed local/MVP surfaces from
+  the remaining human-gated gaps (first GitHub App real read, production deploy,
+  LLM narrative, live non-GitHub provider sync, and broader beta hardening).
 - Added a `/github` GitHub App real-read readiness section. The product connect
   panel now mirrors the existing offline preflight using already-loaded local UI
   state: app env configured/missing, workspace-scoped installation connection
