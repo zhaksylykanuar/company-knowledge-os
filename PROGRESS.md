@@ -631,6 +631,26 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **Deterministic MVP completion audit.**
+  Independently re-derived the playbook MVP contract and added a pure, offline
+  audit that maps every §1.5 requirement and §1.4 main-flow step to
+  authoritative in-repo evidence: `app/services/mvp_completion_audit.py`
+  (evidence checks + summary), CLI `scripts/mvp_completion_audit.py`
+  (`--json`), and offline tests `tests/test_mvp_completion_audit.py`. The audit
+  reports `local_scope_complete = True` (29/29 local items present) but
+  `fully_complete = False`, honestly keeping staging/prod deployment and the
+  first real external action result as human/external-gated. Read-only/offline:
+  no provider calls, network, database, deploy, external write, secret read, or
+  LLM. Files: `app/services/mvp_completion_audit.py`,
+  `scripts/mvp_completion_audit.py`, `tests/test_mvp_completion_audit.py`,
+  `docs/CHANGELOG.md`, `docs/TODO.md`, `PROGRESS.md`. Checks: focused
+  `UV_NO_SYNC=1 uv run pytest -q tests/test_mvp_completion_audit.py` ✅ **5
+  passed**, full backend `UV_NO_SYNC=1 uv run pytest -q` ✅ **460 passed / 1
+  warning**, `UV_NO_SYNC=1 uv run ruff check .` ✅, `UV_NO_SYNC=1 uv run alembic
+  check` ✅ (no drift), frontend `npm test` ✅ **205 passed**, `npm run build`
+  ✅, `npm run lint` ✅, tracked secret scan ✅, `git diff --check` ✅. Commit
+  local-only; push не делался.
+
 - `2026-07-07` — **Control docs current-state alignment.**
   Reconciled stale high-level status text in `README.md`,
   `founderOS_MASTER_PLAYBOOK.md`, and `docs/ROADMAP.md` so completion audits no

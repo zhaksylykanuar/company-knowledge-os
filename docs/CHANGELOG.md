@@ -4,6 +4,17 @@
 
 ### Changed
 
+- Added a deterministic offline MVP completion audit. New
+  `app/services/mvp_completion_audit.py` maps every playbook §1.5 MVP
+  requirement and every §1.4 main-flow step to authoritative in-repo evidence
+  (specific files plus structural markers) and reports which items are locally
+  complete versus human/external gated. A safe CLI
+  `scripts/mvp_completion_audit.py` prints the same report (`--json` supported),
+  and `tests/test_mvp_completion_audit.py` pins the contract. The audit is
+  read-only and offline: no provider calls, network, database, deploy, external
+  write, secret read, or LLM. It reports `local_scope_complete = True` for the
+  current tree while keeping `fully_complete = False` because staging/prod
+  deployment and the first real external action result remain human-gated.
 - Aligned high-level control docs with the current implemented state. README,
   `founderOS_MASTER_PLAYBOOK.md`, and `docs/ROADMAP.md` no longer describe
   local Jira/Gmail/Drive/Documents, teammate provisioning/setup links,

@@ -257,6 +257,15 @@ Implemented foundations:
   `FOUNDEROS_LOG_LEVEL` (default `INFO`) without query values, headers, bodies,
   tokens, or provider payloads. No new dependency, table, migration, provider
   call, external write, or LLM.
+- A deterministic offline MVP completion audit is now in place
+  (`app/services/mvp_completion_audit.py` + `scripts/mvp_completion_audit.py` +
+  `tests/test_mvp_completion_audit.py`). It maps every §1.5 MVP requirement and
+  §1.4 main-flow step to authoritative in-repo evidence and separates
+  locally-complete work from the human-gated remainder. Current result: local
+  scope complete (29/29), full MVP not complete because staging/prod deployment
+  and the first real external action result are human/external gated. Run
+  `uv run python scripts/mvp_completion_audit.py` to re-check before claiming
+  completion.
 
 ## Next Priority: Founder-facing coverage and briefing polish
 
