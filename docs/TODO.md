@@ -252,6 +252,11 @@ Implemented foundations:
   through the UI. NormalizedEntity linkage remains a later slice.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
 - Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
+- Manual final external-action-result smoke runbook:
+  `docs/deploy/external-action-result-smoke.md` documents the one-action,
+  human-approved write smoke needed to prove the final MVP flow step after
+  deploy and read-only provider proof. It is not part of normal read-only smoke,
+  CI, provider-read, provider-token setup, or LLM paths.
 - Basic application request logging is now in place (DEC-072): a sanitized ASGI
   `RequestLoggingMiddleware` logs method/path/status/duration at
   `FOUNDEROS_LOG_LEVEL` (default `INFO`) without query values, headers, bodies,
@@ -349,7 +354,9 @@ Done when:
   Dashboard now surfaces a local private-beta readiness checklist plus manual
   deploy/smoke runbook phases, but actual production launch still uses the
   manual Railway runbooks: backup, deploy, manual `alembic upgrade head`, smoke.
-  Do not add auto-deploy or provider-write smoke without explicit human approval.
+  After deploy and read-only proof, the final external action result is covered
+  by `docs/deploy/external-action-result-smoke.md`. Do not add auto-deploy or
+  provider-write smoke without explicit human approval.
 
 4. **GitHub App real read run readiness (deferred).**
   Backend polling-only live read sync, `/github` explicit repo control, and

@@ -631,6 +631,30 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **External action result smoke runbook.**
+  Added the missing manual runbook for the final human-gated MVP flow step:
+  `docs/deploy/external-action-result-smoke.md` documents a one-action,
+  explicitly approved write smoke for `Approve Action Proposal -> See External
+  Action Result` after deploy/read-only smoke/first provider read proof. It
+  covers preconditions, preferred `/actions` UI path, API fallback placeholders,
+  evidence/approval requirements, `execution-preview`, `/execute`,
+  `sync-execution-result`, idempotency/duplicate behavior, sanitized reporting,
+  cleanup/rollback boundaries, and disabling `ENABLE_WRITE_ACTIONS` after the
+  smoke. The runbook is linked from `README.md` and `docs/README.md`, and the
+  MVP completion audit now treats it as evidence for the human-gated external
+  result path. No live provider call, external write, deploy, migration, secret
+  read, or LLM was run. Files: `docs/deploy/external-action-result-smoke.md`,
+  `tests/test_external_action_result_runbook.py`,
+  `app/services/mvp_completion_audit.py`, `README.md`, `docs/README.md`,
+  `docs/CHANGELOG.md`, `docs/TODO.md`, `PROGRESS.md`. Checks: focused
+  `UV_NO_SYNC=1 uv run pytest -q tests/test_external_action_result_runbook.py
+  tests/test_mvp_completion_audit.py tests/test_docs_navigation_integrity.py`
+  ✅ **12 passed**, MVP audit CLI ✅ (`local_scope_complete=True`,
+  `fully_complete=False`), full backend `UV_NO_SYNC=1 uv run pytest -q` ✅
+  **465 passed / 1 warning**, `UV_NO_SYNC=1 uv run ruff check .` ✅,
+  `UV_NO_SYNC=1 uv run alembic check` ✅ (no drift), tracked secret scan ✅,
+  `git diff --check` ✅. Commit local-only; push не делался.
+
 - `2026-07-07` — **Deterministic MVP completion audit.**
   Independently re-derived the playbook MVP contract and added a pure, offline
   audit that maps every §1.5 requirement and §1.4 main-flow step to

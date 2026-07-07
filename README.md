@@ -148,6 +148,12 @@ migration/backup/rollback procedure, CORS/API-base setup, and read-only
 post-deploy smoke command. It does **not** deploy the app or add an automatic
 deploy workflow.
 
+The final human-gated MVP proof step is documented separately in
+[`docs/deploy/external-action-result-smoke.md`](docs/deploy/external-action-result-smoke.md).
+Use it only after deploy, read-only smoke, and an approved scoped provider read:
+it is a one-action, explicitly approved external-write smoke, not part of normal
+read-only smoke or CI.
+
 Minimum backend env names for a private-beta candidate:
 
 - `APP_ENV`

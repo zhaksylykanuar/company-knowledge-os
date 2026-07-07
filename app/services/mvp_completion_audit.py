@@ -351,12 +351,13 @@ _MAIN_FLOW_ITEMS: tuple[AuditItem, ...] = (
         evidence=(
             EvidenceCheck("app/api/actions.py", "/execute"),
             EvidenceCheck("app/services/github_execution_result_sync_service.py"),
+            EvidenceCheck("docs/deploy/external-action-result-smoke.md"),
         ),
         human_gated=True,
         human_note=(
-            "The execute + result-sync code path exists, but a real external "
-            "action result requires live provider credentials and one "
-            "explicitly approved external write."
+            "The execute + result-sync code path and manual runbook exist, but "
+            "a real external action result requires live provider credentials "
+            "and one explicitly approved external write."
         ),
     ),
 )

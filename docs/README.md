@@ -32,13 +32,14 @@ recovering deleted context.
 | What are the safety/security boundaries? | [`../AGENTS.md`](../AGENTS.md), [`../CLAUDE.md`](../CLAUDE.md), [`../SECURITY_BASELINE.md`](../SECURITY_BASELINE.md) |
 | What should be built next? | [`../PROGRESS.md`](../PROGRESS.md), then [`TODO.md`](TODO.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
-| How do we deploy/smoke private beta manually? | [`deploy/private-beta.md`](deploy/private-beta.md) and [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md) |
+| How do we deploy/smoke private beta manually? | [`deploy/private-beta.md`](deploy/private-beta.md), [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md), and [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) |
 
 ## Deploy Runbooks
 
 - [`deploy/private-beta.md`](deploy/private-beta.md) - manual private-beta deployment, migration, rollback, CORS, env-name, and smoke procedure.
 - [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md) - concrete Railway split-service dry-run plan and placeholder env templates.
 - [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - manual, human-approved, read-only runbook for the first GitHub App real-provider read run, gated by an offline preflight.
+- [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after deploy and read-only provider proof.
 
 ## Required Control Docs
 

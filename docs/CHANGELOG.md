@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Added `docs/deploy/external-action-result-smoke.md`, a manual,
+  human-approved runbook for the final MVP flow step "Approve Action Proposal ->
+  See External Action Result". It documents the one-action external-write smoke
+  boundary, preconditions, preferred UI path, API fallback placeholders,
+  idempotency/receipt checks, result sync, cleanup/rollback boundaries, and the
+  required post-smoke return to read-only mode. It is linked from README and
+  docs index and is explicitly excluded from normal read-only smoke, CI, deploy,
+  provider-read, provider-token setup, and LLM paths.
 - Added a deterministic offline MVP completion audit. New
   `app/services/mvp_completion_audit.py` maps every playbook §1.5 MVP
   requirement and every §1.4 main-flow step to authoritative in-repo evidence
