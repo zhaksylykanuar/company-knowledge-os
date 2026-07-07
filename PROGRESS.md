@@ -631,6 +631,28 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-07` — **Private-beta release handoff report.**
+  Added a sanitized offline release handoff packet for the human push/deploy
+  boundary: `scripts/private_beta_release_handoff.py` plus `make
+  release-handoff`. It combines local git state, the deterministic MVP
+  completion audit, GitHub App real-read preflight, and ordered human-gated next
+  steps (push, deploy, read-only smoke, GitHub App setup/read, one external
+  action result smoke) without starting deploy, provider calls, provider writes,
+  external writes, database access, secret reads, or LLM. Linked from
+  `README.md` and `docs/README.md`; covered by
+  `tests/test_private_beta_release_handoff.py`. Files: `Makefile`,
+  `scripts/private_beta_release_handoff.py`,
+  `tests/test_private_beta_release_handoff.py`, `README.md`, `docs/README.md`,
+  `docs/CHANGELOG.md`, `docs/TODO.md`, `PROGRESS.md`. Checks: focused
+  `UV_NO_SYNC=1 uv run pytest -q tests/test_private_beta_release_handoff.py
+  tests/test_mvp_completion_audit.py tests/test_docs_navigation_integrity.py` ✅
+  **11 passed**, `make release-handoff` ✅, full backend
+  `UV_NO_SYNC=1 uv run pytest -q` ✅ **469 passed / 1 warning**,
+  `UV_NO_SYNC=1 uv run ruff check .` ✅, `UV_NO_SYNC=1 uv run alembic check` ✅
+  (no drift), frontend `npm test` ✅ **205 passed**, `npm run build` ✅,
+  `npm run lint` ✅, tracked secret scan ✅, `git diff --check` ✅. Commit
+  local-only; push не делался.
+
 - `2026-07-07` — **External action result smoke runbook.**
   Added the missing manual runbook for the final human-gated MVP flow step:
   `docs/deploy/external-action-result-smoke.md` documents a one-action,

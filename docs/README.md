@@ -40,6 +40,7 @@ recovering deleted context.
 - [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md) - concrete Railway split-service dry-run plan and placeholder env templates.
 - [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - manual, human-approved, read-only runbook for the first GitHub App real-provider read run, gated by an offline preflight.
 - [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after deploy and read-only provider proof.
+- `scripts/private_beta_release_handoff.py` / `make release-handoff` - sanitized offline handoff report combining git state, MVP completion audit, GitHub App real-read preflight, and remaining human-gated next steps before a human push/deploy.
 
 ## Required Control Docs
 

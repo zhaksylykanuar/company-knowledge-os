@@ -154,6 +154,17 @@ Use it only after deploy, read-only smoke, and an approved scoped provider read:
 it is a one-action, explicitly approved external-write smoke, not part of normal
 read-only smoke or CI.
 
+Before asking a human to push/deploy, generate the sanitized release handoff
+packet:
+
+```bash
+make release-handoff
+```
+
+It combines local git state, the MVP completion audit, GitHub App real-read
+preflight, and the remaining human-gated next steps without starting a deploy,
+provider call, external write, secret read, or LLM.
+
 Minimum backend env names for a private-beta candidate:
 
 - `APP_ENV`

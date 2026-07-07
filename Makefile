@@ -1,7 +1,10 @@
-.PHONY: backend-check check frontend-check smoke secret-scan
+.PHONY: backend-check check frontend-check release-handoff smoke secret-scan
 
 smoke:
 	UV_NO_SYNC=1 uv run python scripts/smoke_private_beta.py
+
+release-handoff:
+	UV_NO_SYNC=1 uv run python scripts/private_beta_release_handoff.py
 
 secret-scan:
 	bash scripts/check_no_secrets.sh --tracked

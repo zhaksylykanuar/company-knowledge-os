@@ -271,6 +271,11 @@ Implemented foundations:
   and the first real external action result are human/external gated. Run
   `uv run python scripts/mvp_completion_audit.py` to re-check before claiming
   completion.
+- A sanitized private-beta release handoff report is now in place
+  (`scripts/private_beta_release_handoff.py` / `make release-handoff`). It
+  combines local git state, MVP completion audit, GitHub App real-read preflight,
+  and ordered human-gated next steps without deploy, provider calls, external
+  writes, database access, secret reads, or LLM.
 
 ## Next Priority: Founder-facing coverage and briefing polish
 
@@ -356,7 +361,9 @@ Done when:
   manual Railway runbooks: backup, deploy, manual `alembic upgrade head`, smoke.
   After deploy and read-only proof, the final external action result is covered
   by `docs/deploy/external-action-result-smoke.md`. Do not add auto-deploy or
-  provider-write smoke without explicit human approval.
+  provider-write smoke without explicit human approval. Before handoff, run
+  `make release-handoff` and attach only the sanitized output to the human
+  review.
 
 4. **GitHub App real read run readiness (deferred).**
   Backend polling-only live read sync, `/github` explicit repo control, and

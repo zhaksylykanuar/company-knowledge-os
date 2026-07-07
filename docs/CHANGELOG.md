@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added a sanitized private-beta release handoff report. New
+  `scripts/private_beta_release_handoff.py` (also exposed as
+  `make release-handoff`) combines local git state, the offline MVP completion
+  audit, GitHub App real-read preflight, and the remaining human-gated next
+  steps into one operator-facing report. It is offline/read-only except for
+  local git metadata and starts no deploy, provider call, provider write,
+  external write, database access, secret read, or LLM.
 - Added `docs/deploy/external-action-result-smoke.md`, a manual,
   human-approved runbook for the final MVP flow step "Approve Action Proposal ->
   See External Action Result". It documents the one-action external-write smoke
