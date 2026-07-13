@@ -111,7 +111,7 @@ export const M = {
     eyebrow: "Операционная карта",
     title: "Мир компании",
     description:
-      "Люди, организации, соприкосновения и работа компании в одном пространстве, подтверждаемом источниками. Кандидаты остаются неподтверждёнными, пока основатель не определит их роль.",
+      "Люди, организации, соприкосновения и работа компании в одном пространстве, подтверждаемом источниками. Кандидаты остаются неподтверждёнными, пока участник команды не примет по ним решение.",
     dataLayerTitle: "Канонические данные",
     dataLayerIndex: "ДАННЫЕ",
     dataLayerDescription:
@@ -174,6 +174,12 @@ export const M = {
     summaryLabel: "Сводка карты компании",
     internalPeople: "Команда",
     internalPeopleDescription: "Подтверждённые участники рабочего пространства.",
+    confirmedExternalPeople: "Подтверждённые внешние лица",
+    confirmedExternalPeopleDescription:
+      "Люди, которых участник команды подтвердил вручную.",
+    confirmedOrganizations: "Подтверждённые организации",
+    confirmedOrganizationsDescription:
+      "Организации с явно выбранным человеком типом отношений.",
     externalPeople: "Люди в поле зрения",
     externalPeopleDescription: "Внешние контакты-кандидаты в текущем окне.",
     organizations: "Организации",
@@ -185,20 +191,87 @@ export const M = {
     teamSection: "Команда",
     contactsSection: "Ключевые лица в поле зрения",
     organizationsSection: "Компании в поле зрения",
+    confirmedContactsSection: "Подтверждённые внешние лица",
+    confirmedOrganizationsSection: "Подтверждённые организации",
     timelineSection: "Журнал соприкосновений",
     noContacts: "Внешние контакты пока не обнаружены.",
     noOrganizations: "Корпоративные организации пока не обнаружены.",
+    noConfirmedContacts: "Подтверждённых внешних лиц пока нет.",
+    noConfirmedOrganizations: "Подтверждённых организаций пока нет.",
     noTouchpoints: "Соприкосновения пока не загружены.",
     windowLabel: "Почтовое окно",
     windowTruncated: "показаны последние сообщения",
     capabilities: "Границы проекции",
     readOnly: "Только чтение",
+    resolutionEnabled: "Локальные подтверждения доступны",
     noProviderCalls: "Без вызовов внешних сервисов",
+    noExternalWrites: "Без записей во внешние сервисы",
     noLlm: "Без языковой модели",
     localProjection: "Локальная проекция",
     candidate: "Кандидат",
     confirmed: "Подтверждено",
     needsConfirmation: "Нужно подтвердить роль",
+    organizationNeedsConfirmation: "Нужно определить отношения",
+    relationshipType: "Тип связи с человеком",
+    organizationRelationshipKind: "Тип отношений с организацией",
+    selectClassification: "Не выбрано",
+    relationshipTypes: {
+      contact: "Контакт",
+      employee: "Сотрудник",
+      decision_maker: "Лицо, принимающее решение",
+      account_owner: "Ответственный за аккаунт",
+      advisor: "Советник",
+      other: "Другое"
+    },
+    organizationRelationshipKinds: {
+      unknown: "Не определено",
+      prospect: "Потенциальный заказчик",
+      customer: "Заказчик",
+      partner: "Партнёр",
+      vendor: "Поставщик",
+      other: "Другое"
+    },
+    statuses: {
+      active: "Активен",
+      archived: "В архиве",
+      confirmed: "Подтверждено"
+    },
+    roleTitle: "Роль или должность",
+    roleRequiresRelationship: "Сначала выберите тип связи с организацией.",
+    displayName: "Отображаемое имя",
+    organizationName: "Название организации",
+    classificationOptional: "Необязательно — укажите только то, что знаете.",
+    humanClassificationBoundary:
+      "Классификацию задаёт человек. Система не назначает автоматически заказчика, сотрудника или ключевое лицо.",
+    confirmCandidate: "Подтвердить",
+    dismissCandidate: "Отклонить кандидата",
+    resolvingCandidate: "Сохраняем решение…",
+    resolutionPending: "Решение сохраняется локально…",
+    resolutionConfirmed: "Кандидат подтверждён. Карта обновляется.",
+    resolutionDismissed: "Кандидат отклонён. Карта обновляется.",
+    resolutionConfirmedRefreshed: "Кандидат подтверждён. Карта обновлена.",
+    resolutionDismissedRefreshed: "Кандидат отклонён. Карта обновлена.",
+    resolutionSavedRefreshFailed:
+      "Решение сохранено, но обновить карту не удалось. Повторите обновление карты.",
+    resolutionConflict:
+      "Кандидат изменился после загрузки. Карта обновлена — проверьте факты и повторите решение.",
+    resolutionNotFound:
+      "Кандидат уже отсутствует или был обработан. Карта обновляется.",
+    resolutionForbidden:
+      "Права доступа изменились. Карта обновляется в режиме только чтения.",
+    resolutionValidation:
+      "Сервер не принял выбранные значения. Проверьте классификацию и повторите.",
+    resolutionError: "Не удалось сохранить решение. Проверьте данные и повторите.",
+    resolutionReadOnly:
+      "У вас доступ только для чтения. Подтверждение и отклонение доступны роли «Участник» и выше.",
+    resolutionStatusLabel: "Состояние решения по кандидату",
+    organizationResolutionRequired: "Сначала решите судьбу организации",
+    organizationResolutionRequiredDescription:
+      "Человек связан с организацией-кандидатом. Участник команды должен подтвердить или отклонить организацию, затем вернуться к человеку.",
+    openOrganizationProfile: "Открыть организацию",
+    confirmedOrganizationForPerson: "Подтверждённая организация",
+    standalonePerson:
+      "Подтверждённой организации нет. Человек будет сохранён как самостоятельный контакт.",
     openProfile: "Открыть профиль",
     profileTitle: "Профиль",
     companyProfile: "Профиль компании",
@@ -229,7 +302,7 @@ export const M = {
       viewer: "Наблюдатель"
     },
     boundary:
-      "Доступ только внутри рабочего пространства, включая роль наблюдателя; изменение ролей и связей здесь отключено. Домен письма не означает, что организация является заказчиком."
+      "Доступ только внутри рабочего пространства. Наблюдатель читает карту; роль «Участник» и выше может локально подтвердить либо отклонить кандидата. Домен письма не означает, что организация является заказчиком."
   },
 
   githubPage: {

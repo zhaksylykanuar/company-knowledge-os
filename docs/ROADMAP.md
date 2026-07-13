@@ -5,11 +5,11 @@ Status: roadmap is subordinate to the canonical control trio:
 `DECISIONS.md` (why).
 
 The current execution pointer is `../PROGRESS.md`: the local MVP foundations are
-in place and Company World v1 now turns workspace memberships plus bounded,
-sanitized Gmail evidence into an honest company operating map (DEC-073). The
-next product-data horizon is durable people/organization/affiliation/interaction
-profiles with explicit founder confirmation. First real provider reads,
-production deploy, and LLM narrative remain separate human-gated horizons. Docs
+in place and Company World now combines bounded, sanitized Gmail evidence with
+durable people/organization/affiliation/interaction profiles and explicit human
+confirmation (DEC-073/DEC-074). The next horizon is private-beta deployment and
+signed-in production onboarding. First real provider reads, production mutation,
+and LLM narrative remain separate human-gated horizons. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -49,8 +49,9 @@ Done:
 
 - Canonical `User`, `Workspace`, `Membership`, `IntegrationConnection`,
   `SyncJob`, `SourceRecord`, `EvidenceRef`, `Repository`, `PullRequest`, `Task`,
-  `Briefing`, `BriefingItem`, `ActionProposal`, `ActionExecution`, and proposal-scoped
-  `ActionExecutionEvent` audit foundations exist.
+  `Briefing`, `BriefingItem`, `ActionProposal`, `ActionExecution`, proposal-scoped
+  `ActionExecutionEvent`, `Person`, `Organization`, `Affiliation`, `Interaction`,
+  and `CompanyWorldResolution` foundations exist.
 - Auth/session foundations exist: a `sessions` table (ORM `UserSession`, stores
   only the sha256 token hash) and a `login_attempts` brute-force throttle table;
   account-active state reuses `User.status` (no `is_active`).
@@ -58,7 +59,7 @@ Done:
   `uq_tasks_workspace_provider_external_id` and idempotent `ON CONFLICT` upserts
   across the GitHub sync path. Canonical `repositories` also have a
   workspace/provider/full_name unique guard for cross-path GitHub identity.
-- Existing migrations are at one Alembic head/current: `f2b3c4d5e6f7`.
+- Existing migrations are at one Alembic head/current: `a3c4d5e6f7b8`.
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
   compatibility substrate; FOS-009 repointed workspace repository reads to
@@ -66,11 +67,11 @@ Done:
 
 Missing:
 
-- Durable `Person`, `Organization`, `Affiliation`, and `Interaction` tables plus
-  explicit founder confirmation. DEC-073 resolves the product need; ASK-1 keeps
-  the exact physical model boundary/count open until migration design.
+- No further canonical model is required for the current private-beta Company
+  World path. Broader normalized entities and post-MVP graph models remain
+  chunk-scoped rather than implied by the playbook vision.
 
-Next step: durable company profiles and founder confirmation (DEC-073). The
+Next step: private-beta deploy/handoff and signed-in production onboarding. The
 first GitHub App real read run remains a separate human-approved external gate;
 physical substrate drop remains a later migration/cleanup task.
 
@@ -211,9 +212,9 @@ Done:
 - `/dashboard` is organized as a company command center and `/company-brain`
   leads with Company World: confirmed workspace members, evidence-backed
   external-contact/organization candidates, inspectable profiles, and a bounded
-  Gmail touchpoint timeline. The projection is gated by workspace membership
-  (including the read-only `viewer` role), workspace-scoped, read-only, and
-  explicit about truncation and unconfirmed roles (DEC-073).
+  Gmail touchpoint timeline. The map is gated by workspace membership, explicit
+  about truncation and unconfirmed roles, and merges durable confirmed profiles.
+  Member+ can confirm/dismiss idempotently; viewer stays read-only (DEC-073/074).
 - `/github` shows GitHub App real-read readiness over already-loaded local
   state, including env/installation/repo-surface blockers, without starting a
   provider call.
@@ -226,8 +227,6 @@ Missing:
   owner/admin teammate provisioning, `/settings` team UI, and one-time
   `/setup-password` links exist.
 - Browser/product E2E coverage.
-- Durable people/organization/affiliation/interaction profiles and the founder
-  confirmation flow; Company World v1 is currently a reversible projection.
 - Selected repository issue and PR sync now have read-only product UI controls
   in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
   allowlisted repository at a time without external writes.

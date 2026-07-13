@@ -15,6 +15,8 @@ import type {
   ApiFetchOptions,
   BriefingActionProposalGenerationResponse,
   BriefingListResponse,
+  CompanyMapResolutionReceipt,
+  CompanyMapResolutionRequest,
   CompanyMapResponse,
   CompanyBrainResponse,
   FounderBriefingRequest,
@@ -80,6 +82,16 @@ async function readError(response: Response): Promise<string> {
   }
 }
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+  }
+}
+
 export async function apiFetch<TResponse>(
   path: string,
   options: ApiFetchOptions = {}
@@ -104,7 +116,7 @@ export async function apiFetch<TResponse>(
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    throw new ApiRequestError(await readError(response), response.status);
   }
 
   if (response.status === 204) {
@@ -150,11 +162,30 @@ export function buildWorkspaceCompanyMapPath(workspaceId: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-map`;
 }
 
+export function buildWorkspaceCompanyMapResolutionsPath(workspaceId: string): string {
+  return `${buildWorkspaceCompanyMapPath(workspaceId)}/resolutions`;
+}
+
 export async function fetchCompanyMap(
   workspaceId: string,
   options: ApiFetchOptions = {}
 ): Promise<CompanyMapResponse> {
   return apiFetch<CompanyMapResponse>(buildWorkspaceCompanyMapPath(workspaceId), options);
+}
+
+export async function resolveCompanyMapCandidate(
+  workspaceId: string,
+  request: CompanyMapResolutionRequest,
+  options: ApiFetchOptions = {}
+): Promise<CompanyMapResolutionReceipt> {
+  return apiFetch<CompanyMapResolutionReceipt>(
+    buildWorkspaceCompanyMapResolutionsPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
 }
 
 export function buildWorkspaceCompanyBrainEntitiesPath(workspaceId: string): string {

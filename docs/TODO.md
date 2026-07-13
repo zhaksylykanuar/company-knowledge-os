@@ -13,7 +13,7 @@ first.
 Implemented foundations:
 
 - FastAPI backend with canonical `/api/v1` routes, async SQLAlchemy/Postgres,
-  Alembic migrations, and one current Alembic head (`f2b3c4d5e6f7`).
+  Alembic migrations, and one current Alembic head (`a3c4d5e6f7b8`).
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -30,16 +30,19 @@ Implemented foundations:
   entities" step directly. The normalized-entities panel also has a client-side
   `entity_type` focus filter over the already-loaded projection. Read-only; no
   new data path, provider calls, sync, external writes, or LLM.
-- Company World v1 is in place (DEC-073): `/dashboard` is grouped as a company
+- Durable Company World is in place (DEC-073/DEC-074): `/dashboard` is grouped as a company
   command center and `/company-brain` leads with the workspace-membership-
   gated, workspace-scoped `company-map` projection. It shows confirmed
   workspace members plus
-  evidence-backed external-contact and organization candidates and Gmail
-  touchpoints. Candidate roles are never inferred as customer/decision maker;
+  evidence-backed external-contact and organization candidates, confirmed
+  durable profiles, and sanitized Gmail interactions. Member+ can confirm or
+  dismiss a server-resolved candidate idempotently; viewer remains read-only.
+  Candidate roles are never inferred as customer/decision maker;
   the newest-100-message window and truncation are visible; raw bodies/snippets
   are excluded. Existing RBAC is preserved: viewer can read workspace data but
-  cannot confirm/mutate; cross-workspace access is rejected. No migration/
-  provider/LLM/write path was added.
+  cannot confirm/mutate; cross-workspace access is rejected. Confirmation is a
+  local canonical write with source provenance; no provider call, external
+  write, raw-source mutation, or LLM path was added.
 - Email+password founder login on server-side sessions (Argon2id, httpOnly
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with
@@ -270,30 +273,29 @@ Implemented foundations:
   and ordered human-gated next steps without deploy, provider calls, external
   writes, database access, secret reads, or LLM.
 
-## Next Priority: Durable company profiles and confirmation
+## Next Priority: Private-beta launch and signed-in production onboarding
 
-Rationale: DEC-073 proves the operating-map UX over existing evidence without
-inventing facts. The next scoped migration should turn confirmed people,
-organizations, affiliations, and interactions into durable workspace-owned
-profiles and add an explicit founder confirmation flow. It must preserve the
-read-only projection until backfill/rollback and tenant-isolation tests are
-defined; provider reads and LLM generation remain separate approvals.
+Rationale: the local product path, including durable Company World profiles and
+human confirmation, is complete enough for a controlled private-beta handoff.
+The remaining value gap is operational: deploy the reviewed commit, migrate a
+backed-up production database, sign in through the product UI, attach the first
+approved source, and prove the founder loop in the hosted platform. Provider
+reads/writes and production mutation remain explicit human gates.
 
 Done when:
 
-- The `Person`/`Organization`/`Affiliation`/`Interaction` boundary, ownership,
-  uniqueness, evidence refs, backfill, and rollback are recorded in a decision
-  before any migration.
-- Founder confirmation never rewrites raw source records and every confirmed
-  relationship remains traceable to evidence.
-- Workspace and role-matrix tests prove no cross-tenant relationship leakage.
-- Confirmation writes are idempotent, require `member` or higher, preserve a
-  read-only `viewer`, and never let an LLM mutate canonical relationships.
-- Backfill has an aggregate-only dry run and a documented rollback; Company
-  World keeps an honest projection fallback until the migration is verified.
-- `uv run ruff check .`, `uv run alembic upgrade head`, `uv run alembic check`,
-  `uv run pytest -q`, frontend checks if touched, and the tracked secret scan are
-  green.
+- `make release-handoff` is green on the exact reviewed commit and exposes no
+  secret values or private provider payloads.
+- A human takes a database backup, applies `alembic upgrade head`, deploys the
+  backend/frontend pair, and completes the documented read-only smoke.
+- The founder signs in, opens one workspace, sees Company World, and confirms a
+  candidate from workspace-owned evidence without terminal or DB intervention.
+- One explicitly approved GitHub App repository read (or a documented local
+  import fallback) reaches Company Brain and a persisted Founder Briefing.
+- External writes stay disabled by default; any first write follows the
+  one-action runbook and returns a durable receipt.
+- Rollback and incident notes contain aggregate counts/IDs only, never secrets,
+  raw bodies, tokens, credentials, or provider payload dumps.
 
 ## Near-Term Backlog
 
@@ -401,8 +403,8 @@ Done when:
 ## Documentation Tasks For Future Work
 
 - Update `PROGRESS.md` after every task.
-- Add a `docs/DECISIONS.md` entry for durable architecture/security/deploy/data
-  model changes.
+- Add a `docs/DECISIONS.md` entry for future durable architecture/security/
+  deploy/data-model changes.
 - Update `docs/ROADMAP.md` only when phase-level direction changes.
 - Add user-visible or operational changes to `docs/CHANGELOG.md`.
 - Move deferred ideas to `docs/POST_MVP.md`; do not keep long completed ledgers

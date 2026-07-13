@@ -66,9 +66,7 @@ async def _cleanup(marker: str) -> None:
         workspace_ids = list(
             (
                 await session.execute(
-                    select(Workspace.id).where(
-                        Workspace.slug.like(f"company-world-{marker}%")
-                    )
+                    select(Workspace.id).where(Workspace.slug.like(f"company-world-{marker}%"))
                 )
             ).scalars()
         )
@@ -86,21 +84,15 @@ async def _cleanup(marker: str) -> None:
             await session.execute(
                 delete(Membership).where(Membership.workspace_id.in_(workspace_ids))
             )
-            await session.execute(
-                delete(Workspace).where(Workspace.id.in_(workspace_ids))
-            )
+            await session.execute(delete(Workspace).where(Workspace.id.in_(workspace_ids)))
         if user_ids:
-            await session.execute(
-                delete(UserSession).where(UserSession.user_id.in_(user_ids))
-            )
+            await session.execute(delete(UserSession).where(UserSession.user_id.in_(user_ids)))
             await session.execute(delete(Membership).where(Membership.user_id.in_(user_ids)))
             await session.execute(delete(User).where(User.id.in_(user_ids)))
         await session.commit()
 
 
-async def _get_company_map(
-    *, workspace_id: str, owner_email: str
-) -> tuple[int, dict]:
+async def _get_company_map(*, workspace_id: str, owner_email: str) -> tuple[int, dict]:
     async with _async_client() as client:
         response = await client.get(
             f"/api/v1/workspaces/{workspace_id}/company-map",
@@ -131,6 +123,8 @@ async def test_company_map_empty_state_has_workspace_and_membership_evidence(
         assert body["company"]["source_refs"][0]["record_type"] == "workspace"
         assert body["summary"] == {
             "internal_people": 1,
+            "confirmed_external_people": 0,
+            "confirmed_organizations": 0,
             "external_contacts_in_window": 0,
             "organizations_in_window": 0,
             "touchpoints_in_window": 0,
@@ -143,14 +137,14 @@ async def test_company_map_empty_state_has_workspace_and_membership_evidence(
             "order": "newest_first",
         }
         assert body["people"]["internal"][0]["role"] == "owner"
-        assert body["people"]["internal"][0]["source_refs"][0]["record_type"] == (
-            "membership"
-        )
+        assert body["people"]["internal"][0]["source_refs"][0]["record_type"] == ("membership")
         assert body["people"]["external_candidates"] == []
         assert body["organizations"] == []
         assert body["touchpoints"] == []
         assert body["capabilities"] == {
             "read_only": True,
+            "can_resolve": True,
+            "required_role": "member",
             "provider_calls": False,
             "llm_used": False,
         }
@@ -204,9 +198,7 @@ async def test_company_map_projects_people_organizations_and_touchpoints(
                                     "Buyer Person <buyer@acme.test>",
                                     "prospect@gmail.com",
                                 ],
-                                "source_url": (
-                                    "https://mail.google.com/mail/u/0/#sent/outbound"
-                                ),
+                                "source_url": ("https://mail.google.com/mail/u/0/#sent/outbound"),
                             },
                             "evidence_refs": [
                                 {
@@ -234,9 +226,7 @@ async def test_company_map_projects_people_organizations_and_touchpoints(
                                 "subject": "Re: Kickoff and next steps",
                                 "from_address": "Buyer Person <buyer@acme.test>",
                                 "to_addresses": [owner_email],
-                                "source_url": (
-                                    "https://mail.google.com/mail/u/0/#inbox/inbound"
-                                ),
+                                "source_url": ("https://mail.google.com/mail/u/0/#inbox/inbound"),
                             },
                             "evidence_refs": [
                                 {
@@ -262,6 +252,8 @@ async def test_company_map_projects_people_organizations_and_touchpoints(
         assert status_code == 200
         assert body["summary"] == {
             "internal_people": 2,
+            "confirmed_external_people": 0,
+            "confirmed_organizations": 0,
             "external_contacts_in_window": 2,
             "organizations_in_window": 1,
             "touchpoints_in_window": 2,
@@ -285,9 +277,12 @@ async def test_company_map_projects_people_organizations_and_touchpoints(
         )
         assert generic["organization_key"] is None
 
+        organization = body["organizations"][0]
+        assert len(organization["candidate_version"]) == 64
         assert body["organizations"] == [
             {
                 "key": "organization:acme.test",
+                "candidate_version": organization["candidate_version"],
                 "domain": "acme.test",
                 "name": None,
                 "kind": "external_candidate",
@@ -453,9 +448,7 @@ async def test_company_map_allows_read_only_viewer_access(monkeypatch) -> None:
         )
         async with _async_client() as client:
             client.cookies.set(settings.session_cookie_name, viewer_token)
-            viewer_response = await client.get(
-                f"/api/v1/workspaces/{workspace_id}/company-map"
-            )
+            viewer_response = await client.get(f"/api/v1/workspaces/{workspace_id}/company-map")
         viewer_status = viewer_response.status_code
         viewer_body = viewer_response.json()
 

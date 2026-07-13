@@ -75,7 +75,8 @@ All user-facing copy is centralized in `web/lib/messages.ts` (Russian).
 
 See [`../docs/deploy/private-beta.md`](../docs/deploy/private-beta.md) for the manual split-service deploy runbook and [`../docs/deploy/railway-private-beta.md`](../docs/deploy/railway-private-beta.md) for the current Railway dry-run target map.
 
-The frontend is a private-beta shell. Production auth/session handling is now in
-place (email+password login on server-side sessions); the remaining gaps before
-broader private beta are GitHub onboarding and the first production deploy of the
-auth phase.
+The frontend is a private-beta shell. Production auth/session handling and the
+durable Company World confirmation UI are in place. Remaining external gaps
+before broader private beta are the first real GitHub App installation/read, the
+first production deploy of the auth phase, and email-delivered self-serve
+onboarding/password reset.

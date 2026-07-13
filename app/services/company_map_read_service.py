@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from email.utils import parseaddr
@@ -11,6 +12,15 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.canonical_models import SOURCE_RECORD_PROVIDER_GMAIL, SourceRecord
+from app.db.company_world_models import (
+    PERSON_ORIGIN_FOUNDER_CONFIRMATION,
+    PROFILE_STATUS_ACTIVE,
+    Affiliation,
+    CompanyWorldResolution,
+    Interaction,
+    Organization,
+    Person,
+)
 from app.db.identity_models import Workspace
 from app.services.company_brain_github_read_service import build_workspace_company_brain
 from app.services.identity_service import list_workspace_members
@@ -45,6 +55,8 @@ async def build_workspace_company_map(
     session: AsyncSession,
     workspace_id: UUID,
     limit: int = 100,
+    include_durable: bool = True,
+    access_role: str | None = None,
 ) -> dict[str, Any]:
     """Build a read-only, evidence-backed map of people and organizations.
 
@@ -100,11 +112,7 @@ async def build_workspace_company_map(
     touchpoints: list[dict[str, Any]] = []
 
     communications = brain.get("communications")
-    raw_messages = (
-        communications.get("messages", [])
-        if isinstance(communications, Mapping)
-        else []
-    )
+    raw_messages = communications.get("messages", []) if isinstance(communications, Mapping) else []
     messages = raw_messages if isinstance(raw_messages, list) else []
 
     for raw_message in messages:
@@ -115,17 +123,13 @@ async def build_workspace_company_map(
         participants = [mailbox for mailbox in [sender, *recipients] if mailbox]
         participant_by_email = {mailbox[1]: mailbox for mailbox in participants}
         external_mailboxes = [
-            mailbox
-            for email, mailbox in participant_by_email.items()
-            if email not in internal_keys
+            mailbox for email, mailbox in participant_by_email.items() if email not in internal_keys
         ]
 
         source_refs = _source_refs(raw_message.get("source_refs"))
         occurred_at = _datetime_or_none(raw_message.get("received_at"))
         person_keys = [
-            internal_keys[email]
-            if email in internal_keys
-            else _external_person_key(email)
+            internal_keys[email] if email in internal_keys else _external_person_key(email)
             for email in sorted(participant_by_email)
         ]
         organization_keys = sorted(
@@ -141,7 +145,7 @@ async def build_workspace_company_map(
                 "key": f"touchpoint:{raw_message.get('source_record_id')}",
                 "channel": "email",
                 "source_record_id": raw_message.get("source_record_id"),
-                "subject": _safe_text(raw_message.get("subject")) or "(no subject)",
+                "subject": _subject_or_fallback(raw_message.get("subject")),
                 "direction": _direction(
                     sender_email=sender[1] if sender else None,
                     recipient_emails=[email for _name, email in recipients],
@@ -177,9 +181,7 @@ async def build_workspace_company_map(
             person["last_interaction_at"] = _latest_datetime(
                 person["last_interaction_at"], occurred_at
             )
-            person["source_refs"] = _merge_source_refs(
-                person["source_refs"], source_refs
-            )
+            person["source_refs"] = _merge_source_refs(person["source_refs"], source_refs)
 
         for organization_key in organization_keys:
             domain = organization_key.removeprefix("organization:")
@@ -225,6 +227,15 @@ async def build_workspace_company_map(
         }
         for organization in organizations.values()
     ]
+    payload_hashes = await _candidate_payload_hashes(
+        session=session,
+        workspace_id=workspace_id,
+        candidates=[*external_rows, *organization_rows],
+    )
+    for row in external_rows:
+        row["candidate_version"] = _candidate_version(row, payload_hashes)
+    for row in organization_rows:
+        row["candidate_version"] = _candidate_version(row, payload_hashes)
     organization_rows.sort(
         key=lambda row: (
             row["last_interaction_at"] or datetime.min.replace(tzinfo=timezone.utc),
@@ -236,6 +247,38 @@ async def build_workspace_company_map(
         key=lambda row: row["occurred_at"] or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
     )
+
+    durable = (
+        await _durable_company_world_rows(
+            session=session,
+            workspace_id=workspace_id,
+        )
+        if include_durable
+        else _empty_durable_rows()
+    )
+    resolved_candidates = durable["resolved_candidates"]
+    external_rows = [
+        row
+        for row in external_rows
+        if ("external_person", row["key"]) not in resolved_candidates
+        and row["key"] not in durable["confirmed_person_candidate_keys"]
+    ]
+    organization_rows = [
+        row
+        for row in organization_rows
+        if ("organization", row["key"]) not in resolved_candidates
+        and row["key"] not in durable["confirmed_organization_candidate_keys"]
+    ]
+    for person in internal_people:
+        person["person_id"] = durable["person_ids_by_user_id"].get(person["user_id"])
+    for touchpoint in touchpoints:
+        touchpoint["person_keys"] = [
+            durable["candidate_person_key_map"].get(key, key) for key in touchpoint["person_keys"]
+        ]
+        touchpoint["organization_keys"] = [
+            durable["candidate_organization_key_map"].get(key, key)
+            for key in touchpoint["organization_keys"]
+        ]
 
     warnings: list[str] = []
     if not messages:
@@ -249,8 +292,8 @@ async def build_workspace_company_map(
         )
     if external_rows:
         warnings.append(
-            "Внешние люди и организации остаются кандидатами, пока основатель не "
-            "подтвердит их роль."
+            "Внешние люди и организации остаются кандидатами, пока участник команды "
+            "не примет по ним решение."
         )
 
     return {
@@ -280,6 +323,8 @@ async def build_workspace_company_map(
             "external_contacts_in_window": len(external_rows),
             "organizations_in_window": len(organization_rows),
             "touchpoints_in_window": len(touchpoints),
+            "confirmed_external_people": len(durable["confirmed_people"]),
+            "confirmed_organizations": len(durable["confirmed_organizations"]),
         },
         "window": {
             "gmail_messages_available": gmail_messages_available,
@@ -291,11 +336,15 @@ async def build_workspace_company_map(
         "people": {
             "internal": internal_people,
             "external_candidates": external_rows,
+            "confirmed_external": durable["confirmed_people"],
         },
         "organizations": organization_rows,
+        "confirmed_organizations": durable["confirmed_organizations"],
         "touchpoints": touchpoints,
         "capabilities": {
             "read_only": True,
+            "can_resolve": access_role in {"owner", "admin", "member"},
+            "required_role": "member",
             "provider_calls": False,
             "llm_used": False,
         },
@@ -303,6 +352,241 @@ async def build_workspace_company_map(
         "is_live": False,
         "llm_used": False,
     }
+
+
+def _empty_durable_rows() -> dict[str, Any]:
+    return {
+        "confirmed_people": [],
+        "confirmed_organizations": [],
+        "resolved_candidates": set(),
+        "confirmed_person_candidate_keys": set(),
+        "confirmed_organization_candidate_keys": set(),
+        "person_ids_by_user_id": {},
+        "candidate_person_key_map": {},
+        "candidate_organization_key_map": {},
+    }
+
+
+async def _durable_company_world_rows(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+) -> dict[str, Any]:
+    people = list(
+        (
+            await session.execute(
+                select(Person).where(
+                    Person.workspace_id == workspace_id,
+                    Person.status == PROFILE_STATUS_ACTIVE,
+                )
+            )
+        ).scalars()
+    )
+    organizations = list(
+        (
+            await session.execute(
+                select(Organization).where(
+                    Organization.workspace_id == workspace_id,
+                    Organization.status == PROFILE_STATUS_ACTIVE,
+                )
+            )
+        ).scalars()
+    )
+    affiliations = list(
+        (
+            await session.execute(
+                select(Affiliation).where(
+                    Affiliation.workspace_id == workspace_id,
+                    Affiliation.status == PROFILE_STATUS_ACTIVE,
+                )
+            )
+        ).scalars()
+    )
+    interactions = list(
+        (
+            await session.execute(
+                select(Interaction).where(Interaction.workspace_id == workspace_id)
+            )
+        ).scalars()
+    )
+    resolutions = list(
+        (
+            await session.execute(
+                select(CompanyWorldResolution).where(
+                    CompanyWorldResolution.workspace_id == workspace_id
+                )
+            )
+        ).scalars()
+    )
+
+    organizations_by_id = {organization.id: organization for organization in organizations}
+    affiliations_by_person = {affiliation.person_id: affiliation for affiliation in affiliations}
+    interactions_by_person: dict[UUID, list[Interaction]] = {}
+    interactions_by_organization: dict[UUID, list[Interaction]] = {}
+    for interaction in interactions:
+        interactions_by_person.setdefault(interaction.person_id, []).append(interaction)
+        if interaction.organization_id is not None:
+            interactions_by_organization.setdefault(interaction.organization_id, []).append(
+                interaction
+            )
+
+    resolutions_by_person = {
+        resolution.result_person_id: resolution
+        for resolution in resolutions
+        if resolution.result_person_id is not None
+    }
+    resolutions_by_organization = {
+        resolution.result_organization_id: resolution
+        for resolution in resolutions
+        if resolution.result_organization_id is not None
+    }
+    confirmed_people: list[dict[str, Any]] = []
+    candidate_person_key_map: dict[str, str] = {}
+    for person in people:
+        if person.origin != PERSON_ORIGIN_FOUNDER_CONFIRMATION or person.user_id is not None:
+            continue
+        affiliation = affiliations_by_person.get(person.id)
+        organization = (
+            organizations_by_id.get(affiliation.organization_id)
+            if affiliation is not None
+            else None
+        )
+        person_interactions = interactions_by_person.get(person.id, [])
+        resolution = resolutions_by_person.get(person.id)
+        if resolution is not None:
+            candidate_person_key_map[resolution.candidate_key] = f"person:{person.id}"
+        confirmed_people.append(
+            {
+                "key": f"person:{person.id}",
+                "person_id": person.id,
+                "email": person.normalized_email,
+                "display_name": person.display_name,
+                "status": person.status,
+                "organization_id": organization.id if organization else None,
+                "organization_key": (f"organization:{organization.id}" if organization else None),
+                "organization_name": organization.display_name if organization else None,
+                "relationship_type": (affiliation.relationship_type if affiliation else None),
+                "role_title": affiliation.role_title if affiliation else None,
+                "interaction_count": len(person_interactions),
+                "last_interaction_at": _latest_interaction_at(person_interactions),
+                "source_refs": _durable_source_refs(
+                    interactions=person_interactions,
+                    resolution=resolution,
+                    fallback_label=person.display_name or person.normalized_email,
+                ),
+            }
+        )
+
+    people_by_organization: dict[UUID, set[UUID]] = {}
+    for affiliation in affiliations:
+        people_by_organization.setdefault(affiliation.organization_id, set()).add(
+            affiliation.person_id
+        )
+    confirmed_organizations: list[dict[str, Any]] = []
+    candidate_organization_key_map: dict[str, str] = {}
+    for organization in organizations:
+        organization_interactions = interactions_by_organization.get(organization.id, [])
+        resolution = resolutions_by_organization.get(organization.id)
+        durable_key = f"organization:{organization.id}"
+        candidate_organization_key_map[organization.canonical_key] = durable_key
+        if resolution is not None and resolution.candidate_type == "organization":
+            candidate_organization_key_map[resolution.candidate_key] = durable_key
+        confirmed_organizations.append(
+            {
+                "key": f"organization:{organization.id}",
+                "organization_id": organization.id,
+                "domain": organization.normalized_domain,
+                "name": organization.display_name,
+                "relationship_kind": organization.relationship_kind,
+                "status": organization.status,
+                "people_count": len(people_by_organization.get(organization.id, set())),
+                "interaction_count": len(organization_interactions),
+                "last_interaction_at": _latest_interaction_at(organization_interactions),
+                "source_refs": _durable_source_refs(
+                    interactions=organization_interactions,
+                    resolution=resolution,
+                    fallback_label=organization.display_name,
+                ),
+            }
+        )
+
+    confirmed_people.sort(
+        key=lambda row: (
+            row["last_interaction_at"] or datetime.min.replace(tzinfo=timezone.utc),
+            row["email"],
+        ),
+        reverse=True,
+    )
+    confirmed_organizations.sort(
+        key=lambda row: (
+            row["last_interaction_at"] or datetime.min.replace(tzinfo=timezone.utc),
+            row["name"],
+        ),
+        reverse=True,
+    )
+    return {
+        "confirmed_people": confirmed_people,
+        "confirmed_organizations": confirmed_organizations,
+        "resolved_candidates": {
+            (resolution.candidate_type, resolution.candidate_key) for resolution in resolutions
+        },
+        "confirmed_person_candidate_keys": set(candidate_person_key_map),
+        "confirmed_organization_candidate_keys": {
+            organization.canonical_key for organization in organizations
+        },
+        "person_ids_by_user_id": {
+            person.user_id: person.id for person in people if person.user_id is not None
+        },
+        "candidate_person_key_map": candidate_person_key_map,
+        "candidate_organization_key_map": candidate_organization_key_map,
+    }
+
+
+def _latest_interaction_at(interactions: list[Interaction]) -> datetime | None:
+    values = [interaction.occurred_at for interaction in interactions]
+    return max(values) if values else None
+
+
+def _durable_source_refs(
+    *,
+    interactions: list[Interaction],
+    resolution: CompanyWorldResolution | None,
+    fallback_label: str,
+) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    seen: set[UUID] = set()
+    for interaction in sorted(
+        interactions,
+        key=lambda row: row.occurred_at,
+        reverse=True,
+    ):
+        if interaction.source_record_id in seen:
+            continue
+        seen.add(interaction.source_record_id)
+        refs.append(
+            {
+                "id": f"source-record:{interaction.source_record_id}",
+                "kind": "gmail_message",
+                "source": "gmail",
+                "label": interaction.subject or fallback_label,
+                "url": interaction.source_url,
+                "record_type": "message",
+                "record_id": interaction.source_record_id,
+            }
+        )
+    if resolution is not None and resolution.source_record_id not in seen:
+        refs.append(
+            {
+                "id": f"source-record:{resolution.source_record_id}",
+                "kind": "gmail_message",
+                "source": "gmail",
+                "label": fallback_label,
+                "url": None,
+                "record_type": "message",
+                "record_id": resolution.source_record_id,
+            }
+        )
+    return refs
 
 
 async def _gmail_message_count(
@@ -393,6 +677,81 @@ def _merge_source_refs(
     return merged
 
 
+async def _candidate_payload_hashes(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    candidates: list[Mapping[str, Any]],
+) -> dict[UUID, str]:
+    record_ids = {
+        record_id
+        for candidate in candidates
+        for record_id in _candidate_source_record_ids(candidate)
+    }
+    if not record_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(SourceRecord.id, SourceRecord.payload_hash).where(
+                SourceRecord.workspace_id == workspace_id,
+                SourceRecord.id.in_(record_ids),
+                SourceRecord.provider == SOURCE_RECORD_PROVIDER_GMAIL,
+                SourceRecord.record_type == "message",
+                SourceRecord.is_deleted.is_(False),
+            )
+        )
+    ).all()
+    return {record_id: payload_hash for record_id, payload_hash in rows}
+
+
+def _candidate_source_record_ids(candidate: Mapping[str, Any]) -> list[UUID]:
+    record_ids: set[UUID] = set()
+    for ref in _source_refs(candidate.get("source_refs")):
+        raw_id = ref.get("record_id")
+        try:
+            record_ids.add(UUID(str(raw_id)))
+        except (TypeError, ValueError):
+            continue
+    return sorted(record_ids, key=str)
+
+
+def _candidate_version(
+    candidate: Mapping[str, Any],
+    payload_hashes: Mapping[UUID, str],
+) -> str:
+    """Return a stable version over candidate identity and visible evidence."""
+
+    visible_fields: dict[str, Any] = {}
+    for field in (
+        "key",
+        "email",
+        "display_name",
+        "organization_key",
+        "domain",
+        "name",
+        "kind",
+        "people_count",
+        "interaction_count",
+        "last_interaction_at",
+    ):
+        value = candidate.get(field)
+        visible_fields[field] = value.isoformat() if isinstance(value, datetime) else value
+    visible_fields["source_records"] = [
+        {
+            "id": str(record_id),
+            "payload_hash": payload_hashes.get(record_id, ""),
+        }
+        for record_id in _candidate_source_record_ids(candidate)
+    ]
+    material = json.dumps(
+        visible_fields,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return sha256(material.encode("utf-8")).hexdigest()
+
+
 def _datetime_or_none(value: Any) -> datetime | None:
     return value if isinstance(value, datetime) else None
 
@@ -407,6 +766,13 @@ def _latest_datetime(left: datetime | None, right: datetime | None) -> datetime 
 
 def _safe_text(value: Any) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _subject_or_fallback(value: Any) -> str:
+    subject = _safe_text(value)
+    if subject is None or subject.casefold() in {"(no subject)", "no subject"}:
+        return "Без темы"
+    return subject
 
 
 def _safe_url(value: Any) -> str | None:

@@ -39,6 +39,10 @@
   Briefing считаются из локальных данных и несут `evidence_refs`; ручные Founder
   Briefings сохраняются в `Briefing` / `BriefingItem` с историей и могут создавать
   local evidence-backed `ActionProposal` rows;
+- durable Company World (DEC-074): workspace-owned профили людей и организаций,
+  подтверждённые связи и sanitized email interactions сохраняются только после
+  явного решения человека; viewer читает, member+ подтверждает/отклоняет, а
+  canonical email/domain/evidence повторно разрешаются сервером;
 - первый local teammate provisioning/setup-link slice: owner/admin может создать
   local teammates, выдать initial password или one-time setup link; email delivery
   и SSO остаются deferred.
@@ -1682,7 +1686,123 @@ created_at: datetime
 
 ---
 
-## 6.24 Cache rules
+## 6.24 Person
+
+```txt
+id: uuid
+workspace_id: uuid
+user_id: uuid optional
+normalized_email: string required
+display_name: string optional
+origin: membership | founder_confirmation
+status: active | archived
+confirmed_by_user_id: uuid optional
+confirmed_at: datetime optional
+created_at: datetime
+updated_at: datetime
+```
+
+Rules:
+
+- membership-origin `user_id` belongs to a membership in the same workspace;
+- founder-confirmed rows require actor and timestamp provenance;
+- normalized email is unique inside one workspace.
+
+---
+
+## 6.25 Organization
+
+```txt
+id: uuid
+workspace_id: uuid
+canonical_key: string required
+normalized_domain: string optional
+display_name: string required
+relationship_kind: unknown | prospect | customer | partner | vendor | other
+status: active | archived
+confirmed_by_user_id: uuid required
+confirmed_at: datetime required
+created_at: datetime
+updated_at: datetime
+```
+
+Organization type is a human decision. Email domain is evidence for a
+candidate, not proof that the organization is a customer or employer.
+
+---
+
+## 6.26 Affiliation
+
+```txt
+id: uuid
+workspace_id: uuid
+person_id: uuid
+organization_id: uuid
+relationship_type: contact | employee | decision_maker | account_owner | advisor | other
+role_title: string optional
+source_record_id: uuid
+confirmed_by_user_id: uuid required
+confirmed_at: datetime required
+status: active | archived
+created_at: datetime
+updated_at: datetime
+```
+
+Person, organization, source record and confirming membership must belong to
+the same workspace. No relationship type is inferred automatically.
+
+---
+
+## 6.27 Interaction
+
+```txt
+id: uuid
+workspace_id: uuid
+person_id: uuid
+organization_id: uuid optional
+source_record_id: uuid
+channel: email
+direction: inbound | outbound | mixed | unknown
+subject: string optional
+occurred_at: datetime
+source_url: string optional
+created_at: datetime
+updated_at: datetime
+```
+
+Interaction stores bounded sanitized metadata and provenance only. Raw body,
+snippet and provider payload remain in the source-of-truth layer and are not
+copied into Company World.
+
+---
+
+## 6.28 CompanyWorldResolution
+
+```txt
+id: uuid
+workspace_id: uuid
+candidate_type: external_person | organization
+candidate_key: string
+candidate_version: sha256
+decision: confirmed | dismissed
+idempotency_key: string
+request_hash: sha256
+actor_user_id: uuid
+source_record_id: uuid
+result_person_id: uuid optional
+result_organization_id: uuid optional
+result_affiliation_id: uuid optional
+created_at: datetime
+updated_at: datetime
+```
+
+Resolution is a terminal, idempotent human decision over a server-resolved
+candidate snapshot. Result IDs, actor and source record are workspace-bound;
+the client cannot nominate canonical email/domain/evidence or raw content.
+
+---
+
+## 6.29 Cache rules
 
 Можно кэшировать:
 
@@ -2243,6 +2363,7 @@ Returns:
 Returns:
 
 - company and confirmed workspace members;
+- confirmed durable external people and organizations;
 - external people and organization candidates;
 - bounded email touchpoints;
 - evidence refs, window metadata, warnings, and capabilities.
@@ -2250,11 +2371,37 @@ Returns:
 Rules:
 
 - workspace-membership-gated, including read-only viewer access;
-- read-only;
+- GET is read-only and merges projection candidates with durable profiles;
 - cross-workspace access is hidden;
 - external roles remain unconfirmed until founder confirmation;
 - raw message bodies/snippets are excluded;
 - no provider calls, external writes, or LLM.
+
+### POST `/workspaces/{workspace_id}/company-map/resolutions`
+
+Input:
+
+- `candidate_type`, `candidate_key`, `candidate_version`;
+- terminal `decision`: `confirmed | dismissed`;
+- `idempotency_key`;
+- optional human-authored display/classification fields allowed by candidate type.
+
+Returns:
+
+- durable resolution receipt;
+- result profile IDs and sanitized interaction count;
+- replay flag and explicit no-provider/no-external-write/no-LLM capabilities.
+
+Rules:
+
+- member-or-higher; viewer receives forbidden and outsider stays hidden;
+- canonical email, domain, source records and evidence are resolved server-side;
+- stale candidate versions and conflicting idempotency keys fail closed;
+- person and organization are separate human decisions; a domain never silently
+  confirms an organization;
+- confirmation writes only the locked evidence snapshot; full historical
+  materialization is an explicit aggregate-only backfill;
+- no raw-source rewrite, provider call, external write, secret read, or LLM.
 
 ---
 
@@ -2511,7 +2658,9 @@ There is no product `/audit` route. The filesystem preview is not
 workspace-scoped and therefore requires the operator API key; browser sessions
 are rejected. Workspace-scoped action audit/import endpoints remain available.
 
-Company World is the current evidence-backed product surface.
+Company World is the current evidence-backed product surface. Confirmed
+profiles are durable; unresolved and dismissed candidates remain explicit human
+decisions rather than inferred company facts.
 
 ---
 

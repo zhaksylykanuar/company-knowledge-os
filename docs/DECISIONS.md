@@ -1918,16 +1918,95 @@ Consequences:
   `Interaction` schema and confirmation write flow remain a separate migration
   chunk and must preserve source provenance and workspace isolation.
 
+## DEC-074 - Durable Company Profiles Use Explicit Human Resolution
+
+Decision (2026-07-13): Company World gains a canonical, workspace-owned profile
+layer with `Person`, `Organization`, `Affiliation`, and `Interaction` models,
+plus a terminal `CompanyWorldResolution` receipt for candidate decisions.
+The existing `Workspace` remains the founder's own company; an `Organization`
+represents an external counterparty and does not duplicate workspace identity.
+
+Identity and relationship rules:
+
+- A `Person` has one normalized email identity inside a workspace and may link
+  to one local `User`. Membership-backed people and founder-confirmed external
+  people share the same model; `origin` records how the row first became
+  canonical rather than declaring an immutable internal/external nature.
+- An `Organization` has a workspace-unique canonical key and an optional
+  normalized domain. Its relationship to the founder's company (`unknown`,
+  `prospect`, `customer`, `partner`, `vendor`, or `other`) is always selected by
+  a human; a mail domain alone never assigns it.
+- An `Affiliation` is one active person-to-organization relationship in v1.
+  `contact`, `employee`, `decision_maker`, `account_owner`, `advisor`, or
+  `other` is founder-authored, never inferred by an LLM or provider metadata.
+- `Interaction` is deliberately contact-centric: one sanitized row per
+  `(workspace, source record, person)`, with an optional organization. One
+  email with several participants therefore produces several linked rows
+  without storing participant UUID arrays in JSON. Product timelines may group
+  them by source record. Raw message bodies and snippets are not copied.
+- `CompanyWorldResolution` records `confirmed` or `dismissed`, actor, time,
+  candidate identity/version, request hash, idempotency key, primary source
+  record, and resulting durable IDs. Decisions are terminal in v1; correction
+  requires a later explicit audited flow rather than silent overwrite.
+  The current service/API is insert-only; the database does not claim a general
+  immutable-row mechanism for out-of-band SQL writers.
+- Person and organization candidates are separate terminal decisions. Confirming
+  a person never silently confirms an organization from the email domain. A
+  corporate-domain person may be affiliated only after that organization was
+  explicitly confirmed; a dismissed organization leaves the person standalone.
+
+Tenant and evidence rules:
+
+- Every profile row carries `workspace_id`. Composite foreign keys include the
+  workspace so a person, organization, interaction, affiliation, source record,
+  or resolution result from another tenant cannot be linked at database level.
+- Membership-backed people and all confirming actors are bound to a membership
+  in the same workspace. Founder confirmation provenance is mandatory, and
+  durable resolution result IDs must describe one internally consistent
+  person/organization/affiliation tuple.
+- Confirmation is allowed to `owner`, `admin`, and `member`; `viewer` remains
+  read-only. Non-members and cross-workspace candidates remain hidden as 404.
+- The server re-resolves candidate identity and provenance from the current
+  workspace projection. Client-supplied canonical email, domain, or evidence
+  IDs are not accepted. Confirmation without a workspace-owned source record
+  is rejected as insufficient evidence.
+- Candidate versions cover visible identity/classification fields plus the
+  payload hash of every source record in the displayed evidence snapshot. The
+  server locks those records, re-resolves the candidate, and writes interactions
+  only from that same snapshot; stale evidence fails closed.
+- The generic `EvidenceRef.entity_id` is not reused for these four tables: it
+  has neither entity type nor a foreign key. Provenance is instead explicit via
+  source-record-backed interactions, affiliations, and resolution receipts.
+
+Migration and backfill rules:
+
+- The Alembic revision is schema-only. It never parses private payloads or
+  performs a data backfill during deploy.
+- Backfill is a separate deterministic command: aggregate-only dry-run by
+  default, explicit apply, idempotent database constraints, no provider calls,
+  no external writes, no LLM, and no raw-body output. It materializes current
+  memberships and interactions only for already confirmed external profiles;
+  projected candidates do not become canonical automatically.
+- Confirmation writes only the confirmed newest-100 evidence snapshot. The
+  explicit backfill may inspect all local Gmail `SourceRecord` metadata to add
+  historical interactions for already confirmed people. Company World keeps
+  the projection fallback during rollout.
+- Confirmation and apply-backfill share a workspace-level transaction lock;
+  candidate/idempotency constraints remain the durable replay boundary.
+- Migration downgrade refuses to drop non-empty Company World tables. A backup
+  and explicit data export/removal are required before a destructive rollback.
+- Deferred nullable `Task.assignee_person_id` and
+  `PullRequest.author_person_id` receive no foreign keys or backfill in this
+  chunk. The deleted Lineage-2 `entities` graph remains deleted.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
 
-- **ASK-1 — Product intent resolved → DEC-073; schema count still open.** The
-  product now explicitly needs durable people, organizations, affiliations, and
-  interactions. §6 still defines 22 entity sections (6.2–6.23) while historical
-  wording says "23 модели", and it does not define the physical `Person` shape.
-  The next schema chunk must settle model boundaries and migration order before
-  adding tables; no count is inferred from the old wording.
+- **ASK-1 — ✅ RESOLVED → DEC-073/DEC-074.** Company World product intent and the
+  physical `Person`/`Organization`/`Affiliation`/`Interaction` plus resolution
+  boundary are now explicit. Playbook §6.24–§6.28 records the canonical shapes;
+  the old informal model count is not used as a migration requirement.
 - **ASK-2 — Foundation reconciliation strategy. ✅ RESOLVED → DEC-028** (branch A,
   narrowed: §6 extends the spine lineage, knowledge-graph lineage frozen legacy).
   Original framing kept for context: To close the canonical-naming

@@ -338,6 +338,7 @@ async def test_canonical_migration_tables_constraints_indexes_exist() -> None:
                         where conname in (
                           'ck_source_records_provider',
                           'uq_source_records_workspace_provider_external_id',
+                          'uq_source_records_workspace_id_id',
                           'fk_source_records_workspace_id',
                           'uq_repositories_workspace_provider_full_name',
                           'ck_repositories_visibility',
@@ -381,6 +382,7 @@ async def test_canonical_migration_tables_constraints_indexes_exist() -> None:
     assert constraints == {
         "ck_source_records_provider",
         "uq_source_records_workspace_provider_external_id",
+        "uq_source_records_workspace_id_id",
         "fk_source_records_workspace_id",
         "uq_repositories_workspace_provider_full_name",
         "ck_repositories_visibility",

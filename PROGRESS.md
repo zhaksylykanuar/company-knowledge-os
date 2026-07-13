@@ -2,38 +2,43 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая фактическая ветка `codex/company-world-v1` (локально). Локальные
+> Текущая фактическая ветка `codex/durable-company-profiles` (локально). Локальные
 > коммиты не пушить без явного запроса человека.
 
 ---
 
 ## ▶ СЕЙЧАС
 
-- **Company World v1 / управленческий UI (DEC-073):** `/dashboard` перестроен в
-  «Штаб компании» с четырьмя слоями — ход дня, решения, карта компании и
-  операционный контур; sidebar сгруппирован по командному центру, управлению,
-  источникам и системе. `/company-brain` стал «Миром компании» и первым показывает
-  evidence-backed профили компании, подтверждённых участников workspace,
-  внешние контакты-кандидаты, домены организаций-кандидатов и журнал почтовых
-  соприкосновений. Новый доступный только участникам workspace (включая
-  read-only `viewer`) endpoint
-  `GET /api/v1/workspaces/{workspace_id}/company-map` workspace-scoped, не возвращает
-  raw body/snippet, показывает evidence, честное окно последних 100 Gmail
-  сообщений и `truncated`. В существующей RBAC-модели viewer может читать
-  workspace, но не подтверждать/изменять связи; cross-workspace доступ закрыт.
-  Это read-only проекция без миграции, provider calls, sync, external writes или LLM.
-  Небезопасный глобальный `/audit` удалён из product routes; filesystem preview
-  API теперь operator-key-only и отвергает browser session.
-  Следующий продуктовый chunk — отдельные durable
-  `Person`/`Organization`/`Affiliation`/`Interaction` модели и founder-confirm
-  flow; не смешивать его с текущей проекцией.
-  Проверено 2026-07-13: `uv run ruff check .`; `uv run pytest -q` — 477
-  passed (одно внешнее Starlette/httpx deprecation warning); Alembic
-  `heads/current` — `f2b3c4d5e6f7`, `alembic check` — no new upgrade
-  operations; tracked-secret scan и `git diff --check` зелёные; frontend —
-  210/210 tests, production build, typecheck и lint. Browser QA пройден для
-  owner и viewer: профили и evidence открываются, `/audit` возвращает 404,
-  viewport 390x844 не имеет горизонтального overflow, ошибок console нет.
+- **Durable Company World / founder confirmation (DEC-074):** проекция DEC-073
+  теперь объединяется с workspace-owned `Person`, `Organization`,
+  `Affiliation`, `Interaction` и terminal `CompanyWorldResolution` receipts.
+  Member+ может явно подтвердить либо отклонить server-resolved кандидата через
+  `POST /api/v1/workspaces/{workspace_id}/company-map/resolutions`; viewer
+  остаётся read-only, а cross-workspace доступ скрыт. Клиент передаёт только
+  candidate key/version, idempotency key и введённые человеком labels; email,
+  domain и evidence повторно разрешаются сервером. Подтверждение материализует
+  только sanitized Gmail metadata и source-record provenance, не меняет raw
+  source records, не вызывает provider, external write или LLM. UI «Мир
+  компании» показывает подтверждённых людей/организации отдельно от кандидатов,
+  ручную классификацию связи и стабильные confirm/dismiss состояния. Добавлен
+  aggregate-only `scripts/backfill_company_world.py`: dry-run по умолчанию,
+  explicit `--apply`, без автоматического принятия внешних кандидатов. Alembic
+  migration `a3c4d5e6f7b8` schema-only; downgrade fail-closed для непустых
+  profile-таблиц.
+  Проверено 2026-07-13: `UV_NO_SYNC=1 uv run ruff check .` ✅; полный backend
+  regression — **498 passed / 1 внешнее deprecation warning**; Alembic
+  `heads/current` — `a3c4d5e6f7b8`, empty-table downgrade до `f2b3c4d5e6f7` и
+  повторный upgrade прошли; non-empty downgrade после exclusive locks отказал
+  без потери данных и сохранил head; `alembic check` — без новых операций.
+  Frontend: **222/222 tests**, build (16/16 routes), typecheck и lint ✅.
+  Browser QA итогового дерева прошёл owner confirm/dismiss и reload durable
+  person/organization profiles, viewer read-only, viewport 390×844 без
+  горизонтального overflow и focus transfer в профиль; console — **0
+  warnings/errors**. Локальный deterministic backfill добавил только **6
+  membership-backed people в 6 workspaces**; повторный aggregate dry-run — **0
+  proposals, 0 conflicts, 0 writes**. Ephemeral QA workspace и пользователи
+  удалены; staged secret scan и cached whitespace audit ✅. Provider calls,
+  external writes, deploy и LLM не выполнялись.
 - **Chunk:** первая продуктовая фича за логином — **Briefings**. Chunk 1
   (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Repository
   identity/race debt перед live sync **закрыт** (DEC-050). GitHub App
@@ -45,10 +50,10 @@
   показывает canonical org repo rows для `qtwin-io` из `.local/repos.json`
   (25 repos), а не retained source-event/legacy fallbacks; live read-only check
   по org env keys подтвердил тот же count без вывода секретов. Следующий
-  продуктовый chunk един для live-документов: durable
-  `Person`/`Organization`/`Affiliation`/`Interaction` + founder-confirm flow
-  (DEC-073). Первый GitHub App real-provider read остаётся отдельным
-  human-approved внешним gate, а не конкурирующим product priority.
+  продуктовый Company World chunk с durable профилями и founder-confirm flow
+  закрыт (DEC-074). Следующий приоритет — private-beta deploy/handoff и первый
+  signed-in production onboarding; GitHub App real-provider read остаётся
+  отдельным human-approved внешним gate.
 - **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
   offline, детерминированный gate перед первым approved real read run:
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
@@ -643,6 +648,23 @@ product routes из-за несовпадения tenant scope.*
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
+
+- `2026-07-13` — **Durable Company World profiles + founder confirmation
+  (DEC-074).** Добавлены workspace-owned people, organizations, affiliations,
+  sanitized interactions и terminal resolution receipts; server-revalidated
+  member+ confirm/dismiss API, viewer/cross-tenant boundaries, отдельные
+  person/organization decisions, snapshot locks, idempotency и безопасный
+  dry-run/apply backfill. «Мир компании» теперь разделяет подтверждённые
+  профили и кандидатов, показывает роль, должность, заказчика и историю
+  соприкосновений. Concurrent confirmation, stale UI completion, membership
+  provenance и locked fail-closed rollback покрыты regression tests. Checks:
+  backend **498 passed / 1 external warning**, ruff ✅, Alembic empty
+  downgrade/upgrade + non-empty refusal + no-drift check ✅, frontend **222
+  passed** + build/typecheck/lint ✅, owner/viewer/mobile browser QA ✅, console
+  clean, staged secret scan ✅, post-apply backfill dry-run **0
+  proposals/conflicts/writes**. Следующий шаг — private-beta release
+  handoff/deploy на этом reviewed commit; push, deploy и provider gates требуют
+  отдельного человеческого действия.
 
 - `2026-07-07` — **Private-beta release handoff report.**
   Added a sanitized offline release handoff packet for the human push/deploy

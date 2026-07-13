@@ -4,6 +4,25 @@
 
 ### Changed
 
+- Added durable Company World profiles and founder confirmation (DEC-074).
+  Workspace-owned `people`, `organizations`, `affiliations`, `interactions`,
+  and terminal `company_world_resolutions` receipts preserve tenant-scoped
+  provenance. `GET .../company-map` merges confirmed profiles with unresolved
+  candidates; member+ may call `POST .../company-map/resolutions`, while viewer
+  remains read-only and cross-workspace access stays hidden.
+- Confirmation is server-resolved and idempotent: candidate versions detect
+  stale projections, idempotency keys prevent duplicate writes, and client
+  attempts to supply canonical email/evidence are rejected. Confirmed Gmail
+  interactions persist sanitized metadata and source-record links only; raw
+  records are never rewritten and no provider call, external write, or LLM is
+  started.
+- Added founder-facing confirm/dismiss controls, manual relationship and
+  organization classification, confirmed profile sections, and explicit
+  read-only viewer states to «Мир компании». Added aggregate-only Company World
+  backfill with dry-run default and explicit apply; unconfirmed candidates are
+  never auto-promoted. The schema requires every membership-origin person to
+  reference a workspace membership. Downgrade takes exclusive table locks
+  before its empty-table checks and refuses to drop non-empty profile tables.
 - Added Company World v1 (DEC-073): a new workspace-membership-gated,
   workspace-scoped `GET /api/v1/workspaces/{workspace_id}/company-map` read
   model and product
@@ -11,13 +30,14 @@
   company and people profiles, external-contact and corporate-domain candidates,
   evidence links, and an email touchpoint timeline without claiming that a
   candidate is a customer, employer, or decision maker.
-- Made projection limits and privacy explicit. The API reports available and
-  considered Gmail message counts, the newest-100 window, order, and
-  `truncated`; derived summary fields are named `*_in_window`. Raw bodies and
-  snippets are excluded and cross-workspace isolation is tested. Consistent
-  with existing workspace RBAC, `viewer` may read but not confirm or mutate;
-  future relationship writes require `member` or higher. No table, migration,
-  provider call, sync, external write, secret read, or LLM was added.
+- In the initial DEC-073 projection slice, limits and privacy became explicit:
+  the API reports available and considered Gmail message counts, the
+  newest-100 window, order, and `truncated`; derived summary fields are named
+  `*_in_window`. Raw bodies and snippets are excluded and cross-workspace
+  isolation is tested. That projection-only slice added no table, migration,
+  provider call, sync, external write, secret read, or LLM; DEC-074 above adds
+  the later member+ local relationship-write boundary while viewer stays
+  read-only.
 - Reframed the product UI as company management: `/dashboard` is now «Штаб
   компании» with daily move, decisions, company map, and operational perimeter;
   `/company-brain` is «Мир компании»; the sidebar is grouped by command center,

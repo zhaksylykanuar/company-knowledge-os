@@ -326,6 +326,7 @@ export type CompanyMapCompany = {
 
 export type CompanyMapInternalPerson = {
   key: string;
+  person_id: string | null;
   user_id: string;
   name: string | null;
   email: string;
@@ -336,6 +337,7 @@ export type CompanyMapInternalPerson = {
 
 export type CompanyMapExternalCandidate = {
   key: string;
+  candidate_version: string;
   email: string;
   display_name: string | null;
   organization_key: string | null;
@@ -347,6 +349,7 @@ export type CompanyMapExternalCandidate = {
 
 export type CompanyMapOrganizationCandidate = {
   key: string;
+  candidate_version: string;
   domain: string;
   name: string | null;
   kind: "external_candidate";
@@ -355,6 +358,117 @@ export type CompanyMapOrganizationCandidate = {
   last_interaction_at: string | null;
   source_refs: CompanyBrainSourceRef[];
   needs_founder_confirm: true;
+};
+
+export type CompanyMapConfirmedExternalPerson = {
+  key: string;
+  person_id: string;
+  email: string;
+  display_name: string | null;
+  status: string;
+  organization_id: string | null;
+  organization_key: string | null;
+  organization_name: string | null;
+  relationship_type: CompanyMapRelationshipType | null;
+  role_title: string | null;
+  interaction_count: number;
+  last_interaction_at: string | null;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type CompanyMapConfirmedOrganization = {
+  key: string;
+  organization_id: string;
+  domain: string | null;
+  name: string | null;
+  relationship_kind: CompanyMapOrganizationRelationshipKind;
+  status: string;
+  people_count: number;
+  interaction_count: number;
+  last_interaction_at: string | null;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type CompanyMapResolutionCandidateType =
+  | "external_person"
+  | "organization";
+
+export type CompanyMapResolutionDecision = "confirmed" | "dismissed";
+
+export type CompanyMapRelationshipType =
+  | "contact"
+  | "employee"
+  | "decision_maker"
+  | "account_owner"
+  | "advisor"
+  | "other";
+
+export type CompanyMapOrganizationRelationshipKind =
+  | "unknown"
+  | "prospect"
+  | "customer"
+  | "partner"
+  | "vendor"
+  | "other";
+
+type CompanyMapResolutionRequestBase = {
+  candidate_key: string;
+  candidate_version: string;
+  idempotency_key: string;
+};
+
+type CompanyMapDismissedResolutionRequest = CompanyMapResolutionRequestBase & {
+  candidate_type: CompanyMapResolutionCandidateType;
+  decision: "dismissed";
+};
+
+type CompanyMapConfirmedExternalPersonResolutionRequest =
+  CompanyMapResolutionRequestBase & {
+    candidate_type: "external_person";
+    decision: "confirmed";
+    display_name?: string;
+  } & (
+    | {
+        relationship_type?: never;
+        role_title?: never;
+      }
+    | {
+        relationship_type: CompanyMapRelationshipType;
+        role_title?: string;
+      }
+  );
+
+type CompanyMapConfirmedOrganizationResolutionRequest =
+  CompanyMapResolutionRequestBase & {
+    candidate_type: "organization";
+    decision: "confirmed";
+    organization_name?: string;
+    organization_relationship_kind?: CompanyMapOrganizationRelationshipKind;
+  };
+
+export type CompanyMapResolutionRequest =
+  | CompanyMapDismissedResolutionRequest
+  | CompanyMapConfirmedExternalPersonResolutionRequest
+  | CompanyMapConfirmedOrganizationResolutionRequest;
+
+export type CompanyMapResolutionReceipt = {
+  resolution: {
+    id: string;
+    candidate_type: CompanyMapResolutionCandidateType;
+    candidate_key: string;
+    decision: CompanyMapResolutionDecision;
+    created_at: string;
+  };
+  person_id?: string | null;
+  organization_id?: string | null;
+  affiliation_id?: string | null;
+  interaction_count: number;
+  replayed: boolean;
+  capabilities: {
+    provider_calls: false;
+    external_write: false;
+    llm_used: false;
+  };
 };
 
 export type CompanyMapTouchpointDirection =
@@ -383,6 +497,8 @@ export type CompanyMapResponse = {
   company: CompanyMapCompany;
   summary: {
     internal_people: number;
+    confirmed_external_people: number;
+    confirmed_organizations: number;
     external_contacts_in_window: number;
     organizations_in_window: number;
     touchpoints_in_window: number;
@@ -396,12 +512,16 @@ export type CompanyMapResponse = {
   };
   people: {
     internal: CompanyMapInternalPerson[];
+    confirmed_external: CompanyMapConfirmedExternalPerson[];
     external_candidates: CompanyMapExternalCandidate[];
   };
   organizations: CompanyMapOrganizationCandidate[];
+  confirmed_organizations: CompanyMapConfirmedOrganization[];
   touchpoints: CompanyMapTouchpoint[];
   capabilities: {
     read_only: true;
+    can_resolve: boolean;
+    required_role: "member";
     provider_calls: false;
     llm_used: false;
   };

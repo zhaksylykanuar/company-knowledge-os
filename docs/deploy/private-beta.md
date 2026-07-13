@@ -224,27 +224,61 @@ as deferred until a worker/job path requires it.
 Before `uv run alembic upgrade head` against private-beta data:
 
 1. Take a database backup through the hosting provider.
-2. Record the current app commit SHA in the deploy log.
-3. Record Alembic heads/current locally without printing database URLs:
+2. Enter a maintenance window and stop backend/worker writers. Revision
+   `a3c4d5e6f7b8` adds a regular composite unique constraint to existing
+   `source_records`; even though duplicate `(workspace_id, id)` values are
+   impossible under the primary key, PostgreSQL may hold a write-blocking lock
+   while it builds the backing index. Do not apply it under active ingestion.
+3. Record the current app commit SHA in the deploy log.
+4. Record Alembic heads/current locally without printing database URLs:
 
    ```bash
    uv run alembic heads
    uv run alembic current
    ```
 
-4. Apply migrations:
+5. Apply migrations:
 
    ```bash
    uv run alembic upgrade head
    ```
 
-5. Run backend health and private-beta smoke.
+6. Restart writers only after the migration succeeds, then run backend health
+   and private-beta smoke.
+
+Company World data migration is deliberately separate from schema migration.
+After the new head is healthy, run the aggregate-only dry run for each intended
+workspace from the backend environment:
+
+```bash
+uv run python scripts/backfill_company_world.py --workspace-id <workspace-uuid>
+```
+
+Review only the returned counts and warnings. The command never promotes
+projected external candidates. If `conflicts` is zero and the backup is current,
+an authorized human may apply membership profiles and missing interactions for
+already confirmed people explicitly:
+
+```bash
+uv run python scripts/backfill_company_world.py \
+  --workspace-id <workspace-uuid> \
+  --apply
+```
+
+Re-run the dry run and require all `*_proposed` counts to be zero. Do not print
+or attach emails, raw bodies, provider payloads, tokens, or database URLs.
 
 Rollback policy:
 
 - If migration has not been applied, redeploy the previous app commit.
 - If migration has been applied and smoke fails, prefer restore-from-backup for
   data-impacting failures; do not guess a downgrade path.
+- Revision `a3c4d5e6f7b8` refuses to downgrade while any Company World profile,
+  interaction, affiliation, organization, or resolution row exists. It takes
+  exclusive locks on all five tables before checking them, so run downgrade only
+  in the same stopped-writer maintenance window. Restore the pre-migration
+  backup, or export and remove those rows through an explicitly reviewed data
+  plan before retrying downgrade; never bypass the guard ad hoc.
 - Some migrations are intentionally irreversible — notably `f7b8c9d0e1a2`
   (canonical-task dedupe), which DELETEs duplicate provider-keyed task rows
   before adding the unique index. Treat database backup as the rollback boundary.
@@ -269,9 +303,11 @@ backend, check `FOUNDEROS_API_PROXY_TARGET` (or `NEXT_PUBLIC_API_BASE_URL`) and
 
 ## GitHub connection setup
 
-Current private beta uses the manual GitHub provider-token bridge. The token is
-submitted to the backend, encrypted, and never returned by read APIs. GitHub
-OAuth/onboarding is still future work.
+The preferred product path is the GitHub App installation foundation
+(DEC-052/053): server-side App credentials, a workspace-scoped installation
+connection, and one explicit repository read at a time. The manual encrypted
+provider-token path remains an operator bridge, not browser onboarding. The
+first real GitHub App read remains a separate human-approved gate.
 
 Rules:
 

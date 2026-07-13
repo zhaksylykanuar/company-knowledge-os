@@ -20,7 +20,7 @@ Read in this order (control trio = what / where / why):
 - Frontend: minimal Next.js shell under [`web/`](web/README.md). The legacy
   local/operator static UI has been removed; do not restore `/ui`.
 - Current implemented foundations include evidence-backed ingestion/extraction,
-  source events, Company Brain preview/repo audit, workspace/GitHub/action
+  workspace-scoped Company Brain and Company World, workspace/GitHub/action
   backend foundations, guarded execution boundaries, and a broad pytest suite.
 - Founder login is built: email+password on server-side, revocable sessions
   (Argon2id, httpOnly first-party cookie via a same-origin proxy, DB login
@@ -32,11 +32,15 @@ Read in this order (control trio = what / where / why):
   foundations exist, including per-repository read-only sync buttons in
   `/github`, mocked synced-evidence isolation for Company Brain/Briefings, safe
   rate-limit/error observability, and a display-only real-read readiness panel.
+  Company World now has workspace-owned durable people/organization profiles,
+  explicit human confirm/dismiss decisions, evidence-backed affiliations and
+  sanitized interaction history; viewer remains read-only.
   Local Jira/Gmail/Drive import/list connectors, internal Documents, normalized
   entities, teammate provisioning/setup links, and sanitized request logging are
   in place. Remaining product gaps are the first human-approved GitHub App real
   read run, LLM briefing narrative over real connected data, first production
-  deploy of the current auth/session build, and broader beta hardening.
+  deploy of the current auth/session build, email-delivered self-serve
+  onboarding/password reset, and broader beta hardening.
 
 ## Local full-stack run path
 

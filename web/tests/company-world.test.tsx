@@ -4,12 +4,28 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  beginCompanyWorldResolution,
+  buildCompanyWorldResolutionDraft,
+  companyWorldCandidateRenderKey,
+  completedCompanyWorldResolutionRefresh,
   CompanyWorldPanelView,
+  createCompanyWorldResolutionGate,
+  failedCompanyWorldResolution,
+  failedCompanyWorldResolutionRefresh,
+  finishCompanyWorldResolution,
+  isCurrentCompanyWorldResolution,
+  pendingCompanyWorldResolution,
+  personOrganizationState,
+  resetCompanyWorldResolutionGate,
+  successfulCompanyWorldResolution,
   validSelectedKey
 } from "../components/CompanyWorldPanel";
 import {
+  ApiRequestError,
   buildWorkspaceCompanyMapPath,
-  fetchCompanyMap
+  buildWorkspaceCompanyMapResolutionsPath,
+  fetchCompanyMap,
+  resolveCompanyMapCandidate
 } from "../lib/api";
 import { M } from "../lib/messages";
 import type { CompanyMapResponse } from "../lib/types";
@@ -23,6 +39,11 @@ const sourceRef = {
   record_type: "message",
   record_id: "source-1"
 };
+
+const PERSON_CANDIDATE_VERSION = "a".repeat(64);
+const ORGANIZATION_CANDIDATE_VERSION = "b".repeat(64);
+const STALE_CANDIDATE_VERSION = "c".repeat(64);
+const UPDATED_CANDIDATE_VERSION = "d".repeat(64);
 
 const sampleMap: CompanyMapResponse = {
   workspace_id: "workspace-123",
@@ -49,6 +70,8 @@ const sampleMap: CompanyMapResponse = {
   },
   summary: {
     internal_people: 1,
+    confirmed_external_people: 1,
+    confirmed_organizations: 1,
     external_contacts_in_window: 1,
     organizations_in_window: 1,
     touchpoints_in_window: 1
@@ -64,6 +87,7 @@ const sampleMap: CompanyMapResponse = {
     internal: [
       {
         key: "user:user-1",
+        person_id: null,
         user_id: "user-1",
         name: "Анна",
         email: "anna@northstar.test",
@@ -83,9 +107,27 @@ const sampleMap: CompanyMapResponse = {
         ]
       }
     ],
+    confirmed_external: [
+      {
+        key: "person:confirmed-buyer",
+        person_id: "confirmed-buyer",
+        email: "confirmed@acme.test",
+        display_name: "Confirmed Buyer",
+        status: "confirmed",
+        organization_id: "confirmed-acme",
+        organization_key: "organization:confirmed-acme",
+        organization_name: "Acme Confirmed",
+        relationship_type: "decision_maker",
+        role_title: "Operations Lead",
+        interaction_count: 3,
+        last_interaction_at: "2026-07-12T12:00:00Z",
+        source_refs: [sourceRef]
+      }
+    ],
     external_candidates: [
       {
         key: "external-person:buyer",
+        candidate_version: PERSON_CANDIDATE_VERSION,
         email: "buyer@acme.test",
         display_name: "Buyer Person",
         organization_key: "organization:acme.test",
@@ -99,6 +141,7 @@ const sampleMap: CompanyMapResponse = {
   organizations: [
     {
       key: "organization:acme.test",
+      candidate_version: ORGANIZATION_CANDIDATE_VERSION,
       domain: "acme.test",
       name: null,
       kind: "external_candidate",
@@ -107,6 +150,20 @@ const sampleMap: CompanyMapResponse = {
       last_interaction_at: "2026-07-12T12:00:00Z",
       source_refs: [sourceRef],
       needs_founder_confirm: true
+    }
+  ],
+  confirmed_organizations: [
+    {
+      key: "organization:confirmed-acme",
+      organization_id: "confirmed-acme",
+      domain: "confirmed.test",
+      name: "Acme Confirmed",
+      relationship_kind: "customer",
+      status: "confirmed",
+      people_count: 1,
+      interaction_count: 3,
+      last_interaction_at: "2026-07-12T12:00:00Z",
+      source_refs: [sourceRef]
     }
   ],
   touchpoints: [
@@ -125,6 +182,8 @@ const sampleMap: CompanyMapResponse = {
   ],
   capabilities: {
     read_only: true,
+    can_resolve: true,
+    required_role: "member",
     provider_calls: false,
     llm_used: false
   },
@@ -133,12 +192,73 @@ const sampleMap: CompanyMapResponse = {
   llm_used: false
 };
 
+function mapWithConfirmedCandidateOrganization(): CompanyMapResponse {
+  const confirmed = sampleMap.confirmed_organizations[0];
+  assert.ok(confirmed);
+  return {
+    ...sampleMap,
+    organizations: [],
+    confirmed_organizations: [
+      {
+        ...confirmed,
+        domain: "acme.test",
+        key: "organization:durable-acme",
+        name: "Acme Confirmed"
+      }
+    ]
+  };
+}
+
+function mapWithStandalonePerson(): CompanyMapResponse {
+  return {
+    ...sampleMap,
+    organizations: []
+  };
+}
+
+function resolutionButton(html: string, action: "confirm" | "dismiss"): string {
+  const tag = (html.match(/<button\b[^>]*>/g) ?? []).find((button) =>
+    button.includes(`data-resolution-action="${action}"`)
+  );
+  assert.ok(tag, `missing ${action} resolution button`);
+  return tag;
+}
+
+function elementWithId(html: string, idSuffix: string): string {
+  const tag = (html.match(/<(?:input|select)\b[^>]*>/g) ?? []).find((element) =>
+    element.includes(`id="${idSuffix}"`)
+  );
+  assert.ok(tag, `missing element ${idSuffix}`);
+  return tag;
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
 function renderPanel(
   status: "loading" | "ready" | "empty" | "error" | "missing",
-  data: CompanyMapResponse | null = sampleMap
+  data: CompanyMapResponse | null = sampleMap,
+  initialSelectedKey: string | null = null
 ): string {
   return renderToStaticMarkup(
-    <CompanyWorldPanelView data={data} error={null} status={status} />
+    <CompanyWorldPanelView
+      data={data}
+      error={null}
+      initialSelectedKey={initialSelectedKey}
+      onResolve={async () => undefined}
+      status={status}
+    />
   );
 }
 
@@ -164,6 +284,104 @@ test("builds and fetches the workspace company-map endpoint", async () => {
     const payload = await fetchCompanyMap("workspace-123");
     assert.equal(payload.summary.internal_people, 1);
     assert.equal(payload.people.external_candidates[0]?.needs_founder_confirm, true);
+    assert.match(
+      payload.people.external_candidates[0]?.candidate_version ?? "",
+      /^[0-9a-f]{64}$/
+    );
+    assert.match(payload.organizations[0]?.candidate_version ?? "", /^[0-9a-f]{64}$/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("builds and posts the workspace company-map resolution contract", async () => {
+  assert.equal(
+    buildWorkspaceCompanyMapResolutionsPath("workspace-123"),
+    "/api/v1/workspaces/workspace-123/company-map/resolutions"
+  );
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/company-map/resolutions"
+    );
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      candidate_type: "external_person",
+      candidate_key: "external-person:buyer",
+      candidate_version: PERSON_CANDIDATE_VERSION,
+      decision: "confirmed",
+      idempotency_key: "resolution-1",
+      relationship_type: "decision_maker",
+      role_title: "Operations Lead"
+    });
+    return new Response(
+      JSON.stringify({
+        resolution: {
+          id: "resolution-1",
+          candidate_type: "external_person",
+          candidate_key: "external-person:buyer",
+          decision: "confirmed",
+          created_at: "2026-07-13T12:00:00Z"
+        },
+        person_id: "person-1",
+        organization_id: "organization-1",
+        affiliation_id: "affiliation-1",
+        interaction_count: 2,
+        replayed: false,
+        capabilities: {
+          provider_calls: false,
+          external_write: false,
+          llm_used: false
+        }
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 200 }
+    );
+  }) as typeof fetch;
+
+  try {
+    const receipt = await resolveCompanyMapCandidate("workspace-123", {
+      candidate_type: "external_person",
+      candidate_key: "external-person:buyer",
+      candidate_version: PERSON_CANDIDATE_VERSION,
+      decision: "confirmed",
+      idempotency_key: "resolution-1",
+      relationship_type: "decision_maker",
+      role_title: "Operations Lead"
+    });
+    assert.equal(receipt.person_id, "person-1");
+    assert.equal(receipt.capabilities.external_write, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("preserves actionable HTTP statuses for resolution handling", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    for (const status of [403, 404, 409, 422]) {
+      globalThis.fetch = (async () =>
+        new Response(JSON.stringify({ detail: `resolution ${status}` }), {
+          headers: { "Content-Type": "application/json" },
+          status
+        })) as typeof fetch;
+
+      await assert.rejects(
+        resolveCompanyMapCandidate("workspace-123", {
+          candidate_type: "organization",
+          candidate_key: "organization:acme.test",
+          candidate_version: STALE_CANDIDATE_VERSION,
+          decision: "dismissed",
+          idempotency_key: `resolution-${status}`
+        }),
+        (error: unknown) =>
+          error instanceof ApiRequestError &&
+          error.status === status &&
+          error.message === `resolution ${status}`
+      );
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -187,16 +405,391 @@ test("renders an evidence-backed company world with provisional candidates", () 
   assert.ok(html.includes("Анна"));
   assert.ok(html.includes("Buyer Person"));
   assert.ok(html.includes("acme.test"));
+  assert.ok(html.includes("Confirmed Buyer"));
+  assert.ok(html.includes("Acme Confirmed"));
   assert.ok(html.includes("Kickoff and next steps"));
-  assert.ok(html.includes(M.companyWorld.needsConfirmation));
+  assert.ok(html.includes(M.companyWorld.organizationNeedsConfirmation));
   assert.ok(html.includes(M.companyWorld.boundary));
   assert.ok(html.includes(M.companyWorld.windowTruncated));
   assert.ok(html.includes("Кандидаты требуют подтверждения."));
-  assert.ok(html.includes(M.companyWorld.readOnly));
+  assert.ok(html.includes(M.companyWorld.resolutionEnabled));
   assert.ok(html.includes(M.companyWorld.noProviderCalls));
+  assert.ok(html.includes(M.companyWorld.noExternalWrites));
   assert.ok(html.includes(M.companyWorld.localProjection));
+  assert.ok(html.includes(M.companyWorld.statuses.active));
+  assert.ok(html.includes(M.companyWorld.organizationRelationshipKinds.customer));
   assert.ok(html.includes('aria-pressed="true"'));
+  assert.ok(html.includes('aria-controls="company-world-profile"'));
+  assert.ok(html.includes('id="company-world-profile"'));
+  assert.ok(html.includes('tabindex="-1"'));
   assert.doesNotMatch(html, /PRIVATE_BODY|raw_body/);
+});
+
+test("builds strict person, organization, standalone, and dismissal payloads", () => {
+  assert.deepEqual(
+    buildCompanyWorldResolutionDraft({
+      candidateKey: "external-person:buyer",
+      candidateType: "external_person",
+      candidateVersion: PERSON_CANDIDATE_VERSION,
+      decision: "confirmed",
+      displayName: " Buyer Person ",
+      organizationName: "must-not-be-sent",
+      organizationRelationshipKind: "customer",
+      relationshipType: "decision_maker",
+      roleTitle: " Operations Lead "
+    }),
+    {
+      candidate_key: "external-person:buyer",
+      candidate_type: "external_person",
+      candidate_version: PERSON_CANDIDATE_VERSION,
+      decision: "confirmed",
+      display_name: "Buyer Person",
+      relationship_type: "decision_maker",
+      role_title: "Operations Lead"
+    }
+  );
+
+  assert.deepEqual(
+    buildCompanyWorldResolutionDraft({
+      candidateKey: "external-person:buyer",
+      candidateType: "external_person",
+      candidateVersion: PERSON_CANDIDATE_VERSION,
+      decision: "confirmed",
+      relationshipType: "",
+      roleTitle: "must-not-be-sent"
+    }),
+    {
+      candidate_key: "external-person:buyer",
+      candidate_type: "external_person",
+      candidate_version: PERSON_CANDIDATE_VERSION,
+      decision: "confirmed"
+    }
+  );
+
+  assert.deepEqual(
+    buildCompanyWorldResolutionDraft({
+      candidateKey: "external-person:buyer",
+      candidateType: "external_person",
+      candidateVersion: PERSON_CANDIDATE_VERSION,
+      decision: "confirmed",
+      displayName: "Buyer Person",
+      relationshipFieldsVisible: false,
+      relationshipType: "decision_maker",
+      roleTitle: "must-not-be-sent"
+    }),
+    {
+      candidate_key: "external-person:buyer",
+      candidate_type: "external_person",
+      candidate_version: PERSON_CANDIDATE_VERSION,
+      decision: "confirmed",
+      display_name: "Buyer Person"
+    }
+  );
+
+  assert.deepEqual(
+    buildCompanyWorldResolutionDraft({
+      candidateKey: "organization:acme.test",
+      candidateType: "organization",
+      candidateVersion: ORGANIZATION_CANDIDATE_VERSION,
+      decision: "confirmed",
+      organizationName: " Acme ",
+      organizationRelationshipKind: "customer"
+    }),
+    {
+      candidate_key: "organization:acme.test",
+      candidate_type: "organization",
+      candidate_version: ORGANIZATION_CANDIDATE_VERSION,
+      decision: "confirmed",
+      organization_name: "Acme",
+      organization_relationship_kind: "customer"
+    }
+  );
+
+  assert.deepEqual(
+    buildCompanyWorldResolutionDraft({
+      candidateKey: "organization:acme.test",
+      candidateType: "organization",
+      candidateVersion: ORGANIZATION_CANDIDATE_VERSION,
+      decision: "dismissed",
+      organizationName: "must-not-be-sent",
+      organizationRelationshipKind: "customer"
+    }),
+    {
+      candidate_key: "organization:acme.test",
+      candidate_type: "organization",
+      candidate_version: ORGANIZATION_CANDIDATE_VERSION,
+      decision: "dismissed"
+    }
+  );
+});
+
+test("serializes deferred resolutions and ignores a completion from an old sequence", async () => {
+  const gate = createCompanyWorldResolutionGate("workspace-123");
+  const firstSequence = beginCompanyWorldResolution(gate, "workspace-123");
+  assert.equal(typeof firstSequence, "number");
+  assert.equal(beginCompanyWorldResolution(gate, "workspace-123"), null);
+
+  const firstResponse = deferred<void>();
+  let staleCompletionApplied = false;
+  const firstCompletion = (async () => {
+    await firstResponse.promise;
+    if (
+      firstSequence !== null &&
+      isCurrentCompanyWorldResolution(gate, "workspace-123", firstSequence)
+    ) {
+      staleCompletionApplied = true;
+      finishCompanyWorldResolution(gate, "workspace-123", firstSequence);
+    }
+  })();
+
+  resetCompanyWorldResolutionGate(gate, "workspace-456");
+  firstResponse.resolve(undefined);
+  await firstCompletion;
+  assert.equal(staleCompletionApplied, false);
+
+  const secondSequence = beginCompanyWorldResolution(gate, "workspace-456");
+  assert.equal(typeof secondSequence, "number");
+  assert.ok(secondSequence !== firstSequence);
+  assert.ok(
+    secondSequence !== null &&
+      isCurrentCompanyWorldResolution(gate, "workspace-456", secondSequence)
+  );
+  if (secondSequence !== null) {
+    finishCompanyWorldResolution(gate, "workspace-456", secondSequence);
+  }
+  assert.equal(gate.inFlight, false);
+});
+
+test("blocks person confirmation while its organization candidate is unresolved", () => {
+  const person = sampleMap.people.external_candidates[0];
+  assert.ok(person);
+  assert.equal(personOrganizationState(sampleMap, person).kind, "unresolved");
+
+  const html = renderPanel("ready", sampleMap, person.key);
+  assert.ok(html.includes(M.companyWorld.organizationResolutionRequired));
+  assert.ok(html.includes(M.companyWorld.openOrganizationProfile));
+  assert.ok(html.includes(M.companyWorld.humanClassificationBoundary));
+  assert.match(resolutionButton(html, "confirm"), /\bdisabled=""/);
+  assert.doesNotMatch(resolutionButton(html, "dismiss"), /\bdisabled=/);
+  assert.ok(!html.includes(`${person.key.replaceAll(":", "-")}-relationship-type`));
+});
+
+test("shows canonical relationship controls only for a confirmed organization", () => {
+  const data = mapWithConfirmedCandidateOrganization();
+  const person = data.people.external_candidates[0];
+  assert.ok(person);
+  assert.equal(personOrganizationState(data, person).kind, "confirmed");
+
+  const html = renderPanel("ready", data, person.key);
+  const idPrefix = "world-resolution-external-person-buyer";
+  assert.ok(html.includes(M.companyWorld.confirmedOrganizationForPerson));
+  assert.match(html, /<option value="decision_maker">Лицо, принимающее решение<\/option>/);
+  assert.match(html, /<option value="account_owner">Ответственный за аккаунт<\/option>/);
+  assert.doesNotMatch(resolutionButton(html, "confirm"), /\bdisabled=/);
+  assert.match(elementWithId(html, `${idPrefix}-role-title`), /\bdisabled=""/);
+  assert.ok(elementWithId(html, `${idPrefix}-relationship-type`).startsWith("<select"));
+  assert.ok(!html.includes(`${idPrefix}-organization-name`));
+});
+
+test("keeps a person standalone after its organization is absent or dismissed", () => {
+  const data = mapWithStandalonePerson();
+  const person = data.people.external_candidates[0];
+  assert.ok(person);
+  assert.equal(personOrganizationState(data, person).kind, "standalone");
+
+  const html = renderPanel("ready", data, person.key);
+  assert.ok(html.includes(M.companyWorld.standalonePerson));
+  assert.doesNotMatch(resolutionButton(html, "confirm"), /\bdisabled=/);
+  assert.ok(!html.includes("-relationship-type"));
+  assert.ok(!html.includes("-organization-name"));
+});
+
+test("renders canonical organization kind controls with Russian labels", () => {
+  const organization = sampleMap.organizations[0];
+  assert.ok(organization);
+  const html = renderPanel("ready", sampleMap, organization.key);
+
+  assert.match(html, /<option value="prospect">Потенциальный заказчик<\/option>/);
+  assert.match(html, /<option value="customer">Заказчик<\/option>/);
+  assert.match(html, /<option value="vendor">Поставщик<\/option>/);
+  assert.ok(html.includes(M.companyWorld.organizationNeedsConfirmation));
+  assert.ok(
+    elementWithId(
+      html,
+      "world-resolution-organization-acme-test-relationship-kind"
+    ).startsWith("<select")
+  );
+});
+
+test("changes the remount key and form defaults when candidate_version changes", () => {
+  const organization = sampleMap.organizations[0];
+  assert.ok(organization);
+  const updatedMap: CompanyMapResponse = {
+    ...sampleMap,
+    organizations: [
+      {
+        ...organization,
+        candidate_version: UPDATED_CANDIDATE_VERSION,
+        name: "Acme Updated"
+      }
+    ]
+  };
+
+  const firstHtml = renderPanel("ready", sampleMap, organization.key);
+  const updatedHtml = renderPanel("ready", updatedMap, organization.key);
+  assert.notEqual(
+    companyWorldCandidateRenderKey(organization.key, organization.candidate_version),
+    companyWorldCandidateRenderKey(organization.key, UPDATED_CANDIDATE_VERSION)
+  );
+  assert.ok(
+    firstHtml.includes(`data-candidate-version="${ORGANIZATION_CANDIDATE_VERSION}"`)
+  );
+  assert.ok(
+    updatedHtml.includes(`data-candidate-version="${UPDATED_CANDIDATE_VERSION}"`)
+  );
+  assert.ok(updatedHtml.includes('value="Acme Updated"'));
+});
+
+test("maps pending, success, 403, 404, 409, and 422 to visible states", () => {
+  const candidateKey = sampleMap.organizations[0]?.key ?? "organization:missing";
+  const states = [
+    pendingCompanyWorldResolution(candidateKey),
+    successfulCompanyWorldResolution(candidateKey, "confirmed"),
+    successfulCompanyWorldResolution(candidateKey, "dismissed"),
+    failedCompanyWorldResolution(candidateKey, new ApiRequestError("forbidden", 403)).state,
+    failedCompanyWorldResolution(candidateKey, new ApiRequestError("missing", 404)).state,
+    failedCompanyWorldResolution(candidateKey, new ApiRequestError("conflict", 409)).state,
+    failedCompanyWorldResolution(candidateKey, new ApiRequestError("invalid", 422)).state
+  ];
+
+  for (const state of states) {
+    const html = renderToStaticMarkup(
+      <CompanyWorldPanelView
+        data={sampleMap}
+        error={null}
+        initialSelectedKey={candidateKey}
+        resolutionState={state}
+        status="ready"
+      />
+    );
+    assert.ok(state.message && html.includes(state.message));
+    assert.ok(html.includes(`world-resolution-notice--${state.status}`));
+  }
+
+  assert.equal(
+    failedCompanyWorldResolution(candidateKey, new ApiRequestError("forbidden", 403)).refresh,
+    true
+  );
+  assert.equal(
+    failedCompanyWorldResolution(candidateKey, new ApiRequestError("missing", 404)).refresh,
+    true
+  );
+  assert.equal(
+    failedCompanyWorldResolution(candidateKey, new ApiRequestError("conflict", 409)).refresh,
+    true
+  );
+  assert.equal(
+    failedCompanyWorldResolution(candidateKey, new ApiRequestError("invalid", 422)).refresh,
+    false
+  );
+
+  const pendingHtml = renderToStaticMarkup(
+    <CompanyWorldPanelView
+      data={sampleMap}
+      error={null}
+      initialSelectedKey={candidateKey}
+      resolutionState={pendingCompanyWorldResolution(candidateKey)}
+      status="ready"
+    />
+  );
+  assert.match(resolutionButton(pendingHtml, "confirm"), /\bdisabled=""/);
+  assert.match(resolutionButton(pendingHtml, "dismiss"), /\bdisabled=""/);
+
+  const standaloneMap = mapWithStandalonePerson();
+  const personKey = standaloneMap.people.external_candidates[0]?.key;
+  assert.ok(personKey);
+  const otherCandidatePendingHtml = renderToStaticMarkup(
+    <CompanyWorldPanelView
+      data={standaloneMap}
+      error={null}
+      initialSelectedKey={personKey}
+      resolutionState={pendingCompanyWorldResolution(candidateKey)}
+      status="ready"
+    />
+  );
+  assert.match(resolutionButton(otherCandidatePendingHtml, "confirm"), /\bdisabled=""/);
+  assert.match(resolutionButton(otherCandidatePendingHtml, "dismiss"), /\bdisabled=""/);
+});
+
+test("keeps a saved receipt visible through reload failure and recovery", () => {
+  const candidateKey = sampleMap.organizations[0]?.key ?? "organization:missing";
+  const saved = successfulCompanyWorldResolution(candidateKey, "confirmed");
+  const refreshFailed = failedCompanyWorldResolutionRefresh(saved);
+  const errorHtml = renderToStaticMarkup(
+    <CompanyWorldPanelView
+      data={null}
+      error="offline"
+      resolutionState={refreshFailed}
+      status="error"
+    />
+  );
+  assert.ok(errorHtml.includes(M.companyWorld.resolutionSavedRefreshFailed));
+  assert.ok(errorHtml.includes("offline"));
+  assert.match(errorHtml, /world-resolution-notice--success/);
+
+  const loadingHtml = renderToStaticMarkup(
+    <CompanyWorldPanelView
+      data={sampleMap}
+      error={null}
+      resolutionState={saved}
+      status="loading"
+    />
+  );
+  assert.ok(loadingHtml.includes(M.companyWorld.resolutionConfirmed));
+
+  const recovered = completedCompanyWorldResolutionRefresh(refreshFailed);
+  assert.equal(recovered.message, M.companyWorld.resolutionConfirmedRefreshed);
+  const readyHtml = renderToStaticMarkup(
+    <CompanyWorldPanelView
+      data={sampleMap}
+      error={null}
+      initialSelectedKey={candidateKey}
+      resolutionState={recovered}
+      status="ready"
+    />
+  );
+  assert.ok(readyHtml.includes(M.companyWorld.resolutionConfirmedRefreshed));
+  assert.ok(
+    readyHtml.indexOf('class="world-profile"') <
+      readyHtml.indexOf("world-resolution-notice--success")
+  );
+  assert.equal(
+    (readyHtml.match(/world-resolution-notice--success/g) ?? []).length,
+    1
+  );
+});
+
+test("keeps candidate decisions read-only for viewers", () => {
+  const viewerMap: CompanyMapResponse = {
+    ...sampleMap,
+    capabilities: {
+      ...sampleMap.capabilities,
+      can_resolve: false
+    }
+  };
+  const html = renderPanel(
+    "ready",
+    viewerMap,
+    viewerMap.people.external_candidates[0]?.key ?? null
+  );
+
+  assert.ok(html.includes(M.companyWorld.resolutionReadOnly));
+  assert.ok(html.includes(M.companyWorld.readOnly));
+  assert.ok(html.includes(M.companyWorld.organizationResolutionRequiredDescription));
+  assert.doesNotMatch(html, /основател/i);
+  assert.ok(!html.includes(`>${M.companyWorld.dismissCandidate}</button>`));
+  assert.ok(!html.includes('data-candidate-type="external_person"'));
+  assert.ok(!html.includes('data-resolution-action="confirm"'));
 });
 
 test("falls back to the company when a selected profile disappears", () => {
@@ -207,5 +800,13 @@ test("falls back to the company when a selected profile disappears", () => {
   assert.equal(
     validSelectedKey(sampleMap, sampleMap.people.external_candidates[0]?.key ?? null),
     sampleMap.people.external_candidates[0]?.key
+  );
+  assert.equal(
+    validSelectedKey(sampleMap, sampleMap.people.confirmed_external[0]?.key ?? null),
+    sampleMap.people.confirmed_external[0]?.key
+  );
+  assert.equal(
+    validSelectedKey(sampleMap, sampleMap.confirmed_organizations[0]?.key ?? null),
+    sampleMap.confirmed_organizations[0]?.key
   );
 });
