@@ -4,16 +4,14 @@ Status: roadmap is subordinate to the canonical control trio:
 `../founderOS_MASTER_PLAYBOOK.md` (what), `../PROGRESS.md` (where), and
 `DECISIONS.md` (why).
 
-The current execution pointer is `../PROGRESS.md`: CHUNK 8 hardening is closed
-(FOS-027B2 + sync-layer idempotency), email+password / server-side-session login
-is built, deterministic Founder Briefings now persist history, GitHub App
-product-connect foundation is in place, polling-only GitHub App live read sync
-exists in the backend, `/github` renders each known repository with its own
-explicit read-only sync button, and mocked synced-evidence isolation is verified
-for Company Brain and deterministic Briefings. Safe live-read error/rate-limit observability is
-also in place. The next horizon is the first explicitly approved real read run
-before an LLM briefing narrative. Docs consolidation is complete; this roadmap is
-planning context, not the live task source.
+The current execution pointer is `../PROGRESS.md`: the local MVP foundations are
+in place and Company World v1 now turns workspace memberships plus bounded,
+sanitized Gmail evidence into an honest company operating map (DEC-073). The
+next product-data horizon is durable people/organization/affiliation/interaction
+profiles with explicit founder confirmation. First real provider reads,
+production deploy, and LLM narrative remain separate human-gated horizons. Docs
+consolidation is complete; this roadmap is planning context, not the live task
+source.
 
 ## Phase 0 - Project Setup
 
@@ -60,9 +58,7 @@ Done:
   `uq_tasks_workspace_provider_external_id` and idempotent `ON CONFLICT` upserts
   across the GitHub sync path. Canonical `repositories` also have a
   workspace/provider/full_name unique guard for cross-path GitHub identity.
-- Existing migrations are at one Alembic head/current: `e8f9a0b1c2d3` (after the
-  task-uniqueness, `ingested_events`-drift, sessions/login-throttle, and
-  briefing-persistence, and repository full-name identity migrations).
+- Existing migrations are at one Alembic head/current: `f2b3c4d5e6f7`.
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
   compatibility substrate; FOS-009 repointed workspace repository reads to
@@ -70,12 +66,13 @@ Done:
 
 Missing:
 
-- `NormalizedEntity` and related generalized entity tables after the GitHub
-  spine proves the need.
-- Person ambiguity remains open as ASK-1.
+- Durable `Person`, `Organization`, `Affiliation`, and `Interaction` tables plus
+  explicit founder confirmation. DEC-073 resolves the product need; ASK-1 keeps
+  the exact physical model boundary/count open until migration design.
 
-Next step: GitHub App real read-run readiness; physical substrate drop
-remains a later migration/cleanup task.
+Next step: durable company profiles and founder confirmation (DEC-073). The
+first GitHub App real read run remains a separate human-approved external gate;
+physical substrate drop remains a later migration/cleanup task.
 
 Definition of Done:
 
@@ -211,6 +208,12 @@ Done:
   `/documents` provides internal document CRUD/search/version history; and
   `/company-brain` provides a dedicated Company Brain + normalized-entities
   view.
+- `/dashboard` is organized as a company command center and `/company-brain`
+  leads with Company World: confirmed workspace members, evidence-backed
+  external-contact/organization candidates, inspectable profiles, and a bounded
+  Gmail touchpoint timeline. The projection is gated by workspace membership
+  (including the read-only `viewer` role), workspace-scoped, read-only, and
+  explicit about truncation and unconfirmed roles (DEC-073).
 - `/github` shows GitHub App real-read readiness over already-loaded local
   state, including env/installation/repo-surface blockers, without starting a
   provider call.
@@ -223,6 +226,8 @@ Missing:
   owner/admin teammate provisioning, `/settings` team UI, and one-time
   `/setup-password` links exist.
 - Browser/product E2E coverage.
+- Durable people/organization/affiliation/interaction profiles and the founder
+  confirmation flow; Company World v1 is currently a reversible projection.
 - Selected repository issue and PR sync now have read-only product UI controls
   in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
   allowlisted repository at a time without external writes.

@@ -15,6 +15,7 @@ import type {
   ApiFetchOptions,
   BriefingActionProposalGenerationResponse,
   BriefingListResponse,
+  CompanyMapResponse,
   CompanyBrainResponse,
   FounderBriefingRequest,
   FounderBriefingResponse,
@@ -143,6 +144,17 @@ export async function fetchGitHubOperationalWork(
 
 export function buildWorkspaceCompanyBrainPath(workspaceId: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-brain`;
+}
+
+export function buildWorkspaceCompanyMapPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-map`;
+}
+
+export async function fetchCompanyMap(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<CompanyMapResponse> {
+  return apiFetch<CompanyMapResponse>(buildWorkspaceCompanyMapPath(workspaceId), options);
 }
 
 export function buildWorkspaceCompanyBrainEntitiesPath(workspaceId: string): string {

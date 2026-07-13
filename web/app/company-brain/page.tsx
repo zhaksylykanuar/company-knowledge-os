@@ -3,15 +3,14 @@
 import { useState } from "react";
 
 import { CompanyBrainPanel } from "../../components/CompanyBrainPanel";
+import { CompanyWorldPanel } from "../../components/CompanyWorldPanel";
 import { NormalizedEntitiesPanel } from "../../components/NormalizedEntitiesPanel";
 import { PageHeader } from "../../components/PageHeader";
 import { M } from "../../lib/messages";
 
 export default function CompanyBrainPage() {
-  // A dedicated, navigable Company Brain view (playbook §1.4 "See Company Brain
-  // entities" / §1.5 "Company Brain view"). It composes the existing read-only
-  // panels so the founder can reach the canonical evidence-backed view without
-  // scrolling the dashboard or using the terminal. No new data path is added.
+  // Company World v1 composes the new workspace-scoped company map with the
+  // existing canonical Company Brain and normalized-entity projections.
   const [refreshSignal, setRefreshSignal] = useState(0);
 
   return (
@@ -30,8 +29,20 @@ export default function CompanyBrainPage() {
           {M.common.refreshStatus}
         </button>
       </div>
-      <CompanyBrainPanel refreshSignal={refreshSignal} />
-      <NormalizedEntitiesPanel refreshSignal={refreshSignal} />
+      <CompanyWorldPanel refreshSignal={refreshSignal} />
+      <section className="dashboard-layer">
+        <header className="layer-heading">
+          <span aria-hidden="true">{M.companyBrainPage.dataLayerIndex}</span>
+          <div>
+            <h2>{M.companyBrainPage.dataLayerTitle}</h2>
+            <p>{M.companyBrainPage.dataLayerDescription}</p>
+          </div>
+        </header>
+        <div className="operations-stack">
+          <CompanyBrainPanel refreshSignal={refreshSignal} />
+          <NormalizedEntitiesPanel refreshSignal={refreshSignal} />
+        </div>
+      </section>
     </>
   );
 }

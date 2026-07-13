@@ -1867,16 +1867,67 @@ Consequences:
 - This is local/in-process only: it adds no provider calls, external writes,
   secret reads, or LLM, and introduces no new dependency, table, or migration.
 
+## DEC-073 - Company World Is An Evidence-Backed Operating Map
+
+Decision (2026-07-13): founderOS presents the company as an operating strategy
+surface, not as a flat collection of technical panels and not as artificial
+gamification. `/dashboard` is the company command center (daily move, decisions,
+company map, operational perimeter); `/company-brain` is the first-class
+**Company World**. The new workspace-membership-gated endpoint (including the
+read-only `viewer` role)
+`GET /api/v1/workspaces/{workspace_id}/company-map` projects only existing
+workspace memberships and sanitized Company Brain Gmail metadata into company,
+internal-person, external-person-candidate, organization-candidate, and email
+touchpoint read models with evidence refs and inspectable profiles.
+
+Rationale: founders need to manage people, companies, relationships, signals,
+and actions in one coherent mental model. Fake points, levels, customer labels,
+or decision-maker claims would violate the evidence-first invariants. A bounded,
+read-only projection makes the product useful now while preserving honest
+uncertainty until durable identity and confirmation models are designed.
+
+Consequences:
+
+- Workspace members are confirmed internal people. External mailboxes are only
+  contact candidates. Non-generic email domains are only organization
+  candidates; they are never called customers or employers automatically. All
+  candidates carry `needs_founder_confirm=true`.
+- Email subjects, participants, timestamps, directions, source URLs, and source
+  refs may appear in authenticated profiles; raw bodies and snippets do not.
+  The existing RBAC meaning is preserved: every authenticated workspace role,
+  including read-only `viewer`, may read workspace data; confirmation and
+  future relationship writes require `member` or higher. Cross-workspace access
+  remains hidden as 404.
+- The Gmail projection is explicitly bounded to the newest 100 messages. The
+  response exposes available/considered counts, limit, order, and `truncated`;
+  external-person, organization, and touchpoint summary fields are named
+  `*_in_window` and the UI renders the window and backend warnings.
+- This slice is read-only and local-only: no new table or migration, provider
+  call, sync, external write, secret read, or LLM. Its source is honestly named
+  `workspace_and_company_brain_projection`, not a nonexistent canonical map.
+- Primary navigation is grouped by command center, management, sources, and
+  system. The global repository-audit overview is no longer mounted in the
+  workspace dashboard because its scope does not match the workspace company
+  map. The legacy `/audit` page is removed, and non-workspace filesystem
+  Company Brain preview APIs require the operator API key; a browser session is
+  explicitly rejected. Workspace product reads remain under workspace-scoped
+  routes.
+- The product purpose of `Person` is now resolved: founderOS needs durable
+  internal/external profiles, organizations, affiliations, confirmation state,
+  and interactions. The physical `Person`/`Organization`/`Affiliation`/
+  `Interaction` schema and confirmation write flow remain a separate migration
+  chunk and must preserve source provenance and workspace isolation.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
 
-- **ASK-1 — The "23 models" count and the missing `Person` entity.** §6 defines
-  22 entity sections (6.2–6.23); the historical EXECUTION_PLAN/FOS-002 wording
-  said "23 модели". §6.9
-  `NormalizedEntity.entity_type` includes `person`, and `Task.assignee_person_id`
-  / `PullRequest.author_person_id` reference a Person that §6 never defines. Is
-  the 23rd model an intended standalone `Person`, or is the count off by one?
+- **ASK-1 — Product intent resolved → DEC-073; schema count still open.** The
+  product now explicitly needs durable people, organizations, affiliations, and
+  interactions. §6 still defines 22 entity sections (6.2–6.23) while historical
+  wording says "23 модели", and it does not define the physical `Person` shape.
+  The next schema chunk must settle model boundaries and migration order before
+  adding tables; no count is inferred from the old wording.
 - **ASK-2 — Foundation reconciliation strategy. ✅ RESOLVED → DEC-028** (branch A,
   narrowed: §6 extends the spine lineage, knowledge-graph lineage frozen legacy).
   Original framing kept for context: To close the canonical-naming

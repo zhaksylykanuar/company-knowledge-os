@@ -5,10 +5,11 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
-from app.api.auth import enforce_fail_closed_auth, get_current_actor
+from app.api.auth import enforce_fail_closed_auth, get_current_actor, require_api_key
 from app.api.auth_routes import router as auth_router
 from app.api.briefings import router as briefings_router
 from app.api.company_brain import router as company_brain_router
+from app.api.company_map import router as company_map_router
 from app.api.connectors import router as connectors_router
 from app.api.dev import router as dev_router
 from app.api.documents import router as documents_router
@@ -75,11 +76,14 @@ app.include_router(jira_router, dependencies=protected_api_dependencies)
 app.include_router(gmail_router, dependencies=protected_api_dependencies)
 app.include_router(drive_router, dependencies=protected_api_dependencies)
 app.include_router(documents_router, dependencies=protected_api_dependencies)
+app.include_router(company_map_router, dependencies=protected_api_dependencies)
 app.include_router(workspace_company_brain_router, dependencies=protected_api_dependencies)
 app.include_router(briefings_router, dependencies=protected_api_dependencies)
 app.include_router(actions_router, dependencies=protected_api_dependencies)
-# Company Brain preview: read-only views over the local preview.
-app.include_router(company_brain_router, dependencies=protected_api_dependencies)
+# Legacy filesystem Company Brain preview: operator-only. These routes are not
+# workspace-scoped and therefore must never accept a browser session as product
+# authorization. Workspace product reads use workspace_company_brain_router.
+app.include_router(company_brain_router, dependencies=[Depends(require_api_key)])
 # Local-dev-only browser bootstrap; intentionally public (hands the browser
 # its local dev key) and gated to APP_ENV=local inside the route.
 app.include_router(dev_router)

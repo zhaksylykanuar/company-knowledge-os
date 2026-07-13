@@ -14,8 +14,8 @@ export const M = {
   nav: {
     primaryLabel: "Основная навигация",
     home: "Главная",
-    dashboard: "Панель",
-    companyBrain: "Мозг компании",
+    dashboard: "Штаб компании",
+    companyBrain: "Мир компании",
     github: "GitHub",
     jira: "Jira",
     gmail: "Gmail",
@@ -25,7 +25,13 @@ export const M = {
     audit: "Аудит репо",
     briefings: "Сводки",
     actions: "Действия",
-    settings: "Настройки"
+    settings: "Настройки",
+    groups: {
+      command: "Командный центр",
+      management: "Управление",
+      sources: "Источники",
+      system: "Система"
+    }
   },
 
   common: {
@@ -102,16 +108,21 @@ export const M = {
   },
 
   companyBrainPage: {
-    eyebrow: "Мозг компании",
-    title: "Мозг компании",
+    eyebrow: "Операционная карта",
+    title: "Мир компании",
     description:
-      "Единый evidence-backed вид канонических данных рабочего пространства: Company Brain и normalized entities. Read-only, без provider calls, sync, external writes и LLM."
+      "Люди, организации, соприкосновения и работа компании в одном пространстве, подтверждаемом источниками. Кандидаты остаются неподтверждёнными, пока основатель не определит их роль.",
+    dataLayerTitle: "Канонические данные",
+    dataLayerIndex: "ДАННЫЕ",
+    dataLayerDescription:
+      "Технический слой карты: работа, источники, нормализованные сущности и подтверждающие материалы без выдуманных связей."
   },
 
   dashboard: {
-    eyebrow: "Панель",
-    title: "Статус MVP",
-    description: "Вид после входа: поток бэкенда и GitHub-ориентированные экраны MVP.",
+    eyebrow: "Командный центр",
+    title: "Штаб компании",
+    description:
+      "Один управленческий цикл: увидеть изменения, принять решения, проверить карту компании и состояние операций.",
     backendTitle: "API бэкенда",
     backendValue: "Подключено",
     backendDescription: "API того же origin с авторизацией по сессионной cookie.",
@@ -128,7 +139,97 @@ export const M = {
     briefingDescription: "Ручная детерминированная сводка для основателя v0.",
     actionsTitle: "Действия",
     actionsValue: "Локальное одобрение",
-    actionsDescription: "Состояния предложений, одобрения и выполнения."
+    actionsDescription: "Состояния предложений, одобрения и выполнения.",
+    currentTurnLabel: "Текущий ход",
+    currentTurnAriaLabel: "Текущий ход компании",
+    currentTurnDescription:
+      "Сначала изучите сводку, затем примите решения и проверьте, какие люди, организации и события подтверждают картину.",
+    layers: {
+      briefingTitle: "Ход дня",
+      briefingDescription: "Что изменилось и куда сейчас направить внимание.",
+      decisionsTitle: "Требует решения",
+      decisionsDescription:
+        "Предложения действий остаются локальными и требуют подтверждения.",
+      worldTitle: "Карта компании",
+      worldDescription:
+        "Команда, внешние контакты, организации-кандидаты и журнал соприкосновений.",
+      operationsTitle: "Операционный контур",
+      operationsDescription:
+        "Подключения, покрытие источников, синхронизация и каноническая работа."
+    }
+  },
+
+  companyWorld: {
+    eyebrow: "Операционная карта",
+    title: "Мир компании",
+    badge: "Подтверждается источниками",
+    intro:
+      "Карта строится только из участников рабочего пространства и нормализованных источников. Внешние люди и компании остаются кандидатами до подтверждения.",
+    loading: "Собираем карту компании…",
+    noWorkspaceDescription: "Войдите в рабочее пространство, чтобы увидеть карту компании.",
+    unavailableTitle: "Карта компании недоступна",
+    unavailableDescription: "Не удалось загрузить людей, организации и соприкосновения.",
+    emptyTitle: "Карта ещё не собрана",
+    emptyDescription: "Добавьте участников или импортируйте Gmail-сигналы.",
+    summaryLabel: "Сводка карты компании",
+    internalPeople: "Команда",
+    internalPeopleDescription: "Подтверждённые участники рабочего пространства.",
+    externalPeople: "Люди в поле зрения",
+    externalPeopleDescription: "Внешние контакты-кандидаты в текущем окне.",
+    organizations: "Организации",
+    organizationsDescription:
+      "Корпоративные домены-кандидаты в текущем окне, не подтверждённые заказчики.",
+    touchpoints: "Соприкосновения",
+    touchpointsDescription: "Подтверждённые события коммуникации в текущем окне.",
+    companySection: "Ваша компания",
+    teamSection: "Команда",
+    contactsSection: "Ключевые лица в поле зрения",
+    organizationsSection: "Компании в поле зрения",
+    timelineSection: "Журнал соприкосновений",
+    noContacts: "Внешние контакты пока не обнаружены.",
+    noOrganizations: "Корпоративные организации пока не обнаружены.",
+    noTouchpoints: "Соприкосновения пока не загружены.",
+    windowLabel: "Почтовое окно",
+    windowTruncated: "показаны последние сообщения",
+    capabilities: "Границы проекции",
+    readOnly: "Только чтение",
+    noProviderCalls: "Без вызовов внешних сервисов",
+    noLlm: "Без языковой модели",
+    localProjection: "Локальная проекция",
+    candidate: "Кандидат",
+    confirmed: "Подтверждено",
+    needsConfirmation: "Нужно подтвердить роль",
+    openProfile: "Открыть профиль",
+    profileTitle: "Профиль",
+    companyProfile: "Профиль компании",
+    personProfile: "Профиль человека",
+    organizationProfile: "Профиль организации",
+    touchpointProfile: "Событие",
+    role: "Роль",
+    status: "Статус",
+    email: "Эл. почта",
+    domain: "Домен",
+    workspace: "Рабочее пространство",
+    interactions: "Соприкосновения",
+    people: "Люди",
+    lastInteraction: "Последний контакт",
+    evidence: "Подтверждающие источники",
+    noEvidence: "Нет связанных источников.",
+    direction: "Направление",
+    directions: {
+      inbound: "Входящее",
+      outbound: "Исходящее",
+      mixed: "Смешанное",
+      unknown: "Не определено"
+    },
+    roles: {
+      owner: "Владелец",
+      admin: "Администратор",
+      member: "Участник",
+      viewer: "Наблюдатель"
+    },
+    boundary:
+      "Доступ только внутри рабочего пространства, включая роль наблюдателя; изменение ролей и связей здесь отключено. Домен письма не означает, что организация является заказчиком."
   },
 
   githubPage: {
@@ -1117,7 +1218,7 @@ export const M = {
       "Запустить backend Uvicorn и frontend Next.js как отдельные services; GitHub writes, provider-write smoke и LLM остаются выключенными.",
     runbookSmokeLabel: "Read-only smoke",
     runbookSmokeDescription:
-      "Проверить health, login, dashboard, /github, /audit, /actions и evidence views read-only; не запускать provider writes или execute paths.",
+      "Проверить health, вход, штаб, /company-brain, /github, /actions и просмотр источников только для чтения; не запускать внешние записи или выполнение действий.",
     runbookRollbackLabel: "Rollback boundary",
     runbookRollbackDescription:
       "Rollback остаётся ручным: остановить services/вернуть commit и восстановить Postgres из backup при data-impacting migration failure.",
@@ -1277,7 +1378,7 @@ export const M = {
 
   companyBrain: {
     eyebrow: "Мозг компании",
-    title: "Состояние источников, подтверждённое evidence",
+    title: "Состояние компании, подтверждённое источниками",
     badgeDeterministic: "Детерминированно",
     loading: "Загрузка Мозга компании",
     noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — Мозга компании нет.",
@@ -1287,7 +1388,7 @@ export const M = {
     emptyDescription:
       "Канонические записи ещё не синхронизированы или не импортированы. Запустите локальную синхронизацию/импорт и вернитесь сюда за состоянием, подтверждённым источниками.",
     intro:
-      "Мозг компании основан на локальных канонических записях GitHub/Jira и aggregate SourceRecord coverage. Живой OAuth, синхронизация провайдера и сводка ИИ в этом виде не включены.",
+      "Мозг компании основан на локальных канонических записях GitHub/Jira и сводном покрытии источников. Живое подключение, синхронизация внешних сервисов и сводка ИИ в этом виде не включены.",
     summaryLabel: "Сводка Мозга компании",
     reposTitle: "Репозитории",
     reposDescription: "Канонические репозитории GitHub, известные этому рабочему пространству.",
@@ -1303,10 +1404,10 @@ export const M = {
     noOpenPrs: "Нет открытых пулреквестов в Мозге компании.",
     recentSection: "Недавняя работа",
     noRecent: "Недавняя работа ещё не синхронизирована или не импортирована.",
-    messagesSection: "Gmail messages",
-    noMessages: "Gmail messages ещё не импортированы.",
-    filesSection: "Drive files",
-    noFiles: "Drive files ещё не импортированы.",
+    messagesSection: "Письма Gmail",
+    noMessages: "Письма Gmail ещё не импортированы.",
+    filesSection: "Файлы Drive",
+    noFiles: "Файлы Drive ещё не импортированы.",
     reposSection: "Репозитории",
     noRepos: "Канонические репозитории ещё не синхронизированы.",
     evidenceSection: "Источники",
@@ -1314,17 +1415,17 @@ export const M = {
     capabilityTitle: "Текущий режим возможностей",
     badgeIssue: "Задача",
     badgePr: "PR",
-    badgeMessage: "Message",
-    badgeUnread: "Unread",
-    badgeFile: "File",
-    badgeSharedFile: "Shared file",
+    badgeMessage: "Письмо",
+    badgeUnread: "Не прочитано",
+    badgeFile: "Файл",
+    badgeSharedFile: "Общий файл",
     metaProvider: "Провайдер",
     metaRepository: "Репозиторий",
     metaScope: "Проект/репозиторий",
     metaFrom: "От",
     metaLabels: "Метки",
-    metaMimeType: "MIME type",
-    metaOwner: "Owner",
+    metaMimeType: "Тип файла",
+    metaOwner: "Владелец",
     metaState: "Состояние",
     metaReference: "Ссылка",
     unknownRepository: "Неизвестный репозиторий",
@@ -1336,44 +1437,44 @@ export const M = {
 
   companyBrainEntities: {
     eyebrow: "Сущности",
-    title: "Normalized entities",
-    badgeProjection: "Read-only projection",
-    loading: "Загрузка normalized entities",
+    title: "Нормализованные сущности",
+    badgeProjection: "Проекция только для чтения",
+    loading: "Загрузка нормализованных сущностей",
     unavailableTitle: "Сущности недоступны",
-    unavailableDescription: "Панель не смогла загрузить normalized entities.",
+    unavailableDescription: "Панель не смогла загрузить нормализованные сущности.",
     noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — normalized entities недоступны.",
+      "У этого аккаунта пока нет рабочего пространства — сущности недоступны.",
     emptyTitle: "Сущностей пока нет",
     emptyDescription:
-      "Канонические записи ещё не синхронизированы или не импортированы. Когда Company Brain получит данные, они появятся здесь как normalized entities.",
+      "Канонические записи ещё не синхронизированы или не импортированы. Когда Мозг компании получит данные, они появятся здесь как нормализованные сущности.",
     intro:
-      "Read-only projection поверх Company Brain: репозитории, задачи, PR, письма, Drive files и внутренние документы в одном evidence-backed списке. Без provider calls, sync, external writes и LLM.",
-    summaryLabel: "Сводка normalized entities",
+      "Проекция только для чтения поверх Мозга компании: репозитории, задачи, пулреквесты, письма, файлы Drive и внутренние документы в одном списке с подтверждающими источниками. Без вызовов внешних сервисов, синхронизации, внешних записей и языковой модели.",
+    summaryLabel: "Сводка нормализованных сущностей",
     totalTitle: "Всего",
-    totalDescription: "Сущности из текущей canonical projection.",
+    totalDescription: "Сущности из текущей канонической проекции.",
     typesTitle: "Типы",
-    typesDescription: "Разных entity_type в projection.",
+    typesDescription: "Количество типов сущностей в проекции.",
     providersTitle: "Провайдеры",
-    providersDescription: "Разных source_provider в projection.",
-    evidenceTitle: "Evidence",
-    evidenceDescription: "Уникальные source_refs, привязанные к сущностям.",
-    listLabel: "Список normalized entities",
+    providersDescription: "Количество источников данных в проекции.",
+    evidenceTitle: "Подтверждающие источники",
+    evidenceDescription: "Уникальные ссылки на источники, привязанные к сущностям.",
+    listLabel: "Список нормализованных сущностей",
     filterTitle: "Фокус сущностей",
-    filterLabel: "Фильтр normalized entities по типу",
+    filterLabel: "Фильтр нормализованных сущностей по типу",
     filterDescription:
-      "Фильтр работает только по уже загруженному локальному списку entities и не запускает provider calls.",
+      "Фильтр работает только по уже загруженному локальному списку и не вызывает внешние сервисы.",
     filterAll: "Все",
     noEntitiesForFilter: "Для выбранного типа сущностей ничего не найдено.",
     typeBreakdownTitle: "По типам",
     providerBreakdownTitle: "По источникам",
-    noEvidence: "Для текущих сущностей source_refs не возвращены.",
+    noEvidence: "Для текущих сущностей подтверждающие ссылки не возвращены.",
     metaType: "Тип",
     metaProvider: "Источник",
     metaStatus: "Статус",
-    metaReference: "Reference",
+    metaReference: "Ссылка",
     metaUpdated: "Обновлено",
     boundaryNote:
-      "Сущности вычисляются локально из уже сохранённых canonical rows. Панель не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не использует LLM."
+      "Сущности вычисляются локально из уже сохранённых канонических записей. Панель не вызывает внешние сервисы, не запускает синхронизацию, не делает внешних записей и не использует языковую модель."
   }
 } as const;
 

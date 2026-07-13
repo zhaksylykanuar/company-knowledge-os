@@ -28,6 +28,44 @@ def test_current_repo_local_scope_is_complete() -> None:
     assert audit.local_scope_complete is True
 
 
+def test_completion_contract_tracks_company_world_not_retired_audit_route() -> None:
+    audit = run_mvp_completion_audit()
+    local_keys = {item.key for item in audit.local_items}
+
+    assert "company_world_view" in local_keys
+    assert "repo_audit_view" not in local_keys
+
+
+def test_company_world_completion_requires_wiring_not_empty_files(
+    tmp_path: Path,
+) -> None:
+    paths = (
+        "web/components/CompanyWorldPanel.tsx",
+        "web/app/company-brain/page.tsx",
+        "app/api/company_map.py",
+        "app/main.py",
+        "app/services/company_map_read_service.py",
+    )
+    for relpath in paths:
+        path = tmp_path / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+    audit = run_mvp_completion_audit(root=tmp_path)
+    company_world = next(
+        item for item in audit.items if item.key == "company_world_view"
+    )
+
+    assert company_world.evidence_present is False
+    assert any(
+        "app.include_router(company_map_router" in item
+        for item in company_world.missing_evidence
+    )
+    assert any(
+        "<CompanyWorldPanel" in item for item in company_world.missing_evidence
+    )
+
+
 def test_human_gated_items_are_code_ready_but_not_fully_complete() -> None:
     audit = run_mvp_completion_audit()
 

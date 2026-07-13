@@ -2,13 +2,38 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая фактическая ветка `feat/github-app-connect-foundation` (локально ahead
-> origin). Локальные коммиты не пушить без явного запроса человека.
+> Текущая фактическая ветка `codex/company-world-v1` (локально). Локальные
+> коммиты не пушить без явного запроса человека.
 
 ---
 
 ## ▶ СЕЙЧАС
 
+- **Company World v1 / управленческий UI (DEC-073):** `/dashboard` перестроен в
+  «Штаб компании» с четырьмя слоями — ход дня, решения, карта компании и
+  операционный контур; sidebar сгруппирован по командному центру, управлению,
+  источникам и системе. `/company-brain` стал «Миром компании» и первым показывает
+  evidence-backed профили компании, подтверждённых участников workspace,
+  внешние контакты-кандидаты, домены организаций-кандидатов и журнал почтовых
+  соприкосновений. Новый доступный только участникам workspace (включая
+  read-only `viewer`) endpoint
+  `GET /api/v1/workspaces/{workspace_id}/company-map` workspace-scoped, не возвращает
+  raw body/snippet, показывает evidence, честное окно последних 100 Gmail
+  сообщений и `truncated`. В существующей RBAC-модели viewer может читать
+  workspace, но не подтверждать/изменять связи; cross-workspace доступ закрыт.
+  Это read-only проекция без миграции, provider calls, sync, external writes или LLM.
+  Небезопасный глобальный `/audit` удалён из product routes; filesystem preview
+  API теперь operator-key-only и отвергает browser session.
+  Следующий продуктовый chunk — отдельные durable
+  `Person`/`Organization`/`Affiliation`/`Interaction` модели и founder-confirm
+  flow; не смешивать его с текущей проекцией.
+  Проверено 2026-07-13: `uv run ruff check .`; `uv run pytest -q` — 477
+  passed (одно внешнее Starlette/httpx deprecation warning); Alembic
+  `heads/current` — `f2b3c4d5e6f7`, `alembic check` — no new upgrade
+  operations; tracked-secret scan и `git diff --check` зелёные; frontend —
+  210/210 tests, production build, typecheck и lint. Browser QA пройден для
+  owner и viewer: профили и evidence открываются, `/audit` возвращает 404,
+  viewport 390x844 не имеет горизонтального overflow, ошибок console нет.
 - **Chunk:** первая продуктовая фича за логином — **Briefings**. Chunk 1
   (персистентность) **сделан**; `CHUNK 8` hardening закрыт ранее. Repository
   identity/race debt перед live sync **закрыт** (DEC-050). GitHub App
@@ -19,10 +44,11 @@
   **сделан**. Live-read observability/rate-limit handling **сделан**. Локальный `/github` теперь
   показывает canonical org repo rows для `qtwin-io` из `.local/repos.json`
   (25 repos), а не retained source-event/legacy fallbacks; live read-only check
-  по org env keys подтвердил тот же count без вывода секретов. Следующий лучший
-  продуктовый шаг — вывести generated non-GitHub local ActionProposals в более
-  богатую review/execution-readiness петлю или двигать первый approved
-  GitHub App real-provider read run после отдельного human approval.
+  по org env keys подтвердил тот же count без вывода секретов. Следующий
+  продуктовый chunk един для live-документов: durable
+  `Person`/`Organization`/`Affiliation`/`Interaction` + founder-confirm flow
+  (DEC-073). Первый GitHub App real-provider read остаётся отдельным
+  human-approved внешним gate, а не конкурирующим product priority.
 - **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
   offline, детерминированный gate перед первым approved real read run:
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
@@ -232,29 +258,24 @@
   работает только client-side по уже полученному backend payload, не делает
   provider calls, не запускает bulk sync и сохраняет per-repo explicit
   read-only sync boundary.
-- **Repository Audit surface + audit→local-action loop (НОВОЕ):** ранее
-  существовавший, но не выведенный в UI детерминированный аудит всех репо
-  (`load_repo_audit()` → `GET /api/v1/founder/company-brain/repo-audit`) теперь
-  доступен во фронтенде: новая страница `/audit` и `RepositoryAuditPanel`
-  показывают per-repo facts (visibility/activity/area/stack/readme/tests/ci/
-  evidence), summary counts, risk-флаги, guardrails (preview-only, no network,
-  no external writes) и локальные focus-фильтры (все/с рисками/неактивные/
-  нужно подтверждение). Кнопка «Создать локальное действие из аудита» создаёт
-  `internal_todo` `ActionProposal` c payload-маркером `source=repo_audit` и
-  evidence refs из аудита; `ActionProposalsPanel` получил новый origin `audit`
-  (фильтр/группа/бейдж/payload-detail) и cross-link обратно на репозитории.
-  Всё read-only: без сетевых вызовов, provider writes и LLM.
-- **External repo-audit import (НОВОЕ):** `/audit` теперь также принимает JSON
+- **Repository Audit surface + audit→local-action loop (ИСТОРИЯ; RETIRED
+  DEC-073):** глобальная product page `/audit` и dashboard overview удалены,
+  потому что filesystem-проекция не workspace-scoped. Preview API сохранён
+  только для оператора с API key и отвергает browser session. Уже созданные
+  `ActionProposal(source=repo_audit|repo_audit_import)` и workspace-scoped
+  action-review/audit endpoints не удалены.
+- **External repo-audit import (backend сохранён):** историческая форма `/audit`
+  удалена из product UI; endpoint `POST .../actions/proposals/import-repo-audit`
+  по-прежнему принимает JSON
   findings от внешнего/другого аудита (массив или `{ findings: [...] }`) и
-  через backend endpoint `POST .../actions/proposals/import-repo-audit`
   детерминированно превращает валидные entries в локальные `internal_todo`
   `ActionProposal` rows с `source=repo_audit_import` and per-finding partial
   failures. Импорт требует
   `repository_full_name` в формате `owner/repo` и `evidence_refs`, редактирует
   secret-like fragments в известных текстовых полях, пишет только локальные
   proposals и не вызывает provider APIs, external writes или LLM.
-- **Repo-audit import UX hardening (НОВОЕ):** форма импорта на `/audit` теперь
-  показывает локальный предпросмотр разобранных findings до импорта: каждый
+- **Repo-audit import UX hardening (ИСТОРИЯ; UI RETIRED DEC-073):** удалённая
+  форма импорта показывала локальный предпросмотр разобранных findings: каждый
   finding помечается валидным/невалидным по тем же правилам, что и backend
   (`repository_full_name` в формате `owner/repo` + непустые `evidence_refs`), с
   описанием проблем по каждому пункту. Появились контролы «выбрать все валидные»
@@ -276,16 +297,9 @@
   dump. `audit_source` query param поддержан на `/actions`, bulk selection and
   default evidence drawer follow the final visible subset. Всё local-only:
   backend/provider calls, external writes и LLM не добавлены.
-- **Dashboard ↔ audit overview (НОВОЕ):** на `/dashboard` добавлена панель
-  `RepositoryAuditOverviewPanel`, которая читает уже существующие локальные
-  endpoints (`GET /founder/company-brain/repo-audit` + local ActionProposals) и
-  показывает сводку аудит-петли: repo_count, суммарные risk-флаги, снимок
-  discovery и счётчики локальных действий из аудита (всего / детерминированных /
-  импортированных / нужно решение). Панель даёт deep-links в `/audit` и
-  `/actions?origin=audit&status=proposed` (+ `audit_source=deterministic` и
-  `audit_source=imported`, когда такие действия есть). ActionProposals-счётчики
-  supplementary: их сбой не ломает детерминированный audit overview. Всё
-  local/read-only: без provider calls, external writes и LLM.
+- **Dashboard ↔ audit overview (ИСТОРИЯ; RETIRED DEC-073):** глобальная
+  `RepositoryAuditOverviewPanel` больше не монтируется в workspace dashboard и
+  ссылки на удалённый `/audit` отсутствуют в продуктовой навигации.
 - **Briefing coverage signals (НОВОЕ):** manual deterministic Founder Briefing
   теперь добавляет `signals.coverage` и item `source-coverage` из локального
   Company Brain state: canonical repositories, open issues/PRs, evidence refs,
@@ -587,13 +601,12 @@ DONE строго = есть код + проходящий тест/рабочи
   `internal-document-context` (DEC-067). NormalizedEntity linkage deferred.
   Local-only: no provider calls, external writes, secret reads, or LLM.
 
-### CHUNK 7 — Polish + Repo Audit UI
-*Gate: нет dead-end состояний; repo audit виден в UI.*
-- [x] FOS-RA-01 — Repo Audit UI — DONE. Backend `app/services/repo_audit.py` +
-  `GET /api/v1/founder/company-brain/repo-audit`; UI реализован как
-  `web/app/audit/page.tsx` (`/audit`): per-repo facts/evidence, summary counts,
-  risk flags, local focus filters, external-audit JSON import с preview, и
-  audit→local-action loop. Read-only: без сетевых вызовов, provider writes и LLM.
+### CHUNK 7 — Polish + Repo Audit UI (история; superseded DEC-073)
+*Gate был закрыт исторически; глобальная UI-поверхность позднее выведена из
+product routes из-за несовпадения tenant scope.*
+- [x] FOS-RA-01 — Repo Audit UI — RETIRED FROM PRODUCT. Operator-only backend
+  preview сохранён; `/audit` удалён, Company World заменил его в MVP completion
+  contract. Workspace-scoped action audit/import APIs сохранены.
 - [ ] FOS-P — Polish (errors/retries/empty/filters/evidence UX) — UI на уровне scaffold, не сделано
 
 ### CHUNK 8 — Testing Gate + Deploy

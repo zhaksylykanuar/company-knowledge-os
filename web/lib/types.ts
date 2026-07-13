@@ -315,6 +315,101 @@ export type CompanyBrainSourceRef = {
   record_id: string;
 };
 
+export type CompanyMapCompany = {
+  key: string;
+  workspace_id: string;
+  name: string;
+  slug: string;
+  status: string;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type CompanyMapInternalPerson = {
+  key: string;
+  user_id: string;
+  name: string | null;
+  email: string;
+  status: string;
+  role: WorkspaceMemberRole;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type CompanyMapExternalCandidate = {
+  key: string;
+  email: string;
+  display_name: string | null;
+  organization_key: string | null;
+  last_interaction_at: string | null;
+  interaction_count: number;
+  source_refs: CompanyBrainSourceRef[];
+  needs_founder_confirm: true;
+};
+
+export type CompanyMapOrganizationCandidate = {
+  key: string;
+  domain: string;
+  name: string | null;
+  kind: "external_candidate";
+  people_count: number;
+  interaction_count: number;
+  last_interaction_at: string | null;
+  source_refs: CompanyBrainSourceRef[];
+  needs_founder_confirm: true;
+};
+
+export type CompanyMapTouchpointDirection =
+  | "inbound"
+  | "outbound"
+  | "mixed"
+  | "unknown";
+
+export type CompanyMapTouchpoint = {
+  key: string;
+  channel: "email";
+  source_record_id: string;
+  subject: string;
+  direction: CompanyMapTouchpointDirection;
+  occurred_at: string | null;
+  person_keys: string[];
+  organization_keys: string[];
+  source_url: string | null;
+  source_refs: CompanyBrainSourceRef[];
+};
+
+export type CompanyMapResponse = {
+  workspace_id: string;
+  mode: "evidence_backed_projection";
+  source: "workspace_and_company_brain_projection";
+  company: CompanyMapCompany;
+  summary: {
+    internal_people: number;
+    external_contacts_in_window: number;
+    organizations_in_window: number;
+    touchpoints_in_window: number;
+  };
+  window: {
+    gmail_messages_available: number;
+    gmail_messages_considered: number;
+    message_limit: number;
+    truncated: boolean;
+    order: "newest_first";
+  };
+  people: {
+    internal: CompanyMapInternalPerson[];
+    external_candidates: CompanyMapExternalCandidate[];
+  };
+  organizations: CompanyMapOrganizationCandidate[];
+  touchpoints: CompanyMapTouchpoint[];
+  capabilities: {
+    read_only: true;
+    provider_calls: false;
+    llm_used: false;
+  };
+  warnings: string[];
+  is_live: false;
+  llm_used: false;
+};
+
 export type CompanyBrainSummary = {
   repositories: number;
   open_issues: number;

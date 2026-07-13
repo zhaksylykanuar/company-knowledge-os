@@ -5,21 +5,51 @@ import { usePathname } from "next/navigation";
 
 import { M } from "../lib/messages";
 
-export const NAV_LINKS = [
-  { href: "/", label: M.nav.home },
-  { href: "/dashboard", label: M.nav.dashboard },
-  { href: "/company-brain", label: M.nav.companyBrain },
-  { href: "/github", label: M.nav.github },
-  { href: "/jira", label: M.nav.jira },
-  { href: "/gmail", label: M.nav.gmail },
-  { href: "/drive", label: M.nav.drive },
-  { href: "/documents", label: M.nav.documents },
-  { href: "/connectors", label: M.nav.connectors },
-  { href: "/audit", label: M.nav.audit },
-  { href: "/briefings", label: M.nav.briefings },
-  { href: "/actions", label: M.nav.actions },
-  { href: "/settings", label: M.nav.settings }
+type NavLink = {
+  href: string;
+  label: string;
+};
+
+type NavGroup = {
+  label: string;
+  links: readonly NavLink[];
+};
+
+export const NAV_GROUPS: readonly NavGroup[] = [
+  {
+    label: M.nav.groups.command,
+    links: [
+      { href: "/dashboard", label: M.nav.dashboard },
+      { href: "/company-brain", label: M.nav.companyBrain }
+    ]
+  },
+  {
+    label: M.nav.groups.management,
+    links: [
+      { href: "/briefings", label: M.nav.briefings },
+      { href: "/actions", label: M.nav.actions },
+      { href: "/documents", label: M.nav.documents }
+    ]
+  },
+  {
+    label: M.nav.groups.sources,
+    links: [
+      { href: "/connectors", label: M.nav.connectors },
+      { href: "/github", label: M.nav.github },
+      { href: "/jira", label: M.nav.jira },
+      { href: "/gmail", label: M.nav.gmail },
+      { href: "/drive", label: M.nav.drive }
+    ]
+  },
+  {
+    label: M.nav.groups.system,
+    links: [{ href: "/settings", label: M.nav.settings }]
+  }
 ] as const;
+
+export const NAV_LINKS: readonly NavLink[] = NAV_GROUPS.flatMap(
+  (group) => group.links
+);
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -31,19 +61,25 @@ export function Sidebar() {
         <span className="brand-mode">{M.app.shellMode}</span>
       </div>
       <nav className="nav" aria-label={M.nav.primaryLabel}>
-        {NAV_LINKS.map((link) => {
-          const isActive =
-            link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-          return (
-            <Link
-              className={isActive ? "nav-link active" : "nav-link"}
-              href={link.href}
-              key={link.href}
-            >
-              {link.label}
-            </Link>
-          );
-        })}
+        {NAV_GROUPS.map((group) => (
+          <div className="nav-group" key={group.label}>
+            <span className="nav-group-label">{group.label}</span>
+            <div className="nav-group-links">
+              {group.links.map((link) => {
+                const isActive = pathname.startsWith(link.href);
+                return (
+                  <Link
+                    className={isActive ? "nav-link active" : "nav-link"}
+                    href={link.href}
+                    key={link.href}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
     </aside>
   );

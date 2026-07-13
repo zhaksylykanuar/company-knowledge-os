@@ -22,14 +22,24 @@ Implemented foundations:
   Company Brain rows into an evidence-backed entity list + summary, and the
   dashboard `NormalizedEntitiesPanel` renders that list with type/provider
   breakdowns and source refs. This is a read-only projection (no
-  `NormalizedEntity` table yet; `Person` stays post-MVP per ASK-1) and starts no
-  provider calls, sync, external writes, or LLM.
+  `NormalizedEntity` table yet) and starts no provider calls, sync, external
+  writes, or LLM.
 - A dedicated navigable Company Brain view is now in place (DEC-071): the
   `/company-brain` page + sidebar entry compose the Company Brain and
   normalized-entities panels so the founder can reach the MVP "See Company Brain
   entities" step directly. The normalized-entities panel also has a client-side
   `entity_type` focus filter over the already-loaded projection. Read-only; no
   new data path, provider calls, sync, external writes, or LLM.
+- Company World v1 is in place (DEC-073): `/dashboard` is grouped as a company
+  command center and `/company-brain` leads with the workspace-membership-
+  gated, workspace-scoped `company-map` projection. It shows confirmed
+  workspace members plus
+  evidence-backed external-contact and organization candidates and Gmail
+  touchpoints. Candidate roles are never inferred as customer/decision maker;
+  the newest-100-message window and truncation are visible; raw bodies/snippets
+  are excluded. Existing RBAC is preserved: viewer can read workspace data but
+  cannot confirm/mutate; cross-workspace access is rejected. No migration/
+  provider/LLM/write path was added.
 - Email+password founder login on server-side sessions (Argon2id, httpOnly
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with
@@ -128,39 +138,22 @@ Implemented foundations:
   evidence refs. This helps prepare repo review/audit without provider calls,
   bulk sync, external writes, or changing the explicit per-repository read-only
   sync boundary.
-- `/audit` now surfaces the deterministic repository audit (all repos) that was
-  already computed by `load_repo_audit()` but previously had no UI. It shows
-  per-repo facts, risk flags, summary counts, guardrails, and local focus
-  filters, and can create local `internal_todo` ActionProposals
-  (`source=repo_audit`) per repository. ActionProposals review has a matching
-  `audit` origin. Read-only: no network calls, provider writes, or LLM.
-- `/audit` can now import structured JSON findings from an external/full
-  repo-audit result through the backend endpoint
-  `POST .../actions/proposals/import-repo-audit` into local `internal_todo`
-  ActionProposals (`source=repo_audit_import`) with per-finding partial
-  failures. Valid findings must include `repository_full_name` (`owner/repo`)
+- The legacy global `/audit` product page and dashboard overview are retired
+  (DEC-073): filesystem Company Brain preview endpoints now require the
+  operator API key and reject browser sessions. The workspace-scoped backend
+  endpoint `POST .../actions/proposals/import-repo-audit` remains available for
+  importing sanitized findings into local `internal_todo` ActionProposals
+  (`source=repo_audit_import`) with per-finding partial failures. Valid findings
+  must include `repository_full_name` (`owner/repo`)
   and `evidence_refs`; known secret-like fragments in imported text are
   redacted. This is local-only and starts no provider calls, external writes,
   or LLM.
-- The `/audit` import form now previews parsed findings before import with
-  per-finding valid/invalid status mirroring the backend rules, select-all-valid
-  and clear-selection controls, and inline per-finding backend failures after a
-  partial import, including subset-selection index remapping (only failed rows
-  stay selected for retry, pasted text is preserved). Preview and selection are
-  client-side only: no provider calls, external writes, or LLM.
 - `/actions` now separates audit-origin proposals by audit source: deterministic
   local repo audit vs imported external audit. The audit origin filter has a
   local audit-source subfilter, source-specific badges, richer payload metadata,
   and query support (`audit_source=deterministic|imported`) while bulk selection
   and the evidence drawer follow the final visible subset. No provider calls,
   external writes, or LLM are started.
-- `/dashboard` now has a repository-audit overview panel that reads the existing
-  local repo-audit endpoint plus local ActionProposals and shows repository
-  count, total risk flags, discovery snapshot, and audit-derived action counts
-  (total/deterministic/imported/proposed) with deep-links into `/audit` and
-  `/actions?origin=audit` (including `audit_source` focus). Counts are
-  supplementary and never break the deterministic summary; no provider calls,
-  external writes, or LLM.
 - The private-beta readiness panel now includes a manual deploy/smoke runbook
   checklist from the deploy docs: local gates, Postgres backup, manual
   migration, split backend/frontend services, read-only smoke, and rollback
@@ -277,27 +270,27 @@ Implemented foundations:
   and ordered human-gated next steps without deploy, provider calls, external
   writes, database access, secret reads, or LLM.
 
-## Next Priority: Founder-facing coverage and briefing polish
+## Next Priority: Durable company profiles and confirmation
 
-Rationale: GitHub source foundation is sufficient for this phase and real
-provider reads are intentionally deferred until explicit human approval. The next
-slice should make the already-loaded canonical data more useful to the founder:
-clear source coverage, deterministic briefing polish, and next-step visibility
-without adding provider calls or LLM generation yet.
+Rationale: DEC-073 proves the operating-map UX over existing evidence without
+inventing facts. The next scoped migration should turn confirmed people,
+organizations, affiliations, and interactions into durable workspace-owned
+profiles and add an explicit founder confirmation flow. It must preserve the
+read-only projection until backfill/rollback and tenant-isolation tests are
+defined; provider reads and LLM generation remain separate approvals.
 
 Done when:
 
-- DEC-052 remains the product-connect decision: GitHub App installation,
-  workspace-scoped binding, backend-only private key/webhook secret, and
-  no persisted short-lived installation access tokens.
-- DEC-053 remains the live-sync v0 decision: polling-only, admin-triggered,
-  explicit repository scope; webhooks deferred until raw-body signature
-  verification and delivery dedupe exist.
-- Repository selection/scope stays minimal and read-only by default; do not add a
-  "sync everything" control while GitHub is deferred.
-- Sync writes through the existing idempotent normalization/upsert path.
-- Two-workspace isolation tests cover connection, sync, briefing, and evidence
-  dereference behavior. ✅ covered for mocked GitHub App live sync.
+- The `Person`/`Organization`/`Affiliation`/`Interaction` boundary, ownership,
+  uniqueness, evidence refs, backfill, and rollback are recorded in a decision
+  before any migration.
+- Founder confirmation never rewrites raw source records and every confirmed
+  relationship remains traceable to evidence.
+- Workspace and role-matrix tests prove no cross-tenant relationship leakage.
+- Confirmation writes are idempotent, require `member` or higher, preserve a
+  read-only `viewer`, and never let an LLM mutate canonical relationships.
+- Backfill has an aggregate-only dry run and a documented rollback; Company
+  World keeps an honest projection fallback until the migration is verified.
 - `uv run ruff check .`, `uv run alembic upgrade head`, `uv run alembic check`,
   `uv run pytest -q`, frontend checks if touched, and the tracked secret scan are
   green.
@@ -329,13 +322,10 @@ Done when:
    action bridge are in place. Briefing/action cross-links are now in place:
    existing local actions are summarized on briefing items, duplicate creation is
    guarded for open actions, and `/actions` can open with briefing/proposed
-   focus. The `/audit` external-import UX is now hardened with a pre-import
-   preview, per-finding validity, select-all-valid/clear controls, and inline
-   per-finding backend failures. `/actions` also now distinguishes
+   focus. `/actions` also now distinguishes
    deterministic vs imported audit-origin proposals with a local subfilter,
-   badges, query focus, and richer payload metadata, and `/dashboard` now has a
-   repository-audit overview panel that links into `/audit` and the audit
-   actions focus. The private-beta readiness panel now also displays the manual
+   badges, query focus, and richer payload metadata. The unsafe global audit
+   page/overview are retired; the private-beta readiness panel displays the manual
    deploy/smoke runbook phases without executing them. The `/dashboard` source-
    coverage panel now also has a local breakdown (closed work, recent activity,
    repos with/without source refs, evidence-by-kind) plus deterministic next-step

@@ -3,12 +3,17 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import delete
 
 import app.services.repo_audit as repo_audit_service
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
+from app.db.base import AsyncSessionLocal
+from app.db.identity_models import User, UserSession
 from app.main import app
+from app.services.session_service import create_session
 
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
@@ -129,3 +134,36 @@ async def test_company_brain_repo_audit_requires_api_key_when_auth_enabled(
 
     assert response.status_code == 401
     assert response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+
+
+async def test_legacy_company_brain_rejects_a_valid_browser_session(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    email = f"legacy-preview-{marker}@founderos.test"
+    monkeypatch.setattr(settings, "api_auth_enabled", True)
+    monkeypatch.setattr(settings, "api_auth_key", "test-api-key")
+    monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
+
+    async with AsyncSessionLocal() as session:
+        user = User(email=email, name="Legacy Preview Session")
+        session.add(user)
+        await session.flush()
+        raw_token, _stored = await create_session(session, user.id)
+        await session.commit()
+
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as client:
+            client.cookies.set(settings.session_cookie_name, raw_token)
+            response = await client.get("/api/v1/founder/company-brain/repo-audit")
+
+        assert response.status_code == 401
+        assert response.json() == {"detail": API_AUTH_FAILURE_DETAIL}
+    finally:
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(UserSession).where(UserSession.user_id == user.id))
+            await session.execute(delete(User).where(User.id == user.id))
+            await session.commit()

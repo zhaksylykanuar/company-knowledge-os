@@ -97,6 +97,12 @@ MVP founderOS должен позволять:
 10. подтвердить действие вручную;
 11. увидеть результат выполнения действия.
 
+Интерфейс строится как evidence-backed управление компанией: «Штаб» показывает
+текущий управленческий ход, решения, карту людей/организаций/соприкосновений и
+операционный контур. Игровая метафора помогает ориентироваться, но не создаёт
+очки, уровни, роли заказчиков или связи без источников. Неподтверждённые люди и
+организации всегда помечаются кандидатами до решения основателя.
+
 ## 1.2 Зачем это нужно
 
 founderOS нужен, чтобы заменить хаотичный набор вкладок на один операционный центр.
@@ -169,7 +175,7 @@ Login
 - evidence refs;
 - Company Brain view;
 - Founder Dashboard;
-- Repo Audit view;
+- Company World view;
 - manual Founder Briefing;
 - action proposals;
 - human approval before execution;
@@ -347,7 +353,7 @@ Connect sources
 - Company Brain;
 - Briefings;
 - Actions;
-- Repo Audit;
+- Company World profiles;
 - Settings.
 
 ## 3.2 После MVP - можно позже
@@ -592,17 +598,18 @@ Founder.
 ### Шаги
 
 1. Открывает Company Brain.
-2. Видит entities.
-3. Фильтрует по типу.
-4. Открывает entity.
-5. Видит source records.
-6. Видит evidence refs.
-7. Переходит во внешний источник.
+2. Видит свою компанию, подтверждённых участников workspace и кандидатов из
+   источников.
+3. Открывает профиль человека, организации или соприкосновения.
+4. Отличает подтверждённые роли от гипотез, требующих решения основателя.
+5. Видит ограничение окна данных и evidence refs.
+6. Переходит во внешний источник.
 
 ### Экраны
 
+- Company World map;
+- Person / organization / touchpoint profile;
 - Brain entity list;
-- Entity detail;
 - Source records;
 - Evidence drawer;
 - Related entities.
@@ -615,6 +622,7 @@ Founder.
 - SourceRecord;
 - EvidenceRef;
 - EntityLink.
+- Workspace membership;
 
 ### Успех
 
@@ -2228,17 +2236,25 @@ Returns:
 
 ---
 
-## 7.15 Repo Audit endpoint
+## 7.15 Company World endpoint
 
-### GET `/workspaces/{workspace_id}/repo-audit`
+### GET `/workspaces/{workspace_id}/company-map`
 
-Returns latest repo audit.
+Returns:
+
+- company and confirmed workspace members;
+- external people and organization candidates;
+- bounded email touchpoints;
+- evidence refs, window metadata, warnings, and capabilities.
 
 Rules:
 
+- workspace-membership-gated, including read-only viewer access;
 - read-only;
-- no external writes;
-- evidence visible.
+- cross-workspace access is hidden;
+- external roles remain unconfirmed until founder confirmation;
+- raw message bodies/snippets are excluded;
+- no provider calls, external writes, or LLM.
 
 ---
 
@@ -2255,6 +2271,10 @@ UI should be:
 - evidence-first;
 - action-oriented.
 
+Допустима метафора стратегии управления компанией: штаб, карта мира, сигналы,
+миссии и туман неизвестности. Она должна отражать реальные данные и
+неопределённость; искусственные XP/монеты/рейтинги и выдуманные связи запрещены.
+
 Не делать “красиво ради красоты”. Сначала рабочий интерфейс.
 
 ## 8.2 Navigation
@@ -2262,18 +2282,10 @@ UI should be:
 Sidebar:
 
 ```txt
-Dashboard
-Company Brain
-Connectors
-GitHub
-Jira
-Gmail
-Drive
-Documents
-Briefings
-Actions
-Repo Audit
-Settings
+Командный центр: Штаб компании, Мир компании
+Управление: Сводки, Действия, Документы
+Источники: Коннекторы, GitHub, Jira, Gmail, Drive
+Система: Настройки
 ```
 
 Topbar:
@@ -2303,15 +2315,10 @@ States:
 
 Sections:
 
-- connection health;
-- last sync;
-- active risks;
-- stale PRs;
-- stale tasks;
-- important threads;
-- recent documents;
-- latest briefing;
-- generate briefing CTA.
+- ход дня / latest briefing;
+- требует решения / action proposals;
+- карта компании / people, organizations, touchpoints;
+- операционный контур / sources, sync, readiness, canonical work.
 
 Empty state:
 
@@ -2438,19 +2445,20 @@ Components:
 
 ---
 
-## `/brain`
+## `/company-brain`
 
-Tabs:
+Sections:
 
-- Entities;
-- Timeline;
-- Source Records;
-- Evidence.
+- Company World map;
+- company, person, organization, and touchpoint profiles;
+- canonical Company Brain;
+- normalized entities;
+- source records and evidence.
 
-Entity detail:
+Profile detail:
 
-- canonical info;
-- source records;
+- confirmed or candidate state;
+- bounded interactions;
 - evidence refs;
 - related entities.
 
@@ -2497,15 +2505,13 @@ Action detail:
 
 ---
 
-## `/repo-audit`
+## Legacy repo audit (operator-only)
 
-Sections:
+There is no product `/audit` route. The filesystem preview is not
+workspace-scoped and therefore requires the operator API key; browser sessions
+are rejected. Workspace-scoped action audit/import endpoints remain available.
 
-- repository inventory;
-- computed facts;
-- warnings;
-- evidence refs;
-- export JSON.
+Company World is the current evidence-backed product surface.
 
 ---
 
@@ -3930,22 +3936,22 @@ Docs appear in Company Brain.
 
 ---
 
-## FOS-021 - Repo Audit UI
+## FOS-021 - Repo Audit UI (historical; superseded by DEC-073)
 
 ### Goal
 
-Expose existing repo audit work.
+Historical task that exposed the filesystem repo-audit preview.
 
 ### Instructions
 
-- Use existing repo_audit logic.
-- No network writes.
-- Show facts/evidence.
-- Add UI page.
+- The former product page is retired because the preview is not
+  workspace-scoped.
+- Keep the preview operator-key-only and reject browser sessions.
+- Keep workspace-scoped action audit/import contracts intact.
 
 ### Acceptance criteria
 
-Repo audit page works.
+No product `/audit` route; Company World is workspace-scoped and evidence-first.
 
 ---
 

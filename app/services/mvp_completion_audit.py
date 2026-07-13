@@ -3,8 +3,8 @@
 This module maps every ``founderOS_MASTER_PLAYBOOK.md`` MVP requirement (§1.5)
 and every main end-to-end flow step (§1.4) to authoritative in-repository
 evidence, and reports which parts are locally complete versus which remain
-human/external gated (for example the first real GitHub App provider read and
-the staging/production deployment).
+human/external gated (the first real external action result and the
+staging/production deployment).
 
 It is a pure, read-only, offline check. It performs no provider calls, opens no
 network connection, touches no database, and never reads or prints secrets,
@@ -202,12 +202,30 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
         ),
     ),
     AuditItem(
-        key="repo_audit_view",
-        requirement="Repo Audit view",
+        key="company_world_view",
+        requirement="Company World operating map",
         category="mvp_requirement",
         evidence=(
-            EvidenceCheck("web/app/audit/page.tsx"),
-            EvidenceCheck("app/services/repo_audit.py"),
+            EvidenceCheck(
+                "web/components/CompanyWorldPanel.tsx",
+                "export function CompanyWorldPanel",
+            ),
+            EvidenceCheck(
+                "web/app/company-brain/page.tsx",
+                "<CompanyWorldPanel",
+            ),
+            EvidenceCheck(
+                "app/api/company_map.py",
+                'prefix="/api/v1/workspaces/{workspace_id}/company-map"',
+            ),
+            EvidenceCheck(
+                "app/main.py",
+                "app.include_router(company_map_router",
+            ),
+            EvidenceCheck(
+                "app/services/company_map_read_service.py",
+                "async def build_workspace_company_map",
+            ),
         ),
     ),
     AuditItem(

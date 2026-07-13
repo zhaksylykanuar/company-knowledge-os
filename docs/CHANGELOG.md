@@ -1,5 +1,39 @@
 # FounderOS Changelog
 
+## 2026-07-13
+
+### Changed
+
+- Added Company World v1 (DEC-073): a new workspace-membership-gated,
+  workspace-scoped `GET /api/v1/workspaces/{workspace_id}/company-map` read
+  model and product
+  surface over workspace memberships plus sanitized Gmail metadata. It renders
+  company and people profiles, external-contact and corporate-domain candidates,
+  evidence links, and an email touchpoint timeline without claiming that a
+  candidate is a customer, employer, or decision maker.
+- Made projection limits and privacy explicit. The API reports available and
+  considered Gmail message counts, the newest-100 window, order, and
+  `truncated`; derived summary fields are named `*_in_window`. Raw bodies and
+  snippets are excluded and cross-workspace isolation is tested. Consistent
+  with existing workspace RBAC, `viewer` may read but not confirm or mutate;
+  future relationship writes require `member` or higher. No table, migration,
+  provider call, sync, external write, secret read, or LLM was added.
+- Reframed the product UI as company management: `/dashboard` is now «Штаб
+  компании» with daily move, decisions, company map, and operational perimeter;
+  `/company-brain` is «Мир компании»; the sidebar is grouped by command center,
+  management, sources, and system. Existing operational panels remain available,
+  while the globally scoped repository-audit overview is no longer mounted on
+  the workspace dashboard.
+- Retired the unsafe legacy `/audit` product route. The underlying filesystem
+  Company Brain preview endpoints are now operator-key-only and reject even a
+  valid browser session, preventing global local snapshots from being exposed
+  as workspace product data. Workspace-scoped action audit/import APIs are
+  unchanged.
+- Updated the offline MVP completion contract to require the evidence-backed
+  Company World surface instead of the retired global Repo Audit page. The
+  current tree remains locally complete while deployment and the first real
+  external action result remain human-gated.
+
 ## 2026-07-07
 
 ### Changed
