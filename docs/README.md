@@ -32,15 +32,21 @@ recovering deleted context.
 | What are the safety/security boundaries? | [`../AGENTS.md`](../AGENTS.md), [`../CLAUDE.md`](../CLAUDE.md), [`../SECURITY_BASELINE.md`](../SECURITY_BASELINE.md) |
 | What should be built next? | [`../PROGRESS.md`](../PROGRESS.md), then [`TODO.md`](TODO.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
-| How do we deploy/smoke private beta manually? | [`deploy/private-beta.md`](deploy/private-beta.md), [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md), and [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) |
+| How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
+| How do we prove a bounded provider read or external action? | [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) and [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) |
 
-## Deploy Runbooks
+## Operations And Human-Gated Runbooks
 
-- [`deploy/private-beta.md`](deploy/private-beta.md) - manual private-beta deployment, migration, rollback, CORS, env-name, and smoke procedure.
-- [`deploy/railway-private-beta.md`](deploy/railway-private-beta.md) - concrete Railway split-service dry-run plan and placeholder env templates.
+- [`operations/local-runtime.md`](operations/local-runtime.md) - canonical local start, doctor, smoke, backup/restore, stop, recovery, and external-resource deletion boundary.
 - [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - manual, human-approved, read-only runbook for the first GitHub App real-provider read run, gated by an offline preflight.
-- [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after deploy and read-only provider proof.
-- `scripts/private_beta_release_handoff.py` / `make release-handoff` - sanitized offline handoff report combining git state, MVP completion audit, GitHub App real-read preflight, and remaining human-gated next steps before a human push/deploy.
+- [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after local acceptance and read-only provider proof.
+- `make local-readiness` is the sanitized repository-evidence report;
+  `make release-handoff` and `scripts/private_beta_release_handoff.py` remain
+  compatibility aliases for that same local report, not hosted-runtime paths.
+
+The former private-beta/Railway runbooks and placeholder hosting templates were
+removed by DEC-077. They remain recoverable from git history but must not be used
+as current operating instructions.
 
 ## Required Control Docs
 
@@ -73,7 +79,7 @@ Lineage-2 purge; recover any from git tag `pre-purge-20260624` if needed.
   decisions.
 - Do not write real secrets, token values, database URLs, provider payloads, raw
   private source bodies, chat IDs, or production smoke outputs into docs.
-- Use placeholder env examples only (`<placeholder>`). `.env.example` and
-  `docs/deploy/templates/*.env.example` are templates, not real config.
+- Use placeholder env examples only (`<placeholder>`). `.env.example` is a
+  template, not real config.
 - Delete obsolete docs only when they are clearly superseded or recoverable from
   git history/tag. If unsure, preserve the file and document the uncertainty.

@@ -1,13 +1,19 @@
+import os
 from pathlib import Path
 
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-LOCAL_CORS_ALLOWED_ORIGINS = (
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-)
+LOCAL_CORS_ALLOWED_ORIGINS = ("http://127.0.0.1:3000",)
+DOTENV_DISABLE_ENV = "FOUNDEROS_DISABLE_DOTENV"
+TRUE_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _settings_env_files() -> tuple[str, str] | None:
+    if os.environ.get(DOTENV_DISABLE_ENV, "").strip().casefold() in TRUE_ENV_VALUES:
+        return None
+    return ".env", ".env.local"
 
 
 def _default_local_workspace_path() -> str:
@@ -161,10 +167,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("FOUNDEROS_OBSIDIAN_SYNC_MODE"),
     )
 
-    # --- Real read-only connector execution (opt-in; default OFF) ---
+    # --- Real connector network execution (opt-in; default OFF) ---
     # When false, real Jira/GitHub clients never make a network call; only
-    # internal/local sources run. Even when true, connectors stay read-only
-    # and only run through an explicit operator request plus live-provider ack.
+    # internal/local sources run. Enabling this gate permits provider network
+    # access only. Provider writes additionally require ENABLE_WRITE_ACTIONS,
+    # the approval/evidence/idempotency policy, and an explicit bounded request.
     enable_real_connectors: bool = Field(
         default=False,
         validation_alias=AliasChoices("FOUNDEROS_ENABLE_REAL_CONNECTORS"),
@@ -338,8 +345,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         # Priority (highest first): real env vars > .env.local > .env > defaults.
         # pydantic-settings loads listed files in order, later overriding
-        # earlier; a missing file is skipped. .env.local stays out of git.
-        env_file=(".env", ".env.local"),
+        # earlier; a missing file is skipped. The backend checker sets
+        # FOUNDEROS_DISABLE_DOTENV in the process environment before this
+        # module is imported, disabling both files for its isolated commands.
+        # .env.local stays out of git during normal runtime loading.
+        env_file=_settings_env_files(),
         extra="ignore",
         populate_by_name=True,
     )

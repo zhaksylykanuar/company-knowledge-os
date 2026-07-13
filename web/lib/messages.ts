@@ -1303,7 +1303,7 @@ export const M = {
       "Company Brain вернул данные без source refs. Следующий шаг — восстановить evidence перед любыми выводами или действиями.",
     nextStepWorkLabel: "Открытая работа",
     nextStepNoOpenWorkDescription:
-      "Открытой работы в текущей canonical выборке нет; можно перейти к readiness/deploy checklist.",
+      "Открытой работы в текущей canonical выборке нет; можно перейти к локальному readiness checklist.",
     nextStepProviderLabel: "Live provider read",
     nextStepProviderEnabledDescription:
       "Capability доступен, но запуск остаётся отдельным подтверждённым scoped действием, а не автоматикой dashboard.",
@@ -1317,89 +1317,6 @@ export const M = {
     statusNeedsData: "Нужны данные",
     statusReview: "К разбору",
     statusBoundary: "Boundary"
-  },
-
-  privateBetaReadiness: {
-    eyebrow: "Private beta",
-    title: "Готовность к ручному запуску",
-    badgeManual: "Manual / no external writes",
-    loading: "Загрузка готовности private beta",
-    noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — готовность private beta недоступна.",
-    unavailableTitle: "Готовность private beta недоступна",
-    unavailableDescription: "Панель не смогла загрузить локальные данные готовности.",
-    intro:
-      "Панель показывает только локальные условия для ручного private-beta запуска. Она не деплоит, не пушит, не запускает provider writes и не вызывает LLM.",
-    summaryLabel: "Сводка готовности private beta",
-    dataTitle: "Данные",
-    dataDescription: "Канонические repo/evidence уже есть в локальной БД.",
-    externalWritesTitle: "External writes",
-    externalWritesDescription: "Записи во внешние сервисы остаются отключёнными.",
-    externalWritesValue: "Отключены",
-    deployTitle: "Deploy",
-    deployDescription: "Только ручной runbook + smoke gate.",
-    deployValue: "Manual",
-    aiTitle: "LLM",
-    aiDescription: "AI generation для сводок/действий не запускается.",
-    aiValue: "Off",
-    detailsLabel: "Чеклист готовности private beta",
-    detailsTitle: "Чеклист перед ручным запуском",
-    dataLabel: "Канонические данные и evidence",
-    dataNeedsEvidenceDescription:
-      "Нужно иметь хотя бы один canonical repo row и evidence ref перед уверенным smoke/readiness выводом.",
-    sessionLabel: "Сессионный логин",
-    sessionDescription:
-      "Продуктовый UI работает через first-party session cookie; operator key не отправляется браузером.",
-    manualDeployLabel: "Manual deploy runbook",
-    manualDeployDescription:
-      "Railway/private-beta deploy остаётся ручным: backup, deploy, alembic upgrade head и smoke выполняются человеком.",
-    runbookLabel: "Manual deploy/smoke runbook",
-    runbookTitle: "Ручной runbook запуска",
-    runbookDescription:
-      "Короткая карта ручного запуска из docs/deploy/private-beta.md. Эта панель только показывает шаги и не выполняет команды.",
-    runbookStatusLocalGate: "Local gate",
-    runbookStatusManual: "Manual",
-    runbookStatusReadOnly: "Read-only",
-    runbookStatusRollback: "Rollback",
-    runbookLocalGateLabel: "Локальные gates",
-    runbookLocalGateDescription:
-      "Перед deploy вручную запустить secret scan, ruff, backend pytest, frontend tests/build/typecheck/lint и убедиться, что worktree не содержит unrelated changes.",
-    runbookBackupLabel: "Backup перед миграцией",
-    runbookBackupDescription:
-      "Перед private-beta migration человек создаёт backup managed Postgres и проверяет restore path в hosting UI.",
-    runbookMigrationLabel: "Миграция вручную",
-    runbookMigrationDescription:
-      "После backup выполнить alembic upgrade head вручную против private-beta Postgres; реальные database URLs не писать в docs/logs.",
-    runbookServicesLabel: "Backend + frontend services",
-    runbookServicesDescription:
-      "Запустить backend Uvicorn и frontend Next.js как отдельные services; GitHub writes, provider-write smoke и LLM остаются выключенными.",
-    runbookSmokeLabel: "Read-only smoke",
-    runbookSmokeDescription:
-      "Проверить health, вход, штаб, /company-brain, /github, /actions и просмотр источников только для чтения; не запускать внешние записи или выполнение действий.",
-    runbookRollbackLabel: "Rollback boundary",
-    runbookRollbackDescription:
-      "Rollback остаётся ручным: остановить services/вернуть commit и восстановить Postgres из backup при data-impacting migration failure.",
-    runbookBoundary:
-      "Runbook checklist — только навигация и контрольный список. Он не деплоит, не пушит, не вызывает провайдеров и не меняет production data.",
-    providerReadLabel: "GitHub provider read",
-    providerReadAvailableDescription:
-      "Backend capability допускает live provider read, но эта панель сама его не запускает.",
-    providerReadDeferredDescription:
-      "Первый real-provider read остаётся отдельным scoped action с явным подтверждением; здесь он не запускается.",
-    externalWritesLabel: "Внешние записи",
-    externalWritesOffDescription:
-      "GitHub/Jira/прочие provider writes не запускаются из readiness/dashboard path.",
-    llmLabel: "LLM / AI generation",
-    llmAvailableDescription:
-      "Capability включён, но readiness не вызывает LLM и не мутирует данные через AI.",
-    llmOffDescription:
-      "LLM briefing/extraction выключены; readiness основан на детерминированных локальных данных.",
-    statusReady: "Готово",
-    statusNeedsData: "Нужны данные",
-    statusManual: "Ручной",
-    statusAvailable: "Доступно",
-    statusDeferred: "Отложено",
-    statusOff: "Выключено"
   },
 
   repoAudit: {
@@ -1829,12 +1746,6 @@ export const T = {
     proposed: number
   ) =>
     `Действий из аудита: ${total} · детерминированных ${deterministic} · импортированных ${imported} · нужно решение ${proposed}.`,
-  privateBetaReadinessDataReady: (
-    repositories: number,
-    evidenceRefs: number,
-    openWork: number
-  ) =>
-    `Локальная база содержит ${repositories} repo rows, evidence refs: ${evidenceRefs}, открытая работа: ${openWork}.`,
   connectionNotReady: (status: string) =>
     `Запись в бэкенде в статусе ${status}. Локальная нормализация требует подключённой записи GitHub.`,
   syncResultCounts: (repos: number, issues: number, prs: number, status: string) =>

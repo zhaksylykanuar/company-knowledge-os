@@ -173,9 +173,7 @@ async def test_invite_ttl_is_capped_at_seven_days() -> None:
     "base_url",
     [
         "https://founderos.example.test",
-        "http://localhost:3000",
         "http://127.0.0.1:3000/app",
-        "http://[::1]:3000",
     ],
 )
 def test_invite_url_keeps_token_in_fragment_not_http_query(base_url: str) -> None:
@@ -191,6 +189,8 @@ def test_invite_url_keeps_token_in_fragment_not_http_query(base_url: str) -> Non
     "base_url",
     [
         "http://founderos.example.test",
+        "http://localhost:3000",
+        "http://[::1]:3000",
         "ftp://founderos.example.test",
         "https://operator:secret@founderos.example.test",
     ],

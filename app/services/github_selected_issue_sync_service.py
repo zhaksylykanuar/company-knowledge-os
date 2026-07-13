@@ -25,6 +25,7 @@ from app.services.github_sync_job_service import (
     GitHubManualSyncJobInput,
     create_manual_github_sync_job,
 )
+from app.services.real_connector_guard import require_real_connectors_enabled
 from app.services.secret_encryption import SecretEncryptionError, decrypt_secret
 
 GITHUB_SELECTED_ISSUE_SYNC_ALLOWLIST_REQUIRED = (
@@ -81,6 +82,7 @@ async def sync_selected_repository_issues(
     input_payload: GitHubSelectedIssueSyncInput,
     requested_by: str = "operator_api_key",
 ) -> dict[str, Any]:
+    require_real_connectors_enabled()
     repositories = _normalize_repositories(input_payload.repositories)
     states = _normalize_states(input_payload.states)
     _validate_sync_allowlist(repositories)

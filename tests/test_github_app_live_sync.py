@@ -42,6 +42,7 @@ def _set_auth(monkeypatch) -> None:
     monkeypatch.setattr(settings, "api_auth_key", SecretStr("test-api-key"))
     monkeypatch.setattr(settings, "secret_encryption_key", SecretStr("test-key"))
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
+    monkeypatch.setattr(settings, "enable_real_connectors", True)
 
 
 def _async_client() -> AsyncClient:
@@ -354,6 +355,57 @@ def test_build_github_app_jwt_uses_app_id_without_exposing_private_key() -> None
     assert payload["exp"] > payload["iat"]
     assert signature_b64
     assert "PRIVATE KEY" not in token
+
+
+async def test_github_app_live_sync_fails_closed_when_real_connectors_disabled(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(settings, "enable_real_connectors", False)
+    await _cleanup_fixture(marker)
+
+    async def fail_provider_call(**_kwargs):
+        raise AssertionError("provider token mint/read must stay disabled")
+
+    monkeypatch.setattr(
+        github_app_live_sync_service.github_app_token_service,
+        "mint_installation_access_token",
+        fail_provider_call,
+    )
+    monkeypatch.setattr(
+        github_app_live_sync_service.github_repository_client,
+        "list_installation_repositories",
+        fail_provider_call,
+    )
+    monkeypatch.setattr(
+        github_app_live_sync_service.github_issue_client,
+        "list_issues",
+        fail_provider_call,
+    )
+    monkeypatch.setattr(
+        github_app_live_sync_service.github_pull_request_client,
+        "list_pull_requests",
+        fail_provider_call,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/connections/app-installation/sync",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "connection_id": str(uuid4()),
+                    "repositories": ["qtwin-io/company-knowledge-os"],
+                },
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": "real provider connectors are disabled"}
+    finally:
+        await _cleanup_fixture(marker)
 
 
 async def test_github_app_live_sync_reads_and_persists_without_token_storage_or_writes(

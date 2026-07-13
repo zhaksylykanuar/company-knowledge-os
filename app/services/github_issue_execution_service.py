@@ -42,6 +42,7 @@ from app.services.action_execution_audit_service import (
     execution_event_idempotency_key,
 )
 from app.services.github_issue_client import GitHubIssueClientError, create_issue
+from app.services.real_connector_guard import require_real_connectors_enabled
 from app.services.secret_encryption import SecretEncryptionError, decrypt_secret
 
 GITHUB_ISSUE_EXECUTION_CONFIRM_REQUIRED = "confirm_external_write must be true"
@@ -109,6 +110,7 @@ async def execute_approved_github_issue_action(
     proposal_id: UUID,
     input_payload: GitHubIssueExecutionInput,
 ) -> dict[str, Any]:
+    require_real_connectors_enabled()
     if input_payload.confirm_external_write is not True:
         raise GitHubIssueExecutionError(GITHUB_ISSUE_EXECUTION_CONFIRM_REQUIRED)
 

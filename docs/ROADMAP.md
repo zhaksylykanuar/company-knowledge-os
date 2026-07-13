@@ -10,11 +10,14 @@ durable people/organization/affiliation/interaction profiles and explicit human
 confirmation (DEC-073/DEC-074), while DEC-075 adds invite-only founder
 enrollment, computed onboarding, explicit company selection, and a one-move
 «Сегодня» shell. DEC-076 completes the frontend-only spatial Company World board
-with conservative affiliation placement and guided candidate resolution. The
-next horizon is release handoff and human-gated private-beta deployment, not
-more local UX expansion. First real provider reads, production mutation, and
-LLM narrative remain separate human-gated horizons. Docs consolidation is
-complete; this roadmap is planning context, not the live task source.
+with conservative affiliation placement and guided candidate resolution.
+DEC-077 makes the one-command loopback runtime the active operational target;
+full local doctor/start/authenticated-browser/smoke/restore/stop acceptance
+passed on 2026-07-14. The next horizon is one founder-approved scoped GitHub App
+read, not a hosted deploy or more UX expansion. External mutation and LLM
+narrative remain separate human-gated horizons. Docs
+consolidation is complete; this roadmap is planning context, not the live task
+source.
 
 ## Phase 0 - Project Setup
 
@@ -73,15 +76,14 @@ Done:
 
 Missing:
 
-- No further canonical model is required for the current private-beta Company
+- No further canonical model is required for the current local Company
   World path. Broader normalized entities and post-MVP graph models remain
   chunk-scoped rather than implied by the playbook vision.
 
 Next step: the current schema and Company Map contract are sufficient for the
-reviewed UX-02 snapshot, and the offline release handoff is complete. Continue
-through the human-approved private-beta deploy gate; the first GitHub App real
-read remains a separate human-approved gate and physical substrate drop remains
-later.
+reviewed UX-02 snapshot, and the DEC-077 local lifecycle is accepted. The first
+GitHub App real read remains a separate human-approved gate; physical substrate
+drop remains later.
 
 Definition of Done:
 
@@ -161,9 +163,9 @@ Missing:
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
 
-Next step: follow `../PROGRESS.md`; the first human-approved GitHub App real
-read run and first auth-session production deploy/handoff are the main
-external gates before LLM briefing work.
+Next step: follow `../PROGRESS.md`; configure the founder-owned GitHub App and
+approve one explicit scoped read-only sync. This remains the main external gate
+before LLM briefing work.
 
 Definition of Done:
 
@@ -249,7 +251,8 @@ Missing:
 - Email delivery for founder/team invites, password reset, and SSO. Founder
   enrollment, local teammate provisioning, `/settings` team UI, and one-time
   `/setup-password` links exist without external delivery.
-- Browser/product E2E coverage.
+- Automated browser/product E2E coverage; the LOCAL-01 authenticated manual
+  browser acceptance has passed.
 - Selected repository issue and PR sync controls remain on source-focused
   routes rather than the default «Сегодня» screen; each syncs one explicit
   allowlisted repository without external writes.
@@ -257,10 +260,9 @@ Missing:
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: after explicit human approval, push the exact reviewed commit and
-perform the manual private-beta deploy/read-only smoke. The offline sanitized
-`make release-handoff` gate has passed. Keep provider reads/deploy human-gated
-and never add browser-stored operator credentials.
+Next step: configure founder-owned GitHub App credentials and installation, then
+run one explicit scoped read-only sync after human approval. Keep provider reads
+human-gated and never add browser-stored operator credentials.
 
 Definition of Done:
 
@@ -391,8 +393,8 @@ Done:
 - Guard/evidence tests exist.
 - GitHub-first backend E2E smoke test covers the local API path with mocked
   external provider execution.
-- FOS-025B added a read-only private-beta smoke script plus `make smoke` for
-  health/auth/workspace/read-model checks without provider writes.
+- FOS-025B historically added a read-only hosted-smoke script. DEC-077 now adds
+  `make local-smoke` as the active health/readiness gate without provider writes.
 - FOS-025C added frontend deploy-readiness gates to CI: `npm test`, build,
   typecheck, and lint, plus backend docs/smoke/CORS/CI contract tests.
 - Current local frontend tests cover the GitHub product connect/readiness UI,
@@ -401,9 +403,8 @@ Done:
 
 Missing:
 
-- Browser/product GitHub-first E2E tests.
-- Deployed/full-stack smoke after auth-session deployment.
-- Manual QA checklist for MVP private-beta handoff.
+- Automated browser/product GitHub-first E2E tests. The manual local product
+  lifecycle and authenticated five-zone browser pass are complete.
 
 Next step: add focused tests with each implementation slice; do not add broad
 test scaffolding before the relevant feature exists.
@@ -416,17 +417,30 @@ Definition of Done:
 - AI validation covered.
 - Action approval path covered.
 
-## Phase 7 - Deployment
+## Phase 7 - Local Operation
 
-Current status: private-beta Railway rehearsal environment exists and deployed
-read-only smoke passes; broader beta still needs production auth/GitHub
-onboarding/custom-domain hardening.
+Current status: DEC-077 makes the loopback local runtime the active MVP target.
+Historical hosted rehearsal evidence is retained below, but it is not the
+current operating path.
 
 Done:
 
-- Local dev startup path exists.
-- Docker Compose Postgres/Redis exists.
+- `make local-doctor`, `make local`, `make local-smoke`, `make local-backup`, and
+  `make local-stop` define the supported local lifecycle.
+- Docker Compose PostgreSQL exists; Redis is optional for the current
+  synchronous runtime.
+- `docs/operations/local-runtime.md` is the canonical operator runbook.
 - Backend CI shape exists.
+- Live doctor/start/same-origin smoke/returning login/onboarding/five-zone
+  browser/backup/stop acceptance passed on the founder's machine.
+- A private PostgreSQL/raw bundle passed checksum, same-major isolated restore,
+  Alembic/count, raw-digest and credential-decryptability proof.
+- Graceful `SIGHUP` cleanup and verified orphan cleanup after a simulated
+  supervisor crash passed without deleting local data.
+
+Historical hosted rehearsal evidence (retained as history; target-specific
+runbooks/templates were removed by DEC-077 and remain recoverable from git):
+
 - FOS-025B added an explicit private-beta env-name contract, backend CORS
   config, placeholder-only `.env.example`, and read-only `make smoke`.
 - FOS-025C added a CI frontend deploy-readiness job and explicit offline
@@ -456,27 +470,24 @@ Done:
 
 Missing:
 
-- First production deploy of the auth phase (the Railway rehearsal predates it);
-  founder invite execution + `FOUNDEROS_API_PROXY_TARGET` wiring in prod.
-- First human-approved GitHub App live read sync run for private-beta users.
-- Custom domain decision and setup.
-- Worker service if/when queue runtime exists.
-- Broader beta monitoring/alerting and backup verification.
+- First human-approved GitHub App live read sync after local acceptance.
+- Any future hosted target, custom domain, worker, monitoring, or public
+  multi-worker security boundary; all are deferred to a new decision.
 
-Next step: after explicit human approval, perform the first auth-session
-production deploy/read-only smoke from the exact reviewed commit; local release
-acceptance and offline `make release-handoff` are complete. GitHub App live read
-sync remains a later human-approved gate; keep deploy manual and smoke-gated.
+Next step: configure the founder-owned GitHub App and approve one explicit
+scoped read-only sync. Do not stop or delete any older hosted resource without a
+separate explicit human approval after restore proof.
 
 Definition of Done:
 
-- Production URL works.
-- Login works.
-- GitHub connect works.
-- Sync works.
+- `make local` reaches healthy loopback backend/frontend endpoints.
+- Login/enrollment and guided onboarding work locally.
+- The local GitHub surface and readiness guidance work; the first real GitHub
+  App connect and scoped provider sync remain separate human-approved gates.
 - Briefing works.
-- Logs are visible.
-- Rollback path exists.
+- Sanitized logs are visible.
+- Logical backup and restore path is proven.
+- `make local-stop` preserves `.local/`, the database volume, and backups.
 
 ## Phase 8 - Post-launch
 

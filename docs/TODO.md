@@ -153,11 +153,9 @@ Implemented foundations:
   action creation when an open action already exists, and links into `/actions`
   with briefing/proposed focus. This reads local DB state only and starts no
   provider calls, external writes, or LLM calls.
-- Dashboard now includes a local private-beta readiness panel backed by the
-  existing Company Brain endpoint. It summarizes canonical data/evidence,
-  session-auth boundary, manual deploy runbook, deferred provider reads,
-  external-writes-off, and LLM boundary without deploying, pushing, calling
-  providers, performing external writes, or invoking LLM.
+- Local readiness is now exposed through the canonical doctor/start/smoke/
+  backup/stop commands and `docs/operations/local-runtime.md`; provider, write,
+  and LLM boundaries remain visible in their relevant product surfaces.
 - `/github` now has client-side local repo-surface focus filters over the
   already-loaded repository list: all repos, active, archived, private, and with
   evidence refs. This helps prepare repo review/audit without provider calls,
@@ -179,11 +177,6 @@ Implemented foundations:
   and query support (`audit_source=deterministic|imported`) while bulk selection
   and the evidence drawer follow the final visible subset. No provider calls,
   external writes, or LLM are started.
-- The private-beta readiness panel now includes a manual deploy/smoke runbook
-  checklist from the deploy docs: local gates, Postgres backup, manual
-  migration, split backend/frontend services, read-only smoke, and rollback
-  boundary. It is display-only and starts no deploy, push, provider call,
-  external write, production data mutation, or LLM.
 - The `/dashboard` source-coverage panel now also shows a local breakdown from
   the already-loaded Company Brain payload: closed work (closed issues / merged
   PRs), recent-activity count, repositories with vs. without source refs, and
@@ -269,12 +262,14 @@ Implemented foundations:
   module CRUD is reachable end-to-end and version history grows past version 1
   through the UI. NormalizedEntity linkage remains a later slice.
 - Russian Next.js UI under `web/` with centralized copy in `web/lib/messages.ts`.
-- Manual private-beta deploy/smoke runbooks; no auto-deploy workflow.
+- Canonical local runtime runbook and one-command lifecycle (DEC-077):
+  `make local-doctor`, `make local`, `make local-smoke`, `make local-backup`,
+  and `make local-stop`.
 - Manual final external-action-result smoke runbook:
   `docs/deploy/external-action-result-smoke.md` documents the one-action,
-  human-approved write smoke needed to prove the final MVP flow step after
-  deploy and read-only provider proof. It is not part of normal read-only smoke,
-  CI, provider-read, provider-token setup, or LLM paths.
+  human-approved write smoke needed to prove the final MVP flow step after a
+  verified local stack and read-only provider proof. It is not part of normal
+  local smoke, CI, provider-read, provider-token setup, or LLM paths.
 - Basic application request logging is now in place (DEC-072): a sanitized ASGI
   `RequestLoggingMiddleware` logs method/path/status/duration at
   `FOUNDEROS_LOG_LEVEL` (default `INFO`) without query values, headers, bodies,
@@ -284,59 +279,33 @@ Implemented foundations:
   (`app/services/mvp_completion_audit.py` + `scripts/mvp_completion_audit.py` +
   `tests/test_mvp_completion_audit.py`). It maps every §1.5 MVP requirement and
   §1.4 main-flow step to authoritative in-repo evidence and separates
-  locally-complete work from the human-gated remainder. Current result: local
-  scope complete (29/29), full MVP not complete because staging/prod deployment
-  and the first real external action result are human/external gated. Run
+  locally-complete work from the human-gated remainder. Current result:
+  repository evidence is present for all 31 items (27/27 local and 4/4
+  code-ready human/runtime-gated). The offline audit cannot attest runtime, but
+  the live local lifecycle has now passed separately. Full external MVP remains
+  unproven until the first GitHub connect, first scoped provider sync, and first
+  real external action result are each proven with human approval. Run
   `uv run python scripts/mvp_completion_audit.py` to re-check before claiming
   completion.
-- A sanitized private-beta release handoff report is now in place
-  (`scripts/private_beta_release_handoff.py` / `make release-handoff`). It
-  combines local git state, MVP completion audit, GitHub App real-read preflight,
-  and ordered human-gated next steps without deploy, provider calls, external
-  writes, database access, secret reads, or LLM.
+- `make local-readiness` is the sanitized local repository-evidence report;
+  `make release-handoff` and `scripts/private_beta_release_handoff.py` are
+  compatibility aliases. The report combines local git state, MVP completion
+  audit, GitHub App real-read preflight, and ordered human-gated next steps
+  without deploy, provider calls, external writes, database access, secret
+  reads, or LLM.
 
-## Next Priority: Human-gated deploy and read-only smoke
+## Next Priority / Near-Term Backlog
 
-Rationale: UX-01 and UX-02 now provide the guided first-run loop and the spatial
-Company World surface over the existing evidence and write boundaries. Local
-UX-02 acceptance and the offline sanitized release handoff are complete on a
-clean exact commit. Exact commit `85b5e1f` is published in Draft PR #33 and all
-GitHub checks are green. Do not expand the local UX again; resume the explicitly
-human-gated private-beta deployment path once a restorable backup boundary is
-available.
+1. **First founder-approved GitHub App read.**
+   The local product, polling-only backend path, explicit per-repository UI
+   control, offline preflight and provider fail-closed guard are ready. Current
+   external blockers are honest: GitHub App env is unset and no installation
+   connection is recorded; the local repository surface contains 25 entries.
+   Next (human): create/configure founder-owned GitHub App credentials, record
+   the installation connection, then approve one explicit scoped read-only sync.
+   This does not authorize a provider write, bulk sync, LLM run or hosted change.
 
-Done when:
-
-- [x] Desktop 1024/1280 px, keyboard/focus and 390×844 mobile browser acceptance
-  passes for the current UX-02 snapshot; controls remain at least 44 px and the
-  CSS preserves the reduced-motion presentation boundary.
-- [x] Backend regression plus the repository's final Ruff, Alembic, secret, and
-  whitespace gates pass for the same reviewed snapshot.
-- [x] `make release-handoff` is run against that exact commit and its sanitized
-  output is attached for human review.
-- [x] The reviewed feature branch is published, Draft PR #33 is open, and all
-  backend/frontend/dependency-review/CodeQL checks are green.
-- [ ] Establish a restorable production Postgres backup boundary. The current
-  Railway Trial plan reports `maxBackupsCount=0`, so no managed snapshot can be
-  created; either enable Railway backup entitlement and verify the snapshot, or
-  separately approve and restore-test a logical backup procedure.
-- [x] Compatible application rollback source `541a0df` is preserved in the
-  published branch history and build-verified against production head
-  `a2b3c4d5e6f7`: backend 316 tests/Ruff and frontend 80 tests/build/typecheck/
-  lint are green. The running Railway archive still has no exact source SHA, and
-  the rollback frontend has two moderate dependency findings, so this source is
-  bounded to emergency rollback.
-- The human-approved Railway sequence completes backup, migration, deploy, and
-  read-only smoke without silently widening provider or write scope.
-- Distinct client-IP behavior behind Railway/Next is proven with a two-client
-  smoke, or the process-local admission boundary is replaced with an approved
-  shared edge/Redis limiter before public launch.
-- Provider writes, live LLM generation, and other production mutations remain
-  separately approved gates.
-
-## Near-Term Backlog
-
-1. **Action review polish (local approval only).**
+2. **Action review polish (local approval only).**
    Briefing items can now create local `internal_todo` proposals with evidence.
    Local status filters and structured execution audit timeline are in place.
    Evidence drawer defaults, origin grouping (briefing/GitHub/internal) with an
@@ -351,10 +320,10 @@ Done when:
   page now has a local readiness summary for needs-decision proposals,
   preview-ready approved GitHub proposals, local-only follow-ups, missing
   evidence, and reported execution receipts. Further polish is deferred until
-  after release/deploy evidence; provider reads, writes, and AI generation
+  after the first scoped provider-read evidence; provider writes and AI generation
   remain separately approved gates.
 
-2. **Founder-facing briefing polish.**
+3. **Founder-facing briefing polish.**
    Deterministic briefing cards, source coverage signals, item category filter,
    default evidence drawer, richer history comparison, and briefing-to-local-
    action bridge are in place. Briefing/action cross-links are now in place:
@@ -363,8 +332,8 @@ Done when:
    focus. `/actions` also now distinguishes
    deterministic vs imported audit-origin proposals with a local subfilter,
    badges, query focus, and richer payload metadata. The unsafe global audit
-   page/overview are retired; the private-beta readiness panel displays the manual
-   deploy/smoke runbook phases without executing them. The `/dashboard` source-
+   page/overview is retired; DEC-077 and the local runtime runbook are
+   authoritative. The `/dashboard` source-
    coverage panel now also has a local breakdown (closed work, recent activity,
    repos with/without source refs, evidence-by-kind) plus deterministic next-step
    guidance for data/evidence/open-work/provider/AI boundaries. `/connectors`
@@ -380,37 +349,10 @@ Done when:
    a clearer local review/readiness loop with counts for pending decisions,
    preview-ready GitHub issue proposals, local-only follow-ups, missing evidence,
   and reported execution receipts. Further briefing polish is deferred until
-  after release/deploy evidence; provider reads, writes, and AI generation
+  after the first scoped provider-read evidence; provider writes and AI generation
   remain separately approved gates.
 
-3. **First auth-session production deploy.**
-  Dashboard now surfaces a local private-beta readiness checklist plus manual
-  deploy/smoke runbook phases, but actual production launch still uses the
-  manual Railway runbooks: backup, deploy, manual `alembic upgrade head`, smoke.
-  After deploy and read-only proof, the final external action result is covered
-  by `docs/deploy/external-action-result-smoke.md`. Do not add auto-deploy or
-  provider-write smoke without explicit human approval. Before handoff, run
-  `make release-handoff` and attach only the sanitized output to the human
-  review.
-
-4. **GitHub App real read run readiness (deferred).**
-  Backend polling-only live read sync, `/github` explicit repo control, and
-  mocked synced-evidence isolation tests are in place; safe rate-limit/error
-  observability is in place. `/github` now adds local repo-surface filters so
-  the founder can focus active/private/evidence-backed repos before choosing a
-  scoped per-repo read. An offline readiness gate now exists (DEC-054):
-  `github_app_real_read_run_readiness()`, the presence-only preflight
-  `scripts/github_app_real_read_run_preflight.py`, offline unit tests, the
-  runbook `docs/deploy/github-app-first-real-read-run.md`, and a matching
-  display-only readiness section on `/github`. Current state
-  (verified): the real read run is externally blocked — GitHub App env is unset
-  and the installation connection is not recorded; unauthenticated network to
-  `api.github.com` is reachable and the local repo surface (25) is present. Next
-  (human): set GitHub App credentials, record the
-  installation connection, then run one explicit scoped read sync only after
-  explicit human approval.
-
-5. **Multi-user / teammate provisioning.**
+4. **Multi-user / teammate provisioning.**
   Local teammate membership foundation is in place (DEC-055):
   owners/admins can list workspace members and create local `admin`/`member`/
   `viewer` memberships without sending email, calling an identity provider, or
@@ -424,23 +366,21 @@ Done when:
   belongs to another workspace is not silently attached: the endpoint returns
   `409`, including under concurrent A/B attach. Next: build recipient-verified,
   self-accepted workspace invitations plus email/password-reset delivery after
-  deploy stability.
+  local multi-user stability.
 
 ## Known Debts / Watch List
 
-- **Production backup gate:** Railway Trial currently permits zero volume
-  backups. Production Alembic is `a2b3c4d5e6f7`, while reviewed code expects
-  `b4d5e6f7a8c9` across 11 migrations. Do not enter the maintenance window or
-  migrate until a restorable backup path is verified.
-- **Application rollback limitation:** the running deployment has no recorded
-  source SHA and its retained image is no longer rollback-eligible on Trial.
-  Compatible source `541a0df` is preserved and build-verified, but is an
-  emergency rollback build rather than proof of the exact old archive.
-- **Public-deploy auth gate:** the process-local per-IP login limiter currently
-  keys on `request.client.host`. Railway/Next proxy semantics have not yet proved
-  that two external client IPs remain distinct. Keep one Uvicorn process and do
-  not expose this as a public security boundary until a two-client deployment
-  smoke confirms trusted forwarding or a shared edge/Redis limiter replaces it.
+- **Local backup continuity:** the current private bundle passed checksum,
+  matching-major restore, Alembic/count, raw-digest and credential-decryptability
+  proof. Keep creating a new verified bundle before future schema/data-risk work;
+  a timestamped but unverified archive is never a rollback boundary.
+- **Hosted retirement gate:** do not stop services, remove domains, delete a
+  database/volume, or delete a project without separate explicit approval after
+  a final logical archive passes restore proof and an observation window.
+- **Future public auth topology:** the process-local per-IP login limiter is
+  sufficient only for the current single-process loopback runtime. Any future
+  public/multi-worker target requires shared edge/Redis limiting, trusted-proxy
+  verification, monitoring, backups, and a new durable hosting decision.
 - Teammate setup delivery is still manual over a trusted direct channel and does
   not verify the recipient. The authenticated admin endpoint also returns `409`
   when an email belongs to an account in another workspace; replace this with a
@@ -448,10 +388,13 @@ Done when:
 - Retained compatibility substrate (`source_events`, `normalized_activity_items`,
   `ingested_events`) still exists; do not drop it without a scoped migration and
   explicit approval.
-- GitHub today is not a product connect flow; provider-token/manual bridge is an
-  operator/admin bridge.
-- Deploy remains manual and smoke-gated. Do not push, deploy, run migrations on
-  production data, or call providers unless the human explicitly requests it.
+- GitHub App connect/read foundations exist, but the first real provider read is
+  still blocked on founder-owned App credentials, installation connection and
+  an explicit scoped approval. Manual provider-token rows remain an operator
+  bridge, not the preferred product setup.
+- Hosted operation is deferred. Do not push, deploy, mutate external data,
+  retire external resources, or call providers unless the human explicitly
+  requests the exact action.
 - Raw storage + Postgres are the source of truth; Obsidian is export-only.
 
 ## Documentation Tasks For Future Work

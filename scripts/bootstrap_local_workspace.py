@@ -9,13 +9,18 @@ older Obsidian vault into the project-local vault when one is configured.
 from __future__ import annotations
 
 import argparse
+import io
 import json
+import os
 import re
+import secrets
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from dotenv import dotenv_values
 
 VAULT_NAME = "FounderOS Knowledge Vault"
 MANAGED_START = "# --- FounderOS local workspace: managed by bootstrap_local_workspace.py ---"
@@ -31,8 +36,13 @@ LOCAL_DIRS = (
     ".local/exports",
     ".local/cache",
     ".local/backups",
+    ".local/raw_storage",
 )
 SENSITIVE_KEY_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|CLIENT_SECRET)", re.IGNORECASE)
+
+
+class LocalWorkspaceBootstrapError(RuntimeError):
+    """A sanitized local bootstrap failure safe to show without env values."""
 
 
 @dataclass(frozen=True)
@@ -64,17 +74,8 @@ def local_paths(repo_root: Path) -> BootstrapPaths:
 
 
 def parse_env_values(text: str) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, value = stripped.split("=", 1)
-        key = key.strip()
-        if key.startswith("export "):
-            key = key.removeprefix("export ").strip()
-        values[key] = value.strip().strip('"').strip("'")
-    return values
+    parsed = dotenv_values(stream=io.StringIO(text))
+    return {key: value for key, value in parsed.items() if value is not None}
 
 
 def _merge_csv(existing: str | None, additions: list[str]) -> str:
@@ -90,15 +91,61 @@ def _merge_csv(existing: str | None, additions: list[str]) -> str:
 
 
 def managed_env_values(existing: dict[str, str], paths: BootstrapPaths) -> dict[str, str]:
-    dev_key = existing.get("FOUNDEROS_DEV_API_KEY") or LOCAL_DEV_KEY
-    api_keys = _merge_csv(existing.get("FOUNDEROS_API_KEYS"), [LOCAL_DEV_KEY, dev_key])
+    existing_dev_key = existing.get("FOUNDEROS_DEV_API_KEY")
+    dev_key = (
+        existing_dev_key
+        if existing_dev_key and existing_dev_key != LOCAL_DEV_KEY
+        else secrets.token_urlsafe(32)
+    )
+    existing_api_keys = ",".join(
+        value
+        for value in (existing.get("FOUNDEROS_API_KEYS") or "").split(",")
+        if value.strip() and value.strip() != LOCAL_DEV_KEY
+    )
+    api_keys = _merge_csv(existing_api_keys, [dev_key])
+    existing_encryption_key = existing.get("FOUNDEROS_SECRET_ENCRYPTION_KEY")
+    ambient_encryption_key = os.environ.get("FOUNDEROS_SECRET_ENCRYPTION_KEY", "").strip() or None
+    if (
+        existing_encryption_key
+        and ambient_encryption_key
+        and not secrets.compare_digest(existing_encryption_key, ambient_encryption_key)
+    ):
+        raise LocalWorkspaceBootstrapError(
+            "FOUNDEROS_SECRET_ENCRYPTION_KEY differs between the shell and "
+            ".env.local; remove the unintended override before local startup."
+        )
+    if existing_encryption_key or ambient_encryption_key:
+        encryption_key = existing_encryption_key or ambient_encryption_key
+    else:
+        # Before FounderOS had a dedicated encryption key, local/dev encrypted
+        # provider tokens with API_AUTH_KEY. Promote that exact material on the
+        # first local bootstrap so existing ciphertext remains decryptable.
+        existing_legacy_key = existing.get("API_AUTH_KEY") or None
+        ambient_legacy_key = os.environ.get("API_AUTH_KEY", "").strip() or None
+        if (
+            existing_legacy_key
+            and ambient_legacy_key
+            and not secrets.compare_digest(existing_legacy_key, ambient_legacy_key)
+        ):
+            raise LocalWorkspaceBootstrapError(
+                "API_AUTH_KEY differs between the shell and .env.local while "
+                "no dedicated encryption key exists; remove the unintended "
+                "override before local startup."
+            )
+        encryption_key = ambient_legacy_key or existing_legacy_key or secrets.token_urlsafe(48)
+    legacy_raw_storage = paths.repo_root / "raw_storage"
+    raw_storage_path = existing.get("RAW_STORAGE_DIR") or str(
+        legacy_raw_storage if legacy_raw_storage.exists() else paths.workspace_path / "raw_storage"
+    )
     return {
         "APP_ENV": "local",
         "FOUNDEROS_API_BASE_URL": "http://127.0.0.1:8765",
         "FOUNDEROS_DEV_API_KEY": dev_key,
         "FOUNDEROS_API_KEYS": api_keys,
-        "FOUNDEROS_ENABLE_BROWSER_DEV_CONFIG": "true",
+        "FOUNDEROS_SECRET_ENCRYPTION_KEY": encryption_key,
+        "FOUNDEROS_ENABLE_BROWSER_DEV_CONFIG": "false",
         "FOUNDEROS_LOCAL_WORKSPACE_PATH": str(paths.workspace_path),
+        "RAW_STORAGE_DIR": raw_storage_path,
         "FOUNDEROS_ENABLE_OBSIDIAN_BRIDGE": "true",
         "FOUNDEROS_OBSIDIAN_VAULT_NAME": VAULT_NAME,
         "FOUNDEROS_OBSIDIAN_VAULT_PATH": str(paths.vault_path),
@@ -106,14 +153,64 @@ def managed_env_values(existing: dict[str, str], paths: BootstrapPaths) -> dict[
     }
 
 
+def _atomic_write_private(path: Path, text: str) -> None:
+    """Atomically replace a local sensitive file with owner-only permissions."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+        os.chmod(path, 0o600)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def render_managed_block(values: dict[str, str]) -> str:
     lines = [MANAGED_START]
-    lines.extend(f"{key}={value}" for key, value in values.items())
+    for key, value in values.items():
+        rendered = json.dumps(value, ensure_ascii=False)
+        # Use the same python-dotenv parser that pydantic-settings uses and
+        # refuse any value whose interpolation/escaping would change on restart.
+        round_trip = parse_env_values(f"{key}={rendered}\n").get(key)
+        if round_trip != value:
+            raise LocalWorkspaceBootstrapError(
+                "A managed local environment value cannot be persisted with "
+                "stable dotenv semantics; no local files were changed."
+            )
+        lines.append(f"{key}={rendered}")
     lines.append(MANAGED_END)
     return "\n".join(lines)
 
 
+def validate_managed_block_structure(text: str) -> None:
+    marker_positions = [
+        (index, line.strip())
+        for index, line in enumerate(text.splitlines())
+        if line.strip() in {MANAGED_START, MANAGED_END}
+    ]
+    if not marker_positions:
+        return
+    if (
+        len(marker_positions) == 2
+        and marker_positions[0][1] == MANAGED_START
+        and marker_positions[1][1] == MANAGED_END
+    ):
+        return
+    raise LocalWorkspaceBootstrapError(
+        "Invalid FounderOS managed block markers in .env.local; expected no "
+        "markers or exactly one ordered start/end pair."
+    )
+
+
 def strip_managed_block(text: str) -> str:
+    validate_managed_block_structure(text)
     lines = text.splitlines()
     out: list[str] = []
     skipping = False
@@ -132,7 +229,7 @@ def strip_managed_block(text: str) -> str:
 def update_env_local_text(existing_text: str, values: dict[str, str]) -> str:
     base = strip_managed_block(existing_text)
     block = render_managed_block(values)
-    return (f"{base}\n\n{block}\n" if base else f"{block}\n")
+    return f"{base}\n\n{block}\n" if base else f"{block}\n"
 
 
 def _mask_value(key: str, value: str) -> str:
@@ -207,7 +304,10 @@ def plan_vault_migration(
             else:
                 conflict = _conflict_path(dest, timestamp)
                 log["conflicts"].append(
-                    {"source": relative.as_posix(), "conflict": conflict.relative_to(paths.vault_path).as_posix()}
+                    {
+                        "source": relative.as_posix(),
+                        "conflict": conflict.relative_to(paths.vault_path).as_posix(),
+                    }
                 )
                 if apply:
                     conflict.parent.mkdir(parents=True, exist_ok=True)
@@ -231,11 +331,19 @@ def bootstrap_local_workspace(
 ) -> dict[str, Any]:
     paths = local_paths(repo_root or repo_root_from_script())
     existing_text = (
-        paths.env_local_path.read_text(encoding="utf-8")
-        if paths.env_local_path.exists()
-        else ""
+        paths.env_local_path.read_text(encoding="utf-8") if paths.env_local_path.exists() else ""
     )
-    existing_values = parse_env_values(existing_text)
+    validate_managed_block_structure(existing_text)
+    base_env_path = paths.repo_root / ".env"
+    base_env_values = (
+        parse_env_values(base_env_path.read_text(encoding="utf-8"))
+        if base_env_path.exists()
+        else {}
+    )
+    # Match Settings' effective file order: .env.local overrides .env. This is
+    # essential for promoting the legacy API_AUTH_KEY that may live only in
+    # .env into a stable dedicated encryption key on first bootstrap.
+    existing_values = {**base_env_values, **parse_env_values(existing_text)}
     old_vault_path = existing_values.get("FOUNDEROS_OBSIDIAN_VAULT_PATH")
     managed_values = managed_env_values(existing_values, paths)
     new_env_text = update_env_local_text(existing_text, managed_values)
@@ -250,17 +358,20 @@ def bootstrap_local_workspace(
 
     if apply:
         for relative in LOCAL_DIRS:
-            (paths.repo_root / relative).mkdir(parents=True, exist_ok=True)
-        paths.env_local_path.write_text(new_env_text, encoding="utf-8")
+            directory = paths.repo_root / relative
+            directory.mkdir(parents=True, exist_ok=True)
+            directory.chmod(0o700)
+        legacy_raw_storage = paths.repo_root / "raw_storage"
+        if legacy_raw_storage.is_dir():
+            legacy_raw_storage.chmod(0o700)
+        _atomic_write_private(paths.env_local_path, new_env_text)
         write_migration_log = (
-            _migration_has_inventory(migration_log)
-            or not paths.migration_log_path.exists()
+            _migration_has_inventory(migration_log) or not paths.migration_log_path.exists()
         )
         if write_migration_log:
-            paths.migration_log_path.write_text(
-                json.dumps(migration_log, ensure_ascii=False, indent=2, sort_keys=True)
-                + "\n",
-                encoding="utf-8",
+            _atomic_write_private(
+                paths.migration_log_path,
+                json.dumps(migration_log, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
             )
 
     return {

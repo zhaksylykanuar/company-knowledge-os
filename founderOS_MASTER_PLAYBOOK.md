@@ -57,10 +57,9 @@
 - LLM-брифинг-пайплайн поверх уже персистентной модели;
 - live Jira/Gmail/Drive provider OAuth/sync вместо local import/list;
 - self-serve workspace onboarding, email-delivered invites / password reset и SSO;
-- webhook-подписи, shared edge/Redis rate limiting до перехода с одного Uvicorn
-  process на несколько workers, deploy-smoke distinct client IP за production
-  proxy, custom-domain/broader beta hardening и first production deploy текущего
-  auth/session состояния.
+- webhook-подписи, shared edge/Redis rate limiting и trusted-proxy verification
+  до любого будущего перехода с loopback single-process runtime на публичный
+  multi-worker hosting, custom-domain/broader beta hardening.
 
 ---
 
@@ -191,7 +190,7 @@ Login
 - human approval before execution;
 - basic logging;
 - basic tests;
-- staging/prod deployment.
+- verified local runtime with backup/restore and safe stop.
 
 ## 1.6 Что НЕ входит в MVP
 
@@ -877,15 +876,15 @@ MVP:
 
 ### Deployment
 
-**Railway** для MVP.
+**Local-first runtime** для текущего MVP (DEC-077).
 
 Причины:
 
-- быстрый deploy;
-- Postgres + Redis;
-- несколько services;
-- GitHub deploy;
-- подходит для early launch.
+- одна команда `make local` запускает понятный продуктовый контур;
+- PostgreSQL остаётся source of truth на машине основателя;
+- loopback FastAPI + Next.js same-origin proxy сохраняют session boundary;
+- нет зависимости от облачного тарифа, deploy или managed backup;
+- будущий hosted target выбирается отдельным решением после реального local use.
 
 ---
 
@@ -3505,31 +3504,31 @@ GitHub OAuth
 
 ---
 
-## Phase 7 - Deployment
+## Phase 7 - Local Operation
 
 ### Цель
 
-Production MVP online.
+FounderOS works end-to-end on the founder's machine.
 
 ### Tasks
 
-- Railway project;
-- Postgres;
-- Redis;
-- backend service;
-- worker service;
-- frontend service;
-- env vars;
+- `make local-doctor`;
+- `make local` loopback supervisor;
+- persistent PostgreSQL volume;
+- FastAPI + Next.js same-origin proxy;
+- founder enrollment/login;
 - migrations;
-- smoke tests;
-- domain.
+- local smoke;
+- logical backup and restore drill;
+- safe stop.
 
 ### Acceptance criteria
 
-- production URL works;
+- local URL works;
 - login works;
-- GitHub connect works;
-- sync works;
+- local GitHub surface and readiness guidance work;
+- first real GitHub connect and scoped sync remain separate human-approved
+  gates after local acceptance;
 - briefing works;
 - logs visible.
 
@@ -4114,17 +4113,22 @@ No product `/audit` route; Company World is workspace-scoped and evidence-first.
 
 ### Goal
 
-Pre-launch confidence.
+Local-runtime confidence without provider calls or writes.
 
 ### Instructions
 
-- Add smoke script.
-- Test health, login, connectors, dashboard.
-- Document command.
+- Keep the default smoke GET-only and loopback-only.
+- Test `/login`, `/health`, and the unauthenticated session boundary through
+  the same-origin frontend proxy.
+- Verify dashboard and source navigation in the authenticated browser
+  acceptance checklist; do not pretend the unauthenticated CLI proves them.
+- Keep provider reads, external writes, and LLM execution out of this smoke.
+- Document the canonical `make local-smoke` command.
 
 ### Acceptance criteria
 
-`make smoke` or equivalent passes.
+`make local-smoke` passes, followed by the authenticated browser checklist in
+`docs/operations/local-runtime.md` for an exact local candidate.
 
 ---
 
@@ -4793,7 +4797,7 @@ Post-launch:
 - secrets only through env;
 - no secrets in code;
 - no secrets in logs;
-- separate staging/prod secrets.
+- separate secrets for every explicitly approved environment.
 
 ### Tokens
 
@@ -4870,70 +4874,62 @@ MVP critical:
 
 ---
 
-# 19. Deployment Plan
+# 19. Local Runtime Plan
 
 ## 19.1 Target
 
-MVP deploy target: **Railway**.
+Active MVP runtime target: **the founder's local machine** (DEC-077).
 
-Services:
+Processes and state:
 
-- backend;
-- frontend;
-- worker;
-- Postgres;
-- Redis.
+- FastAPI on loopback;
+- Next.js on loopback with the same-origin API proxy;
+- compatible loopback PostgreSQL, with Compose PostgreSQL 16 as the managed
+  persistent-volume fallback;
+- gitignored `.local/` evidence/workspace;
+- Redis optional until a real background-job path requires it.
 
-## 19.2 Backend env vars
+## 19.2 Operator commands
 
-```txt
-APP_ENV=production
-APP_URL=https://app.founderos.example
-FRONTEND_URL=https://app.founderos.example
-DATABASE_URL=...
-REDIS_URL=...
-SESSION_SECRET=...
-ENCRYPTION_KEY=...
-CORS_ORIGINS=...
-OPENAI_API_KEY=...
-LLM_MODEL=...
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-JIRA_CLIENT_ID=...
-JIRA_CLIENT_SECRET=...
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
+```bash
+make local-doctor
+make local
+make local-smoke
+make local-backup
+make local-stop
 ```
 
-## 19.3 Frontend env vars
+`docs/operations/local-runtime.md` is the source of truth for operation,
+troubleshooting, backup/restore, and recovery.
+
+## 19.3 Local configuration boundary
 
 ```txt
-NEXT_PUBLIC_API_BASE_URL=https://api.founderos.example/api/v1
-NEXT_PUBLIC_APP_ENV=production
+APP_ENV=local
+FOUNDEROS_API_BASE_URL=http://127.0.0.1:8765
+FOUNDEROS_API_PROXY_TARGET=http://127.0.0.1:8765
 ```
 
-## 19.4 Deployment steps
+Real values remain in gitignored local environment files. Provider credentials,
+database URLs, API keys, encrypted secrets, and bearer links never belong in
+tracked docs or browser storage.
 
-1. Create Railway project.
-2. Add Postgres.
-3. Add Redis.
-4. Add backend service.
-5. Add worker service.
-6. Add frontend service.
-7. Set env vars.
-8. Configure OAuth callback URLs.
-9. Run migrations.
-10. Deploy backend.
-11. Deploy worker.
-12. Deploy frontend.
-13. Configure domain.
-14. Run smoke tests.
+## 19.4 Startup steps
+
+1. Run `make local-doctor` and resolve required blockers.
+2. Run `make local`; preserve `.local/` and existing database volumes.
+3. Let the supervisor make PostgreSQL reachable and apply migrations.
+4. Start FastAPI/Next.js on loopback with the same-origin proxy.
+5. Complete private first-founder enrollment or return through `/login`.
+6. Run `make local-smoke`.
+7. Before risky schema/data work, run `make local-backup` and prove restore.
+8. Stop through `make local-stop`; never delete volumes as normal shutdown.
 
 ## 19.5 Migration command
 
-```bash
-alembic upgrade head
-```
+Migrations are part of `make local`. Manual troubleshooting may use
+`UV_NO_SYNC=1 uv run alembic heads`, `UV_NO_SYNC=1 uv run alembic current`, and
+`UV_NO_SYNC=1 uv run alembic check`; do not use downgrade as a backup strategy.
 
 ## 19.6 Health checks
 
@@ -4944,11 +4940,6 @@ GET /health
 GET /api/v1/auth/me
 ```
 
-Worker:
-
-- can connect Redis;
-- can process test job.
-
 Frontend:
 
 - login page loads;
@@ -4956,21 +4947,21 @@ Frontend:
 
 ## 19.7 Rollback
 
-- redeploy previous commit;
-- avoid irreversible migrations before backup;
-- keep migration notes;
-- backup DB before major schema change.
+- preserve the current volume and `.local/`;
+- take a restrictive logical archive plus checksum before risky changes;
+- restore-test in an isolated matching-major database;
+- keep the previous reviewed code snapshot and database until comparison passes;
+- never delete an older hosted resource without separate explicit approval.
 
-## 19.8 Typical deployment errors
+## 19.8 Typical local-runtime errors
 
-- missing env var;
-- wrong callback URL;
-- OAuth provider mismatch;
-- CORS mismatch;
-- worker not running;
+- Docker daemon not running;
+- loopback port already occupied;
 - migration not applied;
-- Redis unavailable;
-- frontend API URL wrong.
+- PostgreSQL volume unavailable;
+- frontend proxy target does not match backend port;
+- stale local process ownership record;
+- restore archive not verified.
 
 ---
 
@@ -5043,14 +5034,14 @@ Frontend:
 - action logs;
 - errors visible.
 
-## 20.8 Deployment
+## 20.8 Local operation
 
-- domain;
-- HTTPS;
-- env vars;
-- DB backup;
-- worker running;
-- smoke tests pass.
+- doctor passes;
+- backend/frontend bind to loopback;
+- database volume is persistent;
+- logical backup and isolated restore are proven;
+- local smoke passes without provider side effects;
+- safe stop preserves `.local/`, volume, and backups.
 
 ## 20.9 Legal/privacy minimum
 
@@ -5097,7 +5088,7 @@ Frontend:
 Запрещено:
 
 - до первого GitHub E2E;
-- перед deploy;
+- перед рискованной миграцией данных или сменой runtime topology;
 - без tests;
 - из-за вкуса;
 - когда текущий flow broken.
@@ -5110,7 +5101,7 @@ Frontend:
 - пока Dashboard пустой;
 - пока Briefing без evidence;
 - пока Action approval не работает;
-- пока production не запущен.
+- пока canonical local runtime, smoke и restore-proof backup не приняты.
 
 ## 21.6 Если застрял
 
@@ -5326,23 +5317,20 @@ Done when:
 
 ---
 
-## Этап 13 - Deploy
+## Этап 13 - Local Runtime Acceptance
 
 Do:
 
-- Railway;
-- env vars;
-- DB;
-- Redis;
-- backend;
-- worker;
-- frontend;
-- migrations;
-- smoke.
+- `make local-doctor`;
+- `make local`;
+- founder login/enrollment and onboarding;
+- `make local-smoke`;
+- `make local-backup` plus restore proof;
+- `make local-stop`.
 
 Done when:
 
-- production URL works and first E2E passes.
+- local product works end-to-end and the rollback boundary is verified.
 
 ---
 

@@ -76,6 +76,10 @@ from app.services.github_execution_result_sync_service import (
     GitHubExecutionResultSyncProviderReadError,
     sync_github_issue_execution_result,
 )
+from app.services.real_connector_guard import (
+    REAL_CONNECTORS_DISABLED_DETAIL,
+    RealConnectorsDisabledError,
+)
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/actions", tags=["actions"])
 
@@ -739,7 +743,7 @@ async def preview_action_proposal_execution_endpoint(
             session,
             proposal=proposal,
             response=response,
-            external_execution_enabled=bool(settings.enable_write_actions),
+            external_execution_enabled=_live_github_execution_enabled(),
         )
         events = await list_execution_events(
             session,
@@ -813,6 +817,12 @@ async def sync_action_proposal_execution_result_endpoint(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=exc.detail,
             ) from exc
+        except RealConnectorsDisabledError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
         except GitHubExecutionResultSyncConflictError as exc:
             await session.commit()
             raise HTTPException(
@@ -863,7 +873,7 @@ async def execute_action_proposal_endpoint(
                 event_type=ACTION_EXECUTION_EVENT_CONFIRMATION_MISSING,
                 message="Execution blocked because confirm_external_write was not true.",
                 confirmation_received=False,
-                external_execution_enabled=bool(settings.enable_write_actions),
+                external_execution_enabled=_live_github_execution_enabled(),
                 error_code="confirmation_missing",
                 error_message="confirm_external_write must be true",
             )
@@ -891,6 +901,25 @@ async def execute_action_proposal_endpoint(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=ACTION_EXECUTION_DISABLED_DETAIL,
             )
+        if not settings.enable_real_connectors:
+            await _record_execute_block_event(
+                session,
+                proposal=proposal,
+                event_type=ACTION_EXECUTION_EVENT_CONFIRMATION_RECEIVED_BUT_DISABLED,
+                message=(
+                    "Execution confirmation was received, but real provider "
+                    "connectors are disabled. No external write occurred."
+                ),
+                confirmation_received=True,
+                external_execution_enabled=False,
+                error_code="real_connectors_disabled",
+                error_message=REAL_CONNECTORS_DISABLED_DETAIL,
+            )
+            await session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=REAL_CONNECTORS_DISABLED_DETAIL,
+            )
 
     async with AsyncSessionLocal() as session:
         try:
@@ -905,6 +934,12 @@ async def execute_action_proposal_endpoint(
                 ),
             )
             await session.commit()
+        except RealConnectorsDisabledError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
         except GitHubIssueExecutionNotFoundError as exc:
             await session.commit()
             status_code = (
@@ -1059,7 +1094,7 @@ async def _record_local_review_event(
 
 
 def _execution_preview_response(proposal: Any) -> ActionExecutionPreviewResponse:
-    is_external_enabled = bool(settings.enable_write_actions)
+    is_external_enabled = _live_github_execution_enabled()
     warnings = [ACTION_EXECUTION_PREVIEW_WARNING]
     if not proposal.evidence_refs:
         warnings.append(ACTION_EXECUTION_NO_EVIDENCE_WARNING)
@@ -1132,6 +1167,10 @@ def _execution_preview_response(proposal: Any) -> ActionExecutionPreviewResponse
         ),
         warnings=warnings,
     )
+
+
+def _live_github_execution_enabled() -> bool:
+    return bool(settings.enable_write_actions and settings.enable_real_connectors)
 
 
 def _execution_capabilities(

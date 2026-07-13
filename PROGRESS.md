@@ -3,12 +3,31 @@
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
 > Текущая фактическая ветка `codex/guided-onboarding-ux` опубликована в
-> Draft PR #33. Production deploy остаётся ручным и smoke-gated.
+> Draft PR #33. Активный runtime теперь локальный (`make local`, DEC-077);
+> hosted deploy не является текущей целью.
 
 ---
 
 ## ▶ СЕЙЧАС
 
+- **LOCAL-FIRST RUNTIME (DEC-077): ПРИНЯТ И ГОТОВ К ИСПОЛЬЗОВАНИЮ.** Канонический
+  цикл `make local-doctor` → `make local` → `make local-smoke` →
+  `make local-backup` → `make local-stop` полностью проверен на текущей машине.
+  PostgreSQL 16 и Alembic head `b4d5e6f7a8c9` зелёные; backend/frontend доступны
+  только на loopback через same-origin proxy. Возвратный login, onboarding и
+  пять зон продукта прошли авторизованный browser QA при 1280 px без overflow и
+  console errors; временные QA user/workspace/session удалены. Restore-proven
+  backup подтвердил 31 таблицу / 7 265 строк и 51 raw-файл / 1 353 141 байт,
+  включая расшифровку 1 реального credential-поля; 3 test fixtures отделены.
+  Restore работал через приватный Unix socket без TCP и полностью очистился.
+  `SIGHUP` корректно остановил стек, а после имитации `SIGKILL` supervisor
+  `make local-stop` безопасно убрал проверенные orphan-процессы. Изолированный
+  backend gate: **655 passed / 1 внешнее warning**; frontend: **269 passed**,
+  production build (17 routes), typecheck и lint. Следующий продуктовый gate —
+  отдельно одобренная настройка GitHub App и один scoped read-only sync.
+  Provider reads, external writes и LLM не включались. Старый hosted project не
+  удалён: любое stop/domain/database/volume/project removal требует отдельного
+  явного approval после restore-proof.
 - **UX-02 spatial Company World board (DEC-076): ЗАКРЫТ ЛОКАЛЬНО.**
   `/company-brain` теперь ведёт не в набор реестров, а в
   пространственную стратегическую доску: компания находится в центре, команда,
@@ -34,13 +53,9 @@
   `make release-handoff` прошёл на чистом exact commit: local MVP scope complete,
   full MVP complete остаётся false из-за human/external gates. Exact commit
   `85b5e1f` опубликован в Draft PR #33; все шесть GitHub checks зелёные.
-  Railway production проверен без вывода secret values: auth включён, а write
-  actions, LLM и real connectors выключены. Deploy остановлен до любых
-  production-изменений: production schema находится на `a2b3c4d5e6f7`, код —
-  на `b4d5e6f7a8c9` (11 migrations), а Trial-план Railway запрещает managed
-  backups (`maxBackupsCount=0`). Следующий шаг — создать проверяемый rollback
-  boundary через Railway plan upgrade либо отдельно одобренный и проверенный
-  logical backup; дальнейшее локальное расширение UX не является приоритетом.
+  Hosted rehearsal и его backup blocker теперь исторический контекст, а не
+  активный release gate. DEC-077 переводит продукт на проверяемый local-first
+  runtime без cloud migration/deploy.
 - **UX-01 guided founder onboarding + five-zone company shell (DEC-075):
   ЗАКРЫТ ЛОКАЛЬНО.** One-time fragment-only `/start` enrollment атомарно создаёт
   founder/company/owner/session и ведёт в real-state `/onboarding`; public signup
@@ -61,10 +76,11 @@
   multi-company selection и 390×844 mobile без overflow; console — **0
   warnings/errors**, ephemeral QA identities/workspaces/invites удалены. Tracked
   secret scan и `git diff --check` ✅. Provider calls/writes, LLM, push и deploy
-  не выполнялись. Единственный P1 deploy-gate: distinct client IP за Railway/Next
-  proxy ещё не доказан; до публичного запуска нужен two-client smoke либо shared
-  edge/Redis limiter. Следующий product slice UX-02 теперь закрыт DEC-076;
-  актуальный указатель — release-handoff/deploy-gate после финальной проверки.
+  не выполнялись. Loopback runtime соответствует текущему single-process
+  admission boundary; любой будущий public/multi-worker target потребует нового
+  shared limiter и отдельной security-проверки. UX-02 закрыт DEC-076; актуальный
+  указатель — первый отдельно одобренный GitHub App read после принятого
+  local-first runtime DEC-077.
 - **Durable Company World / founder confirmation (DEC-074):** проекция DEC-073
   теперь объединяется с workspace-owned `Person`, `Organization`,
   `Affiliation`, `Interaction` и terminal `CompanyWorldResolution` receipts.
@@ -108,8 +124,8 @@
   по org env keys подтвердил тот же count без вывода секретов. Следующий
   продуктовый Company World chunk с durable профилями и founder-confirm flow
   закрыт (DEC-074), а spatial board/profile inspector закрыт frontend-срезом
-  DEC-076. Следующий приоритет — release-handoff и manual deploy/read-only smoke;
-  GitHub App real-provider read остаётся отдельным human-approved внешним gate.
+  DEC-076. Local runtime acceptance по DEC-077 закрыт; следующий приоритет —
+  GitHub App real-provider read как отдельный human-approved внешний gate.
 - **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
   offline, детерминированный gate перед первым approved real read run:
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
@@ -300,21 +316,11 @@
   там же есть блок deterministic next steps: canonical data readiness, evidence
   gaps, open-work review, live-provider boundary и AI boundary — всё вычисляется
   из уже загруженного payload и ничего не запускает.
-- **Private-beta readiness dashboard (НОВОЕ):** на `/dashboard` добавлен
-  `PrivateBetaReadinessPanel`, который читает только существующий Company Brain
-  endpoint и показывает ручной readiness-чеклист перед private-beta запуском:
-  canonical data/evidence, session login boundary, manual deploy runbook,
-  deferred GitHub provider read, external writes off и LLM off/available
-  boundary. Панель не деплоит, не пушит, не запускает provider calls, provider
-  writes или LLM; tests cover ready/needs-data/live-capability labels.
-- **Manual deploy/smoke runbook checklist (НОВОЕ):** `PrivateBetaReadinessPanel`
-  теперь дополнительно показывает структурированную карту ручного запуска из
-  deploy docs: local gates, Postgres backup, manual migration, split backend/
-  frontend services, read-only smoke и rollback boundary. Это только
-  founder-facing checklist внутри dashboard: UI не запускает команды, не
-  деплоит, не пушит, не вызывает провайдеров, не делает external writes и не
-  меняет production data. Tests assert runbook steps and no deploy/write/LLM
-  overclaim.
+- **Local runtime readiness (DEC-077):** текущий операционный путь —
+  `make local-doctor`, `make local`, `make local-smoke`, `make local-backup`,
+  `make local-stop` и `docs/operations/local-runtime.md`. Устаревший hosted
+  checklist удалён из Dashboard; provider/write/LLM boundaries остаются в
+  соответствующих продуктовых поверхностях и human-approved runbooks.
 - **GitHub repo-surface focus (НОВОЕ):** `/github` теперь показывает локальный
   фокус/фильтры поверх уже загруженного списка репозиториев: все repo,
   активные, архивные, private и с evidence refs, плюс summary counts. Фильтр
@@ -557,18 +563,12 @@
   foundation + synced-evidence isolation tests + safe rate-limit/error
   observability; операторский API-ключ остаётся для server/CI/админ-скриптов.
   Один alembic head — `b4d5e6f7a8c9`.
-- **Дальше:** UX-02 final acceptance и offline `make release-handoff` прошли на
-  clean exact commit `85b5e1f`; ветка опубликована, Draft PR #33 открыт, все
-  GitHub checks зелёные. Manual private-beta deploy безопасно остановлен перед
-  maintenance window: Railway Trial не поддерживает managed backups, а
-  production отстаёт на 11 migrations. Сначала нужен проверяемый backup/restore
-  boundary; затем migration, backend/frontend deploy и read-only smoke. Перед
-  публичным deploy также обязателен smoke
-  реального client-IP
-  isolation за Railway/Next proxy; `request.client.host` нельзя считать
-  доказанно уникальным без этой проверки. First real-provider read и
-  LLM-нарратив остаются отдельными human-approved этапами, а не поводом для
-  нового local UX expansion.
+- **Дальше:** канонический DEC-077 lifecycle принят на текущей машине. Настроить
+  founder-owned GitHub App, записать installation connection и после отдельного
+  human approval выполнить один scoped read-only sync. External write и
+  LLM-нарратив остаются последующими отдельными approval; future public/
+  multi-worker hosting потребует нового решения и shared limiter/trusted-proxy
+  проверки.
 - **Примечание:** Briefings Chunk 1 — это реальный код (модели / миграция /
   эндпоинты / фронтенд) с зелёными гейтами; бэкенд и фронтенд закоммичены
   отдельно, push не делался.
@@ -578,11 +578,11 @@
 ## 📊 ПРОГРЕСС
 
 ```
-Tasks: 22 / 29   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱▱   71%   (строго DONE)
+Tasks: 23 / 29   ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱   79%   (строго DONE)
 Chunks: 2 / 9
 ```
 
-Разбивка: **DONE = 22** · **PARTIAL = 6** · **MISSING = 1**.
+Разбивка: **DONE = 23** · **PARTIAL = 5** · **MISSING = 1**.
 FOS-002 закрыт по DEC-028 (spine-subset §6: SourceRecord/EvidenceRef/Repository/PullRequest/Task; остальные §6-модели отложены по чанкам — не «не сделано», а scoped-out).
 DONE строго = есть код + проходящий тест/рабочий эндпоинт под acceptance criteria.
 `docs/TODO.md` теперь содержит только near-term backlog; завершённые детали
@@ -592,22 +592,23 @@ DONE строго = есть код + проходящий тест/рабочи
 
 ---
 
-## 🚦 GATE HEALTH (результат последней проверки — 2026-07-01)
+## 🚦 GATE HEALTH (актуальная последняя проверка по каждому gate)
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation made no schema change; один линейный head `e8f9a0b1c2d3`; `uv run alembic heads`, `uv run alembic current`, `uv run alembic upgrade head`, and `uv run alembic check` зелёные |
+| `alembic upgrade head` | ✅ pass | 2026-07-14 | Isolated PostgreSQL 16 migrated from empty to the single head `b4d5e6f7a8c9`; product `heads/current/check` are green with no new operations |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-07-01 | GitHub App live-read observability pass: **394 passed / 0 failed / 1 warning** |
-| `ruff` | ✅ pass | 2026-07-01 | GitHub App live read-sync foundation pass: `uv run ruff check .` → `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-07-14 | Dedicated temporary loopback test database through `make backend-check`: **655 passed / 0 failed / 1 external warning** |
+| `ruff` | ✅ pass | 2026-07-14 | Isolated backend gate: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-07-01 | GitHub App live sync UI pass: `npm test` **98 passed**, `npm run build`, `npm run typecheck`, and `npm run lint` passed |
-| docs navigation | ✅ pass | 2026-07-01 | Covered by full pytest; docs/private-beta/hosting/navigation contract tests remain green |
+| frontend build | ✅ pass | 2026-07-14 | `npm test` **269 passed**; production build **17 routes**, typecheck and lint passed |
+| docs navigation | ✅ pass | 2026-07-14 | `test_local_runtime_docs.py`, `test_external_action_result_runbook.py`, and `test_docs_navigation_integrity.py` — **12 passed** |
+| local runtime live acceptance | ✅ pass | 2026-07-14 | Doctor/start/smoke, authenticated onboarding + five zones, verified DB/raw restore, graceful signal stop and crash-orphan cleanup passed; ephemeral QA rows removed |
 | `alembic check` (retained substrate) | ✅ reconciled | 2026-07-01 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; GitHub App live read-sync foundation pass: `alembic upgrade head` + `alembic check` зелёные |
 | **GitHub E2E (spine)** | ✅ selected-sync pass | 2026-06-26 | FOS-019B created exactly one real GitHub issue; FOS-020 read it back; FOS-021 closed it; FOS-022 selected repo issue sync read the approved smoke repo only; FOS-023 selected PR sync covered with read-only mocks |
 | **full main E2E** | ✅ pass | 2026-06-26 | «approved action → real GitHub issue → canonical sync → cleanup close → closed-state sync → selected repository issue sync → selected PR sync» verified locally/mocked where provider reads are not live; execution count stayed single and no extra issues were created |
-| prod smoke | ✅ pass | 2026-06-27 | FOS-026C: deployed Railway read-only smoke passed with minimal private-beta workspace/owner context; no provider writes, LLM calls, selected repo sync, or ActionProposal execute |
+| historical hosted smoke | ✅ pass | 2026-06-27 | FOS-026C rehearsal evidence retained; it is not the active DEC-077 runtime gate |
 
 Статусы: ✅ pass · ❌ fail · ❓ unknown
 
@@ -714,39 +715,27 @@ product routes из-за несовпадения tenant scope.*
   typecheck/lint/build, full backend **537 tests**, Ruff/Alembic and desktop /
   390×844 browser acceptance are verified. See DEC-076.
 - [x] Russian UI localization — all user-facing copy centralized in `web/lib/messages.ts` (no i18n framework; second language is a small addition). See DEC-045.
-- [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth is now built (email+password sessions), but GitHub App live-sync hardening/custom-domain hardening and the first production deploy of the auth phase remain before broader beta.
+- [x] FOS-D — Local operation (DEC-077) — canonical loopback
+  doctor/start/smoke/backup/stop acceptance, authenticated founder browser pass,
+  restore proof, graceful signal shutdown and verified orphan cleanup completed.
+  Historical hosted rehearsal evidence is retained; cloud/public-hosting scope
+  was not expanded.
 
 ---
 
 ## ⛔ BLOCKERS
 
-- **[DEPLOY-BACKUP-P1] Railway Trial disables managed volume backups.** The
-  production Postgres volume is healthy, but the project plan reports
-  `maxBackupsCount=0`; the official backup-create mutation is therefore not
-  authorized and no managed snapshot exists. Production is currently at
-  Alembic `a2b3c4d5e6f7`, while reviewed code expects `b4d5e6f7a8c9` across 11
-  migrations, including irreversible dedupe behavior. Do not stop writers or
-  run `alembic upgrade head` until Railway backup entitlement is enabled and a
-  restorable snapshot is verified, or a separately approved logical-backup
-  procedure has been restore-tested.
-
-- **[DEPLOY-ROLLBACK-P1] RESOLVED AS A COMPATIBLE BUILD.** The running CLI-uploaded
-  backend still exposes no Git SHA/source metadata and is outside Trial image
-  retention, so its exact artifact cannot be claimed. Commit `541a0df` is the
-  last repository commit before the 2026-06-27 deploy, is preserved in the
-  published branch history, and has now been build-verified as the compatible
-  rollback source for production head `a2b3c4d5e6f7`: backend **316 passed / 1
-  external warning** plus Ruff, frontend **80 passed** plus build/typecheck/lint,
-  Alembic one head `a2b3c4d5e6f7`. The old frontend dependency audit reports two
-  moderate issues; use this build only for bounded emergency rollback.
-
-- **[DEPLOY-AUTH-P1] Distinct client IP behind proxy is not yet verified.** The
-  process-local production admission controller keys per-client limits by ASGI
-  `request.client.host`; local tests cannot prove Railway/Next preserves two
-  external source IPs as two keys. Before a public login deploy, run a
-  two-external-client smoke behind the exact trusted proxy boundary or replace
-  the per-process limit with a shared edge/Redis limiter. Keep one Uvicorn
-  process; do not trust arbitrary forwarded headers on a public backend.
+- ~~**[LOCAL-RUNTIME-P1] Full canonical local acceptance was pending.**~~
+  **RESOLVED 2026-07-14:** doctor/start/authenticated browser/smoke/restore-proven
+  backup/graceful stop/crash-orphan cleanup all passed on the current machine.
+- **[EXTERNAL-RETIREMENT-GATE] No deletion is authorized.** Any older hosted
+  database/service remains untouched until a matching-major logical archive has
+  passed checksum and isolated restore verification. Stopping services, removing
+  domains, deleting a database/volume, or deleting a project each requires a
+  separate explicit human approval. Local-first operation alone is not approval.
+- **[FUTURE-PUBLIC-HOSTING] Deferred, not blocking local use.** A future public
+  or multi-worker topology needs a new hosting decision, shared edge/Redis login
+  limiting, trusted-proxy verification, backups, monitoring, and restore drills.
 
 - ~~[CHUNK 0] 4 doc-contract теста красные~~ — **РЕШЕНО (ШАГ A, 2026-06-24).** Починено doc-side (тесты не ослаблялись): вернул CI-секцию в README, lean `docs/playbook.md`, восстановил `docs/ops/jira-target-blueprint.md`, прилинковал guarded-operations, убрал legacy static-UI путь. pytest 1809/0. Коммит `394df7b`.
 
@@ -762,6 +751,36 @@ product routes из-за несовпадения tenant scope.*
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-14` — **LOCAL-01 full local acceptance completed.** The canonical
+  local lifecycle passed on PostgreSQL 16: doctor, start, same-origin smoke,
+  returning-user authentication, guided onboarding and all five founder zones.
+  Browser QA at 1280 px found no horizontal overflow or console errors;
+  the ephemeral user, workspace, membership and session were removed. The
+  verified private backup restored 31 tables / 7 265 aggregate rows and checked
+  51 raw files / 72 directories / 1 353 141 bytes; 1 real encrypted credential
+  field decrypted successfully, 3 explicit fixtures were excluded, restore used
+  a private Unix socket with TCP disabled, and no temporary cluster remained.
+  Graceful `SIGHUP` cleanup and simulated supervisor `SIGKILL` followed by
+  `make local-stop` both cleared state and app listeners without touching data.
+  Final gates: isolated test PostgreSQL migration/schema/Ruff/pytest/secret scan
+  **655 passed / 1 external warning**; frontend **269 passed** plus build
+  (17 routes), typecheck and lint; product Alembic head/current/check, Compose
+  config, tracked-secret scan and whitespace check all green. Railway was removed
+  from the active repo path, but no external hosted resource was stopped or
+  deleted. Next: founder-approved GitHub App credentials/installation and one
+  explicit scoped read-only sync; writes and LLM remain separate approvals.
+- `2026-07-14` — **Local-first runtime becomes the active product path
+  (DEC-077).** Replaced the active hosted/private-beta operating guidance with
+  `make local-doctor`, `make local`, `make local-smoke`, `make local-backup`, and
+  `make local-stop`; added `docs/operations/local-runtime.md`; retired the
+  Railway/private-beta runbooks and placeholder hosting templates; kept prior
+  rehearsal history intact. The supervisor reuses healthy loopback PostgreSQL or
+  starts a safe Compose fallback, preserves `.local/`/volumes, runs backend and
+  frontend on loopback with the same-origin proxy, and opens returning login or
+  private first-founder enrollment without printing the bearer. Redis is
+  optional. Provider reads/writes and LLM remain separate approvals. No hosted
+  resource was stopped or deleted; final archive/restore proof and a separate
+  explicit approval are required before every external retirement phase.
 - `2026-07-14` — **Private-beta publication passed; production deploy stopped at
   backup gate.** Published exact product commit `85b5e1f` on
   `codex/guided-onboarding-ux`, opened Draft PR #33, and received six green

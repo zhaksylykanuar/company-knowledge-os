@@ -10,6 +10,7 @@ from sqlalchemy import delete, func, select
 
 import app.services.github_issue_execution_service as github_issue_execution_service
 import app.services.github_execution_result_sync_service as github_execution_result_sync_service
+import app.api.actions as actions_api
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.action_models import (
     ACTION_CREATED_BY_USER,
@@ -65,6 +66,7 @@ def _set_auth(monkeypatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(settings, "api_auth_key", SecretStr("test-api-key"))
     monkeypatch.setattr(settings, "secret_encryption_key", SecretStr("test-encryption-key"))
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
+    monkeypatch.setattr(settings, "enable_real_connectors", True)
     monkeypatch.setattr(settings, "enable_write_actions", True)
     monkeypatch.setattr(settings, "github_write_allowed_repos", "qtwin-io/founderos-api")
 
@@ -697,6 +699,50 @@ async def test_execute_rejects_when_write_actions_disabled(monkeypatch) -> None:
         await _cleanup_issue_action_fixture(marker)
 
 
+async def test_execute_fails_closed_when_real_connectors_disabled(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(settings, "enable_real_connectors", False)
+    await _cleanup_issue_action_fixture(marker)
+
+    async def fail_execution_service(*_args, **_kwargs):
+        raise AssertionError("provider execution service must stay disabled")
+
+    monkeypatch.setattr(
+        actions_api,
+        "execute_approved_github_issue_action",
+        fail_execution_service,
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(created["workspace"]["id"], owner_email)
+
+        preview = await _preview_execution(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+        )
+        assert preview.status_code == 200, preview.text
+        assert preview.json()["mode"] == "external_disabled"
+        assert preview.json()["capabilities"]["external_execution"] is False
+        assert preview.json()["capabilities"]["live_provider_write"] is False
+
+        response = await _execute_proposal(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+            connection_id=uuid4(),
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": "real provider connectors are disabled"}
+        assert await _stored_executions(proposal["id"]) == []
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
 @pytest.mark.parametrize("allowlist_value", [None, "", "   "])
 async def test_execute_rejects_when_github_write_allowlist_missing(
     monkeypatch,
@@ -1134,6 +1180,41 @@ async def test_sync_execution_result_reads_issue_into_product_state(
         ]
         assert audit_response.json()["receipt"]["status"] == ACTION_EXECUTION_STATUS_SUCCEEDED
         assert audit_response.json()["receipt"]["external_write_performed"] is True
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_sync_execution_result_fails_closed_when_real_connectors_disabled(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(settings, "enable_real_connectors", False)
+    monkeypatch.setattr(
+        github_execution_result_sync_service,
+        "decrypt_secret",
+        lambda _value: (_ for _ in ()).throw(
+            AssertionError("token decrypt must stay disabled")
+        ),
+    )
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(workspace_id, owner_email)
+
+        response = await _sync_execution_result(
+            workspace_id,
+            proposal["id"],
+            owner_email,
+            connection_id=uuid4(),
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": "real provider connectors are disabled"}
+        assert await _stored_executions(proposal["id"]) == []
     finally:
         await _cleanup_issue_action_fixture(marker)
 

@@ -68,7 +68,8 @@ jobs:
         run: >-
           uv run pytest -q
           tests/test_docs_navigation_integrity.py
-          tests/test_private_beta_smoke.py
+          tests/test_local_runtime_docs.py
+          tests/test_local_smoke.py
           tests/test_cors_config.py
           tests/test_ci_deploy_readiness.py
 
@@ -80,7 +81,7 @@ jobs:
         run: uv cache prune --ci
 
   frontend:
-    name: Frontend deploy-readiness checks
+    name: Frontend checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

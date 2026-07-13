@@ -29,6 +29,7 @@ from app.services.github_normalization_service import (
 )
 from app.services.github_pull_request_client import GitHubPullRequestClientError
 from app.services.github_repository_client import GitHubRepositoryClientError
+from app.services.real_connector_guard import require_real_connectors_enabled
 from app.services.github_sync_job_service import (
     GitHubManualSyncJobInput,
     create_manual_github_sync_job,
@@ -94,6 +95,7 @@ async def sync_github_app_installation_repositories(
     input_payload: GitHubAppLiveSyncInput,
     requested_by: str = "operator_api_key",
 ) -> dict[str, Any]:
+    require_real_connectors_enabled()
     repositories = _normalize_repositories(input_payload.repositories)
     issue_states = _normalize_issue_states(input_payload.issue_states)
     pull_request_states = _normalize_pull_request_states(

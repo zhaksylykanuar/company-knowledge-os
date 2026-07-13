@@ -31,7 +31,7 @@ Read in this order (control trio = what / where / why):
   only hashes of invite/setup/session bearer tokens are stored. An
   already-issued session for a disabled account is revoked on its next
   validation. The operator API key remains
-  for server/CI/admin tooling. See step 4 below.
+  for server/CI/admin tooling. See the local full-stack path below.
 - Founder Briefings persist deterministic briefing history and can generate
   local evidence-backed ActionProposals from Jira/Gmail/Drive/document context.
   GitHub App product-connect plus polling-only live read-sync backend/UI
@@ -43,70 +43,55 @@ Read in this order (control trio = what / where / why):
   sanitized interaction history; viewer remains read-only.
   Local Jira/Gmail/Drive import/list connectors, internal Documents, normalized
   entities, teammate provisioning/setup links, and sanitized request logging are
-  in place. Remaining product gaps are the first human-approved GitHub App real
-  read run, LLM briefing narrative over real connected data, first production
-  deploy of the current auth/session build, email delivery for team/founder
-  invites, password reset, and broader beta hardening.
+  in place. The active product now runs locally through `make local`. Remaining
+  product gaps are the first human-approved GitHub App real read run, LLM
+  briefing narrative over real connected data, email delivery for team/founder
+  invites, password reset, and broader multi-user hardening.
 
 ## Local full-stack run path
 
-### 1. Start local infrastructure
-
-Use the project Compose file for local Postgres and Redis:
-
-```bash
-docker compose up -d postgres redis
-```
-
-### 2. Start the backend
-
-The local bootstrap command prepares the gitignored local workspace, updates the
-managed local env block, applies Alembic migrations, and starts FastAPI:
+Diagnose prerequisites, then start the complete product from the repository
+root:
 
 ```bash
-uv run python scripts/start_local.py
+make local-doctor
+make local
 ```
 
-For a manual backend run, apply migrations first and then start Uvicorn:
+`make local` preserves `.local/` and configured raw storage, starts/reuses PostgreSQL, applies current
+Alembic migrations, launches FastAPI on loopback, launches Next.js with the
+correct same-origin proxy, and opens the product. Redis is optional for the
+current synchronous runtime. The canonical browser origin is
+`http://127.0.0.1:3000`; do not substitute `localhost`, because the listener and
+one-time invite handoff intentionally use the exact IPv4 loopback address.
+Existing founders return through `/login`; an
+empty local database opens the private first-founder enrollment path without
+printing its bearer token.
 
-```bash
-uv run alembic upgrade head
-uv run uvicorn app.main:app --host <backend-host> --port <backend-port>
-```
+Run `make local-smoke` for the bounded local acceptance check. Before risky
+data/schema work, run `make local-stop` and then `make local-backup`; it proves a
+database restore and verifies the raw-storage archive. `make local-stop` never
+deletes the database volume, raw storage, or `.local/`. See
+[`docs/operations/local-runtime.md`](docs/operations/local-runtime.md) for the
+complete runbook and manual troubleshooting fallback.
 
-### 3. Start the frontend
+### Founder enrollment fallback
 
-In another shell:
-
-```bash
-cd web
-npm install
-FOUNDEROS_API_PROXY_TARGET=http://127.0.0.1:8765 npm run dev
-```
-
-The dev server proxies `/api/*` and `/health` to the backend, so the session
-cookie stays first-party. Configure the proxy target with
-`FOUNDEROS_API_PROXY_TARGET` (falls back to `NEXT_PUBLIC_API_BASE_URL`, then
-`http://localhost:8000`). The explicit `8765` value above matches
-`scripts/start_local.py`; use the manual Uvicorn port instead when you start the
-backend yourself. Then complete step 4 through its one-time browser link;
-existing founders return through `/login`.
-
-### 4. Invite the founder through the product
-
-Create a short-lived, one-time founder link after migrations are current. TTL is
-1–168 hours (72 by default). No raw token persists: the database stores its
-SHA-256 digest, expiry, and optional consumption/revocation receipts. The raw URL
-is printed once and must be handled like a credential (never paste it into logs,
-docs, commits, or chat):
+Normally `make local` handles the empty-database browser handoff. If automatic
+browser opening is intentionally disabled or fails, create a short-lived,
+one-time founder link after migrations are current. TTL is 1–168 hours (72 by
+default). No raw token persists: the database stores its SHA-256 digest, expiry,
+and optional consumption/revocation receipts. The raw URL is printed once and
+must be handled like a credential (never paste it into logs, docs, commits, or
+chat):
 
 ```bash
 UV_NO_SYNC=1 uv run python scripts/create_founder_invite.py \
-  --base-url http://localhost:3000 \
+  --base-url http://127.0.0.1:3000 \
   --ttl-hours 72
 ```
 
-Open the returned URL in the browser. `/start` creates the founder account,
+Open the returned URL in the local browser. `/start` creates the founder account,
 company workspace, owner membership, and session in one transaction, then opens
 the guided `/onboarding` journey. Public signup without an issued invite stays
 closed.
@@ -194,148 +179,47 @@ If `--org` is omitted, the script reads the non-secret
 `FOS_GITHUB_TARGET_ORG` value from the environment, `.env.local`, then `.env`.
 It is idempotent, offline-only, and never reads or prints GitHub tokens.
 
-## Private-beta deployment foundation
+## Human-gated external operations
 
-The concrete manual private-beta deployment path is documented in
-[`docs/deploy/private-beta.md`](docs/deploy/private-beta.md), with the current
-Railway dry-run target map in
-[`docs/deploy/railway-private-beta.md`](docs/deploy/railway-private-beta.md). It defines the
-backend API process, frontend web process, managed Postgres/Redis expectations,
-migration/backup/rollback procedure, CORS/API-base setup, and read-only
-post-deploy smoke command. It does **not** deploy the app or add an automatic
-deploy workflow.
-
-The final human-gated MVP proof step is documented separately in
+The first real GitHub App read and the final external-action-result smoke remain
+separate human-approved gates. A verified local stack is their prerequisite;
+local startup never enables provider reads, external writes, or LLM execution.
+See
+[`docs/deploy/github-app-first-real-read-run.md`](docs/deploy/github-app-first-real-read-run.md)
+and
 [`docs/deploy/external-action-result-smoke.md`](docs/deploy/external-action-result-smoke.md).
-Use it only after deploy, read-only smoke, and an approved scoped provider read:
-it is a one-action, explicitly approved external-write smoke, not part of normal
-read-only smoke or CI.
 
-Before asking a human to push/deploy, generate the sanitized release handoff
-packet:
-
-```bash
-make release-handoff
-```
-
-It combines local git state, the MVP completion audit, GitHub App real-read
-preflight, and the remaining human-gated next steps without starting a deploy,
-provider call, external write, secret read, or LLM.
-
-Minimum backend env names for a private-beta candidate:
-
-- `APP_ENV`
-- `API_BASE_URL`
-- `DATABASE_URL`
-- `REDIS_URL`
-- `API_AUTH_ENABLED`
-- `API_AUTH_KEY`
-- `API_AUTH_HEADER_NAME`
-- `FOUNDEROS_API_KEYS`
-- `FOUNDEROS_SECRET_ENCRYPTION_KEY`
-- `FOUNDEROS_CORS_ALLOWED_ORIGINS`
-- `FOUNDEROS_CORS_ALLOW_CREDENTIALS`
-- `ENABLE_WRITE_ACTIONS`
-- `REQUIRE_APPROVAL_FOR_WRITES`
-- `FOS_GITHUB_WRITE_ALLOWED_REPOS`
-- `FOS_GITHUB_SYNC_ALLOWED_REPOS`
-- `FOUNDEROS_LOG_LEVEL` (optional; default `INFO`) — level for the sanitized
-  request logger, which records method, path, status, and duration only.
-
-Login security tuning (defaults exist, but production values should be reviewed
-explicitly):
-
-- `FOUNDEROS_LOGIN_MAX_FAILED_ATTEMPTS`
-- `FOUNDEROS_LOGIN_LOCKOUT_MINUTES`
-- `FOUNDEROS_LOGIN_RATE_LIMIT_WINDOW_SECONDS`
-- `FOUNDEROS_LOGIN_RATE_LIMIT_PER_IP`
-- `FOUNDEROS_LOGIN_RATE_LIMIT_GLOBAL`
-- `FOUNDEROS_LOGIN_MAX_CONCURRENT_ATTEMPTS`
-- `FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS`
-
-The current production admission controller is process-local and is designed
-for one Uvicorn process. It caps per-IP and global bursts plus concurrent login
-work before Argon2. The DB-backed per-email lockout persists across restarts,
-and failed-login recording opportunistically removes throttle rows older than
-the configured retention window (24 hours by default). Before adding Uvicorn
-workers or multiple backend replicas, deploy a shared edge/Redis limiter; the
-process-local counters do not aggregate across processes. The per-IP key is the
-ASGI client address; distinct external client identity through the production
-proxy must be proven by deployment smoke before treating that limit as a public
-security boundary.
-
-GitHub App product-connect env names (server-side only, required only when the
-GitHub App installation path is enabled):
-
-- `FOUNDEROS_GITHUB_APP_ID`
-- `FOUNDEROS_GITHUB_APP_SLUG`
-- `FOUNDEROS_GITHUB_APP_PRIVATE_KEY` or `FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH`
-- `FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET`
-- `FOUNDEROS_GITHUB_APP_SETUP_URL`
-- `FOUNDEROS_GITHUB_APP_CALLBACK_URL`
-
-Minimum frontend env names:
-
-- `FOUNDEROS_API_PROXY_TARGET` — server-only backend URL the Next.js app proxies
-  `/api/*` and `/health` to, so the session cookie stays first-party
-  (same-origin). Falls back to `NEXT_PUBLIC_API_BASE_URL`, then
-  `http://localhost:8000`.
-- `NEXT_PUBLIC_API_BASE_URL`
-
-Private-beta smoke env names:
-
-- `FOUNDEROS_SMOKE_API_BASE_URL`
-- `FOUNDEROS_SMOKE_API_KEY`
-- `FOUNDEROS_SMOKE_API_KEY_HEADER_NAME`
-- `FOUNDEROS_SMOKE_OWNER_EMAIL`
-- `FOUNDEROS_SMOKE_WORKSPACE_ID`
-- `FOUNDEROS_SMOKE_EXPECT_AUTH`
-- `FOUNDEROS_SMOKE_TIMEOUT_SECONDS`
-
-Use `.env.example` only as a placeholder template; never commit real env files,
-provider credentials, API keys, encrypted secrets, raw storage, or local operator
-outputs.
-
-## Smoke checks
-
-Run the read-only private-beta smoke script through Make:
-
-```bash
-make smoke
-```
-
-The smoke script checks safe endpoints only: health, protected-auth behavior,
-workspace read, GitHub connection status read, Company Brain read, operational
-work read, and deterministic manual briefing generation. It never calls
-ActionProposal execute, selected repository sync endpoints, provider write
-endpoints, provider-token setup, local-sync, normalize-local, or
-post-execution-result sync.
-
-The smoke script reports only step names and HTTP status codes. It must not
-print API keys, env values, raw response bodies, provider payloads, tokens, or
-credential fields.
+Use `.env.example` only as a placeholder template. Never commit real env files,
+provider credentials, API keys, encrypted secrets, raw storage, local database
+archives, or operator outputs. Moving to local operation also does not authorize
+stopping or deleting an older hosted service; restore proof and a separate
+explicit human approval are required for every external retirement phase.
 
 ## Development & CI
 
 ### Quick local checks
 
-Reproduce the backend CI gates locally:
+Reproduce the backend CI gates locally only against an explicit dedicated
+loopback PostgreSQL test target. Its database name must contain a standalone
+test marker (for example, `founderos_test`); the marker is a guard, not proof
+that the database is empty or disposable. The operator must provision the
+dedicated target. The wrapper refuses the product database from ambient
+`DATABASE_URL`, `.env`, or `.env.local` even when the credentials or loopback
+hostname spelling differ:
 
 ```bash
-uv sync --frozen
-uv run ruff check .
-uv run alembic upgrade head
-uv run alembic check
-uv run pytest -q
-bash scripts/check_no_secrets.sh --tracked
+FOUNDEROS_TEST_DATABASE_URL='<loopback-postgresql-test-url>' make backend-check
 ```
 
-Convenience Make targets wrap the same safe local gates:
+`make backend-check` validates the target before running frozen dependency
+sync, Ruff, Alembic upgrade/schema check, the full pytest suite, and the tracked
+secret scan with `APP_ENV=test` and all external execution gates disabled.
+`make check` has the same dedicated-test-target requirement because it includes
+the backend target:
 
 ```bash
-make backend-check
 make frontend-check
-make check
+FOUNDEROS_TEST_DATABASE_URL='<loopback-postgresql-test-url>' make check
 ```
 
 For frontend work:
@@ -352,10 +236,10 @@ npm run lint
 `.github/workflows/ci.yml` runs backend gates (`uv sync --frozen`,
 `uv run alembic upgrade head`, ruff, pytest, docs/smoke contract tests, and the
 tracked-secret scan) against a pinned Postgres image. It also runs frontend
-deploy-readiness gates from `web/`: `npm test`, `npm run build`,
+quality gates from `web/`: `npm test`, `npm run build`,
 `npm run typecheck`, and `npm run lint`. All GitHub Actions are pinned by full
 commit SHA. Running the backend and frontend commands above reproduces CI
-locally. CI smoke/deploy checks are offline/read-only and do not call providers,
+locally. CI readiness checks are offline/read-only and do not call providers,
 selected repository sync, or external-write endpoints.
 
 ### Dependency automation
@@ -373,7 +257,7 @@ selected repository sync, or external-write endpoints.
 ```text
 app/            FastAPI app, services, connectors, db models
 web/            Next.js product shell
-docs/           canonical docs index, decisions, roadmap, changelog, deploy guides
+docs/           canonical docs index, decisions, roadmap, changelog, operations guides
 scripts/        local operator, smoke, and diagnostic CLIs
 tests/          pytest suite
 migrations/     Alembic migrations

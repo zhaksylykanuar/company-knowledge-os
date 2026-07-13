@@ -12,6 +12,7 @@ REQUIRED_TERMS = (
     "One explicitly approved external write only",
     "FOS_GITHUB_WRITE_ALLOWED_REPOS",
     "ENABLE_WRITE_ACTIONS=true",
+    "FOUNDEROS_ENABLE_REAL_CONNECTORS=true",
     "REQUIRE_APPROVAL_FOR_WRITES=true",
     "evidence_refs",
     "execution-preview",
@@ -23,6 +24,8 @@ REQUIRED_TERMS = (
     "Task",
     "Company Brain",
     "ENABLE_WRITE_ACTIONS is disabled again",
+    "make local-stop",
+    "restart canonical `make local`",
 )
 
 FORBIDDEN_STRINGS = (
@@ -77,7 +80,7 @@ def test_external_action_result_runbook_is_not_read_only_smoke_or_auto_deploy() 
     runbook = _runbook_text().casefold()
     normalized = " ".join(runbook.split())
 
-    assert "not be run as part of normal read-only private-beta smoke" in runbook
+    assert "not be run as part of normal read-only local smoke" in runbook
     assert "not referenced by ci" in runbook
     assert "not add automation" in runbook
     assert (
@@ -95,14 +98,14 @@ def test_external_action_result_runbook_has_no_secret_shaped_values() -> None:
         assert pattern.search(runbook) is None
 
 
-def test_existing_read_only_smoke_does_not_reference_external_action_runbook() -> None:
-    smoke_script = (ROOT / "scripts" / "smoke_private_beta.py").read_text(
+def test_local_read_only_smoke_does_not_reference_external_action_runbook() -> None:
+    smoke_script = (ROOT / "scripts" / "smoke_local.py").read_text(
         encoding="utf-8"
     )
-    private_beta_runbook = (ROOT / "docs" / "deploy" / "private-beta.md").read_text(
+    local_runtime_runbook = (ROOT / "docs" / "operations" / "local-runtime.md").read_text(
         encoding="utf-8"
     )
 
     assert "external-action-result-smoke" not in smoke_script
-    assert "external-action-result-smoke" not in private_beta_runbook
-    assert "/actions/proposals/{proposal_id}/execute" not in private_beta_runbook
+    assert "external-action-result-smoke" not in local_runtime_runbook
+    assert "/actions/proposals/{proposal_id}/execute" not in local_runtime_runbook

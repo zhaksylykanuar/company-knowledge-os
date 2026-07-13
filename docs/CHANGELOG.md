@@ -1,5 +1,65 @@
 # FounderOS Changelog
 
+## 2026-07-14
+
+### Changed
+
+- Made the one-command local runtime the active FounderOS operational path
+  (DEC-077). `make local-doctor`, `make local`, `make local-smoke`,
+  `make local-backup`, and `make local-stop` now define the founder-facing
+  lifecycle: reuse a healthy loopback PostgreSQL or start a safe Compose
+  fallback, preserve `.local/` and database volumes, apply migrations, run
+  FastAPI/Next.js on loopback through the same-origin proxy, open returning
+  login or private first-founder enrollment, verify bounded local health, create
+  a restore-proven database plus raw-storage backup bundle, and stop recorded
+  processes safely.
+  Redis is optional for the current synchronous product path.
+- Completed LOCAL-01 live acceptance on the current machine: doctor, local
+  start and same-origin smoke passed; authenticated onboarding and all five
+  product zones passed without overflow or console errors; ephemeral QA data
+  was removed. The verified receipt restored 31 tables / 7 265 rows and checked
+  51 files / 72 directories / 1 353 141 bytes, proved the real stored credential
+  1/1 while excluding 3 fixtures, and used a private Unix socket with TCP
+  disabled. `SIGHUP` cleanup and simulated supervisor `SIGKILL` followed by
+  verified orphan recovery both passed.
+- Added `docs/operations/local-runtime.md` as the canonical start, acceptance,
+  backup/restore, recovery, and troubleshooting runbook. Removed the obsolete
+  active private-beta/Railway runbooks and placeholder hosting templates;
+  historical Railway rehearsal facts remain below and in git history. Removed
+  the stale `PrivateBetaReadinessPanel` from Dashboard so the product no longer
+  sends the founder toward a retired hosted checklist.
+- Superseded DEC-039 and the Railway-specific topology wording of DEC-042 while
+  preserving its first-party same-origin session property on loopback. A future
+  hosted target now requires a new explicit decision.
+- Changed the prerequisite for the first GitHub App real read and the one-action
+  external-result smoke from a hosted deploy to a verified local stack. Provider
+  reads, external writes, and LLM execution remain separately human-approved.
+- Hardened the canonical local boundary: startup now refuses enabled LLM,
+  write, or real-connector gates; every GitHub network path fails closed before
+  credential decrypt/token mint/client use when real connectors are disabled;
+  and local smoke accepts only plain loopback origins and never follows HTTP
+  redirects that could carry an API key off-machine.
+- Hardened local secrets and private storage. Bootstrap generates and preserves
+  a dedicated encryption key without printing it, writes `.env.local`
+  atomically as `0600`, disables the retired browser dev-key surface, and keeps
+  `.local/` plus legacy raw storage at `0700`.
+- Upgraded `make local-backup` from archive readability to a full private
+  bundle: database and raw-storage checksums, raw content digests,
+  aggregate-only manifest, isolated matching-major PostgreSQL restore/count
+  comparison, verified cleanup, and a `0600` receipt. Current-head restarts do
+  not create duplicate backups; pending/unknown migrations fail before upgrade
+  unless this proof succeeds.
+- Repointed the deterministic MVP completion audit from hosted deployment to the
+  local full-stack runtime and made its scope explicit. The repository-only
+  audit keeps runtime/provider gates separate by design. LOCAL-01 now supplies
+  the independent live runtime proof; GitHub connect, first scoped sync, and the
+  first real external result remain unproven.
+- Documented the irreversible retirement gate: moving FounderOS local does not
+  authorize stopping hosted services, removing domains, or deleting a database,
+  volume, or project. A matching-major logical archive, checksum, isolated
+  restore proof, observation window, and separate explicit approval are required
+  before each external retirement phase.
+
 ## 2026-07-13
 
 ### Changed

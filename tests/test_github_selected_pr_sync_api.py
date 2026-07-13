@@ -34,6 +34,7 @@ def _set_auth(monkeypatch) -> None:
     monkeypatch.setattr(settings, "api_auth_enabled", True)
     monkeypatch.setattr(settings, "api_auth_key", SecretStr("test-api-key"))
     monkeypatch.setattr(settings, "api_auth_header_name", "X-FounderOS-API-Key")
+    monkeypatch.setattr(settings, "enable_real_connectors", True)
 
 
 def _async_client() -> AsyncClient:
@@ -268,6 +269,55 @@ async def test_selected_pr_sync_requires_allowlist_before_provider_call(monkeypa
         assert response.json() == {
             "detail": "github selected pull request sync allowed repositories are not configured"
         }
+    finally:
+        await _cleanup(marker)
+
+
+async def test_selected_pr_sync_fails_closed_when_real_connectors_disabled(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    monkeypatch.setattr(settings, "enable_real_connectors", False)
+    monkeypatch.setattr(
+        settings,
+        "github_sync_allowed_repos",
+        "qtwin-io/founderos-smoke",
+    )
+    await _cleanup(marker)
+
+    async def fail_list_pull_requests(**_kwargs):
+        raise AssertionError("provider read must stay disabled")
+
+    monkeypatch.setattr(
+        selected_pr_sync_service.github_pull_request_client,
+        "list_pull_requests",
+        fail_list_pull_requests,
+    )
+    monkeypatch.setattr(
+        selected_pr_sync_service,
+        "decrypt_secret",
+        lambda _value: (_ for _ in ()).throw(
+            AssertionError("token decrypt must stay disabled")
+        ),
+    )
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/github/repositories/pull-requests/sync",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "connection_id": str(uuid4()),
+                    "repositories": ["qtwin-io/founderos-smoke"],
+                    "states": ["all"],
+                },
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": "real provider connectors are disabled"}
     finally:
         await _cleanup(marker)
 

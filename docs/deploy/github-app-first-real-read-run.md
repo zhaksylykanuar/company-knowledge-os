@@ -25,14 +25,21 @@ GitHub then see real data), gated behind DEC-052 and DEC-053.
 
 ## Prerequisites (offline)
 
-1. A GitHub App exists and is installed on the target account/org with read
+1. The exact reviewed build is running locally through `make local`, and
+   `make local-smoke` has passed without provider calls or external writes.
+2. A GitHub App exists and is installed on the target account/org with read
    access to the repositories you intend to read.
-2. The backend environment provides the GitHub App config (names only):
+3. The backend environment provides the GitHub App config (names only):
    - `FOUNDEROS_GITHUB_APP_ID`
    - `FOUNDEROS_GITHUB_APP_SLUG` or `FOUNDEROS_GITHUB_APP_SETUP_URL`
    - `FOUNDEROS_GITHUB_APP_PRIVATE_KEY` or `FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH`
-3. A local repository surface exists (for example `.local/repos.json`) so the
+4. A local repository surface exists (for example `.local/repos.json`) so the
    scoped read has explicit targets.
+
+Canonical `make local` deliberately keeps real connectors disabled and refuses
+to start when that capability is enabled. The live-read window below therefore
+uses an explicit, temporary manual process pair; it is not a second normal
+startup path.
 
 ## Step 1 - Offline preflight
 
@@ -48,6 +55,36 @@ uv run python scripts/github_app_real_read_run_preflight.py --json
 Proceed only when environment config is complete and the local repository surface
 is non-empty. The preflight cannot verify the installation-connection record
 offline; confirm that in-app in Step 2.
+
+## Step 1A - Open the bounded live-read window
+
+Stop the canonical supervisor without deleting local state:
+
+```bash
+make local-stop
+```
+
+In a dedicated backend terminal, enable real reads while keeping writes and LLM
+off, then start the reviewed backend directly:
+
+```bash
+export FOUNDEROS_ENABLE_REAL_CONNECTORS=true
+export ENABLE_WRITE_ACTIONS=false
+export ENABLE_LLM=false
+UV_NO_SYNC=1 uv run uvicorn app.main:app \
+  --host 127.0.0.1 --port 8765 --no-access-log
+```
+
+In a second terminal, start the local web proxy:
+
+```bash
+cd web
+FOUNDEROS_API_PROXY_TARGET=http://127.0.0.1:8765 \
+  npm run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+Do not enable `ENABLE_WRITE_ACTIONS` during this read run. Continue only after
+`/health` succeeds through `http://127.0.0.1:3000`.
 
 ## Step 2 - Record the workspace-scoped installation connection
 
@@ -96,3 +133,6 @@ canonical normalization/upsert path, and returns
 - To stop reading, simply do not run the sync again. No background job runs.
 - If a read fails, the API returns a sanitized provider status/message without
   leaking authorization headers, tokens, or provider payload dumps.
+- At the end of the single read, stop both temporary processes, unset
+  `FOUNDEROS_ENABLE_REAL_CONNECTORS`, and restore any private env entry to
+  `false`. Then run `make local-doctor` and return to canonical `make local`.

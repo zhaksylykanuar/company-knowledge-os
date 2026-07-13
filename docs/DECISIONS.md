@@ -769,6 +769,10 @@ Consequences:
 
 ## DEC-038 - Private-Beta Deploy Runbook Is Manual, Smoke-Gated, And Write-Disabled
 
+Status: superseded by DEC-077 as the active operational path. Its default-deny,
+human-approval, and backup-before-migration principles remain durable for any
+future hosted target.
+
 Decision (2026-06-26): the private-beta deployment path is documented as a
 manual split-service runbook, not as an automatic deploy workflow. The baseline
 uses a backend API process, a frontend web process, managed Postgres, and
@@ -798,6 +802,9 @@ Consequences:
 
 ## DEC-039 - Railway Is The Private-Beta Hosting Dry-Run Target
 
+Status: superseded by DEC-077. The Railway rehearsal remains historical
+evidence only; it is not the active FounderOS operational target.
+
 Decision (2026-06-26): the concrete private-beta hosting dry-run target is a
 manual Railway-only split-service baseline: backend API service, frontend web
 service, managed Postgres, and managed/deferred Redis. The target mapping is
@@ -812,7 +819,8 @@ manual, smoke-gated, provider-write-disabled policy from DEC-038.
 
 Consequences:
 
-- `docs/deploy/railway-private-beta.md` is the target-specific dry-run plan.
+- `docs/deploy/railway-private-beta.md` was the target-specific dry-run plan; it
+  was removed from the active tree by DEC-077 and remains recoverable from git.
 - `docs/deploy/templates/` may contain placeholder-only env templates, but never
   real cloud project IDs, domains, database URLs, API keys, tokens, encrypted
   secrets, or credential values.
@@ -879,6 +887,11 @@ Consequences:
 - Password hashes are never returned by any API; login returns a generic error.
 
 ## DEC-042 - First-Party Session Cookie via Same-Origin Proxy (Not SameSite=None)
+
+Status: deployment-specific wording superseded by DEC-077. The durable security
+property remains: the browser uses the Next.js same-origin proxy and the cookie
+stays first-party. The active topology is now loopback-local rather than two
+hosted Railway origins.
 
 Decision (2026-06-28): the frontend and backend deploy as two Railway origins,
 but the session cookie stays **first-party**. The Next.js app proxies `/api/*`
@@ -1855,7 +1868,7 @@ logging at import and startup and installs the middleware.
 Rationale: before this change the app had no `getLogger`/logging configuration
 and no request logging at all; the only "logging" was persisted domain audit
 trails (`AuditLog`, `ActionExecutionEvent`). §1.5 lists "basic logging" as a
-distinct MVP must-have, and the also-required "staging/prod deployment" needs
+distinct MVP must-have, and every local or future hosted runtime needs
 operational request visibility. This closes that gap with a minimal, dependency-
 free standard-library logger.
 
@@ -2035,15 +2048,15 @@ Security and identity rules:
   every brand-new teammate receives one manual, unverified setup link that must
   travel over a trusted direct channel, while cross-workspace accounts fail with
   409 until a self-accepted invitation flow exists.
-- Production login admission caps per-IP and global request windows plus
+- Login admission caps per-IP and global request windows plus
   concurrent login work before Argon2. It complements the durable per-email DB
   lockout, whose stale rows are opportunistically deleted after 24 hours by
   failed-login recording. The admission controller is process-local and only
-  satisfies the current single-Uvicorn-process private-beta deployment. Before
-  adding workers or replicas, a shared edge/Redis limiter is required because
+  satisfies the current single-Uvicorn-process loopback runtime. Before adding
+  public workers or replicas, a shared edge/Redis limiter is required because
   process-local counters do not aggregate. The per-IP key is
-  `request.client.host`; distinct external IPs behind Railway/Next are not
-  locally proven and require a two-client deploy smoke before public exposure.
+  `request.client.host`; any future public proxy topology requires a new
+  trusted-client-address verification before exposure.
 - Password inputs are bounded before hashing: login accepts 1–256 characters;
   founder enrollment, teammate setup, and password change require 8–256.
 - A disabled user cannot log in, and validation of an already-issued session for
@@ -2140,9 +2153,79 @@ Resolution and access rules:
 Consequence: the Company World interface can feel like a company strategy game
 without inventing organizational facts or weakening provenance/RBAC. UX-02
 local acceptance passed frontend/backend/static and desktop/mobile browser
-gates. With UX-01 and UX-02 complete locally, the exact local commit and offline
-`make release-handoff` gate precede the human-gated private-beta deploy/read-only
-smoke; both local steps passed before deployment was requested.
+gates. With UX-01 and UX-02 complete locally, DEC-077 defines the verified
+one-command local lifecycle. LOCAL-01 has now closed that operational gate; the
+first human-approved GitHub App scoped read is next. Provider writes and LLM
+remain separate human-approved operations.
+
+## DEC-077 - Local Runtime Is The Active MVP Operational Target
+
+Decision (2026-07-14): FounderOS operates as a complete local-first product on
+the founder's machine. The canonical operational entrypoint is `make local`,
+with `make local-doctor`, `make local-smoke`, `make local-backup`, and
+`make local-stop` as the supported diagnose, acceptance, backup, and shutdown
+commands. `docs/operations/local-runtime.md` is the active runbook. A future
+hosted target requires a new explicit decision; Railway is retired from the
+active path.
+
+Rationale: the current product loop, guided onboarding, Company World, local
+connector imports, deterministic briefings, and approval review are usable on a
+single machine. The hosted rehearsal predates the current auth/onboarding build,
+has no managed backup entitlement, and adds operational risk without helping the
+founder finish and use the product now. A single local entrypoint removes that
+handoff while preserving the evidence, auth, and external-action boundaries.
+
+Consequences:
+
+- PostgreSQL remains the canonical structured store. Raw evidence remains in
+  configured gitignored `RAW_STORAGE_DIR` (legacy `raw_storage/` is preserved;
+  fresh installs use `.local/raw_storage/`); other local evidence stays under
+  `.local/`. Obsidian remains export-only.
+- Compose PostgreSQL 16 is the managed fallback baseline; a compatible reachable
+  loopback PostgreSQL may be reused. Redis may be available for future jobs but
+  is not required by the current synchronous runtime.
+- The backend and frontend bind to loopback. Next.js continues to proxy API and
+  health requests so the session cookie stays first-party; this preserves the
+  security property of DEC-042 without a hosted split-origin topology.
+- `make local` must preserve existing `.local/` contents and database volumes,
+  fail clearly when prerequisites are missing, apply migrations only after the
+  local database is reachable, require a verified full backup before migrating
+  behind/unknown non-empty state, and keep provider reads, external writes, and
+  LLM execution disabled by default.
+- The supported backup boundary is one private bundle: logical PostgreSQL dump,
+  raw-storage snapshot, checksums, aggregate-only manifest, and an isolated
+  matching-major restore receipt. The stable encryption key is preserved
+  separately from encrypted database data. Database files are never copied
+  across major versions, and Alembic downgrade is not treated as a backup.
+- Restore verification binds only to a private Unix socket with TCP disabled,
+  rescans raw storage to detect concurrent changes, and proves decryptability
+  only for real stored manual credentials; explicit test fixtures are reported
+  separately and never count as credential proof.
+- The supervisor owns children by verified process signatures. `SIGHUP`
+  performs graceful cleanup; after supervisor death, `make local-stop` reclaims
+  only verified recorded orphans and otherwise fails closed without touching
+  data.
+- DEC-039 and the Railway-specific part of DEC-042 are superseded. Historical
+  Railway rehearsal facts stay in the changelog, session log, and git history;
+  target-specific active runbooks/templates are removed.
+- A verified local stack is the prerequisite for the separately human-approved
+  first real provider read and one-action external-result smoke. Local startup
+  alone never authorizes either action.
+- Stopping hosted services, removing domains, deleting a database/volume, or
+  deleting a hosted project remains an external state change. Each retirement
+  phase requires separate explicit human approval after a logical archive has
+  passed a matching-major restore drill. "Use FounderOS locally" is not deletion
+  approval.
+
+Acceptance record (2026-07-14): LOCAL-01 passed doctor/start/same-origin smoke,
+authenticated onboarding and all five product zones without overflow or console
+errors, verified restore of 31 tables / 7 265 rows plus 51 raw files / 72
+directories / 1 353 141 bytes, real credential proof 1/1 with 3 fixtures
+excluded, graceful `SIGHUP` cleanup, and verified orphan recovery after simulated
+supervisor `SIGKILL`. Ephemeral QA data and temporary restore state were removed.
+The next gate is a separately approved, repository-scoped GitHub App read-only
+sync; no provider read/write, LLM execution, or hosted deletion was authorized
+by this acceptance.
 
 ## ASK - Open Questions For The Human (not decided)
 

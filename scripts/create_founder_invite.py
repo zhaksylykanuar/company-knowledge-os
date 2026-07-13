@@ -36,9 +36,13 @@ def _invite_url(base_url: str, raw_token: str) -> str:
     parsed = urlsplit(base_url.strip())
     if not parsed.hostname or parsed.username is not None or parsed.password is not None:
         raise ValueError("base URL must be an absolute URL without credentials")
-    is_loopback = parsed.hostname in {"localhost", "127.0.0.1", "::1"}
-    if parsed.scheme != "https" and not (parsed.scheme == "http" and is_loopback):
-        raise ValueError("base URL must use HTTPS except for an explicit loopback host")
+    is_canonical_local = parsed.hostname == "127.0.0.1"
+    if parsed.scheme != "https" and not (
+        parsed.scheme == "http" and is_canonical_local
+    ):
+        raise ValueError(
+            "base URL must use HTTPS except for the canonical 127.0.0.1 host"
+        )
     path = f"{parsed.path.rstrip('/')}/start"
     return urlunsplit(
         (parsed.scheme, parsed.netloc, path, "", urlencode({"token": raw_token}))
@@ -65,8 +69,13 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("FOUNDEROS_APP_BASE_URL", "http://localhost:3000"),
-        help="FounderOS web base URL (default: FOUNDEROS_APP_BASE_URL or localhost)",
+        default=os.environ.get(
+            "FOUNDEROS_APP_BASE_URL", "http://127.0.0.1:3000"
+        ),
+        help=(
+            "FounderOS web base URL "
+            "(default: FOUNDEROS_APP_BASE_URL or http://127.0.0.1:3000)"
+        ),
     )
     parser.add_argument(
         "--ttl-hours",

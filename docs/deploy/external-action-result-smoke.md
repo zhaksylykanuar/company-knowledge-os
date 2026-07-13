@@ -7,11 +7,11 @@ for the final MVP flow step:
 Approve Action Proposal -> See External Action Result
 ```
 
-It must **not** be run as part of normal read-only private-beta smoke. It is only
-for a short, explicitly approved window after the current build is deployed,
-read-only smoke has passed, GitHub App/provider credentials are configured, and
-the human has selected exactly one safe target repository.
-It must not be run as part of normal read-only private-beta smoke.
+It must **not** be run as part of normal read-only local smoke. It is only for a
+short, explicitly approved window after the current local stack is verified,
+the scoped provider read has passed, GitHub App/provider credentials are
+configured server-side, and the human has selected exactly one safe target
+repository. It must not be run as part of normal read-only local smoke.
 
 ## Safety boundary
 
@@ -32,7 +32,7 @@ Required boundaries:
 - `ENABLE_WRITE_ACTIONS` may be enabled only for the approved smoke window.
 - `FOS_GITHUB_WRITE_ALLOWED_REPOS` must include only the approved smoke target.
 - No selected repository issue/PR sync, GitHub App real read, provider-token
-  setup, deploy, migration, or LLM call is part of this runbook.
+  setup, local startup, migration, or LLM call is part of this runbook.
 - After the smoke, disable write capability again unless the human explicitly
   approves keeping it on.
 
@@ -40,8 +40,9 @@ Required boundaries:
 
 Before starting, verify all of these are true:
 
-1. Current branch has been pushed and deployed through the private-beta runbook.
-2. `make smoke` read-only private-beta smoke passed.
+1. The exact reviewed code is running through `make local` and
+   `make local-doctor` reports no required blocker.
+2. `make local-smoke` passed against that verified local stack.
 3. The GitHub connection/write path is configured server-side only; no browser
    token or operator key is pasted into the UI.
 4. The approved target repository is safe for a single smoke issue.
@@ -53,6 +54,39 @@ Before starting, verify all of these are true:
 7. The human has approved the exact title/body/target repository before execute.
 
 If any precondition is false, stop and return to read-only mode.
+
+## Open the bounded write window
+
+Canonical `make local` intentionally refuses live-provider or write gates. Stop
+it first:
+
+```bash
+make local-stop
+```
+
+In a dedicated backend terminal, set only the approved window flags and start
+the reviewed backend directly. Keep the allowlist to one repository:
+
+```bash
+export FOUNDEROS_ENABLE_REAL_CONNECTORS=true
+export ENABLE_WRITE_ACTIONS=true
+export REQUIRE_APPROVAL_FOR_WRITES=true
+export FOS_GITHUB_WRITE_ALLOWED_REPOS=<approved-owner/repo>
+export ENABLE_LLM=false
+UV_NO_SYNC=1 uv run uvicorn app.main:app \
+  --host 127.0.0.1 --port 8765 --no-access-log
+```
+
+In a second terminal, start the local web proxy:
+
+```bash
+cd web
+FOUNDEROS_API_PROXY_TARGET=http://127.0.0.1:8765 \
+  npm run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+Do not proceed if the preview says live execution is disabled or `/health`
+fails through `http://127.0.0.1:3000`.
 
 ## Preferred product UI path
 
@@ -116,6 +150,10 @@ and never commit or paste real values.
 Do not paste raw provider responses, GitHub issue URLs, internal IDs, tokens, or
 payload bodies into repository docs.
 
+After the one approved result is verified, stop both temporary processes,
+unset all four write-window variables, restore any private env entries to their
+disabled values, run `make local-doctor`, and restart canonical `make local`.
+
 ## Verification checklist
 
 The smoke is successful only when all checks pass:
@@ -129,9 +167,9 @@ The smoke is successful only when all checks pass:
   into canonical `SourceRecord` + `Task` data.
 - Dashboard, Company Brain, operational work, and deterministic briefing can see
   the normalized result through evidence-backed local state.
-- `ENABLE_WRITE_ACTIONS` is disabled again after the smoke unless explicitly
-  approved otherwise.
-  ENABLE_WRITE_ACTIONS is disabled again after the smoke window.
+- ENABLE_WRITE_ACTIONS is disabled again after the smoke;
+  `FOUNDEROS_ENABLE_REAL_CONNECTORS` is also disabled and the one-repository
+  allowlist is cleared after the smoke window.
 
 ## Rollback / cleanup boundary
 
@@ -142,8 +180,11 @@ repository settings, pull requests, releases, or files.
 
 If any step fails:
 
-1. Stop executing external writes.
-2. Disable `ENABLE_WRITE_ACTIONS`.
+1. Stop both temporary backend/frontend processes; do not execute another write.
+2. Set `ENABLE_WRITE_ACTIONS=false` and
+   `FOUNDEROS_ENABLE_REAL_CONNECTORS=false`; unset
+   `FOS_GITHUB_WRITE_ALLOWED_REPOS` and `REQUIRE_APPROVAL_FOR_WRITES` in the
+   temporary shell, and restore any private env entries to disabled values.
 3. Preserve local audit rows and server logs for private diagnosis.
 4. Report only sanitized status and blocker category.
 5. Do not retry until the human approves a new idempotency key or confirms the
@@ -153,11 +194,10 @@ If any step fails:
 
 Run order for full MVP proof:
 
-1. `docs/deploy/private-beta.md` / `docs/deploy/railway-private-beta.md` — deploy
-   and read-only smoke.
+1. `docs/operations/local-runtime.md` — start and verify the local stack.
 2. `docs/deploy/github-app-first-real-read-run.md` — first scoped read-only
    GitHub App provider read.
 3. This runbook — one explicitly approved external action result smoke.
 
-This runbook is deliberately not referenced by CI, `make smoke`, or automatic
-workflows.
+This runbook is deliberately not referenced by CI, `make local-smoke`, or
+automatic workflows.

@@ -78,6 +78,7 @@ from app.services.github_sync_job_service import (
     get_github_sync_job,
     list_github_sync_jobs,
 )
+from app.services.real_connector_guard import RealConnectorsDisabledError
 from app.services.secret_encryption import SecretEncryptionError
 
 router = APIRouter(prefix="/api/v1/workspaces/{workspace_id}/github", tags=["github"])
@@ -722,6 +723,12 @@ async def run_github_app_installation_live_sync(
                 requested_by=access.actor.auth_mode,
             )
             await session.commit()
+        except RealConnectorsDisabledError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
         except GitHubAppLiveSyncNotFoundError as exc:
             await session.rollback()
             raise HTTPException(
@@ -980,6 +987,12 @@ async def run_selected_repository_issue_sync(
                 requested_by=access.actor.auth_mode,
             )
             await session.commit()
+        except RealConnectorsDisabledError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
         except GitHubSelectedIssueSyncNotFoundError as exc:
             await session.rollback()
             raise HTTPException(
@@ -1029,6 +1042,12 @@ async def run_selected_repository_pull_request_sync(
                 requested_by=access.actor.auth_mode,
             )
             await session.commit()
+        except RealConnectorsDisabledError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
         except GitHubSelectedPRSyncNotFoundError as exc:
             await session.rollback()
             raise HTTPException(

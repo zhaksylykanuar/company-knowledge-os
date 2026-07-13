@@ -46,6 +46,7 @@ from app.services.github_normalization_service import (
     GitHubNormalizationOptions,
     normalize_github_sync_job_local,
 )
+from app.services.real_connector_guard import require_real_connectors_enabled
 from app.services.secret_encryption import SecretEncryptionError, decrypt_secret
 
 GITHUB_EXECUTION_RESULT_SYNC_PROPOSAL_NOT_FOUND = "action proposal not found"
@@ -101,6 +102,7 @@ async def sync_github_issue_execution_result(
     proposal_id: UUID,
     input_payload: GitHubExecutionResultSyncInput,
 ) -> dict[str, Any]:
+    require_real_connectors_enabled()
     proposal = await _get_proposal_or_raise(
         session,
         workspace_id=workspace_id,

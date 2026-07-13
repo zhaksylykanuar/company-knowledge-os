@@ -36,6 +36,15 @@ def test_completion_contract_tracks_company_world_not_retired_audit_route() -> N
     assert "repo_audit_view" not in local_keys
 
 
+def test_completion_contract_treats_local_runtime_as_mvp_evidence() -> None:
+    audit = run_mvp_completion_audit()
+    all_items = {item.key: item for item in audit.items}
+
+    assert all_items["local_full_stack_runtime"].evidence_present is True
+    assert all_items["local_full_stack_runtime"].human_gated is True
+    assert "staging_prod_deployment" not in all_items
+
+
 def test_company_world_completion_requires_wiring_not_empty_files(
     tmp_path: Path,
 ) -> None:
@@ -70,8 +79,14 @@ def test_human_gated_items_are_code_ready_but_not_fully_complete() -> None:
     audit = run_mvp_completion_audit()
 
     human_keys = {item.key for item in audit.human_gated_items}
-    # The two honestly human/external-gated pieces of the MVP.
-    assert human_keys == {"staging_prod_deployment", "flow_external_action_result"}
+    # Hosting is no longer an MVP gate. Live provider access and the first real
+    # external result remain explicit human-owned operations.
+    assert human_keys == {
+        "local_full_stack_runtime",
+        "flow_connect_github",
+        "flow_sync_github",
+        "flow_external_action_result",
+    }
 
     # Their code paths exist locally...
     assert audit.code_ready_for_human_gated is True
@@ -101,6 +116,9 @@ def test_audit_report_is_json_serializable_and_safe() -> None:
     assert "PRIVATE_KEY" not in blob
     assert "API_AUTH_KEY" not in blob
     assert report["offline"] is True
+    assert report["assessment_scope"] == "repository_evidence_only"
+    assert report["repository_evidence_complete"] is True
+    assert report["runtime_acceptance_assessed"] is False
     assert report["provider_calls"] is False
     assert report["reads_secrets"] is False
     assert report["summary"]["local_present"] == report["summary"]["local_total"]

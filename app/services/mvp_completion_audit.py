@@ -2,9 +2,9 @@
 
 This module maps every ``founderOS_MASTER_PLAYBOOK.md`` MVP requirement (§1.5)
 and every main end-to-end flow step (§1.4) to authoritative in-repository
-evidence, and reports which parts are locally complete versus which remain
-human/external gated (the first real external action result and the
-staging/production deployment).
+evidence, and reports which implementation paths have repository evidence
+versus which still require runtime or human proof: the local lifecycle, first
+GitHub connection/read, and first real external action result.
 
 It is a pure, read-only, offline check. It performs no provider calls, opens no
 network connection, touches no database, and never reads or prints secrets,
@@ -12,11 +12,10 @@ tokens, env values, or credential contents. It only checks that specific tracked
 files exist and contain specific structural markers, so a completion audit does
 not have to be re-derived by hand every time.
 
-The audit intentionally does not claim the full MVP is "done": the main-flow
-step "See External Action Result" and the "staging/prod deployment" requirement
-are marked human-gated because proving them requires live credentials, an
-approved external write, and an actual deploy that this repository cannot
-perform on its own.
+The audit intentionally does not claim the full MVP is "done". File markers can
+prove implementation presence, not that the runtime lifecycle or external
+flows were actually exercised. Those acceptance gates require separate,
+sanitized runtime evidence and explicit human approval where applicable.
 """
 
 from __future__ import annotations
@@ -277,17 +276,19 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
         ),
     ),
     AuditItem(
-        key="staging_prod_deployment",
-        requirement="staging/prod deployment",
+        key="local_full_stack_runtime",
+        requirement="local full-stack runtime",
         category="mvp_requirement",
         evidence=(
-            EvidenceCheck("docs/deploy/private-beta.md"),
-            EvidenceCheck("docs/deploy/railway-private-beta.md"),
+            EvidenceCheck("Makefile", "local:"),
+            EvidenceCheck("scripts/local_runtime.py", "supervise_local_runtime"),
+            EvidenceCheck("scripts/local_runtime.py", "create_local_backup"),
+            EvidenceCheck("docs/operations/local-runtime.md", "make local"),
         ),
         human_gated=True,
         human_note=(
-            "Deploy runbooks exist, but the first production deploy of the "
-            "current auth/session build is a human/external action."
+            "The one-command local runtime is implemented, but repository marker "
+            "checks cannot attest doctor/start/onboarding/smoke/restore/stop acceptance."
         ),
     ),
 )
@@ -317,6 +318,11 @@ _MAIN_FLOW_ITEMS: tuple[AuditItem, ...] = (
         evidence=(
             EvidenceCheck("app/api/github.py", "/connections/app-installation"),
         ),
+        human_gated=True,
+        human_note=(
+            "The local connection flow exists, but the first real GitHub App "
+            "installation requires founder-owned credentials and explicit approval."
+        ),
     ),
     AuditItem(
         key="flow_sync_github",
@@ -324,6 +330,11 @@ _MAIN_FLOW_ITEMS: tuple[AuditItem, ...] = (
         category="main_flow",
         evidence=(
             EvidenceCheck("app/api/github.py", "/repositories/issues/sync"),
+        ),
+        human_gated=True,
+        human_note=(
+            "The read-only sync path exists, but the first live provider read "
+            "has not been proven and remains an explicitly approved operation."
         ),
     ),
     AuditItem(
@@ -465,11 +476,11 @@ class MvpCompletionAudit:
 
     @property
     def fully_complete(self) -> bool:
-        """True only when local scope is complete AND nothing is human-gated.
+        """Whether this offline definition has no unresolved acceptance gates.
 
-        Because the MVP explicitly includes a real deployment and a real
-        external action result, this stays ``False`` until those human/external
-        steps are done. It is the honest "is the whole MVP proven" signal.
+        Human/runtime-gated definitions are static in this repository-only
+        audit, so it cannot transition them to accepted. A future receipt-backed
+        audit may do that; until then this property intentionally remains false.
         """
 
         return self.local_scope_complete and not self.human_gated_items
@@ -477,10 +488,15 @@ class MvpCompletionAudit:
     def to_dict(self) -> dict[str, object]:
         return {
             "check": "mvp_completion_audit",
+            "assessment_scope": "repository_evidence_only",
             "offline": True,
             "provider_calls": False,
             "reads_secrets": False,
             "local_scope_complete": self.local_scope_complete,
+            "repository_evidence_complete": (
+                self.local_scope_complete and self.code_ready_for_human_gated
+            ),
+            "runtime_acceptance_assessed": False,
             "code_ready_for_human_gated": self.code_ready_for_human_gated,
             "fully_complete": self.fully_complete,
             "summary": {
