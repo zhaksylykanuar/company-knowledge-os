@@ -7,8 +7,10 @@ Status: roadmap is subordinate to the canonical control trio:
 The current execution pointer is `../PROGRESS.md`: the local MVP foundations are
 in place and Company World now combines bounded, sanitized Gmail evidence with
 durable people/organization/affiliation/interaction profiles and explicit human
-confirmation (DEC-073/DEC-074). The next horizon is private-beta deployment and
-signed-in production onboarding. First real provider reads, production mutation,
+confirmation (DEC-073/DEC-074), while DEC-075 adds invite-only founder
+enrollment, computed onboarding, explicit company selection, and a one-move
+«Сегодня» shell. The next horizon is UX-02's strategic Company World board,
+then private-beta deployment. First real provider reads, production mutation,
 and LLM narrative remain separate human-gated horizons. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
@@ -55,11 +57,14 @@ Done:
 - Auth/session foundations exist: a `sessions` table (ORM `UserSession`, stores
   only the sha256 token hash) and a `login_attempts` brute-force throttle table;
   account-active state reuses `User.status` (no `is_active`).
+- Invite-only enrollment uses `founder_enrollment_invites`; only a SHA-256 token
+  digest, expiry, and optional consumption/revocation receipts persist. TTL is
+  capped at 168 hours; the raw fragment bearer never persists.
 - Canonical `tasks` now have a partial unique index
   `uq_tasks_workspace_provider_external_id` and idempotent `ON CONFLICT` upserts
   across the GitHub sync path. Canonical `repositories` also have a
   workspace/provider/full_name unique guard for cross-path GitHub identity.
-- Existing migrations are at one Alembic head/current: `a3c4d5e6f7b8`.
+- Existing migrations are at one Alembic head/current: `b4d5e6f7a8c9`.
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
   compatibility substrate; FOS-009 repointed workspace repository reads to
@@ -71,9 +76,9 @@ Missing:
   World path. Broader normalized entities and post-MVP graph models remain
   chunk-scoped rather than implied by the playbook vision.
 
-Next step: private-beta deploy/handoff and signed-in production onboarding. The
-first GitHub App real read run remains a separate human-approved external gate;
-physical substrate drop remains a later migration/cleanup task.
+Next step: UX-02 uses the existing profile schema and Company Map contract; no
+new model is expected. Private-beta deploy and the first GitHub App real read
+remain separate human-approved gates; physical substrate drop remains later.
 
 Definition of Done:
 
@@ -129,6 +134,9 @@ Done:
   `POST /api/v1/auth/login|logout`, `GET /api/v1/auth/me`,
   `POST /api/v1/auth/change-password`, with `require_session` /
   `get_current_actor` (session-or-operator-key) auth and a DB login throttle.
+- Invite-only founder enrollment exists at `POST /api/v1/auth/enroll`; it
+  consumes an operator-issued one-time token and atomically creates the founder,
+  workspace, owner membership, and normal browser session.
 - Founder Briefing persistence exists: `POST .../briefings/manual` stores the
   deterministic briefing, and `GET .../briefings` / `GET .../briefings/{id}`
   expose workspace-scoped history.
@@ -145,8 +153,8 @@ Missing:
 
 - First human-approved real-provider read run.
 - LLM briefing narrative over real connected data.
-- Email-delivered invites / SSO. Local teammate membership provisioning and
-  one-time setup links exist, but external invite delivery is still deferred.
+- Email-delivered invites / SSO / password reset. Founder and teammate one-time
+  links exist locally, but external delivery is still deferred.
 - Broader multi-repository issue/PR sync beyond explicitly approved repository
   scope.
 
@@ -164,39 +172,39 @@ Definition of Done:
 
 ## Phase 3 - Frontend Core
 
-Current status: the `web/` shell is now gated behind a `/login` page and a
-server-side session; the GitHub-first dashboard/briefing/action surfaces are
-wired through guarded local contracts and workspace is derived from the session.
-User-facing copy is Russian via a central message catalog.
+Current status: `web/` is a guided company-management shell behind a server-side
+session. Invite-only `/start` and focused `/onboarding` cover first run;
+`/dashboard` is «Сегодня» with one evidence-derived next move; workspace context
+comes from memberships and requires an explicit choice when ambiguous.
 
 Done:
 
 - Legacy static `/ui` has been removed; `web/` is the only product frontend
   shell to extend.
-- A `/login` page (`web/app/login/page.tsx`) plus an `AuthGate` redirect, a
-  session client (`web/lib/auth.ts`/`session.ts`), and a Settings→account /
-  change-password page gate the app behind email+password login; the old
-  operator-key/owner-email browser config (`web/lib/config.ts`) was removed and
-  workspace is derived from the session.
-- All user-facing copy is centralized in `web/lib/messages.ts` (Russian; no i18n
-  framework).
+- `/login`, session client, `AuthGate`, and Settings→account/change-password
+  gate the app behind email+password. `/start` consumes an invite and
+  `/onboarding` guides company/source/map/team state without a decorative
+  completion flag. Founder and teammate setup bearers are fragment-only and
+  cleared after capture; the onboarding step is hash-backed with explicit
+  Sources/Settings return links. The old browser operator-key/owner-email config
+  remains removed.
+- Shared shell/status copy is Russian through `web/lib/messages.ts`; focused
+  page-specific journey copy is colocated with its page (no i18n framework yet).
 - Company Brain has a product dashboard panel backed by canonical GitHub
   repositories/tasks/PRs and source refs.
-- Minimal Next.js + TypeScript app exists in `web/`.
-- App shell, sidebar, MVP placeholder pages, session-derived workspace context,
-  and a typed API client foundation exist.
-- Dashboard reads canonical GitHub operational work from the backend and shows
-  issue/task and PR sections with open/all/closed/merged filters.
-- Dashboard exposes honest GitHub local-sync controls over existing backend
-  contracts and does not claim live provider execution.
-- Dashboard surfaces deterministic Company Brain state with summary counts,
-  repositories, open issue/PR highlights, recent work, and source refs.
-- Dashboard and `/briefings` surface deterministic manual briefing with returned
+- Next.js + TypeScript, a typed API client, and session-derived workspace context
+  exist. The primary navigation has five zones; provider routes are nested under
+  «Источники», with a compact desktop rail and mobile bottom navigation.
+- `/dashboard` derives one next move and three signals from canonical source
+  records, proposed actions, Company Map candidates, briefings, team membership,
+  and role. Missing reads remain unknown; the old operational panel wall is no
+  longer mounted on the default screen.
+- `/briefings` surfaces deterministic manual briefing history with returned
   evidence refs in a frontend evidence drawer.
 - `/briefings` persists generated deterministic briefings and lists/reopens
   briefing history.
-- Dashboard and `/actions` surface local ActionProposal list/create/approve/
-  reject plus guarded execution preview/audit controls.
+- `/actions` surfaces local ActionProposal list/create/approve/reject plus
+  guarded execution preview/audit controls.
 - `/actions` renders persisted execution audit events and local receipt/readiness
   state for preview and blocked execution attempts.
 - `/actions` exposes live GitHub issue execution controls only when backend
@@ -209,12 +217,16 @@ Done:
   `/documents` provides internal document CRUD/search/version history; and
   `/company-brain` provides a dedicated Company Brain + normalized-entities
   view.
-- `/dashboard` is organized as a company command center and `/company-brain`
-  leads with Company World: confirmed workspace members, evidence-backed
+- `/company-brain` leads with Company World: confirmed workspace members,
+  evidence-backed
   external-contact/organization candidates, inspectable profiles, and a bounded
   Gmail touchpoint timeline. The map is gated by workspace membership, explicit
   about truncation and unconfirmed roles, and merges durable confirmed profiles.
   Member+ can confirm/dismiss idempotently; viewer stays read-only (DEC-073/074).
+- Product controls mirror backend roles: source setup/import/sync and action
+  review/execution require owner/admin; briefing generation and local action
+  creation require member+; Company World resolution requires member+; viewer
+  retains evidence-backed read access only.
 - `/github` shows GitHub App real-read readiness over already-loaded local
   state, including env/installation/repo-surface blockers, without starting a
   provider call.
@@ -222,28 +234,31 @@ Done:
 
 Missing:
 
-- Tailwind/shadcn or final product UI system.
-- Self-serve workspace onboarding / email-delivered multi-user invite. Local
-  owner/admin teammate provisioning, `/settings` team UI, and one-time
-  `/setup-password` links exist.
+- UX-02 spatial Company World board/profile inspector; the current evidence and
+  confirmation contracts are complete, but the surface is still registry-like.
+- Email delivery for founder/team invites, password reset, and SSO. Founder
+  enrollment, local teammate provisioning, `/settings` team UI, and one-time
+  `/setup-password` links exist without external delivery.
 - Browser/product E2E coverage.
-- Selected repository issue and PR sync now have read-only product UI controls
-  in the dashboard (`SelectedRepositorySyncControls`), syncing one explicit
-  allowlisted repository at a time without external writes.
+- Selected repository issue and PR sync controls remain on source-focused
+  routes rather than the default «Сегодня» screen; each syncs one explicit
+  allowlisted repository without external writes.
 - First GitHub App real read run and email/SSO invite delivery remain missing.
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: keep product UI honest while the first GitHub App real read and
-production deploy are human-gated; do not add browser-stored operator
-credentials.
+Next step: implement UX-02 over the existing Company Map API, then perform the
+manual private-beta handoff. Keep provider reads/deploy human-gated and never add
+browser-stored operator credentials.
 
 Definition of Done:
 
 - `web/` app runs locally.
-- User can navigate through the MVP shell.
-- Connector cards are visible.
-- Empty states are helpful.
+- A founder can enroll by one-time link and understand the guided real-state
+  onboarding without terminal/DB knowledge after the link is issued.
+- The user sees one unambiguous company and one next move; five zones and source
+  nesting work on desktop and mobile.
+- Unknown/empty/RBAC states are honest and actionable.
 - Frontend lint/test/build checks exist and pass.
 
 ## Phase 4 - GitHub-First E2E
@@ -422,7 +437,8 @@ Done:
   values are rendered as text).
 - Production auth is decided and built: email+password login on server-side,
   revocable sessions (httpOnly first-party cookie via a same-origin proxy,
-  Argon2id, DB login throttle). Secret encryption is fail-closed outside local
+  Argon2id, DB login throttle), plus one-time hash-only founder enrollment.
+  Secret encryption is fail-closed outside local
   (`FOUNDEROS_SECRET_ENCRYPTION_KEY`).
 - Sanitized request logging is in place for application request lines
   (method/path/status/duration only) with `FOUNDEROS_LOG_LEVEL`/`LOG_LEVEL`.
@@ -430,14 +446,15 @@ Done:
 Missing:
 
 - First production deploy of the auth phase (the Railway rehearsal predates it);
-  founder account provisioning + `FOUNDEROS_API_PROXY_TARGET` wiring in prod.
+  founder invite execution + `FOUNDEROS_API_PROXY_TARGET` wiring in prod.
 - First human-approved GitHub App live read sync run for private-beta users.
 - Custom domain decision and setup.
 - Worker service if/when queue runtime exists.
 - Broader beta monitoring/alerting and backup verification.
 
-Next step: first auth-session production deploy/handoff, then GitHub App live
-read sync; keep deploy manual and smoke-gated.
+Next step: after UX-02 browser acceptance, run the first auth-session production
+deploy/handoff, then GitHub App live read sync; keep deploy manual and
+smoke-gated.
 
 Definition of Done:
 

@@ -127,6 +127,35 @@ async def test_change_password_rejects_wrong_current_and_accepts_correct() -> No
         await _cleanup(email)
 
 
+async def test_change_password_enforces_the_enrollment_password_policy() -> None:
+    marker = uuid4().hex[:10]
+    email = f"admin-{marker}@example.test"
+    await _provision(email, OLD_PASSWORD)
+    try:
+        async with _client() as client:
+            await _login(client, email, OLD_PASSWORD)
+            too_short = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": OLD_PASSWORD, "new_password": "short"},
+            )
+            oversized_current = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": "x" * 257, "new_password": NEW_PASSWORD},
+            )
+            oversized_new = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": OLD_PASSWORD, "new_password": "x" * 257},
+            )
+
+        assert too_short.status_code == 422
+        assert oversized_current.status_code == 422
+        assert oversized_new.status_code == 422
+        async with _client() as client:
+            assert (await _login(client, email, OLD_PASSWORD)).status_code == 200
+    finally:
+        await _cleanup(email)
+
+
 async def test_change_password_revokes_other_sessions_keeps_current() -> None:
     marker = uuid4().hex[:10]
     email = f"admin-{marker}@example.test"

@@ -67,6 +67,7 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <DriveConnectorPanelView
+      canImport={props.canImport}
       data={props.data === undefined ? driveFiles : props.data}
       error={props.error ?? null}
       importError={props.importError ?? null}
@@ -118,6 +119,15 @@ test("renders local Drive files and import boundary without provider-write claim
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /LLM started/i);
   assert.doesNotMatch(html, /RAW_DOC_BODY/);
+});
+
+test("keeps Drive facts visible but removes import controls in read-only mode", () => {
+  const html = renderPanel({ canImport: false });
+
+  assert.ok(html.includes("Private beta launch checklist"));
+  assert.ok(html.includes(M.common.sourceAdminOnlyNote));
+  assert.doesNotMatch(html, new RegExp(M.drive.importTitle));
+  assert.doesNotMatch(html, /<form/);
 });
 
 test("renders empty loading missing and error states", () => {

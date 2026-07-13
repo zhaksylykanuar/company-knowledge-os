@@ -181,6 +181,7 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <GitHubProductConnectPanelView
+      canAdminister={props.canAdminister}
       connectionStatus={props.connectionStatus ?? connectedAppStatus}
       error={props.error ?? null}
       onRetry={props.onRetry}
@@ -287,6 +288,15 @@ test("renders connected GitHub App foundation without write promises", () => {
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /provider token/i);
   assert.doesNotMatch(html, /write enabled/i);
+});
+
+test("keeps GitHub repository facts but removes setup and sync controls in read-only mode", () => {
+  const html = renderPanel({ canAdminister: false });
+
+  assert.ok(html.includes("qtwin-io/company-knowledge-os"));
+  assert.ok(html.includes(M.common.sourceAdminOnlyNote));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
 });
 
 test("summarizes GitHub App real-read readiness from loaded local state", () => {

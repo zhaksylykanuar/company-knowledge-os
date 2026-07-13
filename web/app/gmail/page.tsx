@@ -6,12 +6,16 @@ import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
 import { fetchGmailMessages, importGmailMessages } from "../../lib/api";
 import { M } from "../../lib/messages";
-import { useWorkspaceId } from "../../lib/session";
+import {
+  canAdministerSelectedWorkspace,
+  useSession
+} from "../../lib/session";
 import type { GmailMessage, GmailMessageListResponse } from "../../lib/types";
 
 type PanelStatus = "error" | "loading" | "missing" | "ready";
 
 type GmailConnectorPanelViewProps = {
+  canImport?: boolean;
   data: GmailMessageListResponse | null;
   error: string | null;
   importError: string | null;
@@ -25,7 +29,12 @@ type GmailConnectorPanelViewProps = {
 };
 
 export default function GmailPage() {
-  const workspaceId = useWorkspaceId();
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const canImport = canAdministerSelectedWorkspace(
+    session?.workspaces ?? [],
+    workspaceId
+  );
   const [data, setData] = useState<GmailMessageListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -70,7 +79,7 @@ export default function GmailPage() {
 
   async function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!workspaceId || importPending) {
+    if (!workspaceId || !canImport || importPending) {
       return;
     }
     setImportError(null);
@@ -105,14 +114,15 @@ export default function GmailPage() {
         description={M.gmail.description}
       />
       <GmailConnectorPanelView
+        canImport={canImport}
         data={data}
         error={error}
         importError={importError}
         importMessage={importMessage}
         importPending={importPending}
         importText={importText}
-        onImport={handleImport}
-        onImportTextChange={setImportText}
+        onImport={canImport ? handleImport : undefined}
+        onImportTextChange={canImport ? setImportText : undefined}
         onRetry={() => setReloadKey((current) => current + 1)}
         status={status}
       />
@@ -121,6 +131,7 @@ export default function GmailPage() {
 }
 
 export function GmailConnectorPanelView({
+  canImport = true,
   data,
   error,
   importError,
@@ -207,14 +218,18 @@ export function GmailConnectorPanelView({
             </section>
           ) : null}
 
-          <GmailImportForm
-            importError={importError}
-            importMessage={importMessage}
-            importPending={importPending}
-            importText={importText}
-            onImport={onImport}
-            onImportTextChange={onImportTextChange}
-          />
+          {canImport ? (
+            <GmailImportForm
+              importError={importError}
+              importMessage={importMessage}
+              importPending={importPending}
+              importText={importText}
+              onImport={onImport}
+              onImportTextChange={onImportTextChange}
+            />
+          ) : (
+            <p className="muted">{M.common.sourceAdminOnlyNote}</p>
+          )}
 
           <p className="muted">{M.gmail.boundaryNote}</p>
         </>

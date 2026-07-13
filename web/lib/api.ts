@@ -252,9 +252,7 @@ export async function provisionWorkspaceMember(
       body: JSON.stringify({
         email: request.email,
         name: request.name || null,
-        role: request.role,
-        initial_password: request.initialPassword ? request.initialPassword : null,
-        create_setup_link: request.createSetupLink ?? false
+        role: request.role
       }),
       method: "POST"
     }

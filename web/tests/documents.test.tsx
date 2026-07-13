@@ -3,7 +3,11 @@ import test from "node:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { DocumentsPanelView, parseTags } from "../app/documents/page";
+import {
+  canWriteDocuments,
+  DocumentsPanelView,
+  parseTags
+} from "../app/documents/page";
 import {
   buildWorkspaceDocumentPath,
   buildWorkspaceDocumentVersionsPath,
@@ -96,6 +100,7 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <DocumentsPanelView
+      canWrite={props.canWrite ?? true}
       createBody={props.createBody ?? ""}
       createError={props.createError ?? null}
       createMessage={props.createMessage ?? null}
@@ -237,6 +242,32 @@ test("renders document list, summary counts, and create form", () => {
   assert.ok(html.includes(M.documents.createTitle));
   assert.ok(html.includes(M.documents.boundaryNote));
   assert.doesNotMatch(html, /provider call started/i);
+});
+
+test("viewer keeps document facts but gets an explicit read-only screen", () => {
+  const html = renderPanel({
+    canWrite: false,
+    selected: documentDetail,
+    selectedVersions: documentVersions,
+    onCloseDetail: () => undefined,
+    onCreate: () => undefined,
+    onUpdateDocument: () => undefined,
+    onDeleteDocument: () => undefined
+  });
+
+  assert.ok(html.includes("Launch Plan"));
+  assert.ok(html.includes(M.documents.readOnlyNotice));
+  assert.ok(!html.includes(M.documents.createTitle));
+  assert.ok(!html.includes(M.documents.editDocument));
+  assert.ok(!html.includes(M.documents.deleteDocument));
+  assert.equal(canWriteDocuments("viewer"), false);
+});
+
+test("member and administrative roles may write documents", () => {
+  assert.equal(canWriteDocuments("member"), true);
+  assert.equal(canWriteDocuments("admin"), true);
+  assert.equal(canWriteDocuments("owner"), true);
+  assert.equal(canWriteDocuments(null), false);
 });
 
 test("renders empty state when there are no documents", () => {

@@ -22,12 +22,74 @@ export type MeResponse = {
   workspaces: AuthWorkspace[];
 };
 
+export type FounderEnrollmentRequest = {
+  token: string;
+  email: string;
+  name: string;
+  password: string;
+  workspaceName: string;
+  workspaceSlug: string;
+};
+
+export type FounderEnrollmentResponse = {
+  status: "ok";
+  user: AuthUser;
+  workspace: AuthWorkspace & { role: "owner" };
+};
+
 import { M } from "./messages";
 
 const GENERIC_LOGIN_ERROR = M.auth.loginFailedGeneric;
 const LOCKED_LOGIN_ERROR = M.auth.loginFailedLocked;
 
 export class LoginError extends Error {}
+
+export class EnrollmentError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "EnrollmentError";
+    this.status = status;
+  }
+}
+
+export async function enrollFounder(
+  request: FounderEnrollmentRequest
+): Promise<FounderEnrollmentResponse> {
+  const response = await fetch("/api/v1/auth/enroll", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      token: request.token,
+      email: request.email,
+      name: request.name,
+      password: request.password,
+      workspace_name: request.workspaceName,
+      workspace_slug: request.workspaceSlug
+    })
+  });
+  if (response.ok) {
+    return (await response.json()) as FounderEnrollmentResponse;
+  }
+  if (response.status === 400) {
+    throw new EnrollmentError(
+      "Ссылка приглашения недействительна или устарела. Попросите новую ссылку.",
+      response.status
+    );
+  }
+  if (response.status === 409) {
+    throw new EnrollmentError(
+      "Такая почта или адрес компании уже используются. Проверьте данные или войдите в существующий аккаунт.",
+      response.status
+    );
+  }
+  throw new EnrollmentError(
+    "Не удалось создать компанию. Данные не сохранены — попробуйте ещё раз.",
+    response.status
+  );
+}
 
 export async function login(email: string, password: string): Promise<void> {
   const response = await fetch("/api/v1/auth/login", {

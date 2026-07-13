@@ -13,7 +13,7 @@ first.
 Implemented foundations:
 
 - FastAPI backend with canonical `/api/v1` routes, async SQLAlchemy/Postgres,
-  Alembic migrations, and one current Alembic head (`a3c4d5e6f7b8`).
+  Alembic migrations, and one current Alembic head (`b4d5e6f7a8c9`).
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -30,8 +30,8 @@ Implemented foundations:
   entities" step directly. The normalized-entities panel also has a client-side
   `entity_type` focus filter over the already-loaded projection. Read-only; no
   new data path, provider calls, sync, external writes, or LLM.
-- Durable Company World is in place (DEC-073/DEC-074): `/dashboard` is grouped as a company
-  command center and `/company-brain` leads with the workspace-membership-
+- Durable Company World is in place (DEC-073/DEC-074): `/company-brain` leads
+  with the workspace-membership-
   gated, workspace-scoped `company-map` projection. It shows confirmed
   workspace members plus
   evidence-backed external-contact and organization candidates, confirmed
@@ -43,7 +43,16 @@ Implemented foundations:
   cannot confirm/mutate; cross-workspace access is rejected. Confirmation is a
   local canonical write with source provenance; no provider call, external
   write, raw-source mutation, or LLM path was added.
-- Email+password founder login on server-side sessions (Argon2id, httpOnly
+- Guided shell and founder onboarding are in place (DEC-075): an operator-issued
+  one-time `/start` link atomically creates the founder/company/owner membership
+  and session; `/onboarding` derives source/map/team readiness from real data;
+  multiple companies require explicit selection. `/dashboard` is now «Сегодня»
+  with one deterministic next move and three signals, while five primary zones
+  replace the old flat technical navigation. Role-gated admin operations remain
+  available in context. A new teammate automatically receives one one-time setup
+  link and chooses their own password; the inviter cannot set credentials.
+  Public signup and email delivery stay closed.
+- Email+password founder login uses server-side sessions (Argon2id, httpOnly
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with
   idempotent canonical upserts, DB-level Repository identity guards, and no
@@ -273,29 +282,31 @@ Implemented foundations:
   and ordered human-gated next steps without deploy, provider calls, external
   writes, database access, secret reads, or LLM.
 
-## Next Priority: Private-beta launch and signed-in production onboarding
+## Next Priority: UX-02 strategic Company World board
 
-Rationale: the local product path, including durable Company World profiles and
-human confirmation, is complete enough for a controlled private-beta handoff.
-The remaining value gap is operational: deploy the reviewed commit, migrate a
-backed-up production database, sign in through the product UI, attach the first
-approved source, and prove the founder loop in the hosted platform. Provider
-reads/writes and production mutation remain explicit human gates.
+Rationale: UX-01 now gives the founder a safe first-run path, explicit company
+context, and one next move. The remaining primary-interface mismatch is
+`/company-brain`: the underlying DEC-073/DEC-074 data is strong, but the main
+surface still reads as stacked registries. Before private-beta handoff, turn it
+into the promised spatial company-management board without changing the
+evidence or write boundaries.
 
 Done when:
 
-- `make release-handoff` is green on the exact reviewed commit and exposes no
-  secret values or private provider payloads.
-- A human takes a database backup, applies `alembic upgrade head`, deploys the
-  backend/frontend pair, and completes the documented read-only smoke.
-- The founder signs in, opens one workspace, sees Company World, and confirms a
-  candidate from workspace-owned evidence without terminal or DB intervention.
-- One explicitly approved GitHub App repository read (or a documented local
-  import fallback) reaches Company Brain and a persisted Founder Briefing.
-- External writes stay disabled by default; any first write follows the
-  one-action runbook and returns a durable receipt.
-- Rollback and incident notes contain aggregate counts/IDs only, never secrets,
-  raw bodies, tokens, credentials, or provider payload dumps.
+- The founder's company is the visual center; team, confirmed counterparties,
+  and unresolved candidates occupy distinct understandable zones.
+- People appear inside or beside confirmed organizations only when an explicit
+  affiliation exists; unknown relationships are not drawn as facts.
+- One click opens a focused person/organization inspector: human summary first,
+  touchpoint history second, and evidence/technical provenance behind
+  progressive disclosure.
+- Candidate confirmation asks one plain-language question at a time and keeps
+  `member+`/viewer behavior, candidate versions, idempotency, and server-resolved
+  evidence unchanged.
+- Desktop, keyboard, reduced-motion, and 390 px mobile browser flows pass; the
+  existing Company Map API and durable rows require no new migration.
+- After UX-02, run the exact reviewed commit through `make release-handoff` and
+  the human-gated private-beta deploy/read-only smoke path.
 
 ## Near-Term Backlog
 
@@ -313,10 +324,8 @@ Done when:
   rejected, GitHub or internal) via a read-only control. The `/actions` review
   page now has a local readiness summary for needs-decision proposals,
   preview-ready approved GitHub proposals, local-only follow-ups, missing
-  evidence, and reported execution receipts. Next: continue deployment
-  readiness or run the first explicitly approved scoped GitHub provider read
-  when credentials are available, while keeping provider writes and AI
-  generation disabled unless separately approved.
+  evidence, and reported execution receipts. Further polish follows UX-02;
+  provider reads, writes, and AI generation remain separately approved gates.
 
 2. **Founder-facing briefing polish.**
    Deterministic briefing cards, source coverage signals, item category filter,
@@ -343,9 +352,8 @@ Done when:
    briefing bridge (DEC-069). `/actions` now turns those generated proposals into
    a clearer local review/readiness loop with counts for pending decisions,
    preview-ready GitHub issue proposals, local-only follow-ups, missing evidence,
-   and reported execution receipts. Next: run the first explicitly approved
-   scoped GitHub provider read when credentials are available, or continue
-   deployment readiness, while keeping provider writes and AI generation disabled.
+  and reported execution receipts. Further briefing polish follows UX-02;
+  provider reads, writes, and AI generation remain separately approved gates.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual
@@ -381,16 +389,26 @@ Done when:
   granting `owner`. Duplicate memberships, disabled users, and non-admin
   provisioning are rejected. `/settings` now surfaces the local members list and
   owner/admin local-provisioning form with explicit no-email/no-provider-write
-  copy; viewer/member roles see read-only state. Provisioning now accepts an
-  optional initial local password (min 8) so a newly created teammate can
-  actually log in and then change it; existing users' passwords are never
-  overwritten. A local self-service setup-link flow now exists: admins can create
-  a one-time `/setup-password` link, only the token hash is stored, the teammate
-  sets a password and is signed in, and token reuse is rejected. Next: add email
-  delivery or password-reset delivery after deploy stability.
+  copy; viewer/member roles see read-only state. A brand-new account always gets
+  exactly one one-time `/setup-password#token=...` link; only its token digest is
+  stored, the teammate sets the password, and concurrent/repeated use is rejected.
+  The inviter cannot submit an initial password. An existing account that already
+  belongs to another workspace is not silently attached: the endpoint returns
+  `409`, including under concurrent A/B attach. Next: build recipient-verified,
+  self-accepted workspace invitations plus email/password-reset delivery after
+  deploy stability.
 
 ## Known Debts / Watch List
 
+- **Public-deploy auth gate:** the process-local per-IP login limiter currently
+  keys on `request.client.host`. Railway/Next proxy semantics have not yet proved
+  that two external client IPs remain distinct. Keep one Uvicorn process and do
+  not expose this as a public security boundary until a two-client deployment
+  smoke confirms trusted forwarding or a shared edge/Redis limiter replaces it.
+- Teammate setup delivery is still manual over a trusted direct channel and does
+  not verify the recipient. The authenticated admin endpoint also returns `409`
+  when an email belongs to an account in another workspace; replace this with a
+  recipient-accepted invitation flow before broader multi-tenant rollout.
 - Retained compatibility substrate (`source_events`, `normalized_activity_items`,
   `ingested_events`) still exists; do not drop it without a scoped migration and
   explicit approval.

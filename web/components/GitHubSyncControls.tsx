@@ -7,7 +7,10 @@ import {
   runGitHubLocalSync
 } from "../lib/api";
 import { M, T } from "../lib/messages";
-import { useWorkspaceId } from "../lib/session";
+import {
+  canAdministerSelectedWorkspace,
+  useSession
+} from "../lib/session";
 import type {
   GitHubConnectionStatusResponse,
   GitHubLocalSyncResponse
@@ -24,6 +27,7 @@ type GitHubSyncControlsProps = {
 };
 
 type GitHubSyncControlsViewProps = {
+  canAdminister?: boolean;
   connectionStatus: GitHubConnectionStatusResponse | null;
   error: string | null;
   onRetry?: () => void;
@@ -33,7 +37,12 @@ type GitHubSyncControlsViewProps = {
 };
 
 export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) {
-  const workspaceId = useWorkspaceId();
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const canAdminister = canAdministerSelectedWorkspace(
+    session?.workspaces ?? [],
+    workspaceId
+  );
   const [connectionStatus, setConnectionStatus] =
     useState<GitHubConnectionStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +84,7 @@ export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) 
   }, [workspaceId, reloadKey]);
 
   async function syncLocalGitHubData() {
-    if (!workspaceId) {
+    if (!workspaceId || !canAdminister) {
       setStatus("missing");
       return;
     }
@@ -94,10 +103,11 @@ export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) 
 
   return (
     <GitHubSyncControlsView
+      canAdminister={canAdminister}
       connectionStatus={connectionStatus}
       error={error}
       onRetry={() => setReloadKey((current) => current + 1)}
-      onSync={syncLocalGitHubData}
+      onSync={canAdminister ? syncLocalGitHubData : undefined}
       result={result}
       status={status}
     />
@@ -105,6 +115,7 @@ export function GitHubSyncControls({ onSyncComplete }: GitHubSyncControlsProps) 
 }
 
 export function GitHubSyncControlsView({
+  canAdminister = true,
   connectionStatus,
   error,
   onRetry,
@@ -124,6 +135,10 @@ export function GitHubSyncControlsView({
         </div>
         <span className="badge">{M.githubSync.badgeNoLiveProvider}</span>
       </div>
+
+      {!canAdminister ? (
+        <p className="muted">{M.common.sourceAdminOnlyNote}</p>
+      ) : null}
 
       {status === "loading" ? <LoadingState label={M.githubSync.loading} /> : null}
 
@@ -189,14 +204,16 @@ export function GitHubSyncControlsView({
           ) : null}
 
           <div className="actions-row">
-            <button
-              className="button"
-              disabled={!canSync || isSyncing}
-              onClick={onSync}
-              type="button"
-            >
-              {isSyncing ? M.githubSync.runningSync : M.githubSync.runSync}
-            </button>
+            {canAdminister ? (
+              <button
+                className="button"
+                disabled={!canSync || isSyncing}
+                onClick={onSync}
+                type="button"
+              >
+                {isSyncing ? M.githubSync.runningSync : M.githubSync.runSync}
+              </button>
+            ) : null}
             <button className="button secondary" onClick={onRetry} type="button">
               {M.common.refreshStatus}
             </button>

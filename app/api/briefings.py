@@ -194,7 +194,7 @@ class BriefingActionProposalGenerationResponse(BaseModel):
 async def generate_manual_founder_briefing_route(
     workspace_id: UUID,
     payload: FounderBriefingRequest,
-    access: WorkspaceAccess = Depends(require_workspace_access),
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_MEMBER)),
 ) -> PersistedBriefingResponse:
     """Run the deterministic generator, SAVE the briefing + items, return it.
 

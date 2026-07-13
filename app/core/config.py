@@ -235,6 +235,34 @@ class Settings(BaseSettings):
         default=15,
         validation_alias=AliasChoices("FOUNDEROS_LOGIN_LOCKOUT_MINUTES"),
     )
+    # Production admission control runs before Argon2. Defaults fit the current
+    # single-process private-beta deployment; multi-process deployments require
+    # a shared edge/Redis limiter in addition to these process-local bounds.
+    login_rate_limit_window_seconds: int = Field(
+        default=60,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_WINDOW_SECONDS"),
+    )
+    login_rate_limit_per_ip: int = Field(
+        default=20,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_PER_IP"),
+    )
+    login_rate_limit_global: int = Field(
+        default=100,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_GLOBAL"),
+    )
+    login_max_concurrent_attempts: int = Field(
+        default=4,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_MAX_CONCURRENT_ATTEMPTS"),
+    )
+    login_attempt_retention_hours: int = Field(
+        default=24,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS"),
+    )
 
     cors_allowed_origins: str | None = Field(
         default=None,

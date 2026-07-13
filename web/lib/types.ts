@@ -36,8 +36,6 @@ export type WorkspaceMemberProvisionRequest = {
   email: string;
   name?: string | null;
   role: Exclude<WorkspaceMemberRole, "owner">;
-  initialPassword?: string | null;
-  createSetupLink?: boolean;
 };
 
 export type WorkspaceMemberProvisionResponse = {

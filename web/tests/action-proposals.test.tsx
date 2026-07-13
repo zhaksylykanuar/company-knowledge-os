@@ -24,6 +24,7 @@ import type {
   ActionProposalMutationResponse
 } from "../lib/types";
 import {
+  actionCapabilitiesForRole,
   ActionProposalsPanelView,
   DEFAULT_CREATE_FORM,
   summarizeActionReviewReadiness,
@@ -236,6 +237,8 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <ActionProposalsPanelView
+      canCreateProposals={props.canCreateProposals ?? true}
+      canReviewProposals={props.canReviewProposals ?? true}
       createForm={props.createForm ?? DEFAULT_CREATE_FORM}
       data={"data" in props ? props.data ?? null : sampleList}
       error={props.error ?? null}
@@ -302,6 +305,57 @@ test("builds action proposal URLs", () => {
     buildWorkspaceActionProposalBulkRejectPath("workspace-123"),
     "/api/v1/workspaces/workspace-123/actions/proposals/bulk-reject"
   );
+});
+
+test("maps the selected workspace role to the backend action capability boundary", () => {
+  assert.deepEqual(actionCapabilitiesForRole("viewer"), {
+    canCreateProposals: false,
+    canReviewProposals: false
+  });
+  assert.deepEqual(actionCapabilitiesForRole("member"), {
+    canCreateProposals: true,
+    canReviewProposals: false
+  });
+  assert.deepEqual(actionCapabilitiesForRole("admin"), {
+    canCreateProposals: true,
+    canReviewProposals: true
+  });
+  assert.deepEqual(actionCapabilitiesForRole("owner"), {
+    canCreateProposals: true,
+    canReviewProposals: true
+  });
+  assert.deepEqual(actionCapabilitiesForRole(null), {
+    canCreateProposals: false,
+    canReviewProposals: false
+  });
+});
+
+test("keeps viewer actions read-only while preserving proposal evidence", () => {
+  const html = renderPanel({
+    canCreateProposals: false,
+    canReviewProposals: false
+  });
+
+  assert.ok(html.includes("режим просмотра"));
+  assert.ok(html.includes(proposedProposal.title));
+  assert.ok(html.includes(proposedProposal.evidence_refs[0]!.ref));
+  assert.doesNotMatch(html, /proposal-form/);
+  assert.doesNotMatch(html, /proposal-selection/);
+  assert.doesNotMatch(html, new RegExp(M.actionsPanel.bulkTitle));
+  assert.doesNotMatch(html, new RegExp(M.actionExecution.previewTitle));
+});
+
+test("lets members create local proposals without review or execution controls", () => {
+  const html = renderPanel({
+    canCreateProposals: true,
+    canReviewProposals: false
+  });
+
+  assert.match(html, /proposal-form/);
+  assert.ok(html.includes("можете создавать локальные предложения"));
+  assert.doesNotMatch(html, /proposal-selection/);
+  assert.doesNotMatch(html, new RegExp(M.actionsPanel.bulkTitle));
+  assert.doesNotMatch(html, new RegExp(M.actionExecution.previewTitle));
 });
 
 test("fetches and parses local action proposals", async () => {

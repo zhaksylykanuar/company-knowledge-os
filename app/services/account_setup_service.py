@@ -21,9 +21,11 @@ from app.db.identity_models import (
     AccountSetupToken,
     User,
 )
+from app.services.password_service import hash_password
 
 SETUP_TOKEN_BYTES = 32
 DEFAULT_SETUP_TOKEN_TTL_DAYS = 7
+INVALID_ACCOUNT_SETUP_TOKEN = "setup token is invalid or expired"
 
 
 class AccountSetupTokenError(ValueError):
@@ -84,26 +86,36 @@ async def complete_account_setup_token(
     session: AsyncSession,
     *,
     raw_token: str,
-    password_hash: str,
+    plaintext_password: str,
 ) -> User:
     """Consume a setup token, set the user's local password, and return the user."""
 
     if not raw_token:
-        raise AccountSetupTokenError("setup token is required")
+        raise AccountSetupTokenError(INVALID_ACCOUNT_SETUP_TOKEN)
     row = await session.scalar(
         select(AccountSetupToken).where(
             AccountSetupToken.token_hash == hash_setup_token(raw_token)
-        )
+        ).with_for_update()
     )
     now = _now()
     if row is None or row.consumed_at is not None or row.expires_at <= now:
-        raise AccountSetupTokenError("setup token is invalid or expired")
+        raise AccountSetupTokenError(INVALID_ACCOUNT_SETUP_TOKEN)
 
-    user = await session.get(User, row.user_id)
-    if user is None or user.status != USER_STATUS_ACTIVE:
-        raise AccountSetupTokenError("user not active")
+    # A user lock also closes the race between two distinct setup links for the
+    # same teammate. Only the first valid transaction may set the password.
+    user = await session.scalar(
+        select(User).where(User.id == row.user_id).with_for_update()
+    )
+    if (
+        user is None
+        or user.status != USER_STATUS_ACTIVE
+        or user.password_hash is not None
+    ):
+        raise AccountSetupTokenError(INVALID_ACCOUNT_SETUP_TOKEN)
 
-    user.password_hash = password_hash
+    # Argon2 runs only after the one-time token and target user are locked and
+    # proven valid. Invalid public requests therefore cannot amplify CPU work.
+    user.password_hash = hash_password(plaintext_password)
     row.consumed_at = now
     await session.flush()
     return user

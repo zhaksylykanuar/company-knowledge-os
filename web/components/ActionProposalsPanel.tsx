@@ -11,7 +11,7 @@ import {
   rejectActionProposal
 } from "../lib/api";
 import { M, T } from "../lib/messages";
-import { useWorkspaceId } from "../lib/session";
+import { useSession } from "../lib/session";
 import type {
   ActionProposal,
   ActionProposalBulkResponse,
@@ -77,6 +77,8 @@ type ActionProposalsPanelProps = {
 };
 
 type ActionProposalsPanelViewProps = {
+  canCreateProposals?: boolean;
+  canReviewProposals?: boolean;
   createForm: ActionProposalCreateFormState;
   data: ActionProposalListResponse | null;
   error: string | null;
@@ -123,12 +125,27 @@ const DEFAULT_CREATE_FORM: ActionProposalCreateFormState = {
   title: ""
 };
 
+export function actionCapabilitiesForRole(role: string | null): {
+  canCreateProposals: boolean;
+  canReviewProposals: boolean;
+} {
+  const canReviewProposals = role === "owner" || role === "admin";
+  return {
+    canCreateProposals: canReviewProposals || role === "member",
+    canReviewProposals
+  };
+}
+
 export function ActionProposalsPanel({
   initialAuditSourceFilter = null,
   initialOriginFilter = null,
   initialStatusFilter = null
 }: ActionProposalsPanelProps = {}) {
-  const workspaceId = useWorkspaceId();
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const selectedRole =
+    session?.workspaces.find((workspace) => workspace.id === workspaceId)?.role ?? null;
+  const capabilities = actionCapabilitiesForRole(selectedRole);
   const [data, setData] = useState<ActionProposalListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<ActionProposalCreateFormState>(
@@ -218,6 +235,9 @@ export function ActionProposalsPanel({
       setStatus("missing");
       return;
     }
+    if (!capabilities.canCreateProposals) {
+      return;
+    }
     const request = buildCreateRequest(createForm);
     if (!request) {
       setError(M.actionsPanel.createError);
@@ -247,6 +267,9 @@ export function ActionProposalsPanel({
       setStatus("missing");
       return;
     }
+    if (!capabilities.canReviewProposals) {
+      return;
+    }
 
     setError(null);
     setSuccessMessage(null);
@@ -267,6 +290,9 @@ export function ActionProposalsPanel({
   async function reject(proposalId: string) {
     if (!workspaceId) {
       setStatus("missing");
+      return;
+    }
+    if (!capabilities.canReviewProposals) {
       return;
     }
 
@@ -318,6 +344,9 @@ export function ActionProposalsPanel({
   async function mutateSelectedProposals(mutation: BulkMutation) {
     if (!workspaceId) {
       setStatus("missing");
+      return;
+    }
+    if (!capabilities.canReviewProposals) {
       return;
     }
     const proposalsToMutate = selectedProposalsForBulkMutation(
@@ -390,33 +419,49 @@ export function ActionProposalsPanel({
 
   return (
     <ActionProposalsPanelView
+      canCreateProposals={capabilities.canCreateProposals}
+      canReviewProposals={capabilities.canReviewProposals}
       createForm={createForm}
       data={data}
       error={error}
-      onApprove={approve}
+      onApprove={capabilities.canReviewProposals ? approve : undefined}
       onCloseEvidence={() => {
         setSelectedEvidence(null);
         setSelectedEvidenceTitle(null);
         setSelectedEvidenceCount(null);
       }}
-      onCreate={submitCreate}
-      onCreateFormChange={updateCreateForm}
-      onReject={reject}
+      onCreate={capabilities.canCreateProposals ? submitCreate : undefined}
+      onCreateFormChange={
+        capabilities.canCreateProposals ? updateCreateForm : undefined
+      }
+      onReject={capabilities.canReviewProposals ? reject : undefined}
       onRefreshProposals={() => setReloadKey((current) => current + 1)}
       onRetry={() => setReloadKey((current) => current + 1)}
       onOriginFilterChange={setOriginFilter}
-      onBulkApprove={approveSelected}
-      onBulkReject={rejectSelected}
-      onClearSelectedProposals={() => setSelectedProposalIds([])}
+      onBulkApprove={
+        capabilities.canReviewProposals ? approveSelected : undefined
+      }
+      onBulkReject={
+        capabilities.canReviewProposals ? rejectSelected : undefined
+      }
+      onClearSelectedProposals={
+        capabilities.canReviewProposals
+          ? () => setSelectedProposalIds([])
+          : undefined
+      }
       onSelectEvidence={(evidence, title, count) => {
         setSelectedEvidence(evidence);
         setSelectedEvidenceTitle(title);
         setSelectedEvidenceCount(typeof count === "number" ? count : null);
       }}
-      onSelectVisibleProposed={selectVisibleProposed}
+      onSelectVisibleProposed={
+        capabilities.canReviewProposals ? selectVisibleProposed : undefined
+      }
       onAuditSourceFilterChange={setAuditSourceFilter}
       onStatusFilterChange={setStatusFilter}
-      onToggleProposalSelection={toggleProposalSelection}
+      onToggleProposalSelection={
+        capabilities.canReviewProposals ? toggleProposalSelection : undefined
+      }
       pendingMutation={pendingMutation}
       auditSourceFilter={auditSourceFilter}
       originFilter={originFilter}
@@ -432,6 +477,8 @@ export function ActionProposalsPanel({
 }
 
 export function ActionProposalsPanelView({
+  canCreateProposals = true,
+  canReviewProposals = true,
   createForm,
   data,
   error,
@@ -511,13 +558,27 @@ export function ActionProposalsPanelView({
         <p>{T.actionsCapability()}</p>
       </section>
 
-      <ActionProposalCreateForm
-        form={createForm}
-        isPending={pendingMutation === "create"}
-        onChange={onCreateFormChange}
-        onSubmit={onCreate}
-        submitDisabled={!canCreate}
-      />
+      {canCreateProposals ? (
+        <ActionProposalCreateForm
+          form={createForm}
+          isPending={pendingMutation === "create"}
+          onChange={onCreateFormChange}
+          onSubmit={onCreate}
+          submitDisabled={!canCreate}
+        />
+      ) : (
+        <p className="muted">
+          У вас режим просмотра: можно изучать предложения и доказательства,
+          но нельзя создавать, принимать, отклонять или выполнять решения.
+        </p>
+      )}
+
+      {canCreateProposals && !canReviewProposals ? (
+        <p className="muted">
+          Вы можете создавать локальные предложения. Принимать, отклонять и
+          выполнять их может владелец или администратор компании.
+        </p>
+      ) : null}
 
       {successMessage ? <p className="success-text">{successMessage}</p> : null}
 
@@ -587,7 +648,9 @@ export function ActionProposalsPanelView({
             />
           </section>
 
-          <ActionReviewReadinessPanel proposals={proposals} />
+          {canReviewProposals ? (
+            <ActionReviewReadinessPanel proposals={proposals} />
+          ) : null}
 
           <ActionStatusFilter
             activeFilter={statusFilter}
@@ -609,18 +672,21 @@ export function ActionProposalsPanelView({
             />
           ) : null}
 
-          <BulkReviewControls
-            onApproveSelected={onBulkApprove}
-            onClearSelection={onClearSelectedProposals}
-            onRejectSelected={onBulkReject}
-            onSelectVisibleProposed={onSelectVisibleProposed}
-            pendingMutation={pendingMutation}
-            selectedCount={selectedProposedCount}
-            visibleProposedCount={visibleProposedCount}
-          />
+          {canReviewProposals ? (
+            <BulkReviewControls
+              onApproveSelected={onBulkApprove}
+              onClearSelection={onClearSelectedProposals}
+              onRejectSelected={onBulkReject}
+              onSelectVisibleProposed={onSelectVisibleProposed}
+              pendingMutation={pendingMutation}
+              selectedCount={selectedProposedCount}
+              visibleProposedCount={visibleProposedCount}
+            />
+          ) : null}
 
           <section className="work-columns">
             <ProposalList
+              canReviewProposals={canReviewProposals}
               groups={groups}
               onApprove={onApprove}
               onReject={onReject}
@@ -989,6 +1055,7 @@ function BulkReviewControls({
 }
 
 function ProposalList({
+  canReviewProposals,
   groups,
   onApprove,
   onReject,
@@ -1000,6 +1067,7 @@ function ProposalList({
   totalProposals,
   visibleProposals
 }: {
+  canReviewProposals: boolean;
   groups: ProposalGroup[];
   onApprove?: (proposalId: string) => void;
   onReject?: (proposalId: string) => void;
@@ -1042,12 +1110,14 @@ function ProposalList({
               {group.proposals.map((proposal) => (
                 <article className="work-item" key={proposal.id}>
                   <div className="work-item-main">
-                    <ProposalSelectionControl
-                      disabled={bulkPending}
-                      isSelected={selectedProposalIds.includes(proposal.id)}
-                      onToggle={onToggleProposalSelection}
-                      proposal={proposal}
-                    />
+                    {canReviewProposals ? (
+                      <ProposalSelectionControl
+                        disabled={bulkPending}
+                        isSelected={selectedProposalIds.includes(proposal.id)}
+                        onToggle={onToggleProposalSelection}
+                        proposal={proposal}
+                      />
+                    ) : null}
                     <span className="badge">{proposal.status}</span>
                     {group.origin === "audit" ? (
                       <>
@@ -1098,16 +1168,20 @@ function ProposalList({
                     onSelectEvidence={onSelectEvidence}
                     proposalTitle={proposal.title}
                   />
-                  <ProposalActions
-                    onApprove={onApprove}
-                    onReject={onReject}
-                    pendingMutation={pendingMutation}
-                    proposal={proposal}
-                  />
-                  <ActionExecutionControls
-                    onRefresh={onRefreshProposals}
-                    proposal={proposal}
-                  />
+                  {canReviewProposals ? (
+                    <>
+                      <ProposalActions
+                        onApprove={onApprove}
+                        onReject={onReject}
+                        pendingMutation={pendingMutation}
+                        proposal={proposal}
+                      />
+                      <ActionExecutionControls
+                        onRefresh={onRefreshProposals}
+                        proposal={proposal}
+                      />
+                    </>
+                  ) : null}
                   {proposal.warnings.length > 0 ? (
                     <ul className="meta-list">
                       {proposal.warnings.map((warning) => (

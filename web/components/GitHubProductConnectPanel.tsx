@@ -8,7 +8,10 @@ import {
   runGitHubAppLiveSync
 } from "../lib/api";
 import { M, T } from "../lib/messages";
-import { useWorkspaceId } from "../lib/session";
+import {
+  canAdministerSelectedWorkspace,
+  useSession
+} from "../lib/session";
 import type {
   GitHubAppLiveSyncResponse,
   GitHubConnectionStatusResponse,
@@ -46,6 +49,7 @@ type GitHubRealReadReadiness = {
 };
 
 type GitHubProductConnectPanelViewProps = {
+  canAdminister?: boolean;
   connectionStatus: GitHubConnectionStatusResponse | null;
   error: string | null;
   onRetry?: () => void;
@@ -58,7 +62,12 @@ type GitHubProductConnectPanelViewProps = {
 };
 
 export function GitHubProductConnectPanel() {
-  const workspaceId = useWorkspaceId();
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const canAdminister = canAdministerSelectedWorkspace(
+    session?.workspaces ?? [],
+    workspaceId
+  );
   const [connectionStatus, setConnectionStatus] =
     useState<GitHubConnectionStatusResponse | null>(null);
   const [repositories, setRepositories] =
@@ -113,7 +122,12 @@ export function GitHubProductConnectPanel() {
 
   async function syncRepository(repositoryFullName: string) {
     const repository = repositoryFullName.trim();
-    if (!workspaceId || !connectionStatus?.connection_id || !repository) {
+    if (
+      !workspaceId ||
+      !canAdminister ||
+      !connectionStatus?.connection_id ||
+      !repository
+    ) {
       return;
     }
     setRepositorySync((current) => ({
@@ -146,11 +160,12 @@ export function GitHubProductConnectPanel() {
 
   return (
     <GitHubProductConnectPanelView
+      canAdminister={canAdminister}
       connectionStatus={connectionStatus}
       error={error}
       onRepositoryFocusChange={setRepositoryFocus}
       onRetry={() => setReloadKey((current) => current + 1)}
-      onRunRepositorySync={syncRepository}
+      onRunRepositorySync={canAdminister ? syncRepository : undefined}
       repositoryFocus={repositoryFocus}
       repositorySync={repositorySync}
       repositories={repositories}
@@ -160,6 +175,7 @@ export function GitHubProductConnectPanel() {
 }
 
 export function GitHubProductConnectPanelView({
+  canAdminister = true,
   connectionStatus,
   error,
   onRepositoryFocusChange,
@@ -197,6 +213,10 @@ export function GitHubProductConnectPanelView({
       </div>
 
       <p className="muted">{M.githubProductConnect.description}</p>
+
+      {!canAdminister ? (
+        <p className="muted">{M.common.sourceAdminOnlyNote}</p>
+      ) : null}
 
       {state === "loading" ? (
         <LoadingState label={M.githubProductConnect.loading} />
@@ -276,7 +296,7 @@ export function GitHubProductConnectPanelView({
             </section>
           ) : null}
 
-          {appStatus.setup_url ? (
+          {canAdminister && appStatus.setup_url ? (
             <p className="actions-row">
               <SourceLink className="button secondary" url={appStatus.setup_url}>
                 {M.githubProductConnect.openSetup}
@@ -347,16 +367,18 @@ export function GitHubProductConnectPanelView({
                             </p>
                           ) : null}
                         </div>
-                        <button
-                          className="button"
-                          disabled={!canSyncRepository}
-                          onClick={() => onRunRepositorySync?.(repository.full_name)}
-                          type="button"
-                        >
-                          {sync.state === "syncing"
-                            ? M.githubProductConnect.liveSyncRunning
-                            : M.githubProductConnect.liveSyncRun}
-                        </button>
+                        {canAdminister ? (
+                          <button
+                            className="button"
+                            disabled={!canSyncRepository}
+                            onClick={() => onRunRepositorySync?.(repository.full_name)}
+                            type="button"
+                          >
+                            {sync.state === "syncing"
+                              ? M.githubProductConnect.liveSyncRunning
+                              : M.githubProductConnect.liveSyncRun}
+                          </button>
+                        ) : null}
                       </div>
 
                       {repository.source_url ? (

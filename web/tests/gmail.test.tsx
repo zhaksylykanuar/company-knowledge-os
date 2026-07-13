@@ -67,6 +67,7 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <GmailConnectorPanelView
+      canImport={props.canImport}
       data={props.data === undefined ? gmailMessages : props.data}
       error={props.error ?? null}
       importError={props.importError ?? null}
@@ -118,6 +119,15 @@ test("renders local Gmail messages and import boundary without provider-write cl
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /LLM started/i);
   assert.doesNotMatch(html, /RAW_BODY/);
+});
+
+test("keeps Gmail facts visible but removes import controls in read-only mode", () => {
+  const html = renderPanel({ canImport: false });
+
+  assert.ok(html.includes("Investor intro follow-up"));
+  assert.ok(html.includes(M.common.sourceAdminOnlyNote));
+  assert.doesNotMatch(html, new RegExp(M.gmail.importTitle));
+  assert.doesNotMatch(html, /<form/);
 });
 
 test("renders empty loading missing and error states", () => {

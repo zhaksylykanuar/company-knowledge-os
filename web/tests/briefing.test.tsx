@@ -18,7 +18,10 @@ import type {
   BriefingListResponse,
   FounderBriefingResponse
 } from "../lib/types";
-import { BriefingPanelView } from "../components/BriefingPanel";
+import {
+  BriefingPanelView,
+  canContributeToBriefing
+} from "../components/BriefingPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 
 const sampleBriefing: FounderBriefingResponse = {
@@ -157,6 +160,7 @@ function renderPanel(
       actionLoadError={props.actionLoadError ?? null}
       actionProposals={props.actionProposals ?? []}
       actionSuccessMessage={props.actionSuccessMessage ?? null}
+      canContribute={props.canContribute ?? true}
       categoryFilter={props.categoryFilter ?? "all"}
       onCloseEvidence={props.onCloseEvidence}
       onCategoryFilterChange={props.onCategoryFilterChange}
@@ -383,6 +387,63 @@ test("renders local action proposal controls for briefing items", () => {
   assert.ok(html.includes(M.briefingPanel.actionCreateSuccess));
   assert.doesNotMatch(html, /GitHub issue created/);
   assert.doesNotMatch(html, /external write performed/i);
+});
+
+test("keeps briefing writes visible for member-or-higher roles only", () => {
+  assert.equal(canContributeToBriefing("owner"), true);
+  assert.equal(canContributeToBriefing("admin"), true);
+  assert.equal(canContributeToBriefing("member"), true);
+  assert.equal(canContributeToBriefing("viewer"), false);
+  assert.equal(canContributeToBriefing(null), false);
+  assert.equal(canContributeToBriefing("unexpected-role"), false);
+});
+
+test("viewer sees briefing evidence and history without generation affordances", () => {
+  const html = renderPanel({
+    activeBriefingId: "briefing-1",
+    actionProposals: [briefingActionProposal],
+    canContribute: false,
+    history: [
+      {
+        id: sampleBriefing.briefing.id,
+        title: sampleBriefing.briefing.title,
+        summary: sampleBriefing.briefing.summary,
+        created_at: sampleBriefing.briefing.created_at,
+        generated_at: sampleBriefing.briefing.generated_at,
+        generated_by: sampleBriefing.briefing.generated_by,
+        item_count: sampleBriefing.briefing.items.length,
+        signals: sampleBriefing.briefing.signals
+      }
+    ],
+    onCreateActionFromItem: () => undefined,
+    onGenerate: () => undefined,
+    onGenerateActionsFromBriefing: () => undefined
+  });
+
+  assert.ok(html.includes(M.briefingPanel.readOnlyMode));
+  assert.ok(html.includes(M.briefingPanel.actionReadOnlyDescription));
+  assert.ok(html.includes("Repository inventory is available"));
+  assert.ok(html.includes(M.briefingHistory.title));
+  assert.ok(html.includes(M.briefingPanel.openActions));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.generate}<`));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.refresh}<`));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.actionGenerate}<`));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.actionCreate}<`));
+});
+
+test("viewer empty state asks for help without promising it can generate", () => {
+  const html = renderPanel({
+    canContribute: false,
+    data: null,
+    history: [],
+    onGenerate: () => undefined,
+    status: "empty"
+  });
+
+  assert.ok(html.includes(M.briefingPanel.noBriefingReadOnlyDescription));
+  assert.ok(html.includes(M.briefingHistory.emptyReadOnly));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.generate}<`));
+  assert.doesNotMatch(html, /Сформируйте первую сводку выше/);
 });
 
 test("renders pending briefing action generation control", () => {

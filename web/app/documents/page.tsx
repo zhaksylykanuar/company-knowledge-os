@@ -13,7 +13,7 @@ import {
   updateDocument
 } from "../../lib/api";
 import { M } from "../../lib/messages";
-import { useWorkspaceId } from "../../lib/session";
+import { selectedWorkspaceRole, useSession } from "../../lib/session";
 import type {
   DocumentDetail,
   DocumentListResponse,
@@ -25,7 +25,11 @@ import type {
 type PanelStatus = "error" | "loading" | "missing" | "ready";
 
 export default function DocumentsPage() {
-  const workspaceId = useWorkspaceId();
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const canWrite = canWriteDocuments(
+    selectedWorkspaceRole(session?.workspaces ?? [], workspaceId)
+  );
   const [data, setData] = useState<DocumentListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<PanelStatus>("loading");
@@ -189,6 +193,7 @@ export default function DocumentsPage() {
         description={M.documents.description}
       />
       <DocumentsPanelView
+        canWrite={canWrite}
         createBody={createBody}
         createError={createError}
         createMessage={createMessage}
@@ -201,13 +206,13 @@ export default function DocumentsPage() {
         detailError={detailError}
         detailMessage={detailMessage}
         detailPending={detailPending}
-        onCreate={handleCreate}
+        onCreate={canWrite ? handleCreate : undefined}
         onCreateBodyChange={setCreateBody}
         onCreateStatusChange={setCreateStatusValue}
         onCreateTagsChange={setCreateTags}
         onCreateTitleChange={setCreateTitle}
-        onDeleteDocument={handleDeleteDocument}
-        onUpdateDocument={handleUpdateDocument}
+        onDeleteDocument={canWrite ? handleDeleteDocument : undefined}
+        onUpdateDocument={canWrite ? handleUpdateDocument : undefined}
         onOpenDocument={openDocument}
         onSearchChange={setSearch}
         onSearchClear={() => {
@@ -232,6 +237,7 @@ export default function DocumentsPage() {
 }
 
 type DocumentsPanelViewProps = {
+  canWrite: boolean;
   createBody: string;
   createError: string | null;
   createMessage: string | null;
@@ -264,6 +270,7 @@ type DocumentsPanelViewProps = {
 };
 
 export function DocumentsPanelView({
+  canWrite,
   createBody,
   createError,
   createMessage,
@@ -379,7 +386,11 @@ export function DocumentsPanelView({
           {documents.length === 0 ? (
             <section className="state empty">
               <strong>{M.documents.emptyTitle}</strong>
-              <p>{M.documents.emptyDescription}</p>
+              <p>
+                {canWrite
+                  ? M.documents.emptyDescription
+                  : M.documents.emptyReadOnlyDescription}
+              </p>
             </section>
           ) : (
             <div className="work-list" aria-label={M.documents.listLabel}>
@@ -400,32 +411,40 @@ export function DocumentsPanelView({
               detailMessage={detailMessage}
               detailPending={detailPending}
               onCloseDetail={onCloseDetail}
-              onDeleteDocument={onDeleteDocument}
-              onUpdateDocument={onUpdateDocument}
+              onDeleteDocument={canWrite ? onDeleteDocument : undefined}
+              onUpdateDocument={canWrite ? onUpdateDocument : undefined}
               versions={selectedVersions}
             />
           ) : null}
 
-          <DocumentCreateForm
-            createBody={createBody}
-            createError={createError}
-            createMessage={createMessage}
-            createPending={createPending}
-            createStatusValue={createStatusValue}
-            createTags={createTags}
-            createTitle={createTitle}
-            onCreate={onCreate}
-            onCreateBodyChange={onCreateBodyChange}
-            onCreateStatusChange={onCreateStatusChange}
-            onCreateTagsChange={onCreateTagsChange}
-            onCreateTitleChange={onCreateTitleChange}
-          />
+          {canWrite ? (
+            <DocumentCreateForm
+              createBody={createBody}
+              createError={createError}
+              createMessage={createMessage}
+              createPending={createPending}
+              createStatusValue={createStatusValue}
+              createTags={createTags}
+              createTitle={createTitle}
+              onCreate={onCreate}
+              onCreateBodyChange={onCreateBodyChange}
+              onCreateStatusChange={onCreateStatusChange}
+              onCreateTagsChange={onCreateTagsChange}
+              onCreateTitleChange={onCreateTitleChange}
+            />
+          ) : (
+            <p className="callout muted">{M.documents.readOnlyNotice}</p>
+          )}
 
           <p className="muted">{M.documents.boundaryNote}</p>
         </>
       ) : null}
     </section>
   );
+}
+
+export function canWriteDocuments(role: string | null): boolean {
+  return role === "owner" || role === "admin" || role === "member";
 }
 
 function DocumentCard({

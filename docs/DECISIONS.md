@@ -1244,10 +1244,11 @@ Consequences:
   adds a gate, not a new write or automation path.
 - Provider writes, auto-deploy, and LLM remain out of scope for this path.
 
-## DEC-055 - Teammate Provisioning Starts As Local Workspace Membership Only
+## DEC-055 - Teammate Provisioning Uses Local One-Time Setup Links
 
-Decision (2026-07-03): the first teammate-provisioning slice creates and lists
-local workspace memberships only. Workspace owners/admins may create a local
+Decision (2026-07-03, hardened 2026-07-13): the first
+teammate-provisioning slice creates and lists local workspace memberships only.
+Workspace owners/admins may create a local
 `User` row and `Membership` row through `POST
 /api/v1/workspaces/{workspace_id}/members` with role `admin`, `member`, or
 `viewer`; listing is available through `GET
@@ -1265,29 +1266,33 @@ Consequences:
 
 - Provisioning returns `external_invite_sent: false` and
   `provider_write_performed: false` explicitly.
-- Provisioning accepts an optional `initial_password` (min length 8). When a
-  brand-new local user is created, that password is Argon2-hashed via the
-  existing password service so the teammate can sign in immediately and then
-  change it; the response reports `login_credential_set`. If no password is
-  supplied, the membership is still created but the teammate cannot log in until
-  a password is set.
-- Provisioning may instead create a one-time setup link. The new
+- Provisioning does not accept `initial_password`; the request model rejects it.
+  An inviter therefore cannot choose, establish, or overwrite another user's
+  credential.
+- Provisioning a brand-new local user always creates a one-time setup link. The
   `account_setup_tokens` table stores only `sha256(raw_token)`, purpose,
   expiration, and consumed timestamp; the raw token is returned once in the API
-  response as a `/setup-password?token=...` path and is never persisted. The
-  public setup endpoint consumes the token exactly once, sets an Argon2-hashed
-  local password, creates the teammate's browser session, and rejects reuse or
-  expired tokens.
-- The initial password is only ever applied to a brand-new user that has no
-  password yet. Provisioning never overwrites an existing user's password, so a
-  workspace admin cannot hijack an existing account's credentials by
-  re-provisioning it.
+  response as a fragment-only `/setup-password#token=...` path and is never
+  persisted or sent in the initial HTTP request. The browser clears it after
+  capture. The public setup endpoint locks the token and user, hashes only after
+  validation, consumes exactly once, creates exactly one teammate browser
+  session under concurrent submission, and rejects invalid/reused/expired
+  tokens generically. The default lifetime is seven days.
+- No email or provider write is performed, and this slice does not verify the
+  recipient. The response exposes the setup link to the inviter exactly once for
+  manual transfer over a trusted direct channel; both parties must treat it like
+  a credential. Automated secure delivery remains deferred.
+- An existing active account with no membership may be attached without
+  changing its password and without minting a setup link. If the account already
+  has a membership in any other workspace, provisioning returns 409
+  (`existing account must accept a workspace invitation`) and creates no new
+  membership. Cross-workspace attachment therefore cannot happen silently; a
+  future self-accepted invitation flow owns that case.
 - Duplicate memberships are rejected, disabled users cannot be provisioned, and
   viewers/members cannot provision others because the endpoint requires admin
   workspace role.
-- Email delivery, password-reset email delivery, and SSO remain later slices;
-  this decision enables local admin-set initial passwords and local one-time
-  setup links without external writes.
+- Email delivery, self-accepted cross-workspace invitations, password-reset
+  email delivery, and SSO remain later slices.
 
 ## DEC-056 - Connector Framework Registry Is The MVP Connector Spine
 
@@ -1998,6 +2003,96 @@ Migration and backfill rules:
 - Deferred nullable `Task.assignee_person_id` and
   `PullRequest.author_person_id` receive no foreign keys or backfill in this
   chunk. The deleted Lineage-2 `entities` graph remains deleted.
+
+## DEC-075 - Guided Founder Enrollment Uses Real Readiness, Not An Admin Shell
+
+Decision (2026-07-13): the normal private-beta founder path is invite-only
+product enrollment, followed by a computed onboarding journey and a five-zone
+company shell. The operator creates one short-lived URL; `/start` atomically
+creates the active `User`, `Workspace`, owner `Membership`, and `UserSession`,
+then opens `/onboarding`. Public signup remains closed.
+
+Security and identity rules:
+
+- `founder_enrollment_invites` stores only a SHA-256 token digest, expiry, and
+  optional consumption/revocation receipts. Lifetime is limited to 1–168 hours
+  (72 by default); a leaked or misdirected unconsumed invite can be revoked by
+  its non-secret UUID with `scripts/revoke_founder_invite.py`. The raw token is
+  shown once by `scripts/create_founder_invite.py` inside a URL fragment (never
+  an HTTP query or request log) and must be handled like a credential. Remote
+  origins require HTTPS; loopback HTTP remains available for local development.
+- Consumption locks the invite row, rejects unknown/expired/used tokens with one
+  generic response, checks normalized email/workspace-slug conflicts, performs
+  Argon2 only after those cheap checks, and commits identity rows, consumption,
+  and the browser session together. A failed or concurrent losing request leaves
+  no partial founder or workspace.
+- Teammate password setup follows the same fragment-only bearer rule at
+  `/setup-password#token=...`; query-token fallback is forbidden and the browser
+  clears the address immediately. Token and user rows are locked before Argon2,
+  so concurrent/reused links create exactly one password/session and invalid
+  public requests cannot amplify password-hash work. Public token/password
+  lengths are capped. Per DEC-055, an inviter cannot set `initial_password`;
+  every brand-new teammate receives one manual, unverified setup link that must
+  travel over a trusted direct channel, while cross-workspace accounts fail with
+  409 until a self-accepted invitation flow exists.
+- Production login admission caps per-IP and global request windows plus
+  concurrent login work before Argon2. It complements the durable per-email DB
+  lockout, whose stale rows are opportunistically deleted after 24 hours by
+  failed-login recording. The admission controller is process-local and only
+  satisfies the current single-Uvicorn-process private-beta deployment. Before
+  adding workers or replicas, a shared edge/Redis limiter is required because
+  process-local counters do not aggregate. The per-IP key is
+  `request.client.host`; distinct external IPs behind Railway/Next are not
+  locally proven and require a two-client deploy smoke before public exposure.
+- Password inputs are bounded before hashing: login accepts 1–256 characters;
+  founder enrollment, teammate setup, and password change require 8–256.
+- A disabled user cannot log in, and validation of an already-issued session for
+  a now-disabled user persists revocation before returning unauthenticated.
+- Login, teammate setup, and founder enrollment sanitize session User-Agent
+  metadata to printable text and cap it at 512 characters.
+- The legacy idempotent `scripts/create_admin_user.py` remains an operator
+  recovery path, not the normal founder experience. Email delivery, public
+  registration, password reset, and SSO are not implied by this slice.
+- An account with no workspace is routed to an honest recovery screen. With one
+  workspace the context is unambiguous; with several, the user must choose one.
+  A browser-persisted choice is accepted only while it still belongs to the
+  current `/auth/me` membership list, and switching remounts workspace content.
+
+Product and readiness rules:
+
+- `/onboarding` is a focused journey: company, first source, first map, team,
+  then start. A skipped step remains pending. There is no persisted decorative
+  `onboarding_completed` flag. The active step lives in the URL hash; leaving for
+  `/connectors` or `/settings` preserves continuity, and both destinations offer
+  explicit return links to `#source` or `#team`.
+- Source readiness requires actual canonical
+  `CompanyBrain.source_records.total > 0`. A configured connection without
+  loaded records is still pending. Company-map readiness comes from the
+  evidence-backed workspace Company Map; team state comes from memberships.
+  Failed reads are `unknown`, never silently converted into empty or complete.
+- The primary navigation is «Сегодня / Компания / Решения / Источники /
+  Настройки». GitHub, Jira, Gmail, and Drive remain real routes but are nested
+  under «Источники» rather than competing as separate products. Desktop uses a
+  compact rail; mobile uses a five-item bottom navigation.
+- `/dashboard` is «Сегодня»: exactly one deterministic next move plus three
+  secondary signals. Its priority is source gap, known pending decisions, known
+  Company World candidates, incomplete reads, first briefing, team, then the
+  latest briefing. UI controls mirror backend RBAC exactly: source
+  setup/import/sync is owner/admin; briefing generation and local
+  ActionProposal creation are member+; action review/approve/reject/preview/
+  execute is owner/admin; Company World resolution is member+; viewer retains
+  evidence-backed reads only.
+- Technical capability boundaries remain inspectable but do not dominate the
+  main task. This slice starts no provider call, provider write, external
+  action, deploy, secret read, or LLM inference by itself. Existing
+  human-triggered provider-read and approval-gated external-write paths remain
+  explicit separate controls.
+
+Consequence: UX-01 removes the first-founder terminal handoff after the operator
+issues the link and replaces the dashboard panel wall with a guided operating
+loop. It does not finish the spatial Company World concept; the next product
+chunk is UX-02, a strategic company board and profile inspector over the existing
+DEC-073/DEC-074 contracts.
 
 ## ASK - Open Questions For The Human (not decided)
 

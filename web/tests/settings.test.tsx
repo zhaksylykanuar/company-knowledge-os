@@ -3,7 +3,11 @@ import test from "node:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { SettingsTeamPanelView } from "../app/settings/page";
+import {
+  resolveSettingsWorkspace,
+  SettingsTeamPanelView
+} from "../app/settings/page";
+import type { AuthWorkspace } from "../lib/auth";
 import { buildWorkspaceMembersPath } from "../lib/api";
 import { M } from "../lib/messages";
 import type { WorkspaceMember } from "../lib/types";
@@ -67,6 +71,20 @@ test("builds the workspace members API path", () => {
   );
 });
 
+test("settings resolves the explicitly selected company instead of the first membership", () => {
+  const workspaces: AuthWorkspace[] = [
+    { id: "workspace-a", name: "Atlas", role: "owner", slug: "atlas" },
+    { id: "workspace-b", name: "Boreal", role: "member", slug: "boreal" }
+  ];
+
+  assert.equal(
+    resolveSettingsWorkspace(workspaces, "workspace-b")?.name,
+    "Boreal"
+  );
+  assert.equal(resolveSettingsWorkspace(workspaces, "outside-memberships"), null);
+  assert.equal(resolveSettingsWorkspace(workspaces, null), null);
+});
+
 test("renders local workspace members and provisioning boundary", () => {
   const html = renderTeamPanel({
     provisionMessage: M.settings.teamProvisionSuccess
@@ -89,28 +107,24 @@ test("renders local workspace members and provisioning boundary", () => {
   assert.doesNotMatch(html, /identity provider write/i);
 });
 
-test("exposes an optional initial-password field so a teammate can sign in", () => {
+test("new teammate onboarding always uses a one-time self-setup link", () => {
   const html = renderTeamPanel();
 
-  assert.ok(html.includes(M.settings.teamProvisionPassword));
-  assert.ok(html.includes(M.settings.teamProvisionPasswordHint));
-  assert.ok(html.includes(M.settings.teamProvisionSetupLink));
   assert.ok(html.includes(M.settings.teamProvisionSetupLinkHint));
-  assert.ok(html.includes('type="password"'));
-  assert.match(html, /minlength="8"/i);
-  assert.ok(html.includes('id="team-member-password"'));
+  assert.doesNotMatch(html, /id="team-member-password"/);
+  assert.doesNotMatch(html, /initial.password/i);
 });
 
 test("renders generated one-time setup link for manual teammate onboarding", () => {
   const html = renderTeamPanel({
     provisionMessage: M.settings.teamProvisionSetupLinkGenerated,
     setupLinkExpiresAt: "2026-07-12T00:00:00Z",
-    setupLinkUrl: "https://founderos.example/setup-password?token=one-time-token"
+    setupLinkUrl: "https://founderos.example/setup-password#token=one-time-token"
   });
 
   assert.ok(html.includes(M.settings.teamProvisionSetupLinkGenerated));
   assert.ok(html.includes(M.settings.teamProvisionSetupLinkLabel));
-  assert.ok(html.includes("https://founderos.example/setup-password?token=one-time-token"));
+  assert.ok(html.includes("https://founderos.example/setup-password#token=one-time-token"));
   assert.ok(html.includes(M.settings.teamProvisionSetupLinkExpires));
   assert.ok(html.includes("2026-07-12T00:00:00Z"));
 });

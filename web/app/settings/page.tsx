@@ -1,11 +1,13 @@
 "use client";
 
 import type { FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { fetchWorkspaceMembers, provisionWorkspaceMember } from "../../lib/api";
+import type { AuthWorkspace } from "../../lib/auth";
 import { changePassword, logout } from "../../lib/auth";
 import { M } from "../../lib/messages";
 import { useSession } from "../../lib/session";
@@ -41,8 +43,11 @@ const PROVISION_ROLES: Array<Exclude<WorkspaceMemberRole, "owner">> = [
 export default function SettingsPage() {
   const router = useRouter();
   const session = useSession();
-  const workspace = session?.workspaces[0] ?? null;
-  const workspaceId = workspace?.id ?? null;
+  const workspaceId = session?.workspaceId ?? null;
+  const workspace = resolveSettingsWorkspace(
+    session?.workspaces ?? [],
+    workspaceId
+  );
   const workspaceRole = workspace?.role ?? null;
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -133,9 +138,7 @@ export default function SettingsPage() {
       setProvisionMessage(
         response.setup_link_generated
           ? M.settings.teamProvisionSetupLinkGenerated
-          : response.login_credential_set
-          ? M.settings.teamProvisionSuccessWithLogin
-          : M.settings.teamProvisionSuccessNoLogin
+          : M.settings.teamProvisionExistingAccount
       );
       if (response.setup_url_path) {
         const base = typeof window !== "undefined" ? window.location.origin : "";
@@ -155,6 +158,10 @@ export default function SettingsPage() {
 
   return (
     <>
+      <Link className="onboarding-return" href="/onboarding#team">
+        <span aria-hidden="true">←</span>
+        Открыть шаг настройки команды
+      </Link>
       <PageHeader
         eyebrow={M.settings.eyebrow}
         title={M.settings.title}
@@ -163,7 +170,7 @@ export default function SettingsPage() {
       <section className="panel">
         <ul className="meta-list">
           <li>{M.settings.signedInAs} {session?.user.email ?? "…"}</li>
-          <li>{M.settings.workspace} {session?.workspaces[0]?.name ?? M.settings.workspaceNone}</li>
+          <li>{M.settings.workspace} {workspace?.name ?? M.settings.workspaceNone}</li>
         </ul>
         <div className="actions-row">
           <button className="button secondary" type="button" onClick={onSignOut}>
@@ -192,6 +199,7 @@ export default function SettingsPage() {
           <input
             autoComplete="current-password"
             id="current-password"
+            maxLength={256}
             onChange={(event) => setCurrentPassword(event.target.value)}
             type="password"
             value={currentPassword}
@@ -203,11 +211,14 @@ export default function SettingsPage() {
           <input
             autoComplete="new-password"
             id="new-password"
+            maxLength={256}
+            minLength={8}
             onChange={(event) => setNewPassword(event.target.value)}
             type="password"
             value={newPassword}
             required
           />
+          <span className="muted">{M.settings.newPasswordHint}</span>
         </div>
         {message ? <p className="success-text">{message}</p> : null}
         {error ? (
@@ -223,6 +234,16 @@ export default function SettingsPage() {
       </form>
     </>
   );
+}
+
+export function resolveSettingsWorkspace(
+  workspaces: AuthWorkspace[],
+  workspaceId: string | null
+): AuthWorkspace | null {
+  if (workspaceId === null) {
+    return null;
+  }
+  return workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
 }
 
 export function SettingsTeamPanelView({
@@ -243,8 +264,6 @@ export function SettingsTeamPanelView({
   const [name, setName] = useState("");
   const [role, setRole] =
     useState<WorkspaceMemberProvisionRequest["role"]>("member");
-  const [initialPassword, setInitialPassword] = useState("");
-  const [createSetupLink, setCreateSetupLink] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -254,16 +273,12 @@ export function SettingsTeamPanelView({
     const succeeded = await onProvision({
       email,
       name: name.trim() ? name : null,
-      role,
-      initialPassword: initialPassword.trim() ? initialPassword : null,
-      createSetupLink: createSetupLink && !initialPassword.trim()
+      role
     });
     if (succeeded) {
       setEmail("");
       setName("");
       setRole("member");
-      setInitialPassword("");
-      setCreateSetupLink(false);
     }
   }
 
@@ -328,6 +343,7 @@ export function SettingsTeamPanelView({
             <label htmlFor="team-member-email">{M.settings.teamProvisionEmail}</label>
             <input
               id="team-member-email"
+              maxLength={320}
               onChange={(event) => setEmail(event.target.value)}
               required
               type="email"
@@ -359,29 +375,7 @@ export function SettingsTeamPanelView({
               ))}
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="team-member-password">
-              {M.settings.teamProvisionPassword}
-            </label>
-            <input
-              autoComplete="new-password"
-              id="team-member-password"
-              minLength={8}
-              onChange={(event) => setInitialPassword(event.target.value)}
-              type="password"
-              value={initialPassword}
-            />
-            <p className="muted">{M.settings.teamProvisionPasswordHint}</p>
-          </div>
-          <label className="checkbox-row">
-            <input
-              checked={createSetupLink}
-              onChange={(event) => setCreateSetupLink(event.target.checked)}
-              type="checkbox"
-            />
-            <span>{M.settings.teamProvisionSetupLink}</span>
-          </label>
-          <p className="muted">{M.settings.teamProvisionSetupLinkHint}</p>
+          <p className="callout muted">{M.settings.teamProvisionSetupLinkHint}</p>
           {provisionMessage ? <p className="success-text">{provisionMessage}</p> : null}
           {setupLinkUrl ? (
             <div className="callout" aria-label={M.settings.teamProvisionSetupLinkLabel}>

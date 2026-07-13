@@ -106,6 +106,7 @@ function renderControls(
 ): string {
   return renderToStaticMarkup(
     <GitHubSyncControlsView
+      canAdminister={props.canAdminister}
       connectionStatus={props.connectionStatus ?? connectedStatus}
       error={props.error ?? null}
       onRetry={props.onRetry}
@@ -208,6 +209,15 @@ test("renders connected local sync action without promising OAuth", () => {
   assert.ok(html.includes(M.githubSync.executionModeValue));
   assert.ok(html.includes(M.githubSync.executionModeDescription));
   assert.doesNotMatch(html, /Connected to GitHub/);
+});
+
+test("keeps GitHub status but removes local sync control in read-only mode", () => {
+  const html = renderControls({ canAdminister: false });
+
+  assert.ok(html.includes(M.githubSync.title));
+  assert.ok(html.includes(M.common.sourceAdminOnlyNote));
+  assert.doesNotMatch(html, new RegExp(M.githubSync.runSync));
+  assert.ok(html.includes(M.common.refreshStatus));
 });
 
 test("renders pending local sync state", () => {

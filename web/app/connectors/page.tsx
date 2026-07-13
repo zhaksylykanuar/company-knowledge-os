@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PageHeader } from "../../components/PageHeader";
@@ -60,6 +61,10 @@ export default function ConnectorsPage() {
 
   return (
     <>
+      <Link className="onboarding-return" href="/onboarding#source">
+        <span aria-hidden="true">←</span>
+        Открыть шаг настройки первых данных
+      </Link>
       <PageHeader
         eyebrow={M.connectors.eyebrow}
         title={M.connectors.title}

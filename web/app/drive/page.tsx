@@ -6,12 +6,16 @@ import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
 import { fetchDriveFiles, importDriveFiles } from "../../lib/api";
 import { M } from "../../lib/messages";
-import { useWorkspaceId } from "../../lib/session";
+import {
+  canAdministerSelectedWorkspace,
+  useSession
+} from "../../lib/session";
 import type { DriveFile, DriveFileListResponse } from "../../lib/types";
 
 type PanelStatus = "error" | "loading" | "missing" | "ready";
 
 type DriveConnectorPanelViewProps = {
+  canImport?: boolean;
   data: DriveFileListResponse | null;
   error: string | null;
   importError: string | null;
@@ -25,7 +29,12 @@ type DriveConnectorPanelViewProps = {
 };
 
 export default function DrivePage() {
-  const workspaceId = useWorkspaceId();
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const canImport = canAdministerSelectedWorkspace(
+    session?.workspaces ?? [],
+    workspaceId
+  );
   const [data, setData] = useState<DriveFileListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -70,7 +79,7 @@ export default function DrivePage() {
 
   async function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!workspaceId || importPending) {
+    if (!workspaceId || !canImport || importPending) {
       return;
     }
     setImportError(null);
@@ -105,14 +114,15 @@ export default function DrivePage() {
         description={M.drive.description}
       />
       <DriveConnectorPanelView
+        canImport={canImport}
         data={data}
         error={error}
         importError={importError}
         importMessage={importMessage}
         importPending={importPending}
         importText={importText}
-        onImport={handleImport}
-        onImportTextChange={setImportText}
+        onImport={canImport ? handleImport : undefined}
+        onImportTextChange={canImport ? setImportText : undefined}
         onRetry={() => setReloadKey((current) => current + 1)}
         status={status}
       />
@@ -121,6 +131,7 @@ export default function DrivePage() {
 }
 
 export function DriveConnectorPanelView({
+  canImport = true,
   data,
   error,
   importError,
@@ -204,14 +215,18 @@ export function DriveConnectorPanelView({
             </section>
           ) : null}
 
-          <DriveImportForm
-            importError={importError}
-            importMessage={importMessage}
-            importPending={importPending}
-            importText={importText}
-            onImport={onImport}
-            onImportTextChange={onImportTextChange}
-          />
+          {canImport ? (
+            <DriveImportForm
+              importError={importError}
+              importMessage={importMessage}
+              importPending={importPending}
+              importText={importText}
+              onImport={onImport}
+              onImportTextChange={onImportTextChange}
+            />
+          ) : (
+            <p className="muted">{M.common.sourceAdminOnlyNote}</p>
+          )}
 
           <p className="muted">{M.drive.boundaryNote}</p>
         </>

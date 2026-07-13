@@ -69,6 +69,7 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <JiraConnectorPanelView
+      canImport={props.canImport}
       data={props.data === undefined ? jiraIssues : props.data}
       error={props.error ?? null}
       importError={props.importError ?? null}
@@ -120,6 +121,15 @@ test("renders local Jira issues and import boundary without provider-write claim
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /LLM started/i);
   assert.doesNotMatch(html, /SHOULD_NOT_LEAK/);
+});
+
+test("keeps Jira facts visible but removes import controls in read-only mode", () => {
+  const html = renderPanel({ canImport: false });
+
+  assert.ok(html.includes("FOS-123"));
+  assert.ok(html.includes(M.common.sourceAdminOnlyNote));
+  assert.doesNotMatch(html, new RegExp(M.jira.importTitle));
+  assert.doesNotMatch(html, /<form/);
 });
 
 test("renders empty loading missing and error states", () => {

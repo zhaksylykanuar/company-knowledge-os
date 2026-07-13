@@ -175,6 +175,7 @@ function renderControls(
 ): string {
   return renderToStaticMarkup(
     <SelectedRepositorySyncControlsView
+      canAdminister={props.canAdminister}
       connectionError={props.connectionError ?? null}
       connectionStatus={
         props.connectionStatus === undefined
@@ -371,6 +372,17 @@ test("renders repository input, controls, and validation error", () => {
   assert.ok(html.includes(M.selectedSync.runBoth));
   assert.ok(html.includes(M.selectedSync.repoNote));
   assert.ok(html.includes(M.selectedSync.validationFormat));
+});
+
+test("keeps selected sync status but removes all mutation controls in read-only mode", () => {
+  const html = renderControls({ canAdminister: false });
+
+  assert.ok(html.includes(M.selectedSync.title));
+  assert.ok(html.includes(M.common.sourceAdminOnlyNote));
+  assert.doesNotMatch(html, new RegExp(M.selectedSync.repoLabel));
+  assert.doesNotMatch(html, new RegExp(M.selectedSync.runIssues));
+  assert.doesNotMatch(html, new RegExp(M.selectedSync.runPr));
+  assert.doesNotMatch(html, new RegExp(M.selectedSync.runBoth));
 });
 
 test("renders loading state for each in-flight action", () => {

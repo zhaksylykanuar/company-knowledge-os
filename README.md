@@ -17,15 +17,21 @@ Read in this order (control trio = what / where / why):
 ## Status
 
 - Backend: FastAPI, SQLAlchemy async, Alembic, Postgres, Redis, Pydantic.
-- Frontend: minimal Next.js shell under [`web/`](web/README.md). The legacy
-  local/operator static UI has been removed; do not restore `/ui`.
+- Frontend: guided Next.js product shell under [`web/`](web/README.md). The
+  primary zones are «Сегодня / Компания / Решения / Источники / Настройки»;
+  the legacy local/operator static UI has been removed and must not return.
 - Current implemented foundations include evidence-backed ingestion/extraction,
   workspace-scoped Company Brain and Company World, workspace/GitHub/action
   backend foundations, guarded execution boundaries, and a broad pytest suite.
-- Founder login is built: email+password on server-side, revocable sessions
-  (Argon2id, httpOnly first-party cookie via a same-origin proxy, DB login
-  throttle). The operator API key remains for server/CI/admin tooling. See
-  step 4 below to provision the founder account.
+- Invite-only founder enrollment and login are built: a one-time operator-issued
+  link creates the founder, company workspace, owner membership, and revocable
+  browser session atomically. Email+password auth uses Argon2id hashes, an
+  httpOnly first-party cookie via the same-origin proxy, a durable per-email DB
+  throttle, and production per-IP/global/concurrency admission before Argon2;
+  only hashes of invite/setup/session bearer tokens are stored. An
+  already-issued session for a disabled account is revoked on its next
+  validation. The operator API key remains
+  for server/CI/admin tooling. See step 4 below.
 - Founder Briefings persist deterministic briefing history and can generate
   local evidence-backed ActionProposals from Jira/Gmail/Drive/document context.
   GitHub App product-connect plus polling-only live read-sync backend/UI
@@ -39,8 +45,8 @@ Read in this order (control trio = what / where / why):
   entities, teammate provisioning/setup links, and sanitized request logging are
   in place. Remaining product gaps are the first human-approved GitHub App real
   read run, LLM briefing narrative over real connected data, first production
-  deploy of the current auth/session build, email-delivered self-serve
-  onboarding/password reset, and broader beta hardening.
+  deploy of the current auth/session build, email delivery for team/founder
+  invites, password reset, and broader beta hardening.
 
 ## Local full-stack run path
 
@@ -75,23 +81,48 @@ In another shell:
 ```bash
 cd web
 npm install
-npm run dev
+FOUNDEROS_API_PROXY_TARGET=http://127.0.0.1:8765 npm run dev
 ```
 
 The dev server proxies `/api/*` and `/health` to the backend, so the session
 cookie stays first-party. Configure the proxy target with
 `FOUNDEROS_API_PROXY_TARGET` (falls back to `NEXT_PUBLIC_API_BASE_URL`, then
-`http://localhost:8000`). Then open the app and sign in at `/login` with the
-founder account created in step 4.
+`http://localhost:8000`). The explicit `8765` value above matches
+`scripts/start_local.py`; use the manual Uvicorn port instead when you start the
+backend yourself. Then complete step 4 through its one-time browser link;
+existing founders return through `/login`.
 
-### 4. Create the founder login user (email+password)
+### 4. Invite the founder through the product
 
-Provision the single admin/founder account for browser login. The command also
-ensures the founder's workspace, so no operator key, owner email, or workspace ID
-is entered in the browser — the workspace is derived from the session. The
-password is read from an env var and is never printed or committed; re-running
-updates the password idempotently (the email is unique, so no duplicate user is
-created):
+Create a short-lived, one-time founder link after migrations are current. TTL is
+1–168 hours (72 by default). No raw token persists: the database stores its
+SHA-256 digest, expiry, and optional consumption/revocation receipts. The raw URL
+is printed once and must be handled like a credential (never paste it into logs,
+docs, commits, or chat):
+
+```bash
+UV_NO_SYNC=1 uv run python scripts/create_founder_invite.py \
+  --base-url http://localhost:3000 \
+  --ttl-hours 72
+```
+
+Open the returned URL in the browser. `/start` creates the founder account,
+company workspace, owner membership, and session in one transaction, then opens
+the guided `/onboarding` journey. Public signup without an issued invite stays
+closed.
+
+If an unconsumed URL is leaked or sent to the wrong person, revoke it by the
+returned invite UUID. Unknown, expired, used, and revoked tokens all fail with
+the same generic response:
+
+```bash
+UV_NO_SYNC=1 uv run python scripts/revoke_founder_invite.py \
+  --invite-id <invite-uuid>
+```
+
+For local recovery or an existing installation, the legacy idempotent operator
+command remains available. It bypasses the guided invite screen and should not
+be treated as the normal product onboarding path:
 
 ```bash
 FOUNDEROS_ADMIN_EMAIL=founder@example.com \
@@ -99,12 +130,34 @@ FOUNDEROS_ADMIN_PASSWORD='<chosen-password>' \
 UV_NO_SYNC=1 uv run python scripts/create_admin_user.py
 ```
 
-Optional: `FOUNDEROS_ADMIN_NAME`, `FOUNDEROS_ADMIN_WORKSPACE_NAME`,
-`FOUNDEROS_ADMIN_WORKSPACE_SLUG`. The founder then logs in at the web `/login`
-page.
+Optional recovery values: `FOUNDEROS_ADMIN_NAME`,
+`FOUNDEROS_ADMIN_WORKSPACE_NAME`, `FOUNDEROS_ADMIN_WORKSPACE_SLUG`. Existing
+founders return through `/login`; accounts with several companies must choose
+the company explicitly.
 
 The operator API key and the `/api/v1/workspaces/bootstrap` endpoint remain for
 machine/CI/admin tooling only; they are not part of the founder browser login.
+
+### Teammate onboarding contract
+
+An owner/admin adds a teammate from Settings without choosing that person's
+password. For a brand-new local account, the response shows one
+`/setup-password#token=...` link once. No email is sent and the recipient's
+identity is not verified by this slice, so transfer the link manually over a
+trusted direct channel and treat it like a credential. The raw token is not
+stored, the link is single-use, and the browser removes it from the address
+immediately after capture.
+
+An existing active account with no membership may be attached without changing
+its credentials and without issuing a new setup link. If that account already
+belongs to another workspace, provisioning fails with 409 and creates no
+membership; a future self-accepted invitation flow must handle that case. The
+API does not accept `initial_password`, so an inviter can never establish or
+replace a teammate's credential.
+
+Public password input is bounded before hashing: login accepts 1–256 characters;
+founder enrollment, teammate setup, and password change require 8–256
+characters. Invalid/reused setup tokens fail before Argon2 work.
 
 ## Local GitHub repository surface
 
@@ -188,6 +241,28 @@ Minimum backend env names for a private-beta candidate:
 - `FOS_GITHUB_SYNC_ALLOWED_REPOS`
 - `FOUNDEROS_LOG_LEVEL` (optional; default `INFO`) — level for the sanitized
   request logger, which records method, path, status, and duration only.
+
+Login security tuning (defaults exist, but production values should be reviewed
+explicitly):
+
+- `FOUNDEROS_LOGIN_MAX_FAILED_ATTEMPTS`
+- `FOUNDEROS_LOGIN_LOCKOUT_MINUTES`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_WINDOW_SECONDS`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_PER_IP`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_GLOBAL`
+- `FOUNDEROS_LOGIN_MAX_CONCURRENT_ATTEMPTS`
+- `FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS`
+
+The current production admission controller is process-local and is designed
+for one Uvicorn process. It caps per-IP and global bursts plus concurrent login
+work before Argon2. The DB-backed per-email lockout persists across restarts,
+and failed-login recording opportunistically removes throttle rows older than
+the configured retention window (24 hours by default). Before adding Uvicorn
+workers or multiple backend replicas, deploy a shared edge/Redis limiter; the
+process-local counters do not aggregate across processes. The per-IP key is the
+ASGI client address; distinct external client identity through the production
+proxy must be proven by deployment smoke before treating that limit as a public
+security boundary.
 
 GitHub App product-connect env names (server-side only, required only when the
 GitHub App installation path is enabled):

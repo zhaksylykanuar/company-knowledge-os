@@ -1,10 +1,11 @@
+import asyncio
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.base import AsyncSessionLocal
@@ -18,6 +19,7 @@ from app.db.identity_models import (
     USER_STATUS_DISABLED,
     Membership,
     User,
+    UserSession,
     Workspace,
 )
 from app.main import app
@@ -27,7 +29,10 @@ from app.services.identity_service import (
     role_allows,
 )
 from app.services.password_service import hash_password
-from app.services.account_setup_service import hash_setup_token
+from app.services.account_setup_service import (
+    create_account_setup_token,
+    hash_setup_token,
+)
 
 
 def _headers() -> dict[str, str]:
@@ -442,7 +447,7 @@ async def test_workspace_member_provisioning_rejects_owner_role(monkeypatch) -> 
         await _cleanup_workspace_contract_fixture(marker)
 
 
-async def test_provisioned_member_with_initial_password_can_log_in(monkeypatch) -> None:
+async def test_member_provision_rejects_inviter_selected_password(monkeypatch) -> None:
     marker = uuid4().hex
     _set_auth(monkeypatch)
     await _cleanup_workspace_contract_fixture(marker)
@@ -452,8 +457,6 @@ async def test_provisioned_member_with_initial_password_can_log_in(monkeypatch) 
         workspace_id = created["workspace"]["id"]
         owner_email = f"workspace-{marker}@example.test"
         teammate_email = f"workspace-{marker}-login@example.test"
-        teammate_password = "teammate-initial-pass-123"
-
         async with _async_client() as client:
             provisioned = await client.post(
                 f"/api/v1/workspaces/{workspace_id}/members",
@@ -463,27 +466,16 @@ async def test_provisioned_member_with_initial_password_can_log_in(monkeypatch) 
                     "email": teammate_email,
                     "name": "Login Teammate",
                     "role": MEMBERSHIP_ROLE_MEMBER,
-                    "initial_password": teammate_password,
+                    "initial_password": "inviter-must-not-choose-this",
                 },
             )
-            login = await client.post(
-                "/api/v1/auth/login",
-                json={"email": teammate_email, "password": teammate_password},
+
+        assert provisioned.status_code == 422
+        async with AsyncSessionLocal() as session:
+            teammate = await session.scalar(
+                select(User).where(User.email == teammate_email)
             )
-
-        assert provisioned.status_code == 201, provisioned.text
-        body = provisioned.json()
-        assert body["login_credential_set"] is True
-        assert body["external_invite_sent"] is False
-        assert body["provider_write_performed"] is False
-        assert teammate_password not in provisioned.text
-
-        # The provisioned teammate can actually authenticate with the initial
-        # password: this is what makes teammate provisioning a real product flow
-        # rather than a dead-end membership row.
-        assert login.status_code == 200, login.text
-        assert login.json()["user"]["email"] == teammate_email
-        assert teammate_password not in login.text
+        assert teammate is None
 
     finally:
         await _cleanup_workspace_contract_fixture(marker)
@@ -512,7 +504,6 @@ async def test_provisioned_member_setup_link_is_one_time_and_hash_only(
                     "email": teammate_email,
                     "name": "Setup Teammate",
                     "role": MEMBERSHIP_ROLE_MEMBER,
-                    "create_setup_link": True,
                 },
             )
 
@@ -520,7 +511,8 @@ async def test_provisioned_member_setup_link_is_one_time_and_hash_only(
         body = provisioned.json()
         assert body["login_credential_set"] is False
         assert body["setup_link_generated"] is True
-        assert body["setup_url_path"].startswith("/setup-password?token=")
+        assert body["setup_url_path"].startswith("/setup-password#token=")
+        assert "?token=" not in body["setup_url_path"]
         assert body["setup_token_expires_at"] is not None
         raw_token = body["setup_url_path"].split("token=", 1)[1]
         assert raw_token
@@ -538,21 +530,36 @@ async def test_provisioned_member_setup_link_is_one_time_and_hash_only(
         assert raw_match is None
         assert hash_match is not None
 
+        async def submit_setup():
+            async with _async_client() as client:
+                return await client.post(
+                    "/api/v1/auth/setup-password",
+                    json={"token": raw_token, "new_password": teammate_password},
+                )
+
+        setup_attempts = await asyncio.gather(submit_setup(), submit_setup())
+        setup = next(response for response in setup_attempts if response.status_code == 200)
+        reuse = next(response for response in setup_attempts if response.status_code == 400)
+
+        async with AsyncSessionLocal() as session:
+            teammate = await session.scalar(
+                select(User).where(User.email == teammate_email)
+            )
+            assert teammate is not None
+            setup_session_count = await session.scalar(
+                select(func.count())
+                .select_from(UserSession)
+                .where(UserSession.user_id == teammate.id)
+            )
+
         async with _async_client() as client:
-            setup = await client.post(
-                "/api/v1/auth/setup-password",
-                json={"token": raw_token, "new_password": teammate_password},
-            )
-            reuse = await client.post(
-                "/api/v1/auth/setup-password",
-                json={"token": raw_token, "new_password": "other-password-123"},
-            )
             login = await client.post(
                 "/api/v1/auth/login",
                 json={"email": teammate_email, "password": teammate_password},
             )
 
-        assert setup.status_code == 200, setup.text
+        assert sorted(response.status_code for response in setup_attempts) == [200, 400]
+        assert setup_session_count == 1
         assert setup.json()["user"]["email"] == teammate_email
         assert raw_token not in setup.text
         assert teammate_password not in setup.text
@@ -563,7 +570,41 @@ async def test_provisioned_member_setup_link_is_one_time_and_hash_only(
         await _cleanup_workspace_contract_fixture(marker)
 
 
-async def test_provisioning_does_not_overwrite_existing_user_password(
+async def test_invalid_setup_token_does_not_run_argon2(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.account_setup_service.hash_password",
+        lambda _password: pytest.fail("invalid setup token must not run Argon2"),
+    )
+
+    async with _async_client() as client:
+        response = await client.post(
+            "/api/v1/auth/setup-password",
+            json={
+                "token": "not-an-issued-setup-token",
+                "new_password": "valid-length-password",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "setup token is invalid or expired"
+
+
+async def test_setup_password_request_caps_public_input_lengths() -> None:
+    async with _async_client() as client:
+        oversized_token = await client.post(
+            "/api/v1/auth/setup-password",
+            json={"token": "x" * 1025, "new_password": "valid-password"},
+        )
+        oversized_password = await client.post(
+            "/api/v1/auth/setup-password",
+            json={"token": "invalid-token", "new_password": "x" * 257},
+        )
+
+    assert oversized_token.status_code == 422
+    assert oversized_password.status_code == 422
+
+
+async def test_provisioning_existing_orphan_account_preserves_its_password(
     monkeypatch,
 ) -> None:
     marker = uuid4().hex
@@ -576,7 +617,6 @@ async def test_provisioning_does_not_overwrite_existing_user_password(
         owner_email = f"workspace-{marker}@example.test"
         existing_email = f"workspace-{marker}-existing@example.test"
         original_password = "original-existing-pass-123"
-        attempted_password = "attacker-set-pass-456"
 
         # Seed an existing active user that already has a password.
         async with AsyncSessionLocal() as session:
@@ -598,7 +638,6 @@ async def test_provisioning_does_not_overwrite_existing_user_password(
                 json={
                     "email": existing_email,
                     "role": MEMBERSHIP_ROLE_MEMBER,
-                    "initial_password": attempted_password,
                 },
             )
             login_original = await client.post(
@@ -607,10 +646,150 @@ async def test_provisioning_does_not_overwrite_existing_user_password(
             )
 
         assert provisioned.status_code == 201, provisioned.text
-        # Provisioning must not have overwritten the existing password.
+        # Attaching an operator-created orphan account never changes its password.
         assert provisioned.json()["login_credential_set"] is False
+        assert provisioned.json()["setup_link_generated"] is False
         assert login_original.status_code == 200, login_original.text
 
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_cross_workspace_existing_account_requires_self_accepted_invitation(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        workspace_a = await _bootstrap_workspace(f"{marker}a")
+        await _bootstrap_workspace(f"{marker}b")
+        workspace_a_id = workspace_a["workspace"]["id"]
+        owner_a_email = f"workspace-{marker}a@example.test"
+        existing_email = f"workspace-{marker}b@example.test"
+
+        async with AsyncSessionLocal() as session:
+            existing_user = await session.scalar(
+                select(User).where(User.email == existing_email)
+            )
+            assert existing_user is not None and existing_user.password_hash is None
+            original_setup = await create_account_setup_token(
+                session,
+                user_id=existing_user.id,
+                created_by_user_id=existing_user.id,
+            )
+            original_raw_token = original_setup.raw_token
+            original_token_id = original_setup.row.id
+            await session.commit()
+
+        async with _async_client() as client:
+            provisioned = await client.post(
+                f"/api/v1/workspaces/{workspace_a_id}/members",
+                headers=_headers(),
+                params={"owner_email": owner_a_email},
+                json={
+                    "email": existing_email,
+                    "role": MEMBERSHIP_ROLE_MEMBER,
+                },
+            )
+
+        assert provisioned.status_code == 409, provisioned.text
+        assert (
+            provisioned.json()["detail"]
+            == "existing account must accept a workspace invitation"
+        )
+
+        async with AsyncSessionLocal() as session:
+            existing_user = await session.scalar(
+                select(User).where(User.email == existing_email)
+            )
+            assert existing_user is not None
+            active_setup_tokens = list(
+                (
+                    await session.scalars(
+                        select(AccountSetupToken)
+                        .where(AccountSetupToken.user_id == existing_user.id)
+                        .where(AccountSetupToken.consumed_at.is_(None))
+                    )
+                ).all()
+            )
+        assert existing_user is not None and existing_user.password_hash is None
+        assert [token.id for token in active_setup_tokens] == [original_token_id]
+
+        async with AsyncSessionLocal() as session:
+            cross_workspace_membership = await session.scalar(
+                select(Membership)
+                .where(Membership.user_id == existing_user.id)
+                .where(Membership.workspace_id == workspace_a_id)
+            )
+        assert cross_workspace_membership is None
+
+        # The setup link created under the user's original account context is
+        # still the only path allowed to establish that account's credential.
+        async with _async_client() as client:
+            original_setup_response = await client.post(
+                "/api/v1/auth/setup-password",
+                json={
+                    "token": original_raw_token,
+                    "new_password": "original-context-password",
+                },
+            )
+        assert original_setup_response.status_code == 200
+        assert original_setup_response.json()["user"]["email"] == existing_email
+    finally:
+        await _cleanup_workspace_contract_fixture(marker)
+
+
+async def test_concurrent_workspace_provision_serializes_existing_orphan_identity(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_workspace_contract_fixture(marker)
+
+    try:
+        workspace_a = await _bootstrap_workspace(f"{marker}a")
+        workspace_b = await _bootstrap_workspace(f"{marker}b")
+        orphan_email = f"workspace-{marker}-orphan@example.test"
+        async with AsyncSessionLocal() as session:
+            orphan = User(
+                email=orphan_email,
+                name="Orphan",
+                status=USER_STATUS_ACTIVE,
+                password_hash=None,
+            )
+            session.add(orphan)
+            await session.commit()
+            orphan_id = orphan.id
+
+        async def provision(workspace: dict, owner_email: str):
+            async with _async_client() as client:
+                return await client.post(
+                    f"/api/v1/workspaces/{workspace['workspace']['id']}/members",
+                    headers=_headers(),
+                    params={"owner_email": owner_email},
+                    json={"email": orphan_email, "role": MEMBERSHIP_ROLE_MEMBER},
+                )
+
+        responses = await asyncio.gather(
+            provision(workspace_a, f"workspace-{marker}a@example.test"),
+            provision(workspace_b, f"workspace-{marker}b@example.test"),
+        )
+
+        assert sorted(response.status_code for response in responses) == [201, 409]
+        conflict = next(response for response in responses if response.status_code == 409)
+        assert (
+            conflict.json()["detail"]
+            == "existing account must accept a workspace invitation"
+        )
+        async with AsyncSessionLocal() as session:
+            membership_count = await session.scalar(
+                select(func.count())
+                .select_from(Membership)
+                .where(Membership.user_id == orphan_id)
+            )
+        assert membership_count == 1
     finally:
         await _cleanup_workspace_contract_fixture(marker)
 

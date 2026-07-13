@@ -2,13 +2,36 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая фактическая ветка `codex/durable-company-profiles` (локально). Локальные
+> Текущая фактическая ветка `codex/guided-onboarding-ux` (локально). Локальные
 > коммиты не пушить без явного запроса человека.
 
 ---
 
 ## ▶ СЕЙЧАС
 
+- **UX-01 guided founder onboarding + five-zone company shell (DEC-075):
+  ЗАКРЫТ ЛОКАЛЬНО.** One-time fragment-only `/start` enrollment атомарно создаёт
+  founder/company/owner/session и ведёт в real-state `/onboarding`; public signup
+  закрыт. Основной UI теперь состоит из «Сегодня / Компания / Решения / Источники
+  / Настройки»: «Сегодня» показывает одну следующую задачу и ровно три сигнала,
+  provider routes вложены в «Источники», multi-company контекст выбирается явно,
+  desktop rail и mobile bottom navigation сохраняют одинаковые пять зон. RBAC
+  совпадает с backend. Inviter не задаёт teammate пароль: новый аккаунт получает
+  ровно одну fragment-only setup-ссылку, cross-workspace existing account
+  блокируется `409`, concurrent consumption/attach закрыты row locks. Login
+  защищён DB email-throttle, stable dummy Argon2, bounded inputs и production
+  pre-Argon2 process-local admission; disabled sessions отзываются.
+  Проверено 2026-07-13: Ruff ✅; backend **537 passed / 1 внешнее deprecation
+  warning**; Alembic `heads/current` — `b4d5e6f7a8c9`, `alembic check` — no new
+  operations. Frontend **268/268 tests**, typecheck, lint и production build
+  **17 routes (16 static + 1 dynamic)** ✅. Browser QA прошёл founder enrollment,
+  hash-backed onboarding continuity, teammate self-setup/login, explicit
+  multi-company selection и 390×844 mobile без overflow; console — **0
+  warnings/errors**, ephemeral QA identities/workspaces/invites удалены. Tracked
+  secret scan и `git diff --check` ✅. Provider calls/writes, LLM, push и deploy
+  не выполнялись. Единственный P1 deploy-gate: distinct client IP за Railway/Next
+  proxy ещё не доказан; до публичного запуска нужен two-client smoke либо shared
+  edge/Redis limiter. Следующий local product chunk — UX-02 spatial Company World.
 - **Durable Company World / founder confirmation (DEC-074):** проекция DEC-073
   теперь объединяется с workspace-owned `Person`, `Organization`,
   `Affiliation`, `Interaction` и terminal `CompanyWorldResolution` receipts.
@@ -51,9 +74,9 @@
   (25 repos), а не retained source-event/legacy fallbacks; live read-only check
   по org env keys подтвердил тот же count без вывода секретов. Следующий
   продуктовый Company World chunk с durable профилями и founder-confirm flow
-  закрыт (DEC-074). Следующий приоритет — private-beta deploy/handoff и первый
-  signed-in production onboarding; GitHub App real-provider read остаётся
-  отдельным human-approved внешним gate.
+  закрыт (DEC-074). Следующий интерфейсный приоритет — UX-02, стратегическая
+  доска Company World; deploy/handoff и GitHub App real-provider read остаются
+  отдельными human-approved внешними gates.
 - **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
   offline, детерминированный gate перед первым approved real read run:
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
@@ -217,14 +240,16 @@
   `admin|member|viewer`. `owner` остаётся bootstrap-only; duplicate membership,
   disabled users и viewer/member self-provisioning отклоняются. Endpoint явно
   возвращает `external_invite_sent=false` и `provider_write_performed=false`.
-  Provisioning принимает необязательный `initial_password` (min 8): для нового
-  локального пользователя он Argon2-хэшируется, так что teammate **реально может
-  войти** и затем сменить пароль (`login_credential_set` в ответе). Пароль
-  существующего пользователя никогда не перезаписывается. Добавлен self-service
-  setup-token flow без email/provider writes: `account_setup_tokens` хранит
-  только sha256 token hash, `/setup-password` позволяет teammate по one-time
-  ссылке задать пароль и войти, повторное использование token отклоняется. Email
-  invites/reset/SSO остаются следующим отдельным slice.
+  Inviter больше не задаёт teammate пароль: для каждого нового локального
+  аккаунта endpoint автоматически возвращает ровно одну fragment-only
+  `/setup-password#token=...` ссылку для ручной передачи по доверенному каналу.
+  `account_setup_tokens` хранит только SHA-256 digest; teammate сам задаёт пароль
+  и входит, а concurrent/repeated consumption создаёт не более одной сессии.
+  Existing account с membership в другом workspace не прикрепляется молча:
+  endpoint блокирует такой запрос через `409` до будущего self-accepted invite
+  flow; user-row lock закрывает конкурентное A/B workspace attach. Email
+  delivery, recipient verification, password reset и SSO остаются отдельными
+  последующими slices.
   `/settings` теперь показывает участников workspace и форму локального
   добавления teammate для owner/admin с тем же no-email/no-provider-write
   boundary; viewer/member видят read-only состояние.
@@ -470,14 +495,22 @@
     без переиспользования API-ключа как материала шифрования. Публичный health
     разделён: `GET /health` — минимальный liveness без auth, `GET /health/detail`
     (флаги app/env/write/llm) — за операторским ключом.
-  - **Auth-фаза (email+password, серверные сессии; сейчас один основатель,
-    архитектура многопользовательская):** `password_service` (Argon2id),
+  - **Auth-фаза (email+password, серверные сессии; invite-only founder и
+    локальный teammate setup, архитектура многопользовательская):**
+    `password_service` (Argon2id),
     `session_service` + таблица `sessions` (в БД хранится только sha256-хэш
     токена, сырой токен только в cookie), эндпоинты
     `/api/v1/auth/login|logout|me|change-password`, зависимость `require_session`
     и резолвер `get_current_actor` (сессия-ИЛИ-операторский ключ; сессия в
     приоритете), DB-throttle логина от перебора (`login_attempts`, по умолчанию
     5 попыток / блок 15 мин, generic 401 без раскрытия существования email),
+    стабильная dummy Argon2 verification для unknown/disabled/passwordless
+    аккаунтов и process-local pre-Argon2 admission по client/global/concurrent
+    limits в production. Верный пароль не позволяет злоумышленнику заблокировать
+    владельца через email-throttle, disabled session отзывается при следующей
+    проверке, а публичные password inputs ограничены до Argon2. Admission требует
+    один Uvicorn process и отдельную deploy-проверку trusted client IP за proxy;
+    до масштабирования нужен shared edge/Redis limiter.
     same-origin Next.js-прокси для first-party cookie
     (`FOUNDEROS_API_PROXY_TARGET`), фронтенд полностью переведён с
     operator-key/owner-email на сессию (`web/lib/config.ts` удалён, workspace
@@ -490,12 +523,12 @@
   него + GitHub App product-connect + polling-only live read sync backend/UI
   foundation + synced-evidence isolation tests + safe rate-limit/error
   observability; операторский API-ключ остаётся для server/CI/админ-скриптов.
-  Один alembic head — `e8f9a0b1c2d3`.
-- **Дальше:** first real-provider read run только после отдельного human
-  approval; затем Briefings Chunk 2 —
-  LLM-нарратив поверх уже персистентной
-  модели и реальных evidence-backed данных; провижининг второго
-  пользователя/тиммейта (мультиюзер); первый прод-деплой на Railway.
+  Один alembic head — `b4d5e6f7a8c9`.
+- **Дальше:** UX-02 превращает существующий Company Map в стратегическую доску.
+  Перед публичным deploy также обязателен smoke реального client-IP isolation за
+  Railway/Next proxy; `request.client.host` нельзя считать доказанно уникальным
+  без этой проверки. First real-provider read, LLM-нарратив и production deploy
+  остаются отдельными human-approved этапами после интерфейсного acceptance.
 - **Примечание:** Briefings Chunk 1 — это реальный код (модели / миграция /
   эндпоинты / фронтенд) с зелёными гейтами; бэкенд и фронтенд закоммичены
   отдельно, push не делался.
@@ -627,7 +660,12 @@ product routes из-за несовпадения tenant scope.*
 - [x] FOS-027B1 — Private-beta blocker hardening pass 1 — API auth is fail-closed outside local via a startup guard; untrusted server-provided URLs render through `safeHref`/`SourceLink` (http(s)-only); stale `app/agents` bytecode and deleted-LLM/agent/boundary-doc references were reconciled. Backend pytest/ruff and frontend test/build/typecheck/lint green. No deploy, push, or provider writes.
 - [x] FOS-027B2 — Task uniqueness + idempotent task upsert — partial unique index `uq_tasks_workspace_provider_external_id` (`workspace_id, source_provider, external_id` where `external_id IS NOT NULL`) + dedupe migration `f7b8c9d0e1a2`; the GitHub-issue→`Task` upsert in `github_normalization_service` is now `ON CONFLICT DO UPDATE` (index-matched), bumping `updated_at` per "last synced" semantics. Closes the duplicate-Task-rows blocker.
 - [x] Sync-layer idempotency + hardening (post-FOS-027B2) — idempotent `ON CONFLICT` upserts for `PullRequest`/`SourceRecord`/`Repository`; `ingested_events` alembic drift reconciled (migration `a8c9d0e1f2b3`, indexes/constraints only); secret-encryption fail-closed outside local (`FOUNDEROS_SECRET_ENCRYPTION_KEY` required); public health split (`/health` liveness public, `/health/detail` behind operator key).
-- [x] Auth phase (email+password, server-side sessions) — `password_service` (Argon2id), `session_service` + `sessions` table (stores only the sha256 token hash), `/api/v1/auth/login|logout|me|change-password`, `require_session` + `get_current_actor` (session-or-operator resolver), DB login brute-force throttle (`login_attempts`), same-origin Next.js proxy for a first-party cookie (`FOUNDEROS_API_PROXY_TARGET`), frontend migrated off operator-key/owner-email to the session (`web/lib/config.ts` removed), Settings→account page, admin seeded via `scripts/create_admin_user.py`. Single founder now, multi-user-capable. No FOS id (feat(auth)/feat(web) commits). See DEC-041…DEC-047.
+- [x] Auth phase (email+password, server-side sessions) — `password_service` (Argon2id), `session_service` + `sessions` table (stores only the sha256 token hash), `/api/v1/auth/login|logout|me|change-password`, `require_session` + `get_current_actor` (session-or-operator resolver), DB login brute-force throttle (`login_attempts`), same-origin Next.js proxy for a first-party cookie (`FOUNDEROS_API_PROXY_TARGET`), frontend migrated off operator-key/owner-email to the session (`web/lib/config.ts` removed), Settings→account page, invite-only founder enrollment and protected teammate setup. Multi-workspace/multi-user capable; browser users choose an explicit company when ambiguous. See DEC-041…DEC-047 and DEC-075.
+- [x] UX-01 guided onboarding/company shell — fragment-only founder enrollment,
+  computed five-step onboarding, five product zones, one-move/three-signal Today,
+  nested source navigation, explicit workspace selector, role-accurate controls,
+  automatic teammate self-setup links, concurrency/identity hardening, desktop and
+  390 px browser acceptance. See DEC-075. UX-02 remains next.
 - [x] Russian UI localization — all user-facing copy centralized in `web/lib/messages.ts` (no i18n framework; second language is a small addition). See DEC-045.
 - [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth is now built (email+password sessions), but GitHub App live-sync hardening/custom-domain hardening and the first production deploy of the auth phase remain before broader beta.
 
@@ -635,20 +673,42 @@ product routes из-за несовпадения tenant scope.*
 
 ## ⛔ BLOCKERS
 
+- **[DEPLOY-AUTH-P1] Distinct client IP behind proxy is not yet verified.** The
+  process-local production admission controller keys per-client limits by ASGI
+  `request.client.host`; local tests cannot prove Railway/Next preserves two
+  external source IPs as two keys. Before a public login deploy, run a
+  two-external-client smoke behind the exact trusted proxy boundary or replace
+  the per-process limit with a shared edge/Redis limiter. Keep one Uvicorn
+  process; do not trust arbitrary forwarded headers on a public backend.
+
 - ~~[CHUNK 0] 4 doc-contract теста красные~~ — **РЕШЕНО (ШАГ A, 2026-06-24).** Починено doc-side (тесты не ослаблялись): вернул CI-секцию в README, lean `docs/playbook.md`, восстановил `docs/ops/jira-target-blueprint.md`, прилинковал guarded-operations, убрал legacy static-UI путь. pytest 1809/0. Коммит `394df7b`.
 
 - ~~[CHUNK 1] Фундамент «вбок» — ОЖИДАЕТ РЕШЕНИЯ A/B~~ — **РЕШЕНО (DEC-028):** ветка A — §6 расширяет спайн (spine-subset готов, FOS-002), knowledge-graph lineage → frozen legacy и удалён (DEC-029). `source_events` repointed to compatibility fallback in FOS-009 (DEC-030); physical drop remains a later migration/cleanup task, not this feature path.
 
-- [SPINE] **GitHub App live sync productization is next.** GitHub App
-  product-connect foundation is recorded in DEC-052; polling-only backend live
-  read sync is recorded in DEC-053. The next missing piece is product UI,
-  observability/hardening, briefing/evidence isolation over synced data, and the
-  first real-provider read run after explicit human approval.
+- ~~[SPINE] GitHub App live sync productization~~ — **FOUNDATION RESOLVED.**
+  Product UI, polling-only backend read sync, observability, and mocked
+  briefing/evidence isolation are present (DEC-052/053). The first real-provider
+  read remains a separate human-approved external gate, not the next local UX
+  implementation task.
 
 ---
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-13` — **UX-01 guided founder onboarding + company-management shell
+  (DEC-075).** Replaced the technical panel wall with five primary zones,
+  deterministic Today, contextual source/company navigation, explicit workspace
+  choice, guided computed onboarding, and bold responsive public/auth surfaces.
+  Added one-time hash-only founder enrollment and automatic teammate self-setup;
+  removed inviter-selected credentials; added row-lock concurrency, cross-
+  workspace `409`, disabled-session revocation, stable dummy verification,
+  bounded passwords, durable DB throttle cleanup, and production pre-Argon2
+  admission. Checks: backend **537 passed / 1 external warning**, Ruff ✅,
+  Alembic head/current/check ✅; frontend **268 passed**, typecheck/lint/build
+  **17 routes** ✅; founder/team/multi-workspace/mobile browser QA ✅ with **0
+  warnings/errors**; QA rows cleaned; tracked secrets/whitespace checks ✅. No
+  provider call/write, LLM, push, or deploy. P1 deploy gate remains distinct
+  client-IP/shared-limiter verification; next local chunk is UX-02.
 - `2026-07-13` — **Durable Company World profiles + founder confirmation
   (DEC-074).** Добавлены workspace-owned people, organizations, affiliations,
   sanitized interactions и terminal resolution receipts; server-revalidated

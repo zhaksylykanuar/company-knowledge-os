@@ -4,6 +4,53 @@
 
 ### Changed
 
+- Added guided invite-only founder enrollment (DEC-075). An operator-created
+  one-time `/start` URL now creates the founder, company workspace, owner
+  membership, and browser session in one transaction. The database stores only
+  the invite SHA-256 digest, expiry, and optional consumption/revocation
+  receipts; TTL is capped at 168 hours. The bearer is fragment-only, HTTPS is
+  required outside loopback, and a leaked unconsumed invite can be revoked by
+  UUID. Expired/reused/revoked links fail generically, concurrent consumption
+  creates exactly one identity, and Argon2 runs only after the invite and
+  identity conflicts pass cheap checks.
+- Hardened teammate setup links to `/setup-password#token=...`: query-token
+  fallback was removed, the browser clears the address after capture, token and
+  user rows are locked against concurrent password/session creation, invalid
+  tokens never reach Argon2, and public input lengths are capped. All session
+  creation paths store only printable User-Agent metadata up to 512 characters.
+  A brand-new teammate now always receives exactly one setup link and chooses
+  their own password; the inviter can no longer submit `initial_password`.
+  Existing accounts with membership outside the target workspace are not
+  attached silently: provisioning returns `409`, and a user-row lock guarantees
+  that concurrent A/B workspace attachment yields at most one success. Delivery
+  remains manual over a trusted channel; recipient acceptance/email delivery is
+  deferred.
+- Hardened public login availability and identity handling. Production rejects
+  excessive per-client, global, or concurrent work before Argon2 through a
+  process-local admission controller, while the durable database throttle stays
+  per submitted email. Unknown, disabled, and passwordless accounts perform one
+  stable dummy Argon2 verification; a correct credential still succeeds and
+  resets an attacker-induced email lock, disabled users' existing sessions are
+  revoked, password inputs are bounded before hashing, and stale throttle rows
+  are pruned at most hourly with a 24-hour default retention. The admission
+  contract is deliberately single-process; trusted client-IP behavior behind
+  the deployment proxy remains a required pre-public-deploy smoke gate.
+- Added a focused `/onboarding` journey whose progress is computed from the
+  current workspace, canonical Company Brain source-record count, evidence-
+  backed Company Map, and memberships. Skips remain pending, configured sources
+  without records are not called ready, and failed reads remain unknown. The
+  current step is hash-backed, with explicit return links from Sources and
+  Settings; no decorative completion flag is persisted.
+- Replaced the 11-link technical shell and dashboard panel wall with five
+  product zones («Сегодня / Компания / Решения / Источники / Настройки»), nested
+  provider routes, explicit multi-company selection, mobile bottom navigation,
+  and a deterministic «Сегодня» screen with one next move plus three signals.
+  The public login/enrollment surfaces now share the same company-management
+  visual language. Source setup/import/sync and action review/execution are
+  owner/admin; briefing generation, local action creation, and Company World
+  resolution are member+; viewer remains read-only. Local import,
+  human-triggered provider-read, and approval-gated external-write boundaries
+  remain explicit.
 - Added durable Company World profiles and founder confirmation (DEC-074).
   Workspace-owned `people`, `organizations`, `affiliations`, `interactions`,
   and terminal `company_world_resolutions` receipts preserve tenant-scoped

@@ -11,7 +11,7 @@ import {
   listBriefings
 } from "../lib/api";
 import { M, T } from "../lib/messages";
-import { useWorkspaceId } from "../lib/session";
+import { useSession } from "../lib/session";
 import type {
   ActionProposal,
   BriefingEvidenceRef,
@@ -83,10 +83,15 @@ type BriefingPanelViewProps = {
   selectedEvidenceItemTitle?: string | null;
   selectedEvidenceCount?: number | null;
   status: BriefingStatus;
+  canContribute?: boolean;
 };
 
 export function BriefingPanel() {
-  const workspaceId = useWorkspaceId();
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const workspaceRole =
+    session?.workspaces.find((workspace) => workspace.id === workspaceId)?.role ?? null;
+  const canContribute = canContributeToBriefing(workspaceRole);
   const [data, setData] = useState<FounderBriefingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<BriefingSummary[]>([]);
@@ -143,6 +148,9 @@ export function BriefingPanel() {
       setStatus("missing");
       return;
     }
+    if (!canContribute) {
+      return;
+    }
 
     setError(null);
     setActionError(null);
@@ -197,6 +205,9 @@ export function BriefingPanel() {
       setStatus("missing");
       return;
     }
+    if (!canContribute) {
+      return;
+    }
 
     setActionError(null);
     setActionSuccessMessage(null);
@@ -234,6 +245,9 @@ export function BriefingPanel() {
   async function generateLocalActionsFromBriefing() {
     if (!workspaceId) {
       setStatus("missing");
+      return;
+    }
+    if (!canContribute) {
       return;
     }
     if (!activeBriefingId) {
@@ -275,6 +289,7 @@ export function BriefingPanel() {
       actionProposals={actionProposals}
       actionSuccessMessage={actionSuccessMessage}
       activeBriefingId={activeBriefingId}
+      canContribute={canContribute}
       data={data}
       error={error}
       history={history}
@@ -284,11 +299,13 @@ export function BriefingPanel() {
         setSelectedEvidenceCount(null);
       }}
       onCategoryFilterChange={setCategoryFilter}
-      onCreateActionFromItem={createLocalActionFromItem}
-      onGenerateActionsFromBriefing={generateLocalActionsFromBriefing}
-      onGenerate={generateBriefing}
+      onCreateActionFromItem={canContribute ? createLocalActionFromItem : undefined}
+      onGenerateActionsFromBriefing={
+        canContribute ? generateLocalActionsFromBriefing : undefined
+      }
+      onGenerate={canContribute ? generateBriefing : undefined}
       onOpenBriefing={openBriefing}
-      onRetry={generateBriefing}
+      onRetry={canContribute ? generateBriefing : undefined}
       onSelectEvidence={(evidence, itemTitle, count) => {
         setSelectedEvidence(evidence);
         setSelectedEvidenceItemTitle(itemTitle);
@@ -311,6 +328,7 @@ export function BriefingPanelView({
   actionProposals = [],
   actionSuccessMessage = null,
   activeBriefingId = null,
+  canContribute = true,
   categoryFilter = "all",
   data,
   error,
@@ -362,18 +380,27 @@ export function BriefingPanelView({
           <span className="eyebrow">{M.briefingPanel.eyebrow}</span>
           <h2 id="briefing-title">{M.briefingPanel.title}</h2>
         </div>
-        <button
-          className="button"
-          disabled={isGenerating || status === "missing" || status === "unsupported"}
-          onClick={onGenerate}
-          type="button"
-        >
-          {isGenerating
-            ? M.briefingPanel.generating
-            : briefing
-              ? M.briefingPanel.refresh
-              : M.briefingPanel.generate}
-        </button>
+        {canContribute ? (
+          <button
+            className="button"
+            disabled={
+              !onGenerate ||
+              isGenerating ||
+              status === "missing" ||
+              status === "unsupported"
+            }
+            onClick={onGenerate}
+            type="button"
+          >
+            {isGenerating
+              ? M.briefingPanel.generating
+              : briefing
+                ? M.briefingPanel.refresh
+                : M.briefingPanel.generate}
+          </button>
+        ) : (
+          <span className="badge">{M.briefingPanel.readOnlyMode}</span>
+        )}
       </div>
 
       {status === "loading" ? <LoadingState label={M.briefingPanel.loadingDeterministic} /> : null}
@@ -398,15 +425,21 @@ export function BriefingPanelView({
             description={error ?? M.briefingPanel.unavailableDescription}
             title={M.briefingPanel.unavailableTitle}
           />
-          <button className="button secondary" onClick={onRetry} type="button">
-            {M.common.retry}
-          </button>
+          {canContribute && onRetry ? (
+            <button className="button secondary" onClick={onRetry} type="button">
+              {M.common.retry}
+            </button>
+          ) : null}
         </>
       ) : null}
 
       {status === "empty" && !briefing ? (
         <EmptyState
-          description={M.briefingPanel.noBriefingDescription}
+          description={
+            canContribute
+              ? M.briefingPanel.noBriefingDescription
+              : M.briefingPanel.noBriefingReadOnlyDescription
+          }
           title={M.briefingPanel.noBriefingTitle}
         />
       ) : null}
@@ -451,7 +484,8 @@ export function BriefingPanelView({
           {actionError ? <p className="error-text">{actionError}</p> : null}
           <BriefingActionSummaryPanel
             actionLoadError={actionLoadError}
-            canGenerateActions={Boolean(activeBriefingId)}
+            canGenerateActions={canContribute && Boolean(activeBriefingId)}
+            canContribute={canContribute}
             onGenerateActionsFromBriefing={onGenerateActionsFromBriefing}
             pendingGeneration={pendingBriefingActionGeneration}
             summaries={actionSummaries}
@@ -466,7 +500,9 @@ export function BriefingPanelView({
             <BriefingItemSection
               items={filteredItems}
               actionSummaries={actionSummaries}
-              onCreateActionFromItem={onCreateActionFromItem}
+              onCreateActionFromItem={
+                canContribute ? onCreateActionFromItem : undefined
+              }
               onSelectEvidence={onSelectEvidence}
               pendingActionItemId={pendingActionItemId}
               totalItems={items.length}
@@ -499,6 +535,7 @@ export function BriefingPanelView({
       {showHistory ? (
         <BriefingHistorySection
           activeBriefingId={activeBriefingId}
+          canContribute={canContribute}
           history={history}
           onOpenBriefing={onOpenBriefing}
           reference={briefing ? briefingHistoryReferenceFromBriefing(briefing) : null}
@@ -511,6 +548,7 @@ export function BriefingPanelView({
 function BriefingActionSummaryPanel({
   actionLoadError,
   canGenerateActions,
+  canContribute,
   onGenerateActionsFromBriefing,
   pendingGeneration,
   summaries,
@@ -518,6 +556,7 @@ function BriefingActionSummaryPanel({
 }: {
   actionLoadError: string | null;
   canGenerateActions: boolean;
+  canContribute: boolean;
   onGenerateActionsFromBriefing?: () => void;
   pendingGeneration: boolean;
   summaries: Map<string, BriefingActionSummary>;
@@ -558,18 +597,23 @@ function BriefingActionSummaryPanel({
           : M.briefingPanel.actionSummaryEmpty}
       </p>
       <p className="muted">{M.briefingPanel.actionSummaryDescription}</p>
+      {!canContribute ? (
+        <p className="muted">{M.briefingPanel.actionReadOnlyDescription}</p>
+      ) : null}
       {actionLoadError ? <p className="error-text">{actionLoadError}</p> : null}
       <div className="actions-row">
-        <button
-          className="button secondary"
-          disabled={!canGenerateActions || !onGenerateActionsFromBriefing || pendingGeneration}
-          onClick={onGenerateActionsFromBriefing}
-          type="button"
-        >
-          {pendingGeneration
-            ? M.briefingPanel.actionGeneratingFromBriefing
-            : M.briefingPanel.actionGenerate}
-        </button>
+        {canContribute ? (
+          <button
+            className="button secondary"
+            disabled={!canGenerateActions || !onGenerateActionsFromBriefing || pendingGeneration}
+            onClick={onGenerateActionsFromBriefing}
+            type="button"
+          >
+            {pendingGeneration
+              ? M.briefingPanel.actionGeneratingFromBriefing
+              : M.briefingPanel.actionGenerate}
+          </button>
+        ) : null}
         <a className="button secondary" href={ACTIONS_BRIEFING_FOCUS_HREF}>
           {M.briefingPanel.openActions}
         </a>
@@ -580,11 +624,13 @@ function BriefingActionSummaryPanel({
 
 function BriefingHistorySection({
   activeBriefingId,
+  canContribute,
   history,
   onOpenBriefing,
   reference
 }: {
   activeBriefingId: string | null;
+  canContribute: boolean;
   history: BriefingSummary[];
   onOpenBriefing?: (briefingId: string) => void;
   reference?: BriefingHistoryReference | null;
@@ -594,7 +640,11 @@ function BriefingHistorySection({
       <h3>{M.briefingHistory.title}</h3>
       <p className="muted">{M.briefingHistory.description}</p>
       {history.length === 0 ? (
-        <p className="muted">{M.briefingHistory.empty}</p>
+        <p className="muted">
+          {canContribute
+            ? M.briefingHistory.empty
+            : M.briefingHistory.emptyReadOnly}
+        </p>
       ) : (
         <div className="work-list">
           {history.map((entry) => (
@@ -774,22 +824,20 @@ function BriefingItemSection({
                 onSelectEvidence={onSelectEvidence}
               />
               <div className="actions-row">
-                <button
-                  className="button secondary"
-                  disabled={
-                    !onCreateActionFromItem ||
-                    pendingActionItemId === item.id ||
-                    actionAlreadyOpen
-                  }
-                  onClick={() => onCreateActionFromItem?.(item)}
-                  type="button"
-                >
-                  {pendingActionItemId === item.id
-                    ? M.briefingPanel.actionCreating
-                    : actionAlreadyOpen
-                      ? M.briefingPanel.actionAlreadyCreated
-                      : M.briefingPanel.actionCreate}
-                </button>
+                {onCreateActionFromItem ? (
+                  <button
+                    className="button secondary"
+                    disabled={pendingActionItemId === item.id || actionAlreadyOpen}
+                    onClick={() => onCreateActionFromItem(item)}
+                    type="button"
+                  >
+                    {pendingActionItemId === item.id
+                      ? M.briefingPanel.actionCreating
+                      : actionAlreadyOpen
+                        ? M.briefingPanel.actionAlreadyCreated
+                        : M.briefingPanel.actionCreate}
+                  </button>
+                ) : null}
                 {actionSummary ? (
                   <a className="button secondary" href={ACTIONS_BRIEFING_FOCUS_HREF}>
                     {M.briefingPanel.openActions}
@@ -812,6 +860,10 @@ function BriefingItemSection({
       </div>
     </section>
   );
+}
+
+export function canContributeToBriefing(role: string | null): boolean {
+  return role === "owner" || role === "admin" || role === "member";
 }
 
 function summarizeBriefingActions(

@@ -4,7 +4,6 @@ import builtins
 from pathlib import Path
 from uuid import UUID, uuid4
 
-import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy import delete, func, select
@@ -329,8 +328,7 @@ async def test_manual_briefing_requires_owner_email_context(monkeypatch) -> None
         await _cleanup_briefing_fixture(marker)
 
 
-@pytest.mark.parametrize("role", [MEMBERSHIP_ROLE_MEMBER, MEMBERSHIP_ROLE_VIEWER])
-async def test_member_and_viewer_can_read_manual_briefing(monkeypatch, role: str) -> None:
+async def test_member_can_generate_manual_briefing(monkeypatch) -> None:
     marker = uuid4().hex
     _set_auth(monkeypatch)
     await _cleanup_briefing_fixture(marker)
@@ -349,8 +347,8 @@ async def test_member_and_viewer_can_read_manual_briefing(monkeypatch, role: str
         user_email = await _add_workspace_user(
             created["workspace"]["id"],
             marker,
-            role=role,
-            suffix=role,
+            role=MEMBERSHIP_ROLE_MEMBER,
+            suffix="member-manual",
         )
 
         async with _async_client() as client:
@@ -363,6 +361,34 @@ async def test_member_and_viewer_can_read_manual_briefing(monkeypatch, role: str
 
         assert response.status_code == 200
         assert response.json()["briefing"]["llm_used"] is False
+    finally:
+        await _cleanup_briefing_fixture(marker)
+
+
+async def test_viewer_cannot_generate_manual_briefing(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_briefing_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        viewer_email = await _add_workspace_user(
+            created["workspace"]["id"],
+            marker,
+            role=MEMBERSHIP_ROLE_VIEWER,
+            suffix="viewer-manual",
+        )
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/briefings/manual",
+                headers=_headers(),
+                params={"owner_email": viewer_email},
+                json={},
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "insufficient workspace role"}
     finally:
         await _cleanup_briefing_fixture(marker)
 

@@ -17,8 +17,6 @@ from app.db.identity_models import (
     User,
     Workspace,
 )
-
-
 ROLE_ORDER = {
     MEMBERSHIP_ROLE_VIEWER: 10,
     MEMBERSHIP_ROLE_MEMBER: 20,
@@ -48,6 +46,7 @@ class ProvisionedWorkspaceMember:
     workspace: Workspace
     membership: Membership
     login_credential_set: bool
+    user_created: bool
 
 
 def normalize_email(email: str) -> str:
@@ -174,7 +173,6 @@ async def provision_workspace_member(
     email: str,
     name: str | None,
     role: str = MEMBERSHIP_ROLE_MEMBER,
-    initial_password_hash: str | None = None,
 ) -> ProvisionedWorkspaceMember:
     if role == MEMBERSHIP_ROLE_OWNER:
         raise IdentityAccessError("owner role is bootstrap-only")
@@ -185,17 +183,33 @@ async def provision_workspace_member(
     if workspace is None:
         raise IdentityAccessError("workspace not found")
 
-    user, _created = await get_or_create_user_by_email(session, email=email, name=name)
+    user, user_created = await get_or_create_user_by_email(
+        session, email=email, name=name
+    )
+    if not user_created:
+        # Serialize cross-workspace membership decisions on the global identity.
+        # Without this row lock, two admins could concurrently observe an orphan
+        # account and attach it to two workspaces before either transaction commits.
+        locked_user = await session.scalar(
+            select(User).where(User.id == user.id).with_for_update()
+        )
+        if locked_user is None:
+            raise IdentityConflictError("existing account is unavailable")
+        user = locked_user
     if user.status == USER_STATUS_DISABLED:
         raise IdentityAccessError("user disabled")
 
-    # Set an initial local password only for a brand-new user that has none yet.
-    # Never overwrite an existing user's password here: that would let a
-    # workspace admin hijack another existing account's credentials.
-    login_credential_set = False
-    if initial_password_hash is not None and user.password_hash is None:
-        user.password_hash = initial_password_hash
-        login_credential_set = True
+    if not user_created:
+        outside_membership = await session.scalar(
+            select(Membership.id)
+            .where(Membership.user_id == user.id)
+            .where(Membership.workspace_id != workspace.id)
+            .limit(1)
+        )
+        if outside_membership is not None:
+            raise IdentityConflictError(
+                "existing account must accept a workspace invitation"
+            )
 
     membership, membership_created = await create_membership(
         session,
@@ -210,7 +224,8 @@ async def provision_workspace_member(
         user=user,
         workspace=workspace,
         membership=membership,
-        login_credential_set=login_credential_set,
+        login_credential_set=False,
+        user_created=user_created,
     )
 
 

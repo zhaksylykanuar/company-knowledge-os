@@ -19,10 +19,12 @@
   единственный фронтенд (статический `/ui` удалён), с русским UI через
   центральный каталог сообщений `web/lib/messages.ts`;
 - продуктовый логин **email+password на серверных сессиях** (Argon2id, httpOnly
-  first-party cookie через same-origin прокси, DB-throttle перебора): эндпоинты
+  first-party cookie через same-origin прокси, DB-throttle перебора по email и
+  production admission по IP/global/concurrency до Argon2): эндпоинты
   `/api/v1/auth/login|logout|me|change-password`, страница `/login`, аккаунт в
   Settings; операторская аутентификация по API-ключу сохраняется для
-  server/CI/админ-скриптов и сосуществует с сессией (fail-closed вне local/dev);
+  server/CI/админ-скриптов и сосуществует с сессией (fail-closed вне local/dev),
+  а сессия отключённого пользователя отзывается при следующей проверке;
 - GitHub через provider-token operator bridge и новый GitHub App
   product-connect foundation (DEC-052) + polling-only live read-sync backend/UI
   foundation (DEC-053): read-only нормализация репозиториев / issues / PR в
@@ -44,8 +46,10 @@
   явного решения человека; viewer читает, member+ подтверждает/отклоняет, а
   canonical email/domain/evidence повторно разрешаются сервером;
 - первый local teammate provisioning/setup-link slice: owner/admin может создать
-  local teammates, выдать initial password или one-time setup link; email delivery
-  и SSO остаются deferred.
+  новую local-учётную запись, после чего один раз получает one-time setup-link
+  для ручной передачи по доверенному каналу; inviter не задаёт пароль, email
+  delivery и SSO остаются deferred. Уже состоящий в другом workspace аккаунт не
+  прикрепляется молча: endpoint отвечает 409 до будущего self-accepted invite;
 
 Ещё **не** реализовано (остаётся видением этого плана, а не текущим кодом):
 
@@ -53,8 +57,10 @@
 - LLM-брифинг-пайплайн поверх уже персистентной модели;
 - live Jira/Gmail/Drive provider OAuth/sync вместо local import/list;
 - self-serve workspace onboarding, email-delivered invites / password reset и SSO;
-- webhook-подписи, broad rate limiting, custom-domain/broader beta hardening и
-  first production deploy текущего auth/session состояния.
+- webhook-подписи, shared edge/Redis rate limiting до перехода с одного Uvicorn
+  process на несколько workers, deploy-smoke distinct client IP за production
+  proxy, custom-domain/broader beta hardening и first production deploy текущего
+  auth/session состояния.
 
 ---
 
