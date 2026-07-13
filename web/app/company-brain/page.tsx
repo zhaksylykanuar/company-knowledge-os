@@ -30,19 +30,19 @@ export default function CompanyBrainPage() {
         </button>
       </div>
       <CompanyWorldPanel refreshSignal={refreshSignal} />
-      <section className="dashboard-layer">
-        <header className="layer-heading">
+      <details className="company-data-vault">
+        <summary>
           <span aria-hidden="true">{M.companyBrainPage.dataLayerIndex}</span>
-          <div>
-            <h2>{M.companyBrainPage.dataLayerTitle}</h2>
-            <p>{M.companyBrainPage.dataLayerDescription}</p>
-          </div>
-        </header>
-        <div className="operations-stack">
+          <span>
+            <strong>{M.companyBrainPage.dataLayerTitle}</strong>
+            <small>{M.companyBrainPage.dataLayerDescription}</small>
+          </span>
+        </summary>
+        <div className="operations-stack company-data-vault-body">
           <CompanyBrainPanel refreshSignal={refreshSignal} />
           <NormalizedEntitiesPanel refreshSignal={refreshSignal} />
         </div>
-      </section>
+      </details>
     </>
   );
 }

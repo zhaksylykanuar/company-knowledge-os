@@ -9,11 +9,12 @@ in place and Company World now combines bounded, sanitized Gmail evidence with
 durable people/organization/affiliation/interaction profiles and explicit human
 confirmation (DEC-073/DEC-074), while DEC-075 adds invite-only founder
 enrollment, computed onboarding, explicit company selection, and a one-move
-«Сегодня» shell. The next horizon is UX-02's strategic Company World board,
-then private-beta deployment. First real provider reads, production mutation,
-and LLM narrative remain separate human-gated horizons. Docs
-consolidation is complete; this roadmap is planning context, not the live task
-source.
+«Сегодня» shell. DEC-076 completes the frontend-only spatial Company World board
+with conservative affiliation placement and guided candidate resolution. The
+next horizon is release handoff and human-gated private-beta deployment, not
+more local UX expansion. First real provider reads, production mutation, and
+LLM narrative remain separate human-gated horizons. Docs consolidation is
+complete; this roadmap is planning context, not the live task source.
 
 ## Phase 0 - Project Setup
 
@@ -76,9 +77,11 @@ Missing:
   World path. Broader normalized entities and post-MVP graph models remain
   chunk-scoped rather than implied by the playbook vision.
 
-Next step: UX-02 uses the existing profile schema and Company Map contract; no
-new model is expected. Private-beta deploy and the first GitHub App real read
-remain separate human-approved gates; physical substrate drop remains later.
+Next step: the current schema and Company Map contract are sufficient for the
+reviewed UX-02 snapshot, and the offline release handoff is complete. Continue
+through the human-approved private-beta deploy gate; the first GitHub App real
+read remains a separate human-approved gate and physical substrate drop remains
+later.
 
 Definition of Done:
 
@@ -217,12 +220,21 @@ Done:
   `/documents` provides internal document CRUD/search/version history; and
   `/company-brain` provides a dedicated Company Brain + normalized-entities
   view.
-- `/company-brain` leads with Company World: confirmed workspace members,
-  evidence-backed
-  external-contact/organization candidates, inspectable profiles, and a bounded
-  Gmail touchpoint timeline. The map is gated by workspace membership, explicit
-  about truncation and unconfirmed roles, and merges durable confirmed profiles.
-  Member+ can confirm/dismiss idempotently; viewer stays read-only (DEC-073/074).
+- `/company-brain` leads with the spatial Company World board (DEC-073/074/076):
+  the founder's company is central, while team, confirmed network, and discovery
+  candidates occupy distinct contours. A confirmed person is nested under an
+  organization only when exact durable affiliation fields agree and a human-
+  authored relationship exists; otherwise the person remains standalone.
+  Similar names/domains and candidate organization keys are not treated as
+  facts. The focused inspector shows profile-local touchpoints and keeps
+  evidence plus technical capability/window/warning disclosures collapsed until
+  requested. Resolution asks one plain-language question at a time while
+  preserving member+/viewer, candidate-version, idempotency, and server-evidence
+  contracts. The board adds no backend API, migration, provider call/write, or
+  LLM path. Local acceptance is complete: 272 frontend tests plus
+  typecheck/lint/build, 537 backend tests plus Ruff/Alembic, and desktop
+  1024/1280 px / mobile 390×844 browser QA without overlap, overflow, console
+  warnings or console errors.
 - Product controls mirror backend roles: source setup/import/sync and action
   review/execution require owner/admin; briefing generation and local action
   creation require member+; Company World resolution requires member+; viewer
@@ -234,8 +246,6 @@ Done:
 
 Missing:
 
-- UX-02 spatial Company World board/profile inspector; the current evidence and
-  confirmation contracts are complete, but the surface is still registry-like.
 - Email delivery for founder/team invites, password reset, and SSO. Founder
   enrollment, local teammate provisioning, `/settings` team UI, and one-time
   `/setup-password` links exist without external delivery.
@@ -247,9 +257,10 @@ Missing:
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: implement UX-02 over the existing Company Map API, then perform the
-manual private-beta handoff. Keep provider reads/deploy human-gated and never add
-browser-stored operator credentials.
+Next step: after explicit human approval, push the exact reviewed commit and
+perform the manual private-beta deploy/read-only smoke. The offline sanitized
+`make release-handoff` gate has passed. Keep provider reads/deploy human-gated
+and never add browser-stored operator credentials.
 
 Definition of Done:
 
@@ -452,9 +463,10 @@ Missing:
 - Worker service if/when queue runtime exists.
 - Broader beta monitoring/alerting and backup verification.
 
-Next step: after UX-02 browser acceptance, run the first auth-session production
-deploy/handoff, then GitHub App live read sync; keep deploy manual and
-smoke-gated.
+Next step: after explicit human approval, perform the first auth-session
+production deploy/read-only smoke from the exact reviewed commit; local release
+acceptance and offline `make release-handoff` are complete. GitHub App live read
+sync remains a later human-approved gate; keep deploy manual and smoke-gated.
 
 Definition of Done:
 

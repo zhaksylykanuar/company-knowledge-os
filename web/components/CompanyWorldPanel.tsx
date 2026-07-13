@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { RefObject } from "react";
 
 import {
   ApiRequestError,
@@ -27,8 +27,8 @@ import type {
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
+import { CompanyWorldBoard } from "./CompanyWorldBoard";
 import { SourceLink } from "./SourceLink";
-import { StatusCard } from "./StatusCard";
 
 export type CompanyWorldStatus =
   | "loading"
@@ -394,8 +394,8 @@ export function CompanyWorldPanelView({
     if (selectionRevision === 0) {
       return;
     }
-    focusCompanyWorldProfileOnMobile(profileRef.current);
-  }, [selectionRevision]);
+    focusCompanyWorldProfile(profileRef.current);
+  }, [effectiveSelectedKey, selectionRevision]);
 
   function selectProfile(key: string): void {
     setSelectedKey(key);
@@ -412,7 +412,11 @@ export function CompanyWorldPanelView({
         <span className="badge world-badge">{M.companyWorld.badge}</span>
       </div>
 
-      {status !== "ready" ? <ResolutionNotice state={resolutionState} /> : null}
+      {status === "ready" ? (
+        <ResolutionNotice state={resolutionState} visuallyHidden />
+      ) : (
+        <ResolutionNotice state={resolutionState} />
+      )}
 
       {status === "loading" ? <LoadingState label={M.companyWorld.loading} /> : null}
 
@@ -445,150 +449,13 @@ export function CompanyWorldPanelView({
       {data && status === "ready" ? (
         <>
           <p className="muted company-world-intro">{M.companyWorld.intro}</p>
-          <section className="grid" aria-label={M.companyWorld.summaryLabel}>
-            <StatusCard
-              description={M.companyWorld.internalPeopleDescription}
-              title={M.companyWorld.internalPeople}
-              value={String(data.summary.internal_people)}
-            />
-            <StatusCard
-              description={M.companyWorld.confirmedExternalPeopleDescription}
-              title={M.companyWorld.confirmedExternalPeople}
-              value={String(data.summary.confirmed_external_people)}
-            />
-            <StatusCard
-              description={M.companyWorld.confirmedOrganizationsDescription}
-              title={M.companyWorld.confirmedOrganizations}
-              value={String(data.summary.confirmed_organizations)}
-            />
-            <StatusCard
-              description={M.companyWorld.externalPeopleDescription}
-              title={M.companyWorld.externalPeople}
-              value={String(data.summary.external_contacts_in_window)}
-            />
-            <StatusCard
-              description={M.companyWorld.organizationsDescription}
-              title={M.companyWorld.organizations}
-              value={String(data.summary.organizations_in_window)}
-            />
-            <StatusCard
-              description={M.companyWorld.touchpointsDescription}
-              title={M.companyWorld.touchpoints}
-              value={String(data.summary.touchpoints_in_window)}
-            />
-          </section>
-
           <div className="company-world-layout">
-            <div className="company-world-map">
-              <WorldSection title={M.companyWorld.companySection}>
-                <WorldNode
-                  badge={M.companyWorld.confirmed}
-                  isSelected={effectiveSelectedKey === data.company.key}
-                  label={data.company.name}
-                  meta={data.company.slug}
-                  onSelect={() => selectProfile(data.company.key)}
-                  tone="confirmed"
-                />
-              </WorldSection>
-
-              <WorldSection title={M.companyWorld.teamSection}>
-                <div className="world-node-grid">
-                  {data.people.internal.map((person) => (
-                    <WorldNode
-                      badge={roleLabel(person.role)}
-                      isSelected={effectiveSelectedKey === person.key}
-                      key={person.key}
-                      label={person.name ?? person.email}
-                      meta={person.email}
-                      onSelect={() => selectProfile(person.key)}
-                      tone="confirmed"
-                    />
-                  ))}
-                </div>
-              </WorldSection>
-
-              <WorldSection title={M.companyWorld.confirmedContactsSection}>
-                {data.people.confirmed_external.length > 0 ? (
-                  <div className="world-node-grid">
-                    {data.people.confirmed_external.map((person) => (
-                      <WorldNode
-                        badge={M.companyWorld.confirmed}
-                        isSelected={effectiveSelectedKey === person.key}
-                        key={person.key}
-                        label={person.display_name ?? person.email}
-                        meta={person.organization_name ?? person.email}
-                        onSelect={() => selectProfile(person.key)}
-                        tone="confirmed"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted">{M.companyWorld.noConfirmedContacts}</p>
-                )}
-              </WorldSection>
-
-              <WorldSection title={M.companyWorld.confirmedOrganizationsSection}>
-                {data.confirmed_organizations.length > 0 ? (
-                  <div className="world-node-grid">
-                    {data.confirmed_organizations.map((organization) => (
-                      <WorldNode
-                        badge={M.companyWorld.confirmed}
-                        isSelected={effectiveSelectedKey === organization.key}
-                        key={organization.key}
-                        label={organization.name ?? organization.domain ?? M.common.unknown}
-                        meta={organizationRelationshipKindLabel(
-                          organization.relationship_kind
-                        )}
-                        onSelect={() => selectProfile(organization.key)}
-                        tone="confirmed"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted">{M.companyWorld.noConfirmedOrganizations}</p>
-                )}
-              </WorldSection>
-
-              <WorldSection title={M.companyWorld.contactsSection}>
-                {data.people.external_candidates.length > 0 ? (
-                  <div className="world-node-grid">
-                    {data.people.external_candidates.map((person) => (
-                      <WorldNode
-                        badge={M.companyWorld.candidate}
-                        isSelected={effectiveSelectedKey === person.key}
-                        key={person.key}
-                        label={person.display_name ?? person.email}
-                        meta={`${person.interaction_count} · ${M.companyWorld.interactions.toLocaleLowerCase()}`}
-                        onSelect={() => selectProfile(person.key)}
-                        tone="candidate"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted">{M.companyWorld.noContacts}</p>
-                )}
-              </WorldSection>
-
-              <WorldSection title={M.companyWorld.organizationsSection}>
-                {data.organizations.length > 0 ? (
-                  <div className="world-node-grid">
-                    {data.organizations.map((organization) => (
-                      <WorldNode
-                        badge={M.companyWorld.organizationNeedsConfirmation}
-                        isSelected={effectiveSelectedKey === organization.key}
-                        key={organization.key}
-                        label={organization.name ?? organization.domain}
-                        meta={`${organization.people_count} · ${M.companyWorld.people.toLocaleLowerCase()}`}
-                        onSelect={() => selectProfile(organization.key)}
-                        tone="candidate"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted">{M.companyWorld.noOrganizations}</p>
-                )}
-              </WorldSection>
-            </div>
+            <CompanyWorldBoard
+              data={data}
+              inspectorId={COMPANY_WORLD_PROFILE_ID}
+              onSelect={selectProfile}
+              selectedKey={effectiveSelectedKey}
+            />
 
             <ProfilePanel
               data={data}
@@ -600,40 +467,7 @@ export function CompanyWorldPanelView({
             />
           </div>
 
-          <TouchpointTimeline
-            onSelect={selectProfile}
-            selectedKey={effectiveSelectedKey}
-            touchpoints={data.touchpoints}
-          />
-          <p className="muted world-window">
-            {M.companyWorld.windowLabel}: {data.window.gmail_messages_considered} /{" "}
-            {data.window.gmail_messages_available}
-            {data.window.truncated ? ` · ${M.companyWorld.windowTruncated}` : ""}
-          </p>
-          {data.warnings.length > 0 ? (
-            <aside className="world-warnings" aria-label={M.common.warnings}>
-              <strong>{M.common.warnings}</strong>
-              <ul>
-                {data.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </aside>
-          ) : null}
-          <div className="world-capabilities" aria-label={M.companyWorld.capabilities}>
-            <span>
-              {data.capabilities.can_resolve
-                ? M.companyWorld.resolutionEnabled
-                : M.companyWorld.readOnly}
-            </span>
-            <span>
-              {!data.capabilities.provider_calls ? M.companyWorld.noProviderCalls : ""}
-            </span>
-            <span>{M.companyWorld.noExternalWrites}</span>
-            <span>{!data.capabilities.llm_used ? M.companyWorld.noLlm : ""}</span>
-            <span>{!data.is_live ? M.companyWorld.localProjection : ""}</span>
-          </div>
-          <p className="muted world-boundary">{M.companyWorld.boundary}</p>
+          <CompanyWorldTechnicalBoundary data={data} />
         </>
       ) : null}
     </section>
@@ -664,51 +498,6 @@ export function companyWorldCandidateRenderKey(
   candidateVersion: string
 ): string {
   return `${candidateKey}:${candidateVersion}`;
-}
-
-function WorldSection({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <section className="world-section">
-      <h3>{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function WorldNode({
-  badge,
-  isSelected,
-  label,
-  meta,
-  onSelect,
-  tone
-}: {
-  badge: string;
-  isSelected: boolean;
-  label: string;
-  meta: string;
-  onSelect: () => void;
-  tone: "confirmed" | "candidate";
-}) {
-  return (
-    <button
-      aria-controls={COMPANY_WORLD_PROFILE_ID}
-      aria-label={`${M.companyWorld.openProfile}: ${label}`}
-      aria-pressed={isSelected}
-      className={`world-node world-node--${tone}${isSelected ? " selected" : ""}`}
-      onClick={onSelect}
-      type="button"
-    >
-      <span className="world-avatar" aria-hidden="true">
-        {initials(label)}
-      </span>
-      <span className="world-node-copy">
-        <strong>{label}</strong>
-        <span>{meta}</span>
-      </span>
-      <span className={`world-state world-state--${tone}`}>{badge}</span>
-    </button>
-  );
 }
 
 export type CompanyWorldPersonOrganizationState =
@@ -783,60 +572,74 @@ function ProfilePanel({
   const externalOrganizationState = external
     ? personOrganizationState(data, external)
     : null;
+  const isCompanyProfile =
+    !internal &&
+    !confirmedExternal &&
+    !external &&
+    !confirmedOrganization &&
+    !organization &&
+    !touchpoint;
+  const profileTouchpoints = relatedCompanyWorldTouchpoints(
+    data,
+    selectedKey ?? data.company.key
+  );
+  const evidenceRefs =
+    internal?.source_refs ??
+    confirmedExternal?.source_refs ??
+    external?.source_refs ??
+    confirmedOrganization?.source_refs ??
+    organization?.source_refs ??
+    touchpoint?.source_refs ??
+    data.company.source_refs;
 
   return (
     <aside
-      aria-label={M.companyWorld.profileTitle}
-      aria-live="polite"
+      aria-labelledby="company-world-profile-title"
       className="world-profile"
       id={COMPANY_WORLD_PROFILE_ID}
       ref={profileRef}
       tabIndex={-1}
     >
       <ResolutionNotice announce={false} state={resolutionState} />
-      {internal ? <InternalPersonProfile person={internal} /> : null}
+      {internal ? (
+        <InternalPersonProfile headingId="company-world-profile-title" person={internal} />
+      ) : null}
       {confirmedExternal ? (
-        <ConfirmedExternalPersonProfile person={confirmedExternal} />
+        <ConfirmedExternalPersonProfile
+          headingId="company-world-profile-title"
+          person={confirmedExternal}
+        />
       ) : null}
       {external ? (
         <ExternalPersonProfile
-          canResolve={data.capabilities.can_resolve}
-          key={companyWorldCandidateRenderKey(
-            external.key,
-            external.candidate_version
-          )}
-          onResolve={onResolve}
+          headingId="company-world-profile-title"
           onSelect={onSelect}
           organizationState={externalOrganizationState ?? { kind: "standalone" }}
           person={external}
-          resolutionState={resolutionState}
         />
       ) : null}
       {confirmedOrganization ? (
-        <ConfirmedOrganizationProfile organization={confirmedOrganization} />
+        <ConfirmedOrganizationProfile
+          headingId="company-world-profile-title"
+          organization={confirmedOrganization}
+        />
       ) : null}
       {organization ? (
         <OrganizationProfile
-          canResolve={data.capabilities.can_resolve}
-          key={companyWorldCandidateRenderKey(
-            organization.key,
-            organization.candidate_version
-          )}
-          onResolve={onResolve}
+          headingId="company-world-profile-title"
           organization={organization}
-          resolutionState={resolutionState}
         />
       ) : null}
-      {touchpoint ? <TouchpointProfile touchpoint={touchpoint} /> : null}
-      {!internal &&
-      !confirmedExternal &&
-      !external &&
-      !confirmedOrganization &&
-      !organization &&
-      !touchpoint ? (
+      {touchpoint ? (
+        <TouchpointProfile
+          headingId="company-world-profile-title"
+          touchpoint={touchpoint}
+        />
+      ) : null}
+      {isCompanyProfile ? (
         <>
           <span className="eyebrow">{M.companyWorld.companyProfile}</span>
-          <h3>{data.company.name}</h3>
+          <h3 id="company-world-profile-title">{data.company.name}</h3>
           <dl className="world-profile-meta">
             <ProfileMeta
               label={M.companyWorld.status}
@@ -844,22 +647,73 @@ function ProfilePanel({
             />
             <ProfileMeta label={M.companyWorld.workspace} value={data.company.slug} />
           </dl>
-          <EvidenceList refs={data.company.source_refs} />
         </>
       ) : null}
+      {!touchpoint ? (
+        <ProfileTouchpointHistory
+          isCompanyProfile={isCompanyProfile}
+          key={selectedKey ?? data.company.key}
+          onSelect={onSelect}
+          selectedKey={selectedKey}
+          touchpoints={profileTouchpoints}
+        />
+      ) : null}
+      {external ? (
+        <CandidateResolutionControls
+          canResolve={data.capabilities.can_resolve}
+          candidateKey={external.key}
+          candidateType="external_person"
+          candidateVersion={external.candidate_version}
+          confirmationBlocked={externalOrganizationState?.kind === "unresolved"}
+          confirmationDescriptionId={
+            externalOrganizationState?.kind === "unresolved"
+              ? `world-person-organization-${external.key.replace(
+                  /[^a-zA-Z0-9_-]/g,
+                  "-"
+                )}`
+              : undefined
+          }
+          defaultDisplayName={external.display_name ?? ""}
+          key={companyWorldCandidateRenderKey(
+            external.key,
+            external.candidate_version
+          )}
+          onResolve={onResolve}
+          resolutionState={resolutionState}
+          showRelationshipFields={externalOrganizationState?.kind === "confirmed"}
+        />
+      ) : null}
+      {organization ? (
+        <CandidateResolutionControls
+          canResolve={data.capabilities.can_resolve}
+          candidateKey={organization.key}
+          candidateType="organization"
+          candidateVersion={organization.candidate_version}
+          defaultOrganizationName={organization.name ?? ""}
+          key={companyWorldCandidateRenderKey(
+            organization.key,
+            organization.candidate_version
+          )}
+          onResolve={onResolve}
+          resolutionState={resolutionState}
+        />
+      ) : null}
+      <EvidenceList refs={evidenceRefs} />
     </aside>
   );
 }
 
 function ConfirmedExternalPersonProfile({
+  headingId,
   person
 }: {
+  headingId: string;
   person: CompanyMapConfirmedExternalPerson;
 }) {
   return (
     <>
       <span className="eyebrow">{M.companyWorld.personProfile}</span>
-      <h3>{person.display_name ?? person.email}</h3>
+      <h3 id={headingId}>{person.display_name ?? person.email}</h3>
       <span className="world-state world-state--confirmed">{M.companyWorld.confirmed}</span>
       <dl className="world-profile-meta">
         <ProfileMeta label={M.companyWorld.email} value={person.email} />
@@ -888,16 +742,21 @@ function ConfirmedExternalPersonProfile({
           value={formatDate(person.last_interaction_at)}
         />
       </dl>
-      <EvidenceList refs={person.source_refs} />
     </>
   );
 }
 
-function InternalPersonProfile({ person }: { person: CompanyMapInternalPerson }) {
+function InternalPersonProfile({
+  headingId,
+  person
+}: {
+  headingId: string;
+  person: CompanyMapInternalPerson;
+}) {
   return (
     <>
       <span className="eyebrow">{M.companyWorld.personProfile}</span>
-      <h3>{person.name ?? person.email}</h3>
+      <h3 id={headingId}>{person.name ?? person.email}</h3>
       <span className="world-state world-state--confirmed">{M.companyWorld.confirmed}</span>
       <dl className="world-profile-meta">
         <ProfileMeta label={M.companyWorld.email} value={person.email} />
@@ -907,25 +766,20 @@ function InternalPersonProfile({ person }: { person: CompanyMapInternalPerson })
           value={profileStatus(person.status)}
         />
       </dl>
-      <EvidenceList refs={person.source_refs} />
     </>
   );
 }
 
 function ExternalPersonProfile({
-  canResolve,
-  onResolve,
+  headingId,
   onSelect,
   organizationState,
-  person,
-  resolutionState
+  person
 }: {
-  canResolve: boolean;
-  onResolve?: (request: CompanyWorldResolutionDraft) => Promise<void>;
+  headingId: string;
   onSelect: (key: string) => void;
   organizationState: CompanyWorldPersonOrganizationState;
   person: CompanyMapExternalCandidate;
-  resolutionState: CompanyWorldResolutionState;
 }) {
   const organizationBlockerId = `world-person-organization-${person.key.replace(
     /[^a-zA-Z0-9_-]/g,
@@ -935,7 +789,7 @@ function ExternalPersonProfile({
   return (
     <>
       <span className="eyebrow">{M.companyWorld.personProfile}</span>
-      <h3>{person.display_name ?? person.email}</h3>
+      <h3 id={headingId}>{person.display_name ?? person.email}</h3>
       <span className="world-state world-state--candidate">
         {M.companyWorld.needsConfirmation}
       </span>
@@ -950,25 +804,10 @@ function ExternalPersonProfile({
           value={formatDate(person.last_interaction_at)}
         />
       </dl>
-      <EvidenceList refs={person.source_refs} />
       <PersonOrganizationContext
         calloutId={organizationBlockerId}
         onSelect={onSelect}
         state={organizationState}
-      />
-      <CandidateResolutionControls
-        canResolve={canResolve}
-        candidateKey={person.key}
-        candidateType="external_person"
-        candidateVersion={person.candidate_version}
-        confirmationBlocked={organizationState.kind === "unresolved"}
-        confirmationDescriptionId={
-          organizationState.kind === "unresolved" ? organizationBlockerId : undefined
-        }
-        defaultDisplayName={person.display_name ?? ""}
-        onResolve={onResolve}
-        resolutionState={resolutionState}
-        showRelationshipFields={organizationState.kind === "confirmed"}
       />
     </>
   );
@@ -1011,6 +850,7 @@ function PersonOrganizationContext({
         <small>
           {organizationRelationshipKindLabel(state.organization.relationship_kind)}
         </small>
+        <p>{M.companyWorld.confirmedOrganizationForPersonDescription}</p>
       </aside>
     );
   }
@@ -1019,14 +859,18 @@ function PersonOrganizationContext({
 }
 
 function ConfirmedOrganizationProfile({
+  headingId,
   organization
 }: {
+  headingId: string;
   organization: CompanyMapConfirmedOrganization;
 }) {
   return (
     <>
       <span className="eyebrow">{M.companyWorld.organizationProfile}</span>
-      <h3>{organization.name ?? organization.domain ?? M.common.unknown}</h3>
+      <h3 id={headingId}>
+        {organization.name ?? organization.domain ?? M.common.unknown}
+      </h3>
       <span className="world-state world-state--confirmed">{M.companyWorld.confirmed}</span>
       <dl className="world-profile-meta">
         {organization.domain ? (
@@ -1052,26 +896,21 @@ function ConfirmedOrganizationProfile({
           value={formatDate(organization.last_interaction_at)}
         />
       </dl>
-      <EvidenceList refs={organization.source_refs} />
     </>
   );
 }
 
 function OrganizationProfile({
-  canResolve,
-  onResolve,
-  organization,
-  resolutionState
+  headingId,
+  organization
 }: {
-  canResolve: boolean;
-  onResolve?: (request: CompanyWorldResolutionDraft) => Promise<void>;
+  headingId: string;
   organization: CompanyMapOrganizationCandidate;
-  resolutionState: CompanyWorldResolutionState;
 }) {
   return (
     <>
       <span className="eyebrow">{M.companyWorld.organizationProfile}</span>
-      <h3>{organization.name ?? organization.domain}</h3>
+      <h3 id={headingId}>{organization.name ?? organization.domain}</h3>
       <span className="world-state world-state--candidate">
         {M.companyWorld.organizationNeedsConfirmation}
       </span>
@@ -1087,16 +926,6 @@ function OrganizationProfile({
           value={formatDate(organization.last_interaction_at)}
         />
       </dl>
-      <EvidenceList refs={organization.source_refs} />
-      <CandidateResolutionControls
-        canResolve={canResolve}
-        candidateKey={organization.key}
-        candidateType="organization"
-        candidateVersion={organization.candidate_version}
-        defaultOrganizationName={organization.name ?? ""}
-        onResolve={onResolve}
-        resolutionState={resolutionState}
-      />
     </>
   );
 }
@@ -1192,6 +1021,53 @@ export function buildCompanyWorldResolutionDraft({
   };
 }
 
+export type CompanyWorldResolutionStep =
+  | "decision"
+  | "name"
+  | "relationship"
+  | "role";
+
+export function companyWorldResolutionSteps(
+  candidateType: "external_person" | "organization",
+  showRelationshipFields: boolean
+): readonly CompanyWorldResolutionStep[] {
+  if (candidateType === "organization") {
+    return ["decision", "name", "relationship"];
+  }
+  return showRelationshipFields
+    ? ["decision", "name", "relationship", "role"]
+    : ["decision", "name"];
+}
+
+export function companyWorldResolutionStepForContext(
+  candidateType: "external_person" | "organization",
+  showRelationshipFields: boolean,
+  step: CompanyWorldResolutionStep
+): CompanyWorldResolutionStep {
+  if (
+    candidateType === "external_person" &&
+    !showRelationshipFields &&
+    (step === "relationship" || step === "role")
+  ) {
+    return "name";
+  }
+  return step;
+}
+
+export function advanceCompanyWorldResolutionStep(
+  steps: readonly CompanyWorldResolutionStep[],
+  step: CompanyWorldResolutionStep
+): { nextStep: CompanyWorldResolutionStep; shouldSubmit: boolean } {
+  const stepIndex = Math.max(0, steps.indexOf(step));
+  if (stepIndex === steps.length - 1) {
+    return { nextStep: step, shouldSubmit: true };
+  }
+  return {
+    nextStep: steps[stepIndex + 1] ?? step,
+    shouldSubmit: false
+  };
+}
+
 function CandidateResolutionControls({
   canResolve,
   candidateKey,
@@ -1224,18 +1100,39 @@ function CandidateResolutionControls({
   const [organizationRelationshipKind, setOrganizationRelationshipKind] =
     useState<CompanyMapOrganizationRelationshipKind | "">("");
   const [roleTitle, setRoleTitle] = useState("");
+  const [step, setStep] = useState<CompanyWorldResolutionStep>("decision");
+  const previousStepRef = useRef<CompanyWorldResolutionStep>("decision");
+  const questionRef = useRef<HTMLElement>(null);
   const resolutionInFlight = resolutionState.status === "pending";
   const pendingForCandidate =
     resolutionState.candidateKey === candidateKey &&
     resolutionState.status === "pending";
   const idPrefix = `world-resolution-${candidateKey.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const steps = companyWorldResolutionSteps(candidateType, showRelationshipFields);
+  const stepIndex = Math.max(0, steps.indexOf(step));
+  const isFinalStep = stepIndex === steps.length - 1;
 
   useEffect(() => {
-    if (!showRelationshipFields) {
+    if (candidateType === "external_person" && !showRelationshipFields) {
       setRelationshipType("");
       setRoleTitle("");
     }
-  }, [showRelationshipFields]);
+    const contextualStep = companyWorldResolutionStepForContext(
+      candidateType,
+      showRelationshipFields,
+      step
+    );
+    if (contextualStep !== step) {
+      setStep(contextualStep);
+    }
+  }, [candidateType, showRelationshipFields, step]);
+
+  useEffect(() => {
+    if (previousStepRef.current !== step) {
+      previousStepRef.current = step;
+      questionRef.current?.focus();
+    }
+  }, [step]);
 
   if (!canResolve) {
     return <p className="world-resolution-read-only">{M.companyWorld.resolutionReadOnly}</p>;
@@ -1265,91 +1162,123 @@ function CandidateResolutionControls({
     );
   }
 
+  function moveForward(): void {
+    if (
+      resolutionInFlight ||
+      !onResolve ||
+      (step === "decision" && confirmationBlocked)
+    ) {
+      return;
+    }
+    const advance = advanceCompanyWorldResolutionStep(steps, step);
+    if (advance.shouldSubmit) {
+      submit("confirmed");
+      return;
+    }
+    setStep(advance.nextStep);
+  }
+
+  function moveBack(): void {
+    if (stepIndex === 0 || resolutionInFlight) {
+      return;
+    }
+    setStep(steps[stepIndex - 1] ?? "decision");
+  }
+
+  const question =
+    step === "decision"
+      ? candidateType === "external_person"
+        ? M.companyWorld.resolutionPersonQuestion
+        : M.companyWorld.resolutionOrganizationQuestion
+      : step === "name"
+        ? candidateType === "external_person"
+          ? M.companyWorld.resolutionNamePersonQuestion
+          : M.companyWorld.resolutionNameOrganizationQuestion
+        : step === "relationship"
+          ? candidateType === "external_person"
+            ? M.companyWorld.resolutionPersonRelationshipQuestion
+            : M.companyWorld.resolutionOrganizationRelationshipQuestion
+          : M.companyWorld.resolutionRoleTitleQuestion;
+
   return (
     <form
+      aria-labelledby={`${idPrefix}-question`}
       className="world-resolution"
       data-candidate-type={candidateType}
       data-candidate-version={candidateVersion}
+      data-resolution-step={step}
       onSubmit={(event) => {
         event.preventDefault();
-        submit("confirmed");
+        moveForward();
       }}
     >
       <div className="world-resolution-heading">
-        <strong>{M.companyWorld.confirmCandidate}</strong>
-        <span>{M.companyWorld.classificationOptional}</span>
+        <span>
+          {M.companyWorld.resolutionStepLabel} {stepIndex + 1} / {steps.length}
+        </span>
+        <strong id={`${idPrefix}-question`} ref={questionRef} tabIndex={-1}>
+          {question}
+        </strong>
       </div>
       <p className="world-resolution-boundary">
-        {M.companyWorld.humanClassificationBoundary}
+        {step === "decision"
+          ? M.companyWorld.resolutionQuestionHint
+          : M.companyWorld.resolutionOptionalAnswer}
       </p>
 
-      {candidateType === "external_person" ? (
-        <>
-          <label htmlFor={`${idPrefix}-display-name`}>{M.companyWorld.displayName}</label>
+      {step === "name" && candidateType === "external_person" ? (
+        <label className="world-resolution-answer" htmlFor={`${idPrefix}-display-name`}>
+          <span>{M.companyWorld.displayName}</span>
           <input
             id={`${idPrefix}-display-name`}
+            maxLength={255}
             onChange={(event) => setDisplayName(event.target.value)}
             type="text"
             value={displayName}
           />
-          {showRelationshipFields ? (
-            <>
-              <label htmlFor={`${idPrefix}-relationship-type`}>
-                {M.companyWorld.relationshipType}
-              </label>
-              <select
-                id={`${idPrefix}-relationship-type`}
-                onChange={(event) => {
-                  const value = event.target.value as CompanyMapRelationshipType | "";
-                  setRelationshipType(value);
-                  if (!value) {
-                    setRoleTitle("");
-                  }
-                }}
-                value={relationshipType}
-              >
-                <option value="">{M.companyWorld.selectClassification}</option>
-                {RELATIONSHIP_TYPES.map((value) => (
-                  <option key={value} value={value}>
-                    {relationshipTypeLabel(value)}
-                  </option>
-                ))}
-              </select>
-              <label htmlFor={`${idPrefix}-role-title`}>
-                {M.companyWorld.roleTitle}
-              </label>
-              <input
-                aria-describedby={
-                  relationshipType ? undefined : `${idPrefix}-role-title-help`
-                }
-                disabled={!relationshipType}
-                id={`${idPrefix}-role-title`}
-                onChange={(event) => setRoleTitle(event.target.value)}
-                type="text"
-                value={roleTitle}
-              />
-              {!relationshipType ? (
-                <span className="world-resolution-help" id={`${idPrefix}-role-title-help`}>
-                  {M.companyWorld.roleRequiresRelationship}
-                </span>
-              ) : null}
-            </>
-          ) : null}
-        </>
-      ) : (
-        <>
-          <label htmlFor={`${idPrefix}-organization-name`}>
-            {M.companyWorld.organizationName}
-          </label>
+        </label>
+      ) : null}
+
+      {step === "name" && candidateType === "organization" ? (
+        <label className="world-resolution-answer" htmlFor={`${idPrefix}-organization-name`}>
+          <span>{M.companyWorld.organizationName}</span>
           <input
             id={`${idPrefix}-organization-name`}
+            maxLength={255}
             onChange={(event) => setOrganizationName(event.target.value)}
             type="text"
             value={organizationName}
           />
-          <label htmlFor={`${idPrefix}-relationship-kind`}>
-            {M.companyWorld.organizationRelationshipKind}
-          </label>
+        </label>
+      ) : null}
+
+      {step === "relationship" && candidateType === "external_person" ? (
+        <label className="world-resolution-answer" htmlFor={`${idPrefix}-relationship-type`}>
+          <span>{M.companyWorld.relationshipType}</span>
+          <select
+            id={`${idPrefix}-relationship-type`}
+            onChange={(event) => {
+              const value = event.target.value as CompanyMapRelationshipType | "";
+              setRelationshipType(value);
+              if (!value) {
+                setRoleTitle("");
+              }
+            }}
+            value={relationshipType}
+          >
+            <option value="">{M.companyWorld.selectClassification}</option>
+            {RELATIONSHIP_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {relationshipTypeLabel(value)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {step === "relationship" && candidateType === "organization" ? (
+        <label className="world-resolution-answer" htmlFor={`${idPrefix}-relationship-kind`}>
+          <span>{M.companyWorld.organizationRelationshipKind}</span>
           <select
             id={`${idPrefix}-relationship-kind`}
             onChange={(event) =>
@@ -1366,30 +1295,81 @@ function CandidateResolutionControls({
               </option>
             ))}
           </select>
-        </>
-      )}
+        </label>
+      ) : null}
+
+      {step === "role" ? (
+        <label className="world-resolution-answer" htmlFor={`${idPrefix}-role-title`}>
+          <span>{M.companyWorld.roleTitle}</span>
+          <input
+            aria-describedby={
+              relationshipType ? undefined : `${idPrefix}-role-title-help`
+            }
+            disabled={!relationshipType}
+            id={`${idPrefix}-role-title`}
+            maxLength={255}
+            onChange={(event) => setRoleTitle(event.target.value)}
+            type="text"
+            value={roleTitle}
+          />
+          {!relationshipType ? (
+            <small className="world-resolution-help" id={`${idPrefix}-role-title-help`}>
+              {M.companyWorld.roleRequiresRelationship}
+            </small>
+          ) : null}
+        </label>
+      ) : null}
 
       <div className="world-resolution-actions">
-        <button
-          aria-describedby={confirmationDescriptionId}
-          className="button"
-          data-resolution-action="confirm"
-          disabled={resolutionInFlight || !onResolve || confirmationBlocked}
-          type="submit"
-        >
-          {pendingForCandidate
-            ? M.companyWorld.resolvingCandidate
-            : M.companyWorld.confirmCandidate}
-        </button>
-        <button
-          className="button secondary"
-          data-resolution-action="dismiss"
-          disabled={resolutionInFlight || !onResolve}
-          onClick={() => submit("dismissed")}
-          type="button"
-        >
-          {M.companyWorld.dismissCandidate}
-        </button>
+        {step === "decision" ? (
+          <>
+            <button
+              aria-describedby={confirmationDescriptionId}
+              className="button"
+              data-resolution-action="confirm"
+              disabled={resolutionInFlight || !onResolve || confirmationBlocked}
+              type="submit"
+            >
+              {candidateType === "external_person"
+                ? M.companyWorld.resolutionKeepPerson
+                : M.companyWorld.resolutionKeepOrganization}
+            </button>
+            <button
+              className="button secondary"
+              data-resolution-action="dismiss"
+              disabled={resolutionInFlight || !onResolve}
+              onClick={() => submit("dismissed")}
+              type="button"
+            >
+              {pendingForCandidate
+                ? M.companyWorld.resolvingCandidate
+                : M.companyWorld.dismissCandidate}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              className="button secondary"
+              disabled={resolutionInFlight}
+              onClick={moveBack}
+              type="button"
+            >
+              {M.companyWorld.resolutionBack}
+            </button>
+            <button
+              className="button"
+              data-resolution-action="confirm"
+              disabled={resolutionInFlight || !onResolve}
+              type="submit"
+            >
+              {pendingForCandidate
+                ? M.companyWorld.resolvingCandidate
+                : isFinalStep
+                  ? M.companyWorld.resolutionSave
+                  : M.companyWorld.resolutionContinue}
+            </button>
+          </>
+        )}
       </div>
     </form>
   );
@@ -1397,10 +1377,12 @@ function CandidateResolutionControls({
 
 function ResolutionNotice({
   announce = true,
-  state
+  state,
+  visuallyHidden = false
 }: {
   announce?: boolean;
   state: CompanyWorldResolutionState;
+  visuallyHidden?: boolean;
 }) {
   if (state.status === "idle" || !state.message) {
     return null;
@@ -1409,7 +1391,9 @@ function ResolutionNotice({
     <div
       aria-label={M.companyWorld.resolutionStatusLabel}
       aria-live={announce ? "polite" : undefined}
-      className={`world-resolution-notice world-resolution-notice--${state.status}`}
+      className={`world-resolution-notice world-resolution-notice--${state.status}${
+        visuallyHidden ? " world-resolution-announcer" : ""
+      }`}
       role={
         announce
           ? state.status === "pending" || state.status === "success"
@@ -1423,11 +1407,17 @@ function ResolutionNotice({
   );
 }
 
-function TouchpointProfile({ touchpoint }: { touchpoint: CompanyMapTouchpoint }) {
+function TouchpointProfile({
+  headingId,
+  touchpoint
+}: {
+  headingId: string;
+  touchpoint: CompanyMapTouchpoint;
+}) {
   return (
     <>
       <span className="eyebrow">{M.companyWorld.touchpointProfile}</span>
-      <h3>{touchpoint.subject}</h3>
+      <h3 id={headingId}>{touchpoint.subject}</h3>
       <dl className="world-profile-meta">
         <ProfileMeta
           label={M.companyWorld.direction}
@@ -1438,7 +1428,6 @@ function TouchpointProfile({ touchpoint }: { touchpoint: CompanyMapTouchpoint })
           value={formatDate(touchpoint.occurred_at)}
         />
       </dl>
-      <EvidenceList refs={touchpoint.source_refs} />
       {touchpoint.source_url ? (
         <SourceLink url={touchpoint.source_url}>{M.common.openSource}</SourceLink>
       ) : null}
@@ -1446,7 +1435,67 @@ function TouchpointProfile({ touchpoint }: { touchpoint: CompanyMapTouchpoint })
   );
 }
 
-function TouchpointTimeline({
+function ProfileTouchpointHistory({
+  isCompanyProfile,
+  onSelect,
+  selectedKey,
+  touchpoints
+}: {
+  isCompanyProfile: boolean;
+  onSelect: (key: string) => void;
+  selectedKey: string | null;
+  touchpoints: CompanyMapTouchpoint[];
+}) {
+  const { remainingTouchpoints, visibleTouchpoints } =
+    splitCompanyWorldProfileTouchpoints(touchpoints);
+
+  return (
+    <section className="world-timeline world-profile-timeline">
+      <h4>
+        {isCompanyProfile
+          ? M.companyWorld.allCompanyTouchpoints
+          : M.companyWorld.profileTimeline}
+      </h4>
+      {touchpoints.length > 0 ? (
+        <>
+          <ProfileTouchpointList
+            onSelect={onSelect}
+            selectedKey={selectedKey}
+            touchpoints={visibleTouchpoints}
+          />
+          {remainingTouchpoints.length > 0 ? (
+            <details className="world-profile-timeline-more">
+              <summary>
+                {M.companyWorld.showMoreTouchpoints} ({remainingTouchpoints.length})
+              </summary>
+              <ProfileTouchpointList
+                onSelect={onSelect}
+                selectedKey={selectedKey}
+                touchpoints={remainingTouchpoints}
+              />
+            </details>
+          ) : null}
+        </>
+      ) : (
+        <p className="muted">{M.companyWorld.noProfileTouchpoints}</p>
+      )}
+    </section>
+  );
+}
+
+export function splitCompanyWorldProfileTouchpoints(
+  touchpoints: CompanyMapTouchpoint[]
+): {
+  remainingTouchpoints: CompanyMapTouchpoint[];
+  visibleTouchpoints: CompanyMapTouchpoint[];
+} {
+  return {
+    visibleTouchpoints: touchpoints.slice(0, 6),
+    remainingTouchpoints: touchpoints.slice(6)
+  };
+}
+
+function ProfileTouchpointList({
   onSelect,
   selectedKey,
   touchpoints
@@ -1456,34 +1505,86 @@ function TouchpointTimeline({
   touchpoints: CompanyMapTouchpoint[];
 }) {
   return (
-    <section className="world-timeline" aria-labelledby="world-timeline-title">
-      <h3 id="world-timeline-title">{M.companyWorld.timelineSection}</h3>
-      {touchpoints.length > 0 ? (
-        <ol>
-          {touchpoints.map((touchpoint) => (
-            <li key={touchpoint.key}>
-              <button
-                aria-controls={COMPANY_WORLD_PROFILE_ID}
-                aria-pressed={selectedKey === touchpoint.key}
-                className="timeline-event"
-                onClick={() => onSelect(touchpoint.key)}
-                type="button"
-              >
-                <span className="timeline-marker" aria-hidden="true" />
-                <span>
-                  <strong>{touchpoint.subject}</strong>
-                  <small>
-                    {M.companyWorld.directions[touchpoint.direction]} · {formatDate(touchpoint.occurred_at)}
-                  </small>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="muted">{M.companyWorld.noTouchpoints}</p>
-      )}
-    </section>
+    <ol>
+      {touchpoints.map((touchpoint) => (
+        <li key={touchpoint.key}>
+          <button
+            aria-controls={COMPANY_WORLD_PROFILE_ID}
+            aria-pressed={selectedKey === touchpoint.key}
+            className="timeline-event"
+            onClick={() => onSelect(touchpoint.key)}
+            type="button"
+          >
+            <span className="timeline-marker" aria-hidden="true" />
+            <span>
+              <strong>{touchpoint.subject}</strong>
+              <small>
+                {M.companyWorld.directions[touchpoint.direction]} · {formatDate(touchpoint.occurred_at)}
+              </small>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export function relatedCompanyWorldTouchpoints(
+  data: CompanyMapResponse,
+  selectedKey: string
+): CompanyMapTouchpoint[] {
+  if (selectedKey === data.company.key) {
+    return data.touchpoints;
+  }
+  const selectedTouchpoint = data.touchpoints.find(
+    (touchpoint) => touchpoint.key === selectedKey
+  );
+  if (selectedTouchpoint) {
+    return [selectedTouchpoint];
+  }
+  return data.touchpoints.filter(
+    (touchpoint) =>
+      touchpoint.person_keys.includes(selectedKey) ||
+      touchpoint.organization_keys.includes(selectedKey)
+  );
+}
+
+function CompanyWorldTechnicalBoundary({ data }: { data: CompanyMapResponse }) {
+  return (
+    <details className="world-technical-boundary">
+      <summary>{M.companyWorld.technicalDisclosure}</summary>
+      <div className="world-technical-boundary-body">
+        <p className="muted world-window">
+          {M.companyWorld.windowLabel}: {data.window.gmail_messages_considered} /{" "}
+          {data.window.gmail_messages_available}
+          {data.window.truncated ? ` · ${M.companyWorld.windowTruncated}` : ""}
+        </p>
+        {data.warnings.length > 0 ? (
+          <aside className="world-warnings" aria-label={M.common.warnings}>
+            <strong>{M.common.warnings}</strong>
+            <ul>
+              {data.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </aside>
+        ) : null}
+        <div className="world-capabilities" aria-label={M.companyWorld.capabilities}>
+          <span>
+            {data.capabilities.can_resolve
+              ? M.companyWorld.resolutionEnabled
+              : M.companyWorld.readOnly}
+          </span>
+          <span>
+            {!data.capabilities.provider_calls ? M.companyWorld.noProviderCalls : ""}
+          </span>
+          <span>{M.companyWorld.noExternalWrites}</span>
+          <span>{!data.capabilities.llm_used ? M.companyWorld.noLlm : ""}</span>
+          <span>{!data.is_live ? M.companyWorld.localProjection : ""}</span>
+        </div>
+        <p className="muted world-boundary">{M.companyWorld.boundary}</p>
+      </div>
+    </details>
   );
 }
 
@@ -1498,34 +1599,30 @@ function ProfileMeta({ label, value }: { label: string; value: string }) {
 
 function EvidenceList({ refs }: { refs: CompanyBrainSourceRef[] }) {
   return (
-    <section className="world-evidence" aria-label={M.companyWorld.evidence}>
-      <h4>{M.companyWorld.evidence}</h4>
-      {refs.length > 0 ? (
-        <ul>
-          {refs.map((ref) => (
-            <li key={ref.id}>
-              <SourceLink url={ref.url}>{ref.label}</SourceLink>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">{M.companyWorld.noEvidence}</p>
-      )}
-    </section>
+    <details className="world-evidence">
+      <summary>
+        <span>{M.companyWorld.evidenceDisclosure}</span>
+        <small>{refs.length}</small>
+      </summary>
+      <div>
+        {refs.length > 0 ? (
+          <ul>
+            {refs.map((ref) => (
+              <li key={ref.id}>
+                <SourceLink url={ref.url}>{ref.label}</SourceLink>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">{M.companyWorld.noEvidence}</p>
+        )}
+      </div>
+    </details>
   );
 }
 
 function roleLabel(role: CompanyMapInternalPerson["role"]): string {
   return M.companyWorld.roles[role];
-}
-
-function initials(label: string): string {
-  const parts = label
-    .replace(/@.*$/, "")
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .slice(0, 2);
-  return parts.map((part) => part[0]?.toUpperCase()).join("") || "?";
 }
 
 function formatDate(value: string | null): string {
@@ -1577,17 +1674,18 @@ function organizationCandidateKey(domain: string): string {
   return `organization:${domain.trim().toLowerCase().replace(/\.$/, "")}`;
 }
 
-function focusCompanyWorldProfileOnMobile(profile: HTMLElement | null): void {
+function focusCompanyWorldProfile(profile: HTMLElement | null): void {
+  if (!profile || typeof window === "undefined") {
+    return;
+  }
+  profile.focus({ preventScroll: true });
   if (
-    !profile ||
-    typeof window === "undefined" ||
     typeof window.matchMedia !== "function" ||
-    !window.matchMedia("(max-width: 960px)").matches
+    !window.matchMedia("(max-width: 1320px)").matches
   ) {
     return;
   }
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  profile.focus({ preventScroll: true });
   profile.scrollIntoView({
     behavior: reduceMotion ? "auto" : "smooth",
     block: "start"

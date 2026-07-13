@@ -2090,9 +2090,59 @@ Product and readiness rules:
 
 Consequence: UX-01 removes the first-founder terminal handoff after the operator
 issues the link and replaces the dashboard panel wall with a guided operating
-loop. It does not finish the spatial Company World concept; the next product
-chunk is UX-02, a strategic company board and profile inspector over the existing
-DEC-073/DEC-074 contracts.
+loop. UX-02 subsequently completes the spatial Company World frontend under
+DEC-076. The next product boundary is release handoff and the human-gated deploy
+path, not another local UX expansion.
+
+## DEC-076 - Company World Board Draws Only Durable Relationships
+
+Decision (2026-07-13): `/company-brain` presents the existing DEC-073/DEC-074
+Company Map as a spatial operating board rather than stacked registries. The
+founder's company is the center; workspace team, confirmed external network,
+and unresolved discovery candidates occupy separate, plainly labelled
+contours. This is a frontend projection over the existing response: it adds no
+backend API, migration, provider call/write, external action, secret read, or
+LLM path.
+
+Relationship and placement rules:
+
+- A confirmed external person is nested under a confirmed organization only
+  when `organization_id` and `organization_key` both match that organization's
+  durable identity and `relationship_type` is non-null. The relationship label
+  therefore comes from a human-authored durable affiliation.
+- Name/domain similarity and candidate organization keys never establish a
+  confirmed relationship. A person without the exact durable affiliation stays
+  standalone in the confirmed network; unresolved organizations and people
+  stay in the discovery contour.
+- Selecting a person or organization opens one focused, labelled inspector.
+  Human-readable profile context comes first, profile-local touchpoints are
+  matched only by exact durable keys, and evidence provenance is available in a
+  collapsed disclosure.
+- Technical capability, evidence-window, warning, and boundary details remain
+  inspectable in a separate collapsed disclosure instead of dominating the
+  primary company-management task.
+
+Resolution and access rules:
+
+- Candidate resolution asks one plain-language question at a time. The first
+  question is the terminal decision; confirmation then asks only the labels and
+  relationship/role fields permitted by the existing candidate type and
+  confirmed-organization state.
+- The final request preserves the existing DEC-074 contract: member+ may
+  confirm/dismiss, viewer is read-only, candidate versions and idempotency keys
+  remain mandatory, and canonical identity/evidence stays server-resolved. An
+  unresolved organization cannot be silently converted into a person's
+  confirmed affiliation.
+- Board items use native buttons and expose selection state/controlled inspector
+  relationships. The inspector is labelled and focusable; compact/mobile layout
+  and reduced-motion preferences are first-class presentation constraints.
+
+Consequence: the Company World interface can feel like a company strategy game
+without inventing organizational facts or weakening provenance/RBAC. UX-02
+local acceptance passed frontend/backend/static and desktop/mobile browser
+gates. With UX-01 and UX-02 complete locally, the exact local commit and offline
+`make release-handoff` gate precede the human-gated private-beta deploy/read-only
+smoke; both local steps passed before deployment was requested.
 
 ## ASK - Open Questions For The Human (not decided)
 

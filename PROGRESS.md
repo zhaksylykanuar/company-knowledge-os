@@ -9,6 +9,32 @@
 
 ## ▶ СЕЙЧАС
 
+- **UX-02 spatial Company World board (DEC-076): ЗАКРЫТ ЛОКАЛЬНО.**
+  `/company-brain` теперь ведёт не в набор реестров, а в
+  пространственную стратегическую доску: компания находится в центре, команда,
+  подтверждённая сеть и discovery-кандидаты разведены по понятным контурам, а
+  один клик открывает сфокусированный profile inspector. Люди помещаются внутрь
+  подтверждённой организации только при точном durable affiliation
+  (`organization_id` + `organization_key` + human-authored relationship type);
+  domain/name similarity и candidate signals не рисуются как факт, остальные
+  подтверждённые люди остаются отдельно. Confirmation flow задаёт по одному
+  человеческому вопросу за шаг, не меняя candidate-version/idempotency/RBAC и
+  server-resolved evidence contract. Evidence и технические capability/window
+  границы сохранены, но убраны в раскрываемые детали; provider call, external
+  write, LLM, backend API или migration не добавлены. Проверено 2026-07-13:
+  frontend **272/272 tests**, typecheck, lint и production build
+  (**17 routes**) ✅; backend **537 passed / 1 внешнее deprecation warning** и
+  Ruff ✅; Alembic `heads/current` — `b4d5e6f7a8c9`, `alembic check` — no new
+  operations. Browser QA на desktop 1024/1280 px и mobile 390×844 прошёл без
+  overlap/overflow: keyboard activation и focus transfer работают, controls не
+  меньше 44 px, полный organization/person wizard сохраняет durable affiliation
+  и только после этого группирует человека под организацией; console — **0
+  warnings/errors**. Ephemeral QA workspace/users/invite/source/profile rows
+  удалены; provider calls/writes, LLM, push и deploy не выполнялись. Offline
+  `make release-handoff` прошёл на чистом exact commit: local MVP scope complete,
+  full MVP complete остаётся false из-за human/external gates. Следующий шаг —
+  explicit human approval на push, затем private-beta deploy/read-only smoke;
+  дальнейшее локальное расширение UX не является приоритетом.
 - **UX-01 guided founder onboarding + five-zone company shell (DEC-075):
   ЗАКРЫТ ЛОКАЛЬНО.** One-time fragment-only `/start` enrollment атомарно создаёт
   founder/company/owner/session и ведёт в real-state `/onboarding`; public signup
@@ -31,7 +57,8 @@
   secret scan и `git diff --check` ✅. Provider calls/writes, LLM, push и deploy
   не выполнялись. Единственный P1 deploy-gate: distinct client IP за Railway/Next
   proxy ещё не доказан; до публичного запуска нужен two-client smoke либо shared
-  edge/Redis limiter. Следующий local product chunk — UX-02 spatial Company World.
+  edge/Redis limiter. Следующий product slice UX-02 теперь закрыт DEC-076;
+  актуальный указатель — release-handoff/deploy-gate после финальной проверки.
 - **Durable Company World / founder confirmation (DEC-074):** проекция DEC-073
   теперь объединяется с workspace-owned `Person`, `Organization`,
   `Affiliation`, `Interaction` и terminal `CompanyWorldResolution` receipts.
@@ -74,9 +101,9 @@
   (25 repos), а не retained source-event/legacy fallbacks; live read-only check
   по org env keys подтвердил тот же count без вывода секретов. Следующий
   продуктовый Company World chunk с durable профилями и founder-confirm flow
-  закрыт (DEC-074). Следующий интерфейсный приоритет — UX-02, стратегическая
-  доска Company World; deploy/handoff и GitHub App real-provider read остаются
-  отдельными human-approved внешними gates.
+  закрыт (DEC-074), а spatial board/profile inspector закрыт frontend-срезом
+  DEC-076. Следующий приоритет — release-handoff и manual deploy/read-only smoke;
+  GitHub App real-provider read остаётся отдельным human-approved внешним gate.
 - **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
   offline, детерминированный gate перед первым approved real read run:
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
@@ -524,11 +551,14 @@
   foundation + synced-evidence isolation tests + safe rate-limit/error
   observability; операторский API-ключ остаётся для server/CI/админ-скриптов.
   Один alembic head — `b4d5e6f7a8c9`.
-- **Дальше:** UX-02 превращает существующий Company Map в стратегическую доску.
-  Перед публичным deploy также обязателен smoke реального client-IP isolation за
-  Railway/Next proxy; `request.client.host` нельзя считать доказанно уникальным
-  без этой проверки. First real-provider read, LLM-нарратив и production deploy
-  остаются отдельными human-approved этапами после интерфейсного acceptance.
+- **Дальше:** UX-02 final acceptance и offline `make release-handoff` прошли на
+  clean exact commit. После явного human approval — push и manual private-beta
+  deploy/read-only smoke. Перед публичным deploy также обязателен smoke
+  реального client-IP
+  isolation за Railway/Next proxy; `request.client.host` нельзя считать
+  доказанно уникальным без этой проверки. First real-provider read и
+  LLM-нарратив остаются отдельными human-approved этапами, а не поводом для
+  нового local UX expansion.
 - **Примечание:** Briefings Chunk 1 — это реальный код (модели / миграция /
   эндпоинты / фронтенд) с зелёными гейтами; бэкенд и фронтенд закоммичены
   отдельно, push не делался.
@@ -665,7 +695,14 @@ product routes из-за несовпадения tenant scope.*
   computed five-step onboarding, five product zones, one-move/three-signal Today,
   nested source navigation, explicit workspace selector, role-accurate controls,
   automatic teammate self-setup links, concurrency/identity hardening, desktop and
-  390 px browser acceptance. See DEC-075. UX-02 remains next.
+  390 px browser acceptance. See DEC-075.
+- [x] UX-02 spatial Company World board — company-centered strategic board,
+  separate team/confirmed/discovery contours, affiliation-safe placement,
+  focused profile inspector, exact-key touchpoint history, progressive
+  evidence/technical disclosure, and one-question confirmation flow over the
+  existing Company Map contract. Frontend **272 tests** plus
+  typecheck/lint/build, full backend **537 tests**, Ruff/Alembic and desktop /
+  390×844 browser acceptance are verified. See DEC-076.
 - [x] Russian UI localization — all user-facing copy centralized in `web/lib/messages.ts` (no i18n framework; second language is a small addition). See DEC-045.
 - [~] FOS-D — Deploy (Railway) — private-beta rehearsal environment exists and read-only deployed smoke passes; production auth is now built (email+password sessions), but GitHub App live-sync hardening/custom-domain hardening and the first production deploy of the auth phase remain before broader beta.
 
@@ -695,6 +732,26 @@ product routes из-за несовпадения tenant scope.*
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-13` — **UX-02 spatial Company World board (DEC-076).** Replaced the
+  registry-like Company World surface with a company-centered strategy board,
+  distinct team/confirmed-network/discovery zones, focused inspector and
+  profile-local touchpoint history. Confirmed people are nested under an
+  organization only from exact durable affiliation fields plus a human-authored
+  relationship; domain/name/candidate similarity never creates a visual fact.
+  Candidate resolution now asks one plain-language question per step, while
+  evidence and capability/window boundaries remain available through collapsed
+  disclosures. Existing API, durable rows, RBAC, candidate versions,
+  idempotency and server-resolved evidence remain unchanged; no migration,
+  provider call/write or LLM. Checks: frontend **272 passed** plus
+  typecheck/lint/build (**17 routes**) ✅; backend **537 passed / 1 external
+  warning**, Ruff and Alembic head/current/check ✅; desktop 1024/1280 px и
+  mobile 390×844 browser QA passed without overlap/overflow, with
+  keyboard/focus/44 px
+  controls, complete organization/person resolution and **0 console
+  warnings/errors**. Ephemeral QA data was removed. Offline
+  `make release-handoff` then passed on a clean exact commit with local MVP scope
+  complete and no deploy/provider/external write. Next: explicit human approval
+  for push → deploy/read-only smoke, not another UX expansion.
 - `2026-07-13` — **UX-01 guided founder onboarding + company-management shell
   (DEC-075).** Replaced the technical panel wall with five primary zones,
   deterministic Today, contextual source/company navigation, explicit workspace

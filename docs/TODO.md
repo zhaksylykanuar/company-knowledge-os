@@ -43,6 +43,19 @@ Implemented foundations:
   cannot confirm/mutate; cross-workspace access is rejected. Confirmation is a
   local canonical write with source provenance; no provider call, external
   write, raw-source mutation, or LLM path was added.
+- The UX-02 spatial Company World board is in place (DEC-076): the founder's
+  company is the visual center, while team, confirmed network, and discovery
+  candidates occupy distinct contours. A confirmed person is placed under an
+  organization only when exact durable affiliation fields agree and a human-
+  authored relationship exists; similarity is never drawn as fact. The focused
+  inspector keeps profile-local touchpoints visible while evidence and
+  technical boundaries stay collapsed until requested. Candidate resolution
+  asks one plain-language question at a time without changing member+/viewer,
+  version, idempotency, or server-evidence contracts. This frontend-only slice
+  adds no backend API, migration, provider call/write, or LLM path. Local
+  acceptance is complete: 272 frontend tests plus typecheck/lint/build, 537
+  backend tests plus Ruff/Alembic, and desktop 1024/1280 px / mobile 390×844
+  browser QA without overlap, overflow, console warnings or console errors.
 - Guided shell and founder onboarding are in place (DEC-075): an operator-issued
   one-time `/start` link atomically creates the founder/company/owner membership
   and session; `/onboarding` derives source/map/team readiness from real data;
@@ -282,31 +295,30 @@ Implemented foundations:
   and ordered human-gated next steps without deploy, provider calls, external
   writes, database access, secret reads, or LLM.
 
-## Next Priority: UX-02 strategic Company World board
+## Next Priority: Human-gated deploy and read-only smoke
 
-Rationale: UX-01 now gives the founder a safe first-run path, explicit company
-context, and one next move. The remaining primary-interface mismatch is
-`/company-brain`: the underlying DEC-073/DEC-074 data is strong, but the main
-surface still reads as stacked registries. Before private-beta handoff, turn it
-into the promised spatial company-management board without changing the
-evidence or write boundaries.
+Rationale: UX-01 and UX-02 now provide the guided first-run loop and the spatial
+Company World surface over the existing evidence and write boundaries. Local
+UX-02 acceptance and the offline sanitized release handoff are complete on a
+clean exact commit. Do not expand the local UX again; move through the explicitly
+human-gated private-beta deployment path after approval.
 
 Done when:
 
-- The founder's company is the visual center; team, confirmed counterparties,
-  and unresolved candidates occupy distinct understandable zones.
-- People appear inside or beside confirmed organizations only when an explicit
-  affiliation exists; unknown relationships are not drawn as facts.
-- One click opens a focused person/organization inspector: human summary first,
-  touchpoint history second, and evidence/technical provenance behind
-  progressive disclosure.
-- Candidate confirmation asks one plain-language question at a time and keeps
-  `member+`/viewer behavior, candidate versions, idempotency, and server-resolved
-  evidence unchanged.
-- Desktop, keyboard, reduced-motion, and 390 px mobile browser flows pass; the
-  existing Company Map API and durable rows require no new migration.
-- After UX-02, run the exact reviewed commit through `make release-handoff` and
-  the human-gated private-beta deploy/read-only smoke path.
+- [x] Desktop 1024/1280 px, keyboard/focus and 390×844 mobile browser acceptance
+  passes for the current UX-02 snapshot; controls remain at least 44 px and the
+  CSS preserves the reduced-motion presentation boundary.
+- [x] Backend regression plus the repository's final Ruff, Alembic, secret, and
+  whitespace gates pass for the same reviewed snapshot.
+- [x] `make release-handoff` is run against that exact commit and its sanitized
+  output is attached for human review.
+- The human-approved Railway sequence completes backup, migration, deploy, and
+  read-only smoke without silently widening provider or write scope.
+- Distinct client-IP behavior behind Railway/Next is proven with a two-client
+  smoke, or the process-local admission boundary is replaced with an approved
+  shared edge/Redis limiter before public launch.
+- Provider writes, live LLM generation, and other production mutations remain
+  separately approved gates.
 
 ## Near-Term Backlog
 
@@ -324,8 +336,9 @@ Done when:
   rejected, GitHub or internal) via a read-only control. The `/actions` review
   page now has a local readiness summary for needs-decision proposals,
   preview-ready approved GitHub proposals, local-only follow-ups, missing
-  evidence, and reported execution receipts. Further polish follows UX-02;
-  provider reads, writes, and AI generation remain separately approved gates.
+  evidence, and reported execution receipts. Further polish is deferred until
+  after release/deploy evidence; provider reads, writes, and AI generation
+  remain separately approved gates.
 
 2. **Founder-facing briefing polish.**
    Deterministic briefing cards, source coverage signals, item category filter,
@@ -352,8 +365,9 @@ Done when:
    briefing bridge (DEC-069). `/actions` now turns those generated proposals into
    a clearer local review/readiness loop with counts for pending decisions,
    preview-ready GitHub issue proposals, local-only follow-ups, missing evidence,
-  and reported execution receipts. Further briefing polish follows UX-02;
-  provider reads, writes, and AI generation remain separately approved gates.
+  and reported execution receipts. Further briefing polish is deferred until
+  after release/deploy evidence; provider reads, writes, and AI generation
+  remain separately approved gates.
 
 3. **First auth-session production deploy.**
   Dashboard now surfaces a local private-beta readiness checklist plus manual

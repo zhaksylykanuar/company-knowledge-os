@@ -4,8 +4,11 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  advanceCompanyWorldResolutionStep,
   beginCompanyWorldResolution,
   buildCompanyWorldResolutionDraft,
+  companyWorldResolutionStepForContext,
+  companyWorldResolutionSteps,
   companyWorldCandidateRenderKey,
   completedCompanyWorldResolutionRefresh,
   CompanyWorldPanelView,
@@ -16,10 +19,13 @@ import {
   isCurrentCompanyWorldResolution,
   pendingCompanyWorldResolution,
   personOrganizationState,
+  relatedCompanyWorldTouchpoints,
   resetCompanyWorldResolutionGate,
+  splitCompanyWorldProfileTouchpoints,
   successfulCompanyWorldResolution,
   validSelectedKey
 } from "../components/CompanyWorldPanel";
+import { buildCompanyWorldBoardModel } from "../components/CompanyWorldBoard";
 import {
   ApiRequestError,
   buildWorkspaceCompanyMapPath,
@@ -224,14 +230,6 @@ function resolutionButton(html: string, action: "confirm" | "dismiss"): string {
   return tag;
 }
 
-function elementWithId(html: string, idSuffix: string): string {
-  const tag = (html.match(/<(?:input|select)\b[^>]*>/g) ?? []).find((element) =>
-    element.includes(`id="${idSuffix}"`)
-  );
-  assert.ok(tag, `missing element ${idSuffix}`);
-  return tag;
-}
-
 function deferred<T>(): {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -422,7 +420,76 @@ test("renders an evidence-backed company world with provisional candidates", () 
   assert.ok(html.includes('aria-controls="company-world-profile"'));
   assert.ok(html.includes('id="company-world-profile"'));
   assert.ok(html.includes('tabindex="-1"'));
+  assert.ok(html.includes('aria-labelledby="company-world-profile-title"'));
+  assert.ok(html.includes(M.companyWorld.boardTitle));
+  assert.ok(html.includes(M.companyWorld.confirmedContour));
+  assert.ok(html.includes(M.companyWorld.discoveryContour));
+  assert.ok(html.includes(M.companyWorld.evidenceDisclosure));
+  assert.ok(html.includes(M.companyWorld.technicalDisclosure));
+  assert.doesNotMatch(
+    html,
+    /<aside[^>]*id="company-world-profile"[^>]*aria-live=/
+  );
   assert.doesNotMatch(html, /PRIVATE_BODY|raw_body/);
+});
+
+test("builds spatial groups only from explicit durable affiliations", () => {
+  const grouped = buildCompanyWorldBoardModel(sampleMap);
+  assert.equal(grouped.organizationGroups.length, 1);
+  assert.deepEqual(
+    grouped.organizationGroups[0]?.people.map((person) => person.key),
+    ["person:confirmed-buyer"]
+  );
+  assert.deepEqual(grouped.standaloneConfirmedPeople, []);
+
+  const domainOnly = buildCompanyWorldBoardModel(
+    mapWithConfirmedCandidateOrganization()
+  );
+  assert.deepEqual(domainOnly.organizationGroups[0]?.people, []);
+  assert.deepEqual(
+    domainOnly.standaloneConfirmedPeople.map((person) => person.key),
+    ["person:confirmed-buyer"]
+  );
+});
+
+test("filters profile touchpoints only by exact response keys", () => {
+  assert.equal(
+    relatedCompanyWorldTouchpoints(sampleMap, sampleMap.company.key).length,
+    1
+  );
+  assert.equal(
+    relatedCompanyWorldTouchpoints(sampleMap, "external-person:buyer").length,
+    1
+  );
+  assert.equal(
+    relatedCompanyWorldTouchpoints(sampleMap, "person:confirmed-buyer").length,
+    0
+  );
+  assert.equal(
+    relatedCompanyWorldTouchpoints(sampleMap, "organization:confirmed-acme").length,
+    0
+  );
+});
+
+test("keeps the profile timeline compact while preserving the bounded history", () => {
+  const sourceTouchpoint = sampleMap.touchpoints[0];
+  assert.ok(sourceTouchpoint);
+  const touchpoints = Array.from({ length: 9 }, (_, index) => ({
+    ...sourceTouchpoint,
+    key: `touchpoint:source-${index}`,
+    source_record_id: `source-${index}`,
+    subject: `Touchpoint ${index}`
+  }));
+
+  const split = splitCompanyWorldProfileTouchpoints(touchpoints);
+  assert.deepEqual(
+    split.visibleTouchpoints.map((touchpoint) => touchpoint.key),
+    touchpoints.slice(0, 6).map((touchpoint) => touchpoint.key)
+  );
+  assert.deepEqual(
+    split.remainingTouchpoints.map((touchpoint) => touchpoint.key),
+    touchpoints.slice(6).map((touchpoint) => touchpoint.key)
+  );
 });
 
 test("builds strict person, organization, standalone, and dismissal payloads", () => {
@@ -568,27 +635,32 @@ test("blocks person confirmation while its organization candidate is unresolved"
   const html = renderPanel("ready", sampleMap, person.key);
   assert.ok(html.includes(M.companyWorld.organizationResolutionRequired));
   assert.ok(html.includes(M.companyWorld.openOrganizationProfile));
-  assert.ok(html.includes(M.companyWorld.humanClassificationBoundary));
+  assert.ok(html.includes(M.companyWorld.resolutionQuestionHint));
+  assert.ok(html.includes(M.companyWorld.resolutionPersonQuestion));
+  assert.ok(html.includes('data-resolution-step="decision"'));
   assert.match(resolutionButton(html, "confirm"), /\bdisabled=""/);
   assert.doesNotMatch(resolutionButton(html, "dismiss"), /\bdisabled=/);
-  assert.ok(!html.includes(`${person.key.replaceAll(":", "-")}-relationship-type`));
+  assert.doesNotMatch(html, /<select\b/);
 });
 
-test("shows canonical relationship controls only for a confirmed organization", () => {
+test("uses one-question resolution steps and unlocks relationship questions safely", () => {
   const data = mapWithConfirmedCandidateOrganization();
   const person = data.people.external_candidates[0];
   assert.ok(person);
   assert.equal(personOrganizationState(data, person).kind, "confirmed");
 
   const html = renderPanel("ready", data, person.key);
-  const idPrefix = "world-resolution-external-person-buyer";
   assert.ok(html.includes(M.companyWorld.confirmedOrganizationForPerson));
-  assert.match(html, /<option value="decision_maker">Лицо, принимающее решение<\/option>/);
-  assert.match(html, /<option value="account_owner">Ответственный за аккаунт<\/option>/);
+  assert.ok(html.includes(M.companyWorld.confirmedOrganizationForPersonDescription));
+  assert.deepEqual(companyWorldResolutionSteps("external_person", true), [
+    "decision",
+    "name",
+    "relationship",
+    "role"
+  ]);
+  assert.ok(html.includes(M.companyWorld.resolutionPersonQuestion));
+  assert.doesNotMatch(html, /<select\b/);
   assert.doesNotMatch(resolutionButton(html, "confirm"), /\bdisabled=/);
-  assert.match(elementWithId(html, `${idPrefix}-role-title`), /\bdisabled=""/);
-  assert.ok(elementWithId(html, `${idPrefix}-relationship-type`).startsWith("<select"));
-  assert.ok(!html.includes(`${idPrefix}-organization-name`));
 });
 
 test("keeps a person standalone after its organization is absent or dismissed", () => {
@@ -599,25 +671,53 @@ test("keeps a person standalone after its organization is absent or dismissed", 
 
   const html = renderPanel("ready", data, person.key);
   assert.ok(html.includes(M.companyWorld.standalonePerson));
+  assert.deepEqual(companyWorldResolutionSteps("external_person", false), [
+    "decision",
+    "name"
+  ]);
   assert.doesNotMatch(resolutionButton(html, "confirm"), /\bdisabled=/);
-  assert.ok(!html.includes("-relationship-type"));
-  assert.ok(!html.includes("-organization-name"));
+  assert.doesNotMatch(html, /<select\b/);
 });
 
-test("renders canonical organization kind controls with Russian labels", () => {
+test("keeps organization classification as a later human-authored question", () => {
   const organization = sampleMap.organizations[0];
   assert.ok(organization);
   const html = renderPanel("ready", sampleMap, organization.key);
 
-  assert.match(html, /<option value="prospect">Потенциальный заказчик<\/option>/);
-  assert.match(html, /<option value="customer">Заказчик<\/option>/);
-  assert.match(html, /<option value="vendor">Поставщик<\/option>/);
+  assert.deepEqual(companyWorldResolutionSteps("organization", false), [
+    "decision",
+    "name",
+    "relationship"
+  ]);
+  assert.equal(M.companyWorld.organizationRelationshipKinds.prospect, "Потенциальный заказчик");
+  assert.equal(M.companyWorld.organizationRelationshipKinds.customer, "Заказчик");
+  assert.equal(M.companyWorld.organizationRelationshipKinds.vendor, "Поставщик");
   assert.ok(html.includes(M.companyWorld.organizationNeedsConfirmation));
-  assert.ok(
-    elementWithId(
-      html,
-      "world-resolution-organization-acme-test-relationship-kind"
-    ).startsWith("<select")
+  assert.ok(html.includes(M.companyWorld.resolutionOrganizationQuestion));
+  assert.doesNotMatch(html, /<select\b/);
+});
+
+test("advances the organization wizard to its terminal submit without context reset", () => {
+  const steps = companyWorldResolutionSteps("organization", false);
+  assert.equal(
+    companyWorldResolutionStepForContext("organization", false, "relationship"),
+    "relationship"
+  );
+  assert.equal(
+    companyWorldResolutionStepForContext("external_person", false, "relationship"),
+    "name"
+  );
+
+  const name = advanceCompanyWorldResolutionStep(steps, "decision");
+  assert.deepEqual(name, { nextStep: "name", shouldSubmit: false });
+  const relationship = advanceCompanyWorldResolutionStep(steps, name.nextStep);
+  assert.deepEqual(relationship, {
+    nextStep: "relationship",
+    shouldSubmit: false
+  });
+  assert.deepEqual(
+    advanceCompanyWorldResolutionStep(steps, relationship.nextStep),
+    { nextStep: "relationship", shouldSubmit: true }
   );
 });
 
@@ -647,7 +747,8 @@ test("changes the remount key and form defaults when candidate_version changes",
   assert.ok(
     updatedHtml.includes(`data-candidate-version="${UPDATED_CANDIDATE_VERSION}"`)
   );
-  assert.ok(updatedHtml.includes('value="Acme Updated"'));
+  assert.ok(updatedHtml.includes("Acme Updated"));
+  assert.ok(updatedHtml.includes('data-resolution-step="decision"'));
 });
 
 test("maps pending, success, 403, 404, 409, and 422 to visible states", () => {
@@ -760,12 +861,17 @@ test("keeps a saved receipt visible through reload failure and recovery", () => 
   );
   assert.ok(readyHtml.includes(M.companyWorld.resolutionConfirmedRefreshed));
   assert.ok(
-    readyHtml.indexOf('class="world-profile"') <
-      readyHtml.indexOf("world-resolution-notice--success")
+    readyHtml.indexOf("world-resolution-announcer") <
+      readyHtml.indexOf('class="world-profile"')
   );
+  assert.ok(
+    readyHtml.indexOf('class="world-profile"') <
+      readyHtml.lastIndexOf("world-resolution-notice--success")
+  );
+  assert.match(readyHtml, /world-resolution-announcer[^>]*role="status"/);
   assert.equal(
     (readyHtml.match(/world-resolution-notice--success/g) ?? []).length,
-    1
+    2
   );
 });
 

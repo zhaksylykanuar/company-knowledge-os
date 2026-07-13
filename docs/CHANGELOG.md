@@ -4,6 +4,24 @@
 
 ### Changed
 
+- Replaced the registry-like Company World frontend with a spatial strategy
+  board (DEC-076): the founder's company is central, while team, confirmed
+  network, and discovery candidates occupy distinct contours. Confirmed people
+  are grouped under organizations only from exact durable affiliation fields
+  plus a human-authored relationship; name/domain similarity is never drawn as
+  fact. A focused inspector shows profile-local touchpoints, with evidence and
+  technical capability/window/warning details behind collapsed disclosures.
+  Candidate resolution now asks one plain-language question at a time while
+  retaining member+/viewer roles, candidate versions, idempotency, and server-
+  resolved evidence. This frontend-only slice adds no backend API, migration,
+  provider call/write, or LLM path. Local acceptance passed: 272 frontend tests
+  plus typecheck/lint/build (17 routes); 537 backend tests plus Ruff and Alembic
+  head/current/check; desktop 1024/1280 px and mobile 390×844 browser QA without
+  overlap/overflow and with keyboard focus, 44 px controls, complete
+  organization/person resolution, and zero console warnings/errors. Ephemeral
+  QA data was removed. The offline sanitized `make release-handoff` gate passed
+  on a clean exact commit without deploy, provider calls, secret reads, database
+  access, or external writes.
 - Added guided invite-only founder enrollment (DEC-075). An operator-created
   one-time `/start` URL now creates the founder, company workspace, owner
   membership, and browser session in one transaction. The database stores only
