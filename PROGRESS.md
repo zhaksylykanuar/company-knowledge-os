@@ -2,8 +2,8 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая фактическая ветка `codex/guided-onboarding-ux` (локально). Локальные
-> коммиты не пушить без явного запроса человека.
+> Текущая фактическая ветка `codex/guided-onboarding-ux` опубликована в
+> Draft PR #33. Production deploy остаётся ручным и smoke-gated.
 
 ---
 
@@ -32,9 +32,15 @@
   warnings/errors**. Ephemeral QA workspace/users/invite/source/profile rows
   удалены; provider calls/writes, LLM, push и deploy не выполнялись. Offline
   `make release-handoff` прошёл на чистом exact commit: local MVP scope complete,
-  full MVP complete остаётся false из-за human/external gates. Следующий шаг —
-  explicit human approval на push, затем private-beta deploy/read-only smoke;
-  дальнейшее локальное расширение UX не является приоритетом.
+  full MVP complete остаётся false из-за human/external gates. Exact commit
+  `85b5e1f` опубликован в Draft PR #33; все шесть GitHub checks зелёные.
+  Railway production проверен без вывода secret values: auth включён, а write
+  actions, LLM и real connectors выключены. Deploy остановлен до любых
+  production-изменений: production schema находится на `a2b3c4d5e6f7`, код —
+  на `b4d5e6f7a8c9` (11 migrations), а Trial-план Railway запрещает managed
+  backups (`maxBackupsCount=0`). Следующий шаг — создать проверяемый rollback
+  boundary через Railway plan upgrade либо отдельно одобренный и проверенный
+  logical backup; дальнейшее локальное расширение UX не является приоритетом.
 - **UX-01 guided founder onboarding + five-zone company shell (DEC-075):
   ЗАКРЫТ ЛОКАЛЬНО.** One-time fragment-only `/start` enrollment атомарно создаёт
   founder/company/owner/session и ведёт в real-state `/onboarding`; public signup
@@ -552,8 +558,12 @@
   observability; операторский API-ключ остаётся для server/CI/админ-скриптов.
   Один alembic head — `b4d5e6f7a8c9`.
 - **Дальше:** UX-02 final acceptance и offline `make release-handoff` прошли на
-  clean exact commit. После явного human approval — push и manual private-beta
-  deploy/read-only smoke. Перед публичным deploy также обязателен smoke
+  clean exact commit `85b5e1f`; ветка опубликована, Draft PR #33 открыт, все
+  GitHub checks зелёные. Manual private-beta deploy безопасно остановлен перед
+  maintenance window: Railway Trial не поддерживает managed backups, а
+  production отстаёт на 11 migrations. Сначала нужен проверяемый backup/restore
+  boundary; затем migration, backend/frontend deploy и read-only smoke. Перед
+  публичным deploy также обязателен smoke
   реального client-IP
   isolation за Railway/Next proxy; `request.client.host` нельзя считать
   доказанно уникальным без этой проверки. First real-provider read и
@@ -710,6 +720,26 @@ product routes из-за несовпадения tenant scope.*
 
 ## ⛔ BLOCKERS
 
+- **[DEPLOY-BACKUP-P1] Railway Trial disables managed volume backups.** The
+  production Postgres volume is healthy, but the project plan reports
+  `maxBackupsCount=0`; the official backup-create mutation is therefore not
+  authorized and no managed snapshot exists. Production is currently at
+  Alembic `a2b3c4d5e6f7`, while reviewed code expects `b4d5e6f7a8c9` across 11
+  migrations, including irreversible dedupe behavior. Do not stop writers or
+  run `alembic upgrade head` until Railway backup entitlement is enabled and a
+  restorable snapshot is verified, or a separately approved logical-backup
+  procedure has been restore-tested.
+
+- **[DEPLOY-ROLLBACK-P1] RESOLVED AS A COMPATIBLE BUILD.** The running CLI-uploaded
+  backend still exposes no Git SHA/source metadata and is outside Trial image
+  retention, so its exact artifact cannot be claimed. Commit `541a0df` is the
+  last repository commit before the 2026-06-27 deploy, is preserved in the
+  published branch history, and has now been build-verified as the compatible
+  rollback source for production head `a2b3c4d5e6f7`: backend **316 passed / 1
+  external warning** plus Ruff, frontend **80 passed** plus build/typecheck/lint,
+  Alembic one head `a2b3c4d5e6f7`. The old frontend dependency audit reports two
+  moderate issues; use this build only for bounded emergency rollback.
+
 - **[DEPLOY-AUTH-P1] Distinct client IP behind proxy is not yet verified.** The
   process-local production admission controller keys per-client limits by ASGI
   `request.client.host`; local tests cannot prove Railway/Next preserves two
@@ -732,6 +762,25 @@ product routes из-за несовпадения tenant scope.*
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-14` — **Private-beta publication passed; production deploy stopped at
+  backup gate.** Published exact product commit `85b5e1f` on
+  `codex/guided-onboarding-ux`, opened Draft PR #33, and received six green
+  GitHub checks (backend, frontend, dependency review and CodeQL). Re-ran local
+  release gates: backend **537 passed / 1 external warning**, Ruff, frontend
+  **272 passed** plus build/typecheck/lint, tracked-secret and whitespace checks
+  all green. Read-only Railway inspection confirmed production auth/database
+  presence and write-actions/LLM/real-connectors disabled. Production Alembic
+  current is `a2b3c4d5e6f7`; reviewed head is `b4d5e6f7a8c9` (11 pending
+  migrations). No managed backup exists and the Railway Trial plan exposes zero
+  backup entitlement, so backup creation was rejected. The running CLI-uploaded
+  backend also exposes no source SHA and is outside Trial image retention.
+  Compatible rollback source `541a0df` was therefore verified locally against
+  its matching Alembic head: backend 316 tests/Ruff and frontend 80 tests/build/
+  typecheck/lint are green (two moderate old frontend dependency findings remain
+  bounded to emergency rollback). No service was scaled, no migration/deploy/
+  smoke/provider call/external write/LLM was started. Next: establish and verify
+  the data backup boundary, then resume the documented maintenance/deploy
+  sequence.
 - `2026-07-13` — **UX-02 spatial Company World board (DEC-076).** Replaced the
   registry-like Company World surface with a company-centered strategy board,
   distinct team/confirmed-network/discovery zones, focused inspector and

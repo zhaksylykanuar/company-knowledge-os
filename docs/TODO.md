@@ -300,8 +300,10 @@ Implemented foundations:
 Rationale: UX-01 and UX-02 now provide the guided first-run loop and the spatial
 Company World surface over the existing evidence and write boundaries. Local
 UX-02 acceptance and the offline sanitized release handoff are complete on a
-clean exact commit. Do not expand the local UX again; move through the explicitly
-human-gated private-beta deployment path after approval.
+clean exact commit. Exact commit `85b5e1f` is published in Draft PR #33 and all
+GitHub checks are green. Do not expand the local UX again; resume the explicitly
+human-gated private-beta deployment path once a restorable backup boundary is
+available.
 
 Done when:
 
@@ -312,6 +314,18 @@ Done when:
   whitespace gates pass for the same reviewed snapshot.
 - [x] `make release-handoff` is run against that exact commit and its sanitized
   output is attached for human review.
+- [x] The reviewed feature branch is published, Draft PR #33 is open, and all
+  backend/frontend/dependency-review/CodeQL checks are green.
+- [ ] Establish a restorable production Postgres backup boundary. The current
+  Railway Trial plan reports `maxBackupsCount=0`, so no managed snapshot can be
+  created; either enable Railway backup entitlement and verify the snapshot, or
+  separately approve and restore-test a logical backup procedure.
+- [x] Compatible application rollback source `541a0df` is preserved in the
+  published branch history and build-verified against production head
+  `a2b3c4d5e6f7`: backend 316 tests/Ruff and frontend 80 tests/build/typecheck/
+  lint are green. The running Railway archive still has no exact source SHA, and
+  the rollback frontend has two moderate dependency findings, so this source is
+  bounded to emergency rollback.
 - The human-approved Railway sequence completes backup, migration, deploy, and
   read-only smoke without silently widening provider or write scope.
 - Distinct client-IP behavior behind Railway/Next is proven with a two-client
@@ -414,6 +428,14 @@ Done when:
 
 ## Known Debts / Watch List
 
+- **Production backup gate:** Railway Trial currently permits zero volume
+  backups. Production Alembic is `a2b3c4d5e6f7`, while reviewed code expects
+  `b4d5e6f7a8c9` across 11 migrations. Do not enter the maintenance window or
+  migrate until a restorable backup path is verified.
+- **Application rollback limitation:** the running deployment has no recorded
+  source SHA and its retained image is no longer rollback-eligible on Trial.
+  Compatible source `541a0df` is preserved and build-verified, but is an
+  emergency rollback build rather than proof of the exact old archive.
 - **Public-deploy auth gate:** the process-local per-IP login limiter currently
   keys on `request.client.host`. Railway/Next proxy semantics have not yet proved
   that two external client IPs remain distinct. Keep one Uvicorn process and do
