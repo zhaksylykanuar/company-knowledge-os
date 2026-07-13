@@ -4,15 +4,24 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  buildWorkspaceBriefingActionProposalsPath,
   buildWorkspaceBriefingPath,
   buildWorkspaceBriefingsPath,
   buildWorkspaceManualBriefingPath,
+  generateBriefingActionProposals,
   generateManualFounderBriefing,
   listBriefings
 } from "../lib/api";
 import { M, T } from "../lib/messages";
-import type { BriefingListResponse, FounderBriefingResponse } from "../lib/types";
-import { BriefingPanelView } from "../components/BriefingPanel";
+import type {
+  ActionProposal,
+  BriefingListResponse,
+  FounderBriefingResponse
+} from "../lib/types";
+import {
+  BriefingPanelView,
+  canContributeToBriefing
+} from "../components/BriefingPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 
 const sampleBriefing: FounderBriefingResponse = {
@@ -66,6 +75,16 @@ const sampleBriefing: FounderBriefingResponse = {
         repository_count: 1,
         queued_sync_jobs: 0,
         latest_sync_job_status: "success"
+      },
+      coverage: {
+        canonical_repositories: 1,
+        open_issues: 2,
+        open_pull_requests: 3,
+        evidence_refs: 1,
+        is_live: false,
+        llm_used: false,
+        live_provider_sync: false,
+        local_sync: true
       }
     },
     warnings: ["Founder Briefing v0 is deterministic and does not use an LLM."]
@@ -83,10 +102,49 @@ const emptyBriefing: FounderBriefingResponse = {
         repository_count: 0,
         queued_sync_jobs: 0,
         latest_sync_job_status: null
+      },
+      coverage: {
+        canonical_repositories: 0,
+        open_issues: 0,
+        open_pull_requests: 0,
+        evidence_refs: 0,
+        is_live: false,
+        llm_used: false,
+        live_provider_sync: false,
+        local_sync: true
       }
     },
     warnings: ["No evidence refs were available for this workspace."]
   }
+};
+
+const briefingActionProposal: ActionProposal = {
+  action_type: "internal_todo",
+  approved_at: null,
+  approved_by_user_id: null,
+  briefing_item_id: null,
+  created_at: "2026-06-24T10:05:00+00:00",
+  created_by: "user",
+  created_by_user_id: null,
+  description: "Review synced GitHub work before approving actions.",
+  evidence_refs: sampleBriefing.briefing.items[0]?.evidence_refs ?? [],
+  execution_started: false,
+  id: "proposal-briefing-1",
+  is_live: false,
+  payload: {
+    briefing_item_key: "repo-coverage",
+    category: "repository",
+    source: "briefing_item"
+  },
+  rejected_at: null,
+  rejected_by_user_id: null,
+  rejection_reason: null,
+  status: "proposed",
+  target_provider: "internal",
+  title: "Review synced GitHub work before approving actions.",
+  updated_at: "2026-06-24T10:05:00+00:00",
+  warnings: [],
+  workspace_id: "workspace-123"
 };
 
 function renderPanel(
@@ -98,12 +156,24 @@ function renderPanel(
       data={"data" in props ? props.data ?? null : sampleBriefing}
       error={props.error ?? null}
       history={props.history ?? []}
+      actionError={props.actionError ?? null}
+      actionLoadError={props.actionLoadError ?? null}
+      actionProposals={props.actionProposals ?? []}
+      actionSuccessMessage={props.actionSuccessMessage ?? null}
+      canContribute={props.canContribute ?? true}
+      categoryFilter={props.categoryFilter ?? "all"}
       onCloseEvidence={props.onCloseEvidence}
+      onCategoryFilterChange={props.onCategoryFilterChange}
+      onCreateActionFromItem={props.onCreateActionFromItem}
+      onGenerateActionsFromBriefing={props.onGenerateActionsFromBriefing}
       onGenerate={props.onGenerate}
       onOpenBriefing={props.onOpenBriefing}
       onRetry={props.onRetry}
       onSelectEvidence={props.onSelectEvidence}
+      pendingActionItemId={props.pendingActionItemId ?? null}
+      pendingBriefingActionGeneration={props.pendingBriefingActionGeneration ?? false}
       selectedEvidence={props.selectedEvidence ?? null}
+      selectedEvidenceCount={props.selectedEvidenceCount ?? null}
       selectedEvidenceItemTitle={props.selectedEvidenceItemTitle ?? null}
       status={props.status ?? "success"}
     />
@@ -115,6 +185,52 @@ test("builds the manual briefing URL", () => {
     buildWorkspaceManualBriefingPath("workspace-123"),
     "/api/v1/workspaces/workspace-123/briefings/manual"
   );
+});
+
+test("builds and posts the briefing action proposal generation URL", async () => {
+  assert.equal(
+    buildWorkspaceBriefingActionProposalsPath("workspace-123", "briefing-1"),
+    "/api/v1/workspaces/workspace-123/briefings/briefing-1/action-proposals"
+  );
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/briefings/briefing-1/action-proposals"
+    );
+    assert.equal(init?.method, "POST");
+    assert.equal(init?.body, undefined);
+    return new Response(
+      JSON.stringify({
+        created_count: 1,
+        execution_started: false,
+        is_live: false,
+        proposals: [briefingActionProposal],
+        skipped: [],
+        skipped_count: 0,
+        warnings: ["local-only"]
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const payload = await generateBriefingActionProposals(
+      "workspace-123",
+      "briefing-1",
+      {}
+    );
+    assert.equal(payload.is_live, false);
+    assert.equal(payload.execution_started, false);
+    assert.equal(payload.created_count, 1);
+    assert.equal(payload.proposals[0]?.payload.briefing_item_key, "repo-coverage");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("posts deterministic manual briefing request", async () => {
@@ -194,12 +310,166 @@ test("renders deterministic briefing sections and summary", () => {
   assert.ok(html.includes(M.briefingPanel.title));
   assert.ok(html.includes(M.briefingPanel.intro));
   assert.ok(html.includes(M.briefingPanel.reposTitle));
-  assert.ok(html.includes(M.briefingPanel.queuedTitle));
-  assert.ok(html.includes(M.briefingPanel.latestSyncTitle));
-  assert.ok(html.includes(M.briefingPanel.aiTitle));
+  assert.ok(html.includes(M.briefingPanel.workTitle));
+  assert.ok(html.includes(M.briefingPanel.evidenceTitle));
+  assert.ok(html.includes(M.briefingPanel.modeTitle));
+  assert.ok(html.includes("2 задач / 3 PR"));
+  assert.ok(html.includes(M.briefingPanel.modeLocal));
   assert.match(html, /Repository inventory is available/);
   assert.match(html, /Briefing is deterministic/);
   assert.match(html, /91%/);
+});
+
+test("filters briefing items by local category without provider calls", () => {
+  const html = renderPanel({
+    categoryFilter: "system_fact",
+    onCategoryFilterChange: () => undefined
+  });
+
+  assert.ok(html.includes(M.briefingPanel.itemFilterTitle));
+  assert.ok(html.includes(M.briefingPanel.itemFilterDescription));
+  assert.ok(html.includes(`${M.briefingPanel.itemFilterAll} · 2`));
+  assert.ok(html.includes("repository · 1"));
+  assert.ok(html.includes("system_fact · 1"));
+  assert.match(html, /Briefing is deterministic/);
+  assert.doesNotMatch(html, /Repository inventory is available/);
+  assert.doesNotMatch(html, /provider call started/i);
+});
+
+test("defaults briefing evidence drawer to first visible item evidence", () => {
+  const html = renderPanel({ categoryFilter: "repository" });
+  assert.ok(html.includes(M.evidence.title));
+  assert.ok(html.includes(M.briefingPanel.evidenceDefaultContext));
+  assert.ok(html.includes(M.evidence.countLabel));
+  assert.match(html, /qtwin-io\/founderos-api/);
+  assert.ok(html.includes(M.common.openSource));
+  assert.doesNotMatch(html, new RegExp(`>${M.common.close}<`));
+});
+
+test("shows a safe empty state when a category filter matches no items", () => {
+  const html = renderPanel({ categoryFilter: "nonexistent-category" });
+  // Filter chips still reflect the loaded briefing's real categories/counts.
+  assert.ok(html.includes(`${M.briefingPanel.itemFilterAll} · 2`));
+  // The empty intersection uses the filter-specific message, not the
+  // "backend returned no items" message.
+  assert.ok(html.includes(M.briefingPanel.noItemsForFilter));
+  assert.doesNotMatch(html, new RegExp(M.briefingPanel.noItems));
+  // No item titles render and the evidence drawer falls back to its placeholder.
+  assert.doesNotMatch(html, /Repository inventory is available/);
+  assert.doesNotMatch(html, /Briefing is deterministic/);
+  assert.ok(html.includes(M.evidence.placeholder));
+  assert.doesNotMatch(html, /provider call started/i);
+});
+
+test("keeps manual briefing evidence selection over the default", () => {
+  const evidence = sampleBriefing.briefing.items[0]?.evidence_refs[0] ?? null;
+  const html = renderPanel({
+    selectedEvidence: evidence,
+    selectedEvidenceCount: 1,
+    selectedEvidenceItemTitle: "Repository inventory is available",
+    onCloseEvidence: () => undefined
+  });
+
+  assert.ok(html.includes(M.briefingPanel.evidenceManualContext));
+  assert.match(html, new RegExp(`>${M.common.close}<`));
+});
+
+test("renders local action proposal controls for briefing items", () => {
+  const html = renderPanel({
+    actionSuccessMessage: M.briefingPanel.actionCreateSuccess,
+    onCreateActionFromItem: () => undefined,
+    pendingActionItemId: "repo-coverage"
+  });
+
+  assert.ok(html.includes(M.briefingPanel.actionCreate));
+  assert.ok(html.includes(M.briefingPanel.actionGenerate));
+  assert.ok(html.includes(M.briefingPanel.actionCreating));
+  assert.ok(html.includes(M.briefingPanel.actionCreateSuccess));
+  assert.doesNotMatch(html, /GitHub issue created/);
+  assert.doesNotMatch(html, /external write performed/i);
+});
+
+test("keeps briefing writes visible for member-or-higher roles only", () => {
+  assert.equal(canContributeToBriefing("owner"), true);
+  assert.equal(canContributeToBriefing("admin"), true);
+  assert.equal(canContributeToBriefing("member"), true);
+  assert.equal(canContributeToBriefing("viewer"), false);
+  assert.equal(canContributeToBriefing(null), false);
+  assert.equal(canContributeToBriefing("unexpected-role"), false);
+});
+
+test("viewer sees briefing evidence and history without generation affordances", () => {
+  const html = renderPanel({
+    activeBriefingId: "briefing-1",
+    actionProposals: [briefingActionProposal],
+    canContribute: false,
+    history: [
+      {
+        id: sampleBriefing.briefing.id,
+        title: sampleBriefing.briefing.title,
+        summary: sampleBriefing.briefing.summary,
+        created_at: sampleBriefing.briefing.created_at,
+        generated_at: sampleBriefing.briefing.generated_at,
+        generated_by: sampleBriefing.briefing.generated_by,
+        item_count: sampleBriefing.briefing.items.length,
+        signals: sampleBriefing.briefing.signals
+      }
+    ],
+    onCreateActionFromItem: () => undefined,
+    onGenerate: () => undefined,
+    onGenerateActionsFromBriefing: () => undefined
+  });
+
+  assert.ok(html.includes(M.briefingPanel.readOnlyMode));
+  assert.ok(html.includes(M.briefingPanel.actionReadOnlyDescription));
+  assert.ok(html.includes("Repository inventory is available"));
+  assert.ok(html.includes(M.briefingHistory.title));
+  assert.ok(html.includes(M.briefingPanel.openActions));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.generate}<`));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.refresh}<`));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.actionGenerate}<`));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.actionCreate}<`));
+});
+
+test("viewer empty state asks for help without promising it can generate", () => {
+  const html = renderPanel({
+    canContribute: false,
+    data: null,
+    history: [],
+    onGenerate: () => undefined,
+    status: "empty"
+  });
+
+  assert.ok(html.includes(M.briefingPanel.noBriefingReadOnlyDescription));
+  assert.ok(html.includes(M.briefingHistory.emptyReadOnly));
+  assert.doesNotMatch(html, new RegExp(`>${M.briefingPanel.generate}<`));
+  assert.doesNotMatch(html, /Сформируйте первую сводку выше/);
+});
+
+test("renders pending briefing action generation control", () => {
+  const html = renderPanel({
+    onGenerateActionsFromBriefing: () => undefined,
+    pendingBriefingActionGeneration: true
+  });
+
+  assert.ok(html.includes(M.briefingPanel.actionGeneratingFromBriefing));
+  assert.doesNotMatch(html, /provider call started/i);
+});
+
+test("cross-links existing local actions back to briefing items", () => {
+  const html = renderPanel({
+    actionProposals: [briefingActionProposal],
+    onCreateActionFromItem: () => undefined
+  });
+
+  assert.ok(html.includes(M.briefingPanel.actionSummaryTitle));
+  assert.ok(html.includes(T.briefingActionSummary(1, 1, 0, 0, 0, 0)));
+  assert.ok(html.includes(T.briefingItemActionSummary(1, 1, 0, 0, 0, 0)));
+  assert.ok(html.includes(M.briefingPanel.actionAlreadyCreated));
+  assert.ok(html.includes(M.briefingPanel.openActions));
+  assert.match(html, /href="\/actions\?origin=briefing&amp;status=proposed"/);
+  assert.doesNotMatch(html, /provider write/i);
+  assert.doesNotMatch(html, /LLM call/i);
 });
 
 test("renders empty briefing payload without fake claims", () => {
@@ -307,6 +577,49 @@ test("lists saved briefings newest-first from the history endpoint", async () =>
 });
 
 test("renders briefing history with open buttons", () => {
+  const historySignals = {
+    github: sampleBriefing.briefing.signals.github,
+    coverage: {
+      ...sampleBriefing.briefing.signals.coverage,
+      canonical_repositories: 2,
+      evidence_refs: 4,
+      open_issues: 5,
+      open_pull_requests: 1
+    }
+  };
+  const history = [
+    {
+      id: "briefing-2",
+      created_at: "2026-06-25T10:00:00+00:00",
+      generated_at: "2026-06-25T10:00:00+00:00",
+      generated_by: "deterministic_v0",
+      title: "Founder Briefing",
+      summary: "Newer briefing.",
+      item_count: 3,
+      signals: historySignals
+    }
+  ];
+  const html = renderPanel({ activeBriefingId: "briefing-1", history, status: "success" });
+  assert.ok(html.includes(M.briefingHistory.title));
+  assert.ok(html.includes(M.briefingHistory.open));
+  assert.ok(html.includes(T.briefingHistoryMeta(3, "2026-06-25T10:00:00+00:00")));
+  assert.ok(html.includes(M.briefingHistory.coverageLabel));
+  assert.ok(
+    html.includes(
+      T.briefingHistoryCoverage(2, 5, 1, 4, M.briefingPanel.modeLocal)
+    )
+  );
+  assert.ok(html.includes(M.briefingHistory.deltaLabel));
+  assert.ok(html.includes(T.briefingHistoryDelta(1, 3)));
+  assert.doesNotMatch(html, /provider call started/i);
+});
+
+test("renders empty briefing history hint when there is no history", () => {
+  const html = renderPanel({ data: null, history: [], status: "empty" });
+  assert.ok(html.includes(M.briefingHistory.empty));
+});
+
+test("renders briefing history comparison fallback when no briefing is open", () => {
   const history = [
     {
       id: "briefing-2",
@@ -319,13 +632,7 @@ test("renders briefing history with open buttons", () => {
       signals: sampleBriefing.briefing.signals
     }
   ];
-  const html = renderPanel({ activeBriefingId: "briefing-1", history, status: "success" });
-  assert.ok(html.includes(M.briefingHistory.title));
-  assert.ok(html.includes(M.briefingHistory.open));
-  assert.ok(html.includes(T.briefingHistoryMeta(3, "2026-06-25T10:00:00+00:00")));
-});
-
-test("renders empty briefing history hint when there is no history", () => {
-  const html = renderPanel({ data: null, history: [], status: "empty" });
-  assert.ok(html.includes(M.briefingHistory.empty));
+  const html = renderPanel({ data: null, history, status: "empty" });
+  assert.ok(html.includes(M.briefingHistory.noDelta));
+  assert.ok(html.includes(T.briefingHistoryCoverage(1, 2, 3, 1, M.briefingPanel.modeLocal)));
 });

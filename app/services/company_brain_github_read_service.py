@@ -5,19 +5,23 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.canonical_models import (
     PULL_REQUEST_STATE_MERGED,
     PULL_REQUEST_STATE_OPEN,
+    SOURCE_RECORD_PROVIDER_DRIVE,
     SOURCE_RECORD_PROVIDER_GITHUB,
+    SOURCE_RECORD_PROVIDER_GMAIL,
     TASK_PROVIDER_GITHUB,
+    TASK_PROVIDER_JIRA,
     PullRequest,
     Repository,
     SourceRecord,
     Task,
 )
+from app.db.document_models import DOCUMENT_STATUS_ARCHIVED, Document
 
 COMPANY_BRAIN_GITHUB_MODE = "github_first_canonical"
 COMPANY_BRAIN_GITHUB_SOURCE = "canonical_github_company_brain"
@@ -30,8 +34,33 @@ async def build_workspace_company_brain(
     limit: int = 10,
 ) -> dict[str, Any]:
     repositories = await _repositories(session=session, workspace_id=workspace_id)
-    tasks = await _github_issue_tasks(session=session, workspace_id=workspace_id)
+    github_tasks = await _github_issue_tasks(session=session, workspace_id=workspace_id)
+    jira_tasks = await _jira_issue_tasks(session=session, workspace_id=workspace_id)
+    tasks = [*github_tasks, *jira_tasks]
     pull_requests = await _pull_requests(session=session, workspace_id=workspace_id)
+    gmail_message_records = await _source_records_by_provider_record_type(
+        session=session,
+        workspace_id=workspace_id,
+        provider=SOURCE_RECORD_PROVIDER_GMAIL,
+        record_type="message",
+        limit=limit,
+    )
+    drive_file_records = await _source_records_by_provider_record_type(
+        session=session,
+        workspace_id=workspace_id,
+        provider=SOURCE_RECORD_PROVIDER_DRIVE,
+        record_type="file",
+        limit=limit,
+    )
+    internal_documents = await _internal_documents(
+        session=session,
+        workspace_id=workspace_id,
+        limit=limit,
+    )
+    source_record_coverage = await _source_record_coverage(
+        session=session,
+        workspace_id=workspace_id,
+    )
 
     repository_source_records = await _source_records_by_external_id(
         session=session,
@@ -79,12 +108,24 @@ async def build_workspace_company_brain(
         pull_request_source_records=pull_request_source_records,
         limit=limit,
     )
+    gmail_message_rows = [
+        _gmail_message_payload(source_record)
+        for source_record in gmail_message_records[:limit]
+    ]
+    drive_file_rows = [
+        _drive_file_payload(source_record)
+        for source_record in drive_file_records[:limit]
+    ]
+    document_rows = [_internal_document_payload(document) for document in internal_documents]
     evidence = _unique_source_refs(
         [
             *[row["source_refs"] for row in repository_rows],
             *[row["source_refs"] for row in issue_rows],
             *[row["source_refs"] for row in pull_request_rows],
             *[row["source_refs"] for row in recent_rows],
+            *[row["source_refs"] for row in gmail_message_rows],
+            *[row["source_refs"] for row in drive_file_rows],
+            *[row["source_refs"] for row in document_rows],
         ]
     )
     summary = {
@@ -105,11 +146,19 @@ async def build_workspace_company_brain(
         "mode": COMPANY_BRAIN_GITHUB_MODE,
         "source": COMPANY_BRAIN_GITHUB_SOURCE,
         "summary": summary,
+        "source_records": source_record_coverage,
         "repositories": repository_rows,
         "work": {
             "issues": issue_rows,
             "pull_requests": pull_request_rows,
             "recent": recent_rows,
+        },
+        "communications": {
+            "messages": gmail_message_rows,
+        },
+        "documents": {
+            "files": drive_file_rows,
+            "notes": document_rows,
         },
         "evidence": evidence,
         "capabilities": {
@@ -144,6 +193,51 @@ async def _repositories(
     )
 
 
+async def _source_record_coverage(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+) -> dict[str, Any]:
+    rows = (
+        await session.execute(
+            select(
+                SourceRecord.provider,
+                SourceRecord.record_type,
+                func.count(SourceRecord.id),
+            )
+            .where(SourceRecord.workspace_id == workspace_id)
+            .where(SourceRecord.is_deleted.is_(False))
+            .group_by(SourceRecord.provider, SourceRecord.record_type)
+            .order_by(SourceRecord.provider.asc(), SourceRecord.record_type.asc())
+        )
+    ).all()
+
+    by_provider: dict[str, int] = {}
+    by_record_type: dict[str, int] = {}
+    total = 0
+    for provider, record_type, count in rows:
+        safe_provider = _safe_text(provider) or "unknown"
+        safe_record_type = _safe_text(record_type) or "unknown"
+        row_count = int(count or 0)
+        total += row_count
+        by_provider[safe_provider] = by_provider.get(safe_provider, 0) + row_count
+        by_record_type[safe_record_type] = (
+            by_record_type.get(safe_record_type, 0) + row_count
+        )
+
+    return {
+        "total": total,
+        "by_provider": [
+            {"provider": provider, "count": count}
+            for provider, count in sorted(by_provider.items())
+        ],
+        "by_record_type": [
+            {"record_type": record_type, "count": count}
+            for record_type, count in sorted(by_record_type.items())
+        ],
+    }
+
+
 async def _github_issue_tasks(
     *,
     session: AsyncSession,
@@ -161,6 +255,32 @@ async def _github_issue_tasks(
     seen_issue_keys: set[str] = set()
     for task in rows:
         if not _is_github_issue(task):
+            continue
+        issue_key = _issue_identity_key(task)
+        if issue_key in seen_issue_keys:
+            continue
+        seen_issue_keys.add(issue_key)
+        tasks.append(task)
+    return tasks
+
+
+async def _jira_issue_tasks(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+) -> list[Task]:
+    rows = (
+        await session.execute(
+            select(Task)
+            .where(Task.workspace_id == workspace_id)
+            .where(Task.source_provider == TASK_PROVIDER_JIRA)
+            .order_by(Task.source_updated_at.desc().nullslast(), Task.updated_at.desc())
+        )
+    ).scalars()
+    tasks: list[Task] = []
+    seen_issue_keys: set[str] = set()
+    for task in rows:
+        if not _is_jira_issue(task):
             continue
         issue_key = _issue_identity_key(task)
         if issue_key in seen_issue_keys:
@@ -202,6 +322,7 @@ async def _source_records_by_external_id(
     *,
     session: AsyncSession,
     workspace_id: UUID,
+    provider: str = SOURCE_RECORD_PROVIDER_GITHUB,
     record_type: str,
     external_ids: list[str | None],
 ) -> dict[str, SourceRecord]:
@@ -210,14 +331,62 @@ async def _source_records_by_external_id(
         return {}
     rows = (
         await session.execute(
-            select(SourceRecord)
-            .where(SourceRecord.workspace_id == workspace_id)
-            .where(SourceRecord.provider == SOURCE_RECORD_PROVIDER_GITHUB)
-            .where(SourceRecord.record_type == record_type)
-            .where(SourceRecord.external_id.in_(selected_ids))
+                select(SourceRecord)
+                .where(SourceRecord.workspace_id == workspace_id)
+                .where(SourceRecord.provider == provider)
+                .where(SourceRecord.record_type == record_type)
+                .where(SourceRecord.external_id.in_(selected_ids))
         )
     ).scalars()
     return {row.external_id: row for row in rows}
+
+
+async def _source_records_by_provider_record_type(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    provider: str,
+    record_type: str,
+    limit: int,
+) -> list[SourceRecord]:
+    return list(
+        (
+            await session.execute(
+                select(SourceRecord)
+                .where(SourceRecord.workspace_id == workspace_id)
+                .where(SourceRecord.provider == provider)
+                .where(SourceRecord.record_type == record_type)
+                .where(SourceRecord.is_deleted.is_(False))
+                .order_by(
+                    SourceRecord.source_updated_at.desc().nullslast(),
+                    SourceRecord.created_at.desc(),
+                )
+                .limit(limit)
+            )
+        ).scalars()
+    )
+
+
+async def _internal_documents(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    limit: int,
+) -> list[Document]:
+    # Company Brain surfaces authored internal documents that are not archived
+    # (draft/published), newest-updated first (§4.7: a saved document appears in
+    # Brain). Archived documents are intentionally excluded from the brain view.
+    return list(
+        (
+            await session.execute(
+                select(Document)
+                .where(Document.workspace_id == workspace_id)
+                .where(Document.status != DOCUMENT_STATUS_ARCHIVED)
+                .order_by(Document.updated_at.desc(), Document.id.desc())
+                .limit(limit)
+            )
+        ).scalars()
+    )
 
 
 async def _source_records_for_tasks(
@@ -241,25 +410,36 @@ async def _source_records_for_tasks(
         ).scalars()
         by_id = {row.id: row for row in rows}
 
-    by_external_id = await _source_records_by_external_id(
-        session=session,
-        workspace_id=workspace_id,
-        record_type="issue",
-        external_ids=[task.external_id for task in tasks],
-    )
+    external_ids_by_provider: dict[str, list[str | None]] = {}
+    for task in tasks:
+        external_ids_by_provider.setdefault(task.source_provider, []).append(task.external_id)
+    by_external_id: dict[tuple[str, str | None], SourceRecord] = {}
+    for provider, external_ids in external_ids_by_provider.items():
+        provider_records = await _source_records_by_external_id(
+            session=session,
+            workspace_id=workspace_id,
+            provider=provider,
+            record_type="issue",
+            external_ids=external_ids,
+        )
+        by_external_id.update(
+            {(provider, external_id): record for external_id, record in provider_records.items()}
+        )
     return {
-        task.id: by_id.get(task.source_record_id) or by_external_id.get(task.external_id)
+        task.id: by_id.get(task.source_record_id)
+        or by_external_id.get((task.source_provider, task.external_id))
         for task in tasks
-        if by_id.get(task.source_record_id) or by_external_id.get(task.external_id)
+        if by_id.get(task.source_record_id)
+        or by_external_id.get((task.source_provider, task.external_id))
     }
 
 
 def _open_issues(tasks: list[Task]) -> list[Task]:
-    return [task for task in tasks if task.status == PULL_REQUEST_STATE_OPEN]
+    return [task for task in tasks if _is_open_issue_task(task)]
 
 
 def _closed_issues(tasks: list[Task]) -> list[Task]:
-    return [task for task in tasks if task.status == "closed"]
+    return [task for task in tasks if _is_done_issue_task(task)]
 
 
 def _issue_identity_key(task: Task) -> str:
@@ -325,12 +505,14 @@ def _issue_payload(
     return {
         "id": task.id,
         "type": "issue",
+        "source_provider": task.source_provider,
         "external_id": task.external_id,
         "number": _safe_int(metadata.get("number")),
         "title": task.title,
         "state": task.status,
         "repository_full_name": _safe_text(metadata.get("repository_full_name")),
         "repository_external_id": _safe_text(metadata.get("repository_external_id")),
+        "project_key": _safe_text(metadata.get("project_key")),
         "source_url": _safe_url(task.source_url),
         "updated_at": task.source_updated_at or task.updated_at,
         "source_refs": _source_refs(source_record),
@@ -345,16 +527,96 @@ def _pull_request_payload(
     return {
         "id": pull_request.id,
         "type": "pull_request",
+        "source_provider": SOURCE_RECORD_PROVIDER_GITHUB,
         "external_id": pull_request.external_id,
         "number": pull_request.number,
         "title": pull_request.title,
         "state": pull_request.state,
         "repository_full_name": repository.full_name if repository else None,
         "repository_external_id": repository.external_id if repository else None,
+        "project_key": None,
         "source_url": _safe_url(pull_request.source_url),
         "updated_at": pull_request.updated_at_source or pull_request.created_at,
         "source_refs": _source_refs(source_record),
     }
+
+
+def _gmail_message_payload(source_record: SourceRecord) -> dict[str, Any]:
+    payload = source_record.payload if isinstance(source_record.payload, Mapping) else {}
+    normalized = payload.get("normalized_message")
+    message = normalized if isinstance(normalized, Mapping) else {}
+    labels = _safe_string_list(message.get("labels"))
+    return {
+        "source_record_id": source_record.id,
+        "message_id": _safe_text(message.get("message_id")) or source_record.external_id,
+        "thread_id": _safe_text(message.get("thread_id")),
+        "subject": _safe_text(message.get("subject")) or "(no subject)",
+        "snippet": _safe_text(message.get("snippet")),
+        "from_address": _safe_text(message.get("from_address")),
+        "to_addresses": _safe_string_list(message.get("to_addresses")),
+        "labels": labels,
+        "unread": _safe_bool(message.get("unread"))
+        or "unread" in {label.casefold() for label in labels},
+        "received_at": source_record.source_updated_at,
+        "source_url": _safe_url(message.get("source_url")) or _safe_url(source_record.source_url),
+        "source_refs": _source_refs(source_record),
+    }
+
+
+def _drive_file_payload(source_record: SourceRecord) -> dict[str, Any]:
+    payload = source_record.payload if isinstance(source_record.payload, Mapping) else {}
+    normalized = payload.get("normalized_file")
+    file = normalized if isinstance(normalized, Mapping) else {}
+    return {
+        "source_record_id": source_record.id,
+        "file_id": _safe_text(file.get("file_id")) or source_record.external_id,
+        "name": _safe_text(file.get("name")) or f"Drive file {source_record.external_id}",
+        "mime_type": _safe_text(file.get("mime_type")),
+        "owners": _safe_string_list(file.get("owners")),
+        "drive_id": _safe_text(file.get("drive_id")),
+        "folder_path": _safe_text(file.get("folder_path")),
+        "shared": _safe_bool(file.get("shared")),
+        "size_bytes": _safe_int(file.get("size_bytes")),
+        "modified_at": source_record.source_updated_at,
+        "source_url": _safe_url(file.get("source_url")) or _safe_url(source_record.source_url),
+        "source_refs": _source_refs(source_record),
+    }
+
+
+def _internal_document_payload(document: Document) -> dict[str, Any]:
+    # Internal documents are authored in founderOS, so their "source ref" is the
+    # local document row itself (no external provider). Raw body is not included
+    # here; the brain surfaces a short excerpt for context.
+    excerpt = _document_excerpt(document.body_text)
+    return {
+        "document_id": document.id,
+        "title": _safe_text(document.title) or "(untitled)",
+        "status": document.status,
+        "tags": _safe_string_list(document.tags),
+        "excerpt": excerpt,
+        "updated_at": document.updated_at,
+        "source_refs": [
+            {
+                "id": f"{document.id}:document",
+                "kind": "internal_document",
+                "source": "internal",
+                "label": _safe_text(document.title) or str(document.id),
+                "url": None,
+                "record_type": "document",
+                "record_id": document.id,
+            }
+        ],
+    }
+
+
+def _document_excerpt(body_text: Any, *, limit: int = 240) -> str:
+    text = _safe_text(body_text)
+    if not text:
+        return ""
+    collapsed = " ".join(text.split())
+    if len(collapsed) <= limit:
+        return collapsed
+    return f"{collapsed[: limit - 1]}…"
 
 
 def _recent_work(
@@ -387,6 +649,32 @@ def _recent_work(
 def _is_github_issue(task: Task) -> bool:
     metadata = task.task_metadata if isinstance(task.task_metadata, Mapping) else {}
     return metadata.get("github_object_type") == "issue"
+
+
+def _is_jira_issue(task: Task) -> bool:
+    metadata = task.task_metadata if isinstance(task.task_metadata, Mapping) else {}
+    return metadata.get("jira_object_type") == "issue"
+
+
+def _is_open_issue_task(task: Task) -> bool:
+    if task.source_provider == TASK_PROVIDER_GITHUB:
+        return task.status == PULL_REQUEST_STATE_OPEN
+    if task.source_provider == TASK_PROVIDER_JIRA:
+        return not _is_done_issue_task(task)
+    return False
+
+
+def _is_done_issue_task(task: Task) -> bool:
+    if task.source_provider == TASK_PROVIDER_GITHUB:
+        return task.status == "closed"
+    if task.source_provider == TASK_PROVIDER_JIRA:
+        metadata = task.task_metadata if isinstance(task.task_metadata, Mapping) else {}
+        category = _safe_text(metadata.get("status_category"))
+        if category == "done":
+            return True
+        status = (_safe_text(task.status) or "").casefold()
+        return status in {"closed", "done", "resolved"}
+    return False
 
 
 def _source_refs(source_record: SourceRecord | None) -> list[dict[str, Any]]:
@@ -468,3 +756,18 @@ def _safe_int(value: Any) -> int | None:
     if isinstance(value, str) and value.strip().isdigit():
         return int(value.strip())
     return None
+
+
+def _safe_bool(value: Any) -> bool:
+    return bool(value) if isinstance(value, bool) else False
+
+
+def _safe_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    strings: list[str] = []
+    for item in value[:40]:
+        text = _safe_text(item)
+        if text and text not in strings:
+            strings.append(text)
+    return strings

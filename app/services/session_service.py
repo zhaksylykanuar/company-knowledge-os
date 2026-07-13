@@ -19,7 +19,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.db.identity_models import User, UserSession
+from app.db.identity_models import USER_STATUS_ACTIVE, User, UserSession
 
 # secrets.token_urlsafe(32) draws 32 random bytes = 256 bits of entropy.
 SESSION_TOKEN_BYTES = 32
@@ -79,9 +79,17 @@ async def validate_session(session: AsyncSession, raw_token: str | None) -> User
         return None
     if row.expires_at <= _now():
         return None
+    user = await session.get(User, row.user_id)
+    if user is None or user.status != USER_STATUS_ACTIVE:
+        # Disabling an account must invalidate already-issued sessions, not
+        # only block the next password login. Persist revocation so subsequent
+        # requests remain denied without repeating user resolution.
+        row.revoked_at = _now()
+        await session.flush()
+        return None
     row.last_seen_at = _now()
     await session.flush()
-    return await session.get(User, row.user_id)
+    return user
 
 
 async def revoke_session(session: AsyncSession, raw_token_or_id: str | UUID) -> None:

@@ -324,8 +324,15 @@ async def test_workspace_company_brain_returns_empty_canonical_state(monkeypatch
             "closed_issues": 0,
             "merged_pull_requests": 0,
         }
+        assert body["source_records"] == {
+            "by_provider": [],
+            "by_record_type": [],
+            "total": 0,
+        }
         assert body["repositories"] == []
         assert body["work"] == {"issues": [], "pull_requests": [], "recent": []}
+        assert body["communications"] == {"messages": []}
+        assert body["documents"] == {"files": [], "notes": []}
         assert body["evidence"] == []
         assert body["is_live"] is False
         assert body["llm_used"] is False
@@ -336,6 +343,293 @@ async def test_workspace_company_brain_returns_empty_canonical_state(monkeypatch
             "llm_briefing": False,
         }
         assert any("No canonical GitHub records" in warning for warning in body["warnings"])
+    finally:
+        await _cleanup(marker)
+
+
+async def test_workspace_company_brain_includes_local_connector_source_record_coverage(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        now = datetime(2026, 7, 6, 10, 0, tzinfo=timezone.utc)
+        async with AsyncSessionLocal() as session:
+            session.add_all(
+                [
+                    SourceRecord(
+                        workspace_id=workspace_id,
+                        provider="jira",
+                        external_id=f"FOS-{marker[:6]}",
+                        record_type="issue",
+                        source_url="https://jira.example/browse/FOS-123",
+                        payload={
+                            "evidence_refs": [
+                                {
+                                    "kind": "jira_issue",
+                                    "source": "jira",
+                                    "ref": f"FOS-{marker[:6]}",
+                                    "url": "https://jira.example/browse/FOS-123",
+                                }
+                            ],
+                            "api_token": "SHOULD_NOT_LEAK",
+                        },
+                        payload_hash=f"jira-hash-{marker}",
+                        observed_at=now,
+                        source_updated_at=now,
+                    ),
+                    SourceRecord(
+                        workspace_id=workspace_id,
+                        provider="gmail",
+                        external_id=f"gmail-{marker}",
+                        record_type="message",
+                        source_url="https://mail.google.com/mail/u/0/#inbox/msg",
+                        payload={"raw_body": "SHOULD_NOT_RENDER"},
+                        payload_hash=f"gmail-hash-{marker}",
+                        observed_at=now,
+                        source_updated_at=now,
+                    ),
+                    SourceRecord(
+                        workspace_id=workspace_id,
+                        provider="drive",
+                        external_id=f"drive-{marker}",
+                        record_type="file",
+                        source_url="https://drive.google.com/file/d/file-1/view",
+                        payload={"content": "SHOULD_NOT_RENDER"},
+                        payload_hash=f"drive-hash-{marker}",
+                        observed_at=now,
+                        source_updated_at=now,
+                    ),
+                ]
+            )
+            await session.commit()
+
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/company-brain",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["summary"] == {
+            "repositories": 0,
+            "open_issues": 0,
+            "open_pull_requests": 0,
+            "closed_issues": 0,
+            "merged_pull_requests": 0,
+        }
+        assert body["source_records"] == {
+            "total": 3,
+            "by_provider": [
+                {"provider": "drive", "count": 1},
+                {"provider": "gmail", "count": 1},
+                {"provider": "jira", "count": 1},
+            ],
+            "by_record_type": [
+                {"record_type": "file", "count": 1},
+                {"record_type": "issue", "count": 1},
+                {"record_type": "message", "count": 1},
+            ],
+        }
+        serialized = json.dumps(body, sort_keys=True)
+        assert "SHOULD_NOT_LEAK" not in serialized
+        assert "SHOULD_NOT_RENDER" not in serialized
+
+    finally:
+        await _cleanup(marker)
+
+
+async def test_workspace_company_brain_reads_gmail_and_drive_as_first_class_sections(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        now = datetime(2026, 7, 6, 10, 0, tzinfo=timezone.utc)
+        async with AsyncSessionLocal() as session:
+            session.add_all(
+                [
+                    SourceRecord(
+                        workspace_id=workspace_id,
+                        provider="gmail",
+                        external_id=f"gmail-{marker}",
+                        record_type="message",
+                        source_url="https://mail.google.com/mail/u/0/#inbox/msg",
+                        payload={
+                            "normalized_message": {
+                                "message_id": f"gmail-{marker}",
+                                "thread_id": f"thread-{marker}",
+                                "subject": "Investor follow-up",
+                                "snippet": "Follow up without raw body.",
+                                "from_address": "founder@example.test",
+                                "to_addresses": ["investor@example.test"],
+                                "labels": ["INBOX", "UNREAD"],
+                                "unread": True,
+                                "source_url": "https://mail.google.com/mail/u/0/#inbox/msg",
+                            },
+                            "evidence_refs": [
+                                {
+                                    "kind": "gmail_message",
+                                    "source": "gmail",
+                                    "ref": f"gmail-{marker}",
+                                    "url": "https://mail.google.com/mail/u/0/#inbox/msg",
+                                }
+                            ],
+                            "raw_body": "SHOULD_NOT_RENDER",
+                        },
+                        payload_hash=f"gmail-first-class-hash-{marker}",
+                        observed_at=now,
+                        source_updated_at=now,
+                    ),
+                    SourceRecord(
+                        workspace_id=workspace_id,
+                        provider="drive",
+                        external_id=f"drive-{marker}",
+                        record_type="file",
+                        source_url="https://drive.google.com/file/d/file-1/view",
+                        payload={
+                            "normalized_file": {
+                                "file_id": f"drive-{marker}",
+                                "name": "Private beta checklist",
+                                "mime_type": "application/vnd.google-apps.document",
+                                "owners": ["founder@example.test"],
+                                "shared": True,
+                                "source_url": "https://drive.google.com/file/d/file-1/view",
+                            },
+                            "evidence_refs": [
+                                {
+                                    "kind": "drive_file",
+                                    "source": "drive",
+                                    "ref": f"drive-{marker}",
+                                    "url": "https://drive.google.com/file/d/file-1/view",
+                                }
+                            ],
+                            "content": "SHOULD_NOT_RENDER",
+                        },
+                        payload_hash=f"drive-first-class-hash-{marker}",
+                        observed_at=now,
+                        source_updated_at=now,
+                    ),
+                ]
+            )
+            await session.commit()
+
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/company-brain",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        message = body["communications"]["messages"][0]
+        assert message["message_id"] == f"gmail-{marker}"
+        assert message["subject"] == "Investor follow-up"
+        assert message["unread"] is True
+        assert message["source_refs"][0]["kind"] == "gmail_message"
+        file = body["documents"]["files"][0]
+        assert file["file_id"] == f"drive-{marker}"
+        assert file["name"] == "Private beta checklist"
+        assert file["shared"] is True
+        assert file["source_refs"][0]["kind"] == "drive_file"
+        evidence_kinds = {ref["kind"] for ref in body["evidence"]}
+        assert {"gmail_message", "drive_file"}.issubset(evidence_kinds)
+        serialized = json.dumps(body, sort_keys=True)
+        assert "SHOULD_NOT_RENDER" not in serialized
+
+    finally:
+        await _cleanup(marker)
+
+
+async def test_workspace_company_brain_reads_jira_tasks_as_work_items(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        now = datetime(2026, 7, 6, 10, 0, tzinfo=timezone.utc)
+        async with AsyncSessionLocal() as session:
+            source_record = SourceRecord(
+                workspace_id=workspace_id,
+                provider="jira",
+                external_id=f"FOS-{marker[:6]}",
+                record_type="issue",
+                source_url="https://jira.example/browse/FOS-123",
+                payload={
+                    "evidence_refs": [
+                        {
+                            "kind": "jira_issue",
+                            "source": "jira",
+                            "ref": f"FOS-{marker[:6]}",
+                            "url": "https://jira.example/browse/FOS-123",
+                        }
+                    ],
+                    "api_token": "SHOULD_NOT_LEAK",
+                },
+                payload_hash=f"jira-task-hash-{marker}",
+                observed_at=now,
+                source_updated_at=now,
+            )
+            session.add(source_record)
+            await session.flush()
+            session.add(
+                Task(
+                    workspace_id=workspace_id,
+                    source_provider="jira",
+                    source_record_id=source_record.id,
+                    external_id=f"FOS-{marker[:6]}",
+                    title="Review private beta onboarding",
+                    status="To Do",
+                    source_url="https://jira.example/browse/FOS-123",
+                    task_metadata={
+                        "jira_object_type": "issue",
+                        "key": f"FOS-{marker[:6]}",
+                        "project_key": "FOS",
+                        "status_category": "not_done",
+                    },
+                    source_updated_at=now,
+                )
+            )
+            await session.commit()
+
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/company-brain",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["summary"]["open_issues"] == 1
+        assert body["summary"]["closed_issues"] == 0
+        assert body["summary"]["open_pull_requests"] == 0
+        jira_issue = body["work"]["issues"][0]
+        assert jira_issue["source_provider"] == "jira"
+        assert jira_issue["title"] == "Review private beta onboarding"
+        assert jira_issue["project_key"] == "FOS"
+        assert jira_issue["repository_full_name"] is None
+        assert jira_issue["source_refs"][0]["kind"] == "jira_issue"
+        assert body["work"]["recent"][0]["source_provider"] == "jira"
+        assert body["evidence"][0]["source"] == "jira"
+        serialized = json.dumps(body, sort_keys=True)
+        assert "SHOULD_NOT_LEAK" not in serialized
+
     finally:
         await _cleanup(marker)
 

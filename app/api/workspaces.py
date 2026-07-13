@@ -1,30 +1,45 @@
 from __future__ import annotations
 
+from datetime import datetime
 import re
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import CurrentActor, require_operator_or_user
-from app.api.workspace_auth import WorkspaceAccess, require_workspace_access
+from app.api.workspace_auth import (
+    WorkspaceAccess,
+    require_workspace_access,
+    require_workspace_role,
+)
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import (
+    MEMBERSHIP_ROLE_ADMIN,
+    MEMBERSHIP_ROLE_MEMBER,
+    MEMBERSHIP_ROLE_VIEWER,
     USER_STATUS_DISABLED,
     Membership,
     User,
     Workspace,
 )
+from app.services.account_setup_service import (
+    AccountSetupTokenError,
+    create_account_setup_token,
+)
 from app.services.identity_service import (
     IdentityAccessError,
     IdentityConflictError,
+    ProvisionedWorkspaceMember,
     WorkspaceMembership,
     bootstrap_workspace_for_owner,
     get_user_by_email,
     list_workspaces_for_user,
+    list_workspace_members,
+    provision_workspace_member,
 )
-
-
 router = APIRouter(prefix="/api/v1/workspaces", tags=["workspaces"])
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -87,6 +102,55 @@ class WorkspaceListResponse(BaseModel):
     workspaces: list[WorkspaceRead]
 
 
+class WorkspaceMemberRead(BaseModel):
+    user: UserRead
+    membership: MembershipRead
+
+
+class WorkspaceMembersResponse(BaseModel):
+    members: list[WorkspaceMemberRead]
+
+
+class WorkspaceMemberProvisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    email: str = Field(min_length=3, max_length=320)
+    name: str | None = Field(default=None, max_length=255)
+    role: str = Field(default=MEMBERSHIP_ROLE_MEMBER)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not _EMAIL_RE.fullmatch(normalized):
+            raise ValueError("invalid email")
+        return normalized
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed_roles = {
+            MEMBERSHIP_ROLE_ADMIN,
+            MEMBERSHIP_ROLE_MEMBER,
+            MEMBERSHIP_ROLE_VIEWER,
+        }
+        if normalized not in allowed_roles:
+            raise ValueError("role must be admin, member, or viewer")
+        return normalized
+
+
+class WorkspaceMemberProvisionResponse(BaseModel):
+    member: WorkspaceMemberRead
+    external_invite_sent: bool
+    provider_write_performed: bool
+    login_credential_set: bool
+    setup_link_generated: bool
+    setup_url_path: str | None
+    setup_token_expires_at: datetime | None
+    warnings: list[str]
+
+
 def _user_read(user: User) -> UserRead:
     return UserRead(id=user.id, email=user.email, name=user.name, status=user.status)
 
@@ -106,6 +170,15 @@ def _membership_read(membership: Membership) -> MembershipRead:
         workspace_id=membership.workspace_id,
         user_id=membership.user_id,
         role=membership.role,
+    )
+
+
+def _workspace_member_read(
+    workspace_membership: WorkspaceMembership | ProvisionedWorkspaceMember,
+) -> WorkspaceMemberRead:
+    return WorkspaceMemberRead(
+        user=_user_read(workspace_membership.user),
+        membership=_membership_read(workspace_membership.membership),
     )
 
 
@@ -211,3 +284,100 @@ async def get_workspace(
     access: WorkspaceAccess = Depends(require_workspace_access),
 ) -> WorkspaceBootstrapResponse:
     return _bootstrap_response(access.workspace_membership)
+
+
+@router.get("/{workspace_id}/members", response_model=WorkspaceMembersResponse)
+async def list_workspace_team_members(
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> WorkspaceMembersResponse:
+    async with AsyncSessionLocal() as session:
+        members = await list_workspace_members(
+            session,
+            workspace_id=access.workspace_membership.workspace.id,
+        )
+    return WorkspaceMembersResponse(
+        members=[_workspace_member_read(member) for member in members]
+    )
+
+
+@router.post(
+    "/{workspace_id}/members",
+    response_model=WorkspaceMemberProvisionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def provision_workspace_team_member(
+    payload: WorkspaceMemberProvisionRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> WorkspaceMemberProvisionResponse:
+    setup_url_path: str | None = None
+    setup_token_expires_at: datetime | None = None
+    async with AsyncSessionLocal() as session:
+        try:
+            member = await provision_workspace_member(
+                session,
+                workspace_id=access.workspace_membership.workspace.id,
+                email=payload.email,
+                name=payload.name,
+                role=payload.role,
+            )
+            if (
+                member.user_created
+                and member.user.password_hash is None
+            ):
+                setup_token = await create_account_setup_token(
+                    session,
+                    user_id=member.user.id,
+                    created_by_user_id=access.workspace_membership.user.id,
+                )
+                setup_url_path = (
+                    f"/setup-password#token={quote(setup_token.raw_token, safe='')}"
+                )
+                setup_token_expires_at = setup_token.row.expires_at
+            await session.commit()
+        except IdentityConflictError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        except IdentityAccessError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(exc),
+            ) from exc
+        except AccountSetupTokenError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        except IntegrityError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="workspace member could not be created",
+            ) from exc
+    warnings: list[str] = []
+    if setup_url_path is not None:
+        warnings.append(
+            "One-time setup link generated for the new local account; copy it for "
+            "the teammate. The inviter did not choose a password, the raw token is "
+            "not stored, and no email or external provider write was sent."
+        )
+    else:
+        warnings.append(
+            "Existing local account attached without changing its credentials. "
+            "Accounts already belonging to another workspace require a future "
+            "self-accepted invitation flow."
+        )
+    return WorkspaceMemberProvisionResponse(
+        member=_workspace_member_read(member),
+        external_invite_sent=False,
+        provider_write_performed=False,
+        login_credential_set=member.login_credential_set,
+        setup_link_generated=setup_url_path is not None,
+        setup_url_path=setup_url_path,
+        setup_token_expires_at=setup_token_expires_at,
+        warnings=warnings,
+    )

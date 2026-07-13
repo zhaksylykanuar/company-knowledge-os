@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
@@ -79,6 +82,24 @@ async def test_provision_admin_creates_user_workspace_membership_idempotently() 
         await _cleanup(email)
 
 
+def test_create_admin_user_script_runs_from_repo_root_without_pythonpath() -> None:
+    env = os.environ.copy()
+    env.pop("FOUNDEROS_ADMIN_EMAIL", None)
+    env.pop("FOUNDEROS_ADMIN_PASSWORD", None)
+
+    result = subprocess.run(
+        [sys.executable, "scripts/create_admin_user.py"],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "FOUNDEROS_ADMIN_EMAIL and FOUNDEROS_ADMIN_PASSWORD" in result.stdout
+    assert "ModuleNotFoundError" not in result.stderr
+
+
 async def test_change_password_rejects_wrong_current_and_accepts_correct() -> None:
     marker = uuid4().hex[:10]
     email = f"admin-{marker}@example.test"
@@ -102,6 +123,35 @@ async def test_change_password_rejects_wrong_current_and_accepts_correct() -> No
             assert (await _login(client, email, NEW_PASSWORD)).status_code == 200
         async with _client() as client:
             assert (await _login(client, email, OLD_PASSWORD)).status_code == 401
+    finally:
+        await _cleanup(email)
+
+
+async def test_change_password_enforces_the_enrollment_password_policy() -> None:
+    marker = uuid4().hex[:10]
+    email = f"admin-{marker}@example.test"
+    await _provision(email, OLD_PASSWORD)
+    try:
+        async with _client() as client:
+            await _login(client, email, OLD_PASSWORD)
+            too_short = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": OLD_PASSWORD, "new_password": "short"},
+            )
+            oversized_current = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": "x" * 257, "new_password": NEW_PASSWORD},
+            )
+            oversized_new = await client.post(
+                "/api/v1/auth/change-password",
+                json={"current_password": OLD_PASSWORD, "new_password": "x" * 257},
+            )
+
+        assert too_short.status_code == 422
+        assert oversized_current.status_code == 422
+        assert oversized_new.status_code == 422
+        async with _client() as client:
+            assert (await _login(client, email, OLD_PASSWORD)).status_code == 200
     finally:
         await _cleanup(email)
 

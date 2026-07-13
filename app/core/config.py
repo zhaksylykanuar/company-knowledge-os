@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     app_env: str = "local"
     app_name: str = "company-knowledge-os"
     api_base_url: str = "http://localhost:8000"
+    # Minimum level for the application's basic request logger (MVP §1.5
+    # "basic logging"). Standard Python level name; invalid values fall back to
+    # INFO. The logger only records method, sanitized path, status, and duration
+    # — never secrets, query values, headers, or request/response bodies.
+    log_level: str = Field(
+        default="INFO",
+        validation_alias=AliasChoices("FOUNDEROS_LOG_LEVEL", "LOG_LEVEL"),
+    )
 
     # --- Local dev bootstrap (safe to surface to the browser in local) ---
     # The base URL the browser should call, the dev API key handed to the
@@ -98,6 +106,41 @@ class Settings(BaseSettings):
     github_sync_allowed_repos: str | None = Field(
         default=None,
         validation_alias=AliasChoices("FOS_GITHUB_SYNC_ALLOWED_REPOS"),
+    )
+    # --- GitHub App product-connect foundation ---
+    # Values below describe the app installation path. Secret values are never
+    # returned to the browser; status payloads expose only configured/missing
+    # booleans and safe setup/callback URLs.
+    github_app_id: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_ID", "GITHUB_APP_ID"),
+    )
+    github_app_slug: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_SLUG", "GITHUB_APP_SLUG"),
+    )
+    github_app_private_key: SecretStr | str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_PRIVATE_KEY"),
+    )
+    github_app_private_key_path: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH"),
+    )
+    github_app_webhook_secret: SecretStr | str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET",
+            "GITHUB_WEBHOOK_SECRET",
+        ),
+    )
+    github_app_setup_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_SETUP_URL"),
+    )
+    github_app_callback_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_CALLBACK_URL"),
     )
     enable_obsidian_export: bool = True
     require_approval_for_writes: bool = True
@@ -191,6 +234,34 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = Field(
         default=15,
         validation_alias=AliasChoices("FOUNDEROS_LOGIN_LOCKOUT_MINUTES"),
+    )
+    # Production admission control runs before Argon2. Defaults fit the current
+    # single-process private-beta deployment; multi-process deployments require
+    # a shared edge/Redis limiter in addition to these process-local bounds.
+    login_rate_limit_window_seconds: int = Field(
+        default=60,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_WINDOW_SECONDS"),
+    )
+    login_rate_limit_per_ip: int = Field(
+        default=20,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_PER_IP"),
+    )
+    login_rate_limit_global: int = Field(
+        default=100,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_GLOBAL"),
+    )
+    login_max_concurrent_attempts: int = Field(
+        default=4,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_MAX_CONCURRENT_ATTEMPTS"),
+    )
+    login_attempt_retention_hours: int = Field(
+        default=24,
+        ge=1,
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS"),
     )
 
     cors_allowed_origins: str | None = Field(

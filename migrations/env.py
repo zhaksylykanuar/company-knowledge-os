@@ -16,6 +16,8 @@ from app.db.base import Base  # noqa: E402
 import app.db.action_models  # noqa: F401,E402
 import app.db.briefing_models  # noqa: F401,E402
 import app.db.canonical_models  # noqa: F401,E402
+import app.db.company_world_models  # noqa: F401,E402
+import app.db.document_models  # noqa: F401,E402
 import app.db.identity_models  # noqa: F401,E402
 import app.db.integration_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402

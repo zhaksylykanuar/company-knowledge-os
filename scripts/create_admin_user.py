@@ -27,13 +27,22 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import AsyncSessionLocal
-from app.db.identity_models import MEMBERSHIP_ROLE_OWNER, USER_STATUS_ACTIVE
-from app.services.identity_service import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.db.base import AsyncSessionLocal  # noqa: E402
+from app.db.identity_models import (  # noqa: E402
+    MEMBERSHIP_ROLE_OWNER,
+    USER_STATUS_ACTIVE,
+)
+from app.services.identity_service import (  # noqa: E402
     create_membership,
     create_workspace,
     get_or_create_user_by_email,
@@ -42,7 +51,7 @@ from app.services.identity_service import (
     normalize_email,
     normalize_slug,
 )
-from app.services.password_service import hash_password
+from app.services.password_service import hash_password  # noqa: E402
 
 
 def _default_slug(email: str) -> str:

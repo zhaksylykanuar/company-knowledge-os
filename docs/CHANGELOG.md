@@ -1,8 +1,588 @@
 # FounderOS Changelog
 
+## 2026-07-13
+
+### Changed
+
+- Replaced the registry-like Company World frontend with a spatial strategy
+  board (DEC-076): the founder's company is central, while team, confirmed
+  network, and discovery candidates occupy distinct contours. Confirmed people
+  are grouped under organizations only from exact durable affiliation fields
+  plus a human-authored relationship; name/domain similarity is never drawn as
+  fact. A focused inspector shows profile-local touchpoints, with evidence and
+  technical capability/window/warning details behind collapsed disclosures.
+  Candidate resolution now asks one plain-language question at a time while
+  retaining member+/viewer roles, candidate versions, idempotency, and server-
+  resolved evidence. This frontend-only slice adds no backend API, migration,
+  provider call/write, or LLM path. Local acceptance passed: 272 frontend tests
+  plus typecheck/lint/build (17 routes); 537 backend tests plus Ruff and Alembic
+  head/current/check; desktop 1024/1280 px and mobile 390×844 browser QA without
+  overlap/overflow and with keyboard focus, 44 px controls, complete
+  organization/person resolution, and zero console warnings/errors. Ephemeral
+  QA data was removed. The offline sanitized `make release-handoff` gate passed
+  on a clean exact commit without deploy, provider calls, secret reads, database
+  access, or external writes.
+- Added guided invite-only founder enrollment (DEC-075). An operator-created
+  one-time `/start` URL now creates the founder, company workspace, owner
+  membership, and browser session in one transaction. The database stores only
+  the invite SHA-256 digest, expiry, and optional consumption/revocation
+  receipts; TTL is capped at 168 hours. The bearer is fragment-only, HTTPS is
+  required outside loopback, and a leaked unconsumed invite can be revoked by
+  UUID. Expired/reused/revoked links fail generically, concurrent consumption
+  creates exactly one identity, and Argon2 runs only after the invite and
+  identity conflicts pass cheap checks.
+- Hardened teammate setup links to `/setup-password#token=...`: query-token
+  fallback was removed, the browser clears the address after capture, token and
+  user rows are locked against concurrent password/session creation, invalid
+  tokens never reach Argon2, and public input lengths are capped. All session
+  creation paths store only printable User-Agent metadata up to 512 characters.
+  A brand-new teammate now always receives exactly one setup link and chooses
+  their own password; the inviter can no longer submit `initial_password`.
+  Existing accounts with membership outside the target workspace are not
+  attached silently: provisioning returns `409`, and a user-row lock guarantees
+  that concurrent A/B workspace attachment yields at most one success. Delivery
+  remains manual over a trusted channel; recipient acceptance/email delivery is
+  deferred.
+- Hardened public login availability and identity handling. Production rejects
+  excessive per-client, global, or concurrent work before Argon2 through a
+  process-local admission controller, while the durable database throttle stays
+  per submitted email. Unknown, disabled, and passwordless accounts perform one
+  stable dummy Argon2 verification; a correct credential still succeeds and
+  resets an attacker-induced email lock, disabled users' existing sessions are
+  revoked, password inputs are bounded before hashing, and stale throttle rows
+  are pruned at most hourly with a 24-hour default retention. The admission
+  contract is deliberately single-process; trusted client-IP behavior behind
+  the deployment proxy remains a required pre-public-deploy smoke gate.
+- Added a focused `/onboarding` journey whose progress is computed from the
+  current workspace, canonical Company Brain source-record count, evidence-
+  backed Company Map, and memberships. Skips remain pending, configured sources
+  without records are not called ready, and failed reads remain unknown. The
+  current step is hash-backed, with explicit return links from Sources and
+  Settings; no decorative completion flag is persisted.
+- Replaced the 11-link technical shell and dashboard panel wall with five
+  product zones («Сегодня / Компания / Решения / Источники / Настройки»), nested
+  provider routes, explicit multi-company selection, mobile bottom navigation,
+  and a deterministic «Сегодня» screen with one next move plus three signals.
+  The public login/enrollment surfaces now share the same company-management
+  visual language. Source setup/import/sync and action review/execution are
+  owner/admin; briefing generation, local action creation, and Company World
+  resolution are member+; viewer remains read-only. Local import,
+  human-triggered provider-read, and approval-gated external-write boundaries
+  remain explicit.
+- Added durable Company World profiles and founder confirmation (DEC-074).
+  Workspace-owned `people`, `organizations`, `affiliations`, `interactions`,
+  and terminal `company_world_resolutions` receipts preserve tenant-scoped
+  provenance. `GET .../company-map` merges confirmed profiles with unresolved
+  candidates; member+ may call `POST .../company-map/resolutions`, while viewer
+  remains read-only and cross-workspace access stays hidden.
+- Confirmation is server-resolved and idempotent: candidate versions detect
+  stale projections, idempotency keys prevent duplicate writes, and client
+  attempts to supply canonical email/evidence are rejected. Confirmed Gmail
+  interactions persist sanitized metadata and source-record links only; raw
+  records are never rewritten and no provider call, external write, or LLM is
+  started.
+- Added founder-facing confirm/dismiss controls, manual relationship and
+  organization classification, confirmed profile sections, and explicit
+  read-only viewer states to «Мир компании». Added aggregate-only Company World
+  backfill with dry-run default and explicit apply; unconfirmed candidates are
+  never auto-promoted. The schema requires every membership-origin person to
+  reference a workspace membership. Downgrade takes exclusive table locks
+  before its empty-table checks and refuses to drop non-empty profile tables.
+- Added Company World v1 (DEC-073): a new workspace-membership-gated,
+  workspace-scoped `GET /api/v1/workspaces/{workspace_id}/company-map` read
+  model and product
+  surface over workspace memberships plus sanitized Gmail metadata. It renders
+  company and people profiles, external-contact and corporate-domain candidates,
+  evidence links, and an email touchpoint timeline without claiming that a
+  candidate is a customer, employer, or decision maker.
+- In the initial DEC-073 projection slice, limits and privacy became explicit:
+  the API reports available and considered Gmail message counts, the
+  newest-100 window, order, and `truncated`; derived summary fields are named
+  `*_in_window`. Raw bodies and snippets are excluded and cross-workspace
+  isolation is tested. That projection-only slice added no table, migration,
+  provider call, sync, external write, secret read, or LLM; DEC-074 above adds
+  the later member+ local relationship-write boundary while viewer stays
+  read-only.
+- Reframed the product UI as company management: `/dashboard` is now «Штаб
+  компании» with daily move, decisions, company map, and operational perimeter;
+  `/company-brain` is «Мир компании»; the sidebar is grouped by command center,
+  management, sources, and system. Existing operational panels remain available,
+  while the globally scoped repository-audit overview is no longer mounted on
+  the workspace dashboard.
+- Retired the unsafe legacy `/audit` product route. The underlying filesystem
+  Company Brain preview endpoints are now operator-key-only and reject even a
+  valid browser session, preventing global local snapshots from being exposed
+  as workspace product data. Workspace-scoped action audit/import APIs are
+  unchanged.
+- Updated the offline MVP completion contract to require the evidence-backed
+  Company World surface instead of the retired global Repo Audit page. The
+  current tree remains locally complete while deployment and the first real
+  external action result remain human-gated.
+
+## 2026-07-07
+
+### Changed
+
+- Added a sanitized private-beta release handoff report. New
+  `scripts/private_beta_release_handoff.py` (also exposed as
+  `make release-handoff`) combines local git state, the offline MVP completion
+  audit, GitHub App real-read preflight, and the remaining human-gated next
+  steps into one operator-facing report. It is offline/read-only except for
+  local git metadata and starts no deploy, provider call, provider write,
+  external write, database access, secret read, or LLM.
+- Added `docs/deploy/external-action-result-smoke.md`, a manual,
+  human-approved runbook for the final MVP flow step "Approve Action Proposal ->
+  See External Action Result". It documents the one-action external-write smoke
+  boundary, preconditions, preferred UI path, API fallback placeholders,
+  idempotency/receipt checks, result sync, cleanup/rollback boundaries, and the
+  required post-smoke return to read-only mode. It is linked from README and
+  docs index and is explicitly excluded from normal read-only smoke, CI, deploy,
+  provider-read, provider-token setup, and LLM paths.
+- Added a deterministic offline MVP completion audit. New
+  `app/services/mvp_completion_audit.py` maps every playbook §1.5 MVP
+  requirement and every §1.4 main-flow step to authoritative in-repo evidence
+  (specific files plus structural markers) and reports which items are locally
+  complete versus human/external gated. A safe CLI
+  `scripts/mvp_completion_audit.py` prints the same report (`--json` supported),
+  and `tests/test_mvp_completion_audit.py` pins the contract. The audit is
+  read-only and offline: no provider calls, network, database, deploy, external
+  write, secret read, or LLM. It reports `local_scope_complete = True` for the
+  current tree while keeping `fully_complete = False` because staging/prod
+  deployment and the first real external action result remain human-gated.
+- Aligned high-level control docs with the current implemented state. README,
+  `founderOS_MASTER_PLAYBOOK.md`, and `docs/ROADMAP.md` no longer describe
+  local Jira/Gmail/Drive/Documents, teammate provisioning/setup links,
+  normalized entities, request logging, or the prior guarded GitHub issue live
+  smoke as missing; they now distinguish those completed local/MVP surfaces from
+  the remaining human-gated gaps (first GitHub App real read, production deploy,
+  LLM narrative, live non-GitHub provider sync, and broader beta hardening).
+- Added a `/github` GitHub App real-read readiness section. The product connect
+  panel now mirrors the existing offline preflight using already-loaded local UI
+  state: app env configured/missing, workspace-scoped installation connection
+  state, local repository surface count, blockers, and the next human step. The
+  section is display-only and starts no sync, provider read, provider write,
+  secret read, external write, or LLM; the actual real read remains the existing
+  explicit per-repository action after human approval.
+- Added a founder-facing action review readiness summary to `/actions`. The
+  `ActionProposalsPanel` now computes local counts for proposals needing a
+  decision, approved GitHub issue proposals ready for execution preview,
+  local-only internal follow-ups, proposals missing evidence refs, and proposals
+  with a reported execution receipt, plus a deterministic next-step hint. This
+  is frontend-only over the already-loaded local proposal list and starts no
+  execute call, sync, provider call, external write, secret read, or LLM.
+- Added basic application request logging (DEC-072, MVP §1.5 "basic logging").
+  New `app/core/logging.py` provides an idempotent `configure_logging()` and a
+  `RequestLoggingMiddleware` that logs one sanitized line per HTTP request
+  (method, path, status, duration_ms) at the `FOUNDEROS_LOG_LEVEL`/`LOG_LEVEL`
+  level (default `INFO`); `app/main.py` configures it at startup and installs the
+  middleware. The logger never records query values, headers, cookies, bodies,
+  tokens, or provider payloads, so no secrets can leak. No new dependency,
+  table, migration, provider call, external write, or LLM.
+- Added a dedicated navigable Company Brain view (DEC-071, MVP §1.4/§1.5). New
+  `/company-brain` page and sidebar entry compose the existing read-only
+  `CompanyBrainPanel` and `NormalizedEntitiesPanel` with a manual refresh, so the
+  founder can reach the canonical evidence-backed Company Brain and normalized
+  entities directly (playbook "See Company Brain entities") instead of only
+  scrolling the dashboard. No new data path: read-only, no provider calls, sync,
+  external writes, secret reads, or LLM.
+- Added a client-side entity-type focus filter to the normalized-entities panel
+  (DEC-071 polish). The founder can switch between all entities and each
+  `entity_type` in the already-loaded projection; filtering is local-only and
+  starts no provider call, sync, external write, or LLM.
+- Added a read-only normalized-entities projection API (DEC-070, MVP §1.5 /
+  §6.9). New service `company_brain_entities_read_service.py` and endpoint
+  `GET /api/v1/workspaces/{workspace_id}/company-brain/entities` flatten the
+  canonical Company Brain rows (repositories, issues, pull requests, Gmail
+  messages, Drive files, internal documents) into a single evidence-backed
+  `entities` list plus a by-type/by-provider summary. It builds the canonical
+  `/brain/entities` surface DEC-028 named as the trigger for revisiting
+  NormalizedEntity, without a new table/migration and without producing the
+  post-MVP `Person` entity. Read-only and local-only: no provider calls, sync,
+  external writes, secret reads, or LLM.
+- Added a dashboard UI surface for the normalized-entities projection (DEC-070).
+  New `NormalizedEntitiesPanel` fetches the entities endpoint, shows summary
+  cards, type/provider breakdowns, the evidence-backed entity list, source refs,
+  and explicit no-provider/no-LLM boundary copy. This makes the MVP "See Company
+  Brain entities" path reachable from the product UI instead of only the API.
+- Extended briefing-derived local action generation to internal document context
+  (DEC-069). The persisted briefing
+  `POST /workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
+  endpoint now treats `internal-document-context` as an evidence-backed
+  actionable item alongside Jira/Gmail/Drive briefing signals, creating a local
+  `internal_todo` ActionProposal when evidence exists and skipping duplicate
+  open actions for the same briefing item. Local-only: no provider calls, sync,
+  external writes, raw document body copying, secret reads, or LLM.
+- Wired in-product edit and delete for internal Documents (DEC-066/DEC-068).
+  The `/documents` detail view now exposes an inline edit form (title, markdown
+  body, tags, status) backed by the existing `PATCH
+  /api/v1/workspaces/{workspace_id}/documents/{document_id}` route and a guarded
+  delete affordance backed by the existing `DELETE` route. A successful edit
+  refreshes the document and its version history, so document version history
+  can now grow past version 1 through the product UI (previously only create was
+  reachable). Local-only: no provider calls, external writes, secret reads, or
+  LLM.
+- Added local version history for internal Documents (DEC-068). New
+  `document_versions` table + migration `f2b3c4d5e6f7` records an immutable
+  snapshot on document create and every successful update, preserving title,
+  markdown body, deterministic body text, status, tags, author, and version
+  number. Empty or idempotent PATCH requests are treated as no-op updates and
+  do not append duplicate history revisions. The Documents API now exposes
+  `GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/versions`, and
+  `/documents` detail now renders selectable version snapshots with markdown
+  body, status, tags, and recorded timestamp instead of only a compact list.
+  Local-only: no provider calls, external writes, secret reads, or LLM.
+
+## 2026-07-06
+
+### Changed
+
+- Added internal-document context to deterministic Founder Briefings (DEC-067).
+  Manual briefings now include `internal-document-context` when Company Brain
+  contains internal documents under `documents.notes`, with evidence refs from
+  the internal document source refs. The item uses bounded metadata (titles,
+  statuses, tags) and does not copy raw markdown/body text; local-only with no
+  provider calls, sync, external writes, secret reads, or LLM.
+- Added the internal Documents module (DEC-066, MVP §1.5 / §4.7 / §6.16 / §7.11).
+  New workspace-scoped ``documents`` table + migration ``f1a2b3c4d5e6``, a
+  member-gated CRUD + search API (``/api/v1/workspaces/{id}/documents`` and
+  ``/documents/{document_id}``), and a ``/documents`` frontend page (list,
+  search, create, detail) with a sidebar entry. Documents store authored
+  ``body_markdown`` plus a deterministic plain-text projection for search, and
+  non-archived documents now appear in Company Brain under ``documents.notes``
+  with evidence refs. Local-only: no provider calls, external writes, secret
+  reads, or LLM.
+- Added deterministic local action-proposal generation from persisted Founder
+  Briefings (DEC-065). The backend now exposes
+  `POST /workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
+  to create evidence-backed local `internal_todo` ActionProposal rows from the
+  Jira/Gmail/Drive briefing items, and the Briefing UI has a bulk local action
+  generation control. The path skips missing-evidence items and existing open
+  actions for the same briefing item (including older per-item UI actions) and
+  remains local-only: no provider calls, sync, external writes, secret reads, or
+  LLM.
+- Added first-class local Jira/Gmail/Drive read-model items to the deterministic
+  Founder Briefing (DEC-064). The manual briefing now includes
+  `jira-work-items`, `gmail-message-signals`, and `drive-file-signals` when the
+  workspace Company Brain has local Jira issues, Gmail messages, or Drive files.
+  Items are evidence-backed from Company Brain `source_refs` and remain
+  local-only: no provider calls, sync, external writes, raw body/content payload
+  rendering, secrets, or LLM. Item summaries report the true imported total from
+  the `source_records` aggregate ("N shown of M imported") instead of only the
+  truncated visible slice, and visible-only unread/shared counts are scoped with
+  "in view" so a capped section never implies a false workspace-wide total.
+- Exposed Gmail messages and Google Drive files as first-class Company Brain
+  read sections (DEC-063). Company Brain now returns `communications.messages`
+  and `documents.files` built from sanitized local SourceRecord payloads, and
+  the UI renders both sections separately from tasks. This keeps Gmail/Drive out
+  of `Task` semantics while showing imported emails/documents in the founder
+  surface. Local-only: no provider calls, sync, external writes, raw body/content
+  rendering, secrets, or LLM.
+- Promoted local Jira issues into Company Brain work items (DEC-062). Workspace
+  Company Brain now includes canonical Jira `Task(source_provider='jira')` rows
+  in `work.issues`, `work.recent`, issue summary counts, and evidence, with
+  optional work-item `source_provider` and `project_key` fields for the UI. This
+  is local/deterministic only: no Jira provider calls, sync, external writes,
+  raw payload rendering, or LLM.
+- Added a deterministic connector source-coverage item to the Founder Briefing
+  (DEC-061). The manual briefing now surfaces a `connector-source-coverage`
+  item from the Company Brain `source_records` aggregate so local
+  Jira/Gmail/Drive imports are visible in the briefing flow, not only on the
+  dashboard. Company Brain is fetched once per generation and shared with the
+  existing GitHub-first coverage item. Aggregate-only: no raw payloads, provider
+  calls, sync, external writes, or LLM.
+- Added local connector SourceRecord coverage to the workspace Company Brain
+  payload and dashboard Source Coverage panel (DEC-060). Company Brain now
+  returns aggregate `source_records` counts by provider and record type so
+  local Jira/Gmail/Drive imports are visible without exposing raw payloads,
+  email bodies, document contents, secrets, provider calls, sync, external
+  writes, or LLM behavior.
+- Added the third minimal connector implementation: Google Drive (DEC-059). The
+  backend now exposes local-only Drive file list/import endpoints, and the
+  frontend adds `/drive` with a pasted/exported JSON import form. Imported file
+  metadata is sanitized into canonical `SourceRecord` rows (file record type)
+  with evidence refs through idempotent upserts; raw document bodies are not
+  persisted. The path remains local DB-only: no Drive provider calls, no sync,
+  no external writes, no LLM, and no secret reads. The connector registry now
+  marks Google Drive `available`.
+- Added a second minimal connector implementation: Gmail (DEC-058). The backend
+  now exposes local-only Gmail message list/import endpoints, and the frontend
+  adds `/gmail` with a pasted/exported JSON import form. Imported messages are
+  sanitized into canonical `SourceRecord` rows (message record type) with
+  evidence refs through idempotent upserts; raw email bodies are not persisted.
+  The path remains local DB-only: no Gmail provider calls, no sync, no external
+  writes, no LLM, and no secret reads. The connector registry now marks Gmail
+  `available`.
+- Added the first minimal Jira connector implementation (DEC-057). The backend
+  now exposes local-only Jira issue list/import endpoints, and the frontend adds
+  `/jira` with a pasted/exported JSON import form. Imported issues are sanitized
+  into canonical `SourceRecord` + `Task` rows with evidence refs through
+  idempotent upserts. The path remains local DB-only: no Jira provider calls, no
+  sync, no external writes, no LLM, and no secret reads.
+- Added the connector framework registry (DEC-056). The backend now exposes
+  `GET /api/v1/workspaces/{workspace_id}/connectors`, and the frontend adds a
+  `/connectors` page plus sidebar entry. The registry lists the MVP provider set
+  (GitHub, Jira, Gmail, Google Drive), shows local connection counts, and
+  explicitly remains read-only: no provider calls, sync, external writes, LLM,
+  or secret reads. GitHub was available at introduction; Jira, Gmail, and Drive
+  were later made available through DEC-057/058/059.
+
+## 2026-07-03
+
+### Changed
+
+- Added local one-time account setup links for teammate onboarding (DEC-055).
+  Admin provisioning can generate a `/setup-password` link without sending
+  email or calling an identity provider; the database stores only the sha256
+  token hash in `account_setup_tokens`. The public setup page consumes the token
+  once, lets the teammate set a local password, signs them in, and rejects token
+  reuse. Full pytest now uses a unique unknown-login email to avoid stale
+  login-throttle state between full-suite runs.
+- Enabled provisioned teammates to actually sign in (DEC-055). The workspace
+  members endpoint and `/settings` provisioning form now accept an optional
+  initial local password (min length 8) that is Argon2-hashed for a brand-new
+  user, and the response reports `login_credential_set`. An existing user's
+  password is never overwritten, so re-provisioning cannot hijack an account.
+  Still no email invite, identity-provider write, or external write is performed.
+- Added product UI for local teammate provisioning in `/settings`. The page now
+  lists workspace members and lets owner/admin users create local
+  `admin`/`member`/`viewer` memberships through the existing workspace members
+  API, while viewer/member roles see a read-only state. The UI explicitly states
+  that no email invite, identity-provider write, provider call, or external write
+  is performed.
+- Added the first local teammate-provisioning foundation (DEC-055). Workspace
+  owners/admins can list members and create local `admin`/`member`/`viewer`
+  memberships through workspace-scoped endpoints without sending email, calling
+  an identity provider, granting `owner`, or performing external writes. Tests
+  cover listing/provisioning, duplicate handling, disabled-user rejection, and
+  role gating.
+- Added an offline readiness gate for the first approved GitHub App real read
+  run (DEC-054): a pure `github_app_real_read_run_readiness()` function, a safe
+  presence-only CLI `scripts/github_app_real_read_run_preflight.py`, offline unit
+  tests, and a human-approved read-only runbook
+  `docs/deploy/github-app-first-real-read-run.md`. The readiness check performs
+  no provider calls, opens no network connection, and emits no secret values;
+  the real read run itself remains the existing human-triggered, repository-scoped
+  sync endpoint.
+- Added deterministic "what to check next" guidance to the `/dashboard`
+  source-coverage panel. The panel now derives local next steps from the already
+  loaded Company Brain payload for canonical data readiness, evidence gaps,
+  open-work review, live-provider boundaries, and AI boundaries. This remains
+  read-only dashboard copy: no new endpoint, provider call, external write,
+  deploy, or LLM is started.
+- Enriched the `/dashboard` source-coverage panel with a local breakdown built
+  only from the already-loaded Company Brain payload: closed issues / merged PRs,
+  recent activity count, repositories with vs. without source refs, and an
+  evidence-by-kind breakdown. No new endpoints, provider calls, external writes,
+  or LLM are added; the panel stays deterministic and read-only.
+- Hardened the external repo-audit import UX on `/audit`. The paste-JSON form
+  now renders a non-throwing local preview of parsed findings before import,
+  marks each finding valid/invalid against the same rules the backend enforces
+  (`repository_full_name` in `owner/repo` format plus at least one
+  `evidence_ref`), and shows per-finding validation issues. Reviewers can
+  select all valid findings or clear the selection, and only selected valid
+  findings are submitted. After a partial backend import, per-finding backend
+  failures are shown inline on the matching preview rows (including when only a
+  selected subset was submitted) and only the failed rows stay selected for retry
+  while the pasted text is preserved. Secret-like fragments are still redacted in
+  the preview, and the import continues to write only local `internal_todo`
+  ActionProposals with no provider calls, external writes, or LLM.
+- Polished audit-origin action review on `/actions`. Audit-derived local
+  proposals now distinguish deterministic repository-audit findings
+  (`source=repo_audit`) from imported external-audit findings
+  (`source=repo_audit_import`) with a local "audit source" subfilter,
+  source-specific badges, and richer payload metadata (audit type, repository,
+  severity, area, recommended next step, and risk/related entities) without raw
+  payload dumps. The new `/actions?origin=audit&audit_source=...` query focus,
+  bulk selection, and default evidence drawer all follow the final visible
+  subset and remain client-side/local only: no provider calls, external writes,
+  or LLM.
+- Added a repository-audit overview panel to `/dashboard`. It reads the existing
+  local deterministic repo-audit endpoint plus local ActionProposals and
+  summarizes the audit loop: repository count, total risk flags, discovery
+  snapshot, and audit-derived action counts (total / deterministic / imported /
+  proposed). It deep-links into `/audit` and
+  `/actions?origin=audit&status=proposed` (plus
+  `audit_source=deterministic|imported` when such actions exist). The
+  action-proposal counts are supplementary and never break the deterministic
+  audit summary if they fail to load. The panel is client-side/local only: no
+  provider calls, external writes, or LLM.
+- Expanded the private-beta readiness panel with a manual deploy/smoke runbook
+  checklist. The dashboard now shows the explicit human-run phases from the
+  deploy docs (local gates, Postgres backup, manual Alembic migration, split
+  backend/frontend services, read-only smoke, and rollback boundary) without
+  starting any command. This remains a local/read-only dashboard aid: no deploy,
+  push, provider call, external write, production data mutation, or LLM is
+  performed.
+
+## 2026-07-02
+
+### Changed
+
+- Grouped the ActionProposals review list by proposal origin (from briefing
+  items, GitHub issue proposals, and internal todos) with per-group counts and
+  descriptions, and marked briefing-derived proposals with an explicit origin
+  badge. Grouping is applied on top of the existing local status filter and
+  makes no provider calls or backend state changes.
+- Extended the shared evidence drawer with an optional contextual hint that
+  distinguishes a default (first visible proposal) source from a manually
+  selected one, plus an optional evidence-ref count. The briefing panel usage is
+  unchanged and no raw payloads or secrets are rendered.
+- Rendered briefing-derived `internal_todo` proposal payload metadata (briefing
+  item key, category, severity, recommended next step, and related entities) in
+  the ActionProposals detail view instead of only repository/title/note, without
+  exposing raw payload dumps or secret-like keys.
+- Added a local ActionProposals origin filter that composes with the existing
+  status filter. Users can focus on all sources, briefing-derived proposals,
+  GitHub issue proposals, or internal todos; counts are computed within the
+  current status focus, and the evidence drawer default follows the final
+  visible result set without provider calls, backend mutations, external writes,
+  or LLM calls.
+- Added bulk local ActionProposal review controls. Users can select all visible
+  `proposed` proposals in the current status/origin filter intersection, clear
+  the selection, and locally approve or reject the selected proposals through the
+  existing local ActionProposal endpoints. Selection is pruned to visible
+  `proposed` items so hidden, approved, or rejected proposals are not mutated by
+  accident; provider execution, external writes, and LLM calls are not started.
+- Hardened bulk local ActionProposal review against partial failures: each
+  approve/reject is settled independently so already-applied local transitions
+  are preserved and merged even if another proposal in the batch fails, the
+  reviewer keeps only the failed proposals selected for retry, and a partial or
+  total failure is surfaced inline without hiding the loaded list. Still no
+  provider execution, external writes, or LLM calls.
+- Added local backend bulk ActionProposal endpoints:
+  `POST /actions/proposals/bulk-approve` and
+  `POST /actions/proposals/bulk-reject`. They are admin-only, dedupe requested
+  proposal IDs, return per-proposal successes/failures with counts, preserve
+  partial success semantics, and never start provider execution, external
+  writes, or LLM calls. The web bulk review controls now use these endpoints
+  instead of issuing one request per proposal.
+- Added local review decision audit events for ActionProposals. Single and bulk
+  local approve/reject successes append sanitized audit events to the existing
+  per-proposal audit timeline, with explicit no-external-write metadata and no
+  `ActionExecution` rows or provider calls. The UI audit copy now labels the
+  timeline as decisions and execution.
+- Surfaced the recorded decision history in the UI for any decided proposal.
+  `ActionExecutionControls` now shows a "Показать историю решений" control for
+  approved or rejected proposals (including internal/briefing-derived ones) that
+  loads the persisted per-proposal audit trail through the existing read-only
+  audit endpoint. Previously the authoritative trail was only fetched via the
+  approved-GitHub-issue execution preview, so decision history was unreachable
+  for rejected or internal proposals. Read-only; no provider calls, external
+  writes, or LLM.
+- Added local category filtering and default evidence selection to the Founder
+  Briefing UI. Briefing items can now be focused by category within the already
+  loaded deterministic briefing, and the evidence drawer defaults to the first
+  evidence ref from the visible items with briefing-specific context and counts.
+  Manual evidence selection still overrides the default. No provider calls,
+  external writes, or LLM calls are started.
+- Enriched the Founder Briefing history cards with local coverage summaries and
+  deltas against the currently open briefing. History now shows repo/work/evidence
+  coverage and local/live mode per saved summary, plus item/evidence deltas when
+  a briefing is open. This uses only the already-loaded persisted briefing
+  summaries and starts no provider calls, external writes, or LLM calls.
+- Cross-linked Founder Briefing items with existing local ActionProposals. The
+  briefing screen now reads local proposal state, shows linked action counts by
+  status, blocks blind duplicate local action creation for items that already
+  have an open action, and links to `/actions` with briefing/proposed filters.
+  This is local/read-only apart from the already existing `internal_todo`
+  creation control and does not start provider calls, external writes, or LLM.
+- Added a dashboard private-beta readiness panel backed by the existing
+  Company Brain endpoint. It shows canonical data/evidence readiness, session
+  login boundary, manual deploy runbook status, deferred GitHub provider reads,
+  external-writes-off, and LLM boundary without deploying, pushing, calling
+  providers, performing external writes, or invoking LLM.
+- Added local repo-surface focus filters to the `/github` GitHub App panel.
+  The already-loaded repository list can now be filtered by all, active,
+  archived, private, or evidence-backed repositories with summary counts. This
+  remains client-side only and does not call providers, start bulk sync, perform
+  external writes, or weaken the explicit per-repository read-only sync path.
+- Surfaced the deterministic repository audit in the founder UI. The existing
+  `GET /api/v1/founder/company-brain/repo-audit` (computed locally from the
+  GitHub discovery snapshot, no network, no writes) was previously unreachable
+  from the product UI; a new `/audit` page and `RepositoryAuditPanel` now render
+  per-repo audit facts, risk flags, summary counts, guardrails, and local focus
+  filters (all/risks/stale/needs-confirm). Each repo can spawn an
+  `internal_todo` ActionProposal marked `source=repo_audit` with audit evidence
+  refs. ActionProposals review gained an `audit` origin (filter, group, badge,
+  payload detail) plus cross-links back to repositories. This is read-only apart
+  from the local proposal write and starts no provider calls, external writes,
+  or LLM.
+- Added a structured external repo-audit import path on `/audit`. Users can
+  paste JSON findings from another/full audit result (array or
+  `{ findings: [...] }`), and the backend endpoint
+  `POST .../actions/proposals/import-repo-audit` turns valid entries with
+  `repository_full_name` plus `evidence_refs` into local `internal_todo`
+  ActionProposals marked `source=repo_audit_import` with per-finding partial
+  failures. The import path redacts known secret-like fragments in imported
+  text fields, writes only local proposals, and starts no provider calls,
+  external writes, or LLM.
+
+## 2026-07-01
+
+### Changed
+
+- Added GitHub App product-connect foundation: backend config/status contract,
+  workspace-scoped app-installation connection recording without provider calls
+  or persisted installation tokens, and a `/github` UI panel showing app
+  readiness, local repository surface count, and external writes disabled.
+- Hardened GitHub App installation endpoint test coverage: member/viewer RBAC
+  rejection, idempotent same-installation update in place, and invalid
+  `repository_selection` rejection. Test-only; no production behavior change.
+- Added polling-only GitHub App live read-sync foundation: just-in-time
+  installation token minting, installation repository read client, explicit
+  repository-scoped issues/PRs read sync through the existing normalization
+  path, and tests proving no token persistence or provider writes.
+- Added `/github` product UI for explicit GitHub App read-only sync of one
+  repository through the new backend endpoint, with no browser secrets and
+  user-visible no-write/token-persistence boundaries.
+- Fixed `scripts/create_admin_user.py` so direct local execution
+  (`uv run python scripts/create_admin_user.py`) can import the project `app`
+  package without manually setting `PYTHONPATH`.
+- Refined the `/github` GitHub App sync UI to render each known repository with
+  its own adjacent read-only sync button and per-repository success/error state;
+  no bulk sync control was added.
+- Added GitHub App synced-evidence verification coverage proving mocked live
+  sync feeds Company Brain and deterministic Briefings with evidence while a
+  second workspace cannot see the synced canonical state or evidence refs.
+- Added sanitized GitHub provider error/rate-limit observability for live read
+  sync: safe HTTP status/message/rate-limit headers propagate to API errors
+  without leaking authorization headers, tokens, or provider payload dumps.
+- Added an offline, idempotent local org repository ingest helper that promotes
+  `.local/repos.json` into canonical workspace `Repository` rows so `/github`
+  shows the configured organization's repositories instead of retained
+  source-event or legacy fallback rows; the helper reads only the non-secret
+  target-org setting from env files and does not read or print GitHub tokens.
+- Added a dashboard Source Coverage panel backed by the existing Company Brain
+  endpoint. It summarizes canonical repository/work/evidence counts and clearly
+  labels live provider reads and LLM generation as deferred/off without making
+  provider calls or AI calls.
+- Extended deterministic Founder Briefings with local source-coverage signals
+  and a `source-coverage` briefing item derived from Company Brain. Briefing UI
+  now summarizes canonical repos, open work, evidence refs, and local/live mode
+  without adding provider writes, provider reads, or LLM calls.
+- Added a local-only Briefing → ActionProposal bridge: each briefing item can
+  create an `internal_todo` proposal carrying that item's summary and evidence
+  refs for later local approval, without creating GitHub issues or executing
+  external writes.
+- Added local status filters to the ActionProposals review panel so proposed,
+  approved, rejected, and all local proposals can be reviewed without extra
+  provider calls or backend state changes.
+- Reworked the action execution audit UI into a structured local timeline with
+  status, event, provider/action, timestamp, and external-write boundary per
+  event, keeping raw provider payloads hidden.
+- Defaulted the ActionProposals evidence drawer to the first evidence ref in
+  the current local review filter, while keeping a safe placeholder for
+  evidence-free proposals and avoiding provider calls.
+
 ## 2026-06-30
 
 ### Changed
+
+- Added offline GitHub repository-surface preparation from `.local/repos.json`:
+  repo audit and repository inventory now accept the root local repo list as a
+  fallback discovery snapshot, and `scripts/prepare_github_local_snapshot.py`
+  writes the canonical `.local/discovery/github/<snapshot>/raw/repos.json` layout
+  plus a safe local repo allowlist snippet without provider calls or secrets.
 
 - Added a DB-level GitHub repository identity guard:
   `uq_repositories_workspace_provider_full_name` on

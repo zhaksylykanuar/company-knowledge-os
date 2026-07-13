@@ -1,4 +1,5 @@
 import { EmptyState } from "../../components/EmptyState";
+import { GitHubProductConnectPanel } from "../../components/GitHubProductConnectPanel";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
 import { M } from "../../lib/messages";
@@ -11,6 +12,7 @@ export default function GitHubPage() {
         title={M.githubPage.title}
         description={M.githubPage.description}
       />
+      <GitHubProductConnectPanel />
       <section className="grid">
         <StatusCard
           description={M.githubPage.connectionDescription}

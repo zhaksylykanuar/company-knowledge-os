@@ -19,27 +19,48 @@
   единственный фронтенд (статический `/ui` удалён), с русским UI через
   центральный каталог сообщений `web/lib/messages.ts`;
 - продуктовый логин **email+password на серверных сессиях** (Argon2id, httpOnly
-  first-party cookie через same-origin прокси, DB-throttle перебора): эндпоинты
+  first-party cookie через same-origin прокси, DB-throttle перебора по email и
+  production admission по IP/global/concurrency до Argon2): эндпоинты
   `/api/v1/auth/login|logout|me|change-password`, страница `/login`, аккаунт в
   Settings; операторская аутентификация по API-ключу сохраняется для
-  server/CI/админ-скриптов и сосуществует с сессией (fail-closed вне local/dev);
-- GitHub через provider-token connection: read-only нормализация
-  репозиториев / issues / PR в канонические таблицы (идемпотентный `ON CONFLICT`
-  upsert), Company Brain и ручной evidence-брифинг, плюс human-approved guarded
-  write-back одного GitHub issue;
-- детерминированные проекции без LLM: Company Brain и Founder Briefing считаются
-  из локальных данных и несут `evidence_refs`; ручные Founder Briefings уже
-  сохраняются в `Briefing` / `BriefingItem` с историей.
+  server/CI/админ-скриптов и сосуществует с сессией (fail-closed вне local/dev),
+  а сессия отключённого пользователя отзывается при следующей проверке;
+- GitHub через provider-token operator bridge и новый GitHub App
+  product-connect foundation (DEC-052) + polling-only live read-sync backend/UI
+  foundation (DEC-053): read-only нормализация репозиториев / issues / PR в
+  канонические таблицы (идемпотентный `ON CONFLICT` upsert), workspace-scoped
+  app-installation connection state без browser PAT/секретов, just-in-time
+  installation tokens без persistence, per-repository `/github` read-only sync
+  controls, mocked synced-evidence isolation for Company Brain/manual Briefings,
+  safe rate-limit/error observability, display-only first-real-read readiness,
+  плюс human-approved guarded write-back одного GitHub issue;
+- local-only продуктовые поверхности Jira / Gmail / Drive / Documents: pasted/exported
+  import/list flows пишут sanitized canonical `SourceRecord`/`Task`/`Document` rows
+  с evidence refs, без provider calls, sync, external writes, secret reads или LLM;
+- детерминированные проекции без LLM: Company Brain, normalized entities и Founder
+  Briefing считаются из локальных данных и несут `evidence_refs`; ручные Founder
+  Briefings сохраняются в `Briefing` / `BriefingItem` с историей и могут создавать
+  local evidence-backed `ActionProposal` rows;
+- durable Company World (DEC-074): workspace-owned профили людей и организаций,
+  подтверждённые связи и sanitized email interactions сохраняются только после
+  явного решения человека; viewer читает, member+ подтверждает/отклоняет, а
+  canonical email/domain/evidence повторно разрешаются сервером;
+- первый local teammate provisioning/setup-link slice: owner/admin может создать
+  новую local-учётную запись, после чего один раз получает one-time setup-link
+  для ручной передачи по доверенному каналу; inviter не задаёт пароль, email
+  delivery и SSO остаются deferred. Уже состоящий в другом workspace аккаунт не
+  прикрепляется молча: endpoint отвечает 409 до будущего self-accepted invite;
 
 Ещё **не** реализовано (остаётся видением этого плана, а не текущим кодом):
 
-- GitHub OAuth/App start/callback/connect и живая продуктовая синхронизация;
+- GitHub App first approved real-provider read run;
 - LLM-брифинг-пайплайн поверх уже персистентной модели;
-- продуктовые пути Jira / Gmail / Drive / Documents;
-- мультиюзер/онбординг (сейчас один основатель, заводится через
-  `scripts/create_admin_user.py`);
-- остальные страницы (`/connectors`, `/jira`, `/gmail`, ...), rate limiting,
-  webhook-подписи.
+- live Jira/Gmail/Drive provider OAuth/sync вместо local import/list;
+- self-serve workspace onboarding, email-delivered invites / password reset и SSO;
+- webhook-подписи, shared edge/Redis rate limiting до перехода с одного Uvicorn
+  process на несколько workers, deploy-smoke distinct client IP за production
+  proxy, custom-domain/broader beta hardening и first production deploy текущего
+  auth/session состояния.
 
 ---
 
@@ -85,6 +106,12 @@ MVP founderOS должен позволять:
 9. получить action proposal;
 10. подтвердить действие вручную;
 11. увидеть результат выполнения действия.
+
+Интерфейс строится как evidence-backed управление компанией: «Штаб» показывает
+текущий управленческий ход, решения, карту людей/организаций/соприкосновений и
+операционный контур. Игровая метафора помогает ориентироваться, но не создаёт
+очки, уровни, роли заказчиков или связи без источников. Неподтверждённые люди и
+организации всегда помечаются кандидатами до решения основателя.
 
 ## 1.2 Зачем это нужно
 
@@ -158,7 +185,7 @@ Login
 - evidence refs;
 - Company Brain view;
 - Founder Dashboard;
-- Repo Audit view;
+- Company World view;
 - manual Founder Briefing;
 - action proposals;
 - human approval before execution;
@@ -336,7 +363,7 @@ Connect sources
 - Company Brain;
 - Briefings;
 - Actions;
-- Repo Audit;
+- Company World profiles;
 - Settings.
 
 ## 3.2 После MVP - можно позже
@@ -581,17 +608,18 @@ Founder.
 ### Шаги
 
 1. Открывает Company Brain.
-2. Видит entities.
-3. Фильтрует по типу.
-4. Открывает entity.
-5. Видит source records.
-6. Видит evidence refs.
-7. Переходит во внешний источник.
+2. Видит свою компанию, подтверждённых участников workspace и кандидатов из
+   источников.
+3. Открывает профиль человека, организации или соприкосновения.
+4. Отличает подтверждённые роли от гипотез, требующих решения основателя.
+5. Видит ограничение окна данных и evidence refs.
+6. Переходит во внешний источник.
 
 ### Экраны
 
+- Company World map;
+- Person / organization / touchpoint profile;
 - Brain entity list;
-- Entity detail;
 - Source records;
 - Evidence drawer;
 - Related entities.
@@ -604,6 +632,7 @@ Founder.
 - SourceRecord;
 - EvidenceRef;
 - EntityLink.
+- Workspace membership;
 
 ### Успех
 
@@ -1663,7 +1692,123 @@ created_at: datetime
 
 ---
 
-## 6.24 Cache rules
+## 6.24 Person
+
+```txt
+id: uuid
+workspace_id: uuid
+user_id: uuid optional
+normalized_email: string required
+display_name: string optional
+origin: membership | founder_confirmation
+status: active | archived
+confirmed_by_user_id: uuid optional
+confirmed_at: datetime optional
+created_at: datetime
+updated_at: datetime
+```
+
+Rules:
+
+- membership-origin `user_id` belongs to a membership in the same workspace;
+- founder-confirmed rows require actor and timestamp provenance;
+- normalized email is unique inside one workspace.
+
+---
+
+## 6.25 Organization
+
+```txt
+id: uuid
+workspace_id: uuid
+canonical_key: string required
+normalized_domain: string optional
+display_name: string required
+relationship_kind: unknown | prospect | customer | partner | vendor | other
+status: active | archived
+confirmed_by_user_id: uuid required
+confirmed_at: datetime required
+created_at: datetime
+updated_at: datetime
+```
+
+Organization type is a human decision. Email domain is evidence for a
+candidate, not proof that the organization is a customer or employer.
+
+---
+
+## 6.26 Affiliation
+
+```txt
+id: uuid
+workspace_id: uuid
+person_id: uuid
+organization_id: uuid
+relationship_type: contact | employee | decision_maker | account_owner | advisor | other
+role_title: string optional
+source_record_id: uuid
+confirmed_by_user_id: uuid required
+confirmed_at: datetime required
+status: active | archived
+created_at: datetime
+updated_at: datetime
+```
+
+Person, organization, source record and confirming membership must belong to
+the same workspace. No relationship type is inferred automatically.
+
+---
+
+## 6.27 Interaction
+
+```txt
+id: uuid
+workspace_id: uuid
+person_id: uuid
+organization_id: uuid optional
+source_record_id: uuid
+channel: email
+direction: inbound | outbound | mixed | unknown
+subject: string optional
+occurred_at: datetime
+source_url: string optional
+created_at: datetime
+updated_at: datetime
+```
+
+Interaction stores bounded sanitized metadata and provenance only. Raw body,
+snippet and provider payload remain in the source-of-truth layer and are not
+copied into Company World.
+
+---
+
+## 6.28 CompanyWorldResolution
+
+```txt
+id: uuid
+workspace_id: uuid
+candidate_type: external_person | organization
+candidate_key: string
+candidate_version: sha256
+decision: confirmed | dismissed
+idempotency_key: string
+request_hash: sha256
+actor_user_id: uuid
+source_record_id: uuid
+result_person_id: uuid optional
+result_organization_id: uuid optional
+result_affiliation_id: uuid optional
+created_at: datetime
+updated_at: datetime
+```
+
+Resolution is a terminal, idempotent human decision over a server-resolved
+candidate snapshot. Result IDs, actor and source record are workspace-bound;
+the client cannot nominate canonical email/domain/evidence or raw content.
+
+---
+
+## 6.29 Cache rules
 
 Можно кэшировать:
 
@@ -2217,17 +2362,52 @@ Returns:
 
 ---
 
-## 7.15 Repo Audit endpoint
+## 7.15 Company World endpoint
 
-### GET `/workspaces/{workspace_id}/repo-audit`
+### GET `/workspaces/{workspace_id}/company-map`
 
-Returns latest repo audit.
+Returns:
+
+- company and confirmed workspace members;
+- confirmed durable external people and organizations;
+- external people and organization candidates;
+- bounded email touchpoints;
+- evidence refs, window metadata, warnings, and capabilities.
 
 Rules:
 
-- read-only;
-- no external writes;
-- evidence visible.
+- workspace-membership-gated, including read-only viewer access;
+- GET is read-only and merges projection candidates with durable profiles;
+- cross-workspace access is hidden;
+- external roles remain unconfirmed until founder confirmation;
+- raw message bodies/snippets are excluded;
+- no provider calls, external writes, or LLM.
+
+### POST `/workspaces/{workspace_id}/company-map/resolutions`
+
+Input:
+
+- `candidate_type`, `candidate_key`, `candidate_version`;
+- terminal `decision`: `confirmed | dismissed`;
+- `idempotency_key`;
+- optional human-authored display/classification fields allowed by candidate type.
+
+Returns:
+
+- durable resolution receipt;
+- result profile IDs and sanitized interaction count;
+- replay flag and explicit no-provider/no-external-write/no-LLM capabilities.
+
+Rules:
+
+- member-or-higher; viewer receives forbidden and outsider stays hidden;
+- canonical email, domain, source records and evidence are resolved server-side;
+- stale candidate versions and conflicting idempotency keys fail closed;
+- person and organization are separate human decisions; a domain never silently
+  confirms an organization;
+- confirmation writes only the locked evidence snapshot; full historical
+  materialization is an explicit aggregate-only backfill;
+- no raw-source rewrite, provider call, external write, secret read, or LLM.
 
 ---
 
@@ -2244,6 +2424,10 @@ UI should be:
 - evidence-first;
 - action-oriented.
 
+Допустима метафора стратегии управления компанией: штаб, карта мира, сигналы,
+миссии и туман неизвестности. Она должна отражать реальные данные и
+неопределённость; искусственные XP/монеты/рейтинги и выдуманные связи запрещены.
+
 Не делать “красиво ради красоты”. Сначала рабочий интерфейс.
 
 ## 8.2 Navigation
@@ -2251,18 +2435,10 @@ UI should be:
 Sidebar:
 
 ```txt
-Dashboard
-Company Brain
-Connectors
-GitHub
-Jira
-Gmail
-Drive
-Documents
-Briefings
-Actions
-Repo Audit
-Settings
+Командный центр: Штаб компании, Мир компании
+Управление: Сводки, Действия, Документы
+Источники: Коннекторы, GitHub, Jira, Gmail, Drive
+Система: Настройки
 ```
 
 Topbar:
@@ -2292,15 +2468,10 @@ States:
 
 Sections:
 
-- connection health;
-- last sync;
-- active risks;
-- stale PRs;
-- stale tasks;
-- important threads;
-- recent documents;
-- latest briefing;
-- generate briefing CTA.
+- ход дня / latest briefing;
+- требует решения / action proposals;
+- карта компании / people, organizations, touchpoints;
+- операционный контур / sources, sync, readiness, canonical work.
 
 Empty state:
 
@@ -2427,19 +2598,20 @@ Components:
 
 ---
 
-## `/brain`
+## `/company-brain`
 
-Tabs:
+Sections:
 
-- Entities;
-- Timeline;
-- Source Records;
-- Evidence.
+- Company World map;
+- company, person, organization, and touchpoint profiles;
+- canonical Company Brain;
+- normalized entities;
+- source records and evidence.
 
-Entity detail:
+Profile detail:
 
-- canonical info;
-- source records;
+- confirmed or candidate state;
+- bounded interactions;
 - evidence refs;
 - related entities.
 
@@ -2486,15 +2658,15 @@ Action detail:
 
 ---
 
-## `/repo-audit`
+## Legacy repo audit (operator-only)
 
-Sections:
+There is no product `/audit` route. The filesystem preview is not
+workspace-scoped and therefore requires the operator API key; browser sessions
+are rejected. Workspace-scoped action audit/import endpoints remain available.
 
-- repository inventory;
-- computed facts;
-- warnings;
-- evidence refs;
-- export JSON.
+Company World is the current evidence-backed product surface. Confirmed
+profiles are durable; unresolved and dismissed candidates remain explicit human
+decisions rather than inferred company facts.
 
 ---
 
@@ -3919,22 +4091,22 @@ Docs appear in Company Brain.
 
 ---
 
-## FOS-021 - Repo Audit UI
+## FOS-021 - Repo Audit UI (historical; superseded by DEC-073)
 
 ### Goal
 
-Expose existing repo audit work.
+Historical task that exposed the filesystem repo-audit preview.
 
 ### Instructions
 
-- Use existing repo_audit logic.
-- No network writes.
-- Show facts/evidence.
-- Add UI page.
+- The former product page is retired because the preview is not
+  workspace-scoped.
+- Keep the preview operator-key-only and reject browser sessions.
+- Keep workspace-scoped action audit/import contracts intact.
 
 ### Acceptance criteria
 
-Repo audit page works.
+No product `/audit` route; Company World is workspace-scoped and evidence-first.
 
 ---
 

@@ -4,14 +4,17 @@ import { type FormEvent, useEffect, useState } from "react";
 
 import {
   approveActionProposal,
+  bulkApproveActionProposals,
+  bulkRejectActionProposals,
   createActionProposal,
   fetchActionProposals,
   rejectActionProposal
 } from "../lib/api";
 import { M, T } from "../lib/messages";
-import { useWorkspaceId } from "../lib/session";
+import { useSession } from "../lib/session";
 import type {
   ActionProposal,
+  ActionProposalBulkResponse,
   ActionProposalEvidenceRef,
   ActionProposalListResponse,
   ActionProposalType,
@@ -26,7 +29,38 @@ import { StatusCard } from "./StatusCard";
 
 type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupported";
 type ProposalKind = "github_issue" | "internal_todo";
-type PendingMutation = "create" | `approve:${string}` | `reject:${string}` | null;
+type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
+type ProposalOrigin = "audit" | "briefing" | "github" | "internal";
+type ProposalOriginFilter = "all" | ProposalOrigin;
+type ProposalAuditSource = "deterministic" | "imported";
+type ProposalAuditSourceFilter = "all" | ProposalAuditSource;
+type BulkMutation = "bulk-approve" | "bulk-reject";
+type PendingMutation =
+  | "create"
+  | BulkMutation
+  | `approve:${string}`
+  | `reject:${string}`
+  | null;
+type EvidenceSelection = {
+  evidence: ActionProposalEvidenceRef;
+  title: string;
+  count: number;
+};
+
+type ActionReviewReadiness = {
+  externalResultReported: number;
+  localOnly: number;
+  missingEvidence: number;
+  pendingDecision: number;
+  previewReady: number;
+};
+
+type ProposalGroup = {
+  origin: ProposalOrigin;
+  title: string;
+  description: string;
+  proposals: ActionProposal[];
+};
 
 type ActionProposalCreateFormState = {
   description: string;
@@ -36,7 +70,15 @@ type ActionProposalCreateFormState = {
   title: string;
 };
 
+type ActionProposalsPanelProps = {
+  initialAuditSourceFilter?: string | null;
+  initialOriginFilter?: string | null;
+  initialStatusFilter?: string | null;
+};
+
 type ActionProposalsPanelViewProps = {
+  canCreateProposals?: boolean;
+  canReviewProposals?: boolean;
   createForm: ActionProposalCreateFormState;
   data: ActionProposalListResponse | null;
   error: string | null;
@@ -50,10 +92,27 @@ type ActionProposalsPanelViewProps = {
   onReject?: (proposalId: string) => void;
   onRefreshProposals?: () => void;
   onRetry?: () => void;
-  onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
+  onOriginFilterChange?: (filter: ProposalOriginFilter) => void;
+  onBulkApprove?: () => void;
+  onBulkReject?: () => void;
+  onClearSelectedProposals?: () => void;
+  onSelectEvidence?: (
+    evidence: ActionProposalEvidenceRef,
+    title: string,
+    count?: number
+  ) => void;
+  onSelectVisibleProposed?: () => void;
+  onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
+  onToggleProposalSelection?: (proposalId: string) => void;
   pendingMutation: PendingMutation;
+  auditSourceFilter?: ProposalAuditSourceFilter;
+  onAuditSourceFilterChange?: (filter: ProposalAuditSourceFilter) => void;
+  originFilter?: ProposalOriginFilter;
+  selectedProposalIds?: string[];
   selectedEvidence: ActionProposalEvidenceRef | null;
   selectedEvidenceTitle?: string | null;
+  selectedEvidenceCount?: number | null;
+  statusFilter?: ProposalStatusFilter;
   status: PanelStatus;
   successMessage?: string | null;
 };
@@ -66,8 +125,27 @@ const DEFAULT_CREATE_FORM: ActionProposalCreateFormState = {
   title: ""
 };
 
-export function ActionProposalsPanel() {
-  const workspaceId = useWorkspaceId();
+export function actionCapabilitiesForRole(role: string | null): {
+  canCreateProposals: boolean;
+  canReviewProposals: boolean;
+} {
+  const canReviewProposals = role === "owner" || role === "admin";
+  return {
+    canCreateProposals: canReviewProposals || role === "member",
+    canReviewProposals
+  };
+}
+
+export function ActionProposalsPanel({
+  initialAuditSourceFilter = null,
+  initialOriginFilter = null,
+  initialStatusFilter = null
+}: ActionProposalsPanelProps = {}) {
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const selectedRole =
+    session?.workspaces.find((workspace) => workspace.id === workspaceId)?.role ?? null;
+  const capabilities = actionCapabilitiesForRole(selectedRole);
   const [data, setData] = useState<ActionProposalListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<ActionProposalCreateFormState>(
@@ -78,8 +156,26 @@ export function ActionProposalsPanel() {
   const [selectedEvidence, setSelectedEvidence] =
     useState<ActionProposalEvidenceRef | null>(null);
   const [selectedEvidenceTitle, setSelectedEvidenceTitle] = useState<string | null>(null);
+  const [selectedEvidenceCount, setSelectedEvidenceCount] = useState<number | null>(null);
+  const [selectedProposalIds, setSelectedProposalIds] = useState<string[]>([]);
   const [status, setStatus] = useState<PanelStatus>("loading");
+  const [auditSourceFilter, setAuditSourceFilter] =
+    useState<ProposalAuditSourceFilter>(
+      normalizeAuditSourceFilter(initialAuditSourceFilter)
+    );
+  const [originFilter, setOriginFilter] = useState<ProposalOriginFilter>(
+    normalizeOriginFilter(initialOriginFilter)
+  );
+  const [statusFilter, setStatusFilter] = useState<ProposalStatusFilter>(
+    normalizeStatusFilter(initialStatusFilter)
+  );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAuditSourceFilter(normalizeAuditSourceFilter(initialAuditSourceFilter));
+    setOriginFilter(normalizeOriginFilter(initialOriginFilter));
+    setStatusFilter(normalizeStatusFilter(initialStatusFilter));
+  }, [initialAuditSourceFilter, initialOriginFilter, initialStatusFilter]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -114,6 +210,18 @@ export function ActionProposalsPanel() {
     };
   }, [workspaceId, reloadKey]);
 
+  useEffect(() => {
+    const visibleProposedIds = visibleProposedProposalIds(
+      data?.proposals ?? [],
+      statusFilter,
+      originFilter,
+      auditSourceFilter
+    );
+    setSelectedProposalIds((current) =>
+      pruneProposalSelection(current, visibleProposedIds)
+    );
+  }, [auditSourceFilter, data, originFilter, statusFilter]);
+
   function updateCreateForm(
     field: keyof ActionProposalCreateFormState,
     value: string
@@ -125,6 +233,9 @@ export function ActionProposalsPanel() {
     event.preventDefault();
     if (!workspaceId) {
       setStatus("missing");
+      return;
+    }
+    if (!capabilities.canCreateProposals) {
       return;
     }
     const request = buildCreateRequest(createForm);
@@ -156,6 +267,9 @@ export function ActionProposalsPanel() {
       setStatus("missing");
       return;
     }
+    if (!capabilities.canReviewProposals) {
+      return;
+    }
 
     setError(null);
     setSuccessMessage(null);
@@ -178,6 +292,9 @@ export function ActionProposalsPanel() {
       setStatus("missing");
       return;
     }
+    if (!capabilities.canReviewProposals) {
+      return;
+    }
 
     setError(null);
     setSuccessMessage(null);
@@ -197,28 +314,162 @@ export function ActionProposalsPanel() {
     }
   }
 
+  function toggleProposalSelection(proposalId: string) {
+    setSelectedProposalIds((current) =>
+      current.includes(proposalId)
+        ? current.filter((existingId) => existingId !== proposalId)
+        : [...current, proposalId]
+    );
+  }
+
+  function selectVisibleProposed() {
+    setSelectedProposalIds(
+      visibleProposedProposalIds(
+        data?.proposals ?? [],
+        statusFilter,
+        originFilter,
+        auditSourceFilter
+      )
+    );
+  }
+
+  async function approveSelected() {
+    await mutateSelectedProposals("bulk-approve");
+  }
+
+  async function rejectSelected() {
+    await mutateSelectedProposals("bulk-reject");
+  }
+
+  async function mutateSelectedProposals(mutation: BulkMutation) {
+    if (!workspaceId) {
+      setStatus("missing");
+      return;
+    }
+    if (!capabilities.canReviewProposals) {
+      return;
+    }
+    const proposalsToMutate = selectedProposalsForBulkMutation(
+      data?.proposals ?? [],
+      selectedProposalIds
+    );
+    if (proposalsToMutate.length === 0) {
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setPendingMutation(mutation);
+    try {
+      const proposalIds = proposalsToMutate.map((proposal) => proposal.id);
+      const response =
+        mutation === "bulk-approve"
+          ? await bulkApproveActionProposals(workspaceId, {
+              proposal_ids: proposalIds
+            })
+          : await bulkRejectActionProposals(workspaceId, {
+              proposal_ids: proposalIds,
+              reason: M.actionsPanel.rejectReason
+            });
+      const outcome = summarizeBulkResponse(response);
+      if (outcome.succeeded.length > 0) {
+        setData((current) =>
+          mergeUpdatedProposals(
+            current,
+            outcome.succeeded,
+            response.warnings
+          )
+        );
+      }
+      // Only clear the proposals that actually transitioned; keep failed ones
+      // selected so the reviewer can retry them.
+      setSelectedProposalIds((current) =>
+        current.filter((proposalId) => !outcome.succeededIds.includes(proposalId))
+      );
+      setStatus("ready");
+      if (outcome.failed.length === 0) {
+        setSuccessMessage(
+          mutation === "bulk-approve"
+            ? T.actionsBulkApproveSuccess(outcome.succeeded.length)
+            : T.actionsBulkRejectSuccess(outcome.succeeded.length)
+        );
+      } else if (outcome.succeeded.length === 0) {
+        setError(T.actionsBulkAllFailed(outcome.failed.length));
+      } else {
+        setSuccessMessage(
+          mutation === "bulk-approve"
+            ? T.actionsBulkApprovePartial(
+                outcome.succeeded.length,
+                outcome.failed.length
+              )
+            : T.actionsBulkRejectPartial(
+                outcome.succeeded.length,
+                outcome.failed.length
+              )
+        );
+        setError(outcome.firstFailureMessage ?? M.common.requestFailed);
+      }
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
+      setStatus("error");
+    } finally {
+      setPendingMutation(null);
+    }
+  }
+
   return (
     <ActionProposalsPanelView
+      canCreateProposals={capabilities.canCreateProposals}
+      canReviewProposals={capabilities.canReviewProposals}
       createForm={createForm}
       data={data}
       error={error}
-      onApprove={approve}
+      onApprove={capabilities.canReviewProposals ? approve : undefined}
       onCloseEvidence={() => {
         setSelectedEvidence(null);
         setSelectedEvidenceTitle(null);
+        setSelectedEvidenceCount(null);
       }}
-      onCreate={submitCreate}
-      onCreateFormChange={updateCreateForm}
-      onReject={reject}
+      onCreate={capabilities.canCreateProposals ? submitCreate : undefined}
+      onCreateFormChange={
+        capabilities.canCreateProposals ? updateCreateForm : undefined
+      }
+      onReject={capabilities.canReviewProposals ? reject : undefined}
       onRefreshProposals={() => setReloadKey((current) => current + 1)}
       onRetry={() => setReloadKey((current) => current + 1)}
-      onSelectEvidence={(evidence, title) => {
+      onOriginFilterChange={setOriginFilter}
+      onBulkApprove={
+        capabilities.canReviewProposals ? approveSelected : undefined
+      }
+      onBulkReject={
+        capabilities.canReviewProposals ? rejectSelected : undefined
+      }
+      onClearSelectedProposals={
+        capabilities.canReviewProposals
+          ? () => setSelectedProposalIds([])
+          : undefined
+      }
+      onSelectEvidence={(evidence, title, count) => {
         setSelectedEvidence(evidence);
         setSelectedEvidenceTitle(title);
+        setSelectedEvidenceCount(typeof count === "number" ? count : null);
       }}
+      onSelectVisibleProposed={
+        capabilities.canReviewProposals ? selectVisibleProposed : undefined
+      }
+      onAuditSourceFilterChange={setAuditSourceFilter}
+      onStatusFilterChange={setStatusFilter}
+      onToggleProposalSelection={
+        capabilities.canReviewProposals ? toggleProposalSelection : undefined
+      }
       pendingMutation={pendingMutation}
+      auditSourceFilter={auditSourceFilter}
+      originFilter={originFilter}
+      selectedProposalIds={selectedProposalIds}
       selectedEvidence={selectedEvidence}
       selectedEvidenceTitle={selectedEvidenceTitle}
+      selectedEvidenceCount={selectedEvidenceCount}
+      statusFilter={statusFilter}
       status={status}
       successMessage={successMessage}
     />
@@ -226,6 +477,8 @@ export function ActionProposalsPanel() {
 }
 
 export function ActionProposalsPanelView({
+  canCreateProposals = true,
+  canReviewProposals = true,
   createForm,
   data,
   error,
@@ -236,14 +489,56 @@ export function ActionProposalsPanelView({
   onReject,
   onRefreshProposals,
   onRetry,
+  onOriginFilterChange,
+  onBulkApprove,
+  onBulkReject,
+  onClearSelectedProposals,
   onSelectEvidence,
+  onSelectVisibleProposed,
+  onAuditSourceFilterChange,
+  onStatusFilterChange,
+  onToggleProposalSelection,
   pendingMutation,
+  auditSourceFilter = "all",
+  originFilter = "all",
+  selectedProposalIds = [],
   selectedEvidence,
   selectedEvidenceTitle = null,
+  selectedEvidenceCount = null,
+  statusFilter = "all",
   status,
   successMessage = null
 }: ActionProposalsPanelViewProps) {
   const proposals = data?.proposals ?? [];
+  const statusFilteredProposals = filterProposalsByStatus(proposals, statusFilter);
+  const originFilteredProposals = filterProposalsByOrigin(
+    statusFilteredProposals,
+    originFilter
+  );
+  const filteredProposals =
+    originFilter === "audit"
+      ? filterProposalsByAuditSource(originFilteredProposals, auditSourceFilter)
+      : originFilteredProposals;
+  const visibleProposedIds = proposedProposalIds(filteredProposals);
+  const visibleProposedCount = visibleProposedIds.length;
+  const selectedProposedCount = selectedProposalIds.filter((proposalId) =>
+    visibleProposedIds.includes(proposalId)
+  ).length;
+  const groups = groupProposalsByOrigin(filteredProposals);
+  const orderedProposals = groups.flatMap((group) => group.proposals);
+  const defaultEvidenceSelection = firstEvidenceSelection(orderedProposals);
+  const drawerEvidence = selectedEvidence ?? defaultEvidenceSelection?.evidence ?? null;
+  const drawerTitle = selectedEvidence
+    ? selectedEvidenceTitle
+    : defaultEvidenceSelection?.title ?? null;
+  const drawerCount = selectedEvidence
+    ? selectedEvidenceCount
+    : defaultEvidenceSelection?.count ?? null;
+  const drawerSelectionMode: "default" | "manual" | null = drawerEvidence
+    ? selectedEvidence
+      ? "manual"
+      : "default"
+    : null;
   const canCreate = canSubmitCreateForm(createForm);
 
   return (
@@ -263,15 +558,35 @@ export function ActionProposalsPanelView({
         <p>{T.actionsCapability()}</p>
       </section>
 
-      <ActionProposalCreateForm
-        form={createForm}
-        isPending={pendingMutation === "create"}
-        onChange={onCreateFormChange}
-        onSubmit={onCreate}
-        submitDisabled={!canCreate}
-      />
+      {canCreateProposals ? (
+        <ActionProposalCreateForm
+          form={createForm}
+          isPending={pendingMutation === "create"}
+          onChange={onCreateFormChange}
+          onSubmit={onCreate}
+          submitDisabled={!canCreate}
+        />
+      ) : (
+        <p className="muted">
+          У вас режим просмотра: можно изучать предложения и доказательства,
+          но нельзя создавать, принимать, отклонять или выполнять решения.
+        </p>
+      )}
+
+      {canCreateProposals && !canReviewProposals ? (
+        <p className="muted">
+          Вы можете создавать локальные предложения. Принимать, отклонять и
+          выполнять их может владелец или администратор компании.
+        </p>
+      ) : null}
 
       {successMessage ? <p className="success-text">{successMessage}</p> : null}
+
+      {error && status !== "error" ? (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {status === "loading" ? <LoadingState label={M.actionsPanel.loading} /> : null}
 
@@ -333,19 +648,62 @@ export function ActionProposalsPanelView({
             />
           </section>
 
+          {canReviewProposals ? (
+            <ActionReviewReadinessPanel proposals={proposals} />
+          ) : null}
+
+          <ActionStatusFilter
+            activeFilter={statusFilter}
+            onChange={onStatusFilterChange}
+            proposals={proposals}
+          />
+
+          <ActionOriginFilter
+            activeFilter={originFilter}
+            onChange={onOriginFilterChange}
+            proposals={statusFilteredProposals}
+          />
+
+          {originFilter === "audit" ? (
+            <ActionAuditSourceFilter
+              activeFilter={auditSourceFilter}
+              onChange={onAuditSourceFilterChange}
+              proposals={statusFilteredProposals}
+            />
+          ) : null}
+
+          {canReviewProposals ? (
+            <BulkReviewControls
+              onApproveSelected={onBulkApprove}
+              onClearSelection={onClearSelectedProposals}
+              onRejectSelected={onBulkReject}
+              onSelectVisibleProposed={onSelectVisibleProposed}
+              pendingMutation={pendingMutation}
+              selectedCount={selectedProposedCount}
+              visibleProposedCount={visibleProposedCount}
+            />
+          ) : null}
+
           <section className="work-columns">
             <ProposalList
+              canReviewProposals={canReviewProposals}
+              groups={groups}
               onApprove={onApprove}
               onReject={onReject}
               onRefreshProposals={onRefreshProposals}
               onSelectEvidence={onSelectEvidence}
+              onToggleProposalSelection={onToggleProposalSelection}
               pendingMutation={pendingMutation}
-              proposals={proposals}
+              selectedProposalIds={selectedProposalIds}
+              totalProposals={proposals.length}
+              visibleProposals={filteredProposals.length}
             />
             <EvidenceDrawer
-              evidence={selectedEvidence}
-              itemTitle={selectedEvidenceTitle}
+              evidence={drawerEvidence}
+              evidenceCount={drawerCount}
+              itemTitle={drawerTitle}
               onClose={selectedEvidence ? onCloseEvidence : undefined}
+              selectionMode={drawerSelectionMode}
             />
           </section>
 
@@ -358,6 +716,52 @@ export function ActionProposalsPanelView({
           ) : null}
         </>
       ) : null}
+    </section>
+  );
+}
+
+function ActionReviewReadinessPanel({ proposals }: { proposals: ActionProposal[] }) {
+  const readiness = summarizeActionReviewReadiness(proposals);
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.readinessLabel}>
+      <h3>{M.actionsPanel.readinessTitle}</h3>
+      <p className="muted">{M.actionsPanel.readinessDescription}</p>
+      <section className="grid" aria-label={M.actionsPanel.readinessLabel}>
+        <StatusCard
+          description={M.actionsPanel.readinessPendingDescription}
+          title={M.actionsPanel.readinessPendingTitle}
+          value={String(readiness.pendingDecision)}
+        />
+        <StatusCard
+          description={M.actionsPanel.readinessPreviewDescription}
+          title={M.actionsPanel.readinessPreviewTitle}
+          value={String(readiness.previewReady)}
+        />
+        <StatusCard
+          description={M.actionsPanel.readinessLocalOnlyDescription}
+          title={M.actionsPanel.readinessLocalOnlyTitle}
+          value={String(readiness.localOnly)}
+        />
+        <StatusCard
+          description={M.actionsPanel.readinessMissingEvidenceDescription}
+          title={M.actionsPanel.readinessMissingEvidenceTitle}
+          value={String(readiness.missingEvidence)}
+        />
+        <StatusCard
+          description={M.actionsPanel.readinessExternalResultDescription}
+          title={M.actionsPanel.readinessExternalResultTitle}
+          value={String(readiness.externalResultReported)}
+        />
+      </section>
+      <p className="muted">
+        {T.actionsReadinessNextStep(
+          readiness.pendingDecision,
+          readiness.previewReady,
+          readiness.missingEvidence,
+          readiness.externalResultReported
+        )}
+      </p>
+      <p className="muted">{M.actionsPanel.readinessBoundary}</p>
     </section>
   );
 }
@@ -442,101 +846,424 @@ function ActionProposalCreateForm({
   );
 }
 
-function ProposalList({
-  onApprove,
-  onReject,
-  onRefreshProposals,
-  onSelectEvidence,
-  pendingMutation,
+function ActionStatusFilter({
+  activeFilter,
+  onChange,
   proposals
 }: {
-  onApprove?: (proposalId: string) => void;
-  onReject?: (proposalId: string) => void;
-  onRefreshProposals?: () => void;
-  onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
-  pendingMutation: PendingMutation;
+  activeFilter: ProposalStatusFilter;
+  onChange?: (filter: ProposalStatusFilter) => void;
   proposals: ActionProposal[];
 }) {
+  const filters: ProposalStatusFilter[] = ["proposed", "approved", "rejected", "all"];
   return (
-    <section className="work-section" aria-label={M.actionsPanel.listTitle}>
-      <h3>{M.actionsPanel.listTitle}</h3>
-      {proposals.length === 0 ? (
-        <p className="muted">{M.actionsPanel.noProposals}</p>
-      ) : null}
-      <div className="work-list">
-        {proposals.map((proposal) => (
-          <article className="work-item" key={proposal.id}>
-            <div className="work-item-main">
-              <span className="badge">{proposal.status}</span>
-              <h4>{proposal.title}</h4>
-            </div>
-            {proposal.description ? (
-              <p className="muted">{proposal.description}</p>
-            ) : null}
-            <dl className="work-meta">
-              <div>
-                <dt>{M.actionsPanel.metaTarget}</dt>
-                <dd>{proposal.target_provider}</dd>
-              </div>
-              <div>
-                <dt>{M.actionsPanel.metaAction}</dt>
-                <dd>{actionLabel(proposal.action_type)}</dd>
-              </div>
-              <div>
-                <dt>{M.actionsPanel.metaStatus}</dt>
-                <dd>{proposal.status}</dd>
-              </div>
-              <div>
-                <dt>{M.actionsPanel.metaExecution}</dt>
-                <dd>
-                  {proposal.execution_started
-                    ? M.actionsPanel.executionReported
-                    : M.actionsPanel.executionNotExecuted}
-                </dd>
-              </div>
-            </dl>
-            <ProposalPayloadDetails proposal={proposal} />
-            <ProposalAuditDetails proposal={proposal} />
-            <ActionEvidenceButtons
-              evidenceRefs={proposal.evidence_refs}
-              onSelectEvidence={onSelectEvidence}
-              proposalTitle={proposal.title}
-            />
-            <ProposalActions
-              onApprove={onApprove}
-              onReject={onReject}
-              pendingMutation={pendingMutation}
-              proposal={proposal}
-            />
-            <ActionExecutionControls
-              onRefresh={onRefreshProposals}
-              proposal={proposal}
-            />
-            {proposal.warnings.length > 0 ? (
-              <ul className="meta-list">
-                {proposal.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            ) : null}
-          </article>
+    <section className="work-section" aria-label={M.actionsPanel.filterLabel}>
+      <h3>{M.actionsPanel.filterTitle}</h3>
+      <p className="muted">{M.actionsPanel.filterDescription}</p>
+      <div className="segmented" role="tablist" aria-label={M.actionsPanel.filterLabel}>
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {filterLabel(filter)} · {filterCount(proposals, filter)}
+          </button>
         ))}
       </div>
     </section>
   );
 }
 
+function normalizeStatusFilter(value: string | null | undefined): ProposalStatusFilter {
+  if (
+    value === "all" ||
+    value === "approved" ||
+    value === "proposed" ||
+    value === "rejected"
+  ) {
+    return value;
+  }
+  return "proposed";
+}
+
+function normalizeOriginFilter(value: string | null | undefined): ProposalOriginFilter {
+  if (
+    value === "all" ||
+    value === "audit" ||
+    value === "briefing" ||
+    value === "github" ||
+    value === "internal"
+  ) {
+    return value;
+  }
+  return "all";
+}
+
+function normalizeAuditSourceFilter(
+  value: string | null | undefined
+): ProposalAuditSourceFilter {
+  if (value === "deterministic" || value === "imported" || value === "all") {
+    return value;
+  }
+  return "all";
+}
+
+function ActionOriginFilter({
+  activeFilter,
+  onChange,
+  proposals
+}: {
+  activeFilter: ProposalOriginFilter;
+  onChange?: (filter: ProposalOriginFilter) => void;
+  proposals: ActionProposal[];
+}) {
+  const filters: ProposalOriginFilter[] = [
+    "all",
+    "audit",
+    "briefing",
+    "github",
+    "internal"
+  ];
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.originFilterLabel}>
+      <h3>{M.actionsPanel.originFilterTitle}</h3>
+      <p className="muted">{M.actionsPanel.originFilterDescription}</p>
+      <div className="segmented" role="tablist" aria-label={M.actionsPanel.originFilterLabel}>
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {originFilterLabel(filter)} · {originFilterCount(proposals, filter)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ActionAuditSourceFilter({
+  activeFilter,
+  onChange,
+  proposals
+}: {
+  activeFilter: ProposalAuditSourceFilter;
+  onChange?: (filter: ProposalAuditSourceFilter) => void;
+  proposals: ActionProposal[];
+}) {
+  const filters: ProposalAuditSourceFilter[] = ["all", "deterministic", "imported"];
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.auditSourceFilterLabel}>
+      <h3>{M.actionsPanel.auditSourceFilterTitle}</h3>
+      <p className="muted">{M.actionsPanel.auditSourceFilterDescription}</p>
+      <div
+        className="segmented"
+        role="tablist"
+        aria-label={M.actionsPanel.auditSourceFilterLabel}
+      >
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {auditSourceFilterLabel(filter)} · {auditSourceFilterCount(proposals, filter)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BulkReviewControls({
+  onApproveSelected,
+  onClearSelection,
+  onRejectSelected,
+  onSelectVisibleProposed,
+  pendingMutation,
+  selectedCount,
+  visibleProposedCount
+}: {
+  onApproveSelected?: () => void;
+  onClearSelection?: () => void;
+  onRejectSelected?: () => void;
+  onSelectVisibleProposed?: () => void;
+  pendingMutation: PendingMutation;
+  selectedCount: number;
+  visibleProposedCount: number;
+}) {
+  const bulkPending = isBulkMutationPending(pendingMutation);
+  const hasSelection = selectedCount > 0;
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.bulkLabel}>
+      <h3>{M.actionsPanel.bulkTitle}</h3>
+      <p className="muted">{M.actionsPanel.bulkDescription}</p>
+      <p className="muted">
+        {T.actionsBulkSelection(selectedCount, visibleProposedCount)}
+      </p>
+      <div className="actions-row">
+        <button
+          className="button secondary"
+          disabled={bulkPending || visibleProposedCount === 0}
+          onClick={onSelectVisibleProposed}
+          type="button"
+        >
+          {M.actionsPanel.bulkSelectVisible}
+        </button>
+        <button
+          className="button secondary"
+          disabled={bulkPending || !hasSelection}
+          onClick={onClearSelection}
+          type="button"
+        >
+          {M.actionsPanel.bulkClearSelection}
+        </button>
+        <button
+          className="button"
+          disabled={bulkPending || !hasSelection}
+          onClick={onApproveSelected}
+          type="button"
+        >
+          {pendingMutation === "bulk-approve"
+            ? M.actionsPanel.bulkApproving
+            : M.actionsPanel.bulkApproveSelected}
+        </button>
+        <button
+          className="button secondary"
+          disabled={bulkPending || !hasSelection}
+          onClick={onRejectSelected}
+          type="button"
+        >
+          {pendingMutation === "bulk-reject"
+            ? M.actionsPanel.bulkRejecting
+            : M.actionsPanel.bulkRejectSelected}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ProposalList({
+  canReviewProposals,
+  groups,
+  onApprove,
+  onReject,
+  onRefreshProposals,
+  onSelectEvidence,
+  onToggleProposalSelection,
+  pendingMutation,
+  selectedProposalIds,
+  totalProposals,
+  visibleProposals
+}: {
+  canReviewProposals: boolean;
+  groups: ProposalGroup[];
+  onApprove?: (proposalId: string) => void;
+  onReject?: (proposalId: string) => void;
+  onRefreshProposals?: () => void;
+  onSelectEvidence?: (
+    evidence: ActionProposalEvidenceRef,
+    title: string,
+    count?: number
+  ) => void;
+  onToggleProposalSelection?: (proposalId: string) => void;
+  pendingMutation: PendingMutation;
+  selectedProposalIds: string[];
+  totalProposals: number;
+  visibleProposals: number;
+}) {
+  const bulkPending = isBulkMutationPending(pendingMutation);
+  return (
+    <section className="work-section" aria-label={M.actionsPanel.listTitle}>
+      <h3>{M.actionsPanel.listTitle}</h3>
+      {visibleProposals === 0 && totalProposals === 0 ? (
+        <p className="muted">{M.actionsPanel.noProposals}</p>
+      ) : null}
+      {visibleProposals === 0 && totalProposals > 0 ? (
+        <p className="muted">{M.actionsPanel.noProposalsForFilter}</p>
+      ) : null}
+      <div className="proposal-groups" aria-label={M.actionsPanel.groupsLabel}>
+        {groups.map((group) => (
+          <section
+            className="proposal-group"
+            key={group.origin}
+            aria-label={group.title}
+          >
+            <div className="proposal-group-header">
+              <h4>
+                {group.title} · {group.proposals.length}
+              </h4>
+              <p className="muted">{group.description}</p>
+            </div>
+            <div className="work-list">
+              {group.proposals.map((proposal) => (
+                <article className="work-item" key={proposal.id}>
+                  <div className="work-item-main">
+                    {canReviewProposals ? (
+                      <ProposalSelectionControl
+                        disabled={bulkPending}
+                        isSelected={selectedProposalIds.includes(proposal.id)}
+                        onToggle={onToggleProposalSelection}
+                        proposal={proposal}
+                      />
+                    ) : null}
+                    <span className="badge">{proposal.status}</span>
+                    {group.origin === "audit" ? (
+                      <>
+                        <span className="badge badge-origin">
+                          {M.actionsPanel.originAuditBadge}
+                        </span>
+                        <span className="badge badge-origin">
+                          {auditSourceBadge(proposal)}
+                        </span>
+                      </>
+                    ) : null}
+                    {group.origin === "briefing" ? (
+                      <span className="badge badge-origin">
+                        {M.actionsPanel.originBriefingBadge}
+                      </span>
+                    ) : null}
+                    <h4>{proposal.title}</h4>
+                  </div>
+                  {proposal.description ? (
+                    <p className="muted">{proposal.description}</p>
+                  ) : null}
+                  <dl className="work-meta">
+                    <div>
+                      <dt>{M.actionsPanel.metaTarget}</dt>
+                      <dd>{proposal.target_provider}</dd>
+                    </div>
+                    <div>
+                      <dt>{M.actionsPanel.metaAction}</dt>
+                      <dd>{actionLabel(proposal.action_type)}</dd>
+                    </div>
+                    <div>
+                      <dt>{M.actionsPanel.metaStatus}</dt>
+                      <dd>{proposal.status}</dd>
+                    </div>
+                    <div>
+                      <dt>{M.actionsPanel.metaExecution}</dt>
+                      <dd>
+                        {proposal.execution_started
+                          ? M.actionsPanel.executionReported
+                          : M.actionsPanel.executionNotExecuted}
+                      </dd>
+                    </div>
+                  </dl>
+                  <ProposalPayloadDetails proposal={proposal} />
+                  <ProposalAuditDetails proposal={proposal} />
+                  <ActionEvidenceButtons
+                    evidenceRefs={proposal.evidence_refs}
+                    onSelectEvidence={onSelectEvidence}
+                    proposalTitle={proposal.title}
+                  />
+                  {canReviewProposals ? (
+                    <>
+                      <ProposalActions
+                        onApprove={onApprove}
+                        onReject={onReject}
+                        pendingMutation={pendingMutation}
+                        proposal={proposal}
+                      />
+                      <ActionExecutionControls
+                        onRefresh={onRefreshProposals}
+                        proposal={proposal}
+                      />
+                    </>
+                  ) : null}
+                  {proposal.warnings.length > 0 ? (
+                    <ul className="meta-list">
+                      {proposal.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProposalSelectionControl({
+  disabled,
+  isSelected,
+  onToggle,
+  proposal
+}: {
+  disabled: boolean;
+  isSelected: boolean;
+  onToggle?: (proposalId: string) => void;
+  proposal: ActionProposal;
+}) {
+  if (!isProposalProposed(proposal)) {
+    return null;
+  }
+  return (
+    <label className="proposal-selection">
+      <input
+        checked={isSelected}
+        disabled={disabled}
+        onChange={() => onToggle?.(proposal.id)}
+        type="checkbox"
+      />
+      <span>{M.actionsPanel.bulkSelectProposal}</span>
+    </label>
+  );
+}
+
 function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
+  const auditSource = proposalAuditSource(proposal);
   const repository = payloadString(proposal.payload, "repository_full_name");
   const issueTitle = payloadString(proposal.payload, "title");
   const note = payloadString(proposal.payload, "note");
+  const briefingItemKey = payloadString(proposal.payload, "briefing_item_key");
+  const category = payloadString(proposal.payload, "category");
+  const severity = payloadString(proposal.payload, "severity");
+  const nextStep = payloadString(proposal.payload, "recommended_next_step");
+  const relatedEntities = payloadStringList(proposal.payload, "related_entities");
+  const auditArea = payloadString(proposal.payload, "area_candidate");
+  const auditActivity = payloadString(proposal.payload, "activity_bucket");
 
-  if (!repository && !issueTitle && !note) {
+  const hasDetails =
+    auditSource !== null ||
+    repository ||
+    issueTitle ||
+    note ||
+    briefingItemKey ||
+    category ||
+    severity ||
+    nextStep ||
+    auditArea ||
+    auditActivity ||
+    relatedEntities.length > 0;
+
+  if (!hasDetails) {
     return <p className="muted">{M.actionsPanel.payloadNone}</p>;
   }
 
   return (
     <dl className="work-meta">
+      {auditSource ? (
+        <div>
+          <dt>{M.actionsPanel.payloadAuditSource}</dt>
+          <dd>{auditSourceLabel(auditSource)}</dd>
+        </div>
+      ) : null}
       {repository ? (
         <div>
           <dt>{M.actionsPanel.payloadRepository}</dt>
@@ -553,6 +1280,48 @@ function ProposalPayloadDetails({ proposal }: { proposal: ActionProposal }) {
         <div>
           <dt>{M.actionsPanel.payloadInternalNote}</dt>
           <dd>{note}</dd>
+        </div>
+      ) : null}
+      {briefingItemKey ? (
+        <div>
+          <dt>{M.actionsPanel.payloadBriefingItem}</dt>
+          <dd>{briefingItemKey}</dd>
+        </div>
+      ) : null}
+      {category ? (
+        <div>
+          <dt>{M.actionsPanel.payloadCategory}</dt>
+          <dd>{category}</dd>
+        </div>
+      ) : null}
+      {severity ? (
+        <div>
+          <dt>{M.actionsPanel.payloadSeverity}</dt>
+          <dd>{severity}</dd>
+        </div>
+      ) : null}
+      {nextStep ? (
+        <div>
+          <dt>{M.actionsPanel.payloadNextStep}</dt>
+          <dd>{nextStep}</dd>
+        </div>
+      ) : null}
+      {auditArea ? (
+        <div>
+          <dt>{M.actionsPanel.payloadAuditArea}</dt>
+          <dd>{auditArea}</dd>
+        </div>
+      ) : null}
+      {auditActivity ? (
+        <div>
+          <dt>{M.actionsPanel.payloadAuditActivity}</dt>
+          <dd>{auditActivity}</dd>
+        </div>
+      ) : null}
+      {relatedEntities.length > 0 ? (
+        <div>
+          <dt>{M.actionsPanel.payloadRelatedEntities}</dt>
+          <dd>{relatedEntities.join(", ")}</dd>
         </div>
       ) : null}
     </dl>
@@ -598,7 +1367,11 @@ function ActionEvidenceButtons({
   proposalTitle
 }: {
   evidenceRefs: ActionProposalEvidenceRef[];
-  onSelectEvidence?: (evidence: ActionProposalEvidenceRef, title: string) => void;
+  onSelectEvidence?: (
+    evidence: ActionProposalEvidenceRef,
+    title: string,
+    count?: number
+  ) => void;
   proposalTitle: string;
 }) {
   if (evidenceRefs.length === 0) {
@@ -611,7 +1384,7 @@ function ActionEvidenceButtons({
         <button
           className="button secondary"
           key={`${evidence.kind}-${evidence.source}-${evidence.ref}-${index}`}
-          onClick={() => onSelectEvidence?.(evidence, proposalTitle)}
+          onClick={() => onSelectEvidence?.(evidence, proposalTitle, evidenceRefs.length)}
           type="button"
         >
           {T.evidenceButton(evidence.ref)}
@@ -644,11 +1417,12 @@ function ProposalActions({
 
   const approvePending = pendingMutation === `approve:${proposal.id}`;
   const rejectPending = pendingMutation === `reject:${proposal.id}`;
+  const bulkPending = isBulkMutationPending(pendingMutation);
   return (
     <div className="actions-row">
       <button
         className="button"
-        disabled={approvePending || rejectPending}
+        disabled={approvePending || rejectPending || bulkPending}
         onClick={() => onApprove?.(proposal.id)}
         type="button"
       >
@@ -656,7 +1430,7 @@ function ProposalActions({
       </button>
       <button
         className="button secondary"
-        disabled={approvePending || rejectPending}
+        disabled={approvePending || rejectPending || bulkPending}
         onClick={() => onReject?.(proposal.id)}
         type="button"
       >
@@ -754,8 +1528,337 @@ function mergeUpdatedProposal(
   };
 }
 
+function mergeUpdatedProposals(
+  current: ActionProposalListResponse | null,
+  proposals: ActionProposal[],
+  warnings: string[]
+): ActionProposalListResponse | null {
+  if (!current) {
+    return null;
+  }
+  const updates = new Map(proposals.map((proposal) => [proposal.id, proposal]));
+  return {
+    ...current,
+    proposals: current.proposals.map((existing) => updates.get(existing.id) ?? existing),
+    warnings
+  };
+}
+
 function countByStatus(proposals: ActionProposal[], status: string): number {
   return proposals.filter((proposal) => proposal.status === status).length;
+}
+
+function summarizeActionReviewReadiness(
+  proposals: ActionProposal[]
+): ActionReviewReadiness {
+  return proposals.reduce<ActionReviewReadiness>(
+    (summary, proposal) => {
+      if (proposal.status === "proposed") {
+        summary.pendingDecision += 1;
+      }
+      if (isPreviewReadyGithubIssueProposal(proposal)) {
+        summary.previewReady += 1;
+      }
+      if (isLocalOnlyProposal(proposal)) {
+        summary.localOnly += 1;
+      }
+      if (proposal.evidence_refs.length === 0) {
+        summary.missingEvidence += 1;
+      }
+      if (proposal.execution_started) {
+        summary.externalResultReported += 1;
+      }
+      return summary;
+    },
+    {
+      externalResultReported: 0,
+      localOnly: 0,
+      missingEvidence: 0,
+      pendingDecision: 0,
+      previewReady: 0
+    }
+  );
+}
+
+function isPreviewReadyGithubIssueProposal(proposal: ActionProposal): boolean {
+  return (
+    proposal.status === "approved" &&
+    proposal.action_type === "create_github_issue" &&
+    proposal.target_provider === "github" &&
+    proposal.evidence_refs.length > 0 &&
+    !proposal.execution_started
+  );
+}
+
+function isLocalOnlyProposal(proposal: ActionProposal): boolean {
+  return proposal.action_type === "internal_todo" || proposal.target_provider === "internal";
+}
+
+function isProposalProposed(proposal: ActionProposal): boolean {
+  return proposal.status === "proposed";
+}
+
+function proposedProposalIds(proposals: ActionProposal[]): string[] {
+  return proposals.filter(isProposalProposed).map((proposal) => proposal.id);
+}
+
+function visibleProposedProposalIds(
+  proposals: ActionProposal[],
+  statusFilter: ProposalStatusFilter,
+  originFilter: ProposalOriginFilter,
+  auditSourceFilter: ProposalAuditSourceFilter
+): string[] {
+  const originFilteredProposals = filterProposalsByOrigin(
+    filterProposalsByStatus(proposals, statusFilter),
+    originFilter
+  );
+  const filteredProposals =
+    originFilter === "audit"
+      ? filterProposalsByAuditSource(originFilteredProposals, auditSourceFilter)
+      : originFilteredProposals;
+  return proposedProposalIds(filteredProposals);
+}
+
+function pruneProposalSelection(
+  proposalIds: string[],
+  visibleProposedIds: string[]
+): string[] {
+  const next = proposalIds.filter((proposalId) =>
+    visibleProposedIds.includes(proposalId)
+  );
+  if (
+    next.length === proposalIds.length &&
+    next.every((proposalId, index) => proposalId === proposalIds[index])
+  ) {
+    return proposalIds;
+  }
+  return next;
+}
+
+function selectedProposalsForBulkMutation(
+  proposals: ActionProposal[],
+  proposalIds: string[]
+): ActionProposal[] {
+  return proposals.filter(
+    (proposal) => proposalIds.includes(proposal.id) && isProposalProposed(proposal)
+  );
+}
+
+function isBulkMutationPending(pendingMutation: PendingMutation): boolean {
+  return pendingMutation === "bulk-approve" || pendingMutation === "bulk-reject";
+}
+
+type BulkOutcome = {
+  succeeded: ActionProposal[];
+  failed: { id: string; message: string }[];
+  succeededIds: string[];
+  firstFailureMessage: string | null;
+};
+
+function summarizeBulkResponse(response: ActionProposalBulkResponse): BulkOutcome {
+  const failed = response.failures.map((failure) => ({
+    id: failure.proposal_id,
+    message: failure.detail
+  }));
+  return {
+    succeeded: response.proposals,
+    failed,
+    succeededIds: response.proposals.map((proposal) => proposal.id),
+    firstFailureMessage: failed[0]?.message ?? null
+  };
+}
+
+function filterProposalsByStatus(
+  proposals: ActionProposal[],
+  filter: ProposalStatusFilter
+): ActionProposal[] {
+  if (filter === "all") {
+    return proposals;
+  }
+  return proposals.filter((proposal) => proposal.status === filter);
+}
+
+function filterProposalsByOrigin(
+  proposals: ActionProposal[],
+  filter: ProposalOriginFilter
+): ActionProposal[] {
+  if (filter === "all") {
+    return proposals;
+  }
+  return proposals.filter((proposal) => proposalOrigin(proposal) === filter);
+}
+
+function filterProposalsByAuditSource(
+  proposals: ActionProposal[],
+  filter: ProposalAuditSourceFilter
+): ActionProposal[] {
+  if (filter === "all") {
+    return proposals.filter((proposal) => proposalOrigin(proposal) === "audit");
+  }
+  return proposals.filter((proposal) => proposalAuditSource(proposal) === filter);
+}
+
+function filterCount(
+  proposals: ActionProposal[],
+  filter: ProposalStatusFilter
+): number {
+  return filter === "all" ? proposals.length : countByStatus(proposals, filter);
+}
+
+function filterLabel(filter: ProposalStatusFilter): string {
+  if (filter === "proposed") {
+    return M.actionsPanel.filterProposed;
+  }
+  if (filter === "approved") {
+    return M.actionsPanel.filterApproved;
+  }
+  if (filter === "rejected") {
+    return M.actionsPanel.filterRejected;
+  }
+  return M.actionsPanel.filterAll;
+}
+
+function originFilterCount(
+  proposals: ActionProposal[],
+  filter: ProposalOriginFilter
+): number {
+  if (filter === "all") {
+    return proposals.length;
+  }
+  return proposals.filter((proposal) => proposalOrigin(proposal) === filter).length;
+}
+
+function originFilterLabel(filter: ProposalOriginFilter): string {
+  if (filter === "audit") {
+    return M.actionsPanel.originFilterAudit;
+  }
+  if (filter === "briefing") {
+    return M.actionsPanel.originFilterBriefing;
+  }
+  if (filter === "github") {
+    return M.actionsPanel.originFilterGithub;
+  }
+  if (filter === "internal") {
+    return M.actionsPanel.originFilterInternal;
+  }
+  return M.actionsPanel.originFilterAll;
+}
+
+function auditSourceFilterCount(
+  proposals: ActionProposal[],
+  filter: ProposalAuditSourceFilter
+): number {
+  if (filter === "all") {
+    return proposals.filter((proposal) => proposalOrigin(proposal) === "audit").length;
+  }
+  return proposals.filter((proposal) => proposalAuditSource(proposal) === filter).length;
+}
+
+function auditSourceFilterLabel(filter: ProposalAuditSourceFilter): string {
+  if (filter === "deterministic") {
+    return M.actionsPanel.auditSourceFilterDeterministic;
+  }
+  if (filter === "imported") {
+    return M.actionsPanel.auditSourceFilterImported;
+  }
+  return M.actionsPanel.auditSourceFilterAll;
+}
+
+function auditSourceLabel(source: ProposalAuditSource): string {
+  return source === "imported"
+    ? M.actionsPanel.auditSourceImported
+    : M.actionsPanel.auditSourceDeterministic;
+}
+
+function auditSourceBadge(proposal: ActionProposal): string {
+  const source = proposalAuditSource(proposal);
+  if (source === "imported") {
+    return M.actionsPanel.originAuditImportedBadge;
+  }
+  return M.actionsPanel.originAuditDeterministicBadge;
+}
+
+function firstEvidenceSelection(
+  proposals: ActionProposal[]
+): EvidenceSelection | null {
+  for (const proposal of proposals) {
+    const evidence = proposal.evidence_refs[0];
+    if (evidence) {
+      return {
+        evidence,
+        title: proposal.title,
+        count: proposal.evidence_refs.length
+      };
+    }
+  }
+  return null;
+}
+
+function proposalOrigin(proposal: ActionProposal): ProposalOrigin {
+  if (proposalAuditSource(proposal) !== null) {
+    return "audit";
+  }
+  const source = payloadString(proposal.payload, "source");
+  if (
+    proposal.briefing_item_id !== null ||
+    source === "briefing_item"
+  ) {
+    return "briefing";
+  }
+  if (proposal.action_type === "create_github_issue") {
+    return "github";
+  }
+  return "internal";
+}
+
+function proposalAuditSource(proposal: ActionProposal): ProposalAuditSource | null {
+  const source = payloadString(proposal.payload, "source");
+  if (source === "repo_audit") {
+    return "deterministic";
+  }
+  if (source === "repo_audit_import") {
+    return "imported";
+  }
+  return null;
+}
+
+function groupProposalsByOrigin(proposals: ActionProposal[]): ProposalGroup[] {
+  const order: ProposalOrigin[] = ["audit", "briefing", "github", "internal"];
+  const meta: Record<ProposalOrigin, { title: string; description: string }> = {
+    audit: {
+      title: M.actionsPanel.groupAuditTitle,
+      description: M.actionsPanel.groupAuditDescription
+    },
+    briefing: {
+      title: M.actionsPanel.groupBriefingTitle,
+      description: M.actionsPanel.groupBriefingDescription
+    },
+    github: {
+      title: M.actionsPanel.groupGithubTitle,
+      description: M.actionsPanel.groupGithubDescription
+    },
+    internal: {
+      title: M.actionsPanel.groupInternalTitle,
+      description: M.actionsPanel.groupInternalDescription
+    }
+  };
+  const buckets: Record<ProposalOrigin, ActionProposal[]> = {
+    audit: [],
+    briefing: [],
+    github: [],
+    internal: []
+  };
+  for (const proposal of proposals) {
+    buckets[proposalOrigin(proposal)].push(proposal);
+  }
+  return order
+    .filter((origin) => buckets[origin].length > 0)
+    .map((origin) => ({
+      origin,
+      title: meta[origin].title,
+      description: meta[origin].description,
+      proposals: buckets[origin]
+    }));
 }
 
 function actionLabel(actionType: string): string {
@@ -773,4 +1876,21 @@ function payloadString(payload: Record<string, unknown>, key: string): string | 
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-export { DEFAULT_CREATE_FORM };
+function payloadStringList(
+  payload: Record<string, unknown>,
+  key: string
+): string[] {
+  const value = payload[key];
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(
+    (entry): entry is string => typeof entry === "string" && entry.trim().length > 0
+  );
+}
+
+export {
+  DEFAULT_CREATE_FORM,
+  summarizeActionReviewReadiness,
+  summarizeBulkResponse
+};

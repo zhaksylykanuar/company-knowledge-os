@@ -10,11 +10,13 @@ Use a **Railway-only split-service private-beta baseline** because the master
 playbook names Railway as the MVP deployment target and the current app maps
 cleanly to separate services:
 
-1. **Backend service** - FastAPI/Uvicorn from the repository root.
+1. **Backend service** - FastAPI in one Uvicorn process from the repository
+   root.
 2. **Frontend service** - Next.js from `web/`.
 3. **Managed Postgres service** - required canonical datastore.
 4. **Managed Redis service** - optional/deferred until a worker/job path requires
-   it; keep `REDIS_URL` documented for compatibility.
+   it or the backend is scaled beyond one process; keep `REDIS_URL` documented
+   for compatibility.
 
 Do not use the Railway CLI, auto-deploy-on-push, or deployment workflows in this
 chunk. When a human approves provisioning, perform setup manually in the hosting
@@ -32,6 +34,13 @@ manager.
 
 Use the platform-provided service port placeholder for backend and frontend
 start commands. Do not hardcode private-beta port numbers in tracked files.
+The backend start command deliberately has no `--workers`: current pre-Argon2
+per-IP/global/concurrency admission is process-local. Before adding a worker or
+replica, deploy and verify a shared edge/Redis login limiter.
+The per-IP key is ASGI `request.client.host`; Railway/Next forwarding semantics
+must be verified with two distinct external source IPs before the login route is
+treated as publicly hardened. Do not solve this by trusting forwarded headers
+from every source on a publicly reachable backend.
 
 ## Manual setup checklist
 
@@ -88,11 +97,25 @@ Backend env names:
 - `FOUNDEROS_SECRET_ENCRYPTION_KEY`
 - `FOUNDEROS_CORS_ALLOWED_ORIGINS`
 - `FOUNDEROS_CORS_ALLOW_CREDENTIALS`
+- `FOUNDEROS_LOGIN_MAX_FAILED_ATTEMPTS`
+- `FOUNDEROS_LOGIN_LOCKOUT_MINUTES`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_WINDOW_SECONDS`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_PER_IP`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_GLOBAL`
+- `FOUNDEROS_LOGIN_MAX_CONCURRENT_ATTEMPTS`
+- `FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS`
 - `ENABLE_LLM`
 - `ENABLE_WRITE_ACTIONS`
 - `REQUIRE_APPROVAL_FOR_WRITES`
 - `FOS_GITHUB_WRITE_ALLOWED_REPOS`
 - `FOS_GITHUB_SYNC_ALLOWED_REPOS`
+- `FOUNDEROS_GITHUB_APP_ID`
+- `FOUNDEROS_GITHUB_APP_SLUG`
+- `FOUNDEROS_GITHUB_APP_PRIVATE_KEY` or
+  `FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH`
+- `FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET`
+- `FOUNDEROS_GITHUB_APP_SETUP_URL`
+- `FOUNDEROS_GITHUB_APP_CALLBACK_URL`
 - `FOUNDEROS_ENABLE_REAL_CONNECTORS`
 - `FOUNDEROS_REQUIRE_CONNECTOR_SCOPE`
 
@@ -103,6 +126,8 @@ Backend private-beta defaults:
 - `FOUNDEROS_ENABLE_REAL_CONNECTORS` disabled unless a human approves a scoped
   read-only provider test.
 - GitHub write and sync allowlists remain explicit and repository-scoped.
+- GitHub App private key and webhook secret stay backend-only; installation
+  access tokens should be minted just-in-time and not persisted.
 
 ## Frontend service dry-run details
 
@@ -124,9 +149,21 @@ Frontend env names:
 Production auth/session is now built: users sign in at `/login` with
 email+password on a server-side session cookie (first-party via the same-origin
 proxy). The browser sends no operator API key, owner email, or workspace ID; the
-workspace is derived from the session, and the founder account is provisioned via
-`scripts/create_admin_user.py`. GitHub OAuth/onboarding remains later hardening
-work.
+workspace is derived from the session. The normal founder path is a short-lived
+`scripts/create_founder_invite.py` URL; `scripts/create_admin_user.py` is
+operator recovery only. A brand-new teammate always receives a one-time setup
+link for manual transfer by the inviter over a trusted direct channel; the
+inviter cannot set `initial_password`, no email is sent, and this slice does not
+verify the recipient. Existing accounts with another workspace membership fail
+with 409 and are not attached silently.
+
+Production login work is admitted by process-local per-IP/global windows and a
+concurrency cap before Argon2, plus a durable per-email DB lockout. Stale
+`login_attempts` rows are opportunistically removed after 24 hours by default.
+Password inputs are bounded at 256 characters, and sessions discovered for a
+disabled account are revoked. This contract is valid for the documented single
+Uvicorn process only. Distinct-client isolation through the deployed proxy is a
+mandatory smoke check, not yet a verified property of this local implementation.
 
 ## Domain, CORS, and API-base mapping
 
@@ -168,7 +205,8 @@ issues.
 
 Redis is optional/deferred for the current private-beta HTTP smoke path. Keep
 `REDIS_URL` in the env contract because the app settings include it and future
-worker/job paths may require it.
+worker/job paths may require it. The current login admission controller does not
+use `REDIS_URL`; it remains process-local.
 
 Dry-run decision:
 
@@ -177,6 +215,9 @@ Dry-run decision:
 - If not, record Redis as deferred and do not add a worker process.
 - Do not block read-only HTTP smoke solely on Redis unless a task introduces a
   Redis-backed runtime requirement.
+- Before adding Uvicorn workers or backend replicas, a shared edge or
+  Redis-backed login limiter is mandatory; otherwise each process enforces only
+  its own counters.
 
 ## Migration dry run
 

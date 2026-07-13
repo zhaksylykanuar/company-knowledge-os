@@ -16,7 +16,8 @@
     "components/**/*.tsx",
     "lib/**/*.ts",
     "tests/**/*.test.tsx",
-    "tests/**/*.test.ts"
+    "tests/**/*.test.ts",
+    "types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",

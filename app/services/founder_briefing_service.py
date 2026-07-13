@@ -17,6 +17,7 @@ from app.db.integration_models import (
     SYNC_JOB_STATUS_RUNNING,
     SyncJob,
 )
+from app.services.company_brain_github_read_service import build_workspace_company_brain
 from app.services.github_connection_service import get_github_connection_status
 
 BRIEFING_TITLE = "Founder Briefing"
@@ -50,6 +51,7 @@ async def generate_manual_founder_briefing(
         "queued_sync_jobs": 0,
         "latest_sync_job_status": None,
     }
+    coverage_signals = _empty_coverage_signals()
 
     if not options.include_github:
         warnings.append("GitHub briefing signals were disabled by request.")
@@ -74,6 +76,20 @@ async def generate_manual_founder_briefing(
             items.append(repository_item)
             warnings.extend(repository_warnings)
 
+            brain = await build_workspace_company_brain(
+                session=session,
+                workspace_id=workspace_id,
+                limit=options.limit,
+            )
+            coverage_item, coverage_signals = _source_coverage_item(brain)
+            github_signals["repository_count"] = max(
+                int(github_signals["repository_count"]),
+                int(coverage_signals["canonical_repositories"]),
+            )
+            items.append(coverage_item)
+            items.append(_connector_source_coverage_item(brain))
+            items.extend(_non_github_company_brain_items(brain))
+
         if options.include_sync_jobs:
             sync_items, sync_signals = await _github_sync_items(
                 session,
@@ -92,7 +108,7 @@ async def generate_manual_founder_briefing(
         for item_warning in item.get("warnings", [])
         if isinstance(item_warning, str)
     )
-    summary = _summary(github_signals)
+    summary = _summary(github_signals, coverage_signals)
     return {
         "briefing": {
             "title": BRIEFING_TITLE,
@@ -103,7 +119,7 @@ async def generate_manual_founder_briefing(
             "llm_used": False,
             "persistence": BRIEFING_PERSISTENCE_TRANSIENT,
             "items": items,
-            "signals": {"github": github_signals},
+            "signals": {"github": github_signals, "coverage": coverage_signals},
             "warnings": _dedupe_warnings(warnings),
         }
     }
@@ -234,6 +250,447 @@ async def _github_repository_item(
         ),
         len(repositories),
         list(result.warnings),
+    )
+
+
+def _source_coverage_item(
+    brain: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    summary = brain.get("summary") if isinstance(brain.get("summary"), Mapping) else {}
+    capabilities = (
+        brain.get("capabilities") if isinstance(brain.get("capabilities"), Mapping) else {}
+    )
+    repositories = brain.get("repositories") if isinstance(brain.get("repositories"), list) else []
+    evidence = brain.get("evidence") if isinstance(brain.get("evidence"), list) else []
+
+    repository_count = int(summary.get("repositories") or 0)
+    open_issues = int(summary.get("open_issues") or 0)
+    open_pull_requests = int(summary.get("open_pull_requests") or 0)
+    evidence_refs = _coverage_evidence_refs(evidence, repositories)
+    coverage_signals = {
+        "canonical_repositories": repository_count,
+        "open_issues": open_issues,
+        "open_pull_requests": open_pull_requests,
+        "evidence_refs": len(evidence_refs),
+        "is_live": bool(brain.get("is_live")),
+        "llm_used": bool(brain.get("llm_used")),
+        "live_provider_sync": bool(capabilities.get("live_provider_sync")),
+        "local_sync": bool(capabilities.get("local_sync")),
+    }
+
+    has_coverage = repository_count + open_issues + open_pull_requests > 0
+    related_entities = [
+        str(repo.get("full_name") or repo.get("name"))
+        for repo in repositories[: min(5, len(repositories))]
+        if isinstance(repo, Mapping) and (repo.get("full_name") or repo.get("name"))
+    ]
+    if not has_coverage:
+        return (
+            _item(
+                item_id="source-coverage",
+                category="next_step",
+                title="Source coverage is still empty",
+                summary=(
+                    "Company Brain has no canonical repositories, open issues, "
+                    "or open pull requests for this workspace yet."
+                ),
+                severity="medium",
+                confidence=0.8,
+                evidence_refs=[],
+                recommended_next_step=(
+                    "Prepare local source coverage or approve a scoped read-only "
+                    "provider sync later."
+                ),
+                warnings=["source coverage empty"],
+            ),
+            coverage_signals,
+        )
+
+    work_summary = (
+        f"open_issues={open_issues}, open_pull_requests={open_pull_requests}"
+    )
+    return (
+        _item(
+            item_id="source-coverage",
+            category="status",
+            title="Canonical source coverage is available",
+            summary=(
+                "Company Brain coverage is local and deterministic: "
+                f"repositories={repository_count}, {work_summary}, "
+                f"evidence_refs={len(evidence_refs)}, "
+                f"live_provider_sync={coverage_signals['live_provider_sync']}, "
+                f"llm_used={coverage_signals['llm_used']}."
+            ),
+            severity="low",
+            confidence=1.0,
+            evidence_refs=evidence_refs,
+            related_entities=related_entities,
+            recommended_next_step=(
+                "Use this coverage to review deterministic briefing items; "
+                "run live provider reads only after explicit approval."
+            ),
+            warnings=[] if evidence_refs else ["source coverage has no evidence refs"],
+        ),
+        coverage_signals,
+    )
+
+
+def _connector_source_coverage_item(brain: Mapping[str, Any]) -> dict[str, Any]:
+    """Deterministic briefing item summarizing local connector SourceRecord coverage.
+
+    Reads only the additive ``source_records`` aggregate already computed by
+    Company Brain (DEC-060). It surfaces Jira/Gmail/Drive (and GitHub) local
+    import coverage in the founder-facing briefing without provider calls, sync,
+    external writes, or LLM, and without exposing raw payloads.
+    """
+
+    source_records = (
+        brain.get("source_records")
+        if isinstance(brain.get("source_records"), Mapping)
+        else {}
+    )
+    total = int(source_records.get("total") or 0)
+    by_provider = [
+        entry
+        for entry in (source_records.get("by_provider") or [])
+        if isinstance(entry, Mapping)
+    ]
+    by_record_type = [
+        entry
+        for entry in (source_records.get("by_record_type") or [])
+        if isinstance(entry, Mapping)
+    ]
+    non_github_providers = [
+        _safe_text(entry.get("provider"))
+        for entry in by_provider
+        if _safe_text(entry.get("provider"))
+        and _safe_text(entry.get("provider")) != INTEGRATION_PROVIDER_GITHUB
+    ]
+
+    if total <= 0:
+        return _item(
+            item_id="connector-source-coverage",
+            category="next_step",
+            title="No connector source records imported yet",
+            summary=(
+                "No canonical SourceRecord rows exist for this workspace across "
+                "GitHub/Jira/Gmail/Drive."
+            ),
+            severity="medium",
+            confidence=0.8,
+            evidence_refs=[],
+            recommended_next_step=(
+                "Import local Jira/Gmail/Drive records or run an approved GitHub "
+                "read to populate connector coverage."
+            ),
+            warnings=["connector source coverage empty"],
+        )
+
+    provider_summary = ", ".join(
+        f"{_safe_text(entry.get('provider')) or 'unknown'}={int(entry.get('count') or 0)}"
+        for entry in by_provider
+    )
+    record_type_summary = ", ".join(
+        f"{_safe_text(entry.get('record_type')) or 'unknown'}={int(entry.get('count') or 0)}"
+        for entry in by_record_type
+    )
+    evidence_refs = [
+        {
+            "kind": "connector_source_coverage",
+            "source": "company_brain",
+            "ref": f"{_safe_text(entry.get('provider')) or 'unknown'}:{int(entry.get('count') or 0)}",
+            "url": None,
+        }
+        for entry in by_provider
+    ]
+    if non_github_providers:
+        next_step = (
+            "Review imported "
+            f"{', '.join(sorted(set(non_github_providers)))} records; connector "
+            "coverage stays local until aggregation into Company Brain work items."
+        )
+    else:
+        next_step = (
+            "Import local Jira/Gmail/Drive records to broaden connector coverage "
+            "beyond GitHub."
+        )
+    return _item(
+        item_id="connector-source-coverage",
+        category="status",
+        title="Connector source coverage is available",
+        summary=(
+            "Local connector SourceRecord coverage is deterministic: "
+            f"total={total}; by_provider: {provider_summary or 'none'}; "
+            f"by_record_type: {record_type_summary or 'none'}."
+        ),
+        severity="low",
+        confidence=1.0,
+        evidence_refs=evidence_refs,
+        related_entities=[
+            _safe_text(entry.get("provider"))
+            for entry in by_provider
+            if _safe_text(entry.get("provider"))
+        ],
+        recommended_next_step=next_step,
+        warnings=[],
+    )
+
+
+def _non_github_company_brain_items(brain: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Build additive local connector briefing items from Company Brain read models.
+
+    The Company Brain read model is the boundary here: this code reads only the
+    already-normalized local projection (`work`, `communications`, `documents`)
+    and source refs. It must not inspect raw connector payloads, call providers,
+    start sync, create actions, write externally, or invoke an LLM.
+    """
+
+    items: list[dict[str, Any]] = []
+    provider_totals = _connector_provider_totals(brain)
+    jira_item = _jira_work_item(brain, provider_totals.get("jira", 0))
+    if jira_item is not None:
+        items.append(jira_item)
+    gmail_item = _gmail_messages_item(brain, provider_totals.get("gmail", 0))
+    if gmail_item is not None:
+        items.append(gmail_item)
+    drive_item = _drive_files_item(brain, provider_totals.get("drive", 0))
+    if drive_item is not None:
+        items.append(drive_item)
+    internal_documents_item = _internal_documents_item(brain)
+    if internal_documents_item is not None:
+        items.append(internal_documents_item)
+    return items
+
+
+def _connector_provider_totals(brain: Mapping[str, Any]) -> dict[str, int]:
+    """Accurate, unlimited per-provider SourceRecord totals from the aggregate.
+
+    Company Brain's `work`/`communications`/`documents` sections are truncated to
+    an internal display limit, so `len(section_rows)` is only the *visible* count.
+    The additive `source_records.by_provider` aggregate (DEC-060) is a full SQL
+    ``COUNT`` and is the correct source for the true imported total, so briefing
+    summaries never understate connector volume when more rows exist than are
+    shown.
+    """
+
+    source_records = (
+        brain.get("source_records")
+        if isinstance(brain.get("source_records"), Mapping)
+        else {}
+    )
+    totals: dict[str, int] = {}
+    for entry in source_records.get("by_provider") or []:
+        if not isinstance(entry, Mapping):
+            continue
+        provider = (_safe_text(entry.get("provider")) or "").casefold()
+        if not provider:
+            continue
+        totals[provider] = totals.get(provider, 0) + int(entry.get("count") or 0)
+    return totals
+
+
+def _jira_work_item(
+    brain: Mapping[str, Any],
+    imported_total: int,
+) -> dict[str, Any] | None:
+    work = brain.get("work") if isinstance(brain.get("work"), Mapping) else {}
+    issues = [row for row in work.get("issues") or [] if isinstance(row, Mapping)]
+    jira_issues = [
+        issue
+        for issue in issues
+        if (_safe_text(issue.get("source_provider")) or "").casefold() == "jira"
+    ]
+    if not jira_issues:
+        return None
+
+    project_keys = _unique_texts(
+        _safe_text(issue.get("project_key")) for issue in jira_issues
+    )
+    issue_labels = _unique_texts(_work_item_label(issue) for issue in jira_issues)
+    evidence_refs = _company_brain_row_evidence_refs(jira_issues)
+    visible = len(jira_issues)
+    total_imported = max(imported_total, visible)
+    summary = (
+        f"Company Brain shows {visible} open Jira work item"
+        f"{'' if visible == 1 else 's'}"
+    )
+    if total_imported > visible:
+        summary = (
+            f"{summary} of {total_imported} local Jira record"
+            f"{'' if total_imported == 1 else 's'} imported"
+        )
+    summary = f"{summary}."
+    if project_keys:
+        summary = f"{summary} Project scope: {', '.join(project_keys[:5])}."
+    if issue_labels:
+        summary = f"{summary} Top issues: {', '.join(issue_labels[:3])}."
+
+    return _item(
+        item_id="jira-work-items",
+        category="next_step",
+        title="Jira work is visible in Company Brain",
+        summary=summary,
+        severity="medium",
+        confidence=0.9,
+        evidence_refs=evidence_refs,
+        related_entities=issue_labels[:5] or project_keys[:5],
+        recommended_next_step=(
+            "Review local Jira issues in /jira or Company Brain and create "
+            "evidence-backed internal follow-ups where needed."
+        ),
+        warnings=[] if evidence_refs else ["jira work item source refs missing"],
+    )
+
+
+def _gmail_messages_item(
+    brain: Mapping[str, Any],
+    imported_total: int,
+) -> dict[str, Any] | None:
+    communications = (
+        brain.get("communications")
+        if isinstance(brain.get("communications"), Mapping)
+        else {}
+    )
+    messages = [
+        row for row in communications.get("messages") or [] if isinstance(row, Mapping)
+    ]
+    if not messages:
+        return None
+
+    unread_count = sum(1 for message in messages if bool(message.get("unread")))
+    subjects = _unique_texts(
+        _safe_text(message.get("subject")) or _safe_text(message.get("message_id"))
+        for message in messages
+    )
+    evidence_refs = _company_brain_row_evidence_refs(messages)
+    visible = len(messages)
+    total_imported = max(imported_total, visible)
+    summary = (
+        f"Company Brain shows {visible} local Gmail message"
+        f"{'' if visible == 1 else 's'}"
+    )
+    if total_imported > visible:
+        summary = f"{summary} of {total_imported} imported"
+    summary = f"{summary}; unread={unread_count} in view."
+    if subjects:
+        summary = f"{summary} Top subjects: {', '.join(subjects[:3])}."
+
+    has_unread = unread_count > 0
+    return _item(
+        item_id="gmail-message-signals",
+        category="next_step" if has_unread else "update",
+        title=(
+            "Unread Gmail messages need review"
+            if has_unread
+            else "Gmail messages are visible in Company Brain"
+        ),
+        summary=summary,
+        severity="medium" if has_unread else "low",
+        confidence=0.9,
+        evidence_refs=evidence_refs,
+        related_entities=subjects[:5],
+        recommended_next_step=(
+            "Review unread local Gmail messages in /gmail and create "
+            "evidence-backed internal follow-ups where needed."
+            if has_unread
+            else "Use /gmail as the local evidence surface before turning "
+            "messages into follow-up actions."
+        ),
+        warnings=[] if evidence_refs else ["gmail message source refs missing"],
+    )
+
+
+def _drive_files_item(
+    brain: Mapping[str, Any],
+    imported_total: int,
+) -> dict[str, Any] | None:
+    documents = (
+        brain.get("documents") if isinstance(brain.get("documents"), Mapping) else {}
+    )
+    files = [row for row in documents.get("files") or [] if isinstance(row, Mapping)]
+    if not files:
+        return None
+
+    shared_count = sum(1 for file in files if bool(file.get("shared")))
+    file_names = _unique_texts(
+        _safe_text(file.get("name")) or _safe_text(file.get("file_id"))
+        for file in files
+    )
+    evidence_refs = _company_brain_row_evidence_refs(files)
+    visible = len(files)
+    total_imported = max(imported_total, visible)
+    summary = (
+        f"Company Brain shows {visible} local Drive file"
+        f"{'' if visible == 1 else 's'}"
+    )
+    if total_imported > visible:
+        summary = f"{summary} of {total_imported} imported"
+    summary = f"{summary}; shared={shared_count} in view."
+    if file_names:
+        summary = f"{summary} Top files: {', '.join(file_names[:3])}."
+
+    return _item(
+        item_id="drive-file-signals",
+        category="update",
+        title="Drive files are visible in Company Brain",
+        summary=summary,
+        severity="low",
+        confidence=0.9,
+        evidence_refs=evidence_refs,
+        related_entities=file_names[:5],
+        recommended_next_step=(
+            "Review local Drive file metadata in /drive and attach "
+            "evidence-backed follow-ups for important documents."
+        ),
+        warnings=[] if evidence_refs else ["drive file source refs missing"],
+    )
+
+
+def _internal_documents_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
+    documents = (
+        brain.get("documents") if isinstance(brain.get("documents"), Mapping) else {}
+    )
+    notes = [row for row in documents.get("notes") or [] if isinstance(row, Mapping)]
+    if not notes:
+        return None
+
+    titles = _unique_texts(
+        _safe_text(note.get("title")) or _safe_text(note.get("document_id"))
+        for note in notes
+    )
+    statuses = _unique_texts(_safe_text(note.get("status")) for note in notes)
+    tag_names = _unique_texts(
+        tag
+        for note in notes
+        for tag in _safe_string_values(note.get("tags"), limit=20)
+    )
+    evidence_refs = _company_brain_row_evidence_refs(notes)
+    visible = len(notes)
+    summary = (
+        f"Company Brain shows {visible} internal document"
+        f"{'' if visible == 1 else 's'} as briefing context."
+    )
+    if titles:
+        summary = f"{summary} Top documents: {', '.join(titles[:3])}."
+    if statuses:
+        summary = f"{summary} Statuses in view: {', '.join(statuses[:5])}."
+    if tag_names:
+        summary = f"{summary} Tags in view: {', '.join(tag_names[:5])}."
+
+    return _item(
+        item_id="internal-document-context",
+        category="update",
+        title="Internal documents are available as briefing context",
+        summary=summary,
+        severity="low",
+        confidence=0.9,
+        evidence_refs=evidence_refs,
+        related_entities=titles[:5],
+        recommended_next_step=(
+            "Review internal documents in /documents; use their evidence-backed "
+            "context when interpreting briefing items."
+        ),
+        warnings=[] if evidence_refs else ["internal document source refs missing"],
     )
 
 
@@ -437,13 +894,143 @@ def _collect_repo_evidence_refs(repositories: list[Mapping[str, Any]]) -> list[d
     return refs[:20]
 
 
-def _summary(github_signals: Mapping[str, Any]) -> str:
+def _empty_coverage_signals() -> dict[str, Any]:
+    return {
+        "canonical_repositories": 0,
+        "open_issues": 0,
+        "open_pull_requests": 0,
+        "evidence_refs": 0,
+        "is_live": False,
+        "llm_used": False,
+        "live_provider_sync": False,
+        "local_sync": False,
+    }
+
+
+def _coverage_evidence_refs(
+    evidence: list[Any],
+    repositories: list[Any],
+) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for raw_ref in evidence:
+        if not isinstance(raw_ref, Mapping):
+            continue
+        ref = {
+            "kind": _safe_text(raw_ref.get("kind")) or "company_brain_evidence",
+            "source": _safe_text(raw_ref.get("source")) or "company_brain",
+            "ref": _safe_text(raw_ref.get("label")) or _safe_text(raw_ref.get("id")),
+            "url": _safe_url(raw_ref.get("url")),
+        }
+        if ref["ref"] and ref not in refs:
+            refs.append(ref)
+
+    if refs:
+        return refs[:20]
+
+    for raw_repo in repositories:
+        if not isinstance(raw_repo, Mapping):
+            continue
+        ref_text = _safe_text(raw_repo.get("full_name")) or _safe_text(
+            raw_repo.get("id")
+        )
+        ref = {
+            "kind": "canonical_repository",
+            "source": "local_db",
+            "ref": ref_text,
+            "url": _safe_url(raw_repo.get("source_url")),
+        }
+        if ref["ref"] and ref not in refs:
+            refs.append(ref)
+    return refs[:20]
+
+
+def _company_brain_row_evidence_refs(rows: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for row in rows:
+        raw_refs = row.get("source_refs")
+        if not isinstance(raw_refs, list):
+            raw_refs = row.get("evidence_refs")
+        if not isinstance(raw_refs, list):
+            continue
+        for raw_ref in raw_refs:
+            if not isinstance(raw_ref, Mapping):
+                continue
+            ref_text = (
+                _safe_text(raw_ref.get("label"))
+                or _safe_text(raw_ref.get("ref"))
+                or _safe_text(raw_ref.get("id"))
+            )
+            ref = {
+                "kind": _safe_text(raw_ref.get("kind")) or "source_record",
+                "source": _safe_text(raw_ref.get("source")) or "company_brain",
+                "ref": ref_text,
+                "url": _safe_url(raw_ref.get("url")),
+            }
+            if ref["ref"] and ref not in refs:
+                refs.append(ref)
+    return refs[:20]
+
+
+def _work_item_label(row: Mapping[str, Any]) -> str | None:
+    title = _safe_text(row.get("title"))
+    external_id = _safe_text(row.get("external_id"))
+    number = row.get("number")
+    issue_key = external_id or (
+        f"#{number}" if isinstance(number, int) and not isinstance(number, bool) else None
+    )
+    if issue_key and title:
+        return _clip_text(f"{issue_key}: {title}", limit=120)
+    return _clip_text(title or issue_key, limit=120)
+
+
+def _unique_texts(values: Any) -> list[str]:
+    texts: list[str] = []
+    for value in values:
+        text = _clip_text(value, limit=120)
+        if text and text not in texts:
+            texts.append(text)
+    return texts
+
+
+def _safe_string_values(value: Any, *, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    values: list[str] = []
+    for item in value[:limit]:
+        text = _clip_text(item, limit=120)
+        if text and text not in values:
+            values.append(text)
+    return values
+
+
+def _clip_text(value: Any, *, limit: int) -> str | None:
+    text = _safe_text(value)
+    if not text:
+        return None
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 1]}…"
+
+
+def _summary(
+    github_signals: Mapping[str, Any],
+    coverage_signals: Mapping[str, Any],
+) -> str:
+    coverage_suffix = ""
+    if coverage_signals:
+        coverage_suffix = (
+            f" open_issues={coverage_signals.get('open_issues')}, "
+            f"open_pull_requests={coverage_signals.get('open_pull_requests')}, "
+            f"evidence_refs={coverage_signals.get('evidence_refs')}, "
+            f"mode={'live' if coverage_signals.get('is_live') else 'local_db'}."
+        )
     return (
         "GitHub signals: "
         f"connection={github_signals.get('connection_status')}, "
         f"repositories={github_signals.get('repository_count')}, "
         f"queued_sync_jobs={github_signals.get('queued_sync_jobs')}, "
         f"latest_sync_job={github_signals.get('latest_sync_job_status')}."
+        f"{coverage_suffix}"
     )
 
 

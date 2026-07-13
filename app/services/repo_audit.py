@@ -176,7 +176,10 @@ def load_repo_audit(
 
 def _latest_raw_repos_path(workspace: Path) -> Path | None:
     candidates = sorted((workspace / "discovery" / "github").glob("*/raw/repos.json"))
-    return candidates[-1] if candidates else None
+    if candidates:
+        return candidates[-1]
+    root_repos = workspace / "repos.json"
+    return root_repos if root_repos.exists() else None
 
 
 def _source_snapshot_meta(
@@ -196,10 +199,7 @@ def _source_snapshot_meta(
         max(0, int((now - modified_at).total_seconds())) if modified_at is not None else None
     )
     relative = _safe_relative(path, workspace)
-    try:
-        snapshot_id = path.parents[1].name
-    except IndexError:
-        snapshot_id = None
+    snapshot_id = _snapshot_id_from_path(path=path, workspace=workspace)
     freshness_status = _snapshot_freshness(age_seconds)
     return {
         "available": status == "available",
@@ -214,6 +214,17 @@ def _source_snapshot_meta(
         "freshness_label_ru": _snapshot_freshness_label(freshness_status),
         "repo_count": 0,
     }
+
+
+def _snapshot_id_from_path(*, path: Path, workspace: Path) -> str | None:
+    try:
+        if path.parent == workspace and path.name == "repos.json":
+            return "local-root-repos"
+        if path.name == "repos.json" and path.parent.name == "raw":
+            return path.parents[1].name
+    except IndexError:
+        return None
+    return None
 
 
 def _empty_source_snapshot(message_ru: str) -> dict[str, Any]:

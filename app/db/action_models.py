@@ -33,6 +33,8 @@ ACTION_EXECUTION_EVENT_STATUS_RECORDED = "recorded"
 ACTION_EXECUTION_EVENT_STATUS_BLOCKED = "blocked"
 ACTION_EXECUTION_EVENT_STATUS_UNSUPPORTED = "unsupported"
 
+ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED = "action_proposal_approved_locally"
+ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED = "action_proposal_rejected_locally"
 ACTION_EXECUTION_EVENT_PREVIEW_GENERATED = "execution_preview_generated"
 ACTION_EXECUTION_EVENT_PREVIEW_BLOCKED = "execution_preview_blocked"
 ACTION_EXECUTION_EVENT_UNSUPPORTED = "execution_unsupported"
@@ -197,10 +199,11 @@ class ActionExecution(Base):
 
 
 class ActionExecutionEvent(Base):
-    """Append-only local audit events for execution preview/readiness.
+    """Append-only local audit events for action review and execution readiness.
 
-    These records are intentionally separate from ActionExecution rows: preview
-    and blocked attempts must be auditable without implying a provider write.
+    These records are intentionally separate from ActionExecution rows: local
+    review decisions, preview, and blocked attempts must be auditable without
+    implying a provider write.
     """
 
     __tablename__ = "action_execution_events"

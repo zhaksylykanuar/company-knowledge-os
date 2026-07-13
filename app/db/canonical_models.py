@@ -84,6 +84,11 @@ class SourceRecord(Base):
             "external_id",
             name="uq_source_records_workspace_provider_external_id",
         ),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_source_records_workspace_id_id",
+        ),
         Index("ix_source_records_workspace_record_type", "workspace_id", "record_type"),
         Index("ix_source_records_payload_hash", "payload_hash"),
         Index("ix_source_records_source_updated_at", "source_updated_at"),

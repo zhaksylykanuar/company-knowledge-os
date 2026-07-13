@@ -12,12 +12,14 @@ The current concrete hosting target recommendation is the Railway-only split-ser
 
 Use a simple split deployment for the private beta:
 
-1. **Backend API process** - FastAPI served by Uvicorn from this repository.
+1. **Backend API process** - FastAPI served by one Uvicorn process from this
+   repository.
 2. **Frontend web process** - Next.js app served from `web/` after a production
    build.
 3. **Managed Postgres** - persistent source of truth for canonical state.
-4. **Managed Redis** - provision for runtime compatibility and future worker/job
-   paths; the current private-beta HTTP smoke path does not use Redis directly.
+4. **Managed Redis** - optional while the backend remains one process; required
+   if it becomes the shared limiter or a future worker/job path depends on it.
+   The current private-beta HTTP smoke path does not use Redis directly.
 
 The local `docker-compose.yml` remains a local development dependency file for
 Postgres and Redis. It is not the private-beta deployment target.
@@ -25,6 +27,16 @@ Postgres and Redis. It is not the private-beta deployment target.
 No worker process is required for the current GitHub-first private-beta smoke
 path. Add a worker only after a task explicitly introduces a queue-backed runtime
 contract.
+
+Keep exactly one Uvicorn process/replica for this baseline. The pre-Argon2 login
+admission controller is process-local: its per-IP, global, and concurrent limits
+do not aggregate across workers. A shared edge or Redis-backed login limiter is a
+required prerequisite for multiple Uvicorn workers or backend replicas.
+It currently keys clients by ASGI `request.client.host`. Before exposing the
+login route publicly, verify with two external source IPs that the Railway/Next
+proxy path preserves distinct trusted client identity, or replace per-IP
+admission with an edge/shared limiter. Do not enable unrestricted forwarded-header
+trust on a publicly reachable backend.
 
 ## Preflight checklist
 
@@ -61,6 +73,13 @@ platform secret/env manager and must not be committed to git:
 - `FOUNDEROS_SECRET_ENCRYPTION_KEY`
 - `FOUNDEROS_CORS_ALLOWED_ORIGINS`
 - `FOUNDEROS_CORS_ALLOW_CREDENTIALS`
+- `FOUNDEROS_LOGIN_MAX_FAILED_ATTEMPTS`
+- `FOUNDEROS_LOGIN_LOCKOUT_MINUTES`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_WINDOW_SECONDS`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_PER_IP`
+- `FOUNDEROS_LOGIN_RATE_LIMIT_GLOBAL`
+- `FOUNDEROS_LOGIN_MAX_CONCURRENT_ATTEMPTS`
+- `FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS`
 - `ENABLE_LLM`
 - `ENABLE_WRITE_ACTIONS`
 - `REQUIRE_APPROVAL_FOR_WRITES`
@@ -74,6 +93,13 @@ Optional only when the corresponding feature is intentionally enabled:
 - `OPENAI_API_KEY`
 - `FOS_OPENAI_API_KEY`
 - `FOUNDEROS_GITHUB_REPOS`
+- `FOUNDEROS_GITHUB_APP_ID`
+- `FOUNDEROS_GITHUB_APP_SLUG`
+- `FOUNDEROS_GITHUB_APP_PRIVATE_KEY` or
+  `FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH`
+- `FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET`
+- `FOUNDEROS_GITHUB_APP_SETUP_URL`
+- `FOUNDEROS_GITHUB_APP_CALLBACK_URL`
 - `FOUNDEROS_JIRA_PROJECT_KEYS`
 - `ENABLE_OBSIDIAN_EXPORT`
 - `FOUNDEROS_ENABLE_OBSIDIAN_BRIDGE`
@@ -99,6 +125,9 @@ Private-beta default policy:
   human-approved read-only connector test.
 - Broad provider token scope is not a safety boundary; explicit write and sync
   allowlists are still required.
+- GitHub App product-connect config is server-side only. Private keys and
+  webhook secrets are never browser env vars; installation access tokens should
+  be minted just-in-time and not persisted.
 
 ## Required frontend env names
 
@@ -111,10 +140,27 @@ Configure these on the frontend service:
 
 Production auth/session is now built: users sign in at `/login` with
 email+password on a server-side session cookie (Argon2id, httpOnly, first-party
-via the same-origin proxy). The browser sends no operator API key, owner email,
-or workspace ID; the workspace is derived from the session. Provision the founder
-account with `scripts/create_admin_user.py` (see the root README). The operator
-API key remains for machine/CI/admin tooling only.
+via the same-origin proxy). The browser sends no operator API key or manually
+entered owner/workspace identifiers; available companies come from the session,
+and multiple memberships require an explicit choice. Create the first founder
+through a short-lived `scripts/create_founder_invite.py` URL (see the root
+README). Public signup and email delivery remain closed. The operator API key
+and `scripts/create_admin_user.py` recovery path remain for machine/admin use.
+Founder and teammate setup bearers use URL fragments, not HTTP query strings;
+the browser clears them immediately after capture. All login, setup-password,
+and founder-enrollment sessions retain only printable User-Agent metadata capped
+at 512 characters. Password inputs are capped before hashing: login accepts
+1–256 characters, while enrollment, teammate setup, and password change require
+8–256. A disabled account's live session is revoked when next validated.
+
+In production, per-IP/global request windows and a concurrency limit reject
+excess login work before Argon2; the durable DB throttle separately locks by
+submitted email. Failed-login recording opportunistically removes DB throttle
+rows older than `FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS` (24 hours by default).
+The admission layer is process-local, so this runbook intentionally starts one
+Uvicorn process only. Per-IP isolation behind the actual hosting proxy is not a
+locally proven property; the two-external-client smoke above is a release gate,
+not an implementation claim.
 
 ## Backend deployment procedure
 
@@ -145,6 +191,9 @@ API key remains for machine/CI/admin tooling only.
    ```bash
    uv run uvicorn app.main:app --host 0.0.0.0 --port <backend-port>
    ```
+
+   Do not add `--workers` or a second replica until a shared edge/Redis login
+   limiter is deployed and verified.
 
 7. Verify the public health endpoint:
 
@@ -181,10 +230,41 @@ backend deploy command.
    npm run start -- --port <frontend-port>
    ```
 
-6. Verify the frontend page loads, then sign in at `/login` with the founder
-   account provisioned via `scripts/create_admin_user.py`. The session cookie is
-   first-party through the same-origin proxy; no browser-local operator key,
-   owner email, or workspace ID is entered.
+6. Verify the frontend page loads. In an interactive backend admin shell whose
+   stdout is not retained by a deploy/start job, create one short-lived founder
+   link and pass the real frontend origin. TTL must be 1–168 hours (72 by
+   default):
+
+   ```bash
+   UV_NO_SYNC=1 uv run python scripts/create_founder_invite.py \
+     --base-url <frontend-origin> \
+     --ttl-hours 72
+   ```
+
+   Treat the printed URL like a credential: transfer it directly to the founder
+   and never paste it into deploy logs, tickets, docs, or chat. The founder opens
+   `/start`, creates the company, and follows `/onboarding`; existing founders
+   return through `/login`. The session cookie remains first-party through the
+   same-origin proxy.
+
+   If the unconsumed URL is leaked or sent to the wrong person, revoke it by the
+   returned UUID before issuing another link:
+
+   ```bash
+   UV_NO_SYNC=1 uv run python scripts/revoke_founder_invite.py \
+     --invite-id <invite-uuid>
+   ```
+
+   Unknown, expired, used, and revoked tokens intentionally return the same
+   generic failure. Never create invite links in a retained build log.
+
+7. When an owner/admin adds a brand-new teammate in Settings, FounderOS returns
+   one fragment-only `/setup-password#token=...` link. The inviter does not set
+   an initial password. This slice sends no email and does not verify the
+   recipient, so copy the link once and transfer it manually over a trusted
+   direct channel; never retain it in deploy logs, tickets, docs, or chat. An
+   existing account already belonging to another workspace returns 409 and no
+   membership is created until a future self-accepted invitation flow exists.
 
 ## Postgres and Redis requirements
 
@@ -207,34 +287,74 @@ Requirements:
 Redis is configured through `REDIS_URL` and exists in local Compose. For the
 current private-beta HTTP smoke path, Redis is not directly exercised. Provision
 managed Redis if the hosting platform makes it cheap and safe; otherwise mark it
-as deferred until a worker/job path requires it.
+as deferred while the backend remains one process. Before scaling to multiple
+Uvicorn workers or replicas, add and verify either an edge-shared or Redis-backed
+login limiter; merely setting `REDIS_URL` does not make the current process-local
+controller shared.
 
 ## Migration, backup, and rollback
 
 Before `uv run alembic upgrade head` against private-beta data:
 
 1. Take a database backup through the hosting provider.
-2. Record the current app commit SHA in the deploy log.
-3. Record Alembic heads/current locally without printing database URLs:
+2. Enter a maintenance window and stop backend/worker writers. Revision
+   `a3c4d5e6f7b8` adds a regular composite unique constraint to existing
+   `source_records`; even though duplicate `(workspace_id, id)` values are
+   impossible under the primary key, PostgreSQL may hold a write-blocking lock
+   while it builds the backing index. Do not apply it under active ingestion.
+   The current head `b4d5e6f7a8c9` then adds the
+   `founder_enrollment_invites` table for hash-only, expiring, revocable founder
+   links; it stores no raw bearer.
+3. Record the current app commit SHA in the deploy log.
+4. Record Alembic heads/current locally without printing database URLs:
 
    ```bash
    uv run alembic heads
    uv run alembic current
    ```
 
-4. Apply migrations:
+5. Apply migrations:
 
    ```bash
    uv run alembic upgrade head
    ```
 
-5. Run backend health and private-beta smoke.
+6. Restart writers only after the migration succeeds, then run backend health
+   and private-beta smoke.
+
+Company World data migration is deliberately separate from schema migration.
+After the new head is healthy, run the aggregate-only dry run for each intended
+workspace from the backend environment:
+
+```bash
+uv run python scripts/backfill_company_world.py --workspace-id <workspace-uuid>
+```
+
+Review only the returned counts and warnings. The command never promotes
+projected external candidates. If `conflicts` is zero and the backup is current,
+an authorized human may apply membership profiles and missing interactions for
+already confirmed people explicitly:
+
+```bash
+uv run python scripts/backfill_company_world.py \
+  --workspace-id <workspace-uuid> \
+  --apply
+```
+
+Re-run the dry run and require all `*_proposed` counts to be zero. Do not print
+or attach emails, raw bodies, provider payloads, tokens, or database URLs.
 
 Rollback policy:
 
 - If migration has not been applied, redeploy the previous app commit.
 - If migration has been applied and smoke fails, prefer restore-from-backup for
   data-impacting failures; do not guess a downgrade path.
+- Revision `a3c4d5e6f7b8` refuses to downgrade while any Company World profile,
+  interaction, affiliation, organization, or resolution row exists. It takes
+  exclusive locks on all five tables before checking them, so run downgrade only
+  in the same stopped-writer maintenance window. Restore the pre-migration
+  backup, or export and remove those rows through an explicitly reviewed data
+  plan before retrying downgrade; never bypass the guard ad hoc.
 - Some migrations are intentionally irreversible — notably `f7b8c9d0e1a2`
   (canonical-task dedupe), which DELETEs duplicate provider-keyed task rows
   before adding the unique index. Treat database backup as the rollback boundary.
@@ -259,9 +379,11 @@ backend, check `FOUNDEROS_API_PROXY_TARGET` (or `NEXT_PUBLIC_API_BASE_URL`) and
 
 ## GitHub connection setup
 
-Current private beta uses the manual GitHub provider-token bridge. The token is
-submitted to the backend, encrypted, and never returned by read APIs. GitHub
-OAuth/onboarding is still future work.
+The preferred product path is the GitHub App installation foundation
+(DEC-052/053): server-side App credentials, a workspace-scoped installation
+connection, and one explicit repository read at a time. The manual encrypted
+provider-token path remains an operator bridge, not browser onboarding. The
+first real GitHub App read remains a separate human-approved gate.
 
 Rules:
 
@@ -336,5 +458,6 @@ This runbook does not:
 - choose or store cloud-provider secrets;
 - implement GitHub OAuth/onboarding (production auth/session login is already
   built; this runbook just deploys it);
+- add public signup or email delivery for founder/team invitations;
 - run live provider smoke;
 - authorize provider writes.

@@ -1113,16 +1113,1045 @@ Consequences:
   concurrent GitHub live sync work. GitHub App/product connect design remains
   the next product step.
 
+## DEC-051 - Local GitHub Repository Surface Boots From `.local/repos.json`
+
+Decision (2026-06-30): before GitHub App product connect is implemented, the
+local GitHub repository surface can be bootstrapped from `.local/repos.json`.
+Repo audit and repository inventory now treat that file as a valid offline
+GitHub discovery snapshot when no canonical
+`.local/discovery/github/<snapshot>/raw/repos.json` snapshot exists. The
+canonical discovery layout remains preferred when present.
+
+The helper `scripts/prepare_github_local_snapshot.py` normalizes the root local
+repo list into the canonical discovery layout and writes a safe local repository
+env snippet (`.local/github-repositories.env`) with repo allowlists only. It does
+not call GitHub, does not handle tokens, and refuses sensitive-looking keys in
+input JSON.
+
+Rationale: the founder already has a local repository surface at
+`.local/repos.json`. Supporting it directly lets GitHub dashboard/repo-audit
+surfaces show real repository context immediately, while keeping product GitHub
+connect/live sync as a separate GitHub App installation path.
+
+Consequences:
+
+- `.local/repos.json` is treated as local, offline evidence only; it is not a
+  provider credential source and is not committed.
+- The generated `.local/discovery/github/<snapshot>/raw/repos.json` and
+  `.local/github-repositories.env` are local ignored artifacts.
+- Repository allowlist snippets contain repo names only. Provider writes remain
+  disabled by default; write allowlists still require explicit human approval.
+- GitHub App product connect/live sync remains the next product slice.
+
+## DEC-052 - GitHub Product Connect Uses GitHub App Installation
+
+Decision (2026-07-01): the product GitHub connect path uses a GitHub App
+installation, not user OAuth/PAT as the primary product path. The existing
+manual provider-token bridge remains an operator/admin bridge for controlled
+tests; it is not the browser product onboarding model.
+
+The foundation records a workspace-scoped GitHub App installation in
+`IntegrationConnection` using `provider_metadata.connection_method =
+"github_app_installation"`. The installation id is carried in metadata and in a
+non-secret external account key (`github_app_installation:<installation_id>`).
+An installation may not be bound to a different workspace through the service.
+
+Token and secret model:
+
+- GitHub App private key and webhook secret are backend-only env/config values.
+  They are exposed to status payloads only as configured/missing booleans and
+  safe setup/callback URLs.
+- Short-lived installation access tokens should be minted just-in-time for
+  provider reads and are not persisted in `IntegrationConnection`.
+- The app-installation connection endpoint records connection state only; it
+  does not call GitHub, start sync, persist installation tokens, or perform
+  provider writes.
+- Provider writes remain disabled by default and require the existing separate
+  approval/write path and explicit allowlists.
+
+Rationale: a GitHub App installation gives founderOS the right future unit of
+workspace-scoped repository access, supports selected-repository permissions,
+and avoids browser-shipped tokens/PATs. Keeping installation tokens ephemeral
+matches the existing secret-encryption posture and reduces stored credential
+surface.
+
+Consequences:
+
+- GitHub connection status now includes a redacted GitHub App config block:
+  configured/missing env names, setup/callback URLs, webhook/private-key boolean
+  readiness, and explicit `installation_tokens_persisted: false`.
+- `/api/v1/workspaces/{workspace_id}/github/connections/app-installation`
+  records/updates an installation connection for admins without provider calls.
+- `/github` now shows GitHub App readiness, repository-surface count, no
+  persisted installation tokens, and external writes disabled.
+- The next slice is live read sync using just-in-time installation tokens,
+  strict repository scope, and the existing idempotent normalization/upsert path.
+
+## DEC-053 - GitHub App Live Read Sync Starts Polling-Only and Explicitly Scoped
+
+Decision (2026-07-01): the first GitHub App live read sync is an explicit,
+admin-triggered polling/read endpoint, not webhook-driven automation. The
+endpoint requires an existing workspace-scoped GitHub App installation
+connection and an explicit list of repository `owner/repo` names. It mints a
+short-lived installation access token just-in-time, reads only installation
+repositories/issues/PRs for the requested repositories, and persists through the
+existing idempotent GitHub normalization/upsert path. The installation token is
+not persisted.
+
+Webhooks are intentionally deferred from this v0. Rationale: a safe webhook path
+needs raw-body signature verification, delivery dedupe/replay handling, event
+type filtering, retry semantics, and observability. The polling-only endpoint
+gets real GitHub data flowing while keeping execution human/admin triggered,
+repository-scoped, and easier to test without provider calls in CI.
+
+Consequences:
+
+- `POST .../github/connections/app-installation/sync` performs read-only live
+  sync for explicit repositories and returns `external_write_performed: false`.
+- The endpoint does not sync all organization repositories by default; requested
+  repositories must also be visible to the installation.
+- Provider writes remain outside this path. Action execution still requires the
+  existing separate approval/write controls and allowlists.
+- A future webhook slice must add raw-body signature verification and delivery
+  dedupe before any webhook payload mutates local canonical state.
+
+## DEC-054 - First GitHub App Real Read Run Is Gated By An Offline Readiness Preflight
+
+Decision (2026-07-03): the first approved GitHub App real-provider read run is
+gated by a deterministic, offline readiness check before any provider call. A
+pure function `github_app_real_read_run_readiness()` composes the existing
+`github_app_config_status()` env-presence check with the recorded
+installation-connection state and the already-loaded local repository surface,
+and returns a status (`ready`/`blocked`), a concrete blocker list, and the exact
+next human step. A companion CLI, `scripts/github_app_real_read_run_preflight.py`,
+and the runbook `docs/deploy/github-app-first-real-read-run.md` let a human
+confirm the run is executable and then perform it manually.
+
+Rationale: the authoritative MVP milestone
+(`founderOS_MASTER_PLAYBOOK.md` §1.4) is real GitHub data flowing end-to-end, and
+ROADMAP Phases 2/3/4 all name this same next step. The run itself is externally
+gated on GitHub App credentials and network that are not present in every
+environment, so the aligned, verifiable work is a safe readiness gate rather than
+more fixture-only dashboard polish (which Phase 5 explicitly warns against).
+
+Consequences:
+
+- The readiness function and preflight perform no provider calls, open no
+  network connection, and never emit secret values — only presence booleans,
+  blocker codes, and the next step.
+- The real read run remains the existing human-approved, repository-scoped
+  `POST .../github/connections/app-installation/sync` (DEC-053); this decision
+  adds a gate, not a new write or automation path.
+- Provider writes, auto-deploy, and LLM remain out of scope for this path.
+
+## DEC-055 - Teammate Provisioning Uses Local One-Time Setup Links
+
+Decision (2026-07-03, hardened 2026-07-13): the first
+teammate-provisioning slice creates and lists local workspace memberships only.
+Workspace owners/admins may create a local
+`User` row and `Membership` row through `POST
+/api/v1/workspaces/{workspace_id}/members` with role `admin`, `member`, or
+`viewer`; listing is available through `GET
+/api/v1/workspaces/{workspace_id}/members`. The endpoint does not send email,
+does not call an identity provider, does not create external accounts, and does
+not grant `owner` (owner remains bootstrap-only).
+
+Rationale: the MVP needs multi-user/team readiness, but email invites,
+password-reset flows, SSO, and external identity-provider writes are bigger
+security/product slices. A local membership foundation lets the product
+represent teammates and enforce workspace role gates without adding external
+writes or new migrations.
+
+Consequences:
+
+- Provisioning returns `external_invite_sent: false` and
+  `provider_write_performed: false` explicitly.
+- Provisioning does not accept `initial_password`; the request model rejects it.
+  An inviter therefore cannot choose, establish, or overwrite another user's
+  credential.
+- Provisioning a brand-new local user always creates a one-time setup link. The
+  `account_setup_tokens` table stores only `sha256(raw_token)`, purpose,
+  expiration, and consumed timestamp; the raw token is returned once in the API
+  response as a fragment-only `/setup-password#token=...` path and is never
+  persisted or sent in the initial HTTP request. The browser clears it after
+  capture. The public setup endpoint locks the token and user, hashes only after
+  validation, consumes exactly once, creates exactly one teammate browser
+  session under concurrent submission, and rejects invalid/reused/expired
+  tokens generically. The default lifetime is seven days.
+- No email or provider write is performed, and this slice does not verify the
+  recipient. The response exposes the setup link to the inviter exactly once for
+  manual transfer over a trusted direct channel; both parties must treat it like
+  a credential. Automated secure delivery remains deferred.
+- An existing active account with no membership may be attached without
+  changing its password and without minting a setup link. If the account already
+  has a membership in any other workspace, provisioning returns 409
+  (`existing account must accept a workspace invitation`) and creates no new
+  membership. Cross-workspace attachment therefore cannot happen silently; a
+  future self-accepted invitation flow owns that case.
+- Duplicate memberships are rejected, disabled users cannot be provisioned, and
+  viewers/members cannot provision others because the endpoint requires admin
+  workspace role.
+- Email delivery, self-accepted cross-workspace invitations, password-reset
+  email delivery, and SSO remain later slices.
+
+## DEC-056 - Connector Framework Registry Is The MVP Connector Spine
+
+Decision (2026-07-06): FounderOS now has a deterministic connector framework
+registry as the canonical product spine for MVP connectors. The static connector
+catalog lives in `app/connectors/registry.py`, the workspace read model lives in
+`app/services/connector_registry_service.py`, and the product surface is
+`GET /api/v1/workspaces/{workspace_id}/connectors` plus the `/connectors`
+frontend page. It exposes the MVP provider set (`github`, `jira`, `gmail`,
+`drive`) and reads existing `integration_connections` status/counts plus static
+connector descriptors only.
+
+Rationale: `founderOS_MASTER_PLAYBOOK.md` requires a connector framework plus
+minimal GitHub/Jira/Gmail/Drive connector coverage. `app/connectors/` was empty
+while provider constants already existed in the database model, so the safest
+next step is a single read-only registry surface that GitHub and future
+Jira/Gmail/Drive implementations plug into rather than a new parallel connector
+architecture.
+
+Consequences:
+
+- The registry is read-only: it performs no provider calls, starts no sync,
+  makes no external writes, runs no LLM, and does not read or emit encrypted
+  token fields.
+- At introduction, GitHub is marked `available` with `/github` as its manage
+  path; Jira, Gmail, and Google Drive are marked `planned` but explicitly in MVP
+  scope. DEC-057/058/059 later make Jira/Gmail/Drive locally available.
+- Future connector implementations should extend this registry and keep
+  workspace-scoped status visible on `/connectors`.
+
+
+## DEC-057 - Jira Connector Starts As Local Read-Only Issue Import
+
+Decision (2026-07-06): the first non-GitHub connector implementation is a
+local-only Jira issue import and read surface. The backend exposes `GET
+/api/v1/workspaces/{workspace_id}/jira/issues` and admin-only `POST
+/api/v1/workspaces/{workspace_id}/jira/issues/import`; the frontend adds `/jira`
+and the connector registry now marks Jira `available` with `/jira` as its manage
+path. The import accepts a pasted/exported JSON array (or object with
+`issues`) and persists a sanitized normalized projection into canonical
+`SourceRecord(provider='jira', record_type='issue')` and
+`Task(source_provider='jira')` rows using idempotent upserts.
+
+Rationale: GitHub real-provider reads remain externally blocked by missing
+GitHub App credentials/installation, while the MVP playbook requires minimal
+Jira/Gmail/Drive connector coverage. A local Jira import slice advances the
+connector framework without introducing OAuth, API-token handling, live provider
+reads, provider writes, or LLM behavior. It also reuses the canonical
+SourceRecord/Task spine instead of creating a parallel Jira data model.
+
+Consequences:
+
+- Jira import is local DB-only: it performs no Jira API calls, starts no sync,
+  makes no external writes, invokes no LLM, and does not read or emit encrypted
+  token fields.
+- Imported issue entries must include a valid Jira key such as `FOS-123`; invalid
+  entries are reported as per-entry failures while valid entries can still be
+  imported.
+- Persisted source payloads are normalized and sanitized: secret-like keys are
+  dropped, evidence refs are always present (provided or synthesized from the
+  Jira key/source URL), and raw provider credentials are not stored.
+- The import endpoint requires owner/admin workspace role; listing local Jira
+  issues is available to workspace members with normal workspace access.
+- Live Jira OAuth/API-token connection, background sync, webhooks, Jira writes,
+  and Company Brain aggregation across Jira/Gmail/Drive remain later slices.
+
+## DEC-058 - Gmail Connector Starts As Local Read-Only Message Import
+
+Decision (2026-07-06): the second non-GitHub connector implementation is a
+local-only Gmail message import and read surface, mirroring the DEC-057 Jira
+slice. The backend exposes `GET
+/api/v1/workspaces/{workspace_id}/gmail/messages` and admin-only `POST
+/api/v1/workspaces/{workspace_id}/gmail/messages/import`; the frontend adds
+`/gmail` and the connector registry now marks Gmail `available` with `/gmail` as
+its manage path. The import accepts a pasted/exported JSON array (or object with
+`messages`) and persists a sanitized normalized projection into canonical
+`SourceRecord(provider='gmail', record_type='message')` rows using idempotent
+upserts.
+
+Rationale: GitHub real-provider reads remain externally blocked by missing
+GitHub App credentials/installation, while the MVP playbook (§1.5) requires
+minimal Jira/Gmail/Drive connector coverage. Extending the connector framework
+with Gmail after Jira advances MVP scope without introducing OAuth, API-token
+handling, live provider reads, provider writes, or LLM behavior, and it proves
+the framework generalizes beyond task-shaped providers.
+
+Consequences:
+
+- Gmail import is local DB-only: it performs no Gmail API calls, starts no sync,
+  makes no external writes, invokes no LLM, and does not read or emit encrypted
+  token fields.
+- Gmail messages are not tasks, so they persist to `SourceRecord` only (no
+  `Task` row), unlike the Jira slice. This keeps the canonical `Task` table
+  provider-scoped to `github`/`jira`/`internal`.
+- Raw email bodies are intentionally not persisted; only a narrow evidence-
+  backed projection (subject, participants, labels, dates, and a bounded
+  provider-supplied snippet) is stored. Secret-like keys are dropped and
+  evidence refs are always present (provided or synthesized from the message
+  id/source URL).
+- Imported message entries must include a message id; invalid entries are
+  reported as per-entry failures while valid entries can still be imported.
+- The import endpoint requires owner/admin workspace role; listing local Gmail
+  messages is available to workspace members with normal workspace access.
+- Live Gmail OAuth/API-token connection, background sync, thread aggregation,
+  Gmail writes, and Company Brain aggregation across Jira/Gmail/Drive remain
+  later slices.
+
+## DEC-059 - Google Drive Connector Starts As Local Read-Only File Metadata Import
+
+Decision (2026-07-06): the third non-GitHub connector implementation is a
+local-only Google Drive file metadata import and read surface, completing the
+MVP connector-set local surfaces started by DEC-056/057/058. The backend exposes
+`GET /api/v1/workspaces/{workspace_id}/drive/files` and admin-only `POST
+/api/v1/workspaces/{workspace_id}/drive/files/import`; the frontend adds
+`/drive` and the connector registry now marks Google Drive `available` with
+`/drive` as its manage path. The import accepts a pasted/exported JSON array (or
+object with `files`) and persists a sanitized normalized metadata projection into
+canonical `SourceRecord(provider='drive', record_type='file')` rows using
+idempotent upserts.
+
+Rationale: GitHub real-provider reads remain externally blocked by missing
+GitHub App credentials/installation, while the MVP playbook (§1.5) requires
+minimal Jira/Gmail/Drive connector coverage. Adding Drive after Jira and Gmail
+closes the MVP provider registry's local product surface without introducing
+OAuth, API-token handling, live provider reads, provider writes, or LLM behavior.
+
+Consequences:
+
+- Drive import is local DB-only: it performs no Google Drive API calls, starts no
+  sync, makes no external writes, invokes no LLM, and does not read or emit
+  encrypted token fields.
+- Drive files are not tasks, so they persist to `SourceRecord` only (no `Task`
+  row), like Gmail and unlike Jira.
+- Raw document bodies/content are intentionally not persisted; only a narrow
+  evidence-backed metadata projection (name, MIME type, owners, folder/path,
+  sharing flag, modified timestamp, source URL) is stored. Secret-like keys are
+  dropped and evidence refs are always present (provided or synthesized from the
+  file id/source URL).
+- Imported file entries must include a file id; invalid entries are reported as
+  per-entry failures while valid entries can still be imported.
+- The import endpoint requires owner/admin workspace role; listing local Drive
+  files is available to workspace members with normal workspace access.
+- Live Google Drive OAuth/API-token connection, background sync, document body
+  extraction, Drive writes, and Company Brain aggregation across Jira/Gmail/Drive
+  remain later slices.
+
+## DEC-060 - Company Brain Exposes Local Connector SourceRecord Coverage
+
+Decision (2026-07-06): the workspace Company Brain read model now includes an
+additive `source_records` coverage block that summarizes all canonical
+`SourceRecord` rows for the workspace across providers and record types. The
+existing GitHub-first fields (`summary`, `repositories`, `work`, `evidence`)
+remain unchanged, while `source_records.total`, `source_records.by_provider`,
+and `source_records.by_record_type` make local Jira/Gmail/Drive connector
+imports visible in founder-facing dashboard coverage.
+
+Rationale: DEC-057/058/059 added local-only Jira/Gmail/Drive connector import
+surfaces, but those records were not visible in Company Brain/Dashboard coverage
+unless they were GitHub-shaped repositories/issues/PRs. A compact SourceRecord
+coverage summary advances MVP visibility without pretending Gmail messages or
+Drive files are tasks, without changing the canonical `Task` table, and without
+adding provider calls, sync, writes, or LLM behavior.
+
+Consequences:
+
+- The `source_records` block is aggregate-only: it exposes counts by provider
+  and record type, not raw source payloads, snippets, email bodies, document
+  contents, secrets, tokens, or provider responses.
+- The existing GitHub-first Company Brain work/repository/evidence contract
+  remains backward-compatible for current consumers.
+- Dashboard Source Coverage now renders SourceRecord totals and provider/type
+  breakdowns from the already-loaded Company Brain payload. It still performs no
+  provider calls, starts no sync, makes no external writes, and invokes no LLM.
+- Full entity normalization and richer Company Brain semantics for Jira/Gmail/
+  Drive remain later slices; this decision is a visibility bridge, not a full
+  cross-provider reasoning model.
+
+## DEC-061 - Founder Briefing Surfaces Connector SourceRecord Coverage
+
+Decision (2026-07-06): the deterministic Founder Briefing now includes a
+`connector-source-coverage` item derived from the additive Company Brain
+`source_records` aggregate (DEC-060). It summarizes local canonical
+`SourceRecord` coverage across GitHub/Jira/Gmail/Drive (total, by provider, by
+record type) so imported Jira/Gmail/Drive records are visible in the primary
+founder-facing briefing flow, not only on the dashboard coverage panel. The
+briefing now fetches Company Brain once per generation and feeds both the
+existing GitHub-first `source-coverage` item and the new connector item.
+
+Rationale: DEC-057/058/059 added local connector imports and DEC-060 surfaced
+their aggregate on the dashboard, but a founder generating a briefing still saw
+only GitHub-shaped coverage, leaving non-GitHub connector data invisible in the
+briefing itself. Adding a deterministic connector-coverage item advances MVP
+founder-facing visibility without provider calls, sync, external writes, or LLM.
+
+Consequences:
+
+- The item is aggregate-only: it reports counts by provider and record type, not
+  raw source payloads, snippets, email bodies, document contents, secrets, or
+  provider responses.
+- When no connector SourceRecord rows exist, the item is a `next_step` with a
+  "connector source coverage empty" warning; otherwise it is a `status` item
+  with evidence refs keyed on `provider:count`.
+- Company Brain is now queried once per briefing generation and shared between
+  the GitHub-first coverage item and the connector item, avoiding a duplicate
+  read; the existing briefing item ids/shape remain backward-compatible and the
+  new item is additive.
+- Full cross-provider normalization into Company Brain work items and richer
+  briefing narrative remain later slices; this is a deterministic visibility
+  bridge, not an LLM briefing pipeline. DEC-062 later promotes the task-shaped
+  Jira subset into Company Brain work items.
+
+## DEC-062 - Company Brain Promotes Local Jira Issues Into Work Items
+
+Decision (2026-07-06): workspace Company Brain now treats local canonical Jira
+`Task(source_provider='jira')` rows as first-class issue work items. Jira issues
+appear in `work.issues`, `work.recent`, source evidence, and open/closed issue
+summary counts alongside GitHub issues. The response adds optional
+`source_provider` and `project_key` fields on work items so the UI can render
+Jira project scope without pretending the item belongs to a GitHub repository.
+
+Rationale: DEC-057 made Jira issue import write canonical `Task` rows, while
+DEC-060/061 exposed non-GitHub records only as aggregate SourceRecord coverage.
+Jira issues are task-shaped and already satisfy the canonical Task contract, so
+promoting them into Company Brain work items advances the MVP goal of seeing
+work from multiple connectors in one founder-facing view. Gmail messages and
+Drive files are not task-shaped, so they remain SourceRecord coverage until a
+separate first-class model is introduced.
+
+Consequences:
+
+- Jira work-item promotion is local/deterministic only: no Jira provider calls,
+  sync, external writes, LLM, raw payload rendering, or secret reads are added.
+- GitHub issue semantics remain stable: only GitHub tasks with status `open`
+  count as open, while closed GitHub tasks count as closed. Jira tasks count as
+  closed/done when their metadata `status_category` is `done` (or status is
+  closed/done/resolved); otherwise they are visible as open work.
+- Company Brain `work.issues` can now contain both GitHub and Jira rows. Current
+  UI labels each work item with provider and scope (`repository_full_name` for
+  GitHub, `project_key` for Jira).
+- Gmail and Drive first-class entity/read models remain later slices; they must
+  not be forced into `Task` or work-item semantics without an explicit model
+  decision.
+
+## DEC-063 - Company Brain Exposes Gmail Messages And Drive Files As First-Class Read Sections
+
+Decision (2026-07-06): workspace Company Brain now exposes local Gmail message
+and Google Drive file records as first-class read sections without coercing them
+into tasks. Gmail `SourceRecord(provider='gmail', record_type='message')` rows
+appear under `communications.messages`; Drive
+`SourceRecord(provider='drive', record_type='file')` rows appear under
+`documents.files`. Both sections are built only from the sanitized normalized
+payloads already stored by DEC-058/059 and include source refs/evidence.
+
+Rationale: DEC-060/061 made Gmail/Drive visible as aggregate SourceRecord
+coverage, while DEC-062 promoted only Jira because Jira issues are task-shaped.
+Gmail messages and Drive files are not tasks, but they still need first-class
+founder-facing read models to satisfy the MVP direction of seeing emails and
+documents in one Company Brain surface. Separate `communications` and
+`documents` sections preserve semantics without polluting `Task`.
+
+Consequences:
+
+- This is local/deterministic only: no Gmail/Drive provider calls, sync, external
+  writes, LLM, raw body/content rendering, or secret reads are added.
+- Raw email bodies and Drive document contents remain excluded. The read model
+  renders bounded normalized fields such as subject/snippet, sender/labels,
+  file name/MIME type/owners/shared flag, source URL, and source refs.
+- Company Brain can now contain GitHub/Jira work items plus Gmail messages and
+  Drive files in separate typed sections. Existing GitHub/Jira work contracts are
+  kept backward-compatible, with `communications` and `documents` additive.
+- Future work can enrich these sections into richer thread/document entities,
+  but such enrichment needs separate model decisions and evidence contracts.
+
+## DEC-064 - Founder Briefing Summarizes Local Jira, Gmail, And Drive Read Models
+
+Decision (2026-07-06): the deterministic Founder Briefing now adds first-class
+local connector items from the Company Brain read model: `jira-work-items` for
+Jira issue-shaped work, `gmail-message-signals` for Gmail messages, and
+`drive-file-signals` for Drive file metadata. These items are additive to the
+existing GitHub-first and connector coverage items, and are generated only from
+already-normalized local Company Brain sections (`work.issues`,
+`communications.messages`, and `documents.files`) plus their source refs.
+
+Rationale: DEC-062/063 made Jira/Gmail/Drive visible in Company Brain, but the
+Founder Briefing still only surfaced non-GitHub data as aggregate SourceRecord
+coverage. The briefing should guide founder review from the first-class local
+read models without waiting for the LLM narrative pipeline or real provider
+reads.
+
+Consequences:
+
+- This remains local/deterministic only: no Jira/Gmail/Drive provider calls,
+  sync, external writes, secret reads, raw payload rendering, or LLM are added.
+- Jira issues are summarized as work because they already live in canonical
+  `Task(source_provider='jira')`; Gmail messages and Drive files remain separate
+  communication/document read models and are not coerced into tasks.
+- Each item carries evidence refs converted from Company Brain `source_refs`;
+  if refs are missing, the item is still emitted with an explicit warning so the
+  absence is visible before anyone creates a local follow-up action.
+- Briefing summaries use bounded normalized fields (issue key/title, message
+  subject, file name, counts) and intentionally ignore raw email bodies,
+  snippets-as-body, document content, provider payload dumps, and secret-like
+  data.
+- Counts are truthful under truncation: Company Brain `work`/`communications`/
+  `documents` sections are capped to a display limit, so the imported total is
+  taken from the unlimited `source_records.by_provider` aggregate (DEC-060) and
+  reported as "N shown of M imported". Visible-only signals (unread/shared) are
+  explicitly scoped with "in view" so a truncated slice never implies a false
+  workspace-wide total.
+
+## DEC-065 - Persisted Briefings Can Generate Local Non-GitHub Action Proposals
+
+Decision (2026-07-06): persisted Founder Briefings now have a local-only action
+proposal generation endpoint:
+`POST /api/v1/workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`.
+The endpoint creates local `ActionProposal(target_provider='internal',
+action_type='internal_todo')` rows for the DEC-064 non-GitHub briefing items
+(`jira-work-items`, `gmail-message-signals`, and `drive-file-signals`) when
+those items have evidence refs. The Briefing UI exposes this as a bulk local
+action generation control next to the existing per-item local action button.
+
+Rationale: the MVP path requires a founder to go from Company Brain/Briefing
+signals to human-reviewed action proposals. Before this decision, the UI could
+manually create one local action per visible briefing item, but there was no
+backend deterministic bridge from a saved briefing to evidence-backed local
+proposals for the new Jira/Gmail/Drive read-model signals. A backend endpoint
+makes the flow reproducible, testable, and workspace-scoped without waiting for
+LLM generation or provider execution.
+
+Consequences:
+
+- Generation is local DB-only: it reads persisted `Briefing` / `BriefingItem`
+  rows and writes only local `ActionProposal` rows. It performs no provider
+  calls, starts no sync, makes no external writes, reads no secrets, and invokes
+  no LLM.
+- Items without `evidence_refs` are skipped with `missing_evidence_refs`; local
+  proposals are created only from evidence-backed briefing items.
+- Existing open actions for the same `briefing_id + briefing_item_key` are
+  skipped with `open_action_exists`, including actions previously created by the
+  older per-item UI path (`source='briefing_item'`). This prevents blind
+  duplicates while allowing a rejected/failed action to be regenerated later.
+- Generated proposals are `created_by='system'`, carry the persisted
+  `briefing_item_id`, preserve the stable `briefing_item_key` in payload for UI
+  cross-linking, and include only sanitized summary/category/severity/
+  related-entity metadata plus copied evidence refs.
+- The endpoint requires member-or-higher workspace role. Viewers can still read
+  briefings but cannot create local proposals.
+
+## DEC-066 - Internal Documents Are A First-Class Workspace Module
+
+Decision (2026-07-06): the MVP "internal documents" module (playbook §1.5, flow
+§4.7, model §6.16, endpoints §7.11) is implemented as its own canonical,
+workspace-scoped ``documents`` table with member-gated CRUD, search, and Company
+Brain integration. Unlike the read-only connector slices (Jira/Gmail/Drive) that
+ingest external provider snapshots into ``SourceRecord``, an internal document is
+authored inside founderOS, so it is a first-class internal entity rather than a
+``SourceRecord`` projection.
+
+Backend: ``app/db/document_models.py`` (``Document``), migration
+``f1a2b3c4d5e6``, ``app/services/document_service.py`` (CRUD + deterministic
+``markdown_to_text`` projection + search), and ``app/api/documents.py``
+(``GET/POST /workspaces/{id}/documents``, ``GET/PATCH/DELETE
+/workspaces/{id}/documents/{document_id}``). Company Brain now exposes
+non-archived documents under ``documents.notes`` with internal-document source
+refs that flow into the aggregate ``evidence`` list. Frontend: ``/documents``
+page (list, search, create, detail) plus a sidebar entry.
+
+Rationale: every other MVP §1.5 connector (GitHub/Jira/Gmail/Drive) already had
+a local product surface, but internal documents — a required "must have" and the
+subject of flow §4.7 — had no model, endpoint, or UI. Adding it advances the MVP
+end state (see a document in one UI and in Company Brain) without provider calls,
+external writes, or LLM.
+
+Consequences:
+
+- ``body_markdown`` is the authored source of truth; ``body_text`` is a
+  deterministic offline markdown-strip used for search and Company Brain context.
+  Both are stored (spec requires both). No renderer, network, or LLM is invoked.
+- ``status`` is constrained to ``draft | published | archived``. Company Brain
+  surfaces draft + published documents and excludes archived ones from the brain
+  view; archived documents remain retrievable through the documents API.
+- Create/update/delete require member-or-higher role; viewers get read-only
+  list/detail. All access is workspace-scoped (cross-workspace ids 404).
+- Tags are sanitized (trimmed, de-duplicated, capped); title is required and
+  bounded; body size is bounded. Documents are additive: existing Company Brain
+  consumers keep working because ``documents.notes`` is a new optional field
+  alongside the existing ``documents.files``.
+- ``DocumentVersion`` history and NormalizedEntity linkage (mentioned in §4.7)
+  remain later slices; this decision delivers the CRUD + search + Brain surface
+  the MVP acceptance criteria require ("Docs appear in Company Brain").
+
+## DEC-067 - Founder Briefing Surfaces Internal Document Context
+
+Decision (2026-07-06): the deterministic Founder Briefing now adds an
+`internal-document-context` item when workspace Company Brain contains internal
+documents under `documents.notes` (DEC-066). The item summarizes the visible
+internal document context (count, top titles, statuses, tags) and carries
+evidence refs converted from the Company Brain `source_refs` for those document
+rows.
+
+Rationale: DEC-066 made internal documents first-class and visible in Company
+Brain, but the playbook Documents flow (§4.7) also says "Briefing can use
+document as context." Adding a deterministic briefing item closes that local MVP
+loop without waiting for an LLM narrative pipeline.
+
+Consequences:
+
+- The item reads only the already-normalized Company Brain `documents.notes`
+  slice; it does not query raw `body_markdown`, call providers, start sync,
+  create actions, read secrets, or invoke an LLM.
+- The item does not copy raw markdown or body text into the briefing payload.
+  It uses bounded normalized metadata (titles, statuses, tags) plus
+  evidence refs; full document reading remains in `/documents` and Company
+  Brain.
+- If document source refs are missing, the item is emitted with an explicit
+  warning so evidence gaps remain visible.
+- The item is context, not a task/follow-up signal, so the DEC-065 bulk action
+  generation whitelist remains limited to Jira/Gmail/Drive signal items.
+
+## DEC-068 - Internal Documents Keep Local Version History
+
+Decision (2026-07-07): internal Documents now append immutable local
+``DocumentVersion`` snapshots on create and every successful update. The
+workspace-scoped ``document_versions`` table (migration ``f2b3c4d5e6f7``)
+stores version number, title, body markdown, deterministic body text, status,
+tags, author, and created timestamp. The Documents API exposes read-only version
+history at
+``GET /api/v1/workspaces/{workspace_id}/documents/{document_id}/versions``, and
+the ``/documents`` detail view displays a compact version list.
+
+Rationale: the playbook Documents flow (§4.7) names ``DocumentVersion`` as part
+of the document data path. DEC-066 intentionally deferred version history to
+ship CRUD/search/Brain first; adding immutable snapshots now closes that
+document-lineage gap while keeping the current editable ``Document`` row as the
+source of truth.
+
+Consequences:
+
+- Version history is local DB-only: it does not call providers, does not perform
+  external writes, reads no secrets, and invokes no LLM.
+- Version 1 is written at document creation; version N+1 is written after each
+  successful update. Versions are ordered newest-first by ``version_number`` in
+  the read API.
+- The latest ``Document`` row remains the editable canonical state. Versions are
+  immutable snapshots for review/audit/history and are deleted by database
+  cascade when the document or workspace is deleted.
+- Viewers may read version history through the same workspace access boundary
+  used for document detail, while create/update/delete remain member-gated.
+- NormalizedEntity linkage remains a later slice; this decision only adds the
+  first local document history layer required by §4.7.
+
+## DEC-069 - Internal Document Context Can Generate Local Action Proposals
+
+Decision (2026-07-07): the persisted Founder Briefing → local ActionProposal
+bridge now treats `internal-document-context` as an actionable evidence-backed
+briefing item, alongside the Jira/Gmail/Drive read-model signal items from
+DEC-065. When the item has evidence refs, the existing
+`POST /api/v1/workspaces/{workspace_id}/briefings/{briefing_id}/action-proposals`
+endpoint may create a local `ActionProposal(target_provider='internal',
+action_type='internal_todo')` for it. Duplicate detection remains scoped to the
+same persisted briefing and briefing item key, so repeated generation skips an
+existing open document-context action instead of creating blind duplicates.
+
+Rationale: DEC-067 originally made internal documents briefing context only, but
+after DEC-066/068 made documents editable, versioned, and visible in the product,
+the founder still had no one-click way to route evidence-backed document context
+into the existing local action review queue. Extending the existing deterministic
+bridge closes that local MVP loop without adding a new action system or waiting
+for an LLM narrative.
+
+Consequences:
+
+- This supersedes the DEC-067 consequence that the bulk action generation
+  whitelist is limited to Jira/Gmail/Drive signal items.
+- The generated proposal is local-only: no provider call, sync, external write,
+  secret read, or LLM is started, and approval/execution remains in the existing
+  local ActionProposal review flow.
+- Missing evidence still skips the item. The action uses the persisted
+  `BriefingItem.evidence_refs`; it does not copy raw document markdown/body text
+  into the proposal.
+- The proposal payload keeps the existing briefing-derived shape
+  (`source='briefing_non_github_signal'`, `briefing_id`, `briefing_item_key`,
+  category/severity/related_entities), so the current `/actions` review UI and
+  duplicate handling continue to work.
+
+## DEC-070 - Normalized Entities Ship As A Read-Only Canonical Projection
+
+Decision (2026-07-07): the MVP "normalized entities" surface (§1.5, §6.9) is
+delivered as a deterministic **read-only projection API** over the existing
+canonical Company Brain rows, not as a new physical `NormalizedEntity` table.
+A new service `app/services/company_brain_entities_read_service.py` reuses
+`build_workspace_company_brain` and flattens repositories, issues, pull
+requests, Gmail messages, Drive files, and internal documents into a single
+`entities` list (each with `entity_type`, a stable `key`, `source_provider`,
+`status`, `source_url`, `updated_at`, and evidence `source_refs`), plus a
+`summary` counting by entity type and provider. It is exposed at
+`GET /api/v1/workspaces/{workspace_id}/company-brain/entities`.
+
+Rationale: DEC-028 deferred the physical `NormalizedEntity` table and said to
+revisit "when the canonical `/api/v1/.../brain/entities` API is actually built".
+That API is now the missing MVP acceptance surface ("See Company Brain
+entities"), while the durable-table design is still blocked by ASK-1 (the
+undefined `Person` entity and the "23 models" count). Projecting from
+already-canonical rows delivers the required entity view now, keeps a single
+source of truth, and stays fully reversible if/when a physical table is chosen.
+
+Consequences:
+
+- Read-only and local-only: no new table, no migration, no provider calls, no
+  sync, no external writes, no secret reads, and no LLM. The projection inherits
+  the Company Brain workspace scope, sanitized fields, and evidence refs, so raw
+  provider payloads/bodies do not leak.
+- The `Person` entity type (§6.9) is intentionally not produced (post-MVP,
+  ASK-1). Entity `key`s are `"{provider}:{entity_type}:{external_id}"` and the
+  `recent` work overlap is de-duplicated so each work item appears once.
+- Because it is a projection, the entity list changes only when the underlying
+  canonical rows change; there is no separate write path to keep in sync.
+- The dashboard `NormalizedEntitiesPanel` is the first product surface over the
+  endpoint, so the MVP "See Company Brain entities" path is reachable without
+  terminal/API use.
+- A future physical `NormalizedEntity` table (if ASK-1 is resolved) can replace
+  the projection behind the same endpoint without breaking the response shape.
+
+## DEC-071 - Company Brain Is A Dedicated Navigable View
+
+Decision (2026-07-07): the MVP "Company Brain view" (§1.5) and the main-flow step
+"See Company Brain entities" (§1.4) are delivered as a dedicated navigable
+`/company-brain` page with its own sidebar entry, not only as panels embedded in
+`/dashboard`. The page composes the existing read-only `CompanyBrainPanel` and
+`NormalizedEntitiesPanel` (DEC-070) plus a manual refresh control; it introduces
+no new data path.
+
+Rationale: the playbook flow lists "See Company Brain entities" as a distinct
+step and §1.5 lists "Company Brain view" separately from "Founder Dashboard",
+while §1.1/§1.7 require a UI-first product (no mandatory terminal use). Company
+Brain and normalized entities previously existed only as dashboard panels with
+no direct route, so a founder could not navigate to a Company Brain view. Adding
+a first-class route closes that acceptance-flow gap by reusing existing panels.
+
+Consequences:
+
+- Read-only and local-only: the page reuses the existing Company Brain and
+  normalized-entities endpoints and starts no provider calls, sync, external
+  writes, secret reads, or LLM.
+- No duplication of rendering/data logic: the page mounts the existing panel
+  components; the dashboard keeps its own panels for the at-a-glance view.
+- `Sidebar` now exports `NAV_LINKS` so navigation is unit-testable; the nav order
+  places Company Brain right after the dashboard.
+
+## DEC-072 - Basic Logging Is Sanitized Request Logging
+
+Decision (2026-07-07): the MVP "basic logging" requirement (§1.5) is delivered as
+application-level request logging, not only as domain audit rows. `app/core/logging.py`
+adds `configure_logging()` (an idempotent, level-configurable handler on a
+dedicated `founderos` logger) and `RequestLoggingMiddleware`, an ASGI middleware
+that logs one line per HTTP request. The level is env-driven via
+`FOUNDEROS_LOG_LEVEL` / `LOG_LEVEL` (default `INFO`). `app/main.py` configures
+logging at import and startup and installs the middleware.
+
+Rationale: before this change the app had no `getLogger`/logging configuration
+and no request logging at all; the only "logging" was persisted domain audit
+trails (`AuditLog`, `ActionExecutionEvent`). §1.5 lists "basic logging" as a
+distinct MVP must-have, and the also-required "staging/prod deployment" needs
+operational request visibility. This closes that gap with a minimal, dependency-
+free standard-library logger.
+
+Consequences:
+
+- Sanitization boundary (AGENTS.md / SECURITY_BASELINE.md): the request logger
+  records only HTTP method, URL path, status code, and duration in ms. It never
+  logs query-string values, headers, cookies, request/response bodies, tokens,
+  API keys, or provider payloads, so no secret-bearing data can leak into logs.
+- The `founderos` logger sets `propagate = False` and owns its handler, so
+  configuration is deterministic across app startups and test runs and does not
+  mutate the root logger. `configure_logging` is idempotent (no duplicate
+  handlers) and falls back to `INFO` for unknown level names.
+- This is local/in-process only: it adds no provider calls, external writes,
+  secret reads, or LLM, and introduces no new dependency, table, or migration.
+
+## DEC-073 - Company World Is An Evidence-Backed Operating Map
+
+Decision (2026-07-13): founderOS presents the company as an operating strategy
+surface, not as a flat collection of technical panels and not as artificial
+gamification. `/dashboard` is the company command center (daily move, decisions,
+company map, operational perimeter); `/company-brain` is the first-class
+**Company World**. The new workspace-membership-gated endpoint (including the
+read-only `viewer` role)
+`GET /api/v1/workspaces/{workspace_id}/company-map` projects only existing
+workspace memberships and sanitized Company Brain Gmail metadata into company,
+internal-person, external-person-candidate, organization-candidate, and email
+touchpoint read models with evidence refs and inspectable profiles.
+
+Rationale: founders need to manage people, companies, relationships, signals,
+and actions in one coherent mental model. Fake points, levels, customer labels,
+or decision-maker claims would violate the evidence-first invariants. A bounded,
+read-only projection makes the product useful now while preserving honest
+uncertainty until durable identity and confirmation models are designed.
+
+Consequences:
+
+- Workspace members are confirmed internal people. External mailboxes are only
+  contact candidates. Non-generic email domains are only organization
+  candidates; they are never called customers or employers automatically. All
+  candidates carry `needs_founder_confirm=true`.
+- Email subjects, participants, timestamps, directions, source URLs, and source
+  refs may appear in authenticated profiles; raw bodies and snippets do not.
+  The existing RBAC meaning is preserved: every authenticated workspace role,
+  including read-only `viewer`, may read workspace data; confirmation and
+  future relationship writes require `member` or higher. Cross-workspace access
+  remains hidden as 404.
+- The Gmail projection is explicitly bounded to the newest 100 messages. The
+  response exposes available/considered counts, limit, order, and `truncated`;
+  external-person, organization, and touchpoint summary fields are named
+  `*_in_window` and the UI renders the window and backend warnings.
+- This slice is read-only and local-only: no new table or migration, provider
+  call, sync, external write, secret read, or LLM. Its source is honestly named
+  `workspace_and_company_brain_projection`, not a nonexistent canonical map.
+- Primary navigation is grouped by command center, management, sources, and
+  system. The global repository-audit overview is no longer mounted in the
+  workspace dashboard because its scope does not match the workspace company
+  map. The legacy `/audit` page is removed, and non-workspace filesystem
+  Company Brain preview APIs require the operator API key; a browser session is
+  explicitly rejected. Workspace product reads remain under workspace-scoped
+  routes.
+- The product purpose of `Person` is now resolved: founderOS needs durable
+  internal/external profiles, organizations, affiliations, confirmation state,
+  and interactions. The physical `Person`/`Organization`/`Affiliation`/
+  `Interaction` schema and confirmation write flow remain a separate migration
+  chunk and must preserve source provenance and workspace isolation.
+
+## DEC-074 - Durable Company Profiles Use Explicit Human Resolution
+
+Decision (2026-07-13): Company World gains a canonical, workspace-owned profile
+layer with `Person`, `Organization`, `Affiliation`, and `Interaction` models,
+plus a terminal `CompanyWorldResolution` receipt for candidate decisions.
+The existing `Workspace` remains the founder's own company; an `Organization`
+represents an external counterparty and does not duplicate workspace identity.
+
+Identity and relationship rules:
+
+- A `Person` has one normalized email identity inside a workspace and may link
+  to one local `User`. Membership-backed people and founder-confirmed external
+  people share the same model; `origin` records how the row first became
+  canonical rather than declaring an immutable internal/external nature.
+- An `Organization` has a workspace-unique canonical key and an optional
+  normalized domain. Its relationship to the founder's company (`unknown`,
+  `prospect`, `customer`, `partner`, `vendor`, or `other`) is always selected by
+  a human; a mail domain alone never assigns it.
+- An `Affiliation` is one active person-to-organization relationship in v1.
+  `contact`, `employee`, `decision_maker`, `account_owner`, `advisor`, or
+  `other` is founder-authored, never inferred by an LLM or provider metadata.
+- `Interaction` is deliberately contact-centric: one sanitized row per
+  `(workspace, source record, person)`, with an optional organization. One
+  email with several participants therefore produces several linked rows
+  without storing participant UUID arrays in JSON. Product timelines may group
+  them by source record. Raw message bodies and snippets are not copied.
+- `CompanyWorldResolution` records `confirmed` or `dismissed`, actor, time,
+  candidate identity/version, request hash, idempotency key, primary source
+  record, and resulting durable IDs. Decisions are terminal in v1; correction
+  requires a later explicit audited flow rather than silent overwrite.
+  The current service/API is insert-only; the database does not claim a general
+  immutable-row mechanism for out-of-band SQL writers.
+- Person and organization candidates are separate terminal decisions. Confirming
+  a person never silently confirms an organization from the email domain. A
+  corporate-domain person may be affiliated only after that organization was
+  explicitly confirmed; a dismissed organization leaves the person standalone.
+
+Tenant and evidence rules:
+
+- Every profile row carries `workspace_id`. Composite foreign keys include the
+  workspace so a person, organization, interaction, affiliation, source record,
+  or resolution result from another tenant cannot be linked at database level.
+- Membership-backed people and all confirming actors are bound to a membership
+  in the same workspace. Founder confirmation provenance is mandatory, and
+  durable resolution result IDs must describe one internally consistent
+  person/organization/affiliation tuple.
+- Confirmation is allowed to `owner`, `admin`, and `member`; `viewer` remains
+  read-only. Non-members and cross-workspace candidates remain hidden as 404.
+- The server re-resolves candidate identity and provenance from the current
+  workspace projection. Client-supplied canonical email, domain, or evidence
+  IDs are not accepted. Confirmation without a workspace-owned source record
+  is rejected as insufficient evidence.
+- Candidate versions cover visible identity/classification fields plus the
+  payload hash of every source record in the displayed evidence snapshot. The
+  server locks those records, re-resolves the candidate, and writes interactions
+  only from that same snapshot; stale evidence fails closed.
+- The generic `EvidenceRef.entity_id` is not reused for these four tables: it
+  has neither entity type nor a foreign key. Provenance is instead explicit via
+  source-record-backed interactions, affiliations, and resolution receipts.
+
+Migration and backfill rules:
+
+- The Alembic revision is schema-only. It never parses private payloads or
+  performs a data backfill during deploy.
+- Backfill is a separate deterministic command: aggregate-only dry-run by
+  default, explicit apply, idempotent database constraints, no provider calls,
+  no external writes, no LLM, and no raw-body output. It materializes current
+  memberships and interactions only for already confirmed external profiles;
+  projected candidates do not become canonical automatically.
+- Confirmation writes only the confirmed newest-100 evidence snapshot. The
+  explicit backfill may inspect all local Gmail `SourceRecord` metadata to add
+  historical interactions for already confirmed people. Company World keeps
+  the projection fallback during rollout.
+- Confirmation and apply-backfill share a workspace-level transaction lock;
+  candidate/idempotency constraints remain the durable replay boundary.
+- Migration downgrade refuses to drop non-empty Company World tables. A backup
+  and explicit data export/removal are required before a destructive rollback.
+- Deferred nullable `Task.assignee_person_id` and
+  `PullRequest.author_person_id` receive no foreign keys or backfill in this
+  chunk. The deleted Lineage-2 `entities` graph remains deleted.
+
+## DEC-075 - Guided Founder Enrollment Uses Real Readiness, Not An Admin Shell
+
+Decision (2026-07-13): the normal private-beta founder path is invite-only
+product enrollment, followed by a computed onboarding journey and a five-zone
+company shell. The operator creates one short-lived URL; `/start` atomically
+creates the active `User`, `Workspace`, owner `Membership`, and `UserSession`,
+then opens `/onboarding`. Public signup remains closed.
+
+Security and identity rules:
+
+- `founder_enrollment_invites` stores only a SHA-256 token digest, expiry, and
+  optional consumption/revocation receipts. Lifetime is limited to 1–168 hours
+  (72 by default); a leaked or misdirected unconsumed invite can be revoked by
+  its non-secret UUID with `scripts/revoke_founder_invite.py`. The raw token is
+  shown once by `scripts/create_founder_invite.py` inside a URL fragment (never
+  an HTTP query or request log) and must be handled like a credential. Remote
+  origins require HTTPS; loopback HTTP remains available for local development.
+- Consumption locks the invite row, rejects unknown/expired/used tokens with one
+  generic response, checks normalized email/workspace-slug conflicts, performs
+  Argon2 only after those cheap checks, and commits identity rows, consumption,
+  and the browser session together. A failed or concurrent losing request leaves
+  no partial founder or workspace.
+- Teammate password setup follows the same fragment-only bearer rule at
+  `/setup-password#token=...`; query-token fallback is forbidden and the browser
+  clears the address immediately. Token and user rows are locked before Argon2,
+  so concurrent/reused links create exactly one password/session and invalid
+  public requests cannot amplify password-hash work. Public token/password
+  lengths are capped. Per DEC-055, an inviter cannot set `initial_password`;
+  every brand-new teammate receives one manual, unverified setup link that must
+  travel over a trusted direct channel, while cross-workspace accounts fail with
+  409 until a self-accepted invitation flow exists.
+- Production login admission caps per-IP and global request windows plus
+  concurrent login work before Argon2. It complements the durable per-email DB
+  lockout, whose stale rows are opportunistically deleted after 24 hours by
+  failed-login recording. The admission controller is process-local and only
+  satisfies the current single-Uvicorn-process private-beta deployment. Before
+  adding workers or replicas, a shared edge/Redis limiter is required because
+  process-local counters do not aggregate. The per-IP key is
+  `request.client.host`; distinct external IPs behind Railway/Next are not
+  locally proven and require a two-client deploy smoke before public exposure.
+- Password inputs are bounded before hashing: login accepts 1–256 characters;
+  founder enrollment, teammate setup, and password change require 8–256.
+- A disabled user cannot log in, and validation of an already-issued session for
+  a now-disabled user persists revocation before returning unauthenticated.
+- Login, teammate setup, and founder enrollment sanitize session User-Agent
+  metadata to printable text and cap it at 512 characters.
+- The legacy idempotent `scripts/create_admin_user.py` remains an operator
+  recovery path, not the normal founder experience. Email delivery, public
+  registration, password reset, and SSO are not implied by this slice.
+- An account with no workspace is routed to an honest recovery screen. With one
+  workspace the context is unambiguous; with several, the user must choose one.
+  A browser-persisted choice is accepted only while it still belongs to the
+  current `/auth/me` membership list, and switching remounts workspace content.
+
+Product and readiness rules:
+
+- `/onboarding` is a focused journey: company, first source, first map, team,
+  then start. A skipped step remains pending. There is no persisted decorative
+  `onboarding_completed` flag. The active step lives in the URL hash; leaving for
+  `/connectors` or `/settings` preserves continuity, and both destinations offer
+  explicit return links to `#source` or `#team`.
+- Source readiness requires actual canonical
+  `CompanyBrain.source_records.total > 0`. A configured connection without
+  loaded records is still pending. Company-map readiness comes from the
+  evidence-backed workspace Company Map; team state comes from memberships.
+  Failed reads are `unknown`, never silently converted into empty or complete.
+- The primary navigation is «Сегодня / Компания / Решения / Источники /
+  Настройки». GitHub, Jira, Gmail, and Drive remain real routes but are nested
+  under «Источники» rather than competing as separate products. Desktop uses a
+  compact rail; mobile uses a five-item bottom navigation.
+- `/dashboard` is «Сегодня»: exactly one deterministic next move plus three
+  secondary signals. Its priority is source gap, known pending decisions, known
+  Company World candidates, incomplete reads, first briefing, team, then the
+  latest briefing. UI controls mirror backend RBAC exactly: source
+  setup/import/sync is owner/admin; briefing generation and local
+  ActionProposal creation are member+; action review/approve/reject/preview/
+  execute is owner/admin; Company World resolution is member+; viewer retains
+  evidence-backed reads only.
+- Technical capability boundaries remain inspectable but do not dominate the
+  main task. This slice starts no provider call, provider write, external
+  action, deploy, secret read, or LLM inference by itself. Existing
+  human-triggered provider-read and approval-gated external-write paths remain
+  explicit separate controls.
+
+Consequence: UX-01 removes the first-founder terminal handoff after the operator
+issues the link and replaces the dashboard panel wall with a guided operating
+loop. UX-02 subsequently completes the spatial Company World frontend under
+DEC-076. The next product boundary is release handoff and the human-gated deploy
+path, not another local UX expansion.
+
+## DEC-076 - Company World Board Draws Only Durable Relationships
+
+Decision (2026-07-13): `/company-brain` presents the existing DEC-073/DEC-074
+Company Map as a spatial operating board rather than stacked registries. The
+founder's company is the center; workspace team, confirmed external network,
+and unresolved discovery candidates occupy separate, plainly labelled
+contours. This is a frontend projection over the existing response: it adds no
+backend API, migration, provider call/write, external action, secret read, or
+LLM path.
+
+Relationship and placement rules:
+
+- A confirmed external person is nested under a confirmed organization only
+  when `organization_id` and `organization_key` both match that organization's
+  durable identity and `relationship_type` is non-null. The relationship label
+  therefore comes from a human-authored durable affiliation.
+- Name/domain similarity and candidate organization keys never establish a
+  confirmed relationship. A person without the exact durable affiliation stays
+  standalone in the confirmed network; unresolved organizations and people
+  stay in the discovery contour.
+- Selecting a person or organization opens one focused, labelled inspector.
+  Human-readable profile context comes first, profile-local touchpoints are
+  matched only by exact durable keys, and evidence provenance is available in a
+  collapsed disclosure.
+- Technical capability, evidence-window, warning, and boundary details remain
+  inspectable in a separate collapsed disclosure instead of dominating the
+  primary company-management task.
+
+Resolution and access rules:
+
+- Candidate resolution asks one plain-language question at a time. The first
+  question is the terminal decision; confirmation then asks only the labels and
+  relationship/role fields permitted by the existing candidate type and
+  confirmed-organization state.
+- The final request preserves the existing DEC-074 contract: member+ may
+  confirm/dismiss, viewer is read-only, candidate versions and idempotency keys
+  remain mandatory, and canonical identity/evidence stays server-resolved. An
+  unresolved organization cannot be silently converted into a person's
+  confirmed affiliation.
+- Board items use native buttons and expose selection state/controlled inspector
+  relationships. The inspector is labelled and focusable; compact/mobile layout
+  and reduced-motion preferences are first-class presentation constraints.
+
+Consequence: the Company World interface can feel like a company strategy game
+without inventing organizational facts or weakening provenance/RBAC. UX-02
+local acceptance passed frontend/backend/static and desktop/mobile browser
+gates. With UX-01 and UX-02 complete locally, the exact local commit and offline
+`make release-handoff` gate precede the human-gated private-beta deploy/read-only
+smoke; both local steps passed before deployment was requested.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
 
-- **ASK-1 — The "23 models" count and the missing `Person` entity.** §6 defines
-  22 entity sections (6.2–6.23); the historical EXECUTION_PLAN/FOS-002 wording
-  said "23 модели". §6.9
-  `NormalizedEntity.entity_type` includes `person`, and `Task.assignee_person_id`
-  / `PullRequest.author_person_id` reference a Person that §6 never defines. Is
-  the 23rd model an intended standalone `Person`, or is the count off by one?
+- **ASK-1 — ✅ RESOLVED → DEC-073/DEC-074.** Company World product intent and the
+  physical `Person`/`Organization`/`Affiliation`/`Interaction` plus resolution
+  boundary are now explicit. Playbook §6.24–§6.28 records the canonical shapes;
+  the old informal model count is not used as a migration requirement.
 - **ASK-2 — Foundation reconciliation strategy. ✅ RESOLVED → DEC-028** (branch A,
   narrowed: §6 extends the spine lineage, knowledge-graph lineage frozen legacy).
   Original framing kept for context: To close the canonical-naming

@@ -10,6 +10,8 @@ from sqlalchemy import delete, func, select, text
 
 from app.api.auth import API_AUTH_FAILURE_DETAIL, settings
 from app.db.action_models import (
+    ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
+    ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
     ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_PROPOSAL_STATUS_PROPOSED,
     ACTION_PROPOSAL_STATUS_REJECTED,
@@ -322,6 +324,109 @@ async def test_viewer_cannot_create_proposal(monkeypatch) -> None:
         await _cleanup_action_fixture(marker)
 
 
+async def test_repo_audit_import_creates_local_internal_todos_with_evidence(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/import-repo-audit",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json={
+                    "findings": [
+                        {
+                            "repository_full_name": "qtwin-io/base-collector",
+                            "title": "Проверить CI token=placeholder",
+                            "summary": "CI не найден; password=placeholder",
+                            "severity": "high",
+                            "risks": ["ci_not_detected"],
+                            "evidence_refs": [
+                                "external-audit:base-collector:ci"
+                            ],
+                            "recommended_next_step": "Добавить CI",
+                            "area_candidate": "OPS",
+                        },
+                        {
+                            "repository_full_name": "bad repo",
+                            "summary": "invalid repo identity",
+                            "evidence_refs": ["external-audit:bad"],
+                        },
+                        {
+                            "repository_full_name": "qtwin-io/no-evidence",
+                            "summary": "missing evidence",
+                            "evidence_refs": [" "],
+                        },
+                    ]
+                },
+            )
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["succeeded_count"] == 1
+        assert payload["failed_count"] == 2
+        assert payload["is_live"] is False
+        assert payload["execution_started"] is False
+        proposal = payload["proposals"][0]
+        assert proposal["target_provider"] == ACTION_TARGET_PROVIDER_INTERNAL
+        assert proposal["action_type"] == ACTION_TYPE_INTERNAL_TODO
+        assert proposal["payload"]["source"] == "repo_audit_import"
+        assert proposal["payload"]["repository_full_name"] == "qtwin-io/base-collector"
+        assert proposal["evidence_refs"][0]["source"] == "external_repo_audit_import"
+        assert "token=[redacted]" in proposal["title"]
+        assert "password=[redacted]" in proposal["description"]
+        assert "placeholder" not in proposal["title"]
+        assert "placeholder" not in proposal["description"]
+        assert {
+            failure["detail"] for failure in payload["failures"]
+        } == {
+            "repository_full_name must be in owner/repo format",
+            "repo-audit import finding requires evidence_refs",
+        }
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_repo_audit_import_requires_member_role(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        viewer_email = await _add_workspace_user(
+            created["workspace"]["id"],
+            marker,
+            role=MEMBERSHIP_ROLE_VIEWER,
+            suffix="viewer",
+        )
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/import-repo-audit",
+                headers=_headers(),
+                params={"owner_email": viewer_email},
+                json={
+                    "findings": [
+                        {
+                            "repository_full_name": "qtwin-io/base-collector",
+                            "summary": "CI не найден",
+                            "evidence_refs": ["external-audit:base-collector:ci"],
+                        }
+                    ]
+                },
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "insufficient workspace role"}
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
 @pytest.mark.parametrize(
     ("payload", "expected_status", "expected_detail"),
     [
@@ -493,6 +598,11 @@ async def test_owner_admin_can_approve_without_execution(
                 headers=_headers(),
                 params={"owner_email": actor_email},
             )
+            audit_response = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/audit",
+                headers=_headers(),
+                params={"owner_email": actor_email},
+            )
 
         assert response.status_code == 200
         body = response.json()
@@ -501,6 +611,18 @@ async def test_owner_admin_can_approve_without_execution(
         assert body["is_live"] is False
         assert any("deferred" in warning for warning in body["warnings"])
         assert await _count(ActionExecution) == executions_before
+        assert audit_response.status_code == 200, audit_response.text
+        audit = audit_response.json()
+        assert audit["events"][0]["event_type"] == ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED
+        assert audit["events"][0]["status"] == "recorded"
+        assert audit["events"][0]["provider"] == ACTION_TARGET_PROVIDER_GITHUB
+        assert audit["events"][0]["action"] == ACTION_TYPE_CREATE_GITHUB_ISSUE
+        assert audit["events"][0]["external_execution_enabled"] is False
+        assert audit["events"][0]["confirmation_received"] is False
+        assert audit["events"][0]["event_metadata"]["decision"] == "approved"
+        assert audit["events"][0]["event_metadata"]["bulk"] is False
+        assert audit["receipt"]["external_write_performed"] is False
+        assert audit["receipt"]["provider_result"] == "none"
     finally:
         await _cleanup_action_fixture(marker)
 
@@ -592,6 +714,172 @@ async def test_approve_reject_invalid_transitions_fail(monkeypatch) -> None:
         assert reject_once.json()["proposal"]["rejection_reason"] == "Not needed"
         assert reject_twice.status_code == 409
         assert reject_approved.status_code == 409
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_bulk_approve_partially_succeeds_without_execution(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        approve_me = await _post_proposal(created["workspace"]["id"], owner_email)
+        already_approved = await _post_proposal(
+            created["workspace"]["id"],
+            owner_email,
+            payload=_proposal_payload(title="Already approved"),
+        )
+        missing_id = uuid4()
+        async with _async_client() as client:
+            approved_once = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{already_approved['id']}/approve",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+        assert approved_once.status_code == 200
+        executions_before = await _count(ActionExecution)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-approve",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "proposal_ids": [
+                        approve_me["id"],
+                        already_approved["id"],
+                        str(missing_id),
+                    ]
+                },
+            )
+            approve_me_audit = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approve_me['id']}/audit",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["succeeded_count"] == 1
+        assert body["failed_count"] == 2
+        assert body["is_live"] is False
+        assert body["execution_started"] is False
+        assert body["proposals"][0]["id"] == approve_me["id"]
+        assert body["proposals"][0]["status"] == ACTION_PROPOSAL_STATUS_APPROVED
+        assert [failure["status_code"] for failure in body["failures"]] == [409, 404]
+        assert body["failures"][0]["proposal_id"] == already_approved["id"]
+        assert body["failures"][1]["proposal_id"] == str(missing_id)
+        assert any("deferred" in warning for warning in body["warnings"])
+        assert any("does not execute provider actions" in warning for warning in body["warnings"])
+        assert await _count(ActionExecution) == executions_before
+        assert approve_me_audit.status_code == 200, approve_me_audit.text
+        approve_audit = approve_me_audit.json()
+        assert (
+            approve_audit["events"][0]["event_type"]
+            == ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED
+        )
+        assert approve_audit["events"][0]["event_metadata"]["decision"] == "approved"
+        assert approve_audit["events"][0]["event_metadata"]["bulk"] is True
+        assert approve_audit["events"][0]["external_execution_enabled"] is False
+        assert approve_audit["receipt"]["external_write_performed"] is False
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_bulk_reject_succeeds_without_execution(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        first = await _post_proposal(created["workspace"]["id"], owner_email)
+        second = await _post_proposal(
+            created["workspace"]["id"],
+            owner_email,
+            payload=_proposal_payload(title="Reject second"),
+        )
+        executions_before = await _count(ActionExecution)
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-reject",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json={
+                    "proposal_ids": [first["id"], second["id"], first["id"]],
+                    "reason": "Not now",
+                },
+            )
+            first_audit = await client.get(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{first['id']}/audit",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["succeeded_count"] == 2
+        assert body["failed_count"] == 0
+        assert body["failures"] == []
+        assert body["execution_started"] is False
+        assert {proposal["id"] for proposal in body["proposals"]} == {
+            first["id"],
+            second["id"],
+        }
+        assert {
+            proposal["status"] for proposal in body["proposals"]
+        } == {ACTION_PROPOSAL_STATUS_REJECTED}
+        assert {
+            proposal["rejection_reason"] for proposal in body["proposals"]
+        } == {"Not now"}
+        assert await _count(ActionExecution) == executions_before
+        assert first_audit.status_code == 200, first_audit.text
+        first_audit_body = first_audit.json()
+        assert (
+            first_audit_body["events"][0]["event_type"]
+            == ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED
+        )
+        assert first_audit_body["events"][0]["event_metadata"]["decision"] == "rejected"
+        assert first_audit_body["events"][0]["event_metadata"]["bulk"] is True
+        assert first_audit_body["events"][0]["external_execution_enabled"] is False
+        assert first_audit_body["receipt"]["external_write_performed"] is False
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_member_cannot_bulk_approve(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        member_email = await _add_workspace_user(
+            created["workspace"]["id"],
+            marker,
+            role=MEMBERSHIP_ROLE_MEMBER,
+            suffix="bulk-member",
+        )
+        proposal = await _post_proposal(
+            created["workspace"]["id"],
+            _bootstrap_payload(marker)["owner_email"],
+        )
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-approve",
+                headers=_headers(),
+                params={"owner_email": member_email},
+                json={"proposal_ids": [proposal["id"]]},
+            )
+
+        assert response.status_code == 403
+        assert response.json() == {"detail": "insufficient workspace role"}
     finally:
         await _cleanup_action_fixture(marker)
 

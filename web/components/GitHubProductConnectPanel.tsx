@@ -1,0 +1,718 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+import {
+  fetchGitHubConnectionStatus,
+  fetchGitHubRepositories,
+  runGitHubAppLiveSync
+} from "../lib/api";
+import { M, T } from "../lib/messages";
+import {
+  canAdministerSelectedWorkspace,
+  useSession
+} from "../lib/session";
+import type {
+  GitHubAppLiveSyncResponse,
+  GitHubConnectionStatusResponse,
+  GitHubRepositoryRead,
+  GitHubRepositoryListResponse
+} from "../lib/types";
+import { EmptyState } from "./EmptyState";
+import { ErrorState } from "./ErrorState";
+import { LoadingState } from "./LoadingState";
+import { SourceLink } from "./SourceLink";
+import { StatusCard } from "./StatusCard";
+
+type ProductConnectState = "loading" | "ready" | "error" | "missing";
+type LiveSyncState = "idle" | "syncing" | "success" | "error";
+type RepositoryFocusFilter =
+  | "active"
+  | "all"
+  | "archived"
+  | "private"
+  | "with_evidence";
+type RepositorySyncStatus = {
+  error: string | null;
+  result: GitHubAppLiveSyncResponse | null;
+  state: LiveSyncState;
+};
+type GitHubRealReadReadiness = {
+  appEnvConfigured: boolean;
+  blockers: string[];
+  hasAppInstallationConnection: boolean;
+  installationConnected: boolean;
+  localRepositoryCount: number;
+  localRepositorySurfaceAvailable: boolean;
+  nextStep: string;
+  ready: boolean;
+};
+
+type GitHubProductConnectPanelViewProps = {
+  canAdminister?: boolean;
+  connectionStatus: GitHubConnectionStatusResponse | null;
+  error: string | null;
+  onRetry?: () => void;
+  onRepositoryFocusChange?: (filter: RepositoryFocusFilter) => void;
+  onRunRepositorySync?: (repositoryFullName: string) => void;
+  repositoryFocus?: RepositoryFocusFilter;
+  repositorySync: Record<string, RepositorySyncStatus>;
+  repositories: GitHubRepositoryListResponse | null;
+  state: ProductConnectState;
+};
+
+export function GitHubProductConnectPanel() {
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const canAdminister = canAdministerSelectedWorkspace(
+    session?.workspaces ?? [],
+    workspaceId
+  );
+  const [connectionStatus, setConnectionStatus] =
+    useState<GitHubConnectionStatusResponse | null>(null);
+  const [repositories, setRepositories] =
+    useState<GitHubRepositoryListResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [repositorySync, setRepositorySync] = useState<
+    Record<string, RepositorySyncStatus>
+  >({});
+  const [repositoryFocus, setRepositoryFocus] =
+    useState<RepositoryFocusFilter>("all");
+  const [state, setState] = useState<ProductConnectState>("loading");
+
+  useEffect(() => {
+    if (!workspaceId) {
+      setConnectionStatus(null);
+      setRepositories(null);
+      setError(null);
+      setState("missing");
+      return;
+    }
+
+    let cancelled = false;
+    setError(null);
+    setState("loading");
+    Promise.all([
+      fetchGitHubConnectionStatus(workspaceId),
+      fetchGitHubRepositories(workspaceId)
+    ])
+      .then(([status, repositoryList]) => {
+        if (cancelled) {
+          return;
+        }
+        setConnectionStatus(status);
+        setRepositories(repositoryList);
+        setState("ready");
+      })
+      .catch((caught: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        setConnectionStatus(null);
+        setRepositories(null);
+        setError(caught instanceof Error ? caught.message : M.common.requestFailed);
+        setState("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, reloadKey]);
+
+  async function syncRepository(repositoryFullName: string) {
+    const repository = repositoryFullName.trim();
+    if (
+      !workspaceId ||
+      !canAdminister ||
+      !connectionStatus?.connection_id ||
+      !repository
+    ) {
+      return;
+    }
+    setRepositorySync((current) => ({
+      ...current,
+      [repository]: { error: null, result: null, state: "syncing" }
+    }));
+    try {
+      const payload = await runGitHubAppLiveSync(workspaceId, {
+        connection_id: connectionStatus.connection_id,
+        repositories: [repository],
+        include_issues: true,
+        include_pull_requests: true
+      });
+      setRepositorySync((current) => ({
+        ...current,
+        [repository]: { error: null, result: payload, state: "success" }
+      }));
+      setReloadKey((current) => current + 1);
+    } catch (caught: unknown) {
+      setRepositorySync((current) => ({
+        ...current,
+        [repository]: {
+          error: caught instanceof Error ? caught.message : M.common.requestFailed,
+          result: null,
+          state: "error"
+        }
+      }));
+    }
+  }
+
+  return (
+    <GitHubProductConnectPanelView
+      canAdminister={canAdminister}
+      connectionStatus={connectionStatus}
+      error={error}
+      onRepositoryFocusChange={setRepositoryFocus}
+      onRetry={() => setReloadKey((current) => current + 1)}
+      onRunRepositorySync={canAdminister ? syncRepository : undefined}
+      repositoryFocus={repositoryFocus}
+      repositorySync={repositorySync}
+      repositories={repositories}
+      state={state}
+    />
+  );
+}
+
+export function GitHubProductConnectPanelView({
+  canAdminister = true,
+  connectionStatus,
+  error,
+  onRepositoryFocusChange,
+  onRetry,
+  onRunRepositorySync,
+  repositoryFocus = "all",
+  repositorySync,
+  repositories,
+  state
+}: GitHubProductConnectPanelViewProps) {
+  const appStatus = connectionStatus?.app ?? null;
+  const appConnectionReady =
+    connectionStatus?.connection_method === "github_app_installation" &&
+    connectionStatus.has_connection_record;
+  const repositoryItems = repositories?.repositories ?? [];
+  const filteredRepositoryItems = filterRepositoriesByFocus(
+    repositoryItems,
+    repositoryFocus
+  );
+  const repositoryStats = repositoryFocusStats(repositoryItems);
+
+  return (
+    <section
+      aria-labelledby="github-product-connect-title"
+      className="panel github-product-connect"
+    >
+      <div className="section-header">
+        <div>
+          <span className="eyebrow">{M.githubProductConnect.eyebrow}</span>
+          <h2 id="github-product-connect-title">
+            {M.githubProductConnect.title}
+          </h2>
+        </div>
+        <span className="badge">{M.githubProductConnect.badgeReadOnly}</span>
+      </div>
+
+      <p className="muted">{M.githubProductConnect.description}</p>
+
+      {!canAdminister ? (
+        <p className="muted">{M.common.sourceAdminOnlyNote}</p>
+      ) : null}
+
+      {state === "loading" ? (
+        <LoadingState label={M.githubProductConnect.loading} />
+      ) : null}
+
+      {state === "missing" ? (
+        <EmptyState
+          description={M.githubProductConnect.noWorkspaceDescription}
+          title={M.common.noWorkspaceTitle}
+        />
+      ) : null}
+
+      {state === "error" ? (
+        <>
+          <ErrorState
+            description={error ?? M.githubProductConnect.unavailableDescription}
+            title={M.githubProductConnect.unavailableTitle}
+          />
+          <button className="button secondary" onClick={onRetry} type="button">
+            {M.common.retry}
+          </button>
+        </>
+      ) : null}
+
+      {state === "ready" && connectionStatus && appStatus ? (
+        <>
+          <section className="grid" aria-label={M.githubProductConnect.title}>
+            <StatusCard
+              description={githubAppDescription(connectionStatus)}
+              title={M.githubProductConnect.appTitle}
+              value={
+                appConnectionReady
+                  ? M.githubProductConnect.appConnected
+                  : appStatus.configured
+                    ? M.githubProductConnect.appConfigured
+                    : M.githubProductConnect.appNotConfigured
+              }
+            />
+            <StatusCard
+              description={T.githubRepositorySurfaceDescription(
+                repositories?.source ?? M.common.unknown
+              )}
+              title={M.githubProductConnect.repositoriesTitle}
+              value={String(repositories?.count ?? 0)}
+            />
+            <StatusCard
+              description={M.githubProductConnect.tokenDescription}
+              title={M.githubProductConnect.tokenTitle}
+              value={
+                appStatus.installation_tokens_persisted
+                  ? M.common.yes
+                  : M.common.no
+              }
+            />
+            <StatusCard
+              description={M.githubProductConnect.writeDescription}
+              title={M.githubProductConnect.writeTitle}
+              value={
+                appStatus.provider_writes_enabled ? M.common.enabled : M.common.notEnabled
+              }
+            />
+          </section>
+
+          <GitHubRealReadinessPanel
+            connectionStatus={connectionStatus}
+            repositories={repositories}
+          />
+
+          {!appStatus.configured && appStatus.missing_env.length > 0 ? (
+            <section className="callout">
+              <strong>{M.githubProductConnect.missingEnvTitle}</strong>
+              <ul className="meta-list">
+                {appStatus.missing_env.map((name) => (
+                  <li key={name}>{name}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {canAdminister && appStatus.setup_url ? (
+            <p className="actions-row">
+              <SourceLink className="button secondary" url={appStatus.setup_url}>
+                {M.githubProductConnect.openSetup}
+              </SourceLink>
+            </p>
+          ) : null}
+
+          <section className="callout">
+            <strong>{M.githubProductConnect.liveSyncTitle}</strong>
+            <p>{M.githubProductConnect.liveSyncDescription}</p>
+            <p className="muted">
+              {M.githubProductConnect.liveSyncRepositoryNote}
+            </p>
+            {!appConnectionReady ? (
+              <p className="muted">{M.githubProductConnect.liveSyncRequiresApp}</p>
+            ) : null}
+
+            {repositoryItems.length === 0 ? (
+              <EmptyState
+                description={M.githubProductConnect.repositoryListEmptyDescription}
+                title={M.githubProductConnect.repositoryListEmptyTitle}
+              />
+            ) : (
+              <section
+                aria-label={M.githubProductConnect.repositoryListTitle}
+                className="stack"
+              >
+                <strong>{M.githubProductConnect.repositoryListTitle}</strong>
+                <RepositoryFocusControl
+                  activeFilter={repositoryFocus}
+                  onChange={onRepositoryFocusChange}
+                  repositories={repositoryItems}
+                  stats={repositoryStats}
+                />
+                {filteredRepositoryItems.length === 0 ? (
+                  <p className="muted">
+                    {M.githubProductConnect.repositoryListNoReposForFilter}
+                  </p>
+                ) : null}
+                {filteredRepositoryItems.map((repository) => {
+                  const sync = repositorySync[repository.full_name] ?? {
+                    error: null,
+                    result: null,
+                    state: "idle" as LiveSyncState
+                  };
+                  const repositoryValid = isRepositoryFullName(repository.full_name);
+                  const canSyncRepository =
+                    appConnectionReady &&
+                    repositoryValid &&
+                    sync.state !== "syncing";
+                  return (
+                    <article className="card" key={repository.full_name}>
+                      <div className="section-header">
+                        <div>
+                          <h3>{repository.full_name}</h3>
+                          <p className="muted">
+                            {T.githubRepositoryMeta(
+                              repository.visibility,
+                              repository.archived,
+                              repository.source
+                            )}
+                          </p>
+                          {repository.last_activity_at ? (
+                            <p className="muted">
+                              {T.githubRepositoryLastActivity(
+                                repository.last_activity_at
+                              )}
+                            </p>
+                          ) : null}
+                        </div>
+                        {canAdminister ? (
+                          <button
+                            className="button"
+                            disabled={!canSyncRepository}
+                            onClick={() => onRunRepositorySync?.(repository.full_name)}
+                            type="button"
+                          >
+                            {sync.state === "syncing"
+                              ? M.githubProductConnect.liveSyncRunning
+                              : M.githubProductConnect.liveSyncRun}
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {repository.source_url ? (
+                        <p>
+                          <SourceLink url={repository.source_url}>
+                            {M.common.openSource}
+                          </SourceLink>
+                        </p>
+                      ) : null}
+
+                      {!repositoryValid ? (
+                        <p className="error-text">
+                          {M.githubProductConnect.liveSyncRepositoryInvalid}
+                        </p>
+                      ) : null}
+
+                      {sync.state === "error" ? (
+                        <ErrorState
+                          description={
+                            sync.error ??
+                            M.githubProductConnect.liveSyncFailedDescription
+                          }
+                          title={M.githubProductConnect.liveSyncFailedTitle}
+                        />
+                      ) : null}
+
+                      {sync.result ? (
+                        <section className="callout">
+                          <strong>{M.githubProductConnect.liveSyncResultTitle}</strong>
+                          <p>
+                            {T.githubAppLiveSyncResult(
+                              sync.result.totals.repositories,
+                              sync.result.totals.issues,
+                              sync.result.totals.pull_requests,
+                              sync.result.sync_job.status
+                            )}
+                          </p>
+                          <p className="success-text">
+                            {M.githubProductConnect.liveSyncNoWrites}
+                          </p>
+                          {sync.result.warnings.length > 0 ? (
+                            <ul className="meta-list" aria-label={M.common.warnings}>
+                              {sync.result.warnings.map((warning) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </section>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </section>
+            )}
+          </section>
+
+          {[...connectionStatus.warnings, ...(repositories?.warnings ?? [])].length > 0 ? (
+            <ul className="meta-list" aria-label={M.common.warnings}>
+              {[...connectionStatus.warnings, ...(repositories?.warnings ?? [])].map(
+                (warning) => (
+                  <li key={warning}>{warning}</li>
+                )
+              )}
+            </ul>
+          ) : null}
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function GitHubRealReadinessPanel({
+  connectionStatus,
+  repositories
+}: {
+  connectionStatus: GitHubConnectionStatusResponse;
+  repositories: GitHubRepositoryListResponse | null;
+}) {
+  const readiness = summarizeGitHubRealReadReadiness(connectionStatus, repositories);
+  return (
+    <section
+      className="work-section"
+      aria-label={M.githubProductConnect.realReadReadinessLabel}
+    >
+      <h3>{M.githubProductConnect.realReadReadinessTitle}</h3>
+      <p className="muted">{M.githubProductConnect.realReadReadinessDescription}</p>
+      <section className="grid" aria-label={M.githubProductConnect.realReadReadinessLabel}>
+        <StatusCard
+          description={M.githubProductConnect.realReadStatusDescription}
+          title={M.githubProductConnect.realReadStatusTitle}
+          value={
+            readiness.ready
+              ? M.githubProductConnect.realReadReady
+              : M.githubProductConnect.realReadBlocked
+          }
+        />
+        <StatusCard
+          description={M.githubProductConnect.realReadEnvDescription}
+          title={M.githubProductConnect.realReadEnvTitle}
+          value={
+            readiness.appEnvConfigured ? M.common.available : M.common.unavailable
+          }
+        />
+        <StatusCard
+          description={M.githubProductConnect.realReadInstallationDescription}
+          title={M.githubProductConnect.realReadInstallationTitle}
+          value={
+            readiness.installationConnected ? M.common.available : M.common.unavailable
+          }
+        />
+        <StatusCard
+          description={M.githubProductConnect.realReadRepoSurfaceDescription}
+          title={M.githubProductConnect.realReadRepoSurfaceTitle}
+          value={String(readiness.localRepositoryCount)}
+        />
+      </section>
+      {readiness.blockers.length > 0 ? (
+        <section className="callout">
+          <strong>{M.githubProductConnect.realReadBlockersTitle}</strong>
+          <ul className="meta-list">
+            {readiness.blockers.map((blocker) => (
+              <li key={blocker}>{githubRealReadBlockerLabel(blocker)}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <p className="muted">{readiness.nextStep}</p>
+      <p className="muted">{M.githubProductConnect.realReadBoundary}</p>
+    </section>
+  );
+}
+
+function RepositoryFocusControl({
+  activeFilter,
+  onChange,
+  repositories,
+  stats
+}: {
+  activeFilter: RepositoryFocusFilter;
+  onChange?: (filter: RepositoryFocusFilter) => void;
+  repositories: GitHubRepositoryRead[];
+  stats: ReturnType<typeof repositoryFocusStats>;
+}) {
+  const filters: RepositoryFocusFilter[] = [
+    "all",
+    "active",
+    "archived",
+    "private",
+    "with_evidence"
+  ];
+  return (
+    <section
+      className="work-section"
+      aria-label={M.githubProductConnect.repositoryFocusLabel}
+    >
+      <h3>{M.githubProductConnect.repositoryFocusTitle}</h3>
+      <p className="muted">{M.githubProductConnect.repositoryFocusDescription}</p>
+      <p className="muted">
+        {T.githubRepositoryFocusSummary(
+          repositories.length,
+          stats.active,
+          stats.archived,
+          stats.private,
+          stats.withEvidence
+        )}
+      </p>
+      <div
+        className="segmented"
+        role="tablist"
+        aria-label={M.githubProductConnect.repositoryFocusLabel}
+      >
+        {filters.map((filter) => (
+          <button
+            aria-selected={activeFilter === filter}
+            className={`segment${activeFilter === filter ? " active" : ""}`}
+            key={filter}
+            onClick={() => onChange?.(filter)}
+            role="tab"
+            type="button"
+          >
+            {repositoryFocusLabel(filter)} · {repositoryFocusCount(repositories, filter)}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function repositoryFocusLabel(filter: RepositoryFocusFilter): string {
+  switch (filter) {
+    case "active":
+      return M.githubProductConnect.repositoryFocusActive;
+    case "archived":
+      return M.githubProductConnect.repositoryFocusArchived;
+    case "private":
+      return M.githubProductConnect.repositoryFocusPrivate;
+    case "with_evidence":
+      return M.githubProductConnect.repositoryFocusWithEvidence;
+    case "all":
+    default:
+      return M.githubProductConnect.repositoryFocusAll;
+  }
+}
+
+function repositoryFocusCount(
+  repositories: GitHubRepositoryRead[],
+  filter: RepositoryFocusFilter
+): number {
+  return filterRepositoriesByFocus(repositories, filter).length;
+}
+
+function filterRepositoriesByFocus(
+  repositories: GitHubRepositoryRead[],
+  filter: RepositoryFocusFilter
+): GitHubRepositoryRead[] {
+  switch (filter) {
+    case "active":
+      return repositories.filter((repository) => !repository.archived);
+    case "archived":
+      return repositories.filter((repository) => repository.archived);
+    case "private":
+      return repositories.filter((repository) => repository.visibility === "private");
+    case "with_evidence":
+      return repositories.filter((repository) => repository.evidence_refs.length > 0);
+    case "all":
+    default:
+      return repositories;
+  }
+}
+
+function repositoryFocusStats(repositories: GitHubRepositoryRead[]) {
+  return {
+    active: filterRepositoriesByFocus(repositories, "active").length,
+    archived: filterRepositoriesByFocus(repositories, "archived").length,
+    private: filterRepositoriesByFocus(repositories, "private").length,
+    withEvidence: filterRepositoriesByFocus(repositories, "with_evidence").length
+  };
+}
+
+function summarizeGitHubRealReadReadiness(
+  connectionStatus: GitHubConnectionStatusResponse,
+  repositories: GitHubRepositoryListResponse | null
+): GitHubRealReadReadiness {
+  const appEnvConfigured = connectionStatus.app.configured;
+  const hasAppInstallationConnection =
+    connectionStatus.has_connection_record &&
+    connectionStatus.connection_method === "github_app_installation";
+  const installationConnected =
+    hasAppInstallationConnection && connectionStatus.status === "connected";
+  const localRepositoryCount = repositories?.count ?? 0;
+  const localRepositorySurfaceAvailable = localRepositoryCount > 0;
+
+  const blockers: string[] = [];
+  if (!appEnvConfigured) {
+    blockers.push("github_app_env_incomplete");
+  }
+  if (!hasAppInstallationConnection) {
+    blockers.push("github_app_installation_connection_missing");
+  } else if (!installationConnected) {
+    blockers.push("github_app_installation_connection_not_connected");
+  }
+  if (!localRepositorySurfaceAvailable) {
+    blockers.push("local_repository_surface_empty");
+  }
+
+  const ready = blockers.length === 0;
+  return {
+    appEnvConfigured,
+    blockers,
+    hasAppInstallationConnection,
+    installationConnected,
+    localRepositoryCount,
+    localRepositorySurfaceAvailable,
+    nextStep: githubRealReadNextStep({
+      appEnvConfigured,
+      hasAppInstallationConnection,
+      installationConnected,
+      localRepositorySurfaceAvailable,
+      ready
+    }),
+    ready
+  };
+}
+
+function githubRealReadNextStep({
+  appEnvConfigured,
+  hasAppInstallationConnection,
+  installationConnected,
+  localRepositorySurfaceAvailable,
+  ready
+}: {
+  appEnvConfigured: boolean;
+  hasAppInstallationConnection: boolean;
+  installationConnected: boolean;
+  localRepositorySurfaceAvailable: boolean;
+  ready: boolean;
+}): string {
+  return T.githubRealReadNextStep(
+    appEnvConfigured,
+    hasAppInstallationConnection,
+    installationConnected,
+    localRepositorySurfaceAvailable,
+    ready
+  );
+}
+
+function githubRealReadBlockerLabel(blocker: string): string {
+  if (blocker === "github_app_env_incomplete") {
+    return M.githubProductConnect.realReadBlockerEnv;
+  }
+  if (blocker === "github_app_installation_connection_missing") {
+    return M.githubProductConnect.realReadBlockerConnectionMissing;
+  }
+  if (blocker === "github_app_installation_connection_not_connected") {
+    return M.githubProductConnect.realReadBlockerConnectionNotConnected;
+  }
+  if (blocker === "local_repository_surface_empty") {
+    return M.githubProductConnect.realReadBlockerReposEmpty;
+  }
+  return blocker;
+}
+
+function githubAppDescription(status: GitHubConnectionStatusResponse): string {
+  if (status.connection_method === "github_app_installation") {
+    return status.display_name ?? M.githubProductConnect.appInstallationDescription;
+  }
+  if (status.app.configured) {
+    return M.githubProductConnect.appReadyDescription;
+  }
+  return M.githubProductConnect.appMissingDescription;
+}
+
+function isRepositoryFullName(value: string): boolean {
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value);
+}
+
+export { summarizeGitHubRealReadReadiness };

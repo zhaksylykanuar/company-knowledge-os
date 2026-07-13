@@ -1,0 +1,264 @@
+.currentWorkspace {
+  max-width: 18rem;
+  overflow: hidden;
+  color: var(--text, #17221b);
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focusedShell {
+  min-height: 100vh;
+  background: #f3f6f2;
+}
+
+.focusedTopbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-height: 4.6rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem clamp(1rem, 4vw, 3.5rem);
+  border-bottom: 1px solid #dde4de;
+  background: rgb(255 255 255 / 88%);
+  backdrop-filter: blur(16px);
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #102019;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.wordmark span {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.65rem;
+  background: #b9ef50;
+}
+
+.focusedActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem;
+}
+
+.focusedUser {
+  max-width: 13rem;
+  overflow: hidden;
+  color: #6a766e;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signOut {
+  min-height: 2.2rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid #d8dfda;
+  border-radius: 0.7rem;
+  background: #ffffff;
+  color: #334039;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.signOut:focus-visible,
+.wordmark:focus-visible {
+  outline: 3px solid #245c36;
+  outline-offset: 2px;
+}
+
+.focusedMain {
+  min-height: calc(100vh - 4.6rem);
+}
+
+.compactSelector {
+  display: grid;
+  gap: 0.18rem;
+  color: var(--muted, #69766d);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.compactSelector select {
+  min-width: 10rem;
+  max-width: 18rem;
+  min-height: 2.2rem;
+  margin: 0;
+  padding: 0.4rem 2rem 0.4rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--border, #d9dfda) 85%, transparent);
+  border-radius: 0.7rem;
+  background: var(--surface, #ffffff);
+  color: var(--text, #17221b);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.choiceScreen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 1.25rem;
+  background:
+    radial-gradient(circle at 10% 5%, rgb(203 255 120 / 24%), transparent 35rem),
+    #102019;
+}
+
+.choiceCard {
+  width: min(100%, 37rem);
+  padding: clamp(1.4rem, 5vw, 2.7rem);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 1.8rem;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 2rem 6rem rgb(0 0 0 / 28%);
+}
+
+.choiceMark {
+  display: grid;
+  width: 2.8rem;
+  height: 2.8rem;
+  margin-bottom: 2rem;
+  place-items: center;
+  border-radius: 0.9rem;
+  background: #b9ef50;
+  color: #102019;
+  font-size: 1.25rem;
+  font-weight: 900;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: #5a665e;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.choiceCard h1 {
+  margin: 0;
+  color: #102019;
+  font-size: clamp(2rem, 7vw, 3.25rem);
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.choiceLead {
+  max-width: 31rem;
+  margin: 1rem 0 1.8rem;
+  color: #5a665e;
+  line-height: 1.55;
+}
+
+.workspaceList {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.workspaceButton {
+  display: flex;
+  width: 100%;
+  min-height: 4.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #dce4de;
+  border-radius: 1rem;
+  background: #f6f9f7;
+  color: #102019;
+  text-align: left;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.workspaceButton:hover {
+  border-color: #7ea92b;
+  transform: translateY(-1px);
+}
+
+.workspaceButton:focus-visible,
+.compactSelector select:focus-visible,
+.choiceSignOut:focus-visible {
+  outline: 3px solid #245c36;
+  outline-offset: 2px;
+}
+
+.workspaceButton span:first-child {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.workspaceButton strong {
+  font-size: 1rem;
+}
+
+.workspaceButton small {
+  color: #68756c;
+}
+
+.choiceHint {
+  margin: 1rem 0 0;
+  color: #7b867e;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.choiceSignOut {
+  display: block;
+  width: fit-content;
+  margin: 1.2rem auto 0;
+  padding: 0.4rem;
+  border: 0;
+  background: transparent;
+  color: #536158;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
+@media (max-width: 680px) {
+  .focusedTopbar {
+    align-items: flex-start;
+  }
+
+  .focusedActions {
+    flex-wrap: wrap;
+  }
+
+  .focusedUser {
+    display: none;
+  }
+
+  .compactSelector {
+    max-width: 9.5rem;
+  }
+
+  .compactSelector select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspaceButton {
+    transition: none;
+  }
+}

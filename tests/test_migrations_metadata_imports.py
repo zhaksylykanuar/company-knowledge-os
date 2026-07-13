@@ -23,11 +23,17 @@ EXPECTED_ALEMBIC_TABLES = {
     "repositories",
     "pull_requests",
     "tasks",
+    "people",
+    "organizations",
+    "affiliations",
+    "interactions",
+    "company_world_resolutions",
 }
 
 EXPECTED_ALEMBIC_MODEL_MODULES = {
     "app.db.action_models",
     "app.db.canonical_models",
+    "app.db.company_world_models",
     "app.db.identity_models",
     "app.db.integration_models",
     "app.db.models",

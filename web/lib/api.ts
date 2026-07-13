@@ -3,6 +3,9 @@ import type {
   ActionExecutionResponse,
   ActionProposalAuditResponse,
   ActionProposalExecuteRequest,
+  ActionProposalBulkRejectRequest,
+  ActionProposalBulkRequest,
+  ActionProposalBulkResponse,
   ActionProposalCreateRequest,
   ActionProposalListRequest,
   ActionProposalListResponse,
@@ -10,20 +13,50 @@ import type {
   ActionProposalRejectRequest,
   ApiErrorPayload,
   ApiFetchOptions,
+  BriefingActionProposalGenerationResponse,
   BriefingListResponse,
+  CompanyMapResolutionReceipt,
+  CompanyMapResolutionRequest,
+  CompanyMapResponse,
   CompanyBrainResponse,
   FounderBriefingRequest,
   FounderBriefingResponse,
+  GitHubAppLiveSyncRequest,
+  GitHubAppLiveSyncResponse,
   GitHubConnectionStatusResponse,
   GitHubLocalSyncRequest,
   GitHubLocalSyncResponse,
   GitHubOperationalWorkResponse,
   GitHubOperationalWorkState,
+  GitHubRepositoryListResponse,
   GitHubSelectedIssueSyncRequest,
   GitHubSelectedIssueSyncResponse,
   GitHubSelectedPullRequestSyncRequest,
   GitHubSelectedPullRequestSyncResponse,
-  GitHubSelectedRepositorySyncResult
+  GitHubSelectedRepositorySyncResult,
+  NormalizedEntitiesResponse,
+  DriveFileImportRequest,
+  DriveFileImportResponse,
+  DriveFileListResponse,
+  DocumentCreateRequest,
+  DocumentListRequest,
+  DocumentListResponse,
+  DocumentResponse,
+  DocumentUpdateRequest,
+  DocumentVersionsResponse,
+  GmailMessageImportRequest,
+  GmailMessageImportResponse,
+  GmailMessageListResponse,
+  JiraIssueImportRequest,
+  JiraIssueImportResponse,
+  JiraIssueListResponse,
+  RepoAuditImportRequest,
+  RepoAuditImportResponse,
+  RepoAuditResponse,
+  ConnectorRegistryResponse,
+  WorkspaceMemberProvisionRequest,
+  WorkspaceMemberProvisionResponse,
+  WorkspaceMembersResponse
 } from "./types";
 
 // Same-origin base: the browser calls the web origin, and next.config.mjs
@@ -46,6 +79,16 @@ async function readError(response: Response): Promise<string> {
     return payload.detail || payload.message || fallback;
   } catch {
     return fallback;
+  }
+}
+
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
   }
 }
 
@@ -73,7 +116,7 @@ export async function apiFetch<TResponse>(
   });
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    throw new ApiRequestError(await readError(response), response.status);
   }
 
   if (response.status === 204) {
@@ -115,6 +158,40 @@ export function buildWorkspaceCompanyBrainPath(workspaceId: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-brain`;
 }
 
+export function buildWorkspaceCompanyMapPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-map`;
+}
+
+export function buildWorkspaceCompanyMapResolutionsPath(workspaceId: string): string {
+  return `${buildWorkspaceCompanyMapPath(workspaceId)}/resolutions`;
+}
+
+export async function fetchCompanyMap(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<CompanyMapResponse> {
+  return apiFetch<CompanyMapResponse>(buildWorkspaceCompanyMapPath(workspaceId), options);
+}
+
+export async function resolveCompanyMapCandidate(
+  workspaceId: string,
+  request: CompanyMapResolutionRequest,
+  options: ApiFetchOptions = {}
+): Promise<CompanyMapResolutionReceipt> {
+  return apiFetch<CompanyMapResolutionReceipt>(
+    buildWorkspaceCompanyMapResolutionsPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+}
+
+export function buildWorkspaceCompanyBrainEntitiesPath(workspaceId: string): string {
+  return `${buildWorkspaceCompanyBrainPath(workspaceId)}/entities`;
+}
+
 export async function fetchCompanyBrain(
   workspaceId: string,
   options: ApiFetchOptions = {}
@@ -123,6 +200,299 @@ export async function fetchCompanyBrain(
     buildWorkspaceCompanyBrainPath(workspaceId),
     options
   );
+}
+
+export async function fetchCompanyBrainEntities(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<NormalizedEntitiesResponse> {
+  return apiFetch<NormalizedEntitiesResponse>(
+    buildWorkspaceCompanyBrainEntitiesPath(workspaceId),
+    options
+  );
+}
+
+export function buildWorkspaceMembersPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/members`;
+}
+
+export function buildWorkspaceConnectorsPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/connectors`;
+}
+
+export async function fetchWorkspaceConnectors(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorRegistryResponse> {
+  return apiFetch<ConnectorRegistryResponse>(
+    buildWorkspaceConnectorsPath(workspaceId),
+    options
+  );
+}
+
+export async function fetchWorkspaceMembers(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<WorkspaceMembersResponse> {
+  return apiFetch<WorkspaceMembersResponse>(
+    buildWorkspaceMembersPath(workspaceId),
+    options
+  );
+}
+
+export async function provisionWorkspaceMember(
+  workspaceId: string,
+  request: WorkspaceMemberProvisionRequest,
+  options: ApiFetchOptions = {}
+): Promise<WorkspaceMemberProvisionResponse> {
+  return apiFetch<WorkspaceMemberProvisionResponse>(
+    buildWorkspaceMembersPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        email: request.email,
+        name: request.name || null,
+        role: request.role
+      }),
+      method: "POST"
+    }
+  );
+}
+
+
+export function buildWorkspaceJiraIssuesPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jira/issues`;
+}
+
+export function buildWorkspaceJiraImportPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jira/issues/import`;
+}
+
+export async function fetchJiraIssues(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<JiraIssueListResponse> {
+  return apiFetch<JiraIssueListResponse>(
+    buildWorkspaceJiraIssuesPath(workspaceId),
+    options
+  );
+}
+
+export async function importJiraIssues(
+  workspaceId: string,
+  request: JiraIssueImportRequest,
+  options: ApiFetchOptions = {}
+): Promise<JiraIssueImportResponse> {
+  return apiFetch<JiraIssueImportResponse>(
+    buildWorkspaceJiraImportPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        issues: request.issues,
+        connection_id: request.connectionId ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export function buildWorkspaceGmailMessagesPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/gmail/messages`;
+}
+
+export function buildWorkspaceGmailImportPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/gmail/messages/import`;
+}
+
+export async function fetchGmailMessages(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GmailMessageListResponse> {
+  return apiFetch<GmailMessageListResponse>(
+    buildWorkspaceGmailMessagesPath(workspaceId),
+    options
+  );
+}
+
+export async function importGmailMessages(
+  workspaceId: string,
+  request: GmailMessageImportRequest,
+  options: ApiFetchOptions = {}
+): Promise<GmailMessageImportResponse> {
+  return apiFetch<GmailMessageImportResponse>(
+    buildWorkspaceGmailImportPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        messages: request.messages,
+        connection_id: request.connectionId ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export function buildWorkspaceDriveFilesPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/drive/files`;
+}
+
+export function buildWorkspaceDriveImportPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/drive/files/import`;
+}
+
+export async function fetchDriveFiles(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<DriveFileListResponse> {
+  return apiFetch<DriveFileListResponse>(
+    buildWorkspaceDriveFilesPath(workspaceId),
+    options
+  );
+}
+
+export async function importDriveFiles(
+  workspaceId: string,
+  request: DriveFileImportRequest,
+  options: ApiFetchOptions = {}
+): Promise<DriveFileImportResponse> {
+  return apiFetch<DriveFileImportResponse>(
+    buildWorkspaceDriveImportPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        files: request.files,
+        connection_id: request.connectionId ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export function buildRepoAuditPath(): string {
+  return "/api/v1/founder/company-brain/repo-audit";
+}
+
+export function buildWorkspaceDocumentsPath(
+  workspaceId: string,
+  request: DocumentListRequest = {}
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(request.limit ?? 50));
+  if (request.status) {
+    params.set("status", request.status);
+  }
+  if (request.search) {
+    params.set("search", request.search);
+  }
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/documents?${params.toString()}`;
+}
+
+export function buildWorkspaceDocumentsCollectionPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/documents`;
+}
+
+export function buildWorkspaceDocumentPath(
+  workspaceId: string,
+  documentId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/documents/${encodeURIComponent(documentId)}`;
+}
+
+export function buildWorkspaceDocumentVersionsPath(
+  workspaceId: string,
+  documentId: string
+): string {
+  return `${buildWorkspaceDocumentPath(workspaceId, documentId)}/versions`;
+}
+
+export async function fetchDocuments(
+  workspaceId: string,
+  request: DocumentListRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<DocumentListResponse> {
+  return apiFetch<DocumentListResponse>(
+    buildWorkspaceDocumentsPath(workspaceId, request),
+    options
+  );
+}
+
+export async function fetchDocument(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentPath(workspaceId, documentId),
+    options
+  );
+}
+
+export async function fetchDocumentVersions(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<DocumentVersionsResponse> {
+  return apiFetch<DocumentVersionsResponse>(
+    buildWorkspaceDocumentVersionsPath(workspaceId, documentId),
+    options
+  );
+}
+
+export async function createDocument(
+  workspaceId: string,
+  request: DocumentCreateRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentsCollectionPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        title: request.title,
+        body_markdown: request.body_markdown ?? "",
+        tags: request.tags ?? [],
+        status: request.status ?? "draft"
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function updateDocument(
+  workspaceId: string,
+  documentId: string,
+  request: DocumentUpdateRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentResponse> {
+  return apiFetch<DocumentResponse>(
+    buildWorkspaceDocumentPath(workspaceId, documentId),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "PATCH"
+    }
+  );
+}
+
+export async function deleteDocument(
+  workspaceId: string,
+  documentId: string,
+  options: ApiFetchOptions = {}
+): Promise<void> {
+  await apiFetch<void>(buildWorkspaceDocumentPath(workspaceId, documentId), {
+    ...options,
+    method: "DELETE"
+  });
+}
+
+export async function fetchRepoAudit(
+  options: ApiFetchOptions = {}
+): Promise<RepoAuditResponse> {
+  return apiFetch<RepoAuditResponse>(buildRepoAuditPath(), options);
 }
 
 export function buildWorkspaceManualBriefingPath(workspaceId: string): string {
@@ -172,6 +542,13 @@ export function buildWorkspaceBriefingPath(
   )}/briefings/${encodeURIComponent(briefingId)}`;
 }
 
+export function buildWorkspaceBriefingActionProposalsPath(
+  workspaceId: string,
+  briefingId: string
+): string {
+  return `${buildWorkspaceBriefingPath(workspaceId, briefingId)}/action-proposals`;
+}
+
 export async function listBriefings(
   workspaceId: string,
   request: { limit?: number; offset?: number } = {},
@@ -191,6 +568,20 @@ export async function getBriefing(
   return apiFetch<FounderBriefingResponse>(
     buildWorkspaceBriefingPath(workspaceId, briefingId),
     options
+  );
+}
+
+export async function generateBriefingActionProposals(
+  workspaceId: string,
+  briefingId: string,
+  options: ApiFetchOptions = {}
+): Promise<BriefingActionProposalGenerationResponse> {
+  return apiFetch<BriefingActionProposalGenerationResponse>(
+    buildWorkspaceBriefingActionProposalsPath(workspaceId, briefingId),
+    {
+      ...options,
+      method: "POST"
+    }
   );
 }
 
@@ -239,6 +630,22 @@ export function buildWorkspaceActionProposalRejectPath(
   proposalId: string
 ): string {
   return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/reject`;
+}
+
+export function buildWorkspaceActionProposalBulkApprovePath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceActionProposalsCollectionPath(workspaceId)}/bulk-approve`;
+}
+
+export function buildWorkspaceActionProposalBulkRejectPath(workspaceId: string): string {
+  return `${buildWorkspaceActionProposalsCollectionPath(workspaceId)}/bulk-reject`;
+}
+
+export function buildWorkspaceRepoAuditImportPath(workspaceId: string): string {
+  return `${buildWorkspaceActionProposalsCollectionPath(
+    workspaceId
+  )}/import-repo-audit`;
 }
 
 export function buildWorkspaceActionProposalExecutionPreviewPath(
@@ -332,6 +739,58 @@ export async function rejectActionProposal(
   );
 }
 
+export async function bulkApproveActionProposals(
+  workspaceId: string,
+  request: ActionProposalBulkRequest,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalBulkResponse> {
+  return apiFetch<ActionProposalBulkResponse>(
+    buildWorkspaceActionProposalBulkApprovePath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        proposal_ids: request.proposal_ids
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function bulkRejectActionProposals(
+  workspaceId: string,
+  request: ActionProposalBulkRejectRequest,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposalBulkResponse> {
+  return apiFetch<ActionProposalBulkResponse>(
+    buildWorkspaceActionProposalBulkRejectPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        proposal_ids: request.proposal_ids,
+        reason: request.reason ?? null
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function importRepoAuditFindings(
+  workspaceId: string,
+  request: RepoAuditImportRequest,
+  options: ApiFetchOptions = {}
+): Promise<RepoAuditImportResponse> {
+  return apiFetch<RepoAuditImportResponse>(
+    buildWorkspaceRepoAuditImportPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({
+        findings: request.findings
+      }),
+      method: "POST"
+    }
+  );
+}
+
 export async function fetchActionExecutionPreview(
   workspaceId: string,
   proposalId: string,
@@ -387,6 +846,60 @@ export async function fetchGitHubConnectionStatus(
   return apiFetch<GitHubConnectionStatusResponse>(
     buildWorkspaceGitHubConnectionStatusPath(workspaceId),
     options
+  );
+}
+
+export function buildWorkspaceGitHubRepositoriesPath(
+  workspaceId: string,
+  limit = 100
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/repositories?${params.toString()}`;
+}
+
+export async function fetchGitHubRepositories(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubRepositoryListResponse> {
+  return apiFetch<GitHubRepositoryListResponse>(
+    buildWorkspaceGitHubRepositoriesPath(workspaceId),
+    options
+  );
+}
+
+export function buildWorkspaceGitHubAppLiveSyncPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/connections/app-installation/sync`;
+}
+
+export async function runGitHubAppLiveSync(
+  workspaceId: string,
+  request: GitHubAppLiveSyncRequest,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppLiveSyncResponse> {
+  const body: Record<string, unknown> = {
+    connection_id: request.connection_id,
+    repositories: request.repositories,
+    include_issues: request.include_issues ?? true,
+    include_pull_requests: request.include_pull_requests ?? true
+  };
+  if (request.issue_states && request.issue_states.length > 0) {
+    body.issue_states = request.issue_states;
+  }
+  if (request.pull_request_states && request.pull_request_states.length > 0) {
+    body.pull_request_states = request.pull_request_states;
+  }
+  return apiFetch<GitHubAppLiveSyncResponse>(
+    buildWorkspaceGitHubAppLiveSyncPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(body),
+      method: "POST"
+    }
   );
 }
 

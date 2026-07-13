@@ -8,7 +8,10 @@ import {
   syncSelectedRepositoryPullRequests
 } from "../lib/api";
 import { M, T } from "../lib/messages";
-import { useWorkspaceId } from "../lib/session";
+import {
+  canAdministerSelectedWorkspace,
+  useSession
+} from "../lib/session";
 import type {
   GitHubConnectionStatusResponse,
   GitHubSelectedIssueSyncResponse,
@@ -36,6 +39,7 @@ type SelectedRepositorySyncControlsProps = {
 };
 
 type SelectedRepositorySyncControlsViewProps = {
+  canAdminister?: boolean;
   status: ConnectionLoadStatus;
   connectionStatus: GitHubConnectionStatusResponse | null;
   connectionError: string | null;
@@ -97,7 +101,12 @@ export function classifySelectedSyncError(message: string): SelectedSyncError {
 export function SelectedRepositorySyncControls({
   onSyncComplete
 }: SelectedRepositorySyncControlsProps) {
-  const workspaceId = useWorkspaceId();
+  const session = useSession();
+  const workspaceId = session?.workspaceId ?? null;
+  const canAdminister = canAdministerSelectedWorkspace(
+    session?.workspaces ?? [],
+    workspaceId
+  );
   const [connectionStatus, setConnectionStatus] =
     useState<GitHubConnectionStatusResponse | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -153,7 +162,7 @@ export function SelectedRepositorySyncControls({
   }, [workspaceId, reloadKey]);
 
   async function runSelectedSync(action: SelectedSyncAction): Promise<void> {
-    if (!workspaceId) {
+    if (!workspaceId || !canAdminister) {
       setStatus("missing");
       return;
     }
@@ -209,17 +218,18 @@ export function SelectedRepositorySyncControls({
 
   return (
     <SelectedRepositorySyncControlsView
+      canAdminister={canAdminister}
       connectionError={connectionError}
       connectionStatus={connectionStatus}
       issuesResult={issuesResult}
-      onRepositoryInputChange={(value) => {
-        setRepositoryError(null);
-        setRepositoryInput(value);
-      }}
+      onRepositoryInputChange={canAdminister ? (value) => {
+          setRepositoryError(null);
+          setRepositoryInput(value);
+        } : undefined}
       onRetryConnection={() => setReloadKey((current) => current + 1)}
-      onRunBoth={() => void runSelectedSync("both")}
-      onRunIssues={() => void runSelectedSync("issues")}
-      onRunPullRequests={() => void runSelectedSync("pull_requests")}
+      onRunBoth={canAdminister ? () => void runSelectedSync("both") : undefined}
+      onRunIssues={canAdminister ? () => void runSelectedSync("issues") : undefined}
+      onRunPullRequests={canAdminister ? () => void runSelectedSync("pull_requests") : undefined}
       pendingAction={pendingAction}
       pullRequestsResult={pullRequestsResult}
       repositoryError={repositoryError}
@@ -231,6 +241,7 @@ export function SelectedRepositorySyncControls({
 }
 
 export function SelectedRepositorySyncControlsView({
+  canAdminister = true,
   status,
   connectionStatus,
   connectionError,
@@ -266,6 +277,10 @@ export function SelectedRepositorySyncControlsView({
       </div>
 
       <p className="muted">{M.selectedSync.intro}</p>
+
+      {!canAdminister ? (
+        <p className="muted">{M.common.sourceAdminOnlyNote}</p>
+      ) : null}
 
       {status === "loading" ? (
         <LoadingState label={M.selectedSync.loading} />
@@ -303,59 +318,63 @@ export function SelectedRepositorySyncControlsView({
 
       {status === "ready" && hasConnection ? (
         <>
-          <div className="field">
-            <label htmlFor="selected-repository-input">
-              {M.selectedSync.repoLabel}
-            </label>
-            <input
-              autoComplete="off"
-              id="selected-repository-input"
-              onChange={(event) =>
-                onRepositoryInputChange?.(event.target.value)
-              }
-              placeholder={M.selectedSync.repoPlaceholder}
-              spellCheck={false}
-              type="text"
-              value={repositoryInput}
-            />
-            <p className="muted">{M.selectedSync.repoNote}</p>
-            {repositoryError ? (
-              <p className="error-text" role="alert">
-                {repositoryError}
-              </p>
-            ) : null}
-          </div>
+          {canAdminister ? (
+            <>
+              <div className="field">
+                <label htmlFor="selected-repository-input">
+                  {M.selectedSync.repoLabel}
+                </label>
+                <input
+                  autoComplete="off"
+                  id="selected-repository-input"
+                  onChange={(event) =>
+                    onRepositoryInputChange?.(event.target.value)
+                  }
+                  placeholder={M.selectedSync.repoPlaceholder}
+                  spellCheck={false}
+                  type="text"
+                  value={repositoryInput}
+                />
+                <p className="muted">{M.selectedSync.repoNote}</p>
+                {repositoryError ? (
+                  <p className="error-text" role="alert">
+                    {repositoryError}
+                  </p>
+                ) : null}
+              </div>
 
-          <div className="actions-row">
-            <button
-              className="button"
-              disabled={!canSync}
-              onClick={onRunIssues}
-              type="button"
-            >
-              {pendingAction === "issues" ? M.selectedSync.syncingIssues : M.selectedSync.runIssues}
-            </button>
-            <button
-              className="button"
-              disabled={!canSync}
-              onClick={onRunPullRequests}
-              type="button"
-            >
-              {pendingAction === "pull_requests"
-                ? M.selectedSync.syncingPr
-                : M.selectedSync.runPr}
-            </button>
-            <button
-              className="button secondary"
-              disabled={!canSync}
-              onClick={onRunBoth}
-              type="button"
-            >
-              {pendingAction === "both"
-                ? M.selectedSync.syncingBoth
-                : M.selectedSync.runBoth}
-            </button>
-          </div>
+              <div className="actions-row">
+                <button
+                  className="button"
+                  disabled={!canSync}
+                  onClick={onRunIssues}
+                  type="button"
+                >
+                  {pendingAction === "issues" ? M.selectedSync.syncingIssues : M.selectedSync.runIssues}
+                </button>
+                <button
+                  className="button"
+                  disabled={!canSync}
+                  onClick={onRunPullRequests}
+                  type="button"
+                >
+                  {pendingAction === "pull_requests"
+                    ? M.selectedSync.syncingPr
+                    : M.selectedSync.runPr}
+                </button>
+                <button
+                  className="button secondary"
+                  disabled={!canSync}
+                  onClick={onRunBoth}
+                  type="button"
+                >
+                  {pendingAction === "both"
+                    ? M.selectedSync.syncingBoth
+                    : M.selectedSync.runBoth}
+                </button>
+              </div>
+            </>
+          ) : null}
 
           {syncError ? (
             <ErrorState

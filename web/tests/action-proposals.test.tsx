@@ -5,7 +5,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   approveActionProposal,
+  bulkApproveActionProposals,
+  bulkRejectActionProposals,
   buildWorkspaceActionProposalApprovePath,
+  buildWorkspaceActionProposalBulkApprovePath,
+  buildWorkspaceActionProposalBulkRejectPath,
   buildWorkspaceActionProposalRejectPath,
   buildWorkspaceActionProposalsCollectionPath,
   buildWorkspaceActionProposalsPath,
@@ -13,15 +17,18 @@ import {
   fetchActionProposals,
   rejectActionProposal
 } from "../lib/api";
-import { M } from "../lib/messages";
+import { M, T } from "../lib/messages";
 import type {
   ActionProposal,
   ActionProposalListResponse,
   ActionProposalMutationResponse
 } from "../lib/types";
 import {
+  actionCapabilitiesForRole,
   ActionProposalsPanelView,
-  DEFAULT_CREATE_FORM
+  DEFAULT_CREATE_FORM,
+  summarizeActionReviewReadiness,
+  summarizeBulkResponse
 } from "../components/ActionProposalsPanel";
 import { EvidenceDrawer } from "../components/EvidenceDrawer";
 
@@ -81,11 +88,131 @@ const rejectedProposal: ActionProposal = {
   title: "Rejected local proposal"
 };
 
+const briefingProposal: ActionProposal = {
+  ...proposedProposal,
+  id: "proposal-4",
+  target_provider: "internal",
+  action_type: "internal_todo",
+  title: "Review synced GitHub work before approving actions",
+  description: "Repository inventory is available\n\nOne canonical repo is visible.",
+  payload: {
+    briefing_item_key: "repo-coverage",
+    category: "repository",
+    recommended_next_step: "Review synced GitHub work before approving actions.",
+    related_entities: ["qtwin-io/founderos-api", "qtwin-io/founderos-web"],
+    severity: "info",
+    source: "briefing_item"
+  },
+  evidence_refs: [
+    {
+      kind: "repository_inventory_snapshot",
+      source: "github",
+      ref: "qtwin-io/founderos-api",
+      url: "https://github.com/qtwin-io/founderos-api"
+    },
+    {
+      kind: "repository_inventory_snapshot",
+      source: "github",
+      ref: "qtwin-io/founderos-web",
+      url: "https://github.com/qtwin-io/founderos-web"
+    }
+  ]
+};
+
+const manualInternalProposal: ActionProposal = {
+  ...proposedProposal,
+  id: "proposal-5",
+  target_provider: "internal",
+  action_type: "internal_todo",
+  title: "Manual internal follow-up",
+  description: "A manually created local todo.",
+  payload: {
+    note: "Manual local review note"
+  },
+  evidence_refs: [
+    {
+      kind: "internal_note",
+      source: "founderos",
+      ref: "manual-note-1",
+      url: null
+    }
+  ]
+};
+
+const auditProposal: ActionProposal = {
+  ...proposedProposal,
+  id: "proposal-6",
+  target_provider: "internal",
+  action_type: "internal_todo",
+  title: "Imported repo audit follow-up: qtwin-io/base-collector",
+  description: "Repository: qtwin-io/base-collector",
+  payload: {
+    source: "repo_audit_import",
+    repository_full_name: "qtwin-io/base-collector",
+    area_candidate: "OPS",
+    recommended_next_step: "Add CI before private beta.",
+    related_entities: ["ci_not_detected", "tests_not_detected"],
+    severity: "high"
+  },
+  evidence_refs: [
+    {
+      kind: "repo_audit_external",
+      source: "external_repo_audit_import",
+      ref: "external-audit:base-collector:ci",
+      url: null
+    }
+  ]
+};
+
+const deterministicAuditProposal: ActionProposal = {
+  ...proposedProposal,
+  id: "proposal-7",
+  target_provider: "internal",
+  action_type: "internal_todo",
+  title: "Repo audit follow-up: qtwin-io/local-service",
+  description: "Repository: qtwin-io/local-service",
+  payload: {
+    source: "repo_audit",
+    repository_full_name: "qtwin-io/local-service",
+    activity_bucket: "stale",
+    area_candidate: "CORE",
+    related_entities: ["readme_missing"]
+  },
+  evidence_refs: [
+    {
+      kind: "repo_audit_fact",
+      source: "repo_audit",
+      ref: "github_discovery_snapshot:repos.json:local-service:metadata",
+      url: null
+    }
+  ]
+};
+
+const executedProposal: ActionProposal = {
+  ...approvedProposal,
+  id: "proposal-8",
+  execution_started: true,
+  title: "Executed GitHub proposal"
+};
+
 const sampleList: ActionProposalListResponse = {
   count: 3,
   is_live: false,
   proposals: [proposedProposal, approvedProposal, rejectedProposal],
   warnings: ["Action proposal API is local-only and does not execute provider actions."]
+};
+
+const groupedList: ActionProposalListResponse = {
+  count: 5,
+  is_live: false,
+  proposals: [
+    proposedProposal,
+    approvedProposal,
+    rejectedProposal,
+    briefingProposal,
+    manualInternalProposal
+  ],
+  warnings: []
 };
 
 const emptyList: ActionProposalListResponse = {
@@ -110,6 +237,8 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <ActionProposalsPanelView
+      canCreateProposals={props.canCreateProposals ?? true}
+      canReviewProposals={props.canReviewProposals ?? true}
       createForm={props.createForm ?? DEFAULT_CREATE_FORM}
       data={"data" in props ? props.data ?? null : sampleList}
       error={props.error ?? null}
@@ -119,10 +248,23 @@ function renderPanel(
       onCreateFormChange={props.onCreateFormChange}
       onReject={props.onReject}
       onRetry={props.onRetry}
+      onOriginFilterChange={props.onOriginFilterChange}
+      onBulkApprove={props.onBulkApprove}
+      onBulkReject={props.onBulkReject}
+      onClearSelectedProposals={props.onClearSelectedProposals}
       onSelectEvidence={props.onSelectEvidence}
+      onSelectVisibleProposed={props.onSelectVisibleProposed}
+      onAuditSourceFilterChange={props.onAuditSourceFilterChange}
+      onStatusFilterChange={props.onStatusFilterChange}
+      onToggleProposalSelection={props.onToggleProposalSelection}
       pendingMutation={props.pendingMutation ?? null}
+      auditSourceFilter={props.auditSourceFilter ?? "all"}
+      originFilter={props.originFilter ?? "all"}
+      selectedProposalIds={props.selectedProposalIds ?? []}
       selectedEvidence={props.selectedEvidence ?? null}
       selectedEvidenceTitle={props.selectedEvidenceTitle ?? null}
+      selectedEvidenceCount={props.selectedEvidenceCount ?? null}
+      statusFilter={props.statusFilter ?? "all"}
       status={props.status ?? "ready"}
       successMessage={props.successMessage ?? null}
     />
@@ -155,6 +297,65 @@ test("builds action proposal URLs", () => {
     buildWorkspaceActionProposalRejectPath("workspace-123", "proposal-1"),
     "/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/reject"
   );
+  assert.equal(
+    buildWorkspaceActionProposalBulkApprovePath("workspace-123"),
+    "/api/v1/workspaces/workspace-123/actions/proposals/bulk-approve"
+  );
+  assert.equal(
+    buildWorkspaceActionProposalBulkRejectPath("workspace-123"),
+    "/api/v1/workspaces/workspace-123/actions/proposals/bulk-reject"
+  );
+});
+
+test("maps the selected workspace role to the backend action capability boundary", () => {
+  assert.deepEqual(actionCapabilitiesForRole("viewer"), {
+    canCreateProposals: false,
+    canReviewProposals: false
+  });
+  assert.deepEqual(actionCapabilitiesForRole("member"), {
+    canCreateProposals: true,
+    canReviewProposals: false
+  });
+  assert.deepEqual(actionCapabilitiesForRole("admin"), {
+    canCreateProposals: true,
+    canReviewProposals: true
+  });
+  assert.deepEqual(actionCapabilitiesForRole("owner"), {
+    canCreateProposals: true,
+    canReviewProposals: true
+  });
+  assert.deepEqual(actionCapabilitiesForRole(null), {
+    canCreateProposals: false,
+    canReviewProposals: false
+  });
+});
+
+test("keeps viewer actions read-only while preserving proposal evidence", () => {
+  const html = renderPanel({
+    canCreateProposals: false,
+    canReviewProposals: false
+  });
+
+  assert.ok(html.includes("режим просмотра"));
+  assert.ok(html.includes(proposedProposal.title));
+  assert.ok(html.includes(proposedProposal.evidence_refs[0]!.ref));
+  assert.doesNotMatch(html, /proposal-form/);
+  assert.doesNotMatch(html, /proposal-selection/);
+  assert.doesNotMatch(html, new RegExp(M.actionsPanel.bulkTitle));
+  assert.doesNotMatch(html, new RegExp(M.actionExecution.previewTitle));
+});
+
+test("lets members create local proposals without review or execution controls", () => {
+  const html = renderPanel({
+    canCreateProposals: true,
+    canReviewProposals: false
+  });
+
+  assert.match(html, /proposal-form/);
+  assert.ok(html.includes("можете создавать локальные предложения"));
+  assert.doesNotMatch(html, /proposal-selection/);
+  assert.doesNotMatch(html, new RegExp(M.actionsPanel.bulkTitle));
+  assert.doesNotMatch(html, new RegExp(M.actionExecution.previewTitle));
 });
 
 test("fetches and parses local action proposals", async () => {
@@ -289,6 +490,90 @@ test("approves and rejects locally through supported endpoints", async () => {
   }
 });
 
+test("bulk approves and rejects locally through backend bulk endpoints", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: string[] = [];
+  globalThis.fetch = (async (input, init) => {
+    calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+    if (String(input).endsWith("/bulk-reject")) {
+      assert.equal(
+        init?.body,
+        JSON.stringify({
+          proposal_ids: ["proposal-4"],
+          reason: "Not now"
+        })
+      );
+      return new Response(
+        JSON.stringify({
+          execution_started: false,
+          failed_count: 0,
+          failures: [],
+          is_live: false,
+          proposals: [rejectedProposal],
+          succeeded_count: 1,
+          warnings: ["Action proposal API is local-only and does not execute provider actions."]
+        }),
+        {
+          headers: { "Content-Type": "application/json" },
+          status: 200
+        }
+      );
+    }
+    assert.equal(
+      init?.body,
+      JSON.stringify({
+        proposal_ids: ["proposal-1", "proposal-4"]
+      })
+    );
+    return new Response(
+      JSON.stringify({
+        execution_started: false,
+        failed_count: 1,
+        failures: [
+          {
+            detail: "action proposal is not in proposed status",
+            proposal_id: "proposal-9",
+            status_code: 409
+          }
+        ],
+        is_live: false,
+        proposals: [approvedProposal],
+        succeeded_count: 1,
+        warnings: ["Action proposal API is local-only and does not execute provider actions."]
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const approved = await bulkApproveActionProposals(
+      "workspace-123",
+      { proposal_ids: ["proposal-1", "proposal-4"] },
+      {}
+    );
+    const rejected = await bulkRejectActionProposals(
+      "workspace-123",
+      { proposal_ids: ["proposal-4"], reason: "Not now" },
+      {}
+    );
+
+    assert.equal(approved.succeeded_count, 1);
+    assert.equal(approved.failed_count, 1);
+    assert.equal(approved.failures[0]?.status_code, 409);
+    assert.equal(approved.execution_started, false);
+    assert.equal(rejected.succeeded_count, 1);
+    assert.deepEqual(calls, [
+      "POST http://localhost/api/v1/workspaces/workspace-123/actions/proposals/bulk-approve",
+      "POST http://localhost/api/v1/workspaces/workspace-123/actions/proposals/bulk-reject"
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("surfaces unsupported transition errors", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () =>
@@ -348,6 +633,303 @@ test("renders proposal cards, statuses, evidence refs, and local-only boundary",
   assert.doesNotMatch(html, /source_events/);
 });
 
+test("summarizes action review readiness without starting external execution", () => {
+  const summary = summarizeActionReviewReadiness([
+    proposedProposal,
+    approvedProposal,
+    rejectedProposal,
+    briefingProposal,
+    manualInternalProposal,
+    executedProposal
+  ]);
+
+  assert.deepEqual(summary, {
+    externalResultReported: 1,
+    localOnly: 2,
+    missingEvidence: 1,
+    pendingDecision: 3,
+    previewReady: 1
+  });
+});
+
+test("renders action review readiness next steps from the loaded local list", () => {
+  const html = renderPanel({
+    data: {
+      ...groupedList,
+      count: 6,
+      proposals: [...groupedList.proposals, executedProposal]
+    },
+    statusFilter: "all"
+  });
+
+  assert.ok(html.includes(M.actionsPanel.readinessTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessDescription));
+  assert.ok(html.includes(M.actionsPanel.readinessPendingTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessPreviewTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessLocalOnlyTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessMissingEvidenceTitle));
+  assert.ok(html.includes(M.actionsPanel.readinessExternalResultTitle));
+  assert.ok(html.includes(T.actionsReadinessNextStep(3, 1, 1, 1)));
+  assert.ok(html.includes(M.actionsPanel.readinessBoundary));
+  assert.doesNotMatch(html, /execute started by summary/i);
+  assert.doesNotMatch(html, /provider call started/i);
+  assert.doesNotMatch(html, /created GitHub issue/i);
+});
+
+test("filters loaded local proposals without changing provider state", () => {
+  const proposedHtml = renderPanel({
+    onStatusFilterChange: () => undefined,
+    statusFilter: "proposed"
+  });
+  assert.ok(proposedHtml.includes(M.actionsPanel.filterTitle));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.filterProposed} · 1`));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.filterAll} · 3`));
+  assert.match(proposedHtml, /Create follow-up GitHub issue/);
+  assert.doesNotMatch(proposedHtml, /Approved local proposal/);
+  assert.doesNotMatch(proposedHtml, /Rejected local proposal/);
+  assert.ok(proposedHtml.includes(M.actionsPanel.filterDescription));
+  assert.doesNotMatch(proposedHtml, /provider call started/i);
+
+  const rejectedHtml = renderPanel({ statusFilter: "rejected" });
+  assert.match(rejectedHtml, /Rejected local proposal/);
+  assert.doesNotMatch(rejectedHtml, /Create follow-up GitHub issue/);
+});
+
+test("filters loaded proposals by local origin on top of status", () => {
+  const proposedHtml = renderPanel({
+    data: groupedList,
+    onOriginFilterChange: () => undefined,
+    statusFilter: "proposed"
+  });
+  assert.ok(proposedHtml.includes(M.actionsPanel.originFilterTitle));
+  assert.ok(proposedHtml.includes(M.actionsPanel.originFilterDescription));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.originFilterAll} · 3`));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.originFilterBriefing} · 1`));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.originFilterGithub} · 1`));
+  assert.ok(proposedHtml.includes(`${M.actionsPanel.originFilterInternal} · 1`));
+  assert.doesNotMatch(proposedHtml, /provider call started/i);
+
+  const briefingHtml = renderPanel({
+    data: groupedList,
+    originFilter: "briefing",
+    statusFilter: "proposed"
+  });
+  assert.ok(briefingHtml.includes(`${M.actionsPanel.groupBriefingTitle} · 1`));
+  assert.match(briefingHtml, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(briefingHtml, /Create follow-up GitHub issue/);
+  assert.doesNotMatch(briefingHtml, /Manual internal follow-up/);
+});
+
+test("groups and badges repo-audit-derived proposals under the audit origin", () => {
+  const auditList: ActionProposalListResponse = {
+    ...sampleList,
+    proposals: [deterministicAuditProposal, auditProposal],
+    count: 2
+  };
+  const auditHtml = renderPanel({
+    data: auditList,
+    originFilter: "audit",
+    statusFilter: "proposed"
+  });
+  assert.ok(auditHtml.includes(`${M.actionsPanel.originFilterAudit} · 2`));
+  assert.ok(auditHtml.includes(`${M.actionsPanel.groupAuditTitle} · 2`));
+  assert.ok(auditHtml.includes(M.actionsPanel.originAuditBadge));
+  assert.ok(auditHtml.includes(M.actionsPanel.originAuditDeterministicBadge));
+  assert.ok(auditHtml.includes(M.actionsPanel.originAuditImportedBadge));
+  assert.ok(auditHtml.includes(M.actionsPanel.auditSourceFilterTitle));
+  assert.ok(auditHtml.includes(`${M.actionsPanel.auditSourceFilterAll} · 2`));
+  assert.ok(
+    auditHtml.includes(`${M.actionsPanel.auditSourceFilterDeterministic} · 1`)
+  );
+  assert.ok(auditHtml.includes(`${M.actionsPanel.auditSourceFilterImported} · 1`));
+  assert.ok(auditHtml.includes("qtwin-io/local-service"));
+  assert.ok(auditHtml.includes("qtwin-io/base-collector"));
+  assert.ok(auditHtml.includes(M.actionsPanel.payloadAuditSource));
+  assert.ok(auditHtml.includes(M.actionsPanel.auditSourceImported));
+  assert.ok(auditHtml.includes("Add CI before private beta."));
+  assert.ok(auditHtml.includes("ci_not_detected, tests_not_detected"));
+  assert.doesNotMatch(auditHtml, /provider call started/i);
+});
+
+test("filters audit-origin proposals by deterministic or imported source locally", () => {
+  const auditList: ActionProposalListResponse = {
+    ...sampleList,
+    proposals: [deterministicAuditProposal, auditProposal, briefingProposal],
+    count: 3
+  };
+  const importedHtml = renderPanel({
+    auditSourceFilter: "imported",
+    data: auditList,
+    onAuditSourceFilterChange: () => undefined,
+    originFilter: "audit",
+    statusFilter: "proposed"
+  });
+
+  assert.ok(importedHtml.includes(`${M.actionsPanel.groupAuditTitle} · 1`));
+  assert.ok(importedHtml.includes("qtwin-io/base-collector"));
+  assert.doesNotMatch(importedHtml, /qtwin-io\/local-service/);
+  assert.doesNotMatch(importedHtml, /Review synced GitHub work/);
+  assert.ok(importedHtml.includes(M.actionsPanel.auditSourceImported));
+
+  const deterministicHtml = renderPanel({
+    auditSourceFilter: "deterministic",
+    data: auditList,
+    originFilter: "audit",
+    statusFilter: "proposed"
+  });
+  assert.ok(deterministicHtml.includes("qtwin-io/local-service"));
+  assert.doesNotMatch(deterministicHtml, /qtwin-io\/base-collector/);
+  assert.ok(deterministicHtml.includes(M.actionsPanel.auditSourceDeterministic));
+  assert.doesNotMatch(deterministicHtml, /provider call started/i);
+});
+
+test("shows empty state for origin and status intersections with no local proposals", () => {
+  const html = renderPanel({
+    data: groupedList,
+    originFilter: "briefing",
+    statusFilter: "rejected"
+  });
+  assert.ok(html.includes(M.actionsPanel.noProposalsForFilter));
+  assert.ok(html.includes(`${M.actionsPanel.originFilterAll} · 1`));
+  assert.ok(html.includes(`${M.actionsPanel.originFilterBriefing} · 0`));
+  assert.doesNotMatch(html, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(html, /Create follow-up GitHub issue/);
+});
+
+test("origin filtering updates grouped evidence default without provider calls", () => {
+  const internalHtml = renderPanel({
+    data: groupedList,
+    originFilter: "internal",
+    statusFilter: "proposed"
+  });
+  assert.ok(internalHtml.includes(`${M.actionsPanel.groupInternalTitle} · 1`));
+  assert.match(internalHtml, /Manual internal follow-up/);
+  assert.match(internalHtml, /manual-note-1/);
+  assert.ok(internalHtml.includes(M.evidence.contextDefault));
+  assert.doesNotMatch(internalHtml, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(internalHtml, /href="https:\/\/github.com\/qtwin-io\/founderos-api/);
+});
+
+test("renders bulk local review controls for visible proposed proposals only", () => {
+  const html = renderPanel({
+    data: groupedList,
+    onBulkApprove: () => undefined,
+    onBulkReject: () => undefined,
+    onClearSelectedProposals: () => undefined,
+    onSelectVisibleProposed: () => undefined,
+    onToggleProposalSelection: () => undefined,
+    statusFilter: "all"
+  });
+  assert.ok(html.includes(M.actionsPanel.bulkTitle));
+  assert.ok(html.includes(M.actionsPanel.bulkDescription));
+  assert.ok(html.includes(M.actionsPanel.bulkSelectVisible));
+  assert.ok(html.includes(M.actionsPanel.bulkApproveSelected));
+  assert.ok(html.includes(M.actionsPanel.bulkRejectSelected));
+  assert.ok(html.includes(T.actionsBulkSelection(0, 3)));
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /external write performed/i);
+  assert.doesNotMatch(html, /created GitHub issue/i);
+});
+
+test("bulk local review controls show selected counts and pending labels", () => {
+  const html = renderPanel({
+    data: groupedList,
+    pendingMutation: "bulk-approve",
+    selectedProposalIds: ["proposal-1", "proposal-4"],
+    statusFilter: "proposed"
+  });
+  assert.ok(html.includes(T.actionsBulkSelection(2, 3)));
+  assert.ok(html.includes(M.actionsPanel.bulkApproving));
+  assert.ok(html.includes(M.actionsPanel.bulkRejectSelected));
+  assert.match(html, /checked=""/);
+});
+
+test("bulk origin/status intersections select only currently visible proposed proposals", () => {
+  const html = renderPanel({
+    data: groupedList,
+    originFilter: "briefing",
+    selectedProposalIds: ["proposal-4"],
+    statusFilter: "proposed"
+  });
+  assert.ok(html.includes(T.actionsBulkSelection(1, 1)));
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 1);
+  assert.match(html, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(html, /Manual internal follow-up/);
+  assert.doesNotMatch(html, /Approved local proposal/);
+});
+
+test("summarizeBulkResponse partitions backend bulk results and keeps first failure", () => {
+  const outcome = summarizeBulkResponse({
+    execution_started: false,
+    failed_count: 1,
+    failures: [
+      {
+        detail: "action proposal is not in proposed status",
+        proposal_id: "proposal-9",
+        status_code: 409
+      }
+    ],
+    is_live: false,
+    proposals: [
+      { ...approvedProposal, id: "proposal-1" },
+      { ...approvedProposal, id: "proposal-4" }
+    ],
+    succeeded_count: 2,
+    warnings: []
+  });
+
+  assert.deepEqual(outcome.succeededIds, ["proposal-1", "proposal-4"]);
+  assert.equal(outcome.succeeded.length, 2);
+  assert.equal(outcome.failed.length, 1);
+  assert.equal(outcome.failed[0]?.id, "proposal-9");
+  assert.equal(outcome.firstFailureMessage, "action proposal is not in proposed status");
+});
+
+test("summarizeBulkResponse reports no failure message when all succeed", () => {
+  const outcome = summarizeBulkResponse({
+    execution_started: false,
+    failed_count: 0,
+    failures: [],
+    is_live: false,
+    proposals: [{ ...approvedProposal, id: "proposal-1" }],
+    succeeded_count: 1,
+    warnings: []
+  });
+  assert.equal(outcome.failed.length, 0);
+  assert.equal(outcome.firstFailureMessage, null);
+  assert.deepEqual(outcome.succeededIds, ["proposal-1"]);
+});
+
+test("renders inline partial bulk failure without hiding the loaded list", () => {
+  const html = renderPanel({
+    data: groupedList,
+    error: T.actionsBulkApprovePartial(2, 1),
+    status: "ready",
+    successMessage: T.actionsBulkApprovePartial(2, 1)
+  });
+  // Inline alert is shown while the list stays visible (status stays "ready").
+  assert.match(html, /role="alert"/);
+  assert.match(html, /Не удалось: 1/);
+  assert.match(html, /Успешные локальные изменения сохранены/);
+  assert.match(html, /Review synced GitHub work before approving actions/);
+  assert.doesNotMatch(html, new RegExp(M.actionsPanel.unavailableTitle));
+  assert.doesNotMatch(html, /external write performed/i);
+});
+
+test("defaults evidence drawer to first visible proposal evidence", () => {
+  const proposedHtml = renderPanel({ statusFilter: "proposed" });
+  assert.ok(proposedHtml.includes(M.evidence.title));
+  assert.ok(proposedHtml.includes(M.evidence.source));
+  assert.match(proposedHtml, /qtwin-io\/founderos-api#issue\/42/);
+  assert.ok(proposedHtml.includes(M.common.openSource));
+  // Default evidence is contextual and not an explicit selection, so no close button.
+  assert.doesNotMatch(proposedHtml, new RegExp(`>${M.common.close}<`));
+
+  const rejectedHtml = renderPanel({ statusFilter: "rejected" });
+  assert.ok(rejectedHtml.includes(M.evidence.placeholder));
+  assert.doesNotMatch(rejectedHtml, /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/);
+});
+
 test("renders create form and pending local mutations", () => {
   const html = renderPanel({
     createForm: {
@@ -388,4 +970,59 @@ test("renders proposal evidence drawer details without raw payload dumps", () =>
   assert.ok(html.includes(M.evidence.noSnippet));
   assert.doesNotMatch(html, /provider_response/);
   assert.doesNotMatch(html, /access_token/);
+});
+
+test("groups proposals by origin with per-group counts", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "all" });
+  assert.ok(html.includes(`${M.actionsPanel.groupBriefingTitle} · 1`));
+  assert.ok(html.includes(`${M.actionsPanel.groupGithubTitle} · 3`));
+  assert.ok(html.includes(`${M.actionsPanel.groupInternalTitle} · 1`));
+  assert.ok(html.includes(M.actionsPanel.groupBriefingDescription));
+  // The briefing-derived proposal gets an explicit origin badge.
+  assert.ok(html.includes(M.actionsPanel.originBriefingBadge));
+  assert.match(html, /Review synced GitHub work before approving actions/);
+});
+
+test("omits empty origin groups for the active filter", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "rejected" });
+  // Only the rejected internal-todo-less github proposal remains, so no briefing group.
+  assert.doesNotMatch(html, new RegExp(`${M.actionsPanel.groupBriefingTitle} ·`));
+  assert.doesNotMatch(html, new RegExp(`${M.actionsPanel.groupInternalTitle} ·`));
+  assert.ok(html.includes(`${M.actionsPanel.groupGithubTitle} · 1`));
+});
+
+test("renders briefing internal_todo payload metadata", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "proposed" });
+  assert.ok(html.includes(M.actionsPanel.payloadBriefingItem));
+  assert.match(html, /repo-coverage/);
+  assert.ok(html.includes(M.actionsPanel.payloadCategory));
+  assert.ok(html.includes(M.actionsPanel.payloadSeverity));
+  assert.ok(html.includes(M.actionsPanel.payloadNextStep));
+  assert.ok(html.includes(M.actionsPanel.payloadRelatedEntities));
+  assert.match(html, /qtwin-io\/founderos-api, qtwin-io\/founderos-web/);
+  // Bridge marker keys should not leak as raw payload dumps.
+  assert.doesNotMatch(html, /"source":\s*"briefing_item"/);
+});
+
+test("evidence drawer shows contextual default hint and evidence count", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "proposed" });
+  assert.ok(html.includes(M.evidence.contextDefault));
+  assert.ok(html.includes(M.evidence.countLabel));
+  // Briefing proposal is first in grouped order and carries two evidence refs.
+  assert.match(html, /qtwin-io\/founderos-api/);
+  assert.doesNotMatch(html, new RegExp(`>${M.common.close}<`));
+});
+
+test("evidence drawer marks manual selection and keeps a close affordance", () => {
+  const manualEvidence = proposedProposal.evidence_refs[0] ?? null;
+  const html = renderPanel({
+    data: groupedList,
+    onCloseEvidence: () => undefined,
+    selectedEvidence: manualEvidence,
+    selectedEvidenceCount: 1,
+    selectedEvidenceTitle: "Create follow-up GitHub issue",
+    statusFilter: "all"
+  });
+  assert.ok(html.includes(M.evidence.contextManual));
+  assert.match(html, new RegExp(`>${M.common.close}<`));
 });

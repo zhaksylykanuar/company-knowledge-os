@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any
 from uuid import UUID
 
@@ -18,13 +19,17 @@ from app.db.action_models import (
     ACTION_EXECUTION_EVENT_CONFIRMATION_RECEIVED_BUT_DISABLED,
     ACTION_EXECUTION_EVENT_PREVIEW_BLOCKED,
     ACTION_EXECUTION_EVENT_PREVIEW_GENERATED,
+    ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
+    ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
     ACTION_EXECUTION_EVENT_STATUS_BLOCKED,
     ACTION_EXECUTION_EVENT_STATUS_RECORDED,
     ACTION_EXECUTION_EVENT_STATUS_UNSUPPORTED,
     ACTION_EXECUTION_EVENT_UNSUPPORTED,
     ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_TARGET_PROVIDER_GITHUB,
+    ACTION_TARGET_PROVIDER_INTERNAL,
     ACTION_TYPE_CREATE_GITHUB_ISSUE,
+    ACTION_TYPE_INTERNAL_TODO,
 )
 from app.db.base import AsyncSessionLocal
 from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN, MEMBERSHIP_ROLE_MEMBER
@@ -81,6 +86,15 @@ ACTION_EXECUTION_PREVIEW_WARNING = (
 ACTION_EXECUTION_NO_EVIDENCE_WARNING = (
     "Proposal has no evidence refs; preview preserves that absence."
 )
+REPO_AUDIT_IMPORT_WARNING = (
+    "Repo-audit import created local ActionProposal rows only; no provider calls, "
+    "external writes, or LLM calls were started."
+)
+REPO_FULL_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+SECRET_TEXT_RE = re.compile(
+    r"\b(token|password|secret|api[_-]?key|private[_-]?key)\s*[:=]\s*[^\s,;]+",
+    re.IGNORECASE,
+)
 
 
 class ActionProposalCreateRequest(BaseModel):
@@ -100,6 +114,35 @@ class ActionProposalRejectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     reason: str | None = Field(default=None, max_length=1000)
+
+
+class ActionProposalBulkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
+class ActionProposalBulkRejectRequest(ActionProposalBulkRequest):
+    reason: str | None = Field(default=None, max_length=1000)
+
+
+class RepoAuditImportFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    repository_full_name: str = Field(default="", max_length=160)
+    title: str | None = Field(default=None, max_length=500)
+    summary: str = Field(default="External audit finding.", max_length=2000)
+    severity: str | None = Field(default=None, max_length=40)
+    risks: list[str] = Field(default_factory=list, max_length=20)
+    evidence_refs: list[str] = Field(default_factory=list, max_length=50)
+    recommended_next_step: str | None = Field(default=None, max_length=1000)
+    area_candidate: str | None = Field(default=None, max_length=80)
+
+
+class RepoAuditImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    findings: list[RepoAuditImportFinding] = Field(min_length=1, max_length=50)
 
 
 class ActionProposalExecuteRequest(BaseModel):
@@ -150,6 +193,39 @@ class ActionProposalListResponse(BaseModel):
 
 class ActionProposalMutationResponse(BaseModel):
     proposal: ActionProposalRead
+    is_live: bool
+    execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ActionProposalBulkFailureRead(BaseModel):
+    proposal_id: UUID
+    status_code: int
+    detail: str
+
+
+class ActionProposalBulkResponse(BaseModel):
+    proposals: list[ActionProposalRead]
+    failures: list[ActionProposalBulkFailureRead]
+    succeeded_count: int
+    failed_count: int
+    is_live: bool
+    execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RepoAuditImportFailureRead(BaseModel):
+    index: int
+    repository_full_name: str | None = None
+    status_code: int
+    detail: str
+
+
+class RepoAuditImportResponse(BaseModel):
+    proposals: list[ActionProposalRead]
+    failures: list[RepoAuditImportFailureRead]
+    succeeded_count: int
+    failed_count: int
     is_live: bool
     execution_started: bool
     warnings: list[str] = Field(default_factory=list)
@@ -363,6 +439,168 @@ async def list_action_proposal_endpoint(
     )
 
 
+@router.post(
+    "/proposals/import-repo-audit",
+    response_model=RepoAuditImportResponse,
+)
+async def import_repo_audit_action_proposals_endpoint(
+    workspace_id: UUID,
+    payload: RepoAuditImportRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_MEMBER)),
+) -> RepoAuditImportResponse:
+    proposals: list[ActionProposalRead] = []
+    failures: list[RepoAuditImportFailureRead] = []
+    async with AsyncSessionLocal() as session:
+        for index, finding in enumerate(payload.findings):
+            try:
+                action_input = _repo_audit_import_action_input(finding)
+                proposal = await create_action_proposal(
+                    session,
+                    workspace_id=workspace_id,
+                    created_by_user_id=access.workspace_membership.user.id,
+                    payload=action_input,
+                )
+                proposals.append(
+                    ActionProposalRead.model_validate(
+                        serialize_action_proposal(proposal)
+                    )
+                )
+            except ActionProposalError as exc:
+                failures.append(
+                    RepoAuditImportFailureRead(
+                        index=index,
+                        repository_full_name=finding.repository_full_name,
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=exc.detail,
+                    )
+                )
+        await session.commit()
+
+    return RepoAuditImportResponse(
+        proposals=proposals,
+        failures=failures,
+        succeeded_count=len(proposals),
+        failed_count=len(failures),
+        is_live=False,
+        execution_started=False,
+        warnings=[REPO_AUDIT_IMPORT_WARNING, ACTION_PROPOSAL_NO_EXECUTION_WARNING],
+    )
+
+
+@router.post(
+    "/proposals/bulk-approve",
+    response_model=ActionProposalBulkResponse,
+)
+async def bulk_approve_action_proposals_endpoint(
+    workspace_id: UUID,
+    payload: ActionProposalBulkRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> ActionProposalBulkResponse:
+    async with AsyncSessionLocal() as session:
+        proposals: list[ActionProposalRead] = []
+        failures: list[ActionProposalBulkFailureRead] = []
+        for proposal_id in _unique_proposal_ids(payload.proposal_ids):
+            try:
+                proposal = await approve_action_proposal(
+                    session,
+                    workspace_id=workspace_id,
+                    proposal_id=proposal_id,
+                    approved_by_user_id=access.workspace_membership.user.id,
+                )
+                await _record_local_review_event(
+                    session,
+                    proposal=proposal,
+                    event_type=ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
+                    decision="approved",
+                    bulk=True,
+                )
+                proposals.append(
+                    ActionProposalRead.model_validate(
+                        serialize_action_proposal(proposal)
+                    )
+                )
+            except ActionProposalNotFoundError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=proposal_id,
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=exc.detail,
+                    )
+                )
+            except ActionProposalTransitionError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=proposal_id,
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=exc.detail,
+                    )
+                )
+        await session.commit()
+
+    warnings = [ACTION_PROPOSAL_NO_EXECUTION_WARNING]
+    if proposals:
+        warnings.insert(0, ACTION_PROPOSAL_APPROVAL_WARNING)
+    return _bulk_response(proposals=proposals, failures=failures, warnings=warnings)
+
+
+@router.post(
+    "/proposals/bulk-reject",
+    response_model=ActionProposalBulkResponse,
+)
+async def bulk_reject_action_proposals_endpoint(
+    workspace_id: UUID,
+    payload: ActionProposalBulkRejectRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> ActionProposalBulkResponse:
+    async with AsyncSessionLocal() as session:
+        proposals: list[ActionProposalRead] = []
+        failures: list[ActionProposalBulkFailureRead] = []
+        for proposal_id in _unique_proposal_ids(payload.proposal_ids):
+            try:
+                proposal = await reject_action_proposal(
+                    session,
+                    workspace_id=workspace_id,
+                    proposal_id=proposal_id,
+                    rejected_by_user_id=access.workspace_membership.user.id,
+                    reason=payload.reason,
+                )
+                await _record_local_review_event(
+                    session,
+                    proposal=proposal,
+                    event_type=ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
+                    decision="rejected",
+                    bulk=True,
+                )
+                proposals.append(
+                    ActionProposalRead.model_validate(
+                        serialize_action_proposal(proposal)
+                    )
+                )
+            except ActionProposalNotFoundError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=proposal_id,
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=exc.detail,
+                    )
+                )
+            except ActionProposalTransitionError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=proposal_id,
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=exc.detail,
+                    )
+                )
+        await session.commit()
+
+    return _bulk_response(
+        proposals=proposals,
+        failures=failures,
+        warnings=[ACTION_PROPOSAL_NO_EXECUTION_WARNING],
+    )
+
+
 @router.get("/proposals/{proposal_id}", response_model=ActionProposalRead)
 async def get_action_proposal_endpoint(
     workspace_id: UUID,
@@ -400,6 +638,13 @@ async def approve_action_proposal_endpoint(
                 workspace_id=workspace_id,
                 proposal_id=proposal_id,
                 approved_by_user_id=access.workspace_membership.user.id,
+            )
+            await _record_local_review_event(
+                session,
+                proposal=proposal,
+                event_type=ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
+                decision="approved",
+                bulk=False,
             )
             await session.commit()
         except ActionProposalNotFoundError as exc:
@@ -441,6 +686,13 @@ async def reject_action_proposal_endpoint(
                 proposal_id=proposal_id,
                 rejected_by_user_id=access.workspace_membership.user.id,
                 reason=payload.reason,
+            )
+            await _record_local_review_event(
+                session,
+                proposal=proposal,
+                event_type=ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
+                decision="rejected",
+                bulk=False,
             )
             await session.commit()
         except ActionProposalNotFoundError as exc:
@@ -761,6 +1013,51 @@ async def _record_execute_block_event(
     )
 
 
+async def _record_local_review_event(
+    session: Any,
+    *,
+    proposal: Any,
+    event_type: str,
+    decision: str,
+    bulk: bool,
+) -> None:
+    decided_at = (
+        proposal.approved_at
+        if decision == "approved"
+        else proposal.rejected_at
+    ) or proposal.updated_at
+    await append_execution_event(
+        session,
+        workspace_id=proposal.workspace_id,
+        action_proposal_id=proposal.id,
+        event_type=event_type,
+        actor="workspace_admin",
+        status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+        message=(
+            f"Action proposal {decision} locally. "
+            "No external write occurred."
+        ),
+        idempotency_key=execution_event_idempotency_key(
+            workspace_id=proposal.workspace_id,
+            action_proposal_id=proposal.id,
+            event_type=event_type,
+            external_execution_enabled=False,
+            confirmation_received=False,
+            reason=f"{decision}:{decided_at}:{'bulk' if bulk else 'single'}",
+        ),
+        provider=proposal.target_provider,
+        action=proposal.action_type,
+        external_execution_enabled=False,
+        confirmation_received=False,
+        event_metadata={
+            "bulk": bulk,
+            "decision": decision,
+            "external_execution_enabled": False,
+            "proposal_status": proposal.status,
+        },
+    )
+
+
 def _execution_preview_response(proposal: Any) -> ActionExecutionPreviewResponse:
     is_external_enabled = bool(settings.enable_write_actions)
     warnings = [ACTION_EXECUTION_PREVIEW_WARNING]
@@ -982,3 +1279,125 @@ def _mutation_response(
         execution_started=False,
         warnings=warnings,
     )
+
+
+def _bulk_response(
+    *,
+    proposals: list[ActionProposalRead],
+    failures: list[ActionProposalBulkFailureRead],
+    warnings: list[str],
+) -> ActionProposalBulkResponse:
+    return ActionProposalBulkResponse(
+        proposals=proposals,
+        failures=failures,
+        succeeded_count=len(proposals),
+        failed_count=len(failures),
+        is_live=False,
+        execution_started=False,
+        warnings=warnings,
+    )
+
+
+def _repo_audit_import_action_input(
+    finding: RepoAuditImportFinding,
+) -> ActionProposalCreateInput:
+    repository_full_name = _redact_import_text(finding.repository_full_name, limit=160)
+    if not REPO_FULL_NAME_RE.fullmatch(repository_full_name):
+        raise ActionProposalError("repository_full_name must be in owner/repo format")
+    evidence_refs = _imported_strings(finding.evidence_refs, limit=500, max_items=50)
+    if not evidence_refs:
+        raise ActionProposalError("repo-audit import finding requires evidence_refs")
+    risks = _imported_strings(finding.risks, limit=120, max_items=20)
+    title = _redact_import_text(
+        finding.title or f"External repo audit follow-up: {repository_full_name}",
+        limit=500,
+    )
+    summary = _redact_import_text(finding.summary, limit=2000)
+    recommended_next_step = _optional_redacted_text(
+        finding.recommended_next_step, limit=1000
+    )
+    area_candidate = _optional_redacted_text(finding.area_candidate, limit=80)
+    severity = _optional_redacted_text(finding.severity, limit=40)
+    return ActionProposalCreateInput(
+        target_provider=ACTION_TARGET_PROVIDER_INTERNAL,
+        action_type=ACTION_TYPE_INTERNAL_TODO,
+        title=title,
+        description=_repo_audit_import_description(
+            repository_full_name=repository_full_name,
+            summary=summary,
+            risks=risks,
+            recommended_next_step=recommended_next_step,
+        ),
+        payload={
+            "source": "repo_audit_import",
+            "repository_full_name": repository_full_name,
+            "severity": severity,
+            "area_candidate": area_candidate,
+            "recommended_next_step": recommended_next_step,
+            "related_entities": risks,
+        },
+        evidence_refs=[
+            {
+                "kind": "repo_audit_external",
+                "source": "external_repo_audit_import",
+                "ref": ref,
+                "url": None,
+            }
+            for ref in evidence_refs
+        ],
+        created_by="user",
+    )
+
+
+def _repo_audit_import_description(
+    *,
+    repository_full_name: str,
+    summary: str,
+    risks: list[str],
+    recommended_next_step: str | None,
+) -> str:
+    parts = [
+        f"Репозиторий: {repository_full_name}",
+        summary,
+    ]
+    if recommended_next_step:
+        parts.append(f"Рекомендуемый следующий шаг: {recommended_next_step}")
+    if risks:
+        parts.append(f"Риски: {', '.join(risks)}")
+    return "\n".join(parts)
+
+
+def _imported_strings(
+    values: list[str],
+    *,
+    limit: int,
+    max_items: int,
+) -> list[str]:
+    result: list[str] = []
+    for value in values[:max_items]:
+        text = _redact_import_text(value, limit=limit)
+        if text:
+            result.append(text)
+    return result
+
+
+def _optional_redacted_text(value: str | None, *, limit: int) -> str | None:
+    if value is None:
+        return None
+    text = _redact_import_text(value, limit=limit)
+    return text or None
+
+
+def _redact_import_text(value: str, *, limit: int) -> str:
+    return SECRET_TEXT_RE.sub(r"\1=[redacted]", value).strip()[:limit]
+
+
+def _unique_proposal_ids(proposal_ids: list[UUID]) -> list[UUID]:
+    seen: set[UUID] = set()
+    unique_ids: list[UUID] = []
+    for proposal_id in proposal_ids:
+        if proposal_id in seen:
+            continue
+        seen.add(proposal_id)
+        unique_ids.append(proposal_id)
+    return unique_ids
