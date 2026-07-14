@@ -27,7 +27,9 @@
   отдельно одобренная настройка GitHub App и один scoped read-only sync.
   Provider reads, external writes и LLM не включались. Старый hosted project не
   удалён: любое stop/domain/database/volume/project removal требует отдельного
-  явного approval после restore-proof.
+  явного approval после restore-proof. Локальный экран входа теперь принимает
+  короткий login identifier без требования email-формата; credential хранится
+  только как Argon2-хеш в локальной БД и не попадает в tracked-файлы.
 - **UX-02 spatial Company World board (DEC-076): ЗАКРЫТ ЛОКАЛЬНО.**
   `/company-brain` теперь ведёт не в набор реестров, а в
   пространственную стратегическую доску: компания находится в центре, команда,

@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Allowed the local sign-in screen to accept a short login identifier instead
+  of enforcing browser email syntax. The authentication API and session model
+  stay unchanged; credentials remain local database state and are never written
+  to tracked files.
 - Made the one-command local runtime the active FounderOS operational path
   (DEC-077). `make local-doctor`, `make local`, `make local-smoke`,
   `make local-backup`, and `make local-stop` now define the founder-facing

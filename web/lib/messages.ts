@@ -72,11 +72,11 @@ export const M = {
   auth: {
     title: "Войдите в компанию",
     subtitle: "Откроем её текущую картину и покажем один следующий ход.",
-    email: "Эл. почта",
+    email: "Логин",
     password: "Пароль",
     signIn: "Войти",
     signingIn: "Выполняется вход…",
-    loginFailedGeneric: "Неверная почта или пароль.",
+    loginFailedGeneric: "Неверный логин или пароль.",
     loginFailedLocked: "Слишком много неудачных попыток. Попробуйте позже.",
     loginFailedUnknown: "Не удалось войти.",
     setupTitle: "Задать пароль",

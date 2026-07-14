@@ -62,8 +62,8 @@ export default function LoginPage() {
               <span>{M.auth.email}</span>
               <input
                 maxLength={320}
-                type="email"
-                name="email"
+                type="text"
+                name="username"
                 autoComplete="username"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
