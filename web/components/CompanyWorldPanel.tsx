@@ -28,6 +28,7 @@ import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
 import { CompanyWorldBoard } from "./CompanyWorldBoard";
+import { MiniHint, MissionStrip } from "./MissionStrip";
 import { SourceLink } from "./SourceLink";
 
 export type CompanyWorldStatus =
@@ -389,6 +390,12 @@ export function CompanyWorldPanelView({
   const [selectionRevision, setSelectionRevision] = useState(0);
   const profileRef = useRef<HTMLElement>(null);
   const effectiveSelectedKey = validSelectedKey(data, selectedKey);
+  const selectedCandidate = Boolean(
+    data && isCompanyWorldCandidateKey(data, effectiveSelectedKey)
+  );
+  const nextCandidateKey = data
+    ? nextCompanyWorldCandidateKey(data, effectiveSelectedKey)
+    : null;
 
   useEffect(() => {
     if (selectionRevision === 0) {
@@ -407,7 +414,11 @@ export function CompanyWorldPanelView({
       <div className="section-header company-world-header">
         <div>
           <span className="eyebrow">{M.companyWorld.eyebrow}</span>
-          <h2 id="company-world-title">{M.companyWorld.title}</h2>
+          <h2 id="company-world-title">
+            {status === "ready" && data && companyWorldCandidateCount(data) > 0
+              ? "Кого нужно разобрать"
+              : "Контур связей"}
+          </h2>
         </div>
         <span className="badge world-badge">{M.companyWorld.badge}</span>
       </div>
@@ -448,7 +459,44 @@ export function CompanyWorldPanelView({
 
       {data && status === "ready" ? (
         <>
-          <p className="muted company-world-intro">{M.companyWorld.intro}</p>
+          <MissionStrip
+            action={
+              selectedCandidate
+                ? data.capabilities.can_resolve
+                  ? "Ответьте на вопрос в профиле"
+                  : "Проверьте профиль и источники"
+                : nextCandidateKey
+                  ? "Выберите пункт «Нужно разобрать»"
+                  : "Выберите профиль на карте"
+            }
+            current={selectedCandidate ? "Открыт кандидат" : "Карта компании открыта"}
+            details={<p>{M.companyWorld.intro}</p>}
+            outcome={
+              selectedCandidate && data.capabilities.can_resolve
+                ? "Сохраните только известные факты"
+                : "Увидите связи и историю"
+            }
+          />
+          <div className="company-world-coach">
+            <div className="company-world-coach-copy">
+              <strong>Нажмите на человека или компанию</strong>
+              <span>Профиль и история откроются справа.</span>
+              <MiniHint label="Как работать с картой?">
+                Пунктиром отмечены кандидаты. Их роль задаёт только человек.
+              </MiniHint>
+            </div>
+            {nextCandidateKey ? (
+              <button
+                aria-controls={COMPANY_WORLD_PROFILE_ID}
+                className="button secondary world-next-candidate"
+                disabled={resolutionState.status === "pending"}
+                onClick={() => selectProfile(nextCandidateKey)}
+                type="button"
+              >
+                Следующий кандидат <span aria-hidden="true">→</span>
+              </button>
+            ) : null}
+          </div>
           <div className="company-world-layout">
             <CompanyWorldBoard
               data={data}
@@ -491,6 +539,45 @@ export function validSelectedKey(
     ...data.touchpoints.map((touchpoint) => touchpoint.key)
   ]);
   return selectedKey && validKeys.has(selectedKey) ? selectedKey : data.company.key;
+}
+
+export function nextCompanyWorldCandidateKey(
+  data: CompanyMapResponse,
+  selectedKey: string | null
+): string | null {
+  const candidateKeys = [
+    ...data.organizations.map((organization) => organization.key),
+    ...data.people.external_candidates.map((person) => person.key)
+  ];
+  if (candidateKeys.length === 0) {
+    return null;
+  }
+
+  const selectedIndex = selectedKey ? candidateKeys.indexOf(selectedKey) : -1;
+  if (selectedIndex < 0) {
+    return candidateKeys[0] ?? null;
+  }
+  if (candidateKeys.length === 1) {
+    return null;
+  }
+  return candidateKeys[(selectedIndex + 1) % candidateKeys.length] ?? null;
+}
+
+function isCompanyWorldCandidateKey(
+  data: CompanyMapResponse,
+  selectedKey: string | null
+): boolean {
+  if (!selectedKey) {
+    return false;
+  }
+  return (
+    data.organizations.some((organization) => organization.key === selectedKey) ||
+    data.people.external_candidates.some((person) => person.key === selectedKey)
+  );
+}
+
+function companyWorldCandidateCount(data: CompanyMapResponse): number {
+  return data.organizations.length + data.people.external_candidates.length;
 }
 
 export function companyWorldCandidateRenderKey(
@@ -1490,8 +1577,8 @@ export function splitCompanyWorldProfileTouchpoints(
   visibleTouchpoints: CompanyMapTouchpoint[];
 } {
   return {
-    visibleTouchpoints: touchpoints.slice(0, 6),
-    remainingTouchpoints: touchpoints.slice(6)
+    visibleTouchpoints: touchpoints.slice(0, 3),
+    remainingTouchpoints: touchpoints.slice(3)
   };
 }
 

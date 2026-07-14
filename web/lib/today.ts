@@ -45,7 +45,11 @@ export function deriveTodayView(facts: TodayFacts): TodayViewModel {
     facts.memberCount,
     facts.proposedDecisionCount,
     facts.sourceRecordCount
-  ].some((value) => value === null) || Boolean(facts.candidateCountIsLowerBound);
+  ].some((value) => value === null) ||
+    Boolean(
+      facts.candidateCountIsLowerBound ||
+        facts.proposedDecisionCountIsLowerBound
+    );
 
   if (!facts.workspaceId) {
     return {

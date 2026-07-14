@@ -17,6 +17,7 @@ import {
   failedCompanyWorldResolutionRefresh,
   finishCompanyWorldResolution,
   isCurrentCompanyWorldResolution,
+  nextCompanyWorldCandidateKey,
   pendingCompanyWorldResolution,
   personOrganizationState,
   relatedCompanyWorldTouchpoints,
@@ -400,6 +401,7 @@ test("renders an evidence-backed company world with provisional candidates", () 
   const html = renderPanel("ready");
 
   assert.ok(html.includes("Northstar Labs"));
+  assert.ok(html.includes("Кого нужно разобрать"));
   assert.ok(html.includes("Анна"));
   assert.ok(html.includes("Buyer Person"));
   assert.ok(html.includes("acme.test"));
@@ -426,6 +428,9 @@ test("renders an evidence-backed company world with provisional candidates", () 
   assert.ok(html.includes(M.companyWorld.discoveryContour));
   assert.ok(html.includes(M.companyWorld.evidenceDisclosure));
   assert.ok(html.includes(M.companyWorld.technicalDisclosure));
+  assert.ok(html.includes('class="mission-strip"'));
+  assert.ok(html.includes('class="company-world-coach"'));
+  assert.ok(html.includes("Следующий кандидат"));
   assert.doesNotMatch(
     html,
     /<aside[^>]*id="company-world-profile"[^>]*aria-live=/
@@ -471,6 +476,28 @@ test("filters profile touchpoints only by exact response keys", () => {
   );
 });
 
+test("offers only explicit unresolved candidates as the next profile", () => {
+  const organizationKey = sampleMap.organizations[0]?.key;
+  const personKey = sampleMap.people.external_candidates[0]?.key;
+  assert.ok(organizationKey);
+  assert.ok(personKey);
+
+  assert.equal(
+    nextCompanyWorldCandidateKey(sampleMap, sampleMap.company.key),
+    organizationKey
+  );
+  assert.equal(nextCompanyWorldCandidateKey(sampleMap, organizationKey), personKey);
+  assert.equal(nextCompanyWorldCandidateKey(sampleMap, personKey), organizationKey);
+  const standaloneMap = mapWithStandalonePerson();
+  assert.equal(
+    nextCompanyWorldCandidateKey(
+      standaloneMap,
+      standaloneMap.people.external_candidates[0]?.key ?? null
+    ),
+    null
+  );
+});
+
 test("keeps the profile timeline compact while preserving the bounded history", () => {
   const sourceTouchpoint = sampleMap.touchpoints[0];
   assert.ok(sourceTouchpoint);
@@ -484,11 +511,11 @@ test("keeps the profile timeline compact while preserving the bounded history", 
   const split = splitCompanyWorldProfileTouchpoints(touchpoints);
   assert.deepEqual(
     split.visibleTouchpoints.map((touchpoint) => touchpoint.key),
-    touchpoints.slice(0, 6).map((touchpoint) => touchpoint.key)
+    touchpoints.slice(0, 3).map((touchpoint) => touchpoint.key)
   );
   assert.deepEqual(
     split.remainingTouchpoints.map((touchpoint) => touchpoint.key),
-    touchpoints.slice(6).map((touchpoint) => touchpoint.key)
+    touchpoints.slice(3).map((touchpoint) => touchpoint.key)
   );
 });
 

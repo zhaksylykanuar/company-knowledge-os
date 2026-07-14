@@ -195,6 +195,22 @@ const executedProposal: ActionProposal = {
   title: "Executed GitHub proposal"
 };
 
+const failedProposal: ActionProposal = {
+  ...approvedProposal,
+  id: "proposal-9",
+  execution_started: true,
+  status: "failed",
+  title: "Failed GitHub proposal"
+};
+
+const approvedInternalProposal: ActionProposal = {
+  ...manualInternalProposal,
+  approved_at: "2026-07-14T10:00:00Z",
+  id: "proposal-10",
+  status: "approved",
+  title: "Approved internal follow-up"
+};
+
 const sampleList: ActionProposalListResponse = {
   count: 3,
   is_live: false,
@@ -336,7 +352,8 @@ test("keeps viewer actions read-only while preserving proposal evidence", () => 
     canReviewProposals: false
   });
 
-  assert.ok(html.includes("режим просмотра"));
+  assert.ok(html.includes("Только просмотр"));
+  assert.ok(html.includes("Что доступно в режиме просмотра?"));
   assert.ok(html.includes(proposedProposal.title));
   assert.ok(html.includes(proposedProposal.evidence_refs[0]!.ref));
   assert.doesNotMatch(html, /proposal-form/);
@@ -616,16 +633,20 @@ test("renders proposal cards, statuses, evidence refs, and local-only boundary",
     onReject: () => undefined,
     onSelectEvidence: () => undefined
   });
-  assert.ok(html.includes(M.actionsPanel.title));
-  assert.ok(html.includes(M.actionsPanel.intro));
+  assert.ok(html.includes("Очередь решений"));
+  assert.ok(html.includes("1 решение ждёт проверки"));
   assert.match(html, /Внешнее выполнение: отключено в этом интерфейсе/);
   assert.match(html, /Create follow-up GitHub issue/);
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /Follow up on FounderOS signal/);
   assert.ok(html.includes(M.actionsPanel.approve));
   assert.ok(html.includes(M.actionsPanel.reject));
-  assert.ok(html.includes(M.actionsPanel.actionsApprovedNote));
-  assert.ok(html.includes(M.actionsPanel.actionsRejectedNote));
+  assert.ok(html.includes("Ждёт решения"));
+  assert.ok(html.includes("Принято"));
+  assert.ok(html.includes("Отклонено"));
+  assert.ok(html.includes("Детали и история"));
+  assert.match(html, /decision-room-evidence/);
+  assert.ok(html.includes("Доказательства"));
   assert.match(html, /Источник: qtwin-io\/founderos-api#issue\/42/);
   assert.ok(html.includes(M.actionsPanel.noEvidenceRefs));
   assert.doesNotMatch(html, /sent to GitHub/i);
@@ -790,6 +811,9 @@ test("shows empty state for origin and status intersections with no local propos
     statusFilter: "rejected"
   });
   assert.ok(html.includes(M.actionsPanel.noProposalsForFilter));
+  assert.ok(html.includes("В выбранном фильтре решений нет"));
+  assert.ok(html.includes("Открыть «Фильтры очереди»"));
+  assert.doesNotMatch(html, /Очередь решений пуста/);
   assert.ok(html.includes(`${M.actionsPanel.originFilterAll} · 1`));
   assert.ok(html.includes(`${M.actionsPanel.originFilterBriefing} · 0`));
   assert.doesNotMatch(html, /Review synced GitHub work before approving actions/);
@@ -820,12 +844,11 @@ test("renders bulk local review controls for visible proposed proposals only", (
     onToggleProposalSelection: () => undefined,
     statusFilter: "all"
   });
-  assert.ok(html.includes(M.actionsPanel.bulkTitle));
-  assert.ok(html.includes(M.actionsPanel.bulkDescription));
+  assert.doesNotMatch(html, /decision-room-bulk-bar/);
   assert.ok(html.includes(M.actionsPanel.bulkSelectVisible));
-  assert.ok(html.includes(M.actionsPanel.bulkApproveSelected));
-  assert.ok(html.includes(M.actionsPanel.bulkRejectSelected));
-  assert.ok(html.includes(T.actionsBulkSelection(0, 3)));
+  assert.doesNotMatch(html, new RegExp(M.actionsPanel.bulkApproveSelected));
+  assert.doesNotMatch(html, new RegExp(M.actionsPanel.bulkRejectSelected));
+  assert.doesNotMatch(html, new RegExp(T.actionsBulkSelection(0, 3)));
   assert.equal((html.match(/type="checkbox"/g) ?? []).length, 3);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /created GitHub issue/i);
@@ -839,6 +862,7 @@ test("bulk local review controls show selected counts and pending labels", () =>
     statusFilter: "proposed"
   });
   assert.ok(html.includes(T.actionsBulkSelection(2, 3)));
+  assert.match(html, /decision-room-bulk-bar/);
   assert.ok(html.includes(M.actionsPanel.bulkApproving));
   assert.ok(html.includes(M.actionsPanel.bulkRejectSelected));
   assert.match(html, /checked=""/);
@@ -940,9 +964,86 @@ test("renders create form and pending local mutations", () => {
     pendingMutation: "create"
   });
   assert.ok(html.includes(M.actionCreate.typeLabel));
+  assert.ok(html.includes("Предложить новое действие"));
   assert.ok(html.includes(M.actionCreate.typeGithubIssue));
   assert.ok(html.includes(M.actionCreate.submitting));
   assert.ok(html.includes(M.actionCreate.note));
+});
+
+test("puts the decision queue before creation and advanced readiness", () => {
+  const html = renderPanel({ data: groupedList, statusFilter: "proposed" });
+  const queueIndex = html.indexOf("proposal-groups");
+  const createIndex = html.indexOf("decision-room-create");
+  const readinessIndex = html.indexOf("decision-room-readiness");
+
+  assert.ok(queueIndex >= 0);
+  assert.ok(createIndex > queueIndex);
+  assert.ok(readinessIndex > createIndex);
+  assert.match(html, /<details class="decision-room-disclosure decision-room-filters">/);
+  assert.match(html, /<details class="decision-room-disclosure decision-room-create">/);
+  assert.match(html, /<details class="decision-room-disclosure decision-room-readiness">/);
+});
+
+test("keeps visible proposal status labels in Russian", () => {
+  const html = renderPanel({ statusFilter: "all" });
+
+  assert.match(
+    html,
+    /decision-room-status--pending[^>]*>Ждёт решения<\/span>/
+  );
+  assert.match(
+    html,
+    /decision-room-status--approved[^>]*>Принято<\/span>/
+  );
+  assert.match(
+    html,
+    /decision-room-status--rejected[^>]*>Отклонено<\/span>/
+  );
+  assert.doesNotMatch(html, /<span class="badge">proposed<\/span>/);
+  assert.doesNotMatch(html, /<dd>approved<\/dd>/);
+  assert.doesNotMatch(html, /<dd>rejected<\/dd>/);
+});
+
+test("guides an approved filter to the visible preview step", () => {
+  const html = renderPanel({ statusFilter: "approved" });
+
+  assert.ok(html.includes("1 принятое решение готово к следующему шагу"));
+  assert.ok(html.includes("Подготовить предпросмотр"));
+  assert.match(html, /decision-room-next-step/);
+  assert.ok(html.indexOf("decision-room-next-step") < html.indexOf("Детали и история"));
+  assert.doesNotMatch(html, /решение ждёт проверки/);
+});
+
+test("keeps an approved internal todo local instead of promoting external preview", () => {
+  const html = renderPanel({
+    data: {
+      count: 1,
+      is_live: false,
+      proposals: [approvedInternalProposal],
+      warnings: []
+    },
+    statusFilter: "approved"
+  });
+
+  assert.ok(html.includes("1 решение принято"));
+  assert.match(html, /decision-room-next-step--local/);
+  assert.ok(html.includes("Это действие остаётся внутри FounderOS"));
+});
+
+test("renders a failed execution as an explicit attention state", () => {
+  const html = renderPanel({
+    data: {
+      count: 1,
+      is_live: false,
+      proposals: [failedProposal],
+      warnings: []
+    },
+    statusFilter: "all"
+  });
+
+  assert.ok(html.includes("1 выполнение требует внимания"));
+  assert.match(html, /decision-room-status--failed[^>]*>Ошибка выполнения/);
+  assert.doesNotMatch(html, /Неизвестный статус/);
 });
 
 test("renders success message after local approval or rejection", () => {

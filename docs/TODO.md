@@ -43,6 +43,15 @@ Implemented foundations:
   cannot confirm/mutate; cross-workspace access is rejected. Confirmation is a
   local canonical write with source provenance; no provider call, external
   write, raw-source mutation, or LLM path was added.
+- Post-auth Command Mode is in place (DEC-078): all five primary zones lead
+  with one current mission, the next useful control, and its expected result.
+  Secondary forms, filters, readiness diagnostics, evidence, and technical
+  boundaries remain accessible through progressive disclosure. Source and
+  decision guidance is role-aware and distinguishes failed/attention states
+  without inventing progress. This is a frontend-only interaction change; API,
+  persistence, RBAC, provider/write, and LLM contracts are unchanged. Static
+  frontend acceptance is green; exact desktop/mobile visual acceptance remains
+  pending because the in-app browser currently fails before navigation.
 - The UX-02 spatial Company World board is in place (DEC-076): the founder's
   company is the visual center, while team, confirmed network, and discovery
   candidates occupy distinct contours. A confirmed person is placed under an
@@ -296,7 +305,13 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **First founder-approved GitHub App read.**
+1. **Complete UX-03 authenticated visual acceptance.**
+   Repeat the exact-tree desktop and mobile pass when browser tooling is
+   available: all five zones, profile menu, disclosures, keyboard focus,
+   overflow, and console state. The earlier LOCAL-01 browser result predates
+   UX-03 and is not acceptance evidence for this tree.
+
+2. **First founder-approved GitHub App read.**
    The local product, polling-only backend path, explicit per-repository UI
    control, offline preflight and provider fail-closed guard are ready. Current
    external blockers are honest: GitHub App env is unset and no installation
@@ -305,7 +320,7 @@ Implemented foundations:
    the installation connection, then approve one explicit scoped read-only sync.
    This does not authorize a provider write, bulk sync, LLM run or hosted change.
 
-2. **Action review polish (local approval only).**
+3. **Action review polish (local approval only).**
    Briefing items can now create local `internal_todo` proposals with evidence.
    Local status filters and structured execution audit timeline are in place.
    Evidence drawer defaults, origin grouping (briefing/GitHub/internal) with an
@@ -323,7 +338,7 @@ Implemented foundations:
   after the first scoped provider-read evidence; provider writes and AI generation
   remain separately approved gates.
 
-3. **Founder-facing briefing polish.**
+4. **Founder-facing briefing polish.**
    Deterministic briefing cards, source coverage signals, item category filter,
    default evidence drawer, richer history comparison, and briefing-to-local-
    action bridge are in place. Briefing/action cross-links are now in place:
@@ -352,7 +367,7 @@ Implemented foundations:
   after the first scoped provider-read evidence; provider writes and AI generation
   remain separately approved gates.
 
-4. **Multi-user / teammate provisioning.**
+5. **Multi-user / teammate provisioning.**
   Local teammate membership foundation is in place (DEC-055):
   owners/admins can list workspace members and create local `admin`/`member`/
   `viewer` memberships without sending email, calling an identity provider, or

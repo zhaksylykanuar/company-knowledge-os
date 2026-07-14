@@ -2227,6 +2227,47 @@ The next gate is a separately approved, repository-scoped GitHub App read-only
 sync; no provider read/write, LLM execution, or hosted deletion was authorized
 by this acceptance.
 
+## DEC-078 - Post-Auth Product Uses Command Mode, Not An Admin Console
+
+Decision (2026-07-14): the five authenticated product zones use one
+mission-first interaction grammar. Each primary view answers three questions
+before showing secondary controls: «Сейчас», «Нажмите», «Результат». The next
+useful action and its expected outcome appear before catalogs, creation forms,
+filters, readiness matrices, and technical diagnostics.
+
+Product rules:
+
+- `/dashboard` leads with one current move and compact signals.
+- `/company-brain` teaches the first click and points to the next unresolved
+  candidate without changing the evidence-backed Company World projection.
+- `/actions` leads with the decision queue and the next available review or
+  preview step. Creation, readiness, filters, evidence, and bulk/technical
+  tooling remain available through progressive disclosure; bulk actions become
+  prominent only after selection.
+- `/connectors` recommends the next useful source and explains the product
+  result before showing registry and capability details. Connected, inactive
+  existing connections, and role-limited setup remain visually distinct.
+- `/settings` leads with the team and human-readable roles. Member creation and
+  account/security operations stay contextual instead of dominating the page.
+- Small contextual hints explain what a control does and what the founder gets
+  after using it. Required actions must never be hidden only inside a technical
+  disclosure.
+- Technical boundaries, provenance, and evidence remain inspectable. The UI
+  must not invent progress, relationships, provider connectivity, or completed
+  execution.
+
+Consequences:
+
+- Future founder-facing screens should follow the same mission-first,
+  progressive-disclosure pattern unless a later decision explicitly changes it.
+- The product may feel game-like through focus, clear next moves, and visible
+  outcomes, but it must not use fictional stages, points, or inferred company
+  facts.
+- UX-03 is frontend-only. Existing routes, backend APIs, persisted state, RBAC,
+  evidence contracts, provider-read gates, external-write approval, and LLM
+  boundaries remain unchanged. No migration, provider call, external write, or
+  LLM path is added.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

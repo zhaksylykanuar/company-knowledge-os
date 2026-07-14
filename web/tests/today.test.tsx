@@ -127,8 +127,12 @@ test("Today renders one main move and exactly three secondary signals", () => {
   assert.ok(html.includes(M.today.title));
   assert.ok(html.includes("Acme"));
   assert.ok(html.includes(M.today.moves.reviewDecisionsTitle));
+  assert.ok(html.includes("Открыть решения"));
   assert.equal((html.match(/class="today-primary-action"/g) ?? []).length, 1);
   assert.equal((html.match(/class="today-signal today-signal--/g) ?? []).length, 3);
+  assert.ok(html.includes('class="mission-strip"'));
+  assert.equal((html.match(/class="mini-hint"/g) ?? []).length, 4);
+  assert.doesNotMatch(html, /class="company-cycle"/);
   assert.ok(html.includes(M.today.sourceBoundary));
 });
 
@@ -140,6 +144,17 @@ test("Today marks a capped decision count as a lower bound", () => {
   });
 
   assert.equal(view.signals[1].value, "≥50");
+  assert.equal(view.isPartial, true);
+
+  const html = renderToStaticMarkup(<TodayBoardView facts={{
+    ...readyFacts,
+    proposedDecisionCount: 50,
+    proposedDecisionCountIsLowerBound: true
+  }} />);
+  assert.ok(html.includes(M.today.picturePartial));
+  assert.ok(html.includes("Картина неполная"));
+  assert.doesNotMatch(html, /Проверяем сигналы/);
+  assert.doesNotMatch(html, new RegExp(M.today.pictureComplete));
 });
 
 test("Today treats a truncated Company Map window as partial", () => {

@@ -25,6 +25,7 @@ import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { EvidenceDrawer } from "./EvidenceDrawer";
 import { LoadingState } from "./LoadingState";
+import { MiniHint, MissionStrip } from "./MissionStrip";
 import { StatusCard } from "./StatusCard";
 
 type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupported";
@@ -540,45 +541,41 @@ export function ActionProposalsPanelView({
       : "default"
     : null;
   const canCreate = canSubmitCreateForm(createForm);
+  const mission = decisionRoomMission(
+    filteredProposals,
+    proposals.length,
+    canCreateProposals,
+    canReviewProposals
+  );
 
   return (
     <section className="panel action-proposals" aria-labelledby="action-proposals-title">
-      <div className="section-header">
+      <div className="section-header decision-room-header">
         <div>
           <span className="eyebrow">{M.actionsPanel.eyebrow}</span>
-          <h2 id="action-proposals-title">{M.actionsPanel.title}</h2>
+          <h2 id="action-proposals-title">Очередь решений</h2>
         </div>
         <span className="badge">{M.actionsPanel.badgeLocalApproval}</span>
       </div>
 
-      <p className="muted">{M.actionsPanel.intro}</p>
-
-      <section className="callout" aria-label={M.actionsPanel.capabilityTitle}>
-        <strong>{M.actionsPanel.capabilityTitle}</strong>
-        <p>{T.actionsCapability()}</p>
-      </section>
-
-      {canCreateProposals ? (
-        <ActionProposalCreateForm
-          form={createForm}
-          isPending={pendingMutation === "create"}
-          onChange={onCreateFormChange}
-          onSubmit={onCreate}
-          submitDisabled={!canCreate}
+      {data && status !== "error" && status !== "loading" && status !== "missing" ? (
+        <MissionStrip
+          action={mission.action}
+          current={mission.current}
+          outcome={mission.outcome}
+          details={
+            <>
+              <p>{T.actionsCapability()}</p>
+              <p>Внешнее действие не начнётся без отдельного подтверждения.</p>
+            </>
+          }
         />
-      ) : (
-        <p className="muted">
-          У вас режим просмотра: можно изучать предложения и доказательства,
-          но нельзя создавать, принимать, отклонять или выполнять решения.
-        </p>
-      )}
-
-      {canCreateProposals && !canReviewProposals ? (
-        <p className="muted">
-          Вы можете создавать локальные предложения. Принимать, отклонять и
-          выполнять их может владелец или администратор компании.
-        </p>
       ) : null}
+
+      <DecisionRoomAccessHint
+        canCreateProposals={canCreateProposals}
+        canReviewProposals={canReviewProposals}
+      />
 
       {successMessage ? <p className="success-text">{successMessage}</p> : null}
 
@@ -625,54 +622,48 @@ export function ActionProposalsPanelView({
 
       {data && status !== "loading" && status !== "missing" && status !== "error" ? (
         <>
-          <section className="grid" aria-label={M.actionsPanel.summaryLabel}>
-            <StatusCard
-              description={M.actionsPanel.proposedDescription}
-              title={M.actionsPanel.proposedTitle}
-              value={String(countByStatus(proposals, "proposed"))}
-            />
-            <StatusCard
-              description={M.actionsPanel.approvedDescription}
-              title={M.actionsPanel.approvedTitle}
-              value={String(countByStatus(proposals, "approved"))}
-            />
-            <StatusCard
-              description={M.actionsPanel.rejectedDescription}
-              title={M.actionsPanel.rejectedTitle}
-              value={String(countByStatus(proposals, "rejected"))}
-            />
-            <StatusCard
-              description={M.actionsPanel.totalDescription}
-              title={M.actionsPanel.totalTitle}
-              value={String(data.count)}
-            />
-          </section>
+          <DecisionRoomSummary proposals={proposals} />
 
-          {canReviewProposals ? (
-            <ActionReviewReadinessPanel proposals={proposals} />
-          ) : null}
+          <details className="decision-room-disclosure decision-room-filters">
+            <summary>
+              <span>Фильтры очереди</span>
+              <small>{decisionRoomFilterSummary(statusFilter, originFilter)}</small>
+            </summary>
+            <div className="decision-room-disclosure-body">
+              <ActionStatusFilter
+                activeFilter={statusFilter}
+                onChange={onStatusFilterChange}
+                proposals={proposals}
+              />
 
-          <ActionStatusFilter
-            activeFilter={statusFilter}
-            onChange={onStatusFilterChange}
-            proposals={proposals}
-          />
+              <ActionOriginFilter
+                activeFilter={originFilter}
+                onChange={onOriginFilterChange}
+                proposals={statusFilteredProposals}
+              />
 
-          <ActionOriginFilter
-            activeFilter={originFilter}
-            onChange={onOriginFilterChange}
-            proposals={statusFilteredProposals}
-          />
+              {originFilter === "audit" ? (
+                <ActionAuditSourceFilter
+                  activeFilter={auditSourceFilter}
+                  onChange={onAuditSourceFilterChange}
+                  proposals={statusFilteredProposals}
+                />
+              ) : null}
 
-          {originFilter === "audit" ? (
-            <ActionAuditSourceFilter
-              activeFilter={auditSourceFilter}
-              onChange={onAuditSourceFilterChange}
-              proposals={statusFilteredProposals}
-            />
-          ) : null}
+              {canReviewProposals && selectedProposedCount === 0 ? (
+                <button
+                  className="button secondary decision-room-select-visible"
+                  disabled={visibleProposedCount === 0}
+                  onClick={onSelectVisibleProposed}
+                  type="button"
+                >
+                  {M.actionsPanel.bulkSelectVisible}
+                </button>
+              ) : null}
+            </div>
+          </details>
 
-          {canReviewProposals ? (
+          {canReviewProposals && selectedProposedCount > 0 ? (
             <BulkReviewControls
               onApproveSelected={onBulkApprove}
               onClearSelection={onClearSelectedProposals}
@@ -707,17 +698,262 @@ export function ActionProposalsPanelView({
             />
           </section>
 
+          {canCreateProposals ? (
+            <details className="decision-room-disclosure decision-room-create">
+              <summary>
+                <span>Предложить новое действие</span>
+                <small>Сохранится локально и ничего не выполнит само</small>
+              </summary>
+              <div className="decision-room-disclosure-body">
+                <ActionProposalCreateForm
+                  form={createForm}
+                  isPending={pendingMutation === "create"}
+                  onChange={onCreateFormChange}
+                  onSubmit={onCreate}
+                  submitDisabled={!canCreate}
+                />
+              </div>
+            </details>
+          ) : null}
+
+          {canReviewProposals ? (
+            <details className="decision-room-disclosure decision-room-readiness">
+              <summary>
+                <span>Готовность и контроль</span>
+                <small>Предпросмотр, доказательства и результаты</small>
+              </summary>
+              <div className="decision-room-disclosure-body">
+                <ActionReviewReadinessPanel proposals={proposals} />
+              </div>
+            </details>
+          ) : null}
+
           {data.warnings.length > 0 ? (
-            <ul className="meta-list" aria-label={M.common.warnings}>
-              {data.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
+            <details className="decision-room-disclosure decision-room-warnings">
+              <summary>
+                <span>{M.common.warnings}</span>
+                <small>{data.warnings.length}</small>
+              </summary>
+              <ul className="meta-list" aria-label={M.common.warnings}>
+                {data.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </details>
           ) : null}
         </>
       ) : null}
     </section>
   );
+}
+
+function DecisionRoomAccessHint({
+  canCreateProposals,
+  canReviewProposals
+}: {
+  canCreateProposals: boolean;
+  canReviewProposals: boolean;
+}) {
+  if (canReviewProposals) {
+    return null;
+  }
+  if (canCreateProposals) {
+    return (
+      <div className="decision-room-access-hint">
+        <span className="badge">Создание доступно</span>
+        <MiniHint label="Кто может принимать решения?">
+          <p>
+            Вы можете создавать локальные предложения. Принимать, отклонять и
+            выполнять их может владелец или администратор компании.
+          </p>
+        </MiniHint>
+      </div>
+    );
+  }
+  return (
+    <div className="decision-room-access-hint">
+      <span className="badge">Только просмотр</span>
+      <MiniHint label="Что доступно в режиме просмотра?">
+        <p>
+          Можно изучать предложения и доказательства, но нельзя создавать,
+          принимать, отклонять или выполнять решения.
+        </p>
+      </MiniHint>
+    </div>
+  );
+}
+
+function DecisionRoomSummary({ proposals }: { proposals: ActionProposal[] }) {
+  return (
+    <dl className="decision-room-summary" aria-label={M.actionsPanel.summaryLabel}>
+      <div className="decision-room-summary-item decision-room-summary-item--pending">
+        <dt>Ждут решения</dt>
+        <dd>{countByStatus(proposals, "proposed")}</dd>
+      </div>
+      <div className="decision-room-summary-item">
+        <dt>Приняты</dt>
+        <dd>{countAcceptedProposals(proposals)}</dd>
+      </div>
+      <div className="decision-room-summary-item">
+        <dt>Отклонены</dt>
+        <dd>{countByStatus(proposals, "rejected")}</dd>
+      </div>
+    </dl>
+  );
+}
+
+function decisionRoomFilterSummary(
+  statusFilter: ProposalStatusFilter,
+  originFilter: ProposalOriginFilter
+): string {
+  return `${filterLabel(statusFilter)} · ${originFilterLabel(originFilter)}`;
+}
+
+function decisionRoomMission(
+  visibleProposals: ActionProposal[],
+  totalProposalCount: number,
+  canCreateProposals: boolean,
+  canReviewProposals: boolean
+): { action: string; current: string; outcome: string } {
+  const pendingDecisionCount = countByStatus(visibleProposals, "proposed");
+  const approvedCount = countByStatus(visibleProposals, "approved");
+  const failedCount = countByStatus(visibleProposals, "failed");
+  const executedCount = countByStatus(visibleProposals, "executed");
+  const previewReadyCount = visibleProposals.filter(
+    isPreviewReadyGithubIssueProposal
+  ).length;
+
+  if (failedCount > 0) {
+    return {
+      action: "Открыть «Детали и историю»",
+      current: executionAttentionLabel(failedCount),
+      outcome: "Увидите причину и сохранённую квитанцию"
+    };
+  }
+  if (pendingDecisionCount > 0) {
+    if (canReviewProposals) {
+      return {
+        action: "«Принять» или «Отклонить»",
+        current: pendingDecisionLabel(pendingDecisionCount),
+        outcome: "Решение сохранится локально"
+      };
+    }
+    return {
+      action: "Открыть доказательства",
+      current: pendingDecisionLabel(pendingDecisionCount),
+      outcome: "Вы увидите основание решения"
+    };
+  }
+  if (previewReadyCount > 0 && canReviewProposals) {
+    return {
+      action: "«Подготовить предпросмотр» в принятом решении",
+      current: acceptedDecisionLabel(previewReadyCount),
+      outcome: "Увидите точный запрос без отправки"
+    };
+  }
+  if (approvedCount > 0) {
+    return {
+      action: "Проверить основание и следующий шаг",
+      current: acceptedDecisionStatusLabel(approvedCount),
+      outcome: "Увидите, что доступно после принятия"
+    };
+  }
+  if (executedCount > 0) {
+    return {
+      action: "Открыть «Детали и историю»",
+      current: savedResultLabel(executedCount),
+      outcome: "Проверите итог и историю выполнения"
+    };
+  }
+  if (visibleProposals.length > 0) {
+    return {
+      action: "Открыть доказательства или историю",
+      current: `${visibleProposals.length} ${visibleProposals.length === 1 ? "решение в выбранном разделе" : "решения в выбранном разделе"}`,
+      outcome: "Увидите основание и сохранённый статус"
+    };
+  }
+  if (totalProposalCount > 0) {
+    return {
+      action: "Открыть «Фильтры очереди»",
+      current: "В выбранном фильтре решений нет",
+      outcome: "Вернёте нужные решения в очередь"
+    };
+  }
+  if (canCreateProposals) {
+    return {
+      action: "«Предложить новое действие»",
+      current: "Очередь решений пуста",
+      outcome: "Предложение появится в очереди"
+    };
+  }
+  return {
+    action: "Выбрать другой раздел",
+    current: "В выбранном разделе решений нет",
+    outcome: "Вы продолжите работу с компанией"
+  };
+}
+
+function acceptedDecisionLabel(count: number): string {
+  const lastTwoDigits = count % 100;
+  const lastDigit = count % 10;
+  if (lastTwoDigits < 11 || lastTwoDigits > 14) {
+    if (lastDigit === 1) {
+      return `${count} принятое решение готово к следующему шагу`;
+    }
+    if (lastDigit >= 2 && lastDigit <= 4) {
+      return `${count} принятых решения готовы к следующему шагу`;
+    }
+  }
+  return `${count} принятых решений готовы к следующему шагу`;
+}
+
+function acceptedDecisionStatusLabel(count: number): string {
+  const lastTwoDigits = count % 100;
+  const lastDigit = count % 10;
+  if ((lastTwoDigits < 11 || lastTwoDigits > 14) && lastDigit === 1) {
+    return `${count} решение принято`;
+  }
+  if (
+    (lastTwoDigits < 11 || lastTwoDigits > 14) &&
+    lastDigit >= 2 &&
+    lastDigit <= 4
+  ) {
+    return `${count} решения приняты`;
+  }
+  return `${count} решений приняты`;
+}
+
+function executionAttentionLabel(count: number): string {
+  return count % 10 === 1 && count % 100 !== 11
+    ? `${count} выполнение требует внимания`
+    : `${count} выполнений требуют внимания`;
+}
+
+function savedResultLabel(count: number): string {
+  return count % 10 === 1 && count % 100 !== 11
+    ? `${count} результат сохранён`
+    : `${count} результатов сохранены`;
+}
+
+function countAcceptedProposals(proposals: ActionProposal[]): number {
+  return proposals.filter((proposal) =>
+    ["approved", "executed", "failed"].includes(proposal.status)
+  ).length;
+}
+
+function pendingDecisionLabel(count: number): string {
+  const lastTwoDigits = count % 100;
+  const lastDigit = count % 10;
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+    return `${count} решений ждут проверки`;
+  }
+  if (lastDigit === 1) {
+    return `${count} решение ждёт проверки`;
+  }
+  if (lastDigit >= 2 && lastDigit <= 4) {
+    return `${count} решения ждут проверки`;
+  }
+  return `${count} решений ждут проверки`;
 }
 
 function ActionReviewReadinessPanel({ proposals }: { proposals: ActionProposal[] }) {
@@ -1004,15 +1240,16 @@ function BulkReviewControls({
   visibleProposedCount: number;
 }) {
   const bulkPending = isBulkMutationPending(pendingMutation);
-  const hasSelection = selectedCount > 0;
   return (
-    <section className="work-section" aria-label={M.actionsPanel.bulkLabel}>
-      <h3>{M.actionsPanel.bulkTitle}</h3>
-      <p className="muted">{M.actionsPanel.bulkDescription}</p>
-      <p className="muted">
+    <section
+      className="decision-room-bulk-bar"
+      aria-label={M.actionsPanel.bulkLabel}
+      aria-live="polite"
+    >
+      <strong>
         {T.actionsBulkSelection(selectedCount, visibleProposedCount)}
-      </p>
-      <div className="actions-row">
+      </strong>
+      <div className="actions-row decision-room-bulk-actions">
         <button
           className="button secondary"
           disabled={bulkPending || visibleProposedCount === 0}
@@ -1023,7 +1260,7 @@ function BulkReviewControls({
         </button>
         <button
           className="button secondary"
-          disabled={bulkPending || !hasSelection}
+          disabled={bulkPending}
           onClick={onClearSelection}
           type="button"
         >
@@ -1031,7 +1268,7 @@ function BulkReviewControls({
         </button>
         <button
           className="button"
-          disabled={bulkPending || !hasSelection}
+          disabled={bulkPending}
           onClick={onApproveSelected}
           type="button"
         >
@@ -1041,7 +1278,7 @@ function BulkReviewControls({
         </button>
         <button
           className="button secondary"
-          disabled={bulkPending || !hasSelection}
+          disabled={bulkPending}
           onClick={onRejectSelected}
           type="button"
         >
@@ -1104,11 +1341,13 @@ function ProposalList({
               <h4>
                 {group.title} · {group.proposals.length}
               </h4>
-              <p className="muted">{group.description}</p>
+              <MiniHint label={`Что входит в раздел «${group.title}»?`}>
+                <p>{group.description}</p>
+              </MiniHint>
             </div>
             <div className="work-list">
               {group.proposals.map((proposal) => (
-                <article className="work-item" key={proposal.id}>
+                <article className="work-item decision-room-card" key={proposal.id}>
                   <div className="work-item-main">
                     {canReviewProposals ? (
                       <ProposalSelectionControl
@@ -1118,7 +1357,11 @@ function ProposalList({
                         proposal={proposal}
                       />
                     ) : null}
-                    <span className="badge">{proposal.status}</span>
+                    <span
+                      className={`badge decision-room-status decision-room-status--${proposalStatusTone(proposal.status)}`}
+                    >
+                      {proposalStatusLabel(proposal.status)}
+                    </span>
                     {group.origin === "audit" ? (
                       <>
                         <span className="badge badge-origin">
@@ -1137,58 +1380,75 @@ function ProposalList({
                     <h4>{proposal.title}</h4>
                   </div>
                   {proposal.description ? (
-                    <p className="muted">{proposal.description}</p>
+                    <p className="muted decision-room-card-description">
+                      {proposal.description}
+                    </p>
                   ) : null}
-                  <dl className="work-meta">
-                    <div>
-                      <dt>{M.actionsPanel.metaTarget}</dt>
-                      <dd>{proposal.target_provider}</dd>
-                    </div>
-                    <div>
-                      <dt>{M.actionsPanel.metaAction}</dt>
-                      <dd>{actionLabel(proposal.action_type)}</dd>
-                    </div>
-                    <div>
-                      <dt>{M.actionsPanel.metaStatus}</dt>
-                      <dd>{proposal.status}</dd>
-                    </div>
-                    <div>
-                      <dt>{M.actionsPanel.metaExecution}</dt>
-                      <dd>
-                        {proposal.execution_started
-                          ? M.actionsPanel.executionReported
-                          : M.actionsPanel.executionNotExecuted}
-                      </dd>
-                    </div>
-                  </dl>
-                  <ProposalPayloadDetails proposal={proposal} />
-                  <ProposalAuditDetails proposal={proposal} />
+                  <p className="decision-room-effect">
+                    <strong>Что изменится:</strong> {actionLabel(proposal.action_type)}
+                  </p>
                   <ActionEvidenceButtons
                     evidenceRefs={proposal.evidence_refs}
                     onSelectEvidence={onSelectEvidence}
                     proposalTitle={proposal.title}
                   />
                   {canReviewProposals ? (
-                    <>
-                      <ProposalActions
-                        onApprove={onApprove}
-                        onReject={onReject}
-                        pendingMutation={pendingMutation}
-                        proposal={proposal}
-                      />
-                      <ActionExecutionControls
-                        onRefresh={onRefreshProposals}
-                        proposal={proposal}
-                      />
-                    </>
+                    <ProposalActions
+                      onApprove={onApprove}
+                      onReject={onReject}
+                      pendingMutation={pendingMutation}
+                      proposal={proposal}
+                    />
                   ) : null}
-                  {proposal.warnings.length > 0 ? (
-                    <ul className="meta-list">
-                      {proposal.warnings.map((warning) => (
-                        <li key={warning}>{warning}</li>
-                      ))}
-                    </ul>
+                  {canReviewProposals ? (
+                    <ProposalNextStep
+                      onRefreshProposals={onRefreshProposals}
+                      proposal={proposal}
+                    />
                   ) : null}
+                  <details className="decision-room-card-details">
+                    <summary>Детали и история</summary>
+                    <div className="decision-room-card-details-body">
+                      <dl className="work-meta">
+                        <div>
+                          <dt>{M.actionsPanel.metaTarget}</dt>
+                          <dd>{proposalTargetLabel(proposal.target_provider)}</dd>
+                        </div>
+                        <div>
+                          <dt>{M.actionsPanel.metaAction}</dt>
+                          <dd>{actionLabel(proposal.action_type)}</dd>
+                        </div>
+                        <div>
+                          <dt>{M.actionsPanel.metaStatus}</dt>
+                          <dd>{proposalStatusLabel(proposal.status)}</dd>
+                        </div>
+                        <div>
+                          <dt>{M.actionsPanel.metaExecution}</dt>
+                          <dd>
+                            {proposal.execution_started
+                              ? M.actionsPanel.executionReported
+                              : M.actionsPanel.executionNotExecuted}
+                          </dd>
+                        </div>
+                      </dl>
+                      <ProposalPayloadDetails proposal={proposal} />
+                      <ProposalAuditDetails proposal={proposal} />
+                      {canReviewProposals &&
+                      !isPreviewReadyGithubIssueProposal(proposal) ? (
+                        <ActionExecutionControls
+                          onRefresh={onRefreshProposals}
+                          proposal={proposal}
+                        />
+                      ) : null}
+                      {proposal.warnings.length > 0 ? (
+                        <ul className="meta-list">
+                          {proposal.warnings.map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  </details>
                 </article>
               ))}
             </div>
@@ -1196,6 +1456,39 @@ function ProposalList({
         ))}
       </div>
     </section>
+  );
+}
+
+function ProposalNextStep({
+  onRefreshProposals,
+  proposal
+}: {
+  onRefreshProposals?: () => void;
+  proposal: ActionProposal;
+}) {
+  if (proposal.status !== "approved") {
+    return null;
+  }
+  if (isPreviewReadyGithubIssueProposal(proposal)) {
+    return (
+      <div className="decision-room-next-step">
+        <span>Следующий шаг</span>
+        <ActionExecutionControls
+          onRefresh={onRefreshProposals}
+          proposal={proposal}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="decision-room-next-step decision-room-next-step--local">
+      <span>{isLocalOnlyProposal(proposal) ? "Решение принято" : "Нужно основание"}</span>
+      <p>
+        {isLocalOnlyProposal(proposal)
+          ? "Это действие остаётся внутри FounderOS. История доступна в деталях."
+          : "До внешнего предпросмотра проверьте доказательства и готовность ниже."}
+      </p>
+    </div>
   );
 }
 
@@ -1379,18 +1672,24 @@ function ActionEvidenceButtons({
   }
 
   return (
-    <div className="actions-row" aria-label={T.evidenceFor(proposalTitle)}>
-      {evidenceRefs.map((evidence, index) => (
-        <button
-          className="button secondary"
-          key={`${evidence.kind}-${evidence.source}-${evidence.ref}-${index}`}
-          onClick={() => onSelectEvidence?.(evidence, proposalTitle, evidenceRefs.length)}
-          type="button"
-        >
-          {T.evidenceButton(evidence.ref)}
-        </button>
-      ))}
-    </div>
+    <details className="decision-room-evidence">
+      <summary>
+        <span>Доказательства</span>
+        <small>{evidenceRefs.length}</small>
+      </summary>
+      <div className="actions-row" aria-label={T.evidenceFor(proposalTitle)}>
+        {evidenceRefs.map((evidence, index) => (
+          <button
+            className="button secondary"
+            key={`${evidence.kind}-${evidence.source}-${evidence.ref}-${index}`}
+            onClick={() => onSelectEvidence?.(evidence, proposalTitle, evidenceRefs.length)}
+            type="button"
+          >
+            {T.evidenceButton(evidence.ref)}
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -1405,14 +1704,8 @@ function ProposalActions({
   pendingMutation: PendingMutation;
   proposal: ActionProposal;
 }) {
-  if (proposal.status === "approved") {
-    return <p className="muted">{M.actionsPanel.actionsApprovedNote}</p>;
-  }
-  if (proposal.status === "rejected") {
-    return <p className="muted">{M.actionsPanel.actionsRejectedNote}</p>;
-  }
   if (proposal.status !== "proposed") {
-    return <p className="muted">{M.actionsPanel.actionsOtherNote}</p>;
+    return null;
   }
 
   const approvePending = pendingMutation === `approve:${proposal.id}`;
@@ -1869,6 +2162,54 @@ function actionLabel(actionType: string): string {
     return M.actionsPanel.actionLabelInternalTodo;
   }
   return actionType;
+}
+
+function proposalStatusLabel(status: string): string {
+  if (status === "proposed") {
+    return "Ждёт решения";
+  }
+  if (status === "approved") {
+    return "Принято";
+  }
+  if (status === "rejected") {
+    return "Отклонено";
+  }
+  if (status === "executed") {
+    return "Выполнено";
+  }
+  if (status === "failed") {
+    return "Ошибка выполнения";
+  }
+  return "Неизвестный статус";
+}
+
+function proposalStatusTone(status: string): string {
+  if (status === "proposed") {
+    return "pending";
+  }
+  if (status === "approved") {
+    return "approved";
+  }
+  if (status === "rejected") {
+    return "rejected";
+  }
+  if (status === "executed") {
+    return "executed";
+  }
+  if (status === "failed") {
+    return "failed";
+  }
+  return "unknown";
+}
+
+function proposalTargetLabel(target: string): string {
+  if (target === "github") {
+    return "GitHub";
+  }
+  if (target === "internal") {
+    return "Внутри FounderOS";
+  }
+  return "Другой контур";
 }
 
 function payloadString(payload: Record<string, unknown>, key: string): string | null {

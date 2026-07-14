@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Reworked the authenticated product into a mission-first Command Mode
+  (DEC-078). The five primary zones now lead with «Сейчас → Нажмите →
+  Результат»: Today keeps one compact mission, Company World teaches the first
+  interaction and surfaces the next candidate, Actions puts the decision queue
+  and next available step before creation/readiness tooling, Connectors
+  recommends a useful source and its outcome, and Settings leads with the team
+  and human-readable roles. Contextual hints and progressive disclosures keep
+  forms, filters, evidence, and technical boundaries available without
+  presenting another admin console. The account control is now a compact
+  profile menu. This is frontend-only; backend APIs, persisted state, RBAC,
+  provider-read gates, external-write approval, and LLM boundaries are
+  unchanged.
 - Allowed the local sign-in screen to accept a short login identifier instead
   of enforcing browser email syntax. The authentication API and session model
   stay unchanged; credentials remain local database state and are never written

@@ -75,6 +75,7 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <ConnectorsPanelView
+      canManageSources={props.canManageSources ?? true}
       data={props.data === undefined ? registry : props.data}
       error={props.error ?? null}
       onRetry={props.onRetry}
@@ -90,18 +91,23 @@ test("builds the workspace connectors API path", () => {
   );
 });
 
-test("renders connector registry summary and provider cards without write claims", () => {
+test("renders a recommended source mission and clear provider states without write claims", () => {
   const html = renderPanel();
 
-  assert.ok(html.includes(M.connectors.title));
-  assert.ok(html.includes(M.connectors.badgeReadOnly));
-  assert.ok(html.includes(M.connectors.statusAvailable));
-  assert.ok(html.includes(M.connectors.statusPlanned));
+  assert.ok(html.includes("Ваши источники"));
+  assert.ok(html.includes("1 источник уже даёт факты компании"));
+  assert.ok(html.includes("Откройте Jira и выполните короткую настройку"));
+  assert.ok(html.includes("Появятся задачи, ответственные"));
+  assert.ok(html.includes("Подключён"));
+  assert.ok(html.includes("Можно подключить"));
+  assert.ok(html.includes("connector-card--connected"));
+  assert.ok(html.includes("connector-card--available"));
   assert.ok(html.includes("GitHub"));
   assert.ok(html.includes("Jira"));
   assert.ok(html.includes("Gmail"));
   assert.ok(html.includes("Google Drive"));
   assert.ok(html.includes(M.connectors.boundaryNote));
+  assert.ok(html.includes("mission-strip-details"));
   assert.ok(html.includes('href="/github"'));
   assert.ok(html.includes('href="/jira"'));
   assert.ok(html.includes('href="/gmail"'));
@@ -109,6 +115,56 @@ test("renders connector registry summary and provider cards without write claims
   assert.doesNotMatch(html, /provider call started/i);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /SHOULD_NOT_LEAK/);
+});
+
+test("does not call an inactive connection connected", () => {
+  const attentionRegistry: ConnectorRegistryResponse = {
+    ...registry,
+    summary: { ...registry.summary, connected: 0 },
+    connectors: registry.connectors.map((connector) =>
+      connector.provider === "github"
+        ? { ...connector, connected_count: 0, has_connection: true }
+        : connector
+    )
+  };
+  const html = renderPanel({ data: attentionRegistry });
+
+  assert.ok(html.includes("connector-card--attention"));
+  assert.ok(html.includes("Нужно проверить"));
+  assert.ok(html.includes("Проверить подключение"));
+  assert.doesNotMatch(html, /connector-card connector-card--connected/);
+});
+
+test("keeps source setup role-aware for a read-only participant", () => {
+  const html = renderPanel({ canManageSources: false });
+
+  assert.ok(html.includes("посмотрите, какие данные он добавит"));
+  assert.ok(html.includes("какие данные сможет подключить администратор"));
+  assert.ok(html.includes("Посмотреть источник"));
+  assert.ok(html.includes("владелец или администратор"));
+  assert.doesNotMatch(html, />Настроить источник</);
+  assert.doesNotMatch(html, /Результат<\/small><strong>Появятся/);
+});
+
+test("renders planned connectors as a distinct later state", () => {
+  const plannedRegistry: ConnectorRegistryResponse = {
+    ...registry,
+    summary: { ...registry.summary, available: 3, planned: 1 },
+    connectors: registry.connectors.map((connector) =>
+      connector.provider === "drive"
+        ? {
+            ...connector,
+            status: "planned",
+            manage_path: null
+          }
+        : connector
+    )
+  };
+  const html = renderPanel({ data: plannedRegistry });
+
+  assert.ok(html.includes("connector-card--later"));
+  assert.ok(html.includes("Этот источник появится позже"));
+  assert.ok(html.includes("Позже"));
 });
 
 test("renders loading missing and error states", () => {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { MissionStrip } from "../../components/MissionStrip";
 import { PageHeader } from "../../components/PageHeader";
 import { fetchWorkspaceMembers, provisionWorkspaceMember } from "../../lib/api";
 import type { AuthWorkspace } from "../../lib/auth";
@@ -156,6 +157,13 @@ export default function SettingsPage() {
     }
   }
 
+  const teamMission = settingsTeamMission({
+    canProvision: workspaceRole === "owner" || workspaceRole === "admin",
+    memberCount: members.length,
+    status: membersStatus,
+    workspaceName: workspace?.name ?? null
+  });
+
   return (
     <>
       <Link className="onboarding-return" href="/onboarding#team">
@@ -165,73 +173,104 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow={M.settings.eyebrow}
         title={M.settings.title}
-        description={M.settings.description}
+        description="Управляйте людьми компании и безопасностью своего локального аккаунта в двух понятных разделах."
       />
-      <section className="panel">
-        <ul className="meta-list">
-          <li>{M.settings.signedInAs} {session?.user.email ?? "…"}</li>
-          <li>{M.settings.workspace} {workspace?.name ?? M.settings.workspaceNone}</li>
-        </ul>
-        <div className="actions-row">
-          <button className="button secondary" type="button" onClick={onSignOut}>
-            {M.common.signOut}
-          </button>
-        </div>
-      </section>
-      <SettingsTeamPanelView
-        canProvision={workspaceRole === "owner" || workspaceRole === "admin"}
-        error={membersError}
-        members={members}
-        onProvision={onProvision}
-        onRetry={() => setMembersReloadKey((current) => current + 1)}
-        provisionError={provisionError}
-        provisionMessage={provisionMessage}
-        provisionPending={provisionPending}
-        setupLinkExpiresAt={setupLinkExpiresAt}
-        setupLinkUrl={setupLinkUrl}
-        status={membersStatus}
-        workspaceName={workspace?.name ?? null}
-      />
-      <form className="form panel" onSubmit={onChangePassword}>
-        <h2>{M.settings.changePasswordTitle}</h2>
-        <div className="field">
-          <label htmlFor="current-password">{M.settings.currentPassword}</label>
-          <input
-            autoComplete="current-password"
-            id="current-password"
-            maxLength={256}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-            type="password"
-            value={currentPassword}
-            required
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="new-password">{M.settings.newPassword}</label>
-          <input
-            autoComplete="new-password"
-            id="new-password"
-            maxLength={256}
-            minLength={8}
-            onChange={(event) => setNewPassword(event.target.value)}
-            type="password"
-            value={newPassword}
-            required
-          />
-          <span className="muted">{M.settings.newPasswordHint}</span>
-        </div>
-        {message ? <p className="success-text">{message}</p> : null}
-        {error ? (
-          <p className="error-text" role="alert">
-            {error}
+      <MissionStrip
+        action={teamMission.action}
+        current={teamMission.current}
+        outcome={teamMission.outcome}
+        details={
+          <p>
+            {M.settings.description} Приглашения создаются только локально и не
+            отправляются автоматически.
           </p>
-        ) : null}
-        <div className="actions-row">
-          <button className="button" disabled={pending} type="submit">
-            {pending ? M.settings.changing : M.settings.changePassword}
-          </button>
-        </div>
-      </form>
+        }
+      />
+      <div className="settings-hub">
+        <SettingsTeamPanelView
+          canProvision={workspaceRole === "owner" || workspaceRole === "admin"}
+          error={membersError}
+          members={members}
+          onProvision={onProvision}
+          onRetry={() => setMembersReloadKey((current) => current + 1)}
+          provisionError={provisionError}
+          provisionMessage={provisionMessage}
+          provisionPending={provisionPending}
+          setupLinkExpiresAt={setupLinkExpiresAt}
+          setupLinkUrl={setupLinkUrl}
+          status={membersStatus}
+          workspaceName={workspace?.name ?? null}
+        />
+        <section className="panel account-security" aria-labelledby="account-security-title">
+          <div className="section-header account-security-header">
+            <div>
+              <span className="eyebrow">Аккаунт</span>
+              <h2 id="account-security-title">Безопасность аккаунта</h2>
+            </div>
+            <span className="badge">Локальный доступ</span>
+          </div>
+          <div className="account-identity">
+            <span className="account-avatar" aria-hidden="true">
+              {accountInitial(session?.user.email ?? "")}
+            </span>
+            <div>
+              <strong>{session?.user.email ?? "…"}</strong>
+              <span>{workspace?.name ?? "Компания не выбрана"}</span>
+            </div>
+          </div>
+          <details className="account-security-action">
+            <summary>{M.settings.changePasswordTitle}</summary>
+            <form className="form account-password-form" onSubmit={onChangePassword}>
+              <div className="field">
+                <label htmlFor="current-password">{M.settings.currentPassword}</label>
+                <input
+                  autoComplete="current-password"
+                  id="current-password"
+                  maxLength={256}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  type="password"
+                  value={currentPassword}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="new-password">{M.settings.newPassword}</label>
+                <input
+                  autoComplete="new-password"
+                  id="new-password"
+                  maxLength={256}
+                  minLength={8}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  type="password"
+                  value={newPassword}
+                  required
+                />
+                <span className="muted">{M.settings.newPasswordHint}</span>
+              </div>
+              {message ? <p className="success-text">{message}</p> : null}
+              {error ? (
+                <p className="error-text" role="alert">
+                  {error}
+                </p>
+              ) : null}
+              <div className="actions-row">
+                <button className="button" disabled={pending} type="submit">
+                  {pending ? M.settings.changing : M.settings.changePassword}
+                </button>
+              </div>
+            </form>
+          </details>
+          <div className="account-signout-row">
+            <div>
+              <strong>Завершить работу</strong>
+              <span>На этом устройстве потребуется войти снова.</span>
+            </div>
+            <button className="button secondary" type="button" onClick={onSignOut}>
+              {M.common.signOut}
+            </button>
+          </div>
+        </section>
+      </div>
     </>
   );
 }
@@ -283,16 +322,22 @@ export function SettingsTeamPanelView({
   }
 
   return (
-    <section className="panel" aria-labelledby="settings-team-title">
-      <div className="section-header">
+    <section className="panel settings-team" aria-labelledby="settings-team-title">
+      <div className="section-header settings-team-header">
         <div>
-          <span className="eyebrow">{M.settings.workspace}</span>
-          <h2 id="settings-team-title">{M.settings.teamTitle}</h2>
+          <span className="eyebrow">Компания</span>
+          <h2 id="settings-team-title">Команда</h2>
         </div>
-        <span className="badge">{M.settings.teamBoundary}</span>
+        <span className="badge">
+          {status === "ready"
+            ? `${members.length} ${peopleWord(members.length)}`
+            : "Состав команды"}
+        </span>
       </div>
-      <p className="muted">{M.settings.teamDescription}</p>
-      {workspaceName ? <p className="muted">{workspaceName}</p> : null}
+      <p className="settings-team-intro">
+        Люди, которые видят эту компанию и помогают принимать решения.
+      </p>
+      {workspaceName ? <p className="settings-workspace-name">{workspaceName}</p> : null}
 
       {status === "loading" ? <p className="state loading">{M.settings.teamLoading}</p> : null}
       {status === "missing" ? <p className="muted">{M.settings.teamNoWorkspace}</p> : null}
@@ -311,24 +356,22 @@ export function SettingsTeamPanelView({
       {status === "ready" ? (
         <>
           {members.length === 0 ? <p className="muted">{M.settings.teamEmpty}</p> : null}
-          <div className="work-list">
+          <div className="team-roster" aria-label="Состав команды">
             {members.map((member) => (
-              <article className="work-item" key={member.membership.id}>
-                <div className="work-item-main">
-                  <span className="badge">{roleLabel(member.membership.role)}</span>
-                  <h3>{member.user.email}</h3>
+              <article className="team-member-card" key={member.membership.id}>
+                <span className="team-member-avatar" aria-hidden="true">
+                  {memberInitial(member)}
+                </span>
+                <div className="team-member-main">
+                  <h3>{member.user.name ?? member.user.email}</h3>
+                  {member.user.name ? <span>{member.user.email}</span> : null}
                 </div>
-                <dl className="work-meta">
-                  <div>
-                    <dt>{M.settings.teamMemberRole}</dt>
-                    <dd>{roleLabel(member.membership.role)}</dd>
-                  </div>
-                  <div>
-                    <dt>{M.settings.teamMemberStatus}</dt>
-                    <dd>{member.user.status}</dd>
-                  </div>
-                </dl>
-                {member.user.name ? <p className="muted">{member.user.name}</p> : null}
+                <div className="team-member-state">
+                  <span className={`team-role team-role--${member.membership.role}`}>
+                    {roleLabel(member.membership.role)}
+                  </span>
+                  <small>{memberStatusLabel(member.user.status)}</small>
+                </div>
               </article>
             ))}
           </div>
@@ -336,85 +379,189 @@ export function SettingsTeamPanelView({
       ) : null}
 
       {canProvision ? (
-        <form className="form" onSubmit={onSubmit}>
-          <h3>{M.settings.teamProvisionTitle}</h3>
-          <p className="muted">{M.settings.teamProvisionDescription}</p>
-          <div className="field">
-            <label htmlFor="team-member-email">{M.settings.teamProvisionEmail}</label>
-            <input
-              id="team-member-email"
-              maxLength={320}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              type="email"
-              value={email}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="team-member-name">{M.settings.teamProvisionName}</label>
-            <input
-              id="team-member-name"
-              onChange={(event) => setName(event.target.value)}
-              type="text"
-              value={name}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="team-member-role">{M.settings.teamProvisionRole}</label>
-            <select
-              id="team-member-role"
-              onChange={(event) =>
-                setRole(event.target.value as WorkspaceMemberProvisionRequest["role"])
-              }
-              value={role}
-            >
-              {PROVISION_ROLES.map((option) => (
-                <option key={option} value={option}>
-                  {roleLabel(option)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="callout muted">{M.settings.teamProvisionSetupLinkHint}</p>
-          {provisionMessage ? <p className="success-text">{provisionMessage}</p> : null}
-          {setupLinkUrl ? (
-            <div className="callout" aria-label={M.settings.teamProvisionSetupLinkLabel}>
-              <strong>{M.settings.teamProvisionSetupLinkLabel}</strong>
-              <p className="muted">{setupLinkUrl}</p>
-              {setupLinkExpiresAt ? (
-                <p className="muted">
-                  {M.settings.teamProvisionSetupLinkExpires}: {setupLinkExpiresAt}
-                </p>
-              ) : null}
+        <details className="team-invite-disclosure">
+          <summary className="team-invite-summary">
+            <span aria-hidden="true">＋</span>
+            Добавить сотрудника
+          </summary>
+          <form className="form team-invite-form" onSubmit={onSubmit}>
+            <div className="team-invite-heading">
+              <h3>Новый участник команды</h3>
+              <p>Укажите человека и выберите, что ему будет доступно.</p>
             </div>
-          ) : null}
-          {provisionError ? (
-            <p className="error-text" role="alert">
-              {provisionError}
+            <div className="field">
+              <label htmlFor="team-member-email">{M.settings.teamProvisionEmail}</label>
+              <input
+                id="team-member-email"
+                maxLength={320}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+                type="email"
+                value={email}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="team-member-name">Имя</label>
+              <input
+                id="team-member-name"
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Как показать человека в компании"
+                type="text"
+                value={name}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="team-member-role">{M.settings.teamProvisionRole}</label>
+              <select
+                id="team-member-role"
+                onChange={(event) =>
+                  setRole(event.target.value as WorkspaceMemberProvisionRequest["role"])
+                }
+                value={role}
+              >
+                {PROVISION_ROLES.map((option) => (
+                  <option key={option} value={option}>
+                    {roleLabel(option)}
+                  </option>
+                ))}
+              </select>
+              <span className="muted">{roleHint(role)}</span>
+            </div>
+            <p className="team-invite-note">
+              После добавления появится одноразовая ссылка. Передайте её сотруднику
+              лично — пароль он задаст сам.
             </p>
-          ) : null}
-          <div className="actions-row">
-            <button className="button" disabled={provisionPending} type="submit">
-              {provisionPending ? M.settings.teamProvisioning : M.settings.teamProvisionSubmit}
-            </button>
-          </div>
-        </form>
+            {provisionMessage ? <p className="success-text">{provisionMessage}</p> : null}
+            {setupLinkUrl ? (
+              <div className="callout setup-link-card" aria-label={M.settings.teamProvisionSetupLinkLabel}>
+                <strong>{M.settings.teamProvisionSetupLinkLabel}</strong>
+                <p className="setup-link-value">{setupLinkUrl}</p>
+                {setupLinkExpiresAt ? (
+                  <p className="muted">
+                    {M.settings.teamProvisionSetupLinkExpires}: {setupLinkExpiresAt}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {provisionError ? (
+              <p className="error-text" role="alert">
+                {provisionError}
+              </p>
+            ) : null}
+            <div className="actions-row">
+              <button className="button" disabled={provisionPending} type="submit">
+                {provisionPending ? M.settings.teamProvisioning : "Добавить в команду"}
+              </button>
+            </div>
+          </form>
+        </details>
       ) : (
-        <p className="muted">{M.settings.teamProvisionForbidden}</p>
+        <p className="settings-permission-note">
+          Добавить нового человека может владелец или администратор компании.
+        </p>
       )}
+
+      <details className="technical-boundary team-technical-details">
+        <summary>Как работает приглашение</summary>
+        <div>
+          <p>{M.settings.teamProvisionDescription}</p>
+          <p>{M.settings.teamProvisionSetupLinkHint}</p>
+          <p>{M.settings.teamDescription}</p>
+          <p>{M.settings.teamBoundary}</p>
+        </div>
+      </details>
     </section>
   );
 }
 
 function roleLabel(role: WorkspaceMemberRole): string {
   if (role === "owner") {
-    return M.settings.roleOwner;
+    return "Владелец";
   }
   if (role === "admin") {
-    return M.settings.roleAdmin;
+    return "Администратор";
   }
   if (role === "viewer") {
-    return M.settings.roleViewer;
+    return "Наблюдатель";
   }
-  return M.settings.roleMember;
+  return "Участник";
+}
+
+function roleHint(role: WorkspaceMemberProvisionRequest["role"]): string {
+  if (role === "admin") {
+    return "Управляет командой, источниками и решениями.";
+  }
+  if (role === "viewer") {
+    return "Смотрит данные, но ничего не меняет.";
+  }
+  return "Работает с данными и создаёт предложения решений.";
+}
+
+function memberStatusLabel(status: string): string {
+  return status === "active" ? "Активен" : "Доступ приостановлен";
+}
+
+function memberInitial(member: WorkspaceMember): string {
+  return accountInitial(member.user.name ?? member.user.email);
+}
+
+function accountInitial(value: string): string {
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, 1).toUpperCase() : "?";
+}
+
+function peopleWord(count: number): string {
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  if (mod100 >= 11 && mod100 <= 14) {
+    return "человек";
+  }
+  if (mod10 === 1) {
+    return "человек";
+  }
+  if (mod10 >= 2 && mod10 <= 4) {
+    return "человека";
+  }
+  return "человек";
+}
+
+export function settingsTeamMission({
+  canProvision,
+  memberCount,
+  status,
+  workspaceName
+}: {
+  canProvision: boolean;
+  memberCount: number;
+  status: MembersStatus;
+  workspaceName: string | null;
+}): { action: string; current: string; outcome: string } {
+  if (status === "missing") {
+    return {
+      action: "Откройте настройку компании",
+      current: "Компания ещё не выбрана",
+      outcome: "Появится пространство для команды"
+    };
+  }
+  if (status === "error") {
+    return {
+      action: "Нажмите «Повторить» в блоке «Команда»",
+      current: "Состав команды сейчас недоступен",
+      outcome: "FounderOS попробует загрузить людей снова"
+    };
+  }
+  if (status === "loading") {
+    return {
+      action: "Откройте безопасность аккаунта",
+      current: "Собираем текущий состав команды",
+      outcome: "Команда появится здесь после загрузки"
+    };
+  }
+  return {
+    action: canProvision
+      ? "Откройте «Добавить сотрудника» или безопасность аккаунта"
+      : "Проверьте состав команды или безопасность аккаунта",
+    current: `${memberCount} ${peopleWord(memberCount)} в команде ${workspaceName ?? "компании"}`,
+    outcome: "У каждого человека будет понятная роль и доступ"
+  };
 }

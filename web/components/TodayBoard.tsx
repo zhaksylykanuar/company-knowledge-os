@@ -16,6 +16,7 @@ import {
   type TodayMove,
   type TodaySignal
 } from "../lib/today";
+import { MiniHint, MissionStrip } from "./MissionStrip";
 
 type TodayBoardViewProps = {
   facts: TodayFacts;
@@ -107,7 +108,7 @@ export function TodayBoard() {
 
 export function TodayBoardView({ facts, onRetry }: TodayBoardViewProps) {
   const view = deriveTodayView(facts);
-  const activeStage = stageForMove(view.move);
+  const actionLabel = todayMoveActionLabel(view.move);
 
   return (
     <section className="today-board" aria-labelledby="today-title">
@@ -124,29 +125,28 @@ export function TodayBoardView({ facts, onRetry }: TodayBoardViewProps) {
         </div>
       </header>
 
-      <ol className="company-cycle" aria-label={M.today.cycleLabel}>
-        {[M.today.cycle.signal, M.today.cycle.decide, M.today.cycle.change].map(
-          (label, index) => (
-            <li
-              aria-current={index === activeStage ? "step" : undefined}
-              className={index === activeStage ? "active" : undefined}
-              key={label}
-            >
-              <span aria-hidden="true">{index + 1}</span>
-              {label}
-            </li>
-          )
-        )}
-      </ol>
+      <MissionStrip
+        action={actionLabel}
+        current={view.isPartial ? "Картина неполная" : "Следующий ход готов"}
+        details={
+          <>
+            <p>{view.move.description}</p>
+            <p>
+              <strong>Почему сейчас:</strong> {view.move.reason}
+            </p>
+            <small>{M.today.sourceBoundary}</small>
+          </>
+        }
+        outcome={todayMoveOutcome(view.move)}
+      />
 
       <section className="today-move" aria-labelledby="today-move-title">
         <div className="today-move-main">
           <span className="today-move-label">{M.today.nextMove}</span>
           <h2 id="today-move-title">{view.move.title}</h2>
-          <p>{view.move.description}</p>
           {view.move.href ? (
             <Link className="today-primary-action" href={view.move.href}>
-              <span>{M.today.openMove}</span>
+              <span>{actionLabel}</span>
               <span aria-hidden="true">→</span>
             </Link>
           ) : (
@@ -156,17 +156,14 @@ export function TodayBoardView({ facts, onRetry }: TodayBoardViewProps) {
             </button>
           )}
         </div>
-        <aside className="today-move-reason">
-          <span>{M.today.whyNow}</span>
-          <p>{view.move.reason}</p>
-          <small>{M.today.sourceBoundary}</small>
-        </aside>
       </section>
 
       <section className="today-signal-section" aria-labelledby="today-signals-title">
         <div className="today-signal-heading">
-          <span className="eyebrow">{M.today.signalsLabel}</span>
-          <h2 id="today-signals-title">{M.today.signalsTitle}</h2>
+          <h2 id="today-signals-title">{M.today.signalsLabel}</h2>
+          <MiniHint label="Зачем нужны эти сигналы?">
+            Здесь только факты, которые меняют следующий ход.
+          </MiniHint>
         </div>
         <div className="today-signals">
           {view.signals.map((signal) => (
@@ -210,11 +207,13 @@ function TodayLoading({ workspaceName }: { workspaceName: string | null }) {
 function SignalCard({ signal }: { signal: TodaySignal }) {
   return (
     <article className={`today-signal today-signal--${signal.tone}`}>
-      <div>
+      <div className="today-signal-meta">
         <span>{signal.label}</span>
         <strong>{signal.value}</strong>
+        <MiniHint label={`Что означает сигнал «${signal.label}»?`}>
+          {signal.description}
+        </MiniHint>
       </div>
-      <p>{signal.description}</p>
     </article>
   );
 }
@@ -257,12 +256,42 @@ function factsFromResponses({
   };
 }
 
-function stageForMove(move: TodayMove): number {
-  if (move.href?.startsWith("/actions") || move.href === "/company-brain") {
-    return 1;
+function todayMoveActionLabel(move: TodayMove): string {
+  const labelsByTitle = new Map<string, string>([
+    [M.today.moves.createCompanyTitle, "Создать компанию"],
+    [M.today.moves.addSourceTitle, "Добавить данные"],
+    [M.today.moves.sourceReadOnlyTitle, "Открыть источники"],
+    [M.today.moves.reviewDecisionsTitle, "Открыть решения"],
+    [M.today.moves.observeDecisionsTitle, "Посмотреть решения"],
+    [M.today.moves.reviewMapTitle, "Открыть кандидатов"],
+    [M.today.moves.observeMapTitle, "Посмотреть карту"],
+    [M.today.moves.createBriefingTitle, "Собрать сводку"],
+    [M.today.moves.observeBriefingTitle, "Открыть сводки"],
+    [M.today.moves.inviteTeamTitle, "Добавить участника"],
+    [M.today.moves.openBriefingTitle, "Открыть сводку"]
+  ]);
+
+  return labelsByTitle.get(move.title) ?? (move.href ? move.title : M.today.retryMove);
+}
+
+function todayMoveOutcome(move: TodayMove): string {
+  if (!move.href) {
+    return "Получим актуальную картину";
   }
-  if (move.href?.startsWith("/settings")) {
-    return 2;
+  if (move.href === "/onboarding") {
+    return "Появится пространство компании";
   }
-  return 0;
+  if (move.href === "/connectors") {
+    return "Картина получит основу";
+  }
+  if (move.href.startsWith("/actions")) {
+    return "Очередь решений станет короче";
+  }
+  if (move.href === "/company-brain") {
+    return "Карта людей и компаний станет точнее";
+  }
+  if (move.href.startsWith("/settings")) {
+    return "Команда получит доступ";
+  }
+  return "Получите короткую сводку";
 }

@@ -161,10 +161,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             </Link>
             <div className={styles.focusedActions}>
               {workspaceControl}
-              <span className={styles.focusedUser}>{me.user.email}</span>
-              <button type="button" className={styles.signOut} onClick={onLogout}>
-                {M.common.signOut}
-              </button>
+              <ProfileMenu onLogout={onLogout} user={me.user} />
             </div>
           </header>
           <main className={styles.focusedMain} key={workspaceId ?? "no-workspace"}>
@@ -182,10 +179,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <main className="main">
           <div className="topbar">
             {workspaceControl}
-            <span className="topbar-user">{me.user.email}</span>
-            <button type="button" className="logout-button" onClick={onLogout}>
-              {M.common.signOut}
-            </button>
+            <ProfileMenu onLogout={onLogout} user={me.user} />
           </div>
           <ContextNavigation />
           <div className="content" key={workspaceId ?? "no-workspace"}>
@@ -194,5 +188,36 @@ export function AuthGate({ children }: { children: ReactNode }) {
         </main>
       </div>
     </SessionContext.Provider>
+  );
+}
+
+export function ProfileMenu({
+  onLogout,
+  user
+}: {
+  onLogout: () => Promise<void>;
+  user: MeResponse["user"];
+}) {
+  const label = user.name?.trim() || user.email;
+  const initial = label.slice(0, 1).toLocaleUpperCase("ru-RU") || "F";
+
+  return (
+    <details className="profile-menu">
+      <summary aria-label="Открыть меню аккаунта">
+        <span className="profile-menu-avatar" aria-hidden="true">{initial}</span>
+        <span className="profile-menu-label">{label}</span>
+        <span className="profile-menu-chevron" aria-hidden="true">⌄</span>
+      </summary>
+      <div className="profile-menu-popover">
+        <div>
+          <small>Локальный аккаунт</small>
+          <strong>{label}</strong>
+          {user.name?.trim() ? <span>{user.email}</span> : null}
+        </div>
+        <button type="button" onClick={() => void onLogout()}>
+          {M.common.signOut}
+        </button>
+      </div>
+    </details>
   );
 }

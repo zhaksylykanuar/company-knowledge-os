@@ -2,14 +2,31 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая фактическая ветка `codex/guided-onboarding-ux` опубликована в
-> Draft PR #33. Активный runtime теперь локальный (`make local`, DEC-077);
-> hosted deploy не является текущей целью.
+> Текущая ветка `codex/guided-onboarding-ux` связана с Draft PR #33; UX-03
+> пока зафиксирован только локально и не опубликован. Активный runtime теперь
+> локальный (`make local`, DEC-077); hosted deploy не является текущей целью.
 
 ---
 
 ## ▶ СЕЙЧАС
 
+- **UX-03 post-auth Command Mode (DEC-078): РЕАЛИЗОВАН; ВИЗУАЛЬНЫЙ QA
+  ЗАБЛОКИРОВАН ИНСТРУМЕНТОМ.** Пять зон после авторизации теперь ведут
+  пользователя через единый паттерн «Сейчас → Нажмите → Результат».
+  «Сегодня» показывает короткую миссию и компактные сигналы; Company World
+  обучает первому клику и ведёт к следующему кандидату; «Решения» ставят
+  очередь и следующий доступный шаг выше создания, фильтров и диагностики;
+  «Источники» рекомендуют полезное подключение, показывают результат и честно
+  различают active/attention/read-only состояния; «Настройки» начинаются с
+  команды и понятных ролей, а безопасность отделена в самостоятельный блок.
+  Формы, readiness, evidence и технические границы сохранены через progressive
+  disclosure; аккаунт перенесён в компактное профильное меню. Backend API, БД,
+  миграции, RBAC, evidence и provider/write/LLM gates не менялись. Проверено
+  2026-07-14: frontend **283/283 passed**, typecheck, lint и production build
+  (**17 routes**) ✅; tracked-secret и whitespace checks ✅. Exact UX-03 tree
+  ещё не прошёл desktop/mobile browser acceptance: обновлённый in-app browser
+  падает до навигации с `Cannot redefine property: process`, поэтому прежний
+  LOCAL-01 QA не переиспользуется как доказательство нового интерфейса.
 - **LOCAL-FIRST RUNTIME (DEC-077): ПРИНЯТ И ГОТОВ К ИСПОЛЬЗОВАНИЮ.** Канонический
   цикл `make local-doctor` → `make local` → `make local-smoke` →
   `make local-backup` → `make local-stop` полностью проверен на текущей машине.
@@ -604,7 +621,8 @@ DONE строго = есть код + проходящий тест/рабочи
 | backend tests (`pytest`) | ✅ pass | 2026-07-14 | Dedicated temporary loopback test database through `make backend-check`: **655 passed / 0 failed / 1 external warning** |
 | `ruff` | ✅ pass | 2026-07-14 | Isolated backend gate: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-07-14 | `npm test` **269 passed**; production build **17 routes**, typecheck and lint passed |
+| frontend build | ✅ pass | 2026-07-14 | `npm test` **283 passed**; production build **17 routes**, typecheck and lint passed |
+| UX-03 authenticated browser QA | ❓ unknown | 2026-07-14 | Exact UX-03 tree was not visually inspected: the in-app browser failed before navigation with `Cannot redefine property: process`; prior LOCAL-01 QA predates UX-03 and is not reused as proof |
 | docs navigation | ✅ pass | 2026-07-14 | `test_local_runtime_docs.py`, `test_external_action_result_runbook.py`, and `test_docs_navigation_integrity.py` — **12 passed** |
 | local runtime live acceptance | ✅ pass | 2026-07-14 | Doctor/start/smoke, authenticated onboarding + five zones, verified DB/raw restore, graceful signal stop and crash-orphan cleanup passed; ephemeral QA rows removed |
 | `alembic check` (retained substrate) | ✅ reconciled | 2026-07-01 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; GitHub App live read-sync foundation pass: `alembic upgrade head` + `alembic check` зелёные |
@@ -753,6 +771,22 @@ product routes из-за несовпадения tenant scope.*
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-14` — **UX-03 post-auth Command Mode (DEC-078).** Reworked the five
+  authenticated zones around one mission-first grammar: «Сейчас → Нажмите →
+  Результат». Today now keeps one compact move; Company World teaches the first
+  click and offers the next unresolved candidate; Actions leads with the queue,
+  role-aware decision/preview step and explicit failed execution state;
+  Connectors recommends the next useful source while distinguishing connected,
+  attention and role-limited states; Settings leads with the human roster and
+  separates account security. Secondary creation, filters, readiness, evidence
+  and technical boundaries remain available through disclosures. The profile
+  control keeps both name and account email visible. Frontend-only: no API,
+  persistence, migration, provider, external-write or LLM change. Checks:
+  frontend **283/283 passed**, production build (**17 routes**), typecheck,
+  lint, tracked-secret scan and `git diff --check` ✅. Exact desktop/mobile
+  visual acceptance remains unknown because the in-app browser bootstrap fails
+  before navigation with `Cannot redefine property: process`; older browser QA
+  is not counted for this tree.
 - `2026-07-14` — **LOCAL-01 full local acceptance completed.** The canonical
   local lifecycle passed on PostgreSQL 16: doctor, start, same-origin smoke,
   returning-user authentication, guided onboarding and all five founder zones.

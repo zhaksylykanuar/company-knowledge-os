@@ -90,10 +90,9 @@ export const M = {
   },
 
   companyBrainPage: {
-    eyebrow: "Операционная карта",
+    eyebrow: "Карта связей",
     title: "Мир компании",
-    description:
-      "Люди, организации, соприкосновения и работа компании в одном пространстве, подтверждаемом источниками. Кандидаты остаются неподтверждёнными, пока участник команды не примет по ним решение.",
+    description: "Нажмите на человека или компанию — справа откроется профиль.",
     dataLayerTitle: "Канонические данные",
     dataLayerIndex: "ДАННЫЕ",
     dataLayerDescription:
@@ -101,10 +100,9 @@ export const M = {
   },
 
   today: {
-    eyebrow: "Пульт компании",
+    eyebrow: "Миссия дня",
     title: "Сегодня",
-    description:
-      "Не панель с десятками цифр, а один следующий ход — по уже сохранённым фактам компании.",
+    description: "Один понятный шаг, который двигает компанию дальше.",
     livePicture: "Живая картина",
     loading: "Собираем картину компании…",
     noWorkspace: "Компания ещё не создана",
@@ -117,8 +115,8 @@ export const M = {
     nextMove: "Следующий ход",
     whyNow: "Почему сейчас",
     sourceBoundary:
-      "Основание: только локальные данные рабочего пространства. Никаких скрытых синхронизаций и внешних записей.",
-    openMove: "Сделать следующий ход",
+      "FounderOS использует только сохранённые данные и ничего не отправляет без вашего подтверждения.",
+    openMove: "Открыть задачу",
     retryMove: "Обновить картину",
     signalsLabel: "Три сигнала компании",
     signalsTitle: "Что держать в поле зрения",
@@ -132,8 +130,8 @@ export const M = {
     signalMap: "Карта",
     signalMapDescription: "Новые люди и компании, требующие разбора.",
     picturePartial:
-      "Часть сигналов сейчас недоступна. FounderOS не будет додумывать отсутствующие данные.",
-    pictureComplete: "Картина собрана из текущего состояния рабочего пространства.",
+      "Картина неполная — отсутствующие данные не додумываются.",
+    pictureComplete: "Картина компании актуальна.",
     moves: {
       createCompanyTitle: "Создайте пространство компании",
       createCompanyDescription:
@@ -681,19 +679,17 @@ export const M = {
   },
 
   actionsPage: {
-    eyebrow: "Действия",
-    title: "Граница действий с одобрением человеком",
-    description:
-      "Предложения действий проходят локальные состояния «предложено», «одобрено» и «отклонено» без внешнего выполнения."
+    eyebrow: "Центр решений",
+    title: "Решения",
+    description: "Проверьте основание, примите решение и задайте следующий шаг."
   },
 
   actionsPanel: {
-    eyebrow: "Действия",
-    title: "Предложения действий",
-    badgeLocalApproval: "Локальное одобрение",
-    intro:
-      "Процесс локального одобрения. Одобрение фиксирует решение человека; этот экран не выполняет записи у провайдера.",
-    capabilityTitle: "Текущий режим возможностей",
+    eyebrow: "Очередь",
+    title: "Очередь решений",
+    badgeLocalApproval: "Решает человек",
+    intro: "Сначала — предложения, которые ждут вашего ответа.",
+    capabilityTitle: "Как это работает безопасно",
     loading: "Загрузка предложений действий",
     noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — предложений нет.",
     unsupportedTitle: "Предложения действий не поддерживаются",
@@ -703,32 +699,28 @@ export const M = {
     emptyTitle: "Пока нет предложений действий",
     emptyDescription: "Для этого рабочего пространства ещё не создано локальных предложений действий.",
     summaryLabel: "Сводка предложений",
-    proposedTitle: "Предложено",
-    proposedDescription: "Локальные предложения, ожидающие проверки.",
-    approvedTitle: "Одобрено",
-    approvedDescription: "Локальные предложения, одобренные человеком; этим интерфейсом не выполняются.",
-    rejectedTitle: "Отклонено",
-    rejectedDescription: "Локально отклонённые предложения.",
+    proposedTitle: "Ждут решения",
+    proposedDescription: "Проверьте основание и ответьте.",
+    approvedTitle: "Приняты",
+    approvedDescription: "Подтверждённые человеком решения.",
+    rejectedTitle: "Отклонены",
+    rejectedDescription: "Предложения, которые не пойдут дальше.",
     totalTitle: "Всего",
     totalDescription: "Количество из списка бэкенда.",
-    readinessTitle: "Готовность review / execution",
+    readinessTitle: "Техническая готовность",
     readinessLabel: "Сводка готовности предложений к локальной проверке и предпросмотру",
     readinessDescription:
       "Сводка считается по уже загруженным локальным предложениям. Она не запускает execute, sync, provider calls или LLM.",
-    readinessPendingTitle: "Нужно решение",
-    readinessPendingDescription: "Предложения в статусе proposed: их надо локально одобрить или отклонить.",
-    readinessPreviewTitle: "Можно открыть preview",
-    readinessPreviewDescription:
-      "Одобренные GitHub issue proposals с evidence refs. Предпросмотр не пишет в GitHub.",
-    readinessLocalOnlyTitle: "Local-only follow-up",
-    readinessLocalOnlyDescription:
-      "Internal todo proposals: остаются локальными и не имеют внешнего execution path.",
-    readinessMissingEvidenceTitle: "Без evidence",
-    readinessMissingEvidenceDescription:
-      "Предложения без evidence refs не должны переходить в external execution path.",
-    readinessExternalResultTitle: "Есть execution receipt",
-    readinessExternalResultDescription:
-      "Бэкенд сообщил execution_started; проверяйте audit/receipt перед дальнейшими действиями.",
+    readinessPendingTitle: "Ждут ответа",
+    readinessPendingDescription: "Эти предложения нужно принять или отклонить.",
+    readinessPreviewTitle: "Готовы к проверке",
+    readinessPreviewDescription: "Основания собраны; внешний запрос ещё не выполняется.",
+    readinessLocalOnlyTitle: "Останутся внутри",
+    readinessLocalOnlyDescription: "Внутренние задачи не отправляются во внешние системы.",
+    readinessMissingEvidenceTitle: "Не хватает основания",
+    readinessMissingEvidenceDescription: "Без доказательств действие нельзя отправлять дальше.",
+    readinessExternalResultTitle: "Есть результат",
+    readinessExternalResultDescription: "Для действия сохранена квитанция выполнения.",
     readinessBoundary:
       "Эта сводка только помогает выбрать следующий локальный шаг; внешнее выполнение здесь не запускается.",
     filterTitle: "Фокус проверки",
@@ -913,11 +905,11 @@ export const M = {
   },
 
   settings: {
-    eyebrow: "Аккаунт",
-    title: "Ваш аккаунт",
-    description: "Вы вошли по сессионной cookie. Операторский API-ключ в браузере не используется.",
+    eyebrow: "Люди и доступ",
+    title: "Команда и аккаунт",
+    description: "Управляйте участниками компании и безопасностью своего входа.",
     signedInAs: "Вы вошли как:",
-    workspace: "Рабочее пространство:",
+    workspace: "Компания:",
     workspaceNone: "Нет",
     changePasswordTitle: "Сменить пароль",
     currentPassword: "Текущий пароль",
@@ -927,9 +919,8 @@ export const M = {
     changing: "Смена пароля…",
     changeSuccess: "Пароль изменён. На других устройствах выполнен выход.",
     changeError: "Не удалось сменить пароль. Проверьте текущий пароль.",
-    teamTitle: "Команда рабочего пространства",
-    teamDescription:
-      "Локальные участники workspace. Этот экран не отправляет email-инвайты, не вызывает identity provider и не делает external writes.",
+    teamTitle: "Команда",
+    teamDescription: "Кто видит компанию и какие действия ему доступны.",
     teamLoading: "Загрузка участников",
     teamUnavailableTitle: "Участники недоступны",
     teamUnavailableDescription: "Не удалось загрузить локальных участников workspace.",
@@ -937,7 +928,7 @@ export const M = {
     teamEmpty: "В этом workspace пока нет участников.",
     teamMemberStatus: "Статус",
     teamMemberRole: "Роль",
-    teamProvisionTitle: "Добавить участника локально",
+    teamProvisionTitle: "Добавить сотрудника",
     teamProvisionDescription:
       "Создаёт локального участника и одноразовую setup-ссылку. Новый человек сам задаёт пароль; администратор пароль за него не выбирает.",
     teamProvisionEmail: "Email участника",
@@ -945,7 +936,7 @@ export const M = {
     teamProvisionRole: "Роль",
     teamProvisionSetupLinkHint:
       "Для нового локального аккаунта setup-ссылка появится один раз после добавления. Передайте её человеку по доверенному каналу: email автоматически не отправляется. Существующий аккаунт из другой компании должен принять отдельное приглашение — этот сценарий пока заблокирован.",
-    teamProvisionSubmit: "Добавить участника",
+    teamProvisionSubmit: "Добавить в команду",
     teamProvisioning: "Добавление…",
     teamProvisionSuccess: "Локальный участник добавлен. Email invite не отправлялся.",
     teamProvisionExistingAccount:
@@ -959,39 +950,38 @@ export const M = {
       "Добавлять участников могут только owner/admin текущего workspace.",
     teamBoundary:
       "Boundary: local DB only — external_invite_sent=false, provider_write_performed=false.",
-    roleOwner: "Owner",
-    roleAdmin: "Admin",
-    roleMember: "Member",
-    roleViewer: "Viewer"
+    roleOwner: "Владелец",
+    roleAdmin: "Администратор",
+    roleMember: "Участник",
+    roleViewer: "Наблюдатель"
   },
 
   connectors: {
-    eyebrow: "Коннекторы",
-    title: "Коннекторы источников",
-    description:
-      "Обзор коннекторов из MVP-набора (GitHub, Jira, Gmail, Google Drive). Экран только читает локальное состояние: без provider calls, external writes и LLM.",
-    badgeReadOnly: "Только чтение",
+    eyebrow: "Разведка",
+    title: "Источники компании",
+    description: "Подключите место, где уже живёт работа команды.",
+    badgeReadOnly: "Безопасное чтение",
     loading: "Загрузка коннекторов",
     noWorkspaceDescription:
       "У этого аккаунта пока нет рабочего пространства — коннекторы недоступны.",
     unavailableTitle: "Коннекторы недоступны",
     unavailableDescription: "Не удалось загрузить реестр коннекторов.",
     summaryLabel: "Сводка коннекторов",
-    totalTitle: "Всего",
-    totalDescription: "Коннекторы в MVP-наборе.",
-    availableTitle: "Доступно",
-    availableDescription: "Есть продуктовый путь в приложении.",
-    plannedTitle: "Запланировано",
-    plannedDescription: "В MVP-scope, ещё не реализовано.",
+    totalTitle: "Источников",
+    totalDescription: "В текущем наборе FounderOS.",
+    availableTitle: "Можно открыть",
+    availableDescription: "Источник уже доступен в приложении.",
+    plannedTitle: "Позже",
+    plannedDescription: "Источник пока готовится.",
     connectedTitle: "Подключено",
     connectedDescription: "Есть хотя бы одно подключение в рабочем пространстве.",
     listLabel: "Список коннекторов",
-    statusAvailable: "Доступен",
-    statusPlanned: "Запланирован",
+    statusAvailable: "Можно подключить",
+    statusPlanned: "Скоро",
     connectionsLabel: "Подключений",
     connectedLabel: "Активных",
-    manageLink: "Открыть",
-    plannedHint: "Появится позже; провайдер-вызовы и записи не выполняются.",
+    manageLink: "Посмотреть источник",
+    plannedHint: "Этот источник появится позже.",
     boundaryNote:
       "Реестр вычисляется локально из уже сохранённых записей подключений. Он не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не читает секреты."
   },

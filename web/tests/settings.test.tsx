@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   resolveSettingsWorkspace,
+  settingsTeamMission,
   SettingsTeamPanelView
 } from "../app/settings/page";
 import type { AuthWorkspace } from "../lib/auth";
@@ -85,20 +86,47 @@ test("settings resolves the explicitly selected company instead of the first mem
   assert.equal(resolveSettingsWorkspace(workspaces, null), null);
 });
 
-test("renders local workspace members and provisioning boundary", () => {
+test("settings mission reports loading failures and missing company honestly", () => {
+  assert.equal(
+    settingsTeamMission({
+      canProvision: true,
+      memberCount: 0,
+      status: "error",
+      workspaceName: "FounderOS"
+    }).current,
+    "Состав команды сейчас недоступен"
+  );
+  assert.equal(
+    settingsTeamMission({
+      canProvision: false,
+      memberCount: 0,
+      status: "missing",
+      workspaceName: null
+    }).current,
+    "Компания ещё не выбрана"
+  );
+});
+
+test("renders a roster-first team with Russian roles and collapsed provisioning", () => {
   const html = renderTeamPanel({
     provisionMessage: M.settings.teamProvisionSuccess
   });
 
-  assert.ok(html.includes(M.settings.teamTitle));
+  assert.ok(html.includes("Команда"));
+  assert.ok(html.includes("2 человека"));
   assert.ok(html.includes("owner@example.test"));
   assert.ok(html.includes("member@example.test"));
-  assert.ok(html.includes(M.settings.roleOwner));
-  assert.ok(html.includes(M.settings.roleMember));
+  assert.ok(html.includes("Владелец"));
+  assert.ok(html.includes("Участник"));
+  assert.ok(html.includes("Активен"));
+  assert.ok(html.includes("team-roster"));
+  assert.ok(html.includes("team-invite-disclosure"));
+  assert.ok(html.indexOf("team-roster") < html.indexOf("team-invite-disclosure"));
   assert.ok(html.includes(M.settings.teamBoundary));
   assert.ok(html.includes(M.settings.teamProvisionDescription));
   assert.ok(html.includes(M.settings.teamProvisionSuccess));
-  assert.ok(html.includes(M.settings.teamProvisionSubmit));
+  assert.ok(html.includes("Добавить сотрудника"));
+  assert.ok(html.includes("Добавить в команду"));
   assert.ok(html.includes(`value="admin"`));
   assert.ok(html.includes(`value="member"`));
   assert.ok(html.includes(`value="viewer"`));
@@ -132,8 +160,11 @@ test("renders generated one-time setup link for manual teammate onboarding", () 
 test("hides provisioning form for non-admin workspace roles", () => {
   const html = renderTeamPanel({ canProvision: false });
 
-  assert.ok(html.includes(M.settings.teamProvisionForbidden));
-  assert.doesNotMatch(html, new RegExp(M.settings.teamProvisionSubmit));
+  assert.ok(
+    html.includes("Добавить нового человека может владелец или администратор компании")
+  );
+  assert.doesNotMatch(html, /team-invite-disclosure/);
+  assert.doesNotMatch(html, /Добавить в команду/);
 });
 
 test("renders missing loading and error states safely", () => {

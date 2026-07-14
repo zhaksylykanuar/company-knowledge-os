@@ -197,6 +197,9 @@ export function ActionExecutionControlsView({
   successMessage = null
 }: ActionExecutionControlsViewProps) {
   const isApproved = proposal.status === "approved";
+  const supportsExternalPreview =
+    proposal.target_provider === "github" &&
+    proposal.action_type === "create_github_issue";
   const hasRecordedDecision = Boolean(proposal.approved_at || proposal.rejected_at);
   const externalExecutionEnabled = Boolean(
     preview?.capabilities.external_execution && preview.capabilities.live_provider_write
@@ -227,11 +230,23 @@ export function ActionExecutionControlsView({
 
   return (
     <section className="callout" aria-label={T.executionControlsFor(proposal.title)}>
-      <strong>{M.actionExecution.previewTitle}</strong>
-      <p>{M.actionExecution.previewIntro}</p>
+      <strong>
+        {supportsExternalPreview
+          ? M.actionExecution.previewTitle
+          : "История локального решения"}
+      </strong>
+      <p>
+        {supportsExternalPreview
+          ? M.actionExecution.previewIntro
+          : "Здесь сохраняются решение человека и локальная история без внешнего выполнения."}
+      </p>
 
       {!isApproved ? (
         <p className="muted">{M.actionExecution.approveFirst}</p>
+      ) : !supportsExternalPreview ? (
+        <p className="muted">
+          Это локальное действие: внешний предпросмотр для него не нужен.
+        </p>
       ) : (
         <button
           className="button secondary"

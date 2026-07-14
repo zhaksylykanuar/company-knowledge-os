@@ -80,6 +80,18 @@ const rejectedInternalProposal: ActionProposal = {
   title: "Rejected internal proposal"
 };
 
+const approvedInternalProposal: ActionProposal = {
+  ...rejectedInternalProposal,
+  approved_at: "2026-06-25T01:08:00+06:00",
+  approved_by_user_id: "user-3",
+  id: "proposal-4",
+  rejected_at: null,
+  rejected_by_user_id: null,
+  rejection_reason: null,
+  status: "approved",
+  title: "Approved internal proposal"
+};
+
 function auditEvent(
   overrides: Partial<ActionExecutionAuditEvent> = {}
 ): ActionExecutionAuditEvent {
@@ -375,6 +387,20 @@ test("offers decision-history control for an approved proposal", () => {
   });
   assert.ok(html.includes(M.actionExecution.preview));
   assert.ok(html.includes(M.actionExecution.historyLoad));
+});
+
+test("does not offer unsupported external preview for an approved internal todo", () => {
+  const html = renderControls({
+    onLoadHistory: () => undefined,
+    onPreview: () => undefined,
+    proposal: approvedInternalProposal
+  });
+
+  assert.ok(html.includes("внешний предпросмотр для него не нужен"));
+  assert.ok(html.includes("История локального решения"));
+  assert.ok(html.includes(M.actionExecution.historyLoad));
+  assert.doesNotMatch(html, /Предпросмотр выполнения/);
+  assert.doesNotMatch(html, /задачей GitHub/);
 });
 
 test("hides decision-history control until a decision is recorded", () => {
