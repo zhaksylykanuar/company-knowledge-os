@@ -2,14 +2,35 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая ветка `codex/guided-onboarding-ux` связана с Draft PR #33; UX-03
-> пока зафиксирован только локально и не опубликован. Активный runtime теперь
+> Текущая ветка `codex/guided-onboarding-ux` связана с Draft PR #33; UX-03 и
+> UX-04 пока зафиксированы только локально и не опубликованы. Активный runtime теперь
 > локальный (`make local`, DEC-077); hosted deploy не является текущей целью.
 
 ---
 
 ## ▶ СЕЙЧАС
 
+- **UX-04 GitHub Source Command Center (DEC-079): РЕАЛИЗОВАН; BROWSER VISUAL QA
+  PASS.** `/github` больше не показывает статические
+  backend-карточки и MVP-заглушку. Экран ведёт через роль-зависимую миссию,
+  трёхшаговый путь `GitHub App → выбранный репозиторий → задачи/PR`, четыре
+  честные метрики загруженной repository-выборки и одну read-only загрузку.
+  Репозитории показываются компактно (8 сразу, остальные по запросу); результат
+  успешной или частичной загрузки автоматически обновляет «Пульс работы» с
+  доступными задачами и PR, не выдавая `partial` за полный успех,
+  который также ограничивает видимый список четырьмя строками на колонку.
+  Readiness, env-названия, token/write policy, provenance, warnings и
+  технические причины сохранены в disclosure. Viewer не получает недоступных
+  обещаний; sync требует connected GitHub App installation, `connection_id` и
+  валидный явный `owner/repo`, поэтому прежнее ложное действие при error/suspended
+  закрыто. Backend API, БД, миграции, RBAC, provider-read approval,
+  external-write и LLM gates не менялись. Проверено 2026-07-14: frontend
+  **293/293 passed**, typecheck, lint и production build (**17 routes**) ✅;
+  docs navigation **2 passed**, tracked-secret и whitespace checks ✅;
+  локальные backend/frontend health endpoints отвечают. Авторизованный экран
+  проверен на реальных локальных данных при **1280×720** и **390×844**: mission,
+  метрики, repository chooser и work pulse складываются без горизонтального
+  overflow; интерактивный keyboard/console pass остаётся отдельным follow-up.
 - **UX-03 post-auth Command Mode (DEC-078): РЕАЛИЗОВАН; ВИЗУАЛЬНЫЙ QA
   ЗАБЛОКИРОВАН ИНСТРУМЕНТОМ.** Пять зон после авторизации теперь ведут
   пользователя через единый паттерн «Сейчас → Нажмите → Результат».
@@ -621,8 +642,9 @@ DONE строго = есть код + проходящий тест/рабочи
 | backend tests (`pytest`) | ✅ pass | 2026-07-14 | Dedicated temporary loopback test database through `make backend-check`: **655 passed / 0 failed / 1 external warning** |
 | `ruff` | ✅ pass | 2026-07-14 | Isolated backend gate: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-07-14 | `npm test` **283 passed**; production build **17 routes**, typecheck and lint passed |
+| frontend build | ✅ pass | 2026-07-14 | `npm test` **293 passed**; production build **17 routes**, typecheck and lint passed |
 | UX-03 authenticated browser QA | ❓ unknown | 2026-07-14 | Exact UX-03 tree was not visually inspected: the in-app browser failed before navigation with `Cannot redefine property: process`; prior LOCAL-01 QA predates UX-03 and is not reused as proof |
+| UX-04 `/github` browser visual QA | ✅ pass | 2026-07-14 | Authenticated real-local-data pass at **1280×720** and **390×844**; mission, metrics, compact repository chooser and work pulse render without horizontal overflow. Keyboard/console interaction audit remains separate |
 | docs navigation | ✅ pass | 2026-07-14 | `test_local_runtime_docs.py`, `test_external_action_result_runbook.py`, and `test_docs_navigation_integrity.py` — **12 passed** |
 | local runtime live acceptance | ✅ pass | 2026-07-14 | Doctor/start/smoke, authenticated onboarding + five zones, verified DB/raw restore, graceful signal stop and crash-orphan cleanup passed; ephemeral QA rows removed |
 | `alembic check` (retained substrate) | ✅ reconciled | 2026-07-01 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; GitHub App live read-sync foundation pass: `alembic upgrade head` + `alembic check` зелёные |
@@ -771,6 +793,21 @@ product routes из-за несовпадения tenant scope.*
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-14` — **UX-04 GitHub Source Command Center (DEC-079).** Replaced
+  `/github` backend scaffolding with one role-aware mission, a three-step visual
+  data path, four bounded repository metrics, a compact selected-repository
+  workbench and a refreshed operational task/PR pulse. Technical readiness,
+  env names, provenance, token/write policy, warnings and causes remain behind
+  disclosures. Counts are explicitly scoped to the loaded API sample; no CI,
+  velocity, trend or organization-total metric is invented. Viewer guidance is
+  read-only; admin sync remains one explicit repository and now fails closed
+  unless the installation is connected with a connection id. Frontend-only:
+  no API, persistence, migration, provider write/read authorization, or LLM
+  change. Checks: frontend **293/293 passed**, production build (**17 routes**),
+  typecheck, lint, docs navigation **2 passed**, tracked-secret scan and
+  `git diff --check` ✅; local health endpoints respond. Authenticated browser
+  visual QA passed with real local data at **1280×720** and **390×844** without
+  horizontal overflow; keyboard/console interaction remains a separate pass.
 - `2026-07-14` — **UX-03 post-auth Command Mode (DEC-078).** Reworked the five
   authenticated zones around one mission-first grammar: «Сейчас → Нажмите →
   Результат». Today now keeps one compact move; Company World teaches the first

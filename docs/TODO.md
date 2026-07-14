@@ -52,6 +52,16 @@ Implemented foundations:
   persistence, RBAC, provider/write, and LLM contracts are unchanged. Static
   frontend acceptance is green; exact desktop/mobile visual acceptance remains
   pending because the in-app browser currently fails before navigation.
+- The first provider-specific Source Command Center is in place on `/github`
+  (DEC-079): one role-aware mission, a three-step source flow, four bounded
+  repository metrics, one selected-repository read action, a compact work pulse,
+  and progressive disclosure for readiness/provenance details. Repository and
+  issue/PR counts are explicitly the loaded sample, viewer guidance stays
+  read-only, a non-connected installation cannot enable sync, and a partial
+  read refreshes available work without being labelled as full success.
+  Authenticated visual QA passed on real local data at 1280×720 and 390×844
+  without horizontal overflow. This is the reference interaction grammar for
+  later Jira/Gmail/Drive detail-page work, not a generic connector engine.
 - The UX-02 spatial Company World board is in place (DEC-076): the founder's
   company is the visual center, while team, confirmed network, and discovery
   candidates occupy distinct contours. A confirmed person is placed under an
@@ -305,11 +315,12 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Complete UX-03 authenticated visual acceptance.**
-   Repeat the exact-tree desktop and mobile pass when browser tooling is
-   available: all five zones, profile menu, disclosures, keyboard focus,
-   overflow, and console state. The earlier LOCAL-01 browser result predates
-   UX-03 and is not acceptance evidence for this tree.
+1. **Complete UX-03 authenticated visual acceptance and UX-04 interaction QA.**
+   Repeat the exact-tree desktop and mobile pass for all five command-mode
+   zones, then cover `/github` keyboard focus, disclosures, filters, sync-state
+   recovery, and console state. `/github` desktop/mobile visual composition and
+   overflow are already accepted; the earlier LOCAL-01 result still predates
+   UX-03 and is not acceptance evidence for those five zones.
 
 2. **First founder-approved GitHub App read.**
    The local product, polling-only backend path, explicit per-repository UI

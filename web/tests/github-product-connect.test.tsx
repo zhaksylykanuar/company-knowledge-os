@@ -17,7 +17,9 @@ import type {
   GitHubRepositoryListResponse
 } from "../lib/types";
 import {
+  classifyGitHubSyncState,
   GitHubProductConnectPanelView,
+  shouldRefreshGitHubDataAfterSync,
   summarizeGitHubRealReadReadiness
 } from "../components/GitHubProductConnectPanel";
 
@@ -184,11 +186,14 @@ function renderPanel(
       canAdminister={props.canAdminister}
       connectionStatus={props.connectionStatus ?? connectedAppStatus}
       error={props.error ?? null}
+      onRepositoryFocusChange={props.onRepositoryFocusChange}
+      onRepositorySelect={props.onRepositorySelect ?? (() => undefined)}
       onRetry={props.onRetry}
-      onRunRepositorySync={props.onRunRepositorySync}
+      onRunRepositorySync={props.onRunRepositorySync ?? (() => undefined)}
       repositoryFocus={props.repositoryFocus}
       repositorySync={props.repositorySync ?? {}}
       repositories={props.repositories ?? repositories}
+      selectedRepository={props.selectedRepository}
       state={props.state ?? "ready"}
     />
   );
@@ -262,29 +267,35 @@ test("posts GitHub App live sync request with explicit repository", async () => 
   }
 });
 
-test("renders connected GitHub App foundation without write promises", () => {
+test("renders a mission-first GitHub command center with one sync action", () => {
   const html = renderPanel();
 
   assert.ok(html.includes(M.githubProductConnect.title));
-  assert.ok(html.includes(M.githubProductConnect.appConnected));
+  assert.ok(html.includes(M.githubProductConnect.missionReadyCurrent));
+  assert.ok(html.includes(M.githubProductConnect.missionReadyOutcome));
+  assert.ok(html.includes(M.githubProductConnect.flowConnectionTitle));
+  assert.ok(html.includes(M.githubProductConnect.flowRepositoryTitle));
+  assert.ok(html.includes(M.githubProductConnect.flowFounderOSTitle));
+  assert.ok(html.includes(M.githubProductConnect.metricsTitle));
+  assert.ok(html.includes(T.githubLoadedRepositorySample(2, 25)));
+  assert.match(html, /github-command-metric-value">2</);
+  assert.ok(html.includes(M.githubProductConnect.repositoryWorkbenchTitle));
+  assert.ok(html.includes("qtwin-io/company-knowledge-os"));
+  assert.ok(html.includes("qtwin-io/another-repo"));
+  assert.equal(
+    (html.match(new RegExp(M.githubProductConnect.liveSyncRun, "g")) ?? []).length,
+    1
+  );
+
+  // Readiness and provider mechanics stay available, but only in disclosure.
+  assert.match(html, /<details class="github-command-technical">/);
   assert.ok(html.includes(M.githubProductConnect.realReadReadinessTitle));
   assert.ok(html.includes(M.githubProductConnect.realReadReady));
   assert.ok(
     html.includes(T.githubRealReadNextStep(true, true, true, true, true))
   );
-  assert.ok(html.includes("25"));
   assert.ok(html.includes(M.githubProductConnect.tokenTitle));
   assert.ok(html.includes(M.githubProductConnect.writeTitle));
-  assert.ok(html.includes(M.githubProductConnect.liveSyncTitle));
-  assert.ok(html.includes(M.githubProductConnect.liveSyncRun));
-  assert.ok(html.includes(M.githubProductConnect.repositoryFocusTitle));
-  assert.ok(html.includes(T.githubRepositoryFocusSummary(2, 1, 1, 2, 1)));
-  assert.ok(html.includes("qtwin-io/company-knowledge-os"));
-  assert.ok(html.includes("qtwin-io/another-repo"));
-  assert.equal(
-    (html.match(new RegExp(M.githubProductConnect.liveSyncRun, "g")) ?? []).length,
-    2
-  );
   assert.doesNotMatch(html, /operator API key/);
   assert.doesNotMatch(html, /provider token/i);
   assert.doesNotMatch(html, /write enabled/i);
@@ -297,6 +308,9 @@ test("keeps GitHub repository facts but removes setup and sync controls in read-
   assert.ok(html.includes(M.common.sourceAdminOnlyNote));
   assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
   assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
+  assert.ok(html.includes(M.githubProductConnect.missionViewerCurrent));
+  assert.ok(html.includes(M.githubProductConnect.missionViewerOutcome));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.missionReadyOutcome));
 });
 
 test("summarizes GitHub App real-read readiness from loaded local state", () => {
@@ -369,6 +383,12 @@ test("filters the loaded repository surface locally without provider calls", () 
       .length,
     1
   );
+  assert.match(
+    archivedHtml,
+    new RegExp(
+      `aria-pressed="true"[^>]*>${M.githubProductConnect.repositoryFocusArchived}`
+    )
+  );
 
   const evidenceHtml = renderPanel({
     repositoryFocus: "with_evidence"
@@ -387,9 +407,10 @@ test("renders missing GitHub App env contract", () => {
     repositories: { ...repositories, count: 0 }
   });
 
-  assert.ok(html.includes(M.githubProductConnect.appNotConfigured));
+  assert.ok(html.includes(M.githubProductConnect.connectionMetricAttention));
   assert.ok(html.includes(M.githubProductConnect.missingEnvTitle));
   assert.ok(html.includes("FOUNDEROS_GITHUB_APP_ID"));
+  assert.ok(html.includes(M.githubProductConnect.refreshConnection));
 });
 
 test("renders invalid repository and missing app sync states", () => {
@@ -409,7 +430,101 @@ test("renders invalid repository and missing app sync states", () => {
   const missingApp = renderPanel({
     connectionStatus: missingAppStatus
   });
-  assert.ok(missingApp.includes(M.githubProductConnect.liveSyncRequiresApp));
+  assert.ok(missingApp.includes(M.githubProductConnect.missionConnectionCurrent));
+  assert.doesNotMatch(
+    missingApp,
+    new RegExp(M.githubProductConnect.liveSyncRun)
+  );
+});
+
+test("does not offer sync for a non-connected installation record", () => {
+  const html = renderPanel({ connectionStatus: disconnectedAppStatus });
+
+  assert.ok(
+    html.includes(M.githubProductConnect.missionConnectionAttentionCurrent)
+  );
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
+  assert.ok(html.includes(M.githubProductConnect.refreshConnection));
+  assert.ok(html.includes(M.githubProductConnect.connectionAttentionActionHint));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
+});
+
+test("keeps a stale connected installation blocked when GitHub App env is incomplete", () => {
+  const html = renderPanel({
+    connectionStatus: {
+      ...connectedAppStatus,
+      app: appMissing
+    }
+  });
+
+  assert.ok(html.includes(M.githubProductConnect.connectionMetricAttention));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
+  assert.ok(html.includes(M.githubProductConnect.realReadBlockerEnv));
+});
+
+test("never sends an existing installation into a new-install setup URL", () => {
+  const html = renderPanel({
+    repositories: {
+      ...repositories,
+      count: 0,
+      repositories: []
+    }
+  });
+
+  assert.ok(html.includes(M.githubProductConnect.missionEmptyCurrent));
+  assert.ok(html.includes(M.githubProductConnect.refreshConnection));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
+  assert.doesNotMatch(
+    html,
+    new RegExp(M.githubProductConnect.openSetupSettings)
+  );
+});
+
+test("uses a global sync lock for the chooser and primary action", () => {
+  const html = renderPanel({
+    repositorySync: {
+      "qtwin-io/another-repo": {
+        error: null,
+        result: null,
+        state: "syncing"
+      }
+    }
+  });
+
+  assert.ok(html.includes(M.githubProductConnect.liveSyncRunning));
+  assert.match(
+    html,
+    /class="github-repository-choice-main" disabled=""/
+  );
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
+});
+
+test("keeps at most eight repository choices before the disclosure", () => {
+  const manyRepositories: GitHubRepositoryListResponse = {
+    ...repositories,
+    count: 10,
+    repositories: Array.from({ length: 10 }, (_, index) => ({
+      ...repositories.repositories[0],
+      id: `repo-${index + 1}`,
+      name: `repo-${index + 1}`,
+      full_name: `qtwin-io/repo-${index + 1}`,
+      source_url: `https://github.com/qtwin-io/repo-${index + 1}`
+    }))
+  };
+  const html = renderPanel({ repositories: manyRepositories });
+  const beforeDisclosure = html.split(
+    '<details class="github-repository-more">'
+  )[0];
+
+  assert.equal(
+    (
+      beforeDisclosure.match(
+        /<article class="github-repository-choice(?: |")/g
+      ) ?? []
+    ).length,
+    8
+  );
+  assert.ok(html.includes(T.githubShowMoreRepositories(2)));
 });
 
 test("renders live sync success and error states without write claim", () => {
@@ -425,6 +540,8 @@ test("renders live sync success and error states without write claim", () => {
   assert.ok(success.includes(M.githubProductConnect.liveSyncResultTitle));
   assert.ok(success.includes(M.githubProductConnect.liveSyncNoWrites));
   assert.ok(success.includes("репозиториев — 1, задач — 1, пулреквестов — 1"));
+  assert.match(success, /aria-live="polite"/);
+  assert.match(success, /role="status"/);
 
   const error = renderPanel({
     repositorySync: {
@@ -437,6 +554,82 @@ test("renders live sync success and error states without write claim", () => {
   });
   assert.ok(error.includes(M.githubProductConnect.liveSyncFailedTitle));
   assert.match(error, /not part of the app installation/);
+  assert.match(error, /<details class="github-command-error-details">/);
+});
+
+test("classifies resolved sync jobs without treating HTTP success as job success", () => {
+  assert.equal(classifyGitHubSyncState("succeeded"), "success");
+  assert.equal(classifyGitHubSyncState("running"), "pending");
+  assert.equal(classifyGitHubSyncState("queued"), "pending");
+  assert.equal(classifyGitHubSyncState("failed"), "error");
+  assert.equal(classifyGitHubSyncState("partial"), "partial");
+  assert.equal(shouldRefreshGitHubDataAfterSync("succeeded"), true);
+  assert.equal(shouldRefreshGitHubDataAfterSync("partial"), true);
+  assert.equal(shouldRefreshGitHubDataAfterSync("running"), false);
+  assert.equal(shouldRefreshGitHubDataAfterSync("failed"), false);
+
+  const running = renderPanel({
+    repositorySync: {
+      "qtwin-io/company-knowledge-os": {
+        error: null,
+        result: {
+          ...liveSyncResult,
+          sync_job: { ...liveSyncResult.sync_job, status: "running" }
+        },
+        state: "pending"
+      }
+    }
+  });
+  assert.ok(running.includes(M.githubProductConnect.liveSyncPendingTitle));
+  assert.ok(running.includes(M.githubProductConnect.liveSyncPendingDescription));
+  assert.ok(running.includes(M.githubProductConnect.liveSyncRun));
+  assert.doesNotMatch(running, new RegExp(M.githubProductConnect.liveSyncRunning));
+  assert.match(running, /github-sync-receipt--pending/);
+  assert.doesNotMatch(
+    running,
+    new RegExp(`class="eyebrow">${M.githubProductConnect.receiptEyebrow}<`)
+  );
+
+  const partial = renderPanel({
+    repositorySync: {
+      "qtwin-io/company-knowledge-os": {
+        error: null,
+        result: {
+          ...liveSyncResult,
+          sync_job: { ...liveSyncResult.sync_job, status: "partial" }
+        },
+        state: "partial"
+      }
+    }
+  });
+  assert.ok(partial.includes(M.githubProductConnect.liveSyncPartialTitle));
+  assert.ok(partial.includes(M.githubProductConnect.liveSyncPartialDescription));
+  assert.ok(partial.includes(M.githubProductConnect.missionPartialCurrent));
+  assert.match(partial, /github-sync-receipt--partial/);
+  assert.doesNotMatch(
+    partial,
+    new RegExp(M.githubProductConnect.liveSyncResultFailedTitle)
+  );
+
+  const failed = renderPanel({
+    repositorySync: {
+      "qtwin-io/company-knowledge-os": {
+        error: null,
+        result: {
+          ...liveSyncResult,
+          sync_job: { ...liveSyncResult.sync_job, status: "failed" }
+        },
+        state: "error"
+      }
+    }
+  });
+  assert.ok(failed.includes(M.githubProductConnect.liveSyncResultFailedTitle));
+  assert.ok(failed.includes(M.githubProductConnect.receiptErrorEyebrow));
+  assert.match(failed, /github-sync-receipt--error/);
+  assert.doesNotMatch(
+    failed,
+    new RegExp(`class="eyebrow">${M.githubProductConnect.receiptEyebrow}<`)
+  );
 });
 
 test("renders no-workspace and error states", () => {

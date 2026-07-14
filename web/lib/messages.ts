@@ -382,43 +382,99 @@ export const M = {
   },
 
   githubPage: {
-    eyebrow: "GitHub",
-    title: "Поток бэкенда GitHub",
-    description: "Экраны MVP в рамках рабочего пространства поверх существующих контрактов бэкенда.",
-    connectionTitle: "Статус подключения",
-    connectionValue: "Бэкенд",
-    connectionDescription:
-      "Читает /api/v1/workspaces/{workspace_id}/github/connection-status.",
-    reposTitle: "Репозитории",
-    reposValue: "Бэкенд",
-    reposDescription: "Читает локальную опись репозиториев через бэкенд.",
-    syncJobsTitle: "Задания синхронизации",
-    syncJobsValue: "Вручную",
-    syncJobsDescription: "Записи SyncJob локальны, пока нет рабочего процесса воркера.",
-    normalizationTitle: "Локальная нормализация",
-    normalizationValue: "Канонические",
-    normalizationDescription:
-      "Канонические репозитории, задачи и пулреквесты видны на панели.",
-    scaffoldTitle: "Управление потоком GitHub — пока локальные заготовки MVP.",
-    scaffoldDescription:
-      "Панель уже читает каноническую работу GitHub. Эти элементы подключения и синхронизации остаются заготовками до появления продуктового подключения/синхронизации."
+    eyebrow: "Источники",
+    title: "GitHub",
+    description:
+      "Репозитории, задачи и PR — в одном понятном потоке. Вы выбираете, что читать; FounderOS ничего не меняет в GitHub."
   },
 
   githubProductConnect: {
-    eyebrow: "GitHub App",
-    title: "Продуктовое подключение GitHub",
-    badgeReadOnly: "Только чтение",
+    eyebrow: "Источник данных",
+    title: "Центр GitHub",
+    badgeReadOnly: "Без изменений в GitHub",
     description:
-      "Фундамент подключения через GitHub App: установка привязана к рабочему пространству, токены установки не хранятся, внешние записи отключены.",
-    loading: "Загрузка состояния GitHub App",
+      "Выберите один репозиторий и загрузите его задачи и пулреквесты в рабочую картину FounderOS.",
+    loading: "Проверяем подключение и репозитории…",
     noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — подключать нечего.",
     unavailableTitle: "Состояние GitHub App недоступно",
-    unavailableDescription: "Панель не смогла загрузить состояние продуктового подключения GitHub.",
+    unavailableDescription:
+      "Не удалось проверить подключение. Повторите запрос — существующие данные не изменятся.",
+    errorDetails: "Показать техническую причину",
+    missionViewerCurrent: "GitHub доступен вам для просмотра",
+    missionConnectionCurrent: "GitHub ещё не готов к загрузке",
+    missionConnectionAttentionCurrent: "Подключение GitHub требует внимания",
+    missionEmptyCurrent: "Подключение готово, но список репозиториев пуст",
+    missionReadyCurrent: "Можно загрузить работу из одного репозитория",
+    missionSyncedCurrent: "Выбранный репозиторий загружен",
+    missionViewerAction: "Проверьте доступные репозитории и их состояние",
+    missionConnectionAction: "Подключите GitHub App",
+    missionConnectionAttentionAction:
+      "Проверьте статус установки и блокеры",
+    missionTechnicalAction: "Откройте технические детали и снимите блокеры",
+    missionEmptyAction: "Проверьте установку и доступ к репозиториям",
+    missionReadyAction: "Выберите репозиторий и запустите загрузку",
+    missionPartialCurrent: "Репозиторий загружен частично",
+    missionPartialAction: "Проверьте предупреждения и при необходимости повторите загрузку",
+    missionViewerOutcome: "Вы увидите, какие данные уже доступны в FounderOS",
+    missionConnectionOutcome:
+      "После подключения FounderOS сможет читать выбранные репозитории",
+    missionEmptyOutcome: "Доступные репозитории появятся в списке выбора",
+    missionReadyOutcome: "Задачи и PR появятся в оперативной картине FounderOS",
+    missionPartialOutcome:
+      "Пульс обновлён доступными данными; отсутствующие категории отмечены предупреждением",
+    missionSyncedOutcome: "Пульс работы ниже обновлён данными выбранного репозитория",
+    missionSafeDetails:
+      "FounderOS только читает выбранный репозиторий. Массовой загрузки и изменений в GitHub эта кнопка не выполняет.",
+    flowLabel: "Путь данных из GitHub в FounderOS",
+    flowConnectionTitle: "Подключение",
+    flowConnectionDescription: "GitHub App даёт безопасный доступ на чтение.",
+    flowRepositoryTitle: "Репозиторий",
+    flowRepositoryDescription: "Вы выбираете один понятный источник работы.",
+    flowFounderOSTitle: "Задачи и PR",
+    flowFounderOSDescription: "FounderOS обновляет оперативную картину.",
+    metricsTitle: "Состояние источника",
+    metricsLabel: "Ключевые метрики GitHub",
+    metricsHintLabel: "Как читать метрики GitHub?",
+    metricsHint:
+      "Счётчики относятся только к уже загруженному ответу. FounderOS не достраивает отсутствующие данные и не выдаёт локальную копию за живой GitHub.",
+    connectionMetricTitle: "Подключение",
+    connectionMetricConnected: "Готово",
+    connectionMetricAttention: "Нужно внимание",
+    loadedMetricTitle: "В выборке",
+    activeMetricTitle: "Активные",
+    activeMetricHint: "Неархивные репозитории в загруженной выборке.",
+    lastSyncMetricTitle: "Последняя загрузка",
+    lastSyncMetricHint: "Время последней записанной синхронизации подключения.",
+    lastSyncNever: "Ещё не было",
+    setupActionHint:
+      "Установите приложение, вернитесь на страницу и проверьте подключение.",
+    repositoryAccessActionHint:
+      "Разрешите доступ хотя бы к одному репозиторию, затем обновите состояние.",
+    connectionAttentionActionHint:
+      "Установка уже записана. Проверьте её статус и блокеры — создавать вторую установку не нужно.",
+    refreshConnection: "Проверить подключение",
+    repositoryWorkbenchEyebrow: "Ваш выбор",
+    repositoryWorkbenchTitle: "Какой репозиторий загрузить?",
+    repositoryWorkbenchDescription:
+      "Сначала выберите карточку. Затем нажмите одну кнопку под списком.",
+    repositoryActive: "Активный",
+    repositoryArchived: "Архивный",
+    repositorySourceTitle: "Источник списка",
+    technicalDetails: "Технические детали и безопасность",
+    technicalDescription:
+      "Здесь собраны readiness-проверки, источник локальной выборки, env-настройки и предупреждения — они не мешают основному действию.",
+    receiptEyebrow: "Готово",
+    receiptPartialEyebrow: "Частично готово",
+    receiptPendingEyebrow: "В процессе",
+    receiptErrorEyebrow: "Требует внимания",
+    receiptTechnicalDetails: "Предупреждения синхронизации",
     appTitle: "GitHub App",
     appConnected: "Подключено",
     appConfigured: "Готово",
     appNotConfigured: "Не настроено",
     appInstallationDescription: "Установка GitHub App записана в этом рабочем пространстве.",
+    appConnectionAttentionDescription:
+      "Запись установки найдена, но подключение сейчас не находится в состоянии «Готово».",
     appReadyDescription: "Конфигурация GitHub App готова; можно установить приложение для рабочего пространства.",
     appMissingDescription: "Нужны server-side env-поля GitHub App перед установкой.",
     repositoriesTitle: "Локальная поверхность репозиториев",
@@ -450,7 +506,8 @@ export const M = {
     realReadBoundary:
       "Даже когда статус готов, запуск остаётся отдельным explicit action по одному выбранному репозиторию.",
     missingEnvTitle: "Не хватает server-side env-полей",
-    openSetup: "Открыть установку GitHub App",
+    openSetup: "Подключить GitHub App",
+    openSetupSettings: "Открыть настройки GitHub App",
     liveSyncTitle: "Живая read-only синхронизация",
     liveSyncDescription:
       "Запускает backend polling-only GitHub App sync для одного явно указанного репозитория. Токен установки выпускается just-in-time, не сохраняется, записи в GitHub не выполняются.",
@@ -460,25 +517,31 @@ export const M = {
       "Репозиторий должен быть доступен текущей установке GitHub App. Массовая синхронизация всей организации здесь не запускается.",
     liveSyncRepositoryInvalid: "Укажите репозиторий в формате owner/repo без пробелов.",
     liveSyncRequiresApp: "Сначала нужна подключённая запись GitHub App installation.",
-    liveSyncRun: "Синхронизировать read-only",
-    liveSyncRunning: "Идёт read-only синхронизация",
-    liveSyncFailedTitle: "Живая read-only синхронизация не удалась",
-    liveSyncFailedDescription: "Backend не смог выполнить GitHub App read sync.",
-    liveSyncResultTitle: "Итог GitHub App read sync",
-    liveSyncNoWrites: "Записи в GitHub не выполнялись.",
+    liveSyncRun: "Загрузить задачи и PR",
+    liveSyncRunning: "Загружаем задачи и PR…",
+    liveSyncFailedTitle: "Не удалось загрузить репозиторий",
+    liveSyncFailedDescription: "FounderOS не смог прочитать выбранный репозиторий.",
+    liveSyncResultTitle: "Результат загрузки",
+    liveSyncPendingTitle: "Загрузка ещё выполняется",
+    liveSyncPendingDescription:
+      "Backend вернул промежуточный статус. Автоматическое ожидание не запущено — можно обновить страницу или повторить чтение.",
+    liveSyncPartialTitle: "Загрузка завершена частично",
+    liveSyncPartialDescription:
+      "FounderOS обновил всё, что удалось прочитать. Одна или несколько запрошенных категорий оказались пустыми — подробности есть в предупреждениях.",
+    liveSyncResultFailedTitle: "Загрузка завершилась с ошибкой",
+    liveSyncResultFailedDescription:
+      "Данные не считаются обновлёнными. Проверьте предупреждения и повторите чтение.",
+    liveSyncNoWrites: "GitHub не изменён — выполнено только чтение.",
     repositoryListTitle: "Репозитории",
     repositoryListEmptyTitle: "Репозитории не найдены",
     repositoryListEmptyDescription:
-      "Локальная поверхность репозиториев пуста. Сначала подготовьте repository surface или подключите GitHub App.",
-    repositoryFocusTitle: "Фокус локальной repo surface",
+      "FounderOS пока не видит доступных репозиториев. Подключите GitHub App или разрешите ему доступ к нужным репозиториям.",
     repositoryFocusLabel: "Фильтр локальной поверхности репозиториев",
-    repositoryFocusDescription:
-      "Фильтр работает только по уже загруженному списку репозиториев и не запускает provider calls, bulk sync или внешние записи.",
-    repositoryFocusAll: "Все repo",
+    repositoryFocusAll: "Все",
     repositoryFocusActive: "Активные",
     repositoryFocusArchived: "Архивные",
-    repositoryFocusPrivate: "Private",
-    repositoryFocusWithEvidence: "С evidence",
+    repositoryFocusPrivate: "Приватные",
+    repositoryFocusWithEvidence: "С источниками",
     repositoryListNoReposForFilter:
       "Для выбранного локального фильтра репозиториев нет."
   },
@@ -512,8 +575,8 @@ export const M = {
   },
 
   githubWork: {
-    eyebrow: "GitHub",
-    title: "Оперативная работа",
+    eyebrow: "После загрузки",
+    title: "Пульс работы",
     stateLabel: "Состояние работы GitHub",
     stateAll: "Все",
     stateOpen: "Открытые",
@@ -522,7 +585,11 @@ export const M = {
     loading: "Загрузка работы GitHub",
     noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — работы GitHub нет.",
     unavailableTitle: "Оперативная работа GitHub недоступна",
-    unavailableDescription: "Панель не смогла загрузить работу GitHub.",
+    unavailableDescription:
+      "Не удалось прочитать сохранённые задачи и PR. Повторите запрос — данные не изменятся.",
+    errorDetails: "Показать техническую причину",
+    sampleNote:
+      "Метрики относятся к текущему фильтру локально загруженной выборки — до 100 задач и 100 PR.",
     emptyTitle: "Оперативная работа GitHub ещё не синхронизирована",
     emptyDescription:
       "Запустите локальную нормализацию GitHub с канонической записью, чтобы наполнить задачи и пулреквесты.",
@@ -1649,6 +1716,10 @@ export const T = {
     `${state}: записи задач GitHub из канонического пути бэкенда.`,
   workPullRequestsDescription: (state: string) =>
     `${state}: пулреквесты, связанные с репозиториями, где это возможно.`,
+  githubWorkMetricComposition: (count: number, sampleSize: number) =>
+    sampleSize === 0
+      ? "Пустая выборка текущего фильтра."
+      : `${count} из ${sampleSize} записей текущего фильтра.`,
   repoReadSource: (source: string) => `Источник чтения репозиториев: ${source}.`,
   githubRepositorySurfaceDescription: (source: string) =>
     `Источник поверхности репозиториев: ${source}. Живой provider-sync здесь не запускается.`,
@@ -1666,8 +1737,27 @@ export const T = {
     withEvidence: number
   ) =>
     `Repo surface: всего ${total} · активных ${active} · архивных ${archived} · private ${privateCount} · с evidence ${withEvidence}.`,
-  githubAppLiveSyncResult: (repos: number, issues: number, prs: number, status: string) =>
-    `Синхронизировано через GitHub App: репозиториев — ${repos}, задач — ${issues}, пулреквестов — ${prs}. Статус: ${status}.`,
+  githubLoadedRepositorySample: (loaded: number, reported: number) => {
+    if (reported > loaded) {
+      return `На экране ${loaded} из ${reported} записей ответа; метрика не выдаёт часть выборки за полный список.`;
+    }
+    return `На экране все ${loaded} репозиториев из загруженного ответа.`;
+  },
+  githubSelectedRepositoryAction: (repository: string) =>
+    `Будет прочитан только ${repository}; массовая загрузка не запускается.`,
+  githubShowMoreRepositories: (count: number) =>
+    `Показать остальные репозитории · ${count}`,
+  githubAppLiveSyncResult: (repos: number, issues: number, prs: number, status: string) => {
+    const statusLabel =
+      status === "succeeded"
+        ? "готово"
+        : status === "failed"
+          ? "ошибка"
+          : status === "running"
+            ? "выполняется"
+            : status;
+    return `Прочитано: репозиториев — ${repos}, задач — ${issues}, пулреквестов — ${prs}. Статус: ${statusLabel}.`;
+  },
   githubRealReadNextStep: (
     appEnvConfigured: boolean,
     hasAppInstallationConnection: boolean,

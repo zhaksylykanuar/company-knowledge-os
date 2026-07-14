@@ -4,6 +4,21 @@
 
 ### Changed
 
+- Replaced the technical `/github` scaffold with a Source Command Center
+  (DEC-079). The page now leads with a role-aware mission, shows the three-step
+  path from GitHub App through one selected repository into FounderOS, and uses
+  only truthful loaded-sample metrics for connection state, repositories,
+  active repositories, last recorded sync, tasks, and pull requests. A compact
+  repository chooser promotes one read-only load action; successful and partial
+  loads refresh the visible work pulse and produce an honest no-write receipt,
+  while pending and failed jobs remain recoverable attention states. Long repository
+  and work lists collapse after a small preview, while readiness, env names,
+  token/write policy, provenance, warnings, and technical causes remain
+  available in disclosures. The redesign also closes a readiness bug that could
+  make sync appear available for a non-connected installation. Backend APIs,
+  persistence, RBAC, provider-read approval, external-write, and LLM boundaries
+  are unchanged. Authenticated visual QA passed on real local data at 1280×720
+  and 390×844 without horizontal overflow.
 - Reworked the authenticated product into a mission-first Command Mode
   (DEC-078). The five primary zones now lead with «Сейчас → Нажмите →
   Результат»: Today keeps one compact mission, Company World teaches the first

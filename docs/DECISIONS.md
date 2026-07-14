@@ -2268,6 +2268,48 @@ Consequences:
   boundaries remain unchanged. No migration, provider call, external write, or
   LLM path is added.
 
+## DEC-079 - Provider Detail Pages Use A Source Command Center
+
+Decision (2026-07-14): a provider detail page should explain and operate one
+source through a small command-center grammar rather than expose backend
+readiness as the product. `/github` is the first implementation and the
+reference for later Jira, Gmail, and Drive detail-page redesigns.
+
+The reference layout is:
+
+- one role-aware mission with the current state, one next action, and its
+  expected result;
+- one short visual path from provider access through an explicitly selected
+  source object into FounderOS;
+- no more than four metrics, derived only from the typed response currently
+  loaded and visibly scoped when the API returns a bounded sample;
+- one promoted operation, followed by a human-readable success/partial/error
+  receipt; a partial read refreshes the records that were available without
+  being labelled as complete success;
+- operational records below the source controls so the result of a successful
+  load is visible without navigating elsewhere; and
+- readiness matrices, env names, token policy, provenance, warnings, and raw
+  technical causes behind accessible disclosures.
+
+Honesty and access rules:
+
+- local connection state is not presented as a live provider health check;
+- repository and work counts are labelled as the loaded bounded sample, never
+  as organization-wide totals;
+- viewer guidance never promises setup or synchronization it cannot perform;
+- provider setup and read controls remain role-gated, one repository at a
+  time, and disabled unless the exact backend capability state is ready;
+- visuals must not invent trends, completion percentages, CI health, team
+  velocity, or other metrics absent from the response; and
+- color is supplementary. Text labels, native controls, focus states, compact
+  mobile layout, and reduced-motion behavior remain required.
+
+Consequence: later provider pages may reuse the interaction grammar and visual
+primitives but should not be forced through a generic configuration engine.
+UX-04 changes frontend composition and presentation only; existing backend API,
+database, RBAC, provider-read approval, external-write, evidence, and LLM
+boundaries remain unchanged.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

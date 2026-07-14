@@ -15,7 +15,8 @@ import { SourceLink } from "./SourceLink";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
-import { StatusCard } from "./StatusCard";
+
+const visibleWorkItems = 4;
 
 const stateOptions: { value: GitHubOperationalWorkState; label: string }[] = [
   { value: "open", label: M.githubWork.stateOpen },
@@ -111,18 +112,28 @@ export function GitHubOperationalWorkPanelView({
   status
 }: GitHubOperationalWorkPanelViewProps) {
   return (
-    <section className="panel operational-work" aria-labelledby="github-work-title">
-      <div className="section-header">
+    <section
+      aria-busy={status === "loading"}
+      aria-labelledby="github-work-title"
+      className="panel operational-work github-work-pulse"
+    >
+      <div className="section-header github-work-pulse__header">
         <div>
           <span className="eyebrow">{M.githubWork.eyebrow}</span>
           <h2 id="github-work-title">{M.githubWork.title}</h2>
         </div>
-        <div className="segmented" aria-label={M.githubWork.stateLabel}>
+        <div
+          aria-label={M.githubWork.stateLabel}
+          className="segmented github-work-pulse__filters"
+          role="group"
+        >
           {stateOptions.map((option) => (
             <button
               aria-pressed={selectedState === option.value}
               className={
-                selectedState === option.value ? "segment active" : "segment"
+                selectedState === option.value
+                  ? "segment active github-work-pulse__filter"
+                  : "segment github-work-pulse__filter"
               }
               key={option.value}
               onClick={() => onStateChange?.(option.value)}
@@ -134,28 +145,44 @@ export function GitHubOperationalWorkPanelView({
         </div>
       </div>
 
-      {status === "loading" ? <LoadingState label={M.githubWork.loading} /> : null}
+      {status === "loading" ? (
+        <div
+          aria-live="polite"
+          className="github-work-pulse__state"
+          role="status"
+        >
+          <LoadingState label={M.githubWork.loading} />
+        </div>
+      ) : null}
 
       {status === "missing" ? (
-        <EmptyState
-          description={M.githubWork.noWorkspaceDescription}
-          title={M.common.noWorkspaceTitle}
-        />
+        <div className="github-work-pulse__state">
+          <EmptyState
+            description={M.githubWork.noWorkspaceDescription}
+            title={M.common.noWorkspaceTitle}
+          />
+        </div>
       ) : null}
 
       {status === "error" ? (
-        <>
+        <div className="github-work-pulse__state">
           <ErrorState
-            description={error ?? M.githubWork.unavailableDescription}
+            description={M.githubWork.unavailableDescription}
             title={M.githubWork.unavailableTitle}
           />
           <button className="button secondary" onClick={onRetry} type="button">
             {M.common.retry}
           </button>
-        </>
+          {error ? (
+            <details className="github-work-pulse__error-details">
+              <summary>{M.githubWork.errorDetails}</summary>
+              <p>{error}</p>
+            </details>
+          ) : null}
+        </div>
       ) : null}
 
-      {status === "empty" ? (
+      {status === "empty" && !data ? (
         <EmptyState
           description={M.githubWork.emptyDescription}
           title={M.githubWork.emptyTitle}
@@ -163,20 +190,45 @@ export function GitHubOperationalWorkPanelView({
       ) : null}
 
       {data && status !== "loading" && status !== "error" && status !== "missing" ? (
-        <>
-          <section className="grid" aria-label={M.githubWork.title}>
-            <StatusCard
+        <div className="github-work-pulse__results" id="github-work-results">
+          <p className="muted github-work-pulse__sample-note">
+            {M.githubWork.sampleNote}
+          </p>
+          <section
+            aria-label={M.githubWork.title}
+            aria-live="polite"
+            className="github-work-pulse__snapshot"
+            data-scope="loaded-sample"
+            role="status"
+          >
+            <PulseMetric
+              count={data.counts.issues}
               description={T.workIssuesDescription(stateLabel(selectedState))}
+              kind="issue"
+              sampleSize={data.counts.issues + data.counts.pull_requests}
               title={M.githubWork.issuesTitle}
-              value={String(data.counts.issues)}
             />
-            <StatusCard
+            <PulseMetric
+              count={data.counts.pull_requests}
               description={T.workPullRequestsDescription(stateLabel(selectedState))}
+              kind="pull-request"
+              sampleSize={data.counts.issues + data.counts.pull_requests}
               title={M.githubWork.pullRequestsTitle}
-              value={String(data.counts.pull_requests)}
             />
           </section>
-          <div className="work-columns">
+          {data.warnings.length > 0 ? (
+            <details className="github-work-pulse__warnings">
+              <summary>
+                {M.common.warnings} ({data.warnings.length})
+              </summary>
+              <ul className="github-work-pulse__warning-list">
+                {data.warnings.map((warning, index) => (
+                  <li key={`${index}-${warning}`}>{warning}</li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <div className="work-columns github-work-pulse__columns">
             <WorkSection
               emptyText={M.githubWork.noIssuesForFilter}
               items={data.issues}
@@ -190,9 +242,46 @@ export function GitHubOperationalWorkPanelView({
               type="pull_request"
             />
           </div>
-        </>
+        </div>
       ) : null}
     </section>
+  );
+}
+
+type PulseMetricProps = {
+  count: number;
+  description: string;
+  kind: "issue" | "pull-request";
+  sampleSize: number;
+  title: string;
+};
+
+function PulseMetric({
+  count,
+  description,
+  kind,
+  sampleSize,
+  title
+}: PulseMetricProps) {
+  const composition = T.githubWorkMetricComposition(count, sampleSize);
+  const metricDescription = `${description} ${composition}`;
+  return (
+    <article
+      aria-label={metricDescription}
+      className={`github-work-pulse__metric github-work-pulse__metric--${kind}`}
+    >
+      <span className="github-work-pulse__metric-title">{title}</span>
+      <strong className="github-work-pulse__metric-value">{count}</strong>
+      <meter
+        aria-label={metricDescription}
+        className="github-work-pulse__meter"
+        max={Math.max(sampleSize, 1)}
+        value={count}
+      >
+        {count}
+      </meter>
+      <span className="github-work-pulse__metric-caption">{composition}</span>
+    </article>
   );
 }
 
@@ -211,29 +300,72 @@ type WorkSectionProps =
     };
 
 function WorkSection({ emptyText, items, title, type }: WorkSectionProps) {
+  const firstItems = items.slice(0, visibleWorkItems);
+  const remainingItems = items.slice(visibleWorkItems);
+  const typeClass = type === "issue" ? "issue" : "pull-request";
+
   return (
-    <section className="work-section" aria-label={title}>
-      <h3>{title}</h3>
-      {items.length === 0 ? <p className="muted">{emptyText}</p> : null}
-      <div className="work-list">
-        {items.map((item) => (
-          <article className="work-item" key={item.id}>
-            <div className="work-item-main">
-              <span className="badge">{type === "issue" ? M.githubWork.badgeIssue : M.githubWork.badgePr}</span>
+    <section
+      aria-label={title}
+      className={`work-section github-work-pulse__section github-work-pulse__section--${typeClass}`}
+    >
+      <div className="github-work-pulse__section-header">
+        <h3>{title}</h3>
+        <span className="badge github-work-pulse__section-count">{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="muted github-work-pulse__empty" role="status">
+          {emptyText}
+        </p>
+      ) : (
+        <>
+          <WorkList items={firstItems} type={type} />
+          {remainingItems.length > 0 ? (
+            <details className="github-work-pulse__more">
+              <summary>
+                {title} +{remainingItems.length}
+              </summary>
+              <WorkList items={remainingItems} type={type} />
+            </details>
+          ) : null}
+        </>
+      )}
+    </section>
+  );
+}
+
+type WorkListProps = {
+  items: (GitHubOperationalIssue | GitHubOperationalPullRequest)[];
+  type: "issue" | "pull_request";
+};
+
+function WorkList({ items, type }: WorkListProps) {
+  return (
+    <ul className="work-list github-work-pulse__list">
+      {items.map((item) => (
+        <li className="github-work-pulse__list-item" key={item.id}>
+          <article className="work-item github-work-pulse__item">
+            <div className="work-item-main github-work-pulse__item-main">
+              <div className="github-work-pulse__item-badges">
+                <span className="badge">
+                  {type === "issue"
+                    ? M.githubWork.badgeIssue
+                    : M.githubWork.badgePr}{" "}
+                  {referenceLabel(item)}
+                </span>
+                <span
+                  aria-label={`${M.githubWork.metaState}: ${workItemStateLabel(item.state)}`}
+                  className="badge github-work-pulse__item-state"
+                >
+                  {workItemStateLabel(item.state)}
+                </span>
+              </div>
               <h4>{item.title}</h4>
             </div>
-            <dl className="work-meta">
+            <dl className="work-meta github-work-pulse__item-meta">
               <div>
                 <dt>{M.githubWork.metaRepository}</dt>
                 <dd>{repositoryLabel(item)}</dd>
-              </div>
-              <div>
-                <dt>{M.githubWork.metaState}</dt>
-                <dd>{item.state ?? M.common.unknown}</dd>
-              </div>
-              <div>
-                <dt>{M.githubWork.metaReference}</dt>
-                <dd>{referenceLabel(item)}</dd>
               </div>
               {timestampLabel(item) ? (
                 <div>
@@ -250,9 +382,9 @@ function WorkSection({ emptyText, items, title, type }: WorkSectionProps) {
               <SourceLink url={item.source_url}>{M.common.openSource}</SourceLink>
             ) : null}
           </article>
-        ))}
-      </div>
-    </section>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -282,6 +414,19 @@ function timestampLabel(
     return item.source_updated_at;
   }
   return item.updated_at_source || item.merged_at_source || item.created_at_source;
+}
+
+function workItemStateLabel(value: string | null): string {
+  if (value === "open") {
+    return M.githubWork.stateOpen;
+  }
+  if (value === "closed") {
+    return M.githubWork.stateClosed;
+  }
+  if (value === "merged") {
+    return M.githubWork.stateMerged;
+  }
+  return M.common.unknown;
 }
 
 export function formatSourceTimestamp(value: string | null): string {
