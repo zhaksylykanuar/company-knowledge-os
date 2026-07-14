@@ -1136,8 +1136,10 @@ export type ActionExecutionResponse = {
 
 export type GitHubAppConfigStatus = {
   configured: boolean;
+  credential_source: GitHubAppCredentialSource;
   app_id_configured: boolean;
   app_slug: string | null;
+  app_name: string | null;
   private_key_configured: boolean;
   private_key_source: string | null;
   webhook_secret_configured: boolean;
@@ -1146,6 +1148,88 @@ export type GitHubAppConfigStatus = {
   missing_env: string[];
   installation_tokens_persisted: boolean;
   provider_writes_enabled: boolean;
+};
+
+export type GitHubAppSetupPhase =
+  | "not_started"
+  | "manifest_pending"
+  | "manifest_exchanging"
+  | "installation_pending"
+  | "oauth_pending"
+  | "oauth_exchanging"
+  | "repository_selection"
+  | "connected"
+  | "failed"
+  | "cancelled";
+
+export type GitHubAppCredentialSource = "managed" | "environment" | "none";
+
+export type GitHubAppSetupRepositoryRead = {
+  id: string;
+  name: string;
+  full_name: string;
+  private: boolean;
+  visibility: string;
+  archived: boolean;
+  default_branch: string | null;
+  source_url: string | null;
+  last_activity_at: string | null;
+};
+
+export type GitHubAppSetupStatus = {
+  phase: GitHubAppSetupPhase;
+  credential_source: GitHubAppCredentialSource;
+  app_slug: string | null;
+  app_name: string | null;
+  installation_account: string | null;
+  installation_settings_url: string | null;
+  repository_count: number;
+  repositories: GitHubAppSetupRepositoryRead[];
+  selected_repositories: string[];
+  expires_at: string | null;
+  error_code: string | null;
+  install_url: string | null;
+  can_manage: boolean;
+  can_restart: boolean;
+  setup_owned_by_current_user: boolean;
+  installation_verified: boolean;
+  secrets_encrypted: boolean;
+  installation_tokens_persisted: boolean;
+  provider_writes_enabled: boolean;
+};
+
+export type GitHubAppManifestSetupRequest = {
+  owner_type: "user" | "organization";
+  organization_login?: string;
+  app_origin: string;
+};
+
+export type GitHubAppManifestSetupResponse = {
+  phase: GitHubAppSetupPhase;
+  action_url: string;
+  manifest: string;
+  expires_at: string;
+};
+
+export type GitHubAppInstallSetupResponse = {
+  phase: GitHubAppSetupPhase;
+  redirect_url: string;
+  expires_at: string;
+};
+
+export type GitHubAppRepositorySelectionRequest = {
+  repositories: string[];
+};
+
+export type GitHubAppRepositorySelectionResponse = {
+  phase: GitHubAppSetupPhase;
+  connection_id: string;
+  selected_repositories: string[];
+  repository_count: number;
+};
+
+export type GitHubAppSetupRestartResponse = {
+  phase: GitHubAppSetupPhase;
 };
 
 export type GitHubConnectionStatusResponse = {
@@ -1160,6 +1244,9 @@ export type GitHubConnectionStatusResponse = {
   has_valid_token_record: boolean;
   repository_read_available: boolean;
   repository_read_source: string;
+  installation_verified: boolean;
+  live_read_available: boolean;
+  selected_repositories: string[];
   is_live: boolean;
   app: GitHubAppConfigStatus;
   warnings: string[];

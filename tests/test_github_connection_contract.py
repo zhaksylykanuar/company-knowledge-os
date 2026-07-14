@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -16,12 +17,16 @@ from app.db.identity_models import (
     Workspace,
 )
 from app.db.integration_models import (
+    GITHUB_APP_CREDENTIAL_STATUS_ACTIVE,
+    GITHUB_APP_INSTALLATION_STATUS_ACTIVE,
     INTEGRATION_CONNECTION_STATUS_CONNECTED,
     INTEGRATION_CONNECTION_STATUS_DISABLED,
     INTEGRATION_CONNECTION_STATUS_ERROR,
     INTEGRATION_CONNECTION_STATUS_REVOKED,
     INTEGRATION_PROVIDER_GITHUB,
     INTEGRATION_PROVIDER_JIRA,
+    GitHubAppCredential,
+    GitHubAppInstallation,
     IntegrationConnection,
     SyncJob,
 )
@@ -94,6 +99,16 @@ async def _cleanup_connection_fixture(marker: str) -> None:
             ).scalars()
         )
         if workspace_ids:
+            await session.execute(
+                delete(GitHubAppInstallation).where(
+                    GitHubAppInstallation.workspace_id.in_(workspace_ids)
+                )
+            )
+            await session.execute(
+                delete(GitHubAppCredential).where(
+                    GitHubAppCredential.workspace_id.in_(workspace_ids)
+                )
+            )
             await session.execute(
                 delete(SyncJob).where(SyncJob.workspace_id.in_(workspace_ids))
             )
@@ -179,6 +194,67 @@ async def _seed_connection(
             },
         )
         session.add(connection)
+        await session.commit()
+        return connection.id
+
+
+async def _seed_verified_managed_app_connection(
+    workspace_id: str,
+    *,
+    marker: str,
+) -> UUID:
+    workspace_uuid = UUID(workspace_id)
+    async with AsyncSessionLocal() as session:
+        credential = GitHubAppCredential(
+            workspace_id=workspace_uuid,
+            app_id=f"managed-{marker}",
+            app_slug=f"founderos-managed-{marker}",
+            app_name="FounderOS managed test app",
+            client_id=f"client-{marker}",
+            encrypted_private_key="encrypted-managed-private-key",
+            encrypted_client_secret="encrypted-managed-client-secret",
+            encrypted_webhook_secret="encrypted-managed-webhook-secret",
+            callback_url="http://127.0.0.1:3000/api/v1/github/app-setup/oauth/callback",
+            source="manifest",
+            status=GITHUB_APP_CREDENTIAL_STATUS_ACTIVE,
+            last_verified_at=datetime.now(timezone.utc),
+        )
+        session.add(credential)
+        await session.flush()
+        connection = IntegrationConnection(
+            workspace_id=workspace_uuid,
+            provider=INTEGRATION_PROVIDER_GITHUB,
+            status=INTEGRATION_CONNECTION_STATUS_CONNECTED,
+            display_name="GitHub App: qtwin-io",
+            external_account_id=f"github_app_installation:{marker}",
+            scopes=["github_app_installation", "read_only"],
+            provider_metadata={
+                "connection_method": "github_app_installation",
+                "installation_id": marker,
+                "installation_verified": True,
+                "provider_reads_enabled": True,
+                "provider_writes_enabled": False,
+                "installation_access_token_persisted": False,
+                "selected_repositories": [
+                    {"full_name": "qtwin-io/company-knowledge-os"}
+                ],
+            },
+        )
+        session.add(connection)
+        await session.flush()
+        session.add(
+            GitHubAppInstallation(
+                workspace_id=workspace_uuid,
+                credential_id=credential.id,
+                connection_id=connection.id,
+                installation_id=marker,
+                account_login="qtwin-io",
+                repository_selection="selected",
+                verified_at=datetime.now(timezone.utc),
+                repository_count=1,
+                status=GITHUB_APP_INSTALLATION_STATUS_ACTIVE,
+            )
+        )
         await session.commit()
         return connection.id
 
@@ -316,8 +392,10 @@ async def test_github_connection_status_reports_app_config_without_secret_values
         body = response.json()
         assert body["app"] == {
             "configured": True,
+            "credential_source": "environment",
             "app_id_configured": True,
             "app_slug": "founderos-test",
+            "app_name": None,
             "private_key_configured": True,
             "private_key_source": "path",
             "webhook_secret_configured": True,
@@ -501,7 +579,7 @@ async def test_admin_can_record_github_app_installation_without_tokens_or_sync(
         await _cleanup_connection_fixture(marker)
 
 
-async def test_github_app_installation_status_uses_jit_token_warning(
+async def test_unverified_legacy_github_app_installation_is_not_live_ready(
     monkeypatch,
 ) -> None:
     marker = uuid4().hex
@@ -534,9 +612,75 @@ async def test_github_app_installation_status_uses_jit_token_warning(
         assert body["status"] == "connected"
         assert body["connection_method"] == "github_app_installation"
         assert body["has_valid_token_record"] is False
+        assert body["installation_verified"] is False
+        assert body["live_read_available"] is False
+        assert body["selected_repositories"] == []
         assert body["repository_read_source"] == "local_bridge"
         assert body["is_live"] is False
-        assert any("just-in-time installation tokens" in warning for warning in body["warnings"])
+        assert any("not provider-verified" in warning for warning in body["warnings"])
+    finally:
+        await _cleanup_connection_fixture(marker)
+
+
+async def test_verified_managed_github_app_is_preferred_and_jit_live_ready(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    _set_github_app_config(monkeypatch, configured=False)
+    await _cleanup_connection_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = created["workspace"]["id"]
+        await _seed_connection(workspace_id, suffix="manual")
+        app_connection_id = await _seed_verified_managed_app_connection(
+            workspace_id,
+            marker=marker,
+        )
+
+        async with _async_client() as client:
+            response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/connection-status",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["connection_id"] == str(app_connection_id)
+        assert body["connection_method"] == "github_app_installation"
+        assert body["installation_verified"] is True
+        assert body["has_valid_token_record"] is False
+        assert body["live_read_available"] is True
+        assert body["selected_repositories"] == [
+            "qtwin-io/company-knowledge-os"
+        ]
+        assert body["repository_read_source"] == "integration_connection"
+        assert body["app"] == {
+            "configured": True,
+            "credential_source": "managed",
+            "app_id_configured": True,
+            "app_slug": f"founderos-managed-{marker}",
+            "app_name": "FounderOS managed test app",
+            "private_key_configured": True,
+            "private_key_source": "encrypted_database",
+            "webhook_secret_configured": True,
+            "setup_url": (
+                f"https://github.com/apps/founderos-managed-{marker}/installations/new"
+            ),
+            "callback_url": (
+                "http://127.0.0.1:3000/api/v1/github/app-setup/oauth/callback"
+            ),
+            "missing_env": [],
+            "installation_tokens_persisted": False,
+            "provider_writes_enabled": False,
+        }
+        assert any(
+            "just-in-time installation tokens" in warning
+            for warning in body["warnings"]
+        )
+        assert "encrypted-managed" not in response.text
     finally:
         await _cleanup_connection_fixture(marker)
 

@@ -34,10 +34,18 @@ Read in this order (control trio = what / where / why):
   for server/CI/admin tooling. See the local full-stack path below.
 - Founder Briefings persist deterministic briefing history and can generate
   local evidence-backed ActionProposals from Jira/Gmail/Drive/document context.
-  GitHub App product-connect plus polling-only live read-sync backend/UI
-  foundations exist, including per-repository read-only sync buttons in
-  `/github`, mocked synced-evidence isolation for Company Brain/Briefings, safe
-  rate-limit/error observability, and a display-only real-read readiness panel.
+  GitHub App product-connect plus polling-only live read-sync backend/UI are in
+  place. `/github` now includes the primary owner/admin self-service wizard:
+  App creation, installation, OAuth/PKCE verification, explicit repository
+  selection, and per-repository read-only sync. Workspace App secrets and PKCE
+  state are protected; temporary OAuth/installation tokens are not persisted.
+  Connected owners/admins can revise the repository subset through the same UI
+  without interrupting the saved selection before an atomic save; managed
+  connections never fall back to legacy env authorization when their durable
+  credential/installation relation is missing.
+  Mocked synced-evidence isolation for Company Brain/Briefings and safe
+  rate-limit/error observability are covered. Real GitHub completion and the
+  first scoped provider read still require human confirmation.
   Company World now has workspace-owned durable people/organization profiles,
   explicit human confirm/dismiss decisions, evidence-backed affiliations and
   sanitized interaction history; viewer remains read-only.
@@ -147,9 +155,9 @@ characters. Invalid/reused setup tokens fail before Argon2 work.
 ## Local GitHub repository surface
 
 If a local GitHub repository export exists at `.local/repos.json`, FounderOS can
-use it as an offline repository surface before product GitHub App connect/live
-sync is implemented. The repo audit and repository inventory read models accept
-that file directly when no canonical discovery snapshot exists.
+use it as an offline repository surface before or without a verified live
+connection. The repo audit and repository inventory read models accept that file
+directly when no canonical discovery snapshot exists.
 
 To also write the canonical local discovery layout and a safe repository
 allowlist snippet, run:
@@ -182,8 +190,11 @@ It is idempotent, offline-only, and never reads or prints GitHub tokens.
 ## Human-gated external operations
 
 The first real GitHub App read and the final external-action-result smoke remain
-separate human-approved gates. A verified local stack is their prerequisite;
-local startup never enables provider reads, external writes, or LLM execution.
+separate human-approved gates. Normal GitHub setup now starts in `/github`; the
+managed browser-session read is still one explicit repository-scoped action and
+does not require a terminal env toggle. Local startup itself never starts a
+provider read, external write, or LLM execution. Env/manual GitHub setup remains
+a compatibility path, not the normal onboarding flow.
 See
 [`docs/deploy/github-app-first-real-read-run.md`](docs/deploy/github-app-first-real-read-run.md)
 and

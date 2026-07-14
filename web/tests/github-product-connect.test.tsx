@@ -25,8 +25,10 @@ import {
 
 const appConfigured: GitHubAppConfigStatus = {
   configured: true,
+  credential_source: "environment",
   app_id_configured: true,
   app_slug: "founderos",
+  app_name: "FounderOS",
   private_key_configured: true,
   private_key_source: "path",
   webhook_secret_configured: true,
@@ -40,8 +42,10 @@ const appConfigured: GitHubAppConfigStatus = {
 const appMissing: GitHubAppConfigStatus = {
   ...appConfigured,
   configured: false,
+  credential_source: "none",
   app_id_configured: false,
   app_slug: null,
+  app_name: null,
   private_key_configured: false,
   private_key_source: null,
   webhook_secret_configured: false,
@@ -64,6 +68,9 @@ const connectedAppStatus: GitHubConnectionStatusResponse = {
   has_valid_token_record: false,
   repository_read_available: true,
   repository_read_source: "local_bridge",
+  installation_verified: true,
+  live_read_available: true,
+  selected_repositories: ["qtwin-io/company-knowledge-os"],
   is_live: false,
   app: appConfigured,
   warnings: [
@@ -78,6 +85,8 @@ const missingAppStatus: GitHubConnectionStatusResponse = {
   connection_id: null,
   display_name: null,
   has_connection_record: false,
+  installation_verified: false,
+  live_read_available: false,
   app: appMissing,
   warnings: []
 };
@@ -194,6 +203,8 @@ function renderPanel(
       repositorySync={props.repositorySync ?? {}}
       repositories={props.repositories ?? repositories}
       selectedRepository={props.selectedRepository}
+      selfServiceSetupEnabled={props.selfServiceSetupEnabled}
+      setupWizard={props.setupWizard}
       state={props.state ?? "ready"}
     />
   );
@@ -411,6 +422,67 @@ test("renders missing GitHub App env contract", () => {
   assert.ok(html.includes(M.githubProductConnect.missingEnvTitle));
   assert.ok(html.includes("FOUNDEROS_GITHUB_APP_ID"));
   assert.ok(html.includes(M.githubProductConnect.refreshConnection));
+});
+
+test("self-service mode replaces the legacy env handoff with the in-platform wizard", () => {
+  const html = renderPanel({
+    connectionStatus: missingAppStatus,
+    repositories: { ...repositories, count: 0, repositories: [] },
+    selfServiceSetupEnabled: true,
+    setupWizard: <div>SELF_SERVICE_GITHUB_SETUP</div>
+  });
+
+  assert.ok(html.includes("SELF_SERVICE_GITHUB_SETUP"));
+  assert.ok(html.includes(M.githubProductConnect.missionSelfServiceSetupAction));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.missionTechnicalAction));
+  assert.doesNotMatch(html, /FOUNDEROS_GITHUB_APP_ID/);
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.missingEnvTitle));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.realReadReadinessTitle));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
+  assert.ok(html.includes(M.githubProductConnect.appManagedSetupDescription));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.appMissingDescription));
+});
+
+test("self-service setup stays the only CTA while its installation is disabled", () => {
+  const html = renderPanel({
+    connectionStatus: {
+      ...connectedAppStatus,
+      status: "disabled",
+      installation_verified: true,
+      live_read_available: false,
+      app: { ...appConfigured, credential_source: "managed" }
+    },
+    selfServiceSetupEnabled: true,
+    setupWizard: <div>SELF_SERVICE_REPOSITORY_SELECTION</div>
+  });
+
+  assert.ok(html.includes("SELF_SERVICE_REPOSITORY_SELECTION"));
+  assert.ok(html.includes(M.githubProductConnect.missionSelfServiceSetupAction));
+  assert.doesNotMatch(
+    html,
+    new RegExp(M.githubProductConnect.missionConnectionAttentionAction)
+  );
+  assert.doesNotMatch(
+    html,
+    new RegExp(M.githubProductConnect.connectionAttentionActionHint)
+  );
+});
+
+test("managed self-service workbench shows only the saved repository subset", () => {
+  const html = renderPanel({
+    connectionStatus: {
+      ...connectedAppStatus,
+      app: {
+        ...appConfigured,
+        credential_source: "managed"
+      },
+      selected_repositories: ["qtwin-io/company-knowledge-os"]
+    }
+  });
+
+  assert.ok(html.includes("qtwin-io/company-knowledge-os"));
+  assert.doesNotMatch(html, /qtwin-io\/another-repo/);
+  assert.ok(html.includes(T.githubLoadedRepositorySample(1, 25)));
 });
 
 test("renders invalid repository and missing app sync states", () => {

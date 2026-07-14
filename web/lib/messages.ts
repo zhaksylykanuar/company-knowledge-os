@@ -385,13 +385,102 @@ export const M = {
     eyebrow: "Источники",
     title: "GitHub",
     description:
-      "Репозитории, задачи и PR — в одном понятном потоке. Вы выбираете, что читать; FounderOS ничего не меняет в GitHub."
+      "Репозитории, задачи и PR — в одном понятном потоке. Вы выбираете, что читать; FounderOS не меняет содержимое репозиториев."
+  },
+
+  githubAppSetup: {
+    eyebrow: "Подключение без терминала",
+    title: "Настройте GitHub прямо здесь",
+    badge: "Репозитории — только чтение",
+    description:
+      "FounderOS создаст и установит GitHub App. Код, задачи и пулреквесты не изменяются.",
+    loading: "Проверяем, какой шаг уже готов…",
+    loadErrorTitle: "Не удалось открыть настройку GitHub",
+    loadErrorDescription:
+      "Существующие данные не изменились. Проверьте локальный сервер и повторите запрос.",
+    retry: "Повторить",
+    adminOnly:
+      "Подключение настраивает владелец или администратор компании. Вы можете просматривать уже загруженные данные.",
+    flowLabel: "Этапы подключения GitHub",
+    stepCreate: "Создать App",
+    stepCreateHint: "FounderOS подготовит безопасное приложение.",
+    stepInstall: "Установить",
+    stepInstallHint: "Вы подтвердите доступ на стороне GitHub.",
+    stepRepositories: "Репозитории",
+    stepRepositoriesHint: "Вы выберете, что видеть в FounderOS.",
+    stepReady: "Готово",
+    stepReadyHint: "Задачи и PR можно загружать.",
+    ownerLegend: "Где создать GitHub App?",
+    ownerUser: "В личном аккаунте",
+    ownerUserHint: "Подходит для личной разработки и быстрого старта.",
+    ownerOrganization: "В организации",
+    ownerOrganizationHint: "Выберите, если репозитории принадлежат команде.",
+    organizationLabel: "Название организации в GitHub",
+    organizationPlaceholder: "например, my-company",
+    organizationRequired: "Укажите название организации GitHub.",
+    start: "Настроить GitHub за 2 минуты",
+    startPending: "Открываем GitHub…",
+    startHint:
+      "GitHub откроется в этой вкладке. Подтвердите создание — затем вы автоматически вернётесь сюда.",
+    registrationPendingTitle: "Ждём подтверждение в GitHub",
+    registrationPendingDescription:
+      "Завершите создание приложения в открывшейся вкладке. Если вы отменили действие, начните заново.",
+    exchangePendingTitle: "Сохраняем безопасное подключение",
+    exchangePendingDescription:
+      "FounderOS получает данные приложения и сразу шифрует секреты.",
+    installTitle: "Приложение создано — осталось установить",
+    installDescription:
+      "На стороне GitHub выберите аккаунт и разрешите только нужные репозитории.",
+    install: "Установить и выбрать репозитории",
+    installPending: "Открываем установку…",
+    verifyTitle: "Проверяем установку",
+    verifyDescription:
+      "FounderOS подтверждает, что установка принадлежит вашему аккаунту. Временный токен пользователя не сохраняется.",
+    repositoriesTitle: "Какие репозитории использовать?",
+    repositoriesDescription:
+      "Доступные репозитории уже отмечены. Снимите лишние: FounderOS будет видеть только сохранённый выбор.",
+    repositoriesEmptyTitle: "GitHub не дал доступ ни к одному репозиторию",
+    repositoriesEmptyDescription:
+      "Разрешите репозитории в настройках установки GitHub, затем проверьте доступ ещё раз.",
+    openRepositoryAccess: "Открыть настройки доступа",
+    refreshRepositories: "Проверить доступ ещё раз",
+    refreshRepositorySelection: "Обновить список репозиториев",
+    refreshingRepositories: "Проверяем репозитории…",
+    repositorySelectionRequired: "Выберите хотя бы один репозиторий.",
+    repositorySelectionLimit: "Можно выбрать не более 100 репозиториев.",
+    saveRepositories: "Сохранить выбор",
+    savingRepositories: "Сохраняем выбор…",
+    connectedTitle: "GitHub подключён",
+    connectedDescription:
+      "FounderOS видит выбранные репозитории и ничего в них не меняет.",
+    connectedManageHint:
+      "Нужно изменить набор? Сначала обновите доступ в GitHub, затем загрузите список и сохраните новый выбор.",
+    connectedAccount: "Аккаунт",
+    connectedApp: "Приложение",
+    connectedRepositories: "Репозиториев",
+    restart: "Начать заново",
+    restarting: "Сбрасываем настройку…",
+    cancelledTitle: "Подключение отменено",
+    cancelledDescription:
+      "Ничего не подключено. Можно безопасно начать настройку ещё раз.",
+    failedTitle: "Подключение требует внимания",
+    failedDescription:
+      "FounderOS не завершил проверку. Данные GitHub не были приняты как подтверждённые.",
+    errorExpired: "Время подтверждения истекло. Начните настройку заново.",
+    errorReplay: "Эта ссылка уже использована. Начните новую безопасную настройку.",
+    errorDenied: "GitHub не получил подтверждение доступа. Попробуйте ещё раз.",
+    errorInstallationMissing:
+      "FounderOS не смог подтвердить установку для вашего аккаунта GitHub.",
+    errorProvider: "GitHub временно недоступен. Повторите попытку позже.",
+    errorGeneric: "Не удалось завершить действие. Попробуйте ещё раз.",
+    launchBlocked:
+      "FounderOS отклонил небезопасный адрес перехода. Настройка не продолжена."
   },
 
   githubProductConnect: {
     eyebrow: "Источник данных",
     title: "Центр GitHub",
-    badgeReadOnly: "Без изменений в GitHub",
+    badgeReadOnly: "Репозитории — только чтение",
     description:
       "Выберите один репозиторий и загрузите его задачи и пулреквесты в рабочую картину FounderOS.",
     loading: "Проверяем подключение и репозитории…",
@@ -411,6 +500,7 @@ export const M = {
     missionConnectionAttentionAction:
       "Проверьте статус установки и блокеры",
     missionTechnicalAction: "Откройте технические детали и снимите блокеры",
+    missionSelfServiceSetupAction: "Начните подключение в мастере выше",
     missionEmptyAction: "Проверьте установку и доступ к репозиториям",
     missionReadyAction: "Выберите репозиторий и запустите загрузку",
     missionPartialCurrent: "Репозиторий загружен частично",
@@ -462,7 +552,7 @@ export const M = {
     repositorySourceTitle: "Источник списка",
     technicalDetails: "Технические детали и безопасность",
     technicalDescription:
-      "Здесь собраны readiness-проверки, источник локальной выборки, env-настройки и предупреждения — они не мешают основному действию.",
+      "Здесь собраны safety-факты, источник выборки и предупреждения. Настройка выполняется выше через понятные шаги.",
     receiptEyebrow: "Готово",
     receiptPartialEyebrow: "Частично готово",
     receiptPendingEyebrow: "В процессе",
@@ -477,6 +567,8 @@ export const M = {
       "Запись установки найдена, но подключение сейчас не находится в состоянии «Готово».",
     appReadyDescription: "Конфигурация GitHub App готова; можно установить приложение для рабочего пространства.",
     appMissingDescription: "Нужны server-side env-поля GitHub App перед установкой.",
+    appManagedSetupDescription:
+      "Завершите безопасный мастер выше — терминал и env-настройка не нужны.",
     repositoriesTitle: "Локальная поверхность репозиториев",
     tokenTitle: "Токены установки хранятся",
     tokenDescription: "Для GitHub App токены установки должны выпускаться just-in-time и не сохраняться.",

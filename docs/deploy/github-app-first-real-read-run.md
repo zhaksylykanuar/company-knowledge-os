@@ -1,138 +1,140 @@
-# GitHub App First Real Read Run Runbook
+# GitHub App First Real Read Runbook
 
-Status: **manual, human-approved, read-only runbook**. This document defines the
-first explicitly approved GitHub App real-provider read run. It does not start a
-read run, does not authorize any provider writes, and does not add automation.
-The run itself remains a single admin-triggered, repository-scoped action a human
-performs after the offline preflight passes.
-
-This closes the "GitHub App real read run readiness" gap named in
-`../TODO.md` (item 4) and in `../ROADMAP.md` Phases 2/3/4. It is the authoritative
-next MVP milestone from `../../founderOS_MASTER_PLAYBOOK.md` section 1.4 (Sync
-GitHub then see real data), gated behind DEC-052 and DEC-053.
+Status: **human-approved, read-only runbook**. The managed `/github` wizard is
+the primary setup path. This document does not create a GitHub App, call the
+provider, or authorize a read by itself; the founder performs each external
+confirmation and the final scoped read explicitly.
 
 ## Boundaries
 
-- Read-only. No provider writes. No auto-deploy. No LLM.
-- One workspace, one installation, an explicit list of `owner/repo` names.
-- Installation access tokens are minted just-in-time and never persisted
-  (DEC-052).
-- Webhooks stay deferred until raw-body signature verification and delivery
-  dedupe exist (DEC-053).
-- Do not paste secret values, token/key contents, database URLs, installation
-  identifiers, or provider payloads into this repo, logs, or docs. Use env
-  variable names and placeholder examples only.
+- One local workspace and one workspace-managed GitHub App.
+- Private App; repository issues and pull requests are read-only. GitHub's
+  implicit metadata read is accepted. No contents read, provider writes,
+  webhooks, background sync, bulk sync, deploy, or LLM.
+- Setup is available only to a browser-session owner/admin. Viewer is read-only;
+  operator/CI cannot advance the managed wizard.
+- OAuth user tokens and just-in-time installation tokens are never persisted.
+- Never paste private keys, client secrets, OAuth codes, tokens, session cookies,
+  installation identifiers, database URLs, or raw provider payloads into logs,
+  docs, issues, or commits.
 
-## Prerequisites (offline)
+## Prerequisites
 
-1. The exact reviewed build is running locally through `make local`, and
-   `make local-smoke` has passed without provider calls or external writes.
-2. A GitHub App exists and is installed on the target account/org with read
-   access to the repositories you intend to read.
-3. The backend environment provides the GitHub App config (names only):
-   - `FOUNDEROS_GITHUB_APP_ID`
-   - `FOUNDEROS_GITHUB_APP_SLUG` or `FOUNDEROS_GITHUB_APP_SETUP_URL`
-   - `FOUNDEROS_GITHUB_APP_PRIVATE_KEY` or `FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH`
-4. A local repository surface exists (for example `.local/repos.json`) so the
-   scoped read has explicit targets.
+1. Run the reviewed local build with `make local` and verify it with
+   `make local-smoke`. Startup performs no GitHub provider call.
+2. Apply and verify the current migration before starting the new backend:
 
-Canonical `make local` deliberately keeps real connectors disabled and refuses
-to start when that capability is enabled. The live-read window below therefore
-uses an explicit, temporary manual process pair; it is not a second normal
-startup path.
+   ```bash
+   UV_NO_SYNC=1 uv run alembic upgrade head
+   UV_NO_SYNC=1 uv run alembic current
+   UV_NO_SYNC=1 uv run alembic check
+   ```
 
-## Step 1 - Offline preflight
+   The expected single head for this flow is `c5d6e7f8a9b0`.
+3. Sign in to FounderOS as the workspace owner or admin. The existing local
+   application encryption key must remain available; do not print it.
+4. Be ready to choose either a personal GitHub account or the exact GitHub
+   organization login that owns the intended repositories.
 
-Run the offline, read-only preflight. It performs no provider calls and prints
-presence booleans and the next step only:
+An offline `.local/repos.json` surface is optional historical/local evidence. It
+is not required for managed setup and cannot prove live GitHub access.
 
-```bash
-uv run python scripts/github_app_real_read_run_preflight.py
-# or machine-readable:
-uv run python scripts/github_app_real_read_run_preflight.py --json
-```
+## Step 1 - Complete managed setup in `/github`
 
-Proceed only when environment config is complete and the local repository surface
-is non-empty. The preflight cannot verify the installation-connection record
-offline; confirm that in-app in Step 2.
+Open `http://127.0.0.1:3000/github` and use **«Настроить GitHub за 2 минуты»**.
 
-## Step 1A - Open the bounded live-read window
+The wizard performs four visible stages:
 
-Stop the canonical supervisor without deleting local state:
+1. **Create App.** Choose personal account or organization. FounderOS submits an
+   exact private read-only manifest to GitHub in the same tab. Confirm creation
+   on GitHub; GitHub returns to FounderOS.
+2. **Install.** Click **«Установить и выбрать репозитории»**. On GitHub, choose
+   the account and grant only the repositories FounderOS should be able to read.
+3. **Verify.** GitHub returns through the setup callback and OAuth + PKCE. The
+   installation ID from the callback is not trusted by itself: FounderOS checks
+   it with the App and then proves the current GitHub user can see the same
+   installation. The temporary user token is revoked best-effort and never
+   stored.
+4. **Repositories.** Review the accessible repository list, remove unnecessary
+   selections, and save at least one. FounderOS keeps only this subset in the
+   completed setup state. The connection is not enabled before this save.
 
-```bash
-make local-stop
-```
+Leaving GitHub without approval does not create a connected source. A denial
+returns to a recoverable cancelled state; use **«Начать заново»**. Expired or
+replayed state is rejected.
 
-In a dedicated backend terminal, enable real reads while keeping writes and LLM
-off, then start the reviewed backend directly:
+## Step 2 - Verify the receipt before reading
 
-```bash
-export FOUNDEROS_ENABLE_REAL_CONNECTORS=true
-export ENABLE_WRITE_ACTIONS=false
-export ENABLE_LLM=false
-UV_NO_SYNC=1 uv run uvicorn app.main:app \
-  --host 127.0.0.1 --port 8765 --no-access-log
-```
+The connected card must show the expected GitHub account, App name, and selected
+repository count. The command center must list only the saved managed subset.
+To change that subset later, first adjust access through the connected card,
+then refresh and save the replacement selection. The existing saved subset
+continues to work until the new choice is saved; closing an unfinished draft
+does not disable it.
 
-In a second terminal, start the local web proxy:
+In **«Технические детали и безопасность»**, verify the truthful boundaries:
 
-```bash
-cd web
-FOUNDEROS_API_PROXY_TARGET=http://127.0.0.1:8765 \
-  npm run dev -- --hostname 127.0.0.1 --port 3000
-```
+- installation token stored: **no**;
+- GitHub writes: **not enabled**;
+- connection is verified and live-read available, while `is_live` remains false
+  because status itself does not call GitHub.
 
-Do not enable `ENABLE_WRITE_ACTIONS` during this read run. Continue only after
-`/health` succeeds through `http://127.0.0.1:3000`.
+Stop if the account, App, repository subset, or verification state is wrong.
 
-## Step 2 - Record the workspace-scoped installation connection
+## Step 3 - Run one scoped read
 
-Record (or confirm) the workspace-scoped GitHub App installation connection via
-the existing admin endpoint. This stores installation metadata only and starts no
-provider read:
+Choose one repository in the command center and click the single read-only load
+button. That browser-session action is the first approved provider read.
 
-```txt
-POST /api/v1/workspaces/{workspace_id}/github/connections/app-installation
-```
+The backend rechecks all of the following before token mint or network access:
 
-The response returns `provider_sync_started: false` and
-`installation_access_token_persisted: false`.
+- current workspace, connection, active credential, and active installation
+  relation match;
+- installation was provider- and user-verified;
+- provider reads were enabled by completed setup;
+- the requested `owner/repo` belongs to the saved FounderOS subset; and
+- the repository is still returned by the live GitHub installation inventory.
 
-## Step 3 - Run one scoped real read sync (human-approved)
+For this managed browser-session action, the legacy
+`FOUNDEROS_ENABLE_REAL_CONNECTORS` env gate is not required. Operator/CI calls
+remain behind that kill switch. No background read starts after setup.
 
-With an explicit, minimal repository list, trigger the polling-only read sync
-(DEC-053). This is the human-approved real read run:
+## Step 4 - Verify canonical results
 
-```txt
-POST /api/v1/workspaces/{workspace_id}/github/connections/app-installation/sync
-{
-  "connection_id": "<connection-uuid>",
-  "repositories": ["<owner>/<repo>"],
-  "include_issues": true,
-  "include_pull_requests": true
-}
-```
+- Confirm the read receipt reports `external_write_performed: false` and no
+  persisted installation token.
+- Confirm the selected repository's tasks and pull requests appear in the
+  `/github` work pulse.
+- Confirm Company Brain shows the new canonical records with evidence refs.
+- Generate a deterministic Founder Briefing only if desired and confirm its
+  evidence refs resolve. This is not an LLM run.
 
-The endpoint mints a just-in-time installation token, reads only the requested
-installation repositories/issues/PRs, persists through the existing idempotent
-canonical normalization/upsert path, and returns
-`external_write_performed: false`.
+The first run is proven only after these live results are observed. Green mocked
+tests or a connected status alone are not evidence of a real provider read.
 
-## Step 4 - Verify the real data landed
+## Recovery and stopping
 
-- Confirm Dashboard / Company Brain now show the read repositories, issues, and
-  PRs with evidence refs.
-- Generate a deterministic Founder Briefing and confirm evidence refs resolve.
-- Keep the repository scope minimal for the first run; expand later, one explicit
-  repository at a time.
+- If GitHub returns no repositories, adjust the App installation access on
+  GitHub, return to the wizard, and use **«Проверить доступ ещё раз»**.
+- If verification or encryption fails, the setup remains disabled and the UI
+  shows a safe retry/restart state; do not create manual database rows.
+- If a read fails, no provider write needs rollback. Do not retry broadly;
+  re-check the selected repository and use one explicit action again.
+- To stop reading, do nothing. There is no schedule or webhook. `make local-stop`
+  stops the local product without deleting its state.
 
-## Rollback / safety
+## Legacy compatibility path
 
-- The read run is read-only; there is nothing external to roll back.
-- To stop reading, simply do not run the sync again. No background job runs.
-- If a read fails, the API returns a sanitized provider status/message without
-  leaking authorization headers, tokens, or provider payload dumps.
-- At the end of the single read, stop both temporary processes, unset
-  `FOUNDEROS_ENABLE_REAL_CONNECTORS`, and restore any private env entry to
-  `false`. Then run `make local-doctor` and return to canonical `make local`.
+The following path is retained only for older operator workflows:
+
+- env names such as `FOUNDEROS_GITHUB_APP_ID`,
+  `FOUNDEROS_GITHUB_APP_SLUG`, and
+  `FOUNDEROS_GITHUB_APP_PRIVATE_KEY`/`..._PATH`;
+- `scripts/github_app_real_read_run_preflight.py`;
+- the manual `POST .../connections/app-installation`; and
+- the global `FOUNDEROS_ENABLE_REAL_CONNECTORS` gate.
+
+The offline preflight sees only env configuration and cannot attest managed
+database credentials. A new manual installation POST is deliberately recorded
+as unverified/read-disabled and cannot start live reads by itself. Do not use the
+legacy path as the normal founder onboarding flow.

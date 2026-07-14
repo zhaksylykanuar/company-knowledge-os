@@ -10,8 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.integration_models import (
+    GITHUB_APP_CREDENTIAL_STATUS_ACTIVE,
+    GITHUB_APP_INSTALLATION_STATUS_ACTIVE,
     INTEGRATION_CONNECTION_STATUS_CONNECTED,
     INTEGRATION_PROVIDER_GITHUB,
+    GitHubAppCredential,
+    GitHubAppInstallation,
     IntegrationConnection,
 )
 from app.services import (
@@ -21,7 +25,14 @@ from app.services import (
     github_repository_client,
 )
 from app.services.github_app_token_service import GitHubAppTokenError
-from app.services.github_connection_service import GITHUB_APP_CONNECTION_METHOD
+from app.services.github_app_credential_service import (
+    GitHubAppSigningCredential,
+    get_github_app_signing_credential,
+)
+from app.services.github_connection_service import (
+    GITHUB_APP_CONNECTION_METHOD,
+    GITHUB_APP_MANAGED_CONNECTION_SOURCE,
+)
 from app.services.github_issue_client import GitHubIssueClientError
 from app.services.github_normalization_service import (
     GitHubNormalizationOptions,
@@ -30,6 +41,7 @@ from app.services.github_normalization_service import (
 from app.services.github_pull_request_client import GitHubPullRequestClientError
 from app.services.github_repository_client import GitHubRepositoryClientError
 from app.services.real_connector_guard import require_real_connectors_enabled
+from app.services.secret_encryption import SecretEncryptionError
 from app.services.github_sync_job_service import (
     GitHubManualSyncJobInput,
     create_manual_github_sync_job,
@@ -42,6 +54,9 @@ GITHUB_APP_LIVE_SYNC_CONNECTION_NOT_APP_INSTALLATION = (
 )
 GITHUB_APP_LIVE_SYNC_INSTALLATION_ID_MISSING = (
     "github app installation_id is missing"
+)
+GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED = (
+    "github app installation is not provider-verified"
 )
 GITHUB_APP_LIVE_SYNC_TOKEN_UNAVAILABLE = "github app installation token unavailable"
 GITHUB_APP_LIVE_SYNC_PROVIDER_READ_FAILED = "github app live read failed"
@@ -88,6 +103,14 @@ class GitHubAppLiveSyncInput:
     )
 
 
+@dataclass(frozen=True)
+class _GitHubAppLiveReadAuthorization:
+    installation_id: str
+    credential: GitHubAppSigningCredential | None
+    managed_explicit_read: bool
+    selected_repositories: frozenset[str] | None
+
+
 async def sync_github_app_installation_repositories(
     session: AsyncSession,
     *,
@@ -95,23 +118,50 @@ async def sync_github_app_installation_repositories(
     input_payload: GitHubAppLiveSyncInput,
     requested_by: str = "operator_api_key",
 ) -> dict[str, Any]:
-    require_real_connectors_enabled()
     repositories = _normalize_repositories(input_payload.repositories)
     issue_states = _normalize_issue_states(input_payload.issue_states)
     pull_request_states = _normalize_pull_request_states(
         input_payload.pull_request_states
     )
-    connection = await _get_app_installation_connection_or_raise(
+    try:
+        connection = await _get_app_installation_connection_or_raise(
+            session,
+            workspace_id=workspace_id,
+            connection_id=input_payload.connection_id,
+        )
+    except GitHubAppLiveSyncNotFoundError:
+        # Preserve the legacy fail-closed ordering when the global provider gate
+        # is disabled. A managed self-service connection can only be identified
+        # after its workspace-scoped row has been loaded.
+        require_real_connectors_enabled()
+        raise
+    authorization = await _resolve_live_read_authorization(
         session,
         workspace_id=workspace_id,
-        connection_id=input_payload.connection_id,
+        connection=connection,
     )
-    installation_id = _installation_id(connection)
-    try:
-        installation_token = await github_app_token_service.mint_installation_access_token(
-            installation_id=installation_id
+    if not (
+        authorization.managed_explicit_read and requested_by == "session"
+    ):
+        require_real_connectors_enabled()
+    if authorization.selected_repositories is not None and any(
+        repository.casefold() not in authorization.selected_repositories
+        for repository in repositories
+    ):
+        raise GitHubAppLiveSyncConflictError(
+            GITHUB_APP_LIVE_SYNC_REPOSITORY_NOT_INSTALLED
         )
-    except GitHubAppTokenError as exc:
+    installation_id = authorization.installation_id
+    try:
+        token_kwargs: dict[str, Any] = {"installation_id": installation_id}
+        if authorization.credential is not None:
+            token_kwargs["credential"] = authorization.credential
+        installation_token = (
+            await github_app_token_service.mint_installation_access_token(
+                **token_kwargs
+            )
+        )
+    except (GitHubAppTokenError, SecretEncryptionError) as exc:
         raise GitHubAppLiveSyncConflictError(
             GITHUB_APP_LIVE_SYNC_TOKEN_UNAVAILABLE
         ) from exc
@@ -314,6 +364,99 @@ async def _get_app_installation_connection_or_raise(
             GITHUB_APP_LIVE_SYNC_CONNECTION_NOT_APP_INSTALLATION
         )
     return connection
+
+
+async def _resolve_live_read_authorization(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    connection: IntegrationConnection,
+) -> _GitHubAppLiveReadAuthorization:
+    metadata = connection.provider_metadata
+    if not isinstance(metadata, Mapping):
+        raise GitHubAppLiveSyncConflictError(
+            GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED
+        )
+
+    managed_credential = await session.scalar(
+        select(GitHubAppCredential).where(
+            GitHubAppCredential.workspace_id == workspace_id
+        )
+    )
+    if managed_credential is None:
+        if metadata.get("created_via") == GITHUB_APP_MANAGED_CONNECTION_SOURCE:
+            raise GitHubAppLiveSyncConflictError(
+                GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED
+            )
+        # Compatibility/operator path only. New legacy POST records explicitly
+        # set installation_verified=false, so they cannot silently become live.
+        if metadata.get("installation_verified") is not True:
+            raise GitHubAppLiveSyncConflictError(
+                GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED
+            )
+        return _GitHubAppLiveReadAuthorization(
+            installation_id=_installation_id(connection),
+            credential=None,
+            managed_explicit_read=False,
+            selected_repositories=None,
+        )
+
+    installation = await session.scalar(
+        select(GitHubAppInstallation)
+        .where(GitHubAppInstallation.workspace_id == workspace_id)
+        .where(GitHubAppInstallation.connection_id == connection.id)
+        .where(GitHubAppInstallation.status == GITHUB_APP_INSTALLATION_STATUS_ACTIVE)
+    )
+    if (
+        managed_credential.status != GITHUB_APP_CREDENTIAL_STATUS_ACTIVE
+        or installation is None
+        or installation.credential_id != managed_credential.id
+        or metadata.get("installation_verified") is not True
+        or metadata.get("provider_reads_enabled") is not True
+        or str(metadata.get("installation_id", "")).strip()
+        != installation.installation_id
+    ):
+        raise GitHubAppLiveSyncConflictError(
+            GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED
+        )
+
+    try:
+        credential = await get_github_app_signing_credential(
+            session,
+            workspace_id=workspace_id,
+        )
+    except SecretEncryptionError as exc:
+        raise GitHubAppLiveSyncConflictError(
+            GITHUB_APP_LIVE_SYNC_TOKEN_UNAVAILABLE
+        ) from exc
+    if credential is None:
+        raise GitHubAppLiveSyncConflictError(
+            GITHUB_APP_LIVE_SYNC_TOKEN_UNAVAILABLE
+        )
+    selected_repositories = _selected_repository_names(metadata)
+    if not selected_repositories:
+        raise GitHubAppLiveSyncConflictError(
+            GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED
+        )
+    return _GitHubAppLiveReadAuthorization(
+        installation_id=installation.installation_id,
+        credential=credential,
+        managed_explicit_read=True,
+        selected_repositories=selected_repositories,
+    )
+
+
+def _selected_repository_names(metadata: Mapping[str, Any]) -> frozenset[str]:
+    raw_repositories = metadata.get("selected_repositories")
+    if not isinstance(raw_repositories, list):
+        return frozenset()
+    normalized: set[str] = set()
+    for item in raw_repositories:
+        value = item.get("full_name") if isinstance(item, Mapping) else item
+        full_name = _normalize_repository_full_name(value)
+        if full_name is not None:
+            normalized.add(full_name.casefold())
+    return frozenset(normalized)
 
 
 def _installation_id(connection: IntegrationConnection) -> str:

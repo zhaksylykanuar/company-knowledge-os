@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import httpx
 from cryptography.hazmat.primitives import hashes, serialization
@@ -15,6 +15,7 @@ from pydantic import SecretStr
 from app.core.config import Settings, settings
 
 GITHUB_API_BASE_URL = "https://api.github.com"
+GITHUB_API_VERSION = "2022-11-28"
 GITHUB_APP_JWT_LIFETIME_SECONDS = 540
 GITHUB_APP_JWT_BACKDATE_SECONDS = 60
 
@@ -25,15 +26,21 @@ class GitHubAppTokenError(RuntimeError):
         self.detail = detail
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False)
 class GitHubInstallationAccessToken:
     token: str
     expires_at: str | None = None
 
 
+class GitHubAppSigningCredential(Protocol):
+    app_id: str
+    private_key_pem: str
+
+
 async def mint_installation_access_token(
     *,
     installation_id: str,
+    credential: GitHubAppSigningCredential | None = None,
     config: Settings = settings,
 ) -> GitHubInstallationAccessToken:
     """Mint a short-lived GitHub App installation access token just-in-time.
@@ -43,7 +50,7 @@ async def mint_installation_access_token(
     """
 
     normalized_installation_id = _safe_installation_id(installation_id)
-    app_jwt = build_github_app_jwt(config=config)
+    app_jwt = build_github_app_jwt(credential=credential, config=config)
     url = (
         f"{GITHUB_API_BASE_URL}/app/installations/"
         f"{normalized_installation_id}/access_tokens"
@@ -51,6 +58,7 @@ async def mint_installation_access_token(
     headers = {
         "Authorization": f"Bearer {app_jwt}",
         "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
         "User-Agent": "founderOS",
     }
     try:
@@ -77,11 +85,14 @@ async def mint_installation_access_token(
 
 def build_github_app_jwt(
     *,
+    credential: GitHubAppSigningCredential | None = None,
     config: Settings = settings,
     now: datetime | None = None,
 ) -> str:
-    app_id = _safe_app_id(config.github_app_id)
-    private_key = _load_private_key(config)
+    app_id = _safe_app_id(
+        credential.app_id if credential is not None else config.github_app_id
+    )
+    private_key = _load_private_key(config, credential=credential)
     issued_at = int(
         ((now or datetime.now(timezone.utc)) - timedelta(seconds=GITHUB_APP_JWT_BACKDATE_SECONDS)).timestamp()
     )
@@ -103,9 +114,21 @@ def build_github_app_jwt(
     return f"{signing_input.decode('ascii')}.{_base64url_bytes(signature)}"
 
 
-def _load_private_key(config: Settings) -> Any:
-    private_key_pem = _secret_value(config.github_app_private_key)
-    if private_key_pem is None and config.github_app_private_key_path:
+def _load_private_key(
+    config: Settings,
+    *,
+    credential: GitHubAppSigningCredential | None = None,
+) -> Any:
+    private_key_pem = (
+        credential.private_key_pem
+        if credential is not None
+        else _secret_value(config.github_app_private_key)
+    )
+    if (
+        private_key_pem is None
+        and credential is None
+        and config.github_app_private_key_path
+    ):
         try:
             private_key_pem = Path(config.github_app_private_key_path).read_text(
                 encoding="utf-8"

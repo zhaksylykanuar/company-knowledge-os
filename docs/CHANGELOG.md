@@ -4,6 +4,26 @@
 
 ### Changed
 
+- Added the workspace-managed GitHub App self-service wizard (DEC-080). An
+  owner/admin can now complete the primary setup from `/github`: create a
+  private App from an exact read-only manifest, install it, verify ownership
+  through App JWT plus OAuth/PKCE `/user/installations`, and save an explicit
+  repository subset. Migration `c5d6e7f8a9b0` adds encrypted App credentials,
+  verified installation facts, and a resumable setup session; raw state and
+  temporary OAuth/installation tokens are not persisted. Connection activation
+  rechecks a non-expired active relation, keeps only the saved inventory subset,
+  and live read rejects repositories outside it. The managed read-gate exception
+  is browser-session-only; operator/CI remains behind the global connector gate.
+  GitHub denial is recoverable in the UI, viewer stays read-only, provider writes,
+  webhooks, background sync, LLM, and hosted changes remain disabled. The
+  env/manual path remains fail-closed compatibility only. Connected admins can
+  revise GitHub access and repository selection without disabling the working
+  subset before atomic save; another owner/admin may continue that completed
+  setup. Managed provenance cannot fall back to legacy env authorization after
+  credential deletion. The wizard now stacks on mobile, announces phase changes
+  and moves keyboard focus, hides management affordances from viewers, and
+  replaces legacy env instructions with direct UI guidance. No real GitHub App
+  was created and no provider read was executed by this code change.
 - Replaced the technical `/github` scaffold with a Source Command Center
   (DEC-079). The page now leads with a role-aware mission, shows the three-step
   path from GitHub App through one selected repository into FounderOS, and uses

@@ -2,14 +2,42 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая ветка `codex/guided-onboarding-ux` связана с Draft PR #33; UX-03 и
-> UX-04 пока зафиксированы только локально и не опубликованы. Активный runtime теперь
+> Текущая ветка `codex/github-self-service-setup`; изменения пока зафиксированы
+> только локально и не опубликованы. Активный runtime
 > локальный (`make local`, DEC-077); hosted deploy не является текущей целью.
 
 ---
 
 ## ▶ СЕЙЧАС
 
+- **GitHub self-service setup (DEC-080): РЕАЛИЗОВАН ЛОКАЛЬНО; ВНЕШНЕЕ
+  ЗАВЕРШЕНИЕ ЕЩЁ НЕ ДОКАЗАНО.** Owner/admin теперь проходит весь основной путь
+  прямо в `/github`: создать private GitHub App из точного read-only manifest,
+  установить его, подтвердить принадлежность installation через OAuth + PKCE и
+  выбрать непустой набор репозиториев. Workspace credentials хранятся только в
+  зашифрованных полях; одноразовые state сохраняются как SHA-256, PKCE verifier
+  шифруется, OAuth и installation tokens не персистятся. Callback installation
+  требует точный одноразовый state, App- и user-проверки; отказ GitHub безопасно
+  переводит мастер в восстановимое состояние. Connection остаётся disabled до
+  выбора репозиториев, а live read ограничен сохранённым subset и доступен без
+  legacy global gate только browser-session owner/admin; operator/CI остаются
+  под `FOUNDEROS_ENABLE_REAL_CONNECTORS`. Viewer видит только состояние.
+  Environment/manual setup сохранён как fail-closed compatibility path. Новая
+  миграция `c5d6e7f8a9b0` добавляет workspace-owned credential, verified
+  installation и resumable setup-session tables. Реальное создание App,
+  установка и первый provider read не выполнялись: следующий человеческий шаг
+  — завершить мастер в `/github`, выбрать репозитории и отдельно нажать одну
+  scoped read-only загрузку. Финальный локальный gate 2026-07-14: backend
+  **674 passed / 1 external warning**, Ruff; frontend **308/308 passed**,
+  typecheck, lint и production build (**17 routes**); Alembic
+  `upgrade/heads/current/check`, tracked-secret и whitespace checks ✅.
+  Авторизованный self-service экран проверен при **1280×720** и **390×844**:
+  global overflow и новые console warning/error отсутствуют, controls не меньше
+  44 px, mobile layout одноколоночный, keyboard focus и screen-reader status
+  переводятся на новый этап. Второй admin может безопасно продолжить completed
+  setup, а обновление repository subset сохраняет текущие чтения до атомарного
+  save. Удалённый/неактивный managed credential всегда fail-closed и не
+  наследует legacy env-authority.
 - **UX-04 GitHub Source Command Center (DEC-079): РЕАЛИЗОВАН; BROWSER VISUAL QA
   PASS.** `/github` больше не показывает статические
   backend-карточки и MVP-заглушку. Экран ведёт через роль-зависимую миссию,
@@ -51,7 +79,7 @@
 - **LOCAL-FIRST RUNTIME (DEC-077): ПРИНЯТ И ГОТОВ К ИСПОЛЬЗОВАНИЮ.** Канонический
   цикл `make local-doctor` → `make local` → `make local-smoke` →
   `make local-backup` → `make local-stop` полностью проверен на текущей машине.
-  PostgreSQL 16 и Alembic head `b4d5e6f7a8c9` зелёные; backend/frontend доступны
+  PostgreSQL 16 и Alembic head `c5d6e7f8a9b0` зелёные; backend/frontend доступны
   только на loopback через same-origin proxy. Возвратный login, onboarding и
   пять зон продукта прошли авторизованный browser QA при 1280 px без overflow и
   console errors; временные QA user/workspace/session удалены. Restore-proven
@@ -166,23 +194,19 @@
   закрыт (DEC-074), а spatial board/profile inspector закрыт frontend-срезом
   DEC-076. Local runtime acceptance по DEC-077 закрыт; следующий приоритет —
   GitHub App real-provider read как отдельный human-approved внешний gate.
-- **GitHub App real-read-run readiness gate (НОВОЕ, DEC-054):** добавлен
+- **GitHub App legacy real-read preflight (DEC-054, compatibility-only):** сохранён
   offline, детерминированный gate перед первым approved real read run:
   чистая функция `github_app_real_read_run_readiness()` + безопасный CLI
   `scripts/github_app_real_read_run_preflight.py` (только presence-флаги, без
   значений секретов) + offline unit-тесты + human-approved read-only runbook
-  `docs/deploy/github-app-first-real-read-run.md`. `/github` теперь также
-  показывает display-only real-read readiness section из уже загруженных
-  `connectionStatus.app` + local repository surface: env configured/missing,
-  installation connection state, repo count, blockers и next human step. Сам
-  real read run остаётся существующим human-triggered scoped
-  `POST .../app-installation/sync` (DEC-053). **Проверено независимо:** сейчас
-  real read run внешне заблокирован — GitHub App env
-  (`FOUNDEROS_GITHUB_APP_ID` / `..._PRIVATE_KEY`) не задан и installation
-  connection не записан; сеть до `api.github.com` теперь доступна (`HTTP 200`
-  без auth), локальная поверхность репо (25 из `.local/repos.json`)
-  присутствует. Preflight/UI сообщает точный next step; выполнить run должен
-  человек после установки credentials.
+  `docs/deploy/github-app-first-real-read-run.md`. Он проверяет только старый
+  environment/manual путь и не является readiness-гейтом для managed
+  credentials из DEC-080. Primary `/github` wizard сам создаёт App, проверяет
+  installation и сохраняет repository subset; первый реальный provider read
+  всё равно остаётся отдельным human-triggered действием. Исторический факт:
+  env-path был заблокирован отсутствующими App env и installation record, при
+  этом локальная поверхность содержала 25 репозиториев. Это не описывает
+  текущую готовность managed wizard.
 - **Connector framework registry (DEC-056):** добавлен канонический read-only
   реестр MVP-коннекторов: `GET /workspaces/{id}/connectors` и страница
   `/connectors` показывают `github`, `jira`, `gmail`, `drive`, counts локальных
@@ -602,10 +626,12 @@
   него + GitHub App product-connect + polling-only live read sync backend/UI
   foundation + synced-evidence isolation tests + safe rate-limit/error
   observability; операторский API-ключ остаётся для server/CI/админ-скриптов.
-  Один alembic head — `b4d5e6f7a8c9`.
-- **Дальше:** канонический DEC-077 lifecycle принят на текущей машине. Настроить
-  founder-owned GitHub App, записать installation connection и после отдельного
-  human approval выполнить один scoped read-only sync. External write и
+  Один alembic head — `c5d6e7f8a9b0`.
+- **Дальше:** канонический DEC-077 lifecycle принят на текущей машине. Founder
+  завершает GitHub confirmations через мастер `/github`, сохраняет явный набор
+  репозиториев и после отдельного human approval запускает одну scoped read-only
+  загрузку. Terminal/env и ручная запись installation для primary path не нужны.
+  External write и
   LLM-нарратив остаются последующими отдельными approval; future public/
   multi-worker hosting потребует нового решения и shared limiter/trusted-proxy
   проверки.
@@ -636,15 +662,15 @@ DONE строго = есть код + проходящий тест/рабочи
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ pass | 2026-07-14 | Isolated PostgreSQL 16 migrated from empty to the single head `b4d5e6f7a8c9`; product `heads/current/check` are green with no new operations |
+| `alembic upgrade head` | ✅ pass | 2026-07-14 | Local PostgreSQL 16 upgraded to the single head `c5d6e7f8a9b0`; product `heads/current/check` are green with no new operations |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-07-14 | Dedicated temporary loopback test database through `make backend-check`: **655 passed / 0 failed / 1 external warning** |
+| backend tests (`pytest`) | ✅ pass | 2026-07-14 | Full local suite: **674 passed / 0 failed / 1 external warning** |
 | `ruff` | ✅ pass | 2026-07-14 | Isolated backend gate: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-07-14 | `npm test` **293 passed**; production build **17 routes**, typecheck and lint passed |
+| frontend build | ✅ pass | 2026-07-14 | `npm test` **308 passed**; production build **17 routes**, typecheck and lint passed |
 | UX-03 authenticated browser QA | ❓ unknown | 2026-07-14 | Exact UX-03 tree was not visually inspected: the in-app browser failed before navigation with `Cannot redefine property: process`; prior LOCAL-01 QA predates UX-03 and is not reused as proof |
-| UX-04 `/github` browser visual QA | ✅ pass | 2026-07-14 | Authenticated real-local-data pass at **1280×720** and **390×844**; mission, metrics, compact repository chooser and work pulse render without horizontal overflow. Keyboard/console interaction audit remains separate |
+| UX-04 `/github` + DEC-080 setup browser QA | ✅ pass | 2026-07-14 | Authenticated real-local-data pass at **1280×720** and **390×844**; self-service wizard, mission, metrics, repository chooser and work pulse have no global overflow or new console warnings/errors. Organization choice is keyboard/semantic native; dynamic phases have focus + polite status announcement. External GitHub phases remain human-gated |
 | docs navigation | ✅ pass | 2026-07-14 | `test_local_runtime_docs.py`, `test_external_action_result_runbook.py`, and `test_docs_navigation_integrity.py` — **12 passed** |
 | local runtime live acceptance | ✅ pass | 2026-07-14 | Doctor/start/smoke, authenticated onboarding + five zones, verified DB/raw restore, graceful signal stop and crash-orphan cleanup passed; ephemeral QA rows removed |
 | `alembic check` (retained substrate) | ✅ reconciled | 2026-07-01 | Прежний дрейф (7 операций на `ingested_events`) сведён миграцией `a8c9d0e1f2b3`; GitHub App live read-sync foundation pass: `alembic upgrade head` + `alembic check` зелёные |
@@ -793,6 +819,21 @@ product routes из-за несовпадения tenant scope.*
 
 ## 🧾 SESSION LOG (append-only, новое — сверху)
 
+- `2026-07-14` — **DEC-080 GitHub self-service setup.** Added the owner/admin
+  `/github` wizard for private read-only App manifest creation, installation,
+  App + OAuth/PKCE user verification, provider inventory and explicit repository
+  selection. Managed credentials and PKCE are encrypted; states are hashed;
+  OAuth/JIT tokens are not stored. Viewer/operator capability claims are
+  fail-closed, permission scope is exact, installation callbacks require
+  one-time state, reads are limited to the saved subset, and deleting managed
+  credentials cannot fall back to legacy env authorization. Repository access
+  can be revised without interrupting an existing connection until atomic save,
+  including handoff to another owner/admin. UI adds clear recovery/settings
+  actions, mobile stacking, 44 px controls, phase focus and screen-reader live
+  announcements. Checks: backend **674 passed**, Ruff; frontend **308 passed**,
+  build/typecheck/lint; Alembic `upgrade/heads/current/check`; tracked-secret and
+  whitespace checks; authenticated 1280×720 + 390×844 browser QA ✅. No real
+  GitHub App, provider read/write, push, deploy or LLM action was performed.
 - `2026-07-14` — **UX-04 GitHub Source Command Center (DEC-079).** Replaced
   `/github` backend scaffolding with one role-aware mission, a three-step visual
   data path, four bounded repository metrics, a compact selected-repository

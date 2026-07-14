@@ -21,8 +21,15 @@ import type {
   CompanyBrainResponse,
   FounderBriefingRequest,
   FounderBriefingResponse,
+  GitHubAppInstallSetupResponse,
   GitHubAppLiveSyncRequest,
   GitHubAppLiveSyncResponse,
+  GitHubAppManifestSetupRequest,
+  GitHubAppManifestSetupResponse,
+  GitHubAppRepositorySelectionRequest,
+  GitHubAppRepositorySelectionResponse,
+  GitHubAppSetupRestartResponse,
+  GitHubAppSetupStatus,
   GitHubConnectionStatusResponse,
   GitHubLocalSyncRequest,
   GitHubLocalSyncResponse,
@@ -846,6 +853,117 @@ export async function fetchGitHubConnectionStatus(
   return apiFetch<GitHubConnectionStatusResponse>(
     buildWorkspaceGitHubConnectionStatusPath(workspaceId),
     options
+  );
+}
+
+export function buildWorkspaceGitHubAppSetupPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/github/app-setup`;
+}
+
+export function buildWorkspaceGitHubAppSetupManifestPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupPath(workspaceId)}/manifest`;
+}
+
+export function buildWorkspaceGitHubAppSetupInstallPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupPath(workspaceId)}/install`;
+}
+
+export function buildWorkspaceGitHubAppSetupRepositoriesPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupPath(workspaceId)}/repositories`;
+}
+
+export function buildWorkspaceGitHubAppSetupRepositoriesRefreshPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupRepositoriesPath(workspaceId)}/refresh`;
+}
+
+export function buildWorkspaceGitHubAppSetupRestartPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceGitHubAppSetupPath(workspaceId)}/restart`;
+}
+
+export async function fetchGitHubAppSetupStatus(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppSetupStatus> {
+  return apiFetch<GitHubAppSetupStatus>(
+    buildWorkspaceGitHubAppSetupPath(workspaceId),
+    options
+  );
+}
+
+export async function beginGitHubAppManifestSetup(
+  workspaceId: string,
+  request: GitHubAppManifestSetupRequest,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppManifestSetupResponse> {
+  const body: GitHubAppManifestSetupRequest = {
+    app_origin: request.app_origin,
+    owner_type: request.owner_type
+  };
+  if (request.owner_type === "organization" && request.organization_login) {
+    body.organization_login = request.organization_login;
+  }
+  return apiFetch<GitHubAppManifestSetupResponse>(
+    buildWorkspaceGitHubAppSetupManifestPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(body),
+      method: "POST"
+    }
+  );
+}
+
+export async function beginGitHubAppInstallSetup(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppInstallSetupResponse> {
+  return apiFetch<GitHubAppInstallSetupResponse>(
+    buildWorkspaceGitHubAppSetupInstallPath(workspaceId),
+    { ...options, method: "POST" }
+  );
+}
+
+export async function selectGitHubAppRepositories(
+  workspaceId: string,
+  request: GitHubAppRepositorySelectionRequest,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppRepositorySelectionResponse> {
+  return apiFetch<GitHubAppRepositorySelectionResponse>(
+    buildWorkspaceGitHubAppSetupRepositoriesPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({ repositories: request.repositories }),
+      method: "POST"
+    }
+  );
+}
+
+export async function refreshGitHubAppSetupRepositories(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppSetupStatus> {
+  return apiFetch<GitHubAppSetupStatus>(
+    buildWorkspaceGitHubAppSetupRepositoriesRefreshPath(workspaceId),
+    { ...options, method: "POST" }
+  );
+}
+
+export async function restartGitHubAppSetup(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubAppSetupRestartResponse> {
+  return apiFetch<GitHubAppSetupRestartResponse>(
+    buildWorkspaceGitHubAppSetupRestartPath(workspaceId),
+    { ...options, method: "POST" }
   );
 }
 

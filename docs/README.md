@@ -38,7 +38,7 @@ recovering deleted context.
 ## Operations And Human-Gated Runbooks
 
 - [`operations/local-runtime.md`](operations/local-runtime.md) - canonical local start, doctor, smoke, backup/restore, stop, recovery, and external-resource deletion boundary.
-- [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - manual, human-approved, read-only runbook for the first GitHub App real-provider read run, gated by an offline preflight.
+- [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook; managed `/github` setup is primary and legacy env/manual preflight is compatibility-only.
 - [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after local acceptance and read-only provider proof.
 - `make local-readiness` is the sanitized repository-evidence report;
   `make release-handoff` and `scripts/private_beta_release_handoff.py` remain

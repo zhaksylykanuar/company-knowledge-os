@@ -2310,6 +2310,63 @@ UX-04 changes frontend composition and presentation only; existing backend API,
 database, RBAC, provider-read approval, external-write, evidence, and LLM
 boundaries remain unchanged.
 
+## DEC-080 - GitHub App Setup Is Workspace-Managed Self-Service
+
+Decision (2026-07-14): the primary GitHub onboarding path is an owner/admin
+wizard inside `/github`, not terminal env configuration or an operator-created
+installation row. The wizard creates a private GitHub App from a manifest,
+installs it, verifies the installation twice, and requires an explicit non-empty
+repository selection before enabling reads.
+
+Security and persistence rules:
+
+- Setup mutations require an authenticated browser session with workspace
+  owner/admin access. The operator API key cannot create or advance a managed
+  setup; viewer/member access remains read-only.
+- The manifest requests only repository `issues: read` and
+  `pull_requests: read`; GitHub's implicit `metadata: read` is accepted. Any
+  write permission or extra read permission fails closed. Events and webhooks
+  are not enabled.
+- App ID/slug/client ID and safe ownership metadata are workspace scoped.
+  Private key, client secret, optional webhook secret, and PKCE verifier are
+  encrypted with the existing application encryption boundary. Raw OAuth state
+  is never stored; only SHA-256 is persisted.
+- The `installation_id` returned to the setup URL is untrusted. FounderOS first
+  verifies it with an App JWT, then uses OAuth + PKCE and `/user/installations`
+  to prove the logged-in GitHub user can see the same installation and App.
+  OAuth denial clears the verifier and produces a recoverable cancelled state.
+- OAuth user tokens and just-in-time installation tokens are never persisted.
+  Secret-bearing dataclasses are non-representable so routine diagnostics do not
+  stringify their values.
+- A verified installation creates a disabled connection. It becomes connected
+  only after a non-expired setup saves one or more provider-returned
+  repositories. The durable setup inventory is narrowed to that saved subset;
+  an active credential/installation/connection relation is rechecked at
+  finalization. After connection, any owner/admin may refresh the provider
+  inventory and revise the subset; the existing connected selection remains
+  active until the replacement is atomically saved, so abandoning a draft does
+  not interrupt current reads.
+- Managed live reads are restricted to the saved subset. A browser-session
+  owner/admin may explicitly run that read without the legacy global
+  `FOUNDEROS_ENABLE_REAL_CONNECTORS` gate because the managed setup and current
+  click provide the scoped consent. Operator/CI calls remain behind the global
+  gate. There is no background or bulk sync.
+- Existing env/manual endpoints remain compatibility-only. A newly recorded
+  manual installation is unverified and read-disabled until an older trusted
+  operator flow explicitly supplies verified metadata; it cannot silently
+  become live-ready. A connection marked as created by managed self-service
+  never falls back to legacy env credentials: missing/inactive managed
+  credential or installation relation disables verified status and live reads.
+
+Schema consequence: migration `c5d6e7f8a9b0` adds encrypted workspace App
+credentials, verified installation facts, and one resumable setup session per
+workspace. It must be applied before the new backend starts.
+
+Non-goals: this decision does not enable provider writes, webhooks, automatic
+sync, LLM execution, hosted deployment, or removal of legacy compatibility
+code. The real GitHub creation/installation and first scoped read remain
+human/external acceptance gates until proven live.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

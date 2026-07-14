@@ -12,6 +12,9 @@ from app.db.identity_models import (
     Workspace,
 )
 from app.db.integration_models import (
+    GitHubAppCredential,
+    GitHubAppInstallation,
+    GitHubAppSetupSession,
     INTEGRATION_CONNECTION_STATUS_CONNECTED,
     INTEGRATION_PROVIDER_GITHUB,
     SYNC_JOB_STATUS_QUEUED,
@@ -109,6 +112,9 @@ async def _create_identity_fixture(marker: str) -> tuple[User, Workspace, Member
 def test_integration_models_register_with_metadata() -> None:
     assert IntegrationConnection.__tablename__ == "integration_connections"
     assert SyncJob.__tablename__ == "sync_jobs"
+    assert GitHubAppCredential.__tablename__ == "github_app_credentials"
+    assert GitHubAppInstallation.__tablename__ == "github_app_installations"
+    assert GitHubAppSetupSession.__tablename__ == "github_app_setup_sessions"
     assert IntegrationConnection.__table__.c.metadata.name == "metadata"
 
 

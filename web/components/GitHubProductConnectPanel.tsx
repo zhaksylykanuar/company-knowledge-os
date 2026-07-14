@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -20,6 +21,7 @@ import type {
 } from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
+import { GitHubAppSetupWizard } from "./GitHubAppSetupWizard";
 import { LoadingState } from "./LoadingState";
 import { MiniHint, MissionStrip } from "./MissionStrip";
 import { SourceLink } from "./SourceLink";
@@ -73,6 +75,8 @@ type GitHubProductConnectPanelViewProps = {
   repositorySync: Record<string, RepositorySyncStatus>;
   repositories: GitHubRepositoryListResponse | null;
   selectedRepository?: string | null;
+  selfServiceSetupEnabled?: boolean;
+  setupWizard?: ReactNode;
   state: ProductConnectState;
 };
 
@@ -164,6 +168,8 @@ export function GitHubProductConnectPanel({
       !workspaceId ||
       !canAdminister ||
       !connectionStatus?.app.configured ||
+      !connectionStatus.installation_verified ||
+      !connectionStatus.live_read_available ||
       connectionStatus?.status !== "connected" ||
       !connectionStatus.connection_id ||
       connectionStatus.connection_method !== "github_app_installation" ||
@@ -226,6 +232,16 @@ export function GitHubProductConnectPanel({
       repositorySync={repositorySync}
       repositories={repositories}
       selectedRepository={selectedRepository}
+      selfServiceSetupEnabled
+      setupWizard={
+        workspaceId ? (
+          <GitHubAppSetupWizard
+            canAdminister={canAdminister}
+            onSetupChange={() => setReloadKey((current) => current + 1)}
+            workspaceId={workspaceId}
+          />
+        ) : null
+      }
       state={state}
     />
   );
@@ -243,17 +259,34 @@ export function GitHubProductConnectPanelView({
   repositorySync,
   repositories,
   selectedRepository,
+  selfServiceSetupEnabled = false,
+  setupWizard,
   state
 }: GitHubProductConnectPanelViewProps) {
   const appStatus = connectionStatus?.app ?? null;
   const appConnectionReady = Boolean(
     connectionStatus?.app.configured &&
+      connectionStatus.installation_verified &&
+      connectionStatus.live_read_available &&
       connectionStatus.status === "connected" &&
       connectionStatus.connection_id &&
       connectionStatus.connection_method === "github_app_installation" &&
       connectionStatus.has_connection_record
   );
-  const repositoryItems = repositories?.repositories ?? [];
+  const loadedRepositoryItems = repositories?.repositories ?? [];
+  const managedSelectedRepositories = new Set(
+    (connectionStatus?.selected_repositories ?? []).map((repository) =>
+      repository.toLowerCase()
+    )
+  );
+  const repositoryItems =
+    connectionStatus?.app.credential_source === "managed" &&
+    connectionStatus.installation_verified &&
+    managedSelectedRepositories.size > 0
+      ? loadedRepositoryItems.filter((repository) =>
+          managedSelectedRepositories.has(repository.full_name.toLowerCase())
+        )
+      : loadedRepositoryItems;
   const filteredRepositoryItems = filterRepositoriesByFocus(
     repositoryItems,
     repositoryFocus
@@ -284,13 +317,17 @@ export function GitHubProductConnectPanelView({
       connectionStatus.connection_method === "github_app_installation"
   );
   const showSetupAction = Boolean(
-    canAdminister &&
+    !selfServiceSetupEnabled &&
+      canAdminister &&
       appStatus?.setup_url &&
       !appConnectionReady &&
       !hasAppInstallationRecord
   );
   const showConnectionAttentionAction = Boolean(
-    canAdminister && hasAppInstallationRecord && !appConnectionReady
+    !selfServiceSetupEnabled &&
+      canAdminister &&
+      hasAppInstallationRecord &&
+      !appConnectionReady
   );
 
   return (
@@ -312,6 +349,8 @@ export function GitHubProductConnectPanelView({
       <p className="muted github-command-intro">
         {M.githubProductConnect.description}
       </p>
+
+      {setupWizard}
 
       {state === "loading" ? (
         <LoadingState label={M.githubProductConnect.loading} />
@@ -350,6 +389,7 @@ export function GitHubProductConnectPanelView({
               canAdminister,
               hasAppInstallationRecord,
               hasRepositories: repositoryItems.length > 0,
+              selfServiceSetupEnabled,
               setupAvailable: Boolean(appStatus.setup_url),
               syncPartial: selectedSync.state === "partial"
             })}
@@ -358,6 +398,7 @@ export function GitHubProductConnectPanelView({
               canAdminister,
               hasAppInstallationRecord,
               hasRepositories: repositoryItems.length > 0,
+              selfServiceSetupEnabled,
               syncPartial: selectedSync.state === "partial",
               syncSucceeded: selectedSync.state === "success"
             })}
@@ -400,7 +441,10 @@ export function GitHubProductConnectPanelView({
               className="github-command-metrics"
             >
               <GitHubMetric
-                hint={githubAppDescription(connectionStatus)}
+                hint={githubAppDescription(
+                  connectionStatus,
+                  selfServiceSetupEnabled
+                )}
                 label={M.githubProductConnect.connectionMetricTitle}
                 tone={appConnectionReady ? "positive" : "attention"}
                 value={
@@ -569,12 +613,16 @@ export function GitHubProductConnectPanelView({
                 {M.githubProductConnect.technicalDescription}
               </p>
 
-              <GitHubRealReadinessPanel
-                connectionStatus={connectionStatus}
-                repositories={repositories}
-              />
+              {!selfServiceSetupEnabled ? (
+                <GitHubRealReadinessPanel
+                  connectionStatus={connectionStatus}
+                  repositories={repositories}
+                />
+              ) : null}
 
-              {!appStatus.configured && appStatus.missing_env.length > 0 ? (
+              {!selfServiceSetupEnabled &&
+              !appStatus.configured &&
+              appStatus.missing_env.length > 0 ? (
                 <section className="callout">
                   <strong>{M.githubProductConnect.missingEnvTitle}</strong>
                   <ul className="meta-list">
@@ -1196,7 +1244,13 @@ function githubRealReadBlockerLabel(blocker: string): string {
   return blocker;
 }
 
-function githubAppDescription(status: GitHubConnectionStatusResponse): string {
+function githubAppDescription(
+  status: GitHubConnectionStatusResponse,
+  selfServiceSetupEnabled: boolean
+): string {
+  if (selfServiceSetupEnabled && !status.live_read_available) {
+    return M.githubProductConnect.appManagedSetupDescription;
+  }
   if (status.connection_method === "github_app_installation") {
     if (status.status !== "connected" || !status.connection_id) {
       return M.githubProductConnect.appConnectionAttentionDescription;
@@ -1214,6 +1268,7 @@ function githubMissionCurrent({
   canAdminister,
   hasAppInstallationRecord,
   hasRepositories,
+  selfServiceSetupEnabled,
   syncPartial,
   syncSucceeded
 }: {
@@ -1221,6 +1276,7 @@ function githubMissionCurrent({
   canAdminister: boolean;
   hasAppInstallationRecord: boolean;
   hasRepositories: boolean;
+  selfServiceSetupEnabled: boolean;
   syncPartial: boolean;
   syncSucceeded: boolean;
 }): string {
@@ -1228,6 +1284,9 @@ function githubMissionCurrent({
     return M.githubProductConnect.missionViewerCurrent;
   }
   if (!appConnectionReady) {
+    if (selfServiceSetupEnabled) {
+      return M.githubProductConnect.missionConnectionCurrent;
+    }
     return hasAppInstallationRecord
       ? M.githubProductConnect.missionConnectionAttentionCurrent
       : M.githubProductConnect.missionConnectionCurrent;
@@ -1249,6 +1308,7 @@ function githubMissionAction({
   canAdminister,
   hasAppInstallationRecord,
   hasRepositories,
+  selfServiceSetupEnabled,
   setupAvailable,
   syncPartial
 }: {
@@ -1256,6 +1316,7 @@ function githubMissionAction({
   canAdminister: boolean;
   hasAppInstallationRecord: boolean;
   hasRepositories: boolean;
+  selfServiceSetupEnabled: boolean;
   setupAvailable: boolean;
   syncPartial: boolean;
 }): string {
@@ -1263,6 +1324,9 @@ function githubMissionAction({
     return M.githubProductConnect.missionViewerAction;
   }
   if (!appConnectionReady) {
+    if (selfServiceSetupEnabled) {
+      return M.githubProductConnect.missionSelfServiceSetupAction;
+    }
     if (hasAppInstallationRecord) {
       return M.githubProductConnect.missionConnectionAttentionAction;
     }

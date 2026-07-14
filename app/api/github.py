@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.api.workspace_auth import (
@@ -13,7 +15,7 @@ from app.api.workspace_auth import (
     require_workspace_role,
 )
 from app.db.base import AsyncSessionLocal
-from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN
+from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN, MEMBERSHIP_ROLE_OWNER
 from app.db.integration_models import INTEGRATION_CONNECTION_STATUS_CONNECTED
 from app.services.github_connection_service import (
     GITHUB_APP_INSTALLATION_ALREADY_BOUND,
@@ -34,6 +36,20 @@ from app.services.github_app_live_sync_service import (
     GitHubAppLiveSyncNotFoundError,
     GitHubAppLiveSyncProviderReadError,
     sync_github_app_installation_repositories,
+)
+from app.services.github_app_setup_service import (
+    GitHubAppManifestStartInput,
+    GitHubAppSetupError,
+    begin_github_app_oauth_from_installation,
+    cancel_github_app_oauth_callback,
+    complete_github_app_manifest_callback,
+    complete_github_app_oauth_callback,
+    finalize_github_app_repositories,
+    get_github_app_setup_status,
+    launch_github_app_installation,
+    refresh_github_app_repository_inventory,
+    restart_github_app_setup,
+    start_github_app_manifest_setup,
 )
 from app.services.github_normalization_service import (
     GITHUB_NORMALIZATION_JOB_NOT_FOUND,
@@ -141,8 +157,10 @@ class GitHubConnectionListResponse(BaseModel):
 
 class GitHubAppConfigStatusRead(BaseModel):
     configured: bool
+    credential_source: str = "environment"
     app_id_configured: bool
     app_slug: str | None = None
+    app_name: str | None = None
     private_key_configured: bool
     private_key_source: str | None = None
     webhook_secret_configured: bool
@@ -165,9 +183,84 @@ class GitHubConnectionStatusResponse(BaseModel):
     has_valid_token_record: bool
     repository_read_available: bool
     repository_read_source: str
+    installation_verified: bool = False
+    live_read_available: bool = False
+    selected_repositories: list[str] = Field(default_factory=list)
     is_live: bool
     app: GitHubAppConfigStatusRead
     warnings: list[str] = Field(default_factory=list)
+
+
+class GitHubAppSetupRepositoryRead(BaseModel):
+    id: str
+    name: str
+    full_name: str
+    private: bool
+    visibility: str
+    archived: bool
+    default_branch: str | None = None
+    source_url: str | None = None
+    last_activity_at: str | None = None
+
+
+class GitHubAppSetupStatusResponse(BaseModel):
+    phase: str
+    credential_source: str
+    app_slug: str | None = None
+    app_name: str | None = None
+    installation_account: str | None = None
+    installation_settings_url: str | None = None
+    repository_count: int
+    repositories: list[GitHubAppSetupRepositoryRead] = Field(default_factory=list)
+    selected_repositories: list[str] = Field(default_factory=list)
+    expires_at: datetime | None = None
+    error_code: str | None = None
+    install_url: str | None = None
+    can_manage: bool
+    can_restart: bool
+    setup_owned_by_current_user: bool
+    installation_verified: bool
+    secrets_encrypted: bool
+    installation_tokens_persisted: bool
+    provider_writes_enabled: bool
+
+
+class GitHubAppManifestStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    owner_type: str = Field(pattern="^(user|organization)$")
+    organization_login: str | None = Field(default=None, max_length=39)
+    app_origin: str = Field(min_length=1, max_length=1000)
+
+
+class GitHubAppManifestLaunchResponse(BaseModel):
+    phase: str
+    action_url: str
+    manifest: str
+    expires_at: datetime
+
+
+class GitHubAppInstallLaunchResponse(BaseModel):
+    phase: str
+    redirect_url: str
+    expires_at: datetime
+
+
+class GitHubAppRepositorySelectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    repositories: list[str] = Field(min_length=1, max_length=100)
+
+
+class GitHubAppRepositorySelectionResponse(BaseModel):
+    phase: str
+    connection_id: UUID
+    selected_repositories: list[str]
+    repository_count: int
+
+
+class GitHubAppSetupRestartResponse(BaseModel):
+    phase: str
 
 
 class GitHubProviderTokenConnectionRequest(BaseModel):
@@ -570,6 +663,291 @@ class GitHubOperationalWorkResponse(BaseModel):
     source: str
     is_live: bool
     warnings: list[str] = Field(default_factory=list)
+
+
+async def require_github_setup_admin_session(
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> WorkspaceAccess:
+    if access.actor.is_operator or access.actor.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="browser session required for GitHub App setup",
+        )
+    return access
+
+
+@router.get("/app-setup", response_model=GitHubAppSetupStatusResponse)
+async def get_github_app_setup_state(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> GitHubAppSetupStatusResponse:
+    role = access.workspace_membership.membership.role
+    can_manage = bool(
+        role in {MEMBERSHIP_ROLE_OWNER, MEMBERSHIP_ROLE_ADMIN}
+        and not access.actor.is_operator
+        and access.actor.user_id is not None
+    )
+    async with AsyncSessionLocal() as session:
+        payload = await get_github_app_setup_status(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=access.actor.user_id,
+            can_manage=can_manage,
+        )
+    return GitHubAppSetupStatusResponse.model_validate(payload)
+
+
+@router.post(
+    "/app-setup/manifest",
+    response_model=GitHubAppManifestLaunchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_github_app_manifest_flow(
+    workspace_id: UUID,
+    payload: GitHubAppManifestStartRequest,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppManifestLaunchResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            launch = await start_github_app_manifest_setup(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                payload=GitHubAppManifestStartInput(
+                    owner_type=payload.owner_type,
+                    organization_login=payload.organization_login,
+                    app_origin=payload.app_origin,
+                ),
+            )
+            await session.commit()
+        except SecretEncryptionError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="secret encryption is not configured",
+            ) from exc
+        except GitHubAppSetupError as exc:
+            await session.rollback()
+            _raise_github_setup_http_error(exc)
+    return GitHubAppManifestLaunchResponse(
+        phase=launch.phase,
+        action_url=launch.action_url,
+        manifest=launch.manifest,
+        expires_at=launch.expires_at,
+    )
+
+
+@router.post(
+    "/app-setup/install",
+    response_model=GitHubAppInstallLaunchResponse,
+)
+async def start_github_app_installation_flow(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppInstallLaunchResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            launch = await launch_github_app_installation(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+            )
+            await session.commit()
+        except GitHubAppSetupError as exc:
+            await session.rollback()
+            _raise_github_setup_http_error(exc)
+    return GitHubAppInstallLaunchResponse(
+        phase=launch.phase,
+        redirect_url=launch.redirect_url,
+        expires_at=launch.expires_at,
+    )
+
+
+@router.get("/app-setup/callback/manifest", include_in_schema=False)
+async def github_app_manifest_callback(
+    workspace_id: UUID,
+    code: str | None = Query(default=None),
+    state_value: str | None = Query(default=None, alias="state"),
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> RedirectResponse:
+    if not code or not state_value:
+        return _github_setup_return_redirect()
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            await complete_github_app_manifest_callback(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                state=state_value,
+                code=code,
+            )
+            await session.commit()
+        except GitHubAppSetupError:
+            await session.rollback()
+    return _github_setup_return_redirect()
+
+
+@router.get("/app-setup/callback/installation", include_in_schema=False)
+async def github_app_installation_callback(
+    workspace_id: UUID,
+    installation_id: str | None = Query(default=None),
+    state_value: str | None = Query(default=None, alias="state"),
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> RedirectResponse:
+    if not installation_id or not state_value:
+        return _github_setup_return_redirect()
+    actor_user_id = _github_setup_actor_user_id(access)
+    redirect_url: str | None = None
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await begin_github_app_oauth_from_installation(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                installation_id=installation_id,
+                state=state_value,
+            )
+            redirect_url = result.redirect_url if result.succeeded else None
+            await session.commit()
+        except GitHubAppSetupError:
+            await session.rollback()
+    return (
+        _github_provider_redirect(redirect_url)
+        if redirect_url is not None
+        else _github_setup_return_redirect()
+    )
+
+
+@router.get("/app-setup/callback/oauth", include_in_schema=False)
+async def github_app_oauth_callback(
+    workspace_id: UUID,
+    code: str | None = Query(default=None),
+    provider_error: str | None = Query(default=None, alias="error"),
+    state_value: str | None = Query(default=None, alias="state"),
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> RedirectResponse:
+    if not state_value:
+        return _github_setup_return_redirect()
+    actor_user_id = _github_setup_actor_user_id(access)
+    if not code:
+        if provider_error:
+            async with AsyncSessionLocal() as session:
+                try:
+                    await cancel_github_app_oauth_callback(
+                        session,
+                        workspace_id=workspace_id,
+                        actor_user_id=actor_user_id,
+                        state=state_value,
+                    )
+                    await session.commit()
+                except GitHubAppSetupError:
+                    await session.rollback()
+        return _github_setup_return_redirect()
+    succeeded = False
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await complete_github_app_oauth_callback(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                state=state_value,
+                code=code,
+            )
+            succeeded = result.succeeded
+            await session.commit()
+        except GitHubAppSetupError:
+            await session.rollback()
+
+    if succeeded:
+        async with AsyncSessionLocal() as inventory_session:
+            try:
+                await refresh_github_app_repository_inventory(
+                    inventory_session,
+                    workspace_id=workspace_id,
+                    actor_user_id=actor_user_id,
+                )
+                await inventory_session.commit()
+            except GitHubAppSetupError:
+                # The verified connection remains durable. The safe error code
+                # written by the service is committed so the UI can offer retry.
+                await inventory_session.commit()
+    return _github_setup_return_redirect()
+
+
+@router.post(
+    "/app-setup/repositories/refresh",
+    response_model=GitHubAppSetupStatusResponse,
+)
+async def refresh_github_app_setup_repositories(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppSetupStatusResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            await refresh_github_app_repository_inventory(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+            )
+            await session.commit()
+        except GitHubAppSetupError as exc:
+            await session.commit()
+            _raise_github_setup_http_error(exc)
+        payload = await get_github_app_setup_status(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=actor_user_id,
+            can_manage=True,
+        )
+    return GitHubAppSetupStatusResponse.model_validate(payload)
+
+
+@router.post(
+    "/app-setup/repositories",
+    response_model=GitHubAppRepositorySelectionResponse,
+)
+async def save_github_app_setup_repositories(
+    workspace_id: UUID,
+    payload: GitHubAppRepositorySelectionRequest,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppRepositorySelectionResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await finalize_github_app_repositories(
+                session,
+                workspace_id=workspace_id,
+                actor_user_id=actor_user_id,
+                selected_repositories=payload.repositories,
+            )
+            await session.commit()
+        except GitHubAppSetupError as exc:
+            await session.rollback()
+            _raise_github_setup_http_error(exc)
+    return GitHubAppRepositorySelectionResponse.model_validate(result)
+
+
+@router.post(
+    "/app-setup/restart",
+    response_model=GitHubAppSetupRestartResponse,
+)
+async def restart_github_app_setup_flow(
+    workspace_id: UUID,
+    access: WorkspaceAccess = Depends(require_github_setup_admin_session),
+) -> GitHubAppSetupRestartResponse:
+    actor_user_id = _github_setup_actor_user_id(access)
+    async with AsyncSessionLocal() as session:
+        phase = await restart_github_app_setup(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=actor_user_id,
+        )
+        await session.commit()
+    return GitHubAppSetupRestartResponse(phase=phase)
 
 
 @router.get("/connections", response_model=GitHubConnectionListResponse)
@@ -1201,4 +1579,61 @@ async def list_github_repositories(
         source=result.source,
         is_live=result.is_live,
         warnings=result.warnings,
+    )
+
+
+def _github_setup_actor_user_id(access: WorkspaceAccess) -> UUID:
+    user_id = access.actor.user_id
+    if access.actor.is_operator or user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="browser session required for GitHub App setup",
+        )
+    return user_id
+
+
+def _raise_github_setup_http_error(exc: GitHubAppSetupError) -> None:
+    conflict_codes = {
+        "github_app_already_connected",
+        "github_app_already_created",
+        "github_app_installation_already_bound",
+        "github_app_installation_not_available",
+        "github_app_installation_not_verified",
+        "github_app_setup_not_ready",
+        "repository_inventory_not_available",
+        "repository_selection_not_available",
+    }
+    if exc.code in conflict_codes:
+        http_status = status.HTTP_409_CONFLICT
+    elif exc.code == "repository_inventory_unavailable":
+        http_status = status.HTTP_502_BAD_GATEWAY
+    elif exc.code == "workspace_not_found":
+        http_status = status.HTTP_404_NOT_FOUND
+    else:
+        http_status = status.HTTP_400_BAD_REQUEST
+    raise HTTPException(status_code=http_status, detail=exc.code) from exc
+
+
+def _github_setup_return_redirect() -> RedirectResponse:
+    return RedirectResponse(
+        url="/github#github-setup",
+        status_code=status.HTTP_303_SEE_OTHER,
+        headers={
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
+
+def _github_provider_redirect(value: str) -> RedirectResponse:
+    parsed = urlsplit(value)
+    if parsed.scheme != "https" or parsed.netloc != "github.com":
+        return _github_setup_return_redirect()
+    return RedirectResponse(
+        url=value,
+        status_code=status.HTTP_303_SEE_OTHER,
+        headers={
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+        },
     )

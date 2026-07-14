@@ -19,8 +19,10 @@ import { GitHubSyncControlsView } from "../components/GitHubSyncControls";
 
 const configuredApp: GitHubAppConfigStatus = {
   configured: true,
+  credential_source: "environment",
   app_id_configured: true,
   app_slug: "founderos",
+  app_name: "FounderOS",
   private_key_configured: true,
   private_key_source: "path",
   webhook_secret_configured: false,
@@ -43,6 +45,9 @@ const connectedStatus: GitHubConnectionStatusResponse = {
   has_valid_token_record: true,
   repository_read_available: true,
   repository_read_source: "integration_connection",
+  installation_verified: false,
+  live_read_available: true,
+  selected_repositories: [],
   is_live: false,
   app: configuredApp,
   warnings: []
@@ -60,6 +65,9 @@ const missingConnectionStatus: GitHubConnectionStatusResponse = {
   has_valid_token_record: false,
   repository_read_available: true,
   repository_read_source: "local_bridge",
+  installation_verified: false,
+  live_read_available: false,
+  selected_repositories: [],
   is_live: false,
   app: {
     ...configuredApp,

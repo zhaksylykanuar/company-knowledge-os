@@ -13,7 +13,7 @@ first.
 Implemented foundations:
 
 - FastAPI backend with canonical `/api/v1` routes, async SQLAlchemy/Postgres,
-  Alembic migrations, and one current Alembic head (`b4d5e6f7a8c9`).
+  Alembic migrations, and one current Alembic head (`c5d6e7f8a9b0`).
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -91,10 +91,13 @@ Implemented foundations:
   browser-shipped operator key. Local `.local/repos.json` can now bootstrap the
   offline repository surface before product connect and can be promoted into
   canonical workspace `Repository` rows for the local `/github` UI.
-- GitHub App product-connect foundation: DEC-052 chooses GitHub App
-  installation over OAuth/PAT for product onboarding; backend config/status and
-  workspace-scoped installation connection recording exist without provider
-  calls or persisted installation tokens.
+- GitHub App setup is now workspace-managed self-service (DEC-080). Owner/admin
+  uses the `/github` wizard to create a private read-only App, install it,
+  complete OAuth + PKCE user verification, and save an explicit non-empty
+  repository subset. Credentials and the PKCE verifier are encrypted; state is
+  hashed; OAuth and installation tokens are never persisted. The connection is
+  disabled until selection completes, and viewer remains read-only. The old
+  env/manual connection endpoints are compatibility-only and fail closed.
 - GitHub App live read-sync foundation: DEC-053 keeps v0 polling-only and
   explicitly repository-scoped; backend can mint just-in-time installation
   tokens, read installation repositories/issues/PRs for requested repositories,
@@ -106,11 +109,11 @@ Implemented foundations:
   workspace B cannot see workspace A's synced canonical state/evidence. Safe
   provider error/rate-limit details surface HTTP status/message/retry metadata
   without leaking tokens or provider payloads.
-- `/github` also surfaces first real-read readiness from already-loaded local
-  state: GitHub App env configured/missing, workspace-scoped installation
-  connection state, local repository surface count, blockers, and the next human
-  step. This mirrors the offline preflight without starting sync, provider read,
-  provider write, secret read, external write, or LLM.
+- `/github` now owns the primary setup flow. Legacy env readiness remains hidden
+  compatibility diagnostics; it does not define managed setup readiness. The
+  wizard itself performs no provider read until the human confirms GitHub,
+  verifies the installation, saves the repository subset, and later presses the
+  separate one-repository sync action.
 - Deterministic Company Brain, dashboard Source Coverage over the existing
   Company Brain endpoint, and persisted deterministic Founder Briefings with
   history, evidence refs, and local source-coverage signals. No LLM generation
@@ -315,21 +318,20 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Complete UX-03 authenticated visual acceptance and UX-04 interaction QA.**
-   Repeat the exact-tree desktop and mobile pass for all five command-mode
-   zones, then cover `/github` keyboard focus, disclosures, filters, sync-state
-   recovery, and console state. `/github` desktop/mobile visual composition and
-   overflow are already accepted; the earlier LOCAL-01 result still predates
-   UX-03 and is not acceptance evidence for those five zones.
-
-2. **First founder-approved GitHub App read.**
-   The local product, polling-only backend path, explicit per-repository UI
-   control, offline preflight and provider fail-closed guard are ready. Current
-   external blockers are honest: GitHub App env is unset and no installation
-   connection is recorded; the local repository surface contains 25 entries.
-   Next (human): create/configure founder-owned GitHub App credentials, record
-   the installation connection, then approve one explicit scoped read-only sync.
+1. **First founder-approved GitHub App read.**
+   The managed setup code, migration, polling-only backend path, explicit
+   repository subset and per-repository UI action are ready. Next (human): open
+   `/github`, complete GitHub creation/installation/OAuth confirmations, save the
+   repository subset, then approve one explicit scoped read-only sync. No
+   terminal env or manual installation POST is required for this primary path.
+   The external completion and first provider read are not yet proven.
    This does not authorize a provider write, bulk sync, LLM run or hosted change.
+
+2. **Complete UX-03 acceptance outside `/github`.**
+   The exact self-service `/github` tree has desktop/mobile, console, native
+   ownership-choice, focus-announcement and overflow acceptance. Repeat the
+   current-tree browser pass for the other four command-mode zones; the earlier
+   LOCAL-01 result predates UX-03 and is not reused as proof.
 
 3. **Action review polish (local approval only).**
    Briefing items can now create local `internal_todo` proposals with evidence.
@@ -414,10 +416,10 @@ Implemented foundations:
 - Retained compatibility substrate (`source_events`, `normalized_activity_items`,
   `ingested_events`) still exists; do not drop it without a scoped migration and
   explicit approval.
-- GitHub App connect/read foundations exist, but the first real provider read is
-  still blocked on founder-owned App credentials, installation connection and
-  an explicit scoped approval. Manual provider-token rows remain an operator
-  bridge, not the preferred product setup.
+- GitHub App self-service code is complete locally, but the first real managed
+  setup and provider read still require founder confirmation in GitHub plus one
+  explicit scoped sync. Manual provider-token and env installation paths remain
+  compatibility bridges, not the preferred product setup.
 - Hosted operation is deferred. Do not push, deploy, mutate external data,
   retire external resources, or call providers unless the human explicitly
   requests the exact action.
