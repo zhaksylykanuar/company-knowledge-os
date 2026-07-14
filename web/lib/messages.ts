@@ -3,6 +3,19 @@
 // addition (export another object of the same shape). Code identifiers, routes,
 // data-testids, and backend enum values stay in English; only chrome is Russian.
 
+function russianPlural(
+  count: number,
+  one: string,
+  few: string,
+  many: string
+): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
 export const M = {
   app: {
     name: "founderOS",
@@ -13,7 +26,12 @@ export const M = {
 
   nav: {
     primaryLabel: "Основная навигация",
-    brandHomeLabel: "FounderOS — перейти на экран Сегодня",
+    brandHomeLabel: "FounderOS — перейти в Штаб",
+    hq: "Штаб",
+    world: "Мир",
+    missions: "Миссии",
+    radars: "Радары",
+    backstage: "Системные разделы",
     today: "Сегодня",
     company: "Компания",
     decisions: "Решения",
@@ -24,7 +42,7 @@ export const M = {
     sourceProviders: "Источники данных",
     todaySections: "Раздел Сегодня",
     companySections: "Раздел Компания",
-    primaryZones: "Пять зон компании",
+    primaryZones: "Основные зоны компании",
     boundary: "Факты прежде выводов",
     home: "Главная",
     dashboard: "Штаб компании",
@@ -181,6 +199,229 @@ export const M = {
       sourceReadOnlyDescription:
         "На экране источников вам доступен просмотр. Откройте его и узнайте, каких данных не хватает.",
       sourceReadOnlyReason: "Сохранённых исходных записей пока нет. Добавить их может владелец или администратор."
+    }
+  },
+
+  livingHq: {
+    eyebrow: "Живой штаб",
+    fallbackCompany: "Штаб компании",
+    description:
+      "Что требует внимания, кто связан с компанией и какой ход имеет смысл сейчас.",
+    statusLabel: "Состояние штаба",
+    radars: "Радары",
+    radarConnected: (count: number) => `${count} подключено`,
+    radarAttention: "Нужна проверка",
+    radarEmpty: "Не подключены",
+    radarUnknown: "Статус неизвестен",
+    currentSnapshot: "Текущий снимок",
+    moveNow: "Ход сейчас",
+    aggregateBasis: "Основано на сводке",
+    referencedBasis: (count: number) =>
+      `${count} ${russianPlural(count, "ссылка", "ссылки", "ссылок")} на основания`,
+    readOnly: "Доступен просмотр",
+    contextEyebrow: "Контекст",
+    whyImportant: "Почему это важно",
+    whyFounderOs: "Почему FounderOS так считает?",
+    aggregateExplanation:
+      "Этот ход выбран по общим показателям компании. Конкретные факты без ссылок на исходные материалы не утверждаются.",
+    summaryBadge: "Сводка",
+    referencesBadge: "Ссылки",
+    noReferencesBadge: "Без ссылок",
+    changesEyebrow: "Сигналы",
+    changesTitle: "Что появилось в картине",
+    changesBoundary:
+      "Это текущий снимок, а не сравнение с прошлым визитом. Сигналы без подтверждённых или заявленных оснований сюда не попадают.",
+    noChanges: "В текущем снимке нет подтверждённых сигналов",
+    noChangesHint: "Подключите радар или обновите уже выбранный источник.",
+    changesUnavailable: "Не все сигналы удалось проверить",
+    changesUnavailableHint:
+      "Повторите обновление — отсутствие данных сейчас не означает, что изменений нет.",
+    moreSignals: "Ещё подтверждённых сигналов",
+    withoutEvidence: "Не показано без доказательств",
+    pulseEyebrow: "Контуры",
+    pulseTitle: "Кто уже виден",
+    pulseUnavailable:
+      "Контуры появятся после загрузки карты компании. Нули здесь не означают, что людей или связей нет.",
+    openWorld: "Открыть весь мир",
+    partial:
+      "Часть картины недоступна или ограничена окном — FounderOS не заполняет пробелы догадками.",
+    complete: "Текущий снимок собран из доступных подтверждённых данных.",
+    loading: "Собираем доказательную картину компании…",
+    timeUnknown: "Без даты",
+    viewModel: {
+      missions: {
+        createWorkspaceTitle: "Создайте штаб компании",
+        createWorkspaceDescription: "Сначала выберите рабочее пространство компании.",
+        createWorkspaceWhy:
+          "Без выбранной компании нельзя безопасно связать сигналы с её картиной.",
+        start: "Начать",
+        proposalFallbackDescription: "Предложение готово к проверке человеком.",
+        proposalWhy:
+          "У предложения есть ссылки на исходные материалы; проверка остаётся за человеком, а действие не запускается автоматически.",
+        reviewMission: "Рассмотреть миссию",
+        viewMission: "Посмотреть миссию",
+        connectSourceTitle: "Включите первый радар",
+        connectSourceDescription:
+          "Подключите один источник и безопасно загрузите первые данные.",
+        connectSourceReadOnlyDescription:
+          "Попросите владельца подключить первый источник компании.",
+        connectSourceWhy: "В этой компании пока нет загруженных исходных данных.",
+        connectGithub: "Подключить GitHub",
+        viewRadars: "Посмотреть радары",
+        reviewProposalsTitle: "Проверьте предложения решений",
+        reviewProposalsDescription: (count: number) =>
+          `На проверке: ${count}. Конкретная миссия не выбрана без ссылок на исходные материалы.`,
+        reviewProposalsWhy:
+          "Агрегат показывает очередь, но не доказывает содержание отдельного решения.",
+        reviewQueue: "Проверить очередь",
+        viewQueue: "Посмотреть очередь",
+        reviewWorldPersonTitle: (name: string) => `Кто такой ${name}?`,
+        reviewWorldOrganizationTitle: (name: string) =>
+          `Как связана компания ${name}?`,
+        reviewWorldDescription: "Подтвердите найденную связь или отклоните её.",
+        reviewWorldWhy:
+          "Связь найдена в текущей доказательной проекции Company World.",
+        reviewRelationship: "Проверить связь",
+        viewRelationship: "Посмотреть связь",
+        reviewCandidatesTitle: "Проверьте неподтверждённые связи",
+        reviewCandidatesDescription: (count: number) =>
+          `В текущей проекции ожидают проверки: ${count}.`,
+        reviewCandidatesWhy:
+          "Доступен только общий счётчик; конкретная связь без исходных материалов не утверждается.",
+        openWorld: "Открыть мир",
+        refreshTitle: "Обновите картину компании",
+        refreshDescription: "Часть обязательных фактов сейчас недоступна.",
+        refreshWhy:
+          "FounderOS не придумывает следующий ход при неполных входных данных.",
+        refreshAction: "Повторить проверку",
+        createBriefingTitle: "Соберите первую сводку",
+        createBriefingDescription: "Источники есть, но сохранённой сводки ещё нет.",
+        createBriefingWhy:
+          "Сохранённых сводок для этой компании пока нет.",
+        createBriefing: "Создать сводку",
+        viewBriefings: "Посмотреть сводки",
+        openBriefingTitle: "Откройте актуальную сводку",
+        openBriefingDescription:
+          "Критичных доказательных миссий в текущем снимке не найдено.",
+        openBriefingWhy:
+          "Источники и сводка доступны, а очередь решений и связей пуста.",
+        openBriefing: "Открыть сводку"
+      },
+      changes: {
+        proposalFallbackDescription: "Локальное предложение действия.",
+        touchpointFallbackTitle: "Письмо без темы",
+        personCandidateDescription:
+          "Новый кандидат на связь требует подтверждения.",
+        organizationCandidateDescription:
+          "Новая организация требует подтверждения связи.",
+        proposalStatus: {
+          approved: "Решение принято",
+          executed: "Миссия выполнена",
+          failed: "Ошибка выполнения",
+          proposed: "Новая миссия",
+          rejected: "Предложение отклонено",
+          fallback: "Изменилось предложение"
+        },
+        touchpointDirection: {
+          inbound: "Входящее касание",
+          mixed: "Двустороннее касание",
+          outbound: "Исходящее касание",
+          unknown: "Направление не определено"
+        },
+        touchpointDescription: (direction: string) => `${direction} по email.`
+      },
+      metrics: {
+        internalPeople: "Команда",
+        confirmedExternalPeople: "Подтверждённые контакты",
+        confirmedOrganizations: "Компании",
+        pendingConfirmations: "Нужно подтвердить",
+        touchpoints: "Касания в окне",
+        sourceRecords: "Исходные записи"
+      }
+    },
+    miniMap: {
+      emptyDetail: "Карта появится после получения первых подтверждённых данных.",
+      emptyTitle: "Карта ещё не собрана",
+      emptyDescription:
+        "Подключите радар или добавьте участников — здесь появятся реальные люди и связи.",
+      errorTitle: "Не удалось загрузить карту",
+      errorDescription:
+        "Данные не потеряны. Повторите проверку или откройте полный Мир компании.",
+      retry: "Повторить",
+      companyFallback: "Компания",
+      waitingData: "Ожидает данных",
+      companyCenter: "Центр компании",
+      employee: "Сотрудник",
+      organizationFallback: "Организация",
+      confirmedOrganization: "Подтверждённая компания",
+      unspecifiedRole: "Роль не указана",
+      confirmed: "Подтверждён",
+      externalContact: "Внешний контакт",
+      needsConfirmation: "Нужно подтвердить",
+      possibleOrganization: "Возможная компания",
+      possibleContact: "Возможный контакт",
+      companyDetail: (
+        internalPeople: number,
+        touchpoints: number,
+        touchpointsAreLowerBound: boolean
+      ) =>
+        `${internalPeople} в команде · ${touchpointsAreLowerBound ? "≥" : ""}${touchpoints} ${russianPlural(
+          touchpoints,
+          "касание",
+          "касания",
+          "касаний"
+        )}${touchpointsAreLowerBound ? " в показанном окне" : ""}`,
+      activeContour: "Активный контур",
+      eyebrow: "Живая карта",
+      title: "Мир компании",
+      description: "Только реальные участники и подтверждённые связи.",
+      legendLabel: "Обозначения карты",
+      legendConfirmed: "Подтверждено",
+      legendCandidate: "Нужно разобрать",
+      teamEmpty: "Команда появится после добавления участников.",
+      team: "Команда",
+      confirmedNetworkEmpty: "Подтверждённая сеть пока пуста.",
+      confirmedNetwork: "Подтверждённая сеть",
+      candidatesEmpty: "Новых кандидатов для разбора нет.",
+      unknownZone: "Неизвестное",
+      noEvidence: "Доказательств пока нет",
+      moreNodes: (count: number) => `Ещё ${count} — в полном мире`,
+      openProfile: (label: string) => `Открыть профиль: ${label}`,
+      roles: {
+        owner: "Владелец",
+        admin: "Администратор",
+        viewer: "Наблюдатель",
+        member: "Участник"
+      },
+      relationships: {
+        account_owner: "Владелец аккаунта",
+        advisor: "Советник",
+        contact: "Контакт",
+        decision_maker: "Принимает решение",
+        employee: "Сотрудник",
+        other: "Другая роль",
+        fallback: "Роль не указана"
+      },
+      organizationRelationships: {
+        customer: "Заказчик",
+        other: "Другая связь",
+        partner: "Партнёр",
+        prospect: "Потенциальный заказчик",
+        unknown: "Связь не указана",
+        vendor: "Поставщик",
+        fallback: "Связь не указана"
+      },
+      interactionLabel: (count: number, isLowerBound = false) =>
+        `${isLowerBound ? "≥" : ""}${count} ${russianPlural(
+          count,
+          "касание",
+          "касания",
+          "касаний"
+        )}${isLowerBound ? " в показанном окне" : ""}`,
+      peopleLabel: (count: number) =>
+        `${count} ${russianPlural(count, "человек", "человека", "человек")}`,
+      evidenceWord: (count: number) =>
+        russianPlural(count, "доказательство", "доказательства", "доказательств")
     }
   },
 

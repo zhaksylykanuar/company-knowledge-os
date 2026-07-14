@@ -23,25 +23,28 @@ type NavGroup = {
 export const PRIMARY_NAV: readonly NavLink[] = [
   {
     href: "/dashboard",
-    label: M.nav.today,
+    label: M.nav.hq,
     icon: "today",
     activePaths: ["/dashboard", "/briefings"]
   },
   {
     href: "/company-brain",
-    label: M.nav.company,
+    label: M.nav.world,
     icon: "building",
     activePaths: ["/company-brain", "/documents"]
   },
   {
     href: "/actions",
-    label: M.nav.decisions,
+    label: M.nav.missions,
     icon: "decision",
     activePaths: ["/actions"]
-  },
+  }
+] as const;
+
+export const BACKSTAGE_NAV: readonly NavLink[] = [
   {
     href: "/connectors",
-    label: M.nav.sources,
+    label: M.nav.radars,
     icon: "sources",
     activePaths: ["/connectors", "/github", "/jira", "/gmail", "/drive"]
   },
@@ -71,18 +74,18 @@ export const COMPANY_NAV: readonly NavLink[] = [
   { href: "/documents", label: M.nav.documents }
 ] as const;
 
-// Kept as a small compatibility export for tests and consumers that need a
-// flattened navigation model. The rendered shell intentionally has one human
-// hierarchy: five zones, with a small contextual menu inside complex zones.
+// Kept as compatibility exports for tests and consumers that need a flattened
+// navigation model. Briefings and documents remain reachable product routes,
+// but the rendered shell no longer treats them as primary sub-navigation.
 export const NAV_GROUPS: readonly NavGroup[] = [
   { label: M.nav.primaryZones, links: PRIMARY_NAV },
-  { label: M.nav.todaySections, links: TODAY_NAV },
-  { label: M.nav.companySections, links: COMPANY_NAV },
+  { label: M.nav.backstage, links: BACKSTAGE_NAV },
   { label: M.nav.sourceProviders, links: SOURCE_NAV }
 ] as const;
 
 export const NAV_LINKS: readonly NavLink[] = [
   ...PRIMARY_NAV,
+  ...BACKSTAGE_NAV,
   TODAY_NAV[1],
   COMPANY_NAV[1],
   ...SOURCE_NAV.slice(1)
@@ -129,8 +132,52 @@ export function Sidebar() {
         })}
       </nav>
 
+      <nav className="backstage-nav" aria-label={M.nav.backstage}>
+        {BACKSTAGE_NAV.map((link) => {
+          const isActive = isNavigationItemActive(pathname, link);
+          return (
+            <Link
+              aria-current={pathname === link.href ? "page" : undefined}
+              className={
+                isActive
+                  ? "nav-link backstage-nav-link active"
+                  : "nav-link backstage-nav-link"
+              }
+              href={link.href}
+              key={link.href}
+            >
+              {link.icon ? <NavGlyph icon={link.icon} /> : null}
+              <span>{link.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
       <p className="sidebar-boundary">{M.nav.boundary}</p>
     </aside>
+  );
+}
+
+export function MobilePrimaryNavigation() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="mobile-nav" aria-label={M.nav.primaryLabel}>
+      {PRIMARY_NAV.map((link) => {
+        const isActive = isNavigationItemActive(pathname, link);
+        return (
+          <Link
+            aria-current={pathname === link.href ? "page" : undefined}
+            className={isActive ? "nav-link active" : "nav-link"}
+            href={link.href}
+            key={link.href}
+          >
+            {link.icon ? <NavGlyph icon={link.icon} /> : null}
+            <span>{link.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -165,25 +212,12 @@ export function ContextNavigation() {
 }
 
 export function getContextNavigation(pathname: string): NavGroup | null {
-  const contexts: readonly { primary: NavLink; group: NavGroup }[] = [
-    {
-      primary: PRIMARY_NAV[0],
-      group: { label: M.nav.todaySections, links: TODAY_NAV }
-    },
-    {
-      primary: PRIMARY_NAV[1],
-      group: { label: M.nav.companySections, links: COMPANY_NAV }
-    },
-    {
-      primary: PRIMARY_NAV[3],
-      group: { label: M.nav.sourceProviders, links: SOURCE_NAV }
-    }
-  ];
-
-  return (
-    contexts.find(({ primary }) => isNavigationItemActive(pathname, primary))?.group ??
-    null
+  const isSourceRoute = SOURCE_NAV.some((link) =>
+    isNavigationItemActive(pathname, link)
   );
+  return isSourceRoute
+    ? { label: M.nav.sourceProviders, links: SOURCE_NAV }
+    : null;
 }
 
 function NavGlyph({ icon }: { icon: NavIcon }) {

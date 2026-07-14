@@ -4,23 +4,47 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { fetchActionProposals, listBriefings } from "../lib/api";
+import {
+  deriveLivingHqView,
+  type LivingHqChange,
+  type LivingHqMission,
+  type LivingHqWorldMetric
+} from "../lib/living-hq";
 import { M } from "../lib/messages";
 import {
   loadOnboardingSnapshot,
   type OnboardingSnapshot
 } from "../lib/onboarding";
 import { useSession } from "../lib/session";
-import {
-  deriveTodayView,
-  type TodayFacts,
-  type TodayMove,
-  type TodaySignal
-} from "../lib/today";
-import { MiniHint, MissionStrip } from "./MissionStrip";
+import type { TodayFacts } from "../lib/today";
+import type { ActionProposal, CompanyMapResponse } from "../lib/types";
+import { LivingWorldMiniMap } from "./LivingWorldMiniMap";
+import { SourceLink } from "./SourceLink";
 
 type TodayBoardViewProps = {
+  actionProposals?: readonly ActionProposal[] | null;
+  companyMapState?: CompanyMapLoadState;
+  companyMap?: CompanyMapResponse | null;
   facts: TodayFacts;
+  isDataPartial?: boolean;
   onRetry?: () => void;
+  radarSummary?: RadarSummary;
+};
+
+type CompanyMapLoadState = "empty" | "error" | "ready";
+
+type RadarSummary = {
+  connectedCount: number | null;
+  state: "attention" | "connected" | "empty" | "unknown";
+};
+
+type TodayBoardState = {
+  actionProposals: ActionProposal[] | null;
+  companyMapState: CompanyMapLoadState;
+  companyMap: CompanyMapResponse | null;
+  facts: TodayFacts;
+  isDataPartial: boolean;
+  radarSummary: RadarSummary;
 };
 
 export function TodayBoard() {
@@ -28,23 +52,19 @@ export function TodayBoard() {
   const workspaceId = session?.workspaceId ?? null;
   const workspace =
     session?.workspaces.find((item) => item.id === workspaceId) ?? null;
-  const [facts, setFacts] = useState<TodayFacts | null>(null);
+  const [state, setState] = useState<TodayBoardState | null>(null);
   const [loadingWorkspaceId, setLoadingWorkspaceId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!workspaceId) {
-      setFacts({
-        briefingCount: null,
-        candidateCount: null,
-        candidateCountIsLowerBound: false,
-        memberCount: null,
-        proposedDecisionCount: null,
-        proposedDecisionCountIsLowerBound: false,
-        role: null,
-        sourceRecordCount: null,
-        workspaceId: null,
-        workspaceName: null
+      setState({
+        actionProposals: [],
+        companyMapState: "empty",
+        companyMap: null,
+        facts: emptyFacts(),
+        isDataPartial: true,
+        radarSummary: unknownRadarSummary()
       });
       setLoadingWorkspaceId(null);
       return;
@@ -56,32 +76,64 @@ export function TodayBoard() {
     Promise.allSettled([
       loadOnboardingSnapshot(workspaceId),
       listBriefings(workspaceId, { limit: 1 }),
-      fetchActionProposals(workspaceId, { status: "proposed", limit: 50 })
-    ]).then(([onboardingResult, briefingResult, actionResult]) => {
+      fetchActionProposals(workspaceId, { limit: 100, status: "proposed" }),
+      fetchActionProposals(workspaceId, { limit: 50 })
+    ]).then(([
+      onboardingResult,
+      briefingResult,
+      proposedActionResult,
+      recentActionResult
+    ]) => {
       if (cancelled) {
         return;
       }
 
       const snapshot =
         onboardingResult.status === "fulfilled" ? onboardingResult.value : null;
-      const nextFacts = factsFromResponses({
-        actionCount:
-          actionResult.status === "fulfilled"
-            ? actionResult.value.proposals.filter(
-                (proposal) => proposal.status === "proposed"
-              ).length
-            : null,
-        actionCountIsLowerBound:
-          actionResult.status === "fulfilled" && actionResult.value.count >= 50,
-        briefingCount:
-          briefingResult.status === "fulfilled" ? briefingResult.value.count : null,
-        role: workspace?.role ?? null,
-        snapshot,
-        workspaceId,
-        workspaceName: workspace?.name ?? null
-      });
+      const actionProposals = mergeActionProposals(
+        proposedActionResult.status === "fulfilled"
+          ? proposedActionResult.value.proposals
+          : null,
+        recentActionResult.status === "fulfilled"
+          ? recentActionResult.value.proposals
+          : null
+      );
+      const proposedCount =
+        proposedActionResult.status === "fulfilled"
+          ? proposedActionResult.value.count
+          : null;
+      const snapshotUnavailable = snapshot?.unavailable ?? [];
 
-      setFacts(nextFacts);
+      setState({
+        actionProposals,
+        companyMapState:
+          onboardingResult.status === "rejected" ||
+          snapshotUnavailable.includes("company-map")
+            ? "error"
+            : snapshot?.companyMap
+              ? "ready"
+              : "empty",
+        companyMap: snapshot?.companyMap ?? null,
+        facts: factsFromResponses({
+          actionCount: proposedCount,
+          actionCountIsLowerBound:
+            proposedActionResult.status === "fulfilled" &&
+            proposedActionResult.value.count >= 100,
+          briefingCount:
+            briefingResult.status === "fulfilled" ? briefingResult.value.count : null,
+          role: workspace?.role ?? null,
+          snapshot,
+          workspaceId,
+          workspaceName: workspace?.name ?? null
+        }),
+        isDataPartial:
+          onboardingResult.status === "rejected" ||
+          briefingResult.status === "rejected" ||
+          proposedActionResult.status === "rejected" ||
+          recentActionResult.status === "rejected" ||
+          snapshotUnavailable.length > 0,
+        radarSummary: radarSummaryFromSnapshot(snapshot)
+      });
       setLoadingWorkspaceId(null);
     });
 
@@ -90,132 +142,319 @@ export function TodayBoard() {
     };
   }, [reloadKey, workspace?.name, workspace?.role, workspaceId]);
 
-  if (workspaceId && (facts?.workspaceId !== workspaceId || loadingWorkspaceId)) {
+  if (
+    workspaceId &&
+    (state?.facts.workspaceId !== workspaceId || loadingWorkspaceId)
+  ) {
     return <TodayLoading workspaceName={workspace?.name ?? null} />;
   }
 
-  if (!facts) {
+  if (!state) {
     return <TodayLoading workspaceName={workspace?.name ?? null} />;
   }
 
   return (
     <TodayBoardView
-      facts={facts}
+      actionProposals={state.actionProposals}
+      companyMapState={state.companyMapState}
+      companyMap={state.companyMap}
+      facts={state.facts}
+      isDataPartial={state.isDataPartial}
       onRetry={() => setReloadKey((current) => current + 1)}
+      radarSummary={state.radarSummary}
     />
   );
 }
 
-export function TodayBoardView({ facts, onRetry }: TodayBoardViewProps) {
-  const view = deriveTodayView(facts);
-  const actionLabel = todayMoveActionLabel(view.move);
+export function TodayBoardView({
+  actionProposals = null,
+  companyMap = null,
+  companyMapState = companyMap ? "ready" : "empty",
+  facts,
+  isDataPartial = false,
+  onRetry,
+  radarSummary = unknownRadarSummary()
+}: TodayBoardViewProps) {
+  const view = deriveLivingHqView({ facts, companyMap, actionProposals });
+  const safeCompanyMap =
+    companyMap && facts.workspaceId === companyMap.workspace_id ? companyMap : null;
+  const resolvedCompanyMapState =
+    companyMap && safeCompanyMap === null ? "error" : companyMapState;
+  const isPartial = view.isPartial || isDataPartial;
 
   return (
-    <section className="today-board" aria-labelledby="today-title">
-      <header className="today-heading">
-        <div className="today-heading-copy">
-          <span className="eyebrow">{M.today.eyebrow}</span>
-          <h1 id="today-title">{M.today.title}</h1>
-          <p>{M.today.description}</p>
+    <section className="living-hq" aria-labelledby="living-hq-title">
+      <header className="living-hq-header">
+        <div>
+          <span className="eyebrow">{M.livingHq.eyebrow}</span>
+          <h1 id="living-hq-title">
+            {facts.workspaceName ?? M.livingHq.fallbackCompany}
+          </h1>
+          <p>{M.livingHq.description}</p>
         </div>
-        <div className="today-company-chip">
-          <span className="today-live-dot" aria-hidden="true" />
-          <span>{M.today.livePicture}</span>
-          <strong>{facts.workspaceName ?? M.today.noWorkspace}</strong>
+        <div className="living-hq-status" aria-label={M.livingHq.statusLabel}>
+          <Link
+            className="living-hq-radar"
+            data-state={radarSummary.state}
+            href="/connectors"
+          >
+            <span className="living-hq-radar-dot" aria-hidden="true" />
+            <span>{M.livingHq.radars}</span>
+            <strong>{formatRadarSummary(radarSummary)}</strong>
+          </Link>
+          <span className="living-hq-snapshot">{M.livingHq.currentSnapshot}</span>
         </div>
       </header>
 
-      <MissionStrip
-        action={actionLabel}
-        current={view.isPartial ? "Картина неполная" : "Следующий ход готов"}
-        details={
-          <>
-            <p>{view.move.description}</p>
-            <p>
-              <strong>Почему сейчас:</strong> {view.move.reason}
-            </p>
-            <small>{M.today.sourceBoundary}</small>
-          </>
-        }
-        outcome={todayMoveOutcome(view.move)}
+      <div className="living-hq-command-grid">
+        <MissionCard mission={view.mission} onRetry={onRetry} />
+        <MissionContext mission={view.mission} />
+      </div>
+
+      <LivingWorldMiniMap
+        data={safeCompanyMap}
+        onRetry={onRetry}
+        state={resolvedCompanyMapState}
+        workspaceName={facts.workspaceName ?? M.livingHq.fallbackCompany}
       />
 
-      <section className="today-move" aria-labelledby="today-move-title">
-        <div className="today-move-main">
-          <span className="today-move-label">{M.today.nextMove}</span>
-          <h2 id="today-move-title">{view.move.title}</h2>
-          {view.move.href ? (
-            <Link className="today-primary-action" href={view.move.href}>
-              <span>{actionLabel}</span>
-              <span aria-hidden="true">→</span>
-            </Link>
-          ) : (
-            <button className="today-primary-action" onClick={onRetry} type="button">
-              <span>{M.today.retryMove}</span>
-              <span aria-hidden="true">↻</span>
-            </button>
-          )}
-        </div>
-      </section>
+      <div className="living-hq-lower-grid">
+        <ChangeFeed
+          changes={view.changes}
+          isPartial={isPartial}
+          omittedCount={view.omittedChangeCount}
+          unsupportedCount={view.unsupportedSignalCount}
+        />
+        <WorldPulse availability={view.world.availability} metrics={view.world.metrics} />
+      </div>
 
-      <section className="today-signal-section" aria-labelledby="today-signals-title">
-        <div className="today-signal-heading">
-          <h2 id="today-signals-title">{M.today.signalsLabel}</h2>
-          <MiniHint label="Зачем нужны эти сигналы?">
-            Здесь только факты, которые меняют следующий ход.
-          </MiniHint>
-        </div>
-        <div className="today-signals">
-          {view.signals.map((signal) => (
-            <SignalCard key={signal.label} signal={signal} />
-          ))}
-        </div>
-      </section>
-
-      <p className={view.isPartial ? "today-truth-note warning" : "today-truth-note"}>
-        <span aria-hidden="true">{view.isPartial ? "!" : "✓"}</span>
-        {view.isPartial ? M.today.picturePartial : M.today.pictureComplete}
+      <p
+        className={
+          isPartial
+            ? "living-hq-truth-note living-hq-truth-note--partial"
+            : "living-hq-truth-note"
+        }
+      >
+        <span aria-hidden="true">{isPartial ? "!" : "✓"}</span>
+        {isPartial ? M.livingHq.partial : M.livingHq.complete}
       </p>
     </section>
   );
 }
 
+function MissionCard({
+  mission,
+  onRetry
+}: {
+  mission: LivingHqMission;
+  onRetry?: () => void;
+}) {
+  const evidenceLabel =
+    mission.evidenceState === "direct"
+      ? `${mission.evidence.length} ${evidenceWord(mission.evidence.length)}`
+      : mission.evidenceState === "referenced"
+        ? M.livingHq.referencedBasis(mission.evidence.length)
+        : M.livingHq.aggregateBasis;
+
+  return (
+    <article className="living-hq-mission" aria-labelledby="living-hq-mission-title">
+      <div className="living-hq-mission-topline">
+        <span>{M.livingHq.moveNow}</span>
+        <span>{evidenceLabel}</span>
+      </div>
+      <div className="living-hq-mission-copy">
+        <h2 id="living-hq-mission-title">{mission.title}</h2>
+        <p>{mission.description}</p>
+      </div>
+      <div className="living-hq-mission-actions">
+        {mission.href ? (
+          <Link className="living-hq-primary-action" href={mission.href}>
+            <span>{mission.actionLabel}</span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        ) : (
+          <button
+            className="living-hq-primary-action"
+            onClick={onRetry}
+            type="button"
+          >
+            <span>{mission.actionLabel}</span>
+            <span aria-hidden="true">↻</span>
+          </button>
+        )}
+        {!mission.canAct ? (
+          <span className="living-hq-role-note">{M.livingHq.readOnly}</span>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function MissionContext({ mission }: { mission: LivingHqMission }) {
+  return (
+    <aside className="living-hq-context" aria-labelledby="living-hq-context-title">
+      <span className="eyebrow">{M.livingHq.contextEyebrow}</span>
+      <h2 id="living-hq-context-title">{M.livingHq.whyImportant}</h2>
+      <p>{mission.why}</p>
+
+      <details className="living-hq-evidence">
+        <summary>
+          {M.livingHq.whyFounderOs}
+          <span>{missionEvidenceBadge(mission)}</span>
+        </summary>
+        {mission.evidence.length > 0 ? (
+          <ul>
+            {mission.evidence.map((evidence) => (
+              <li key={evidence.key}>
+                {evidence.url ? (
+                  <SourceLink url={evidence.url}>
+                    {evidence.label}
+                  </SourceLink>
+                ) : (
+                  <span>{evidence.label}</span>
+                )}
+                <small>{evidence.source}</small>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>{M.livingHq.aggregateExplanation}</p>
+        )}
+      </details>
+    </aside>
+  );
+}
+
+function ChangeFeed({
+  changes,
+  isPartial,
+  omittedCount,
+  unsupportedCount
+}: {
+  changes: readonly LivingHqChange[];
+  isPartial: boolean;
+  omittedCount: number;
+  unsupportedCount: number;
+}) {
+  return (
+    <section className="living-hq-changes" aria-labelledby="living-hq-changes-title">
+      <header>
+        <div>
+          <span className="eyebrow">{M.livingHq.changesEyebrow}</span>
+          <h2 id="living-hq-changes-title">{M.livingHq.changesTitle}</h2>
+        </div>
+        <span className="living-hq-change-count">{changes.length}</span>
+      </header>
+      <p className="living-hq-section-note">{M.livingHq.changesBoundary}</p>
+
+      {changes.length > 0 ? (
+        <ol className="living-hq-change-list">
+          {changes.map((change) => (
+            <li key={change.id}>
+              <Link href={change.href}>
+                <span className="living-hq-change-icon" data-kind={change.kind}>
+                  {changeIcon(change.kind)}
+                </span>
+                <span>
+                  <strong>{change.title}</strong>
+                  <small>{change.description}</small>
+                </span>
+                <time dateTime={change.occurredAt ?? undefined}>
+                  {formatChangeTime(change.occurredAt)}
+                </time>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <div className="living-hq-empty-change">
+          <strong>
+            {isPartial ? M.livingHq.changesUnavailable : M.livingHq.noChanges}
+          </strong>
+          <span>
+            {isPartial
+              ? M.livingHq.changesUnavailableHint
+              : M.livingHq.noChangesHint}
+          </span>
+        </div>
+      )}
+
+      {omittedCount > 0 || unsupportedCount > 0 ? (
+        <p className="living-hq-feed-note">
+          {omittedCount > 0 ? `${M.livingHq.moreSignals}: ${omittedCount}. ` : ""}
+          {unsupportedCount > 0
+            ? `${M.livingHq.withoutEvidence}: ${unsupportedCount}.`
+            : ""}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function WorldPulse({
+  availability,
+  metrics
+}: {
+  availability: "partial" | "ready" | "unavailable";
+  metrics: readonly LivingHqWorldMetric[];
+}) {
+  return (
+    <aside className="living-hq-pulse" aria-labelledby="living-hq-pulse-title">
+      <header>
+        <span className="eyebrow">{M.livingHq.pulseEyebrow}</span>
+        <h2 id="living-hq-pulse-title">{M.livingHq.pulseTitle}</h2>
+      </header>
+      {availability === "unavailable" ? (
+        <p className="living-hq-pulse-empty">{M.livingHq.pulseUnavailable}</p>
+      ) : (
+        <dl>
+          {metrics.map((metric) => (
+            <div key={metric.key}>
+              <dt>{metric.label}</dt>
+              <dd>{formatMetricValue(metric)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <Link className="living-hq-secondary-action" href="/company-brain">
+        {M.livingHq.openWorld}
+        <span aria-hidden="true">→</span>
+      </Link>
+    </aside>
+  );
+}
+
 function TodayLoading({ workspaceName }: { workspaceName: string | null }) {
   return (
-    <section className="today-board" aria-busy="true" aria-live="polite">
-      <header className="today-heading">
-        <div className="today-heading-copy">
-          <span className="eyebrow">{M.today.eyebrow}</span>
-          <h1>{M.today.title}</h1>
-          <p>{M.today.description}</p>
+    <section className="living-hq living-hq--loading" aria-busy="true" aria-live="polite">
+      <header className="living-hq-header">
+        <div>
+          <span className="eyebrow">{M.livingHq.eyebrow}</span>
+          <h1>{workspaceName ?? M.livingHq.fallbackCompany}</h1>
+          <p>{M.livingHq.loading}</p>
         </div>
-        {workspaceName ? (
-          <div className="today-company-chip">
-            <span className="today-live-dot" aria-hidden="true" />
-            <strong>{workspaceName}</strong>
-          </div>
-        ) : null}
       </header>
-      <div className="today-loading-card">
-        <span className="today-loading-mark" aria-hidden="true" />
-        <span>{M.today.loading}</span>
+      <div className="living-hq-loading-card">
+        <span className="living-hq-loading-mark" aria-hidden="true" />
+        <span>{M.livingHq.loading}</span>
       </div>
     </section>
   );
 }
 
-function SignalCard({ signal }: { signal: TodaySignal }) {
-  return (
-    <article className={`today-signal today-signal--${signal.tone}`}>
-      <div className="today-signal-meta">
-        <span>{signal.label}</span>
-        <strong>{signal.value}</strong>
-        <MiniHint label={`Что означает сигнал «${signal.label}»?`}>
-          {signal.description}
-        </MiniHint>
-      </div>
-    </article>
-  );
+function emptyFacts(): TodayFacts {
+  return {
+    briefingCount: null,
+    candidateCount: null,
+    candidateCountIsLowerBound: false,
+    memberCount: null,
+    proposedDecisionCount: null,
+    proposedDecisionCountIsLowerBound: false,
+    role: null,
+    sourceRecordCount: null,
+    workspaceId: null,
+    workspaceName: null
+  };
 }
 
 function factsFromResponses({
@@ -256,42 +495,101 @@ function factsFromResponses({
   };
 }
 
-function todayMoveActionLabel(move: TodayMove): string {
-  const labelsByTitle = new Map<string, string>([
-    [M.today.moves.createCompanyTitle, "Создать компанию"],
-    [M.today.moves.addSourceTitle, "Добавить данные"],
-    [M.today.moves.sourceReadOnlyTitle, "Открыть источники"],
-    [M.today.moves.reviewDecisionsTitle, "Открыть решения"],
-    [M.today.moves.observeDecisionsTitle, "Посмотреть решения"],
-    [M.today.moves.reviewMapTitle, "Открыть кандидатов"],
-    [M.today.moves.observeMapTitle, "Посмотреть карту"],
-    [M.today.moves.createBriefingTitle, "Собрать сводку"],
-    [M.today.moves.observeBriefingTitle, "Открыть сводки"],
-    [M.today.moves.inviteTeamTitle, "Добавить участника"],
-    [M.today.moves.openBriefingTitle, "Открыть сводку"]
-  ]);
-
-  return labelsByTitle.get(move.title) ?? (move.href ? move.title : M.today.retryMove);
+function mergeActionProposals(
+  proposed: readonly ActionProposal[] | null,
+  recent: readonly ActionProposal[] | null
+): ActionProposal[] | null {
+  if (proposed === null && recent === null) {
+    return null;
+  }
+  const byId = new Map<string, ActionProposal>();
+  for (const proposal of [...(proposed ?? []), ...(recent ?? [])]) {
+    byId.set(proposal.id, proposal);
+  }
+  return [...byId.values()];
 }
 
-function todayMoveOutcome(move: TodayMove): string {
-  if (!move.href) {
-    return "Получим актуальную картину";
+function unknownRadarSummary(): RadarSummary {
+  return { connectedCount: null, state: "unknown" };
+}
+
+function radarSummaryFromSnapshot(
+  snapshot: OnboardingSnapshot | null
+): RadarSummary {
+  const connectors = snapshot?.connectors;
+  if (!connectors) {
+    return unknownRadarSummary();
   }
-  if (move.href === "/onboarding") {
-    return "Появится пространство компании";
+  const hasAttention = connectors.connectors.some(
+    (connector) => connector.connection_count > connector.connected_count
+  );
+  if (hasAttention) {
+    return {
+      connectedCount: connectors.summary.connected,
+      state: "attention"
+    };
   }
-  if (move.href === "/connectors") {
-    return "Картина получит основу";
+  return {
+    connectedCount: connectors.summary.connected,
+    state: connectors.summary.connected > 0 ? "connected" : "empty"
+  };
+}
+
+function formatRadarSummary(summary: RadarSummary): string {
+  if (summary.state === "attention") return M.livingHq.radarAttention;
+  if (summary.state === "empty") return M.livingHq.radarEmpty;
+  if (summary.state === "connected" && summary.connectedCount !== null) {
+    return M.livingHq.radarConnected(summary.connectedCount);
   }
-  if (move.href.startsWith("/actions")) {
-    return "Очередь решений станет короче";
+  return M.livingHq.radarUnknown;
+}
+
+function missionEvidenceBadge(mission: LivingHqMission): string {
+  if (mission.evidence.length > 0) {
+    return mission.evidenceState === "referenced"
+      ? M.livingHq.referencesBadge
+      : String(mission.evidence.length);
   }
-  if (move.href === "/company-brain") {
-    return "Карта людей и компаний станет точнее";
+  if (mission.evidenceState === "unavailable") {
+    return M.livingHq.noReferencesBadge;
   }
-  if (move.href.startsWith("/settings")) {
-    return "Команда получит доступ";
+  return M.livingHq.summaryBadge;
+}
+
+function formatMetricValue(metric: LivingHqWorldMetric): string {
+  if (metric.value === null) {
+    return "—";
   }
-  return "Получите короткую сводку";
+  return metric.precision === "at_least" ? `≥${metric.value}` : String(metric.value);
+}
+
+function formatChangeTime(value: string | null): string {
+  if (!value) {
+    return M.livingHq.timeUnknown;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return M.livingHq.timeUnknown;
+  }
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "short"
+  }).format(parsed);
+}
+
+function changeIcon(kind: LivingHqChange["kind"]): string {
+  if (kind === "proposal") return "!";
+  if (kind === "touchpoint") return "↔";
+  if (kind === "organization_candidate") return "□";
+  return "+";
+}
+
+function evidenceWord(count: number): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "доказательство";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return "доказательства";
+  }
+  return "доказательств";
 }

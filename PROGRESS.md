@@ -2,7 +2,7 @@
 
 > Это **живой файл состояния**. Его обновляет агент (Claude Code / Codex) после КАЖДОЙ задачи.
 > Человек смотрит сюда, чтобы за 5 секунд понять: **где мы и что дальше.**
-> Текущая ветка `codex/github-self-service-setup`; изменения пока зафиксированы
+> Текущая ветка `codex/living-hq-ux-reset`; изменения пока зафиксированы
 > только локально и не опубликованы. Активный runtime
 > локальный (`make local`, DEC-077); hosted deploy не является текущей целью.
 
@@ -10,6 +10,32 @@
 
 ## ▶ СЕЙЧАС
 
+- **UX-RESET-01 Living Headquarters (DEC-081): РЕАЛИЗОВАН ЛОКАЛЬНО; ПЕРВЫЙ
+  ЭКРАН И НОВАЯ ОБОЛОЧКА ГОТОВЫ.** Основная навигация теперь состоит из трёх
+  повседневных зон `Штаб / Мир / Миссии`; `Радары / Настройки` перенесены за
+  сцену, но остаются доступны на desktop и через topbar/profile menu на mobile.
+  `/dashboard` больше не является набором счётчиков: он показывает одну
+  evidence-aware миссию, понятное объяснение, интерактивную мини-карту реальных
+  сотрудников/контактов/организаций, текущий снимок сигналов и компактный пульс
+  мира. Старые pending-решения не теряются за общей страницей недавних действий:
+  для них выполняется отдельный status-scoped read, а целевой экран `Миссии`
+  повторяет active status на сервере вместо фильтрации смешанных последних 50.
+  Ошибка карты отделена от
+  пустого состояния; truncated counts получают `≥`; текущий снимок не называется
+  изменением с прошлого визита. ActionProposal refs честно обозначены как
+  заявленные ссылки на основания, а не server-verified evidence. Независимый
+  review закрыл найденные P1: mobile Settings, перекрытие topbar, tablet clipping,
+  ложный зелёный radar status и потерю pending queue. Проверено 2026-07-14:
+  frontend **321/321 passed**, typecheck, lint и production build (**17
+  продуктовых routes**) ✅; backend **674 passed / 1 external warning** и Ruff ✅;
+  `git diff --check` ✅. Авторизованный browser QA прошёл при **1280×720** и
+  **390×844**: global/map overflow отсутствует, mobile bottom nav не перекрывает
+  topbar, touch controls не меньше 44 px, профиль сотрудника меняет inspector,
+  Настройки доступны из mobile account menu, новых console warnings/errors нет.
+  Backend API, schema, provider calls/writes, RBAC и LLM не менялись. Следующий
+  локальный UX chunk — перенести полный `/company-brain` в тот же Living World
+  язык и связать мини-карту с конкретными профилями; первый GitHub App read
+  остаётся отдельным human-approved внешним gate.
 - **GitHub self-service setup (DEC-080): РЕАЛИЗОВАН ЛОКАЛЬНО; ВНЕШНЕЕ
   ЗАВЕРШЕНИЕ ЕЩЁ НЕ ДОКАЗАНО.** Owner/admin теперь проходит весь основной путь
   прямо в `/github`: создать private GitHub App из точного read-only manifest,

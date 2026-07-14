@@ -43,6 +43,15 @@ Implemented foundations:
   cannot confirm/mutate; cross-workspace access is rejected. Confirmation is a
   local canonical write with source provenance; no provider call, external
   write, raw-source mutation, or LLM path was added.
+- The Living Headquarters foundation is in place (DEC-081): the everyday shell
+  is now `Штаб / Мир / Миссии`, with `Радары / Настройки` backstage and still
+  reachable on mobile. `/dashboard` leads with one evidence-aware mission, its
+  explanation, a compact real-data Company World, a current-snapshot signal
+  feed, and a small world pulse. It distinguishes empty/error/partial states,
+  marks truncated counts as lower bounds, and does not call a current snapshot
+  a since-last-visit delta. Proposal evidence refs are presented as declared
+  source references rather than server-verified facts. This slice changes no
+  backend API, schema, provider/write gate, RBAC, or LLM path.
 - Post-auth Command Mode is in place (DEC-078): all five primary zones lead
   with one current mission, the next useful control, and its expected result.
   Secondary forms, filters, readiness diagnostics, evidence, and technical
@@ -318,83 +327,40 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **First founder-approved GitHub App read.**
-   The managed setup code, migration, polling-only backend path, explicit
-   repository subset and per-repository UI action are ready. Next (human): open
-   `/github`, complete GitHub creation/installation/OAuth confirmations, save the
-   repository subset, then approve one explicit scoped read-only sync. No
-   terminal env or manual installation POST is required for this primary path.
-   The external completion and first provider read are not yet proven.
-   This does not authorize a provider write, bulk sync, LLM run or hosted change.
+1. **Turn `Мир` into the full living company surface.**
+   Recompose `/company-brain` around the same world grammar as the new mini-map:
+   company, team, confirmed contacts, customer/partner organizations, unresolved
+   signals, and one contextual profile inspector. Keep exact durable affiliation
+   rules and current confirm/dismiss receipts; do not infer an organization role
+   from a domain or email. The mini-map must deep-link to the selected real
+   profile rather than become a second competing registry.
 
-2. **Complete UX-03 acceptance outside `/github`.**
-   The exact self-service `/github` tree has desktop/mobile, console, native
-   ownership-choice, focus-announcement and overflow acceptance. Repeat the
-   current-tree browser pass for the other four command-mode zones; the earlier
-   LOCAL-01 result predates UX-03 and is not reused as proof.
+2. **Turn `Миссии` into the human decision room.**
+   Preserve the existing ActionProposal RBAC, evidence drawers, local bulk review,
+   execution preview, and audit receipts, but lead with a small mission queue:
+   why now, what changes if accepted, what remains local, and the recorded result.
+   The current proposal list must remain reachable as detail, not define the page.
 
-3. **Action review polish (local approval only).**
-   Briefing items can now create local `internal_todo` proposals with evidence.
-   Local status filters and structured execution audit timeline are in place.
-   Evidence drawer defaults, origin grouping (briefing/GitHub/internal) with an
-   origin badge, briefing `internal_todo` payload detail, and evidence
-   drawer default-vs-manual context + evidence-ref count are in place. A local
-   origin filter now composes with the status filter, and bulk local approve/
-   reject controls are available for visible `proposed` proposals through
-  backend bulk endpoints with partial-success results. Local approve/reject
-  decisions now write no-provider audit events to the existing timeline, and the
-  UI can load that decision history for any decided proposal (approved or
-  rejected, GitHub or internal) via a read-only control. The `/actions` review
-  page now has a local readiness summary for needs-decision proposals,
-  preview-ready approved GitHub proposals, local-only follow-ups, missing
-  evidence, and reported execution receipts. Further polish is deferred until
-  after the first scoped provider-read evidence; provider writes and AI generation
-  remain separately approved gates.
+3. **Finish the radar loop one provider at a time.**
+   `/github` remains the reference command center and the next external gate is
+   still one founder-approved, repository-scoped read through its UI wizard. Then
+   bring Gmail, Drive, and Jira to the same setup → scoped read → visible result →
+   receipt pattern. No bulk/background sync, provider write, LLM run, or hosted
+   change is authorized by this backlog item.
 
-4. **Founder-facing briefing polish.**
-   Deterministic briefing cards, source coverage signals, item category filter,
-   default evidence drawer, richer history comparison, and briefing-to-local-
-   action bridge are in place. Briefing/action cross-links are now in place:
-   existing local actions are summarized on briefing items, duplicate creation is
-   guarded for open actions, and `/actions` can open with briefing/proposed
-   focus. `/actions` also now distinguishes
-   deterministic vs imported audit-origin proposals with a local subfilter,
-   badges, query focus, and richer payload metadata. The unsafe global audit
-   page/overview is retired; DEC-077 and the local runtime runbook are
-   authoritative. The `/dashboard` source-
-   coverage panel now also has a local breakdown (closed work, recent activity,
-   repos with/without source refs, evidence-by-kind) plus deterministic next-step
-   guidance for data/evidence/open-work/provider/AI boundaries. `/connectors`
-   now surfaces the MVP connector registry for GitHub/Jira/Gmail/Drive, and
-   `/jira`, `/gmail`, and `/drive` provide local-only connector import/list
-   paths. Company Brain/Dashboard source coverage now also exposes aggregate
-   local connector SourceRecord counts, and the deterministic Founder Briefing
-   now includes a connector-source-coverage item (DEC-061). Jira issues are now
-   first-class Company Brain work items (DEC-062), and Gmail/Drive have
-   first-class read sections (DEC-063). Internal document context can now also
-   generate a local evidence-backed ActionProposal through the same persisted
-   briefing bridge (DEC-069). `/actions` now turns those generated proposals into
-   a clearer local review/readiness loop with counts for pending decisions,
-   preview-ready GitHub issue proposals, local-only follow-ups, missing evidence,
-  and reported execution receipts. Further briefing polish is deferred until
-  after the first scoped provider-read evidence; provider writes and AI generation
-  remain separately approved gates.
+4. **Add a real company-change boundary.**
+   The new headquarters honestly shows a current evidence snapshot. Design the
+   smallest persisted snapshot/event contract that can prove "since your last
+   visit" changes, dedupe them, link each one to workspace-resolved evidence, and
+   close a mission with a receipt. This requires a separate schema/data review and
+   must not be simulated from browser-local timestamps.
 
-5. **Multi-user / teammate provisioning.**
-  Local teammate membership foundation is in place (DEC-055):
-  owners/admins can list workspace members and create local `admin`/`member`/
-  `viewer` memberships without sending email, calling an identity provider, or
-  granting `owner`. Duplicate memberships, disabled users, and non-admin
-  provisioning are rejected. `/settings` now surfaces the local members list and
-  owner/admin local-provisioning form with explicit no-email/no-provider-write
-  copy; viewer/member roles see read-only state. A brand-new account always gets
-  exactly one one-time `/setup-password#token=...` link; only its token digest is
-  stored, the teammate sets the password, and concurrent/repeated use is rejected.
-  The inviter cannot submit an initial password. An existing account that already
-  belongs to another workspace is not silently attached: the endpoint returns
-  `409`, including under concurrent A/B attach. Next: build recipient-verified,
-  self-accepted workspace invitations plus email/password-reset delivery after
-  local multi-user stability.
+5. **Make onboarding the short prologue to the headquarters.**
+   Recompose the existing computed onboarding into a visual four-step path:
+   company → first radar → first world → first teammate. Each step must be
+   completed by real backend state, return directly to the headquarters, and
+   avoid terminal/operator handoff. Recipient-verified teammate invitation and
+   password-reset delivery remain a separate security-scoped follow-up.
 
 ## Known Debts / Watch List
 

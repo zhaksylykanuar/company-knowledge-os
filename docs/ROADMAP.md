@@ -9,13 +9,16 @@ in place and Company World now combines bounded, sanitized Gmail evidence with
 durable people/organization/affiliation/interaction profiles and explicit human
 confirmation (DEC-073/DEC-074), while DEC-075 adds invite-only founder
 enrollment, computed onboarding, explicit company selection, and a one-move
-«Сегодня» shell. DEC-076 completes the frontend-only spatial Company World board
-with conservative affiliation placement and guided candidate resolution.
-DEC-077 makes the one-command loopback runtime the active operational target;
-full local doctor/start/authenticated-browser/smoke/restore/stop acceptance
-passed on 2026-07-14. The next horizon is one founder-approved scoped GitHub App
-read, not a hosted deploy or more UX expansion. External mutation and LLM
-narrative remain separate human-gated horizons. Docs
+shell. DEC-076 completes the frontend-only spatial Company World board with
+conservative affiliation placement and guided candidate resolution. DEC-077
+makes the one-command loopback runtime the active operational target; full local
+doctor/start/authenticated-browser/smoke/restore/stop acceptance passed on
+2026-07-14. DEC-081 now makes the Living Headquarters loop the product direction:
+`Штаб / Мир / Миссии`, with providers backstage as `Радары`. The next local UX
+horizon is to carry that model through the full World and Missions screens; the
+next external gate remains one founder-approved scoped GitHub App read, not a
+hosted deploy. External mutation and LLM narrative remain separate human-gated
+horizons. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 
@@ -177,10 +180,11 @@ Definition of Done:
 
 ## Phase 3 - Frontend Core
 
-Current status: `web/` is a guided company-management shell behind a server-side
+Current status: `web/` is a Living Headquarters shell behind a server-side
 session. Invite-only `/start` and focused `/onboarding` cover first run;
-`/dashboard` is «Сегодня» with one evidence-derived next move; workspace context
-comes from memberships and requires an explicit choice when ambiguous.
+`/dashboard` is `Штаб` with one evidence-aware mission, a compact Company World,
+current-snapshot signals, and a world pulse. Workspace context comes from
+memberships and requires an explicit choice when ambiguous.
 
 Done:
 
@@ -198,12 +202,15 @@ Done:
 - Company Brain has a product dashboard panel backed by canonical GitHub
   repositories/tasks/PRs and source refs.
 - Next.js + TypeScript, a typed API client, and session-derived workspace context
-  exist. The primary navigation has five zones; provider routes are nested under
-  «Источники», with a compact desktop rail and mobile bottom navigation.
-- `/dashboard` derives one next move and three signals from canonical source
-  records, proposed actions, Company Map candidates, briefings, team membership,
-  and role. Missing reads remain unknown; the old operational panel wall is no
-  longer mounted on the default screen.
+  exist. The primary navigation has three everyday zones (`Штаб / Мир / Миссии`);
+  provider routes and settings remain backstage as `Радары / Настройки`, with a
+  compact desktop rail and three-item mobile bottom navigation.
+- `/dashboard` derives one mission, a real-data mini-world, a current evidence
+  snapshot, and truthful metrics from canonical source records, proposed actions,
+  Company Map candidates, briefings, team membership, connectors, and role.
+  Missing reads, empty states, declared proposal refs, truncated windows, and
+  server-resolved Company Map evidence remain distinct. It does not invent a
+  since-last-visit delta, health score, trend, or autonomous action.
 - `/briefings` surfaces deterministic manual briefing history with returned
   evidence refs in a frontend evidence drawer.
 - `/briefings` persists generated deterministic briefings and lists/reopens
@@ -260,17 +267,18 @@ Missing:
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: configure founder-owned GitHub App credentials and installation, then
-run one explicit scoped read-only sync after human approval. Keep provider reads
-human-gated and never add browser-stored operator credentials.
+Next step: follow `../PROGRESS.md`. Recompose the full World and Missions screens
+around DEC-081, while keeping one explicit founder-approved GitHub read as the
+next external gate. Keep provider reads human-gated and never add browser-stored
+operator credentials.
 
 Definition of Done:
 
 - `web/` app runs locally.
 - A founder can enroll by one-time link and understand the guided real-state
   onboarding without terminal/DB knowledge after the link is issued.
-- The user sees one unambiguous company and one next move; five zones and source
-  nesting work on desktop and mobile.
+- The user sees one unambiguous company and one next move; the three everyday
+  zones and backstage radar/settings access work on desktop and mobile.
 - Unknown/empty/RBAC states are honest and actionable.
 - Frontend lint/test/build checks exist and pass.
 

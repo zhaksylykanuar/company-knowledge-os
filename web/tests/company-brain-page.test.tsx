@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import CompanyBrainPage from "../app/company-brain/page";
 import {
+  BACKSTAGE_NAV,
   COMPANY_NAV,
   getContextNavigation,
   isNavigationItemActive,
@@ -15,16 +16,27 @@ import {
 } from "../components/Sidebar";
 import { M } from "../lib/messages";
 
-test("Company zone opens the evidence-backed Company Brain route", () => {
+test("World zone opens the evidence-backed Company Brain route", () => {
   const link = NAV_LINKS.find((item) => item.href === "/company-brain");
   assert.ok(link, "expected a /company-brain nav link");
-  assert.equal(link?.label, M.nav.company);
+  assert.equal(link?.label, "Мир");
 });
 
-test("sidebar exposes five human zones and keeps providers secondary", () => {
+test("sidebar exposes three everyday zones and keeps system controls backstage", () => {
   assert.deepEqual(
     PRIMARY_NAV.map((item) => item.label),
-    [M.nav.today, M.nav.company, M.nav.decisions, M.nav.sources, M.nav.settings]
+    ["Штаб", "Мир", "Миссии"]
+  );
+  assert.deepEqual(
+    PRIMARY_NAV.map((item) => item.href),
+    ["/dashboard", "/company-brain", "/actions"]
+  );
+  assert.deepEqual(
+    BACKSTAGE_NAV.map((item) => [item.href, item.label]),
+    [
+      ["/connectors", "Радары"],
+      ["/settings", M.nav.settings]
+    ]
   );
   assert.deepEqual(
     SOURCE_NAV.map((item) => item.label),
@@ -34,16 +46,19 @@ test("sidebar exposes five human zones and keeps providers secondary", () => {
   assert.equal(NAV_LINKS.some((item) => item.href === "/audit"), false);
 });
 
-test("provider routes activate the Sources zone and briefings activate Today", () => {
-  const sources = PRIMARY_NAV.find((item) => item.href === "/connectors");
+test("provider routes activate Radars and compatibility routes activate their world", () => {
+  const sources = BACKSTAGE_NAV.find((item) => item.href === "/connectors");
   const today = PRIMARY_NAV.find((item) => item.href === "/dashboard");
+  const world = PRIMARY_NAV.find((item) => item.href === "/company-brain");
   assert.ok(sources);
   assert.ok(today);
+  assert.ok(world);
   assert.equal(isNavigationItemActive("/gmail", sources), true);
   assert.equal(isNavigationItemActive("/briefings/briefing-1", today), true);
+  assert.equal(isNavigationItemActive("/documents/document-1", world), true);
 });
 
-test("every secondary product route is reachable through contextual navigation", () => {
+test("only source and provider routes expose contextual navigation", () => {
   assert.deepEqual(
     TODAY_NAV.map((item) => item.href),
     ["/dashboard", "/briefings"]
@@ -52,8 +67,11 @@ test("every secondary product route is reachable through contextual navigation",
     COMPANY_NAV.map((item) => item.href),
     ["/company-brain", "/documents"]
   );
-  assert.equal(getContextNavigation("/briefings")?.links, TODAY_NAV);
-  assert.equal(getContextNavigation("/documents")?.links, COMPANY_NAV);
+  assert.equal(getContextNavigation("/dashboard"), null);
+  assert.equal(getContextNavigation("/briefings"), null);
+  assert.equal(getContextNavigation("/company-brain"), null);
+  assert.equal(getContextNavigation("/documents"), null);
+  assert.equal(getContextNavigation("/connectors")?.links, SOURCE_NAV);
   assert.equal(getContextNavigation("/gmail")?.links, SOURCE_NAV);
   assert.ok(NAV_LINKS.some((item) => item.href === "/briefings"));
   assert.ok(NAV_LINKS.some((item) => item.href === "/documents"));

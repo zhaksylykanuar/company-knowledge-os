@@ -398,6 +398,30 @@ test("fetches and parses local action proposals", async () => {
   }
 });
 
+test("requests the full proposed queue from the server", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals?limit=100&status=proposed"
+    );
+    return new Response(JSON.stringify(sampleList), {
+      headers: { "Content-Type": "application/json" },
+      status: 200
+    });
+  }) as typeof fetch;
+
+  try {
+    await fetchActionProposals(
+      "workspace-123",
+      { limit: 100, status: "proposed" },
+      {}
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("creates local action proposal without external execution", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input, init) => {

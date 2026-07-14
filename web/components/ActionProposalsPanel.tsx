@@ -189,7 +189,10 @@ export function ActionProposalsPanel({
     let cancelled = false;
     setStatus("loading");
     setError(null);
-    fetchActionProposals(workspaceId)
+    fetchActionProposals(workspaceId, {
+      limit: 100,
+      ...(statusFilter === "all" ? {} : { status: statusFilter })
+    })
       .then((payload) => {
         if (cancelled) {
           return;
@@ -209,7 +212,7 @@ export function ActionProposalsPanel({
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, reloadKey]);
+  }, [workspaceId, reloadKey, statusFilter]);
 
   useEffect(() => {
     const visibleProposedIds = visibleProposedProposalIds(

@@ -2367,6 +2367,48 @@ sync, LLM execution, hosted deployment, or removal of legacy compatibility
 code. The real GitHub creation/installation and first scoped read remain
 human/external acceptance gates until proven live.
 
+## DEC-081 - FounderOS Uses A Living Headquarters, Not A Dashboard
+
+Decision (2026-07-14): the founder-facing product model is a living company
+headquarters. The default screen is not a collection of counters or setup
+panels; it is one evidence-aware operating loop:
+
+`signal → change in the company world → mission → human decision → action → receipt`.
+
+The first frontend slice establishes this model as follows:
+
+- the primary shell has three everyday zones: `Штаб`, `Мир`, and `Миссии`;
+  providers and system configuration move backstage under `Радары` and
+  `Настройки` without becoming unreachable on mobile;
+- `Штаб` promotes exactly one current mission, explains why it was selected,
+  renders a compact real-data Company World, and keeps signals plus a small
+  world pulse below the primary action;
+- people, organizations, affiliations, touchpoints, proposals, and source
+  coverage keep their existing canonical meanings; visual placement must not
+  invent a customer, employee, decision maker, health score, trend, or causal
+  relationship;
+- Company Map refs may be presented as direct read-model evidence. Local action
+  proposal refs are labelled as declared source references until the backend
+  supplies workspace-resolved verification; they must not be upgraded to
+  verified evidence by presentation code;
+- a current snapshot is not called a delta from the last visit. A true change
+  timeline requires a future persisted snapshot/event boundary; until then the
+  UI says explicitly that it shows the current evidence snapshot; and
+- empty, unavailable, partial, role-limited, and truncated states remain
+  distinct. Counts from truncated windows use lower-bound notation.
+
+This is deliberate product language, not decorative gamification. FounderOS
+does not add XP, streaks, invented company health, fake urgency, or autonomous
+execution. The "game" quality comes from a legible world, bounded missions,
+visible consequences, and human-controlled moves.
+
+Consequence: later screens should migrate one at a time to this loop. `Мир`
+becomes the full profile-and-relationship surface, `Миссии` becomes the human
+decision queue, and each provider becomes a radar with setup and receipts.
+Existing routes remain available during migration. This first slice is
+frontend-only: it adds no schema, provider call, external write, LLM execution,
+or authorization change.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

@@ -4,6 +4,24 @@
 
 ### Changed
 
+- Introduced the Living Headquarters product model (DEC-081). The authenticated
+  shell now has three everyday zones — `Штаб`, `Мир`, and `Миссии` — while
+  providers and system controls stay backstage as `Радары` and `Настройки` and
+  remain reachable on mobile. `/dashboard` now leads with one evidence-aware
+  mission, a plain-language explanation, a compact interactive Company World,
+  a current-snapshot signal feed, and a small world pulse instead of a wall of
+  panels and abstract counters. The screen reads existing Company Map,
+  connector, briefing, and ActionProposal state only. It distinguishes missing,
+  empty, partial, role-limited, and truncated data; proposal refs are labelled as
+  declared source references rather than verified backend facts; and the current
+  snapshot is not called a since-last-visit delta. Pending proposals are loaded
+  through a dedicated status-filtered request so older missions are not hidden
+  behind recently completed items; the target Missions page now repeats its
+  active status in the server request instead of filtering a mixed recent page
+  in the browser. Partial reads no longer produce a false "no signals" empty
+  state, and mobile focus follows the visible content before the fixed bottom
+  navigation. No backend API, schema, provider call/write,
+  RBAC, LLM path, or autonomous execution was added.
 - Added the workspace-managed GitHub App self-service wizard (DEC-080). An
   owner/admin can now complete the primary setup from `/github`: create a
   private App from an exact read-only manifest, install it, verify ownership

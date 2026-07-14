@@ -15,7 +15,11 @@ import {
   SessionContext,
   workspaceSelectionStorageKey
 } from "../lib/session";
-import { ContextNavigation, Sidebar } from "./Sidebar";
+import {
+  ContextNavigation,
+  MobilePrimaryNavigation,
+  Sidebar
+} from "./Sidebar";
 import { WorkspaceChoice, WorkspaceSelector } from "./WorkspaceSelector";
 import styles from "./workspace-selector.module.css";
 
@@ -155,7 +159,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <SessionContext.Provider value={session}>
         <div className={styles.focusedShell}>
           <header className={styles.focusedTopbar}>
-            <Link className={styles.wordmark} href="/dashboard" aria-label="FounderOS — Сегодня">
+            <Link
+              className={styles.wordmark}
+              href="/dashboard"
+              aria-label={M.nav.brandHomeLabel}
+            >
               <span aria-hidden="true">F</span>
               FounderOS
             </Link>
@@ -178,6 +186,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <Sidebar />
         <main className="main">
           <div className="topbar">
+            <div className="topbar-system-links" aria-label={M.nav.backstage}>
+              <Link className="topbar-radar-link" href="/connectors">
+                {M.nav.radars}
+              </Link>
+              <Link className="topbar-settings-link" href="/settings">
+                {M.nav.settings}
+              </Link>
+            </div>
             {workspaceControl}
             <ProfileMenu onLogout={onLogout} user={me.user} />
           </div>
@@ -186,6 +202,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             {children}
           </div>
         </main>
+        <MobilePrimaryNavigation />
       </div>
     </SessionContext.Provider>
   );
@@ -214,6 +231,9 @@ export function ProfileMenu({
           <strong>{label}</strong>
           {user.name?.trim() ? <span>{user.email}</span> : null}
         </div>
+        <Link className="profile-menu-settings-link" href="/settings">
+          {M.nav.settings}
+        </Link>
         <button type="button" onClick={() => void onLogout()}>
           {M.common.signOut}
         </button>

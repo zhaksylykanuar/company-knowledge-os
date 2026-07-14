@@ -21,4 +21,5 @@ test("profile menu keeps the active account email visible when a name exists", (
   assert.ok(html.includes("Основатель"));
   assert.ok(html.includes("founder@example.test"));
   assert.ok(html.includes("Открыть меню аккаунта"));
+  assert.match(html, /href="\/settings"/);
 });

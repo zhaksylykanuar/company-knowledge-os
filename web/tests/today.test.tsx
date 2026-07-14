@@ -119,21 +119,23 @@ test("Today does not invent a move when required facts are unavailable", () => {
   assert.equal(unknownTeam.move.title, M.today.moves.refreshTitle);
 });
 
-test("Today renders one main move and exactly three secondary signals", () => {
+test("Living HQ renders one mission, a real world surface, and contextual evidence", () => {
   const html = renderToStaticMarkup(
     <TodayBoardView facts={{ ...readyFacts, proposedDecisionCount: 2 }} />
   );
 
-  assert.ok(html.includes(M.today.title));
+  assert.ok(html.includes(M.livingHq.eyebrow));
   assert.ok(html.includes("Acme"));
-  assert.ok(html.includes(M.today.moves.reviewDecisionsTitle));
-  assert.ok(html.includes("Открыть решения"));
-  assert.equal((html.match(/class="today-primary-action"/g) ?? []).length, 1);
-  assert.equal((html.match(/class="today-signal today-signal--/g) ?? []).length, 3);
-  assert.ok(html.includes('class="mission-strip"'));
-  assert.equal((html.match(/class="mini-hint"/g) ?? []).length, 4);
-  assert.doesNotMatch(html, /class="company-cycle"/);
-  assert.ok(html.includes(M.today.sourceBoundary));
+  assert.ok(html.includes("Проверьте предложения решений"));
+  assert.ok(html.includes("Проверить очередь"));
+  assert.equal((html.match(/class="living-hq-primary-action"/g) ?? []).length, 1);
+  assert.ok(html.includes("Мир компании"));
+  assert.ok(html.includes(M.livingHq.whyFounderOs));
+  assert.ok(html.includes(M.livingHq.changesBoundary));
+  assert.ok(html.includes(M.livingHq.changesUnavailable));
+  assert.doesNotMatch(html, new RegExp(M.livingHq.noChanges));
+  assert.doesNotMatch(html, /class="mission-strip"/);
+  assert.doesNotMatch(html, /today-signal/);
 });
 
 test("Today marks a capped decision count as a lower bound", () => {
@@ -151,10 +153,10 @@ test("Today marks a capped decision count as a lower bound", () => {
     proposedDecisionCount: 50,
     proposedDecisionCountIsLowerBound: true
   }} />);
-  assert.ok(html.includes(M.today.picturePartial));
-  assert.ok(html.includes("Картина неполная"));
+  assert.ok(html.includes(M.livingHq.partial));
+  assert.ok(html.includes("Проверьте предложения решений"));
   assert.doesNotMatch(html, /Проверяем сигналы/);
-  assert.doesNotMatch(html, new RegExp(M.today.pictureComplete));
+  assert.doesNotMatch(html, new RegExp(M.livingHq.complete));
 });
 
 test("Today treats a truncated Company Map window as partial", () => {
