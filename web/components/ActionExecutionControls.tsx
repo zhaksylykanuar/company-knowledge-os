@@ -19,12 +19,23 @@ import type {
 import { SourceLink } from "./SourceLink";
 
 type ActionExecutionControlsProps = {
+  onBusyChange?: (isBusy: boolean) => void;
+  onComplete?: (outcome: ActionExecutionOutcome) => void;
   onRefresh?: () => void;
   proposal: ActionProposal;
 };
 
+export type ActionExecutionOutcome = {
+  auditRefreshFailed: boolean;
+  externalResultUrl: string | null;
+  externalWritePerformed: boolean;
+  providerResult: string;
+  receiptStatus: string | null;
+};
+
 type ActionExecutionControlsViewProps = {
   auditEvents: ActionExecutionAuditEvent[];
+  auditWarning?: string | null;
   confirmationChecked: boolean;
   connectionId: string;
   error: string | null;
@@ -44,11 +55,14 @@ type ActionExecutionControlsViewProps = {
 };
 
 export function ActionExecutionControls({
+  onBusyChange,
+  onComplete,
   onRefresh,
   proposal
 }: ActionExecutionControlsProps) {
   const workspaceId = useWorkspaceId();
   const [auditEvents, setAuditEvents] = useState<ActionExecutionAuditEvent[]>([]);
+  const [auditWarning, setAuditWarning] = useState<string | null>(null);
   const [connectionId, setConnectionId] = useState("");
   const [confirmationChecked, setConfirmationChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,8 +87,10 @@ export function ActionExecutionControls({
     }
 
     setError(null);
+    setAuditWarning(null);
     setSuccessMessage(null);
     setIsHistoryPending(true);
+    onBusyChange?.(true);
     try {
       await refreshAudit(workspaceId);
       setSuccessMessage(M.actionExecution.historyLoaded);
@@ -82,6 +98,7 @@ export function ActionExecutionControls({
       setError(caught instanceof Error ? caught.message : M.common.requestFailed);
     } finally {
       setIsHistoryPending(false);
+      onBusyChange?.(false);
     }
   }
 
@@ -92,18 +109,25 @@ export function ActionExecutionControls({
     }
 
     setError(null);
+    setAuditWarning(null);
     setSuccessMessage(null);
     setIsPreviewPending(true);
+    onBusyChange?.(true);
     try {
       const response = await fetchActionExecutionPreview(workspaceId, proposal.id);
       setPreview(response);
       setAuditEvents(response.audit);
-      await refreshAudit(workspaceId);
       setSuccessMessage(M.actionExecution.previewLoaded);
+      try {
+        await refreshAudit(workspaceId);
+      } catch {
+        setAuditWarning(M.actionExecution.auditRefreshFailed);
+      }
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : M.common.requestFailed);
     } finally {
       setIsPreviewPending(false);
+      onBusyChange?.(false);
     }
   }
 
@@ -122,8 +146,10 @@ export function ActionExecutionControls({
     }
 
     setError(null);
+    setAuditWarning(null);
     setSuccessMessage(null);
     setIsExecutePending(true);
+    onBusyChange?.(true);
     try {
       const response = await executeActionProposal(workspaceId, proposal.id, {
         connection_id: connectionId.trim(),
@@ -131,17 +157,30 @@ export function ActionExecutionControls({
       });
       setExecuteResult(response);
       setReceipt(response.receipt);
-      await refreshAudit(workspaceId);
       setSuccessMessage(
         response.warnings.some((warning) => warning.includes("existing successful"))
           ? M.actionExecution.successExisting
           : response.external_write_performed && response.receipt.provider_result === "succeeded"
             ? M.actionExecution.createdIssue
             : response.external_write_performed
-          ? M.actionExecution.successExternalResult
-          : M.actionExecution.successNoWrite
+              ? M.actionExecution.successExternalResult
+              : M.actionExecution.successNoWrite
       );
+      const outcome: ActionExecutionOutcome = {
+        auditRefreshFailed: false,
+        externalResultUrl: response.receipt.external_result_url,
+        externalWritePerformed: response.external_write_performed,
+        providerResult: response.receipt.provider_result,
+        receiptStatus: response.receipt.status
+      };
+      onComplete?.(outcome);
       onRefresh?.();
+      try {
+        await refreshAudit(workspaceId);
+      } catch {
+        setAuditWarning(M.actionExecution.auditRefreshAfterExecuteFailed);
+        onComplete?.({ ...outcome, auditRefreshFailed: true });
+      }
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       try {
@@ -151,12 +190,14 @@ export function ActionExecutionControls({
       }
     } finally {
       setIsExecutePending(false);
+      onBusyChange?.(false);
     }
   }
 
   return (
     <ActionExecutionControlsView
       auditEvents={auditEvents}
+      auditWarning={auditWarning}
       confirmationChecked={confirmationChecked}
       connectionId={connectionId}
       error={error}
@@ -179,6 +220,7 @@ export function ActionExecutionControls({
 
 export function ActionExecutionControlsView({
   auditEvents,
+  auditWarning = null,
   confirmationChecked,
   connectionId,
   error,
@@ -204,12 +246,13 @@ export function ActionExecutionControlsView({
   const externalExecutionEnabled = Boolean(
     preview?.capabilities.external_execution && preview.capabilities.live_provider_write
   );
+  const isBusy = isExecutePending || isHistoryPending || isPreviewPending;
   const canExecute =
     externalExecutionEnabled &&
     preview?.status === "preview_ready" &&
     confirmationChecked &&
     Boolean(connectionId.trim()) &&
-    !isExecutePending;
+    !isBusy;
   const displayedAuditEvents =
     auditEvents.length > 0
       ? auditEvents
@@ -250,7 +293,7 @@ export function ActionExecutionControlsView({
       ) : (
         <button
           className="button secondary"
-          disabled={isPreviewPending}
+          disabled={isBusy}
           onClick={onPreview}
           type="button"
         >
@@ -261,7 +304,7 @@ export function ActionExecutionControlsView({
       {hasRecordedDecision ? (
         <button
           className="button secondary"
-          disabled={isHistoryPending}
+          disabled={isBusy}
           onClick={onLoadHistory}
           type="button"
         >
@@ -271,8 +314,17 @@ export function ActionExecutionControlsView({
         </button>
       ) : null}
 
-      {error ? <p className="state error">{error}</p> : null}
-      {successMessage ? <p className="success-text">{successMessage}</p> : null}
+      <div className="execution-announcements">
+        {error ? (
+          <p className="state error" role="alert">{error}</p>
+        ) : null}
+        {successMessage ? (
+          <p className="success-text" role="status">{successMessage}</p>
+        ) : null}
+        {auditWarning ? (
+          <p className="state" role="status">{auditWarning}</p>
+        ) : null}
+      </div>
 
       {preview ? (
         <div className="work-item-main">

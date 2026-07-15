@@ -7,10 +7,12 @@ import type { AuthUser, AuthWorkspace } from "./auth";
 // Session state provided by AuthGate from /api/v1/auth/me. The workspace id is
 // derived from the session (no manual entry, no localStorage operator config).
 export type SessionState = {
+  externalOperationPending: boolean;
   user: AuthUser;
   workspaces: AuthWorkspace[];
   workspaceId: string | null;
   selectWorkspace: (workspaceId: string) => void;
+  setExternalOperationPending: (pending: boolean) => void;
 };
 
 export const SessionContext = createContext<SessionState | null>(null);

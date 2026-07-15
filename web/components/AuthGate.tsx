@@ -30,6 +30,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [resolved, setResolved] = useState(false);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [workspaceSelectionResolved, setWorkspaceSelectionResolved] = useState(false);
+  const [externalOperationPending, setExternalOperationPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,7 +100,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   function onSelectWorkspace(nextWorkspaceId: string) {
-    if (me === null || !isWorkspaceSelectionValid(me.workspaces, nextWorkspaceId)) {
+    if (
+      externalOperationPending ||
+      me === null ||
+      !isWorkspaceSelectionValid(me.workspaces, nextWorkspaceId)
+    ) {
       return;
     }
     setWorkspaceId(nextWorkspaceId);
@@ -140,14 +145,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   const session = {
+    externalOperationPending,
     user: me.user,
     workspaces: me.workspaces,
     workspaceId,
-    selectWorkspace: onSelectWorkspace
+    selectWorkspace: onSelectWorkspace,
+    setExternalOperationPending
   };
 
   const workspaceControl = workspaceId ? (
     <WorkspaceSelector
+      disabled={externalOperationPending}
       onSelect={onSelectWorkspace}
       workspaceId={workspaceId}
       workspaces={me.workspaces}
@@ -158,7 +166,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <SessionContext.Provider value={session}>
         <div className={styles.focusedShell}>
-          <header className={styles.focusedTopbar}>
+          <header className={styles.focusedTopbar} inert={externalOperationPending}>
             <Link
               className={styles.wordmark}
               href="/dashboard"
@@ -183,9 +191,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return (
     <SessionContext.Provider value={session}>
       <div className="app-shell">
-        <Sidebar />
+        <Sidebar locked={externalOperationPending} />
         <main className="main">
-          <div className="topbar">
+          <div className="topbar" inert={externalOperationPending}>
             <div className="topbar-system-links" aria-label={M.nav.backstage}>
               <Link className="topbar-radar-link" href="/connectors">
                 {M.nav.radars}
@@ -197,12 +205,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
             {workspaceControl}
             <ProfileMenu onLogout={onLogout} user={me.user} />
           </div>
-          <ContextNavigation />
+          <ContextNavigation locked={externalOperationPending} />
           <div className="content" key={workspaceId ?? "no-workspace"}>
             {children}
           </div>
         </main>
-        <MobilePrimaryNavigation />
+        <MobilePrimaryNavigation locked={externalOperationPending} />
       </div>
     </SessionContext.Provider>
   );

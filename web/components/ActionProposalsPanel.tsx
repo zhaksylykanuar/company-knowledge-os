@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import {
   approveActionProposal,
@@ -20,12 +20,16 @@ import type {
   ActionProposalType,
   ActionTargetProvider
 } from "../lib/types";
-import { ActionExecutionControls } from "./ActionExecutionControls";
+import {
+  ActionExecutionControls,
+  type ActionExecutionOutcome
+} from "./ActionExecutionControls";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { EvidenceDrawer } from "./EvidenceDrawer";
 import { LoadingState } from "./LoadingState";
-import { MiniHint, MissionStrip } from "./MissionStrip";
+import { MiniHint } from "./MissionStrip";
+import { SourceLink } from "./SourceLink";
 import { StatusCard } from "./StatusCard";
 
 type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupported";
@@ -46,6 +50,11 @@ type EvidenceSelection = {
   evidence: ActionProposalEvidenceRef;
   title: string;
   count: number;
+};
+
+type MutationError = {
+  message: string;
+  scope: "bulk" | "create" | `proposal:${string}`;
 };
 
 type ActionReviewReadiness = {
@@ -83,6 +92,9 @@ type ActionProposalsPanelViewProps = {
   createForm: ActionProposalCreateFormState;
   data: ActionProposalListResponse | null;
   error: string | null;
+  executionBusyProposalId?: string | null;
+  isRefreshing?: boolean;
+  mutationError?: MutationError | null;
   onApprove?: (proposalId: string) => void;
   onCloseEvidence?: () => void;
   onCreate?: (event: FormEvent<HTMLFormElement>) => void;
@@ -92,6 +104,7 @@ type ActionProposalsPanelViewProps = {
   ) => void;
   onReject?: (proposalId: string) => void;
   onRefreshProposals?: () => void;
+  onSelectProposal?: (proposalId: string) => void;
   onRetry?: () => void;
   onOriginFilterChange?: (filter: ProposalOriginFilter) => void;
   onBulkApprove?: () => void;
@@ -100,12 +113,16 @@ type ActionProposalsPanelViewProps = {
   onSelectEvidence?: (
     evidence: ActionProposalEvidenceRef,
     title: string,
-    count?: number
+    count?: number,
+    proposalId?: string
   ) => void;
+  onExecutionBusyChange?: (proposalId: string, isBusy: boolean) => void;
+  onExecutionComplete?: (proposalId: string) => void;
   onSelectVisibleProposed?: () => void;
   onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
   onToggleProposalSelection?: (proposalId: string) => void;
   pendingMutation: PendingMutation;
+  activeProposalId?: string | null;
   auditSourceFilter?: ProposalAuditSourceFilter;
   onAuditSourceFilterChange?: (filter: ProposalAuditSourceFilter) => void;
   originFilter?: ProposalOriginFilter;
@@ -113,6 +130,7 @@ type ActionProposalsPanelViewProps = {
   selectedEvidence: ActionProposalEvidenceRef | null;
   selectedEvidenceTitle?: string | null;
   selectedEvidenceCount?: number | null;
+  selectedEvidenceProposalId?: string | null;
   statusFilter?: ProposalStatusFilter;
   status: PanelStatus;
   successMessage?: string | null;
@@ -146,6 +164,7 @@ export function ActionProposalsPanel({
   const workspaceId = session?.workspaceId ?? null;
   const selectedRole =
     session?.workspaces.find((workspace) => workspace.id === workspaceId)?.role ?? null;
+  const setExternalOperationPending = session?.setExternalOperationPending;
   const capabilities = actionCapabilitiesForRole(selectedRole);
   const [data, setData] = useState<ActionProposalListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +177,8 @@ export function ActionProposalsPanel({
     useState<ActionProposalEvidenceRef | null>(null);
   const [selectedEvidenceTitle, setSelectedEvidenceTitle] = useState<string | null>(null);
   const [selectedEvidenceCount, setSelectedEvidenceCount] = useState<number | null>(null);
+  const [selectedEvidenceProposalId, setSelectedEvidenceProposalId] =
+    useState<string | null>(null);
   const [selectedProposalIds, setSelectedProposalIds] = useState<string[]>([]);
   const [status, setStatus] = useState<PanelStatus>("loading");
   const [auditSourceFilter, setAuditSourceFilter] =
@@ -171,48 +192,124 @@ export function ActionProposalsPanel({
     normalizeStatusFilter(initialStatusFilter)
   );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
+  const [executionBusyProposalId, setExecutionBusyProposalId] =
+    useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [mutationError, setMutationError] = useState<MutationError | null>(null);
+  const loadedWorkspaceIdRef = useRef<string | null>(null);
+  const focusAfterReloadRef = useRef(false);
+  const mountedRef = useRef(true);
+  const currentWorkspaceIdRef = useRef<string | null>(workspaceId);
+  currentWorkspaceIdRef.current = workspaceId;
+
+  function clearSelectedEvidenceContext() {
+    setSelectedEvidence(null);
+    setSelectedEvidenceTitle(null);
+    setSelectedEvidenceCount(null);
+    setSelectedEvidenceProposalId(null);
+  }
+
+  function isCurrentMutationContext(requestWorkspaceId: string): boolean {
+    return (
+      mountedRef.current && currentWorkspaceIdRef.current === requestWorkspaceId
+    );
+  }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     setAuditSourceFilter(normalizeAuditSourceFilter(initialAuditSourceFilter));
     setOriginFilter(normalizeOriginFilter(initialOriginFilter));
     setStatusFilter(normalizeStatusFilter(initialStatusFilter));
+    setActiveProposalId(null);
+    setSelectedEvidence(null);
+    setSelectedEvidenceTitle(null);
+    setSelectedEvidenceCount(null);
+    setSelectedEvidenceProposalId(null);
   }, [initialAuditSourceFilter, initialOriginFilter, initialStatusFilter]);
+
+  useEffect(() => {
+    setActiveProposalId(null);
+    setSelectedEvidence(null);
+    setSelectedEvidenceTitle(null);
+    setSelectedEvidenceCount(null);
+    setSelectedEvidenceProposalId(null);
+    setSelectedProposalIds([]);
+    setExecutionBusyProposalId(null);
+    setMutationError(null);
+    setSuccessMessage(null);
+    focusAfterReloadRef.current = false;
+    if (!workspaceId) {
+      loadedWorkspaceIdRef.current = null;
+    }
+  }, [workspaceId]);
+
+  useEffect(() => {
+    const pending = executionBusyProposalId !== null;
+    setExternalOperationPending?.(pending);
+    return () => {
+      if (pending) {
+        setExternalOperationPending?.(false);
+      }
+    };
+  }, [executionBusyProposalId, setExternalOperationPending]);
 
   useEffect(() => {
     if (!workspaceId) {
       setData(null);
       setError(null);
+      setIsRefreshing(false);
       setStatus("missing");
       return;
     }
 
     let cancelled = false;
-    setStatus("loading");
+    const canRefreshInPlace =
+      data !== null && loadedWorkspaceIdRef.current === workspaceId;
+    if (canRefreshInPlace) {
+      setIsRefreshing(true);
+    } else {
+      setData(null);
+      setStatus("loading");
+    }
     setError(null);
-    fetchActionProposals(workspaceId, {
-      limit: 100,
-      ...(statusFilter === "all" ? {} : { status: statusFilter })
-    })
+    fetchActionProposals(workspaceId, { limit: 100 })
       .then((payload) => {
         if (cancelled) {
           return;
         }
+        loadedWorkspaceIdRef.current = workspaceId;
         setData(payload);
         setStatus(payload.proposals.length > 0 ? "ready" : "empty");
+        setIsRefreshing(false);
+        if (focusAfterReloadRef.current) {
+          focusAfterReloadRef.current = false;
+          focusMissionDestinationAfterRender();
+        }
       })
       .catch((caught: unknown) => {
         if (cancelled) {
           return;
         }
-        setData(null);
+        setIsRefreshing(false);
         setError(caught instanceof Error ? caught.message : M.common.requestFailed);
-        setStatus("error");
+        if (!canRefreshInPlace) {
+          loadedWorkspaceIdRef.current = workspaceId;
+          setData(null);
+          setStatus("error");
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, reloadKey, statusFilter]);
+  }, [workspaceId, reloadKey]);
 
   useEffect(() => {
     const visibleProposedIds = visibleProposedProposalIds(
@@ -242,27 +339,42 @@ export function ActionProposalsPanel({
     if (!capabilities.canCreateProposals) {
       return;
     }
+    if (executionBusyProposalId) {
+      return;
+    }
     const request = buildCreateRequest(createForm);
     if (!request) {
-      setError(M.actionsPanel.createError);
-      setStatus("error");
+      setMutationError({ message: M.actionsPanel.createError, scope: "create" });
       return;
     }
 
-    setError(null);
+    setMutationError(null);
     setSuccessMessage(null);
     setPendingMutation("create");
+    const requestWorkspaceId = workspaceId;
     try {
-      const response = await createActionProposal(workspaceId, request);
+      const response = await createActionProposal(requestWorkspaceId, request);
+      if (!isCurrentMutationContext(requestWorkspaceId)) {
+        return;
+      }
       setData((current) => mergeCreatedProposal(current, response.proposal, response.warnings));
       setStatus("ready");
       setCreateForm(DEFAULT_CREATE_FORM);
+      setActiveProposalId(response.proposal.id);
       setSuccessMessage(M.actionsPanel.createSuccess);
+      focusMissionDestinationAfterRender();
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
-      setStatus("error");
+      if (!isCurrentMutationContext(requestWorkspaceId)) {
+        return;
+      }
+      setMutationError({
+        message: caught instanceof Error ? caught.message : M.common.requestFailed,
+        scope: "create"
+      });
     } finally {
-      setPendingMutation(null);
+      if (isCurrentMutationContext(requestWorkspaceId)) {
+        setPendingMutation(null);
+      }
     }
   }
 
@@ -274,20 +386,36 @@ export function ActionProposalsPanel({
     if (!capabilities.canReviewProposals) {
       return;
     }
+    if (executionBusyProposalId) {
+      return;
+    }
 
-    setError(null);
+    setMutationError(null);
     setSuccessMessage(null);
     setPendingMutation(`approve:${proposalId}`);
+    const requestWorkspaceId = workspaceId;
     try {
-      const response = await approveActionProposal(workspaceId, proposalId);
+      const response = await approveActionProposal(requestWorkspaceId, proposalId);
+      if (!isCurrentMutationContext(requestWorkspaceId)) {
+        return;
+      }
       setData((current) => mergeUpdatedProposal(current, response.proposal, response.warnings));
       setStatus("ready");
+      clearSelectedEvidenceContext();
       setSuccessMessage(M.actionsPanel.approveSuccess);
+      focusMissionDestinationAfterRender();
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
-      setStatus("error");
+      if (!isCurrentMutationContext(requestWorkspaceId)) {
+        return;
+      }
+      setMutationError({
+        message: caught instanceof Error ? caught.message : M.common.requestFailed,
+        scope: `proposal:${proposalId}`
+      });
     } finally {
-      setPendingMutation(null);
+      if (isCurrentMutationContext(requestWorkspaceId)) {
+        setPendingMutation(null);
+      }
     }
   }
 
@@ -299,22 +427,38 @@ export function ActionProposalsPanel({
     if (!capabilities.canReviewProposals) {
       return;
     }
+    if (executionBusyProposalId) {
+      return;
+    }
 
-    setError(null);
+    setMutationError(null);
     setSuccessMessage(null);
     setPendingMutation(`reject:${proposalId}`);
+    const requestWorkspaceId = workspaceId;
     try {
-      const response = await rejectActionProposal(workspaceId, proposalId, {
+      const response = await rejectActionProposal(requestWorkspaceId, proposalId, {
         reason: M.actionsPanel.rejectReason
       });
+      if (!isCurrentMutationContext(requestWorkspaceId)) {
+        return;
+      }
       setData((current) => mergeUpdatedProposal(current, response.proposal, response.warnings));
       setStatus("ready");
+      clearSelectedEvidenceContext();
       setSuccessMessage(M.actionsPanel.rejectSuccess);
+      focusMissionDestinationAfterRender();
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
-      setStatus("error");
+      if (!isCurrentMutationContext(requestWorkspaceId)) {
+        return;
+      }
+      setMutationError({
+        message: caught instanceof Error ? caught.message : M.common.requestFailed,
+        scope: `proposal:${proposalId}`
+      });
     } finally {
-      setPendingMutation(null);
+      if (isCurrentMutationContext(requestWorkspaceId)) {
+        setPendingMutation(null);
+      }
     }
   }
 
@@ -353,6 +497,9 @@ export function ActionProposalsPanel({
     if (!capabilities.canReviewProposals) {
       return;
     }
+    if (executionBusyProposalId) {
+      return;
+    }
     const proposalsToMutate = selectedProposalsForBulkMutation(
       data?.proposals ?? [],
       selectedProposalIds
@@ -361,20 +508,24 @@ export function ActionProposalsPanel({
       return;
     }
 
-    setError(null);
+    setMutationError(null);
     setSuccessMessage(null);
     setPendingMutation(mutation);
+    const requestWorkspaceId = workspaceId;
     try {
       const proposalIds = proposalsToMutate.map((proposal) => proposal.id);
       const response =
         mutation === "bulk-approve"
-          ? await bulkApproveActionProposals(workspaceId, {
+          ? await bulkApproveActionProposals(requestWorkspaceId, {
               proposal_ids: proposalIds
             })
-          : await bulkRejectActionProposals(workspaceId, {
+          : await bulkRejectActionProposals(requestWorkspaceId, {
               proposal_ids: proposalIds,
               reason: M.actionsPanel.rejectReason
             });
+      if (!isCurrentMutationContext(requestWorkspaceId)) {
+        return;
+      }
       const outcome = summarizeBulkResponse(response);
       if (outcome.succeeded.length > 0) {
         setData((current) =>
@@ -391,6 +542,10 @@ export function ActionProposalsPanel({
         current.filter((proposalId) => !outcome.succeededIds.includes(proposalId))
       );
       setStatus("ready");
+      if (outcome.succeeded.length > 0) {
+        clearSelectedEvidenceContext();
+        focusMissionDestinationAfterRender();
+      }
       if (outcome.failed.length === 0) {
         setSuccessMessage(
           mutation === "bulk-approve"
@@ -398,7 +553,10 @@ export function ActionProposalsPanel({
             : T.actionsBulkRejectSuccess(outcome.succeeded.length)
         );
       } else if (outcome.succeeded.length === 0) {
-        setError(T.actionsBulkAllFailed(outcome.failed.length));
+        setMutationError({
+          message: T.actionsBulkAllFailed(outcome.failed.length),
+          scope: "bulk"
+        });
       } else {
         setSuccessMessage(
           mutation === "bulk-approve"
@@ -411,37 +569,75 @@ export function ActionProposalsPanel({
                 outcome.failed.length
               )
         );
-        setError(outcome.firstFailureMessage ?? M.common.requestFailed);
+        setMutationError({
+          message: outcome.firstFailureMessage ?? M.common.requestFailed,
+          scope: "bulk"
+        });
       }
     } catch (caught: unknown) {
-      setError(caught instanceof Error ? caught.message : M.common.requestFailed);
-      setStatus("error");
+      if (!isCurrentMutationContext(requestWorkspaceId)) {
+        return;
+      }
+      setMutationError({
+        message: caught instanceof Error ? caught.message : M.common.requestFailed,
+        scope: "bulk"
+      });
     } finally {
-      setPendingMutation(null);
+      if (isCurrentMutationContext(requestWorkspaceId)) {
+        setPendingMutation(null);
+      }
     }
   }
+
+  const workspaceContextMatches =
+    workspaceId !== null && loadedWorkspaceIdRef.current === workspaceId;
+  const visibleData = workspaceContextMatches ? data : null;
+  const visibleStatus: PanelStatus = !workspaceId
+    ? "missing"
+    : workspaceContextMatches
+      ? status
+      : "loading";
 
   return (
     <ActionProposalsPanelView
       canCreateProposals={capabilities.canCreateProposals}
       canReviewProposals={capabilities.canReviewProposals}
+      activeProposalId={activeProposalId}
       createForm={createForm}
-      data={data}
+      data={visibleData}
       error={error}
+      executionBusyProposalId={executionBusyProposalId}
+      isRefreshing={isRefreshing}
+      mutationError={mutationError}
       onApprove={capabilities.canReviewProposals ? approve : undefined}
       onCloseEvidence={() => {
-        setSelectedEvidence(null);
-        setSelectedEvidenceTitle(null);
-        setSelectedEvidenceCount(null);
+        clearSelectedEvidenceContext();
       }}
       onCreate={capabilities.canCreateProposals ? submitCreate : undefined}
       onCreateFormChange={
         capabilities.canCreateProposals ? updateCreateForm : undefined
       }
       onReject={capabilities.canReviewProposals ? reject : undefined}
-      onRefreshProposals={() => setReloadKey((current) => current + 1)}
+      onRefreshProposals={() => {
+        focusAfterReloadRef.current = true;
+        setReloadKey((current) => current + 1);
+      }}
+      onSelectProposal={(proposalId) => {
+        if (executionBusyProposalId) {
+          return;
+        }
+        setActiveProposalId(proposalId);
+        clearSelectedEvidenceContext();
+      }}
       onRetry={() => setReloadKey((current) => current + 1)}
-      onOriginFilterChange={setOriginFilter}
+      onOriginFilterChange={(filter) => {
+        if (executionBusyProposalId) {
+          return;
+        }
+        setOriginFilter(filter);
+        setActiveProposalId(null);
+        clearSelectedEvidenceContext();
+      }}
       onBulkApprove={
         capabilities.canReviewProposals ? approveSelected : undefined
       }
@@ -453,16 +649,43 @@ export function ActionProposalsPanel({
           ? () => setSelectedProposalIds([])
           : undefined
       }
-      onSelectEvidence={(evidence, title, count) => {
+      onSelectEvidence={(evidence, title, count, proposalId) => {
         setSelectedEvidence(evidence);
         setSelectedEvidenceTitle(title);
         setSelectedEvidenceCount(typeof count === "number" ? count : null);
+        setSelectedEvidenceProposalId(proposalId ?? null);
       }}
       onSelectVisibleProposed={
         capabilities.canReviewProposals ? selectVisibleProposed : undefined
       }
-      onAuditSourceFilterChange={setAuditSourceFilter}
-      onStatusFilterChange={setStatusFilter}
+      onAuditSourceFilterChange={(filter) => {
+        if (executionBusyProposalId) {
+          return;
+        }
+        setAuditSourceFilter(filter);
+        setActiveProposalId(null);
+        clearSelectedEvidenceContext();
+      }}
+      onExecutionBusyChange={(proposalId, isBusy) => {
+        setExecutionBusyProposalId((current) =>
+          isBusy ? proposalId : current === proposalId ? null : current
+        );
+      }}
+      onExecutionComplete={(proposalId) => {
+        setStatusFilter("all");
+        setOriginFilter("all");
+        setAuditSourceFilter("all");
+        setActiveProposalId(proposalId);
+        clearSelectedEvidenceContext();
+      }}
+      onStatusFilterChange={(filter) => {
+        if (executionBusyProposalId) {
+          return;
+        }
+        setStatusFilter(filter);
+        setActiveProposalId(null);
+        clearSelectedEvidenceContext();
+      }}
       onToggleProposalSelection={
         capabilities.canReviewProposals ? toggleProposalSelection : undefined
       }
@@ -473,25 +696,30 @@ export function ActionProposalsPanel({
       selectedEvidence={selectedEvidence}
       selectedEvidenceTitle={selectedEvidenceTitle}
       selectedEvidenceCount={selectedEvidenceCount}
+      selectedEvidenceProposalId={selectedEvidenceProposalId}
       statusFilter={statusFilter}
-      status={status}
+      status={visibleStatus}
       successMessage={successMessage}
     />
   );
 }
 
 export function ActionProposalsPanelView({
+  activeProposalId = null,
   canCreateProposals = true,
   canReviewProposals = true,
   createForm,
   data,
   error,
+  executionBusyProposalId = null,
+  isRefreshing = false,
+  mutationError = null,
   onApprove,
-  onCloseEvidence,
   onCreate,
   onCreateFormChange,
   onReject,
   onRefreshProposals,
+  onSelectProposal,
   onRetry,
   onOriginFilterChange,
   onBulkApprove,
@@ -500,6 +728,8 @@ export function ActionProposalsPanelView({
   onSelectEvidence,
   onSelectVisibleProposed,
   onAuditSourceFilterChange,
+  onExecutionBusyChange,
+  onExecutionComplete,
   onStatusFilterChange,
   onToggleProposalSelection,
   pendingMutation,
@@ -509,6 +739,7 @@ export function ActionProposalsPanelView({
   selectedEvidence,
   selectedEvidenceTitle = null,
   selectedEvidenceCount = null,
+  selectedEvidenceProposalId = null,
   statusFilter = "all",
   status,
   successMessage = null
@@ -530,57 +761,65 @@ export function ActionProposalsPanelView({
   ).length;
   const groups = groupProposalsByOrigin(filteredProposals);
   const orderedProposals = groups.flatMap((group) => group.proposals);
-  const defaultEvidenceSelection = firstEvidenceSelection(orderedProposals);
-  const drawerEvidence = selectedEvidence ?? defaultEvidenceSelection?.evidence ?? null;
-  const drawerTitle = selectedEvidence
-    ? selectedEvidenceTitle
+  const activeProposal = selectActiveMission(orderedProposals, activeProposalId);
+  const defaultEvidenceSelection = firstEvidenceSelection(
+    activeProposal ? [activeProposal] : []
+  );
+  const manualEvidenceMatchesActiveMission = Boolean(
+    selectedEvidence &&
+      activeProposal &&
+      selectedEvidenceProposalId === activeProposal.id &&
+      proposalContainsEvidence(activeProposal, selectedEvidence)
+  );
+  const drawerEvidence = manualEvidenceMatchesActiveMission
+    ? selectedEvidence
+    : defaultEvidenceSelection?.evidence ?? null;
+  const drawerTitle = manualEvidenceMatchesActiveMission
+    ? activeProposal?.title ?? selectedEvidenceTitle
     : defaultEvidenceSelection?.title ?? null;
-  const drawerCount = selectedEvidence
-    ? selectedEvidenceCount
+  const drawerCount = manualEvidenceMatchesActiveMission
+    ? activeProposal?.evidence_refs.length ?? selectedEvidenceCount
     : defaultEvidenceSelection?.count ?? null;
   const drawerSelectionMode: "default" | "manual" | null = drawerEvidence
-    ? selectedEvidence
+    ? manualEvidenceMatchesActiveMission
       ? "manual"
       : "default"
     : null;
   const canCreate = canSubmitCreateForm(createForm);
-  const mission = decisionRoomMission(
-    filteredProposals,
-    proposals.length,
-    canCreateProposals,
-    canReviewProposals
-  );
+  const executionBusy = executionBusyProposalId !== null;
 
   return (
-    <section className="panel action-proposals" aria-labelledby="action-proposals-title">
-      <div className="section-header decision-room-header">
-        <div>
-          <span className="eyebrow">{M.actionsPanel.eyebrow}</span>
-          <h2 id="action-proposals-title">Очередь решений</h2>
+    <section className="missions-room" aria-labelledby="missions-title">
+      <header className="missions-hero">
+        <div className="missions-hero-copy">
+          <span className="eyebrow">Комната решений</span>
+          <h1 id="missions-title">Миссии</h1>
+          <p>
+            Здесь вы решаете, что компания делает дальше. Сначала основание,
+            потом решение, и только затем — отдельный внешний шаг.
+          </p>
         </div>
-        <span className="badge">{M.actionsPanel.badgeLocalApproval}</span>
-      </div>
-
-      {data && status !== "error" && status !== "loading" && status !== "missing" ? (
-        <MissionStrip
-          action={mission.action}
-          current={mission.current}
-          outcome={mission.outcome}
-          details={
-            <>
-              <p>{T.actionsCapability()}</p>
-              <p>Внешнее действие не начнётся без отдельного подтверждения.</p>
-            </>
-          }
+        <div className="missions-human-control">
+          <span className="missions-control-light" aria-hidden="true" />
+          <div>
+            <strong>Под контролем человека</strong>
+            <small>Ничего не отправится само</small>
+          </div>
+        </div>
+        <DecisionRoomAccessHint
+          canCreateProposals={canCreateProposals}
+          canReviewProposals={canReviewProposals}
         />
-      ) : null}
+      </header>
 
-      <DecisionRoomAccessHint
-        canCreateProposals={canCreateProposals}
-        canReviewProposals={canReviewProposals}
-      />
-
-      {successMessage ? <p className="success-text">{successMessage}</p> : null}
+      <div
+        aria-atomic="true"
+        aria-live="polite"
+        className="missions-announcements"
+        role="status"
+      >
+        {successMessage ? <p className="success-text">{successMessage}</p> : null}
+      </div>
 
       {error && status !== "error" ? (
         <p className="error-text" role="alert">
@@ -616,55 +855,56 @@ export function ActionProposalsPanelView({
         </>
       ) : null}
 
-      {status === "empty" ? (
-        <EmptyState
-          description={M.actionsPanel.emptyDescription}
-          title={M.actionsPanel.emptyTitle}
-        />
-      ) : null}
-
       {data && status !== "loading" && status !== "missing" && status !== "error" ? (
         <>
           <DecisionRoomSummary proposals={proposals} />
 
-          <details className="decision-room-disclosure decision-room-filters">
-            <summary>
-              <span>Фильтры очереди</span>
-              <small>{decisionRoomFilterSummary(statusFilter, originFilter)}</small>
-            </summary>
-            <div className="decision-room-disclosure-body">
-              <ActionStatusFilter
-                activeFilter={statusFilter}
-                onChange={onStatusFilterChange}
-                proposals={proposals}
-              />
+          <div className="missions-toolbar">
+            <details className="decision-room-disclosure decision-room-filters">
+              <summary>
+                <span>Настроить очередь</span>
+                <small>{decisionRoomFilterSummary(statusFilter, originFilter)}</small>
+              </summary>
+              <div className="decision-room-disclosure-body">
+                <ActionStatusFilter
+                  activeFilter={statusFilter}
+                  disabled={executionBusy}
+                  onChange={onStatusFilterChange}
+                  proposals={proposals}
+                />
 
-              <ActionOriginFilter
-                activeFilter={originFilter}
-                onChange={onOriginFilterChange}
-                proposals={statusFilteredProposals}
-              />
-
-              {originFilter === "audit" ? (
-                <ActionAuditSourceFilter
-                  activeFilter={auditSourceFilter}
-                  onChange={onAuditSourceFilterChange}
+                <ActionOriginFilter
+                  activeFilter={originFilter}
+                  disabled={executionBusy}
+                  onChange={onOriginFilterChange}
                   proposals={statusFilteredProposals}
                 />
-              ) : null}
 
-              {canReviewProposals && selectedProposedCount === 0 ? (
-                <button
-                  className="button secondary decision-room-select-visible"
-                  disabled={visibleProposedCount === 0}
-                  onClick={onSelectVisibleProposed}
-                  type="button"
-                >
-                  {M.actionsPanel.bulkSelectVisible}
-                </button>
-              ) : null}
-            </div>
-          </details>
+                {originFilter === "audit" ? (
+                  <ActionAuditSourceFilter
+                    activeFilter={auditSourceFilter}
+                    disabled={executionBusy}
+                    onChange={onAuditSourceFilterChange}
+                    proposals={statusFilteredProposals}
+                  />
+                ) : null}
+
+                {canReviewProposals && selectedProposedCount === 0 ? (
+                  <button
+                    className="button secondary decision-room-select-visible"
+                    disabled={executionBusy || visibleProposedCount === 0}
+                    onClick={onSelectVisibleProposed}
+                    type="button"
+                  >
+                    {M.actionsPanel.bulkSelectVisible}
+                  </button>
+                ) : null}
+              </div>
+            </details>
+            <span className="missions-loaded-note">
+              {isRefreshing ? "Обновляем очередь…" : "В загруженной очереди · до 100 миссий"}
+            </span>
+          </div>
 
           {canReviewProposals && selectedProposedCount > 0 ? (
             <BulkReviewControls
@@ -672,78 +912,114 @@ export function ActionProposalsPanelView({
               onClearSelection={onClearSelectedProposals}
               onRejectSelected={onBulkReject}
               onSelectVisibleProposed={onSelectVisibleProposed}
+              disabled={executionBusy}
+              error={mutationError?.scope === "bulk" ? mutationError.message : null}
               pendingMutation={pendingMutation}
               selectedCount={selectedProposedCount}
               visibleProposedCount={visibleProposedCount}
             />
           ) : null}
 
-          <section className="work-columns">
-            <ProposalList
-              canReviewProposals={canReviewProposals}
-              groups={groups}
-              onApprove={onApprove}
-              onReject={onReject}
-              onRefreshProposals={onRefreshProposals}
-              onSelectEvidence={onSelectEvidence}
-              onToggleProposalSelection={onToggleProposalSelection}
-              pendingMutation={pendingMutation}
-              selectedProposalIds={selectedProposalIds}
-              totalProposals={proposals.length}
-              visibleProposals={filteredProposals.length}
+          {activeProposal ? (
+            <section
+              aria-busy={isRefreshing}
+              aria-label="Рабочая зона миссий"
+              className="missions-workspace"
+            >
+              <MissionDecisionConsole
+                key={activeProposal.id}
+                canReviewProposals={canReviewProposals}
+                drawerCount={drawerCount}
+                drawerEvidence={drawerEvidence}
+                drawerSelectionMode={drawerSelectionMode}
+                drawerTitle={drawerTitle}
+                onApprove={onApprove}
+                onExecutionBusyChange={onExecutionBusyChange}
+                onExecutionComplete={onExecutionComplete}
+                onRefreshProposals={onRefreshProposals}
+                onReject={onReject}
+                onSelectEvidence={onSelectEvidence}
+                pendingMutation={pendingMutation}
+                proposal={activeProposal}
+                proposalMutationError={
+                  mutationError?.scope === `proposal:${activeProposal.id}`
+                    ? mutationError.message
+                    : null
+                }
+              />
+              <MissionQueue
+                activeProposalId={activeProposal.id}
+                canReviewProposals={canReviewProposals}
+                disabled={executionBusy}
+                onSelectProposal={onSelectProposal}
+                onToggleProposalSelection={onToggleProposalSelection}
+                pendingMutation={pendingMutation}
+                proposals={orderedProposals}
+                selectedProposalIds={selectedProposalIds}
+                statusFilter={statusFilter}
+              />
+            </section>
+          ) : (
+            <MissionQueueEmpty
+              canCreateProposals={canCreateProposals}
+              hasAnyProposals={proposals.length > 0}
             />
-            <EvidenceDrawer
-              evidence={drawerEvidence}
-              evidenceCount={drawerCount}
-              itemTitle={drawerTitle}
-              onClose={selectedEvidence ? onCloseEvidence : undefined}
-              selectionMode={drawerSelectionMode}
-            />
+          )}
+
+          <section className="missions-backstage" aria-label="Дополнительные возможности">
+            {canCreateProposals ? (
+              <details
+                className="decision-room-disclosure decision-room-create"
+                id="add-mission"
+                open={status === "empty"}
+              >
+                <summary>
+                  <span>Добавить миссию</span>
+                  <small>Сохранится в FounderOS и ничего не выполнит само</small>
+                </summary>
+                <div className="decision-room-disclosure-body">
+                  {mutationError?.scope === "create" ? (
+                    <p className="error-text" role="alert">
+                      {mutationError.message}
+                    </p>
+                  ) : null}
+                  <ActionProposalCreateForm
+                    form={createForm}
+                    isPending={pendingMutation === "create"}
+                    onChange={onCreateFormChange}
+                    onSubmit={onCreate}
+                    submitDisabled={!canCreate || executionBusy}
+                  />
+                </div>
+              </details>
+            ) : null}
+
+            {canReviewProposals ? (
+              <details className="decision-room-disclosure decision-room-readiness">
+                <summary>
+                  <span>Контроль безопасности</span>
+                  <small>Основания, предпросмотр и сохранённые результаты</small>
+                </summary>
+                <div className="decision-room-disclosure-body">
+                  <ActionReviewReadinessPanel proposals={proposals} />
+                </div>
+              </details>
+            ) : null}
+
+            {data.warnings.length > 0 ? (
+              <details className="decision-room-disclosure decision-room-warnings">
+                <summary>
+                  <span>{M.common.warnings}</span>
+                  <small>{data.warnings.length}</small>
+                </summary>
+                <ul className="meta-list" aria-label={M.common.warnings}>
+                  {data.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
           </section>
-
-          {canCreateProposals ? (
-            <details className="decision-room-disclosure decision-room-create">
-              <summary>
-                <span>Предложить новое действие</span>
-                <small>Сохранится локально и ничего не выполнит само</small>
-              </summary>
-              <div className="decision-room-disclosure-body">
-                <ActionProposalCreateForm
-                  form={createForm}
-                  isPending={pendingMutation === "create"}
-                  onChange={onCreateFormChange}
-                  onSubmit={onCreate}
-                  submitDisabled={!canCreate}
-                />
-              </div>
-            </details>
-          ) : null}
-
-          {canReviewProposals ? (
-            <details className="decision-room-disclosure decision-room-readiness">
-              <summary>
-                <span>Готовность и контроль</span>
-                <small>Предпросмотр, доказательства и результаты</small>
-              </summary>
-              <div className="decision-room-disclosure-body">
-                <ActionReviewReadinessPanel proposals={proposals} />
-              </div>
-            </details>
-          ) : null}
-
-          {data.warnings.length > 0 ? (
-            <details className="decision-room-disclosure decision-room-warnings">
-              <summary>
-                <span>{M.common.warnings}</span>
-                <small>{data.warnings.length}</small>
-              </summary>
-              <ul className="meta-list" aria-label={M.common.warnings}>
-                {data.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
         </>
       ) : null}
     </section>
@@ -787,21 +1063,36 @@ function DecisionRoomAccessHint({
 }
 
 function DecisionRoomSummary({ proposals }: { proposals: ActionProposal[] }) {
+  const failedCount = countByStatus(proposals, "failed");
   return (
-    <dl className="decision-room-summary" aria-label={M.actionsPanel.summaryLabel}>
-      <div className="decision-room-summary-item decision-room-summary-item--pending">
-        <dt>Ждут решения</dt>
+    <div className="missions-pulse-wrap">
+      <dl className="missions-pulse" aria-label={M.actionsPanel.summaryLabel}>
+      <div className="missions-pulse-item missions-pulse-item--primary">
+        <dt>Ждут вас</dt>
         <dd>{countByStatus(proposals, "proposed")}</dd>
+        <small>Нужно открыть и решить</small>
       </div>
-      <div className="decision-room-summary-item">
-        <dt>Приняты</dt>
+      <div className="missions-pulse-item">
+        <dt>Приняты человеком</dt>
         <dd>{countAcceptedProposals(proposals)}</dd>
+        <small>Это ещё не внешнее выполнение</small>
       </div>
-      <div className="decision-room-summary-item">
-        <dt>Отклонены</dt>
-        <dd>{countByStatus(proposals, "rejected")}</dd>
+      <div className="missions-pulse-item">
+        <dt>С результатом</dt>
+        <dd>{countByStatus(proposals, "executed")}</dd>
+        <small>Есть сохранённая квитанция</small>
       </div>
-    </dl>
+      </dl>
+      {failedCount > 0 ? (
+        <p className="missions-attention" role="status">
+          {failedCount === 1 ? (
+            <><strong>1 выполнение</strong> требует внимания</>
+          ) : (
+            <><strong>{failedCount} выполнений</strong> требуют внимания</>
+          )}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -812,151 +1103,126 @@ function decisionRoomFilterSummary(
   return `${filterLabel(statusFilter)} · ${originFilterLabel(originFilter)}`;
 }
 
-function decisionRoomMission(
-  visibleProposals: ActionProposal[],
-  totalProposalCount: number,
-  canCreateProposals: boolean,
-  canReviewProposals: boolean
-): { action: string; current: string; outcome: string } {
-  const pendingDecisionCount = countByStatus(visibleProposals, "proposed");
-  const approvedCount = countByStatus(visibleProposals, "approved");
-  const failedCount = countByStatus(visibleProposals, "failed");
-  const executedCount = countByStatus(visibleProposals, "executed");
-  const previewReadyCount = visibleProposals.filter(
-    isPreviewReadyGithubIssueProposal
-  ).length;
-
-  if (failedCount > 0) {
-    return {
-      action: "Открыть «Детали и историю»",
-      current: executionAttentionLabel(failedCount),
-      outcome: "Увидите причину и сохранённую квитанцию"
-    };
+function selectActiveMission(
+  proposals: ActionProposal[],
+  activeProposalId: string | null
+): ActionProposal | null {
+  const selected = proposals.find((proposal) => proposal.id === activeProposalId);
+  if (selected) {
+    return selected;
   }
-  if (pendingDecisionCount > 0) {
-    if (canReviewProposals) {
-      return {
-        action: "«Принять» или «Отклонить»",
-        current: pendingDecisionLabel(pendingDecisionCount),
-        outcome: "Решение сохранится локально"
-      };
-    }
-    return {
-      action: "Открыть доказательства",
-      current: pendingDecisionLabel(pendingDecisionCount),
-      outcome: "Вы увидите основание решения"
-    };
-  }
-  if (previewReadyCount > 0 && canReviewProposals) {
-    return {
-      action: "«Подготовить предпросмотр» в принятом решении",
-      current: acceptedDecisionLabel(previewReadyCount),
-      outcome: "Увидите точный запрос без отправки"
-    };
-  }
-  if (approvedCount > 0) {
-    return {
-      action: "Проверить основание и следующий шаг",
-      current: acceptedDecisionStatusLabel(approvedCount),
-      outcome: "Увидите, что доступно после принятия"
-    };
-  }
-  if (executedCount > 0) {
-    return {
-      action: "Открыть «Детали и историю»",
-      current: savedResultLabel(executedCount),
-      outcome: "Проверите итог и историю выполнения"
-    };
-  }
-  if (visibleProposals.length > 0) {
-    return {
-      action: "Открыть доказательства или историю",
-      current: `${visibleProposals.length} ${visibleProposals.length === 1 ? "решение в выбранном разделе" : "решения в выбранном разделе"}`,
-      outcome: "Увидите основание и сохранённый статус"
-    };
-  }
-  if (totalProposalCount > 0) {
-    return {
-      action: "Открыть «Фильтры очереди»",
-      current: "В выбранном фильтре решений нет",
-      outcome: "Вернёте нужные решения в очередь"
-    };
-  }
-  if (canCreateProposals) {
-    return {
-      action: "«Предложить новое действие»",
-      current: "Очередь решений пуста",
-      outcome: "Предложение появится в очереди"
-    };
-  }
-  return {
-    action: "Выбрать другой раздел",
-    current: "В выбранном разделе решений нет",
-    outcome: "Вы продолжите работу с компанией"
-  };
+  return (
+    proposals.reduce<ActionProposal | null>((best, proposal) => {
+      if (!best || missionPriority(proposal) < missionPriority(best)) {
+        return proposal;
+      }
+      return best;
+    }, null)
+  );
 }
 
-function acceptedDecisionLabel(count: number): string {
-  const lastTwoDigits = count % 100;
-  const lastDigit = count % 10;
-  if (lastTwoDigits < 11 || lastTwoDigits > 14) {
-    if (lastDigit === 1) {
-      return `${count} принятое решение готово к следующему шагу`;
-    }
-    if (lastDigit >= 2 && lastDigit <= 4) {
-      return `${count} принятых решения готовы к следующему шагу`;
-    }
+function missionPriority(proposal: ActionProposal): number {
+  if (proposal.status === "failed") {
+    return 0;
   }
-  return `${count} принятых решений готовы к следующему шагу`;
+  if (proposal.status === "proposed") {
+    return 1;
+  }
+  if (isPreviewReadyGithubIssueProposal(proposal)) {
+    return 2;
+  }
+  if (proposal.status === "approved") {
+    return 3;
+  }
+  if (proposal.status === "executed") {
+    return 4;
+  }
+  if (proposal.status === "rejected") {
+    return 5;
+  }
+  return 6;
 }
 
-function acceptedDecisionStatusLabel(count: number): string {
-  const lastTwoDigits = count % 100;
-  const lastDigit = count % 10;
-  if ((lastTwoDigits < 11 || lastTwoDigits > 14) && lastDigit === 1) {
-    return `${count} решение принято`;
+function missionStage(proposal: ActionProposal): number {
+  if (proposal.status === "executed" || proposal.status === "rejected") {
+    return 3;
   }
-  if (
-    (lastTwoDigits < 11 || lastTwoDigits > 14) &&
-    lastDigit >= 2 &&
-    lastDigit <= 4
-  ) {
-    return `${count} решения приняты`;
+  if (proposal.status === "approved" || proposal.status === "failed") {
+    return 2;
   }
-  return `${count} решений приняты`;
+  return 0;
 }
 
-function executionAttentionLabel(count: number): string {
-  return count % 10 === 1 && count % 100 !== 11
-    ? `${count} выполнение требует внимания`
-    : `${count} выполнений требуют внимания`;
+function missionProgressLabels(proposal: ActionProposal): string[] {
+  return [
+    "Основание",
+    "Решение",
+    proposal.status === "rejected" ? "Закрыто" : "Следующий шаг"
+  ];
 }
 
-function savedResultLabel(count: number): string {
-  return count % 10 === 1 && count % 100 !== 11
-    ? `${count} результат сохранён`
-    : `${count} результатов сохранены`;
+function missionWhyNow(proposal: ActionProposal): string {
+  if (proposal.description) {
+    return proposal.description;
+  }
+  if (proposal.status === "failed") {
+    return "Предыдущая попытка завершилась ошибкой и требует внимания человека.";
+  }
+  if (proposal.status === "approved") {
+    return "Решение уже сохранено; следующий шаг ещё нужно проверить отдельно.";
+  }
+  if (proposal.status === "executed") {
+    return "Для этой миссии сохранён результат выполнения.";
+  }
+  if (proposal.status === "rejected") {
+    return "Миссия закрыта решением человека и остаётся в истории.";
+  }
+  return "Миссия сохранена в очереди и ждёт решения человека.";
+}
+
+function missionQueueTitle(statusFilter: ProposalStatusFilter): string {
+  if (statusFilter === "proposed") {
+    return "Что ждёт вас";
+  }
+  if (statusFilter === "approved") {
+    return "Принятые миссии";
+  }
+  if (statusFilter === "rejected") {
+    return "Закрытые миссии";
+  }
+  return "Миссии компании";
+}
+
+function focusMissionDestinationAfterRender() {
+  if (typeof document === "undefined") {
+    return;
+  }
+  requestAnimationFrame(() => {
+    const destination =
+      document.getElementById("mission-console-title") ??
+      document.getElementById("mission-empty-title") ??
+      document.getElementById("mission-queue-title");
+    destination?.focus();
+  });
+}
+
+function proposalOriginLabel(origin: ProposalOrigin): string {
+  switch (origin) {
+    case "audit":
+      return "Аудит репо";
+    case "briefing":
+      return "Сводка";
+    case "github":
+      return "GitHub";
+    case "internal":
+      return "Внутри";
+  }
 }
 
 function countAcceptedProposals(proposals: ActionProposal[]): number {
   return proposals.filter((proposal) =>
     ["approved", "executed", "failed"].includes(proposal.status)
   ).length;
-}
-
-function pendingDecisionLabel(count: number): string {
-  const lastTwoDigits = count % 100;
-  const lastDigit = count % 10;
-  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
-    return `${count} решений ждут проверки`;
-  }
-  if (lastDigit === 1) {
-    return `${count} решение ждёт проверки`;
-  }
-  if (lastDigit >= 2 && lastDigit <= 4) {
-    return `${count} решения ждут проверки`;
-  }
-  return `${count} решений ждут проверки`;
 }
 
 function ActionReviewReadinessPanel({ proposals }: { proposals: ActionProposal[] }) {
@@ -1087,10 +1353,12 @@ function ActionProposalCreateForm({
 
 function ActionStatusFilter({
   activeFilter,
+  disabled = false,
   onChange,
   proposals
 }: {
   activeFilter: ProposalStatusFilter;
+  disabled?: boolean;
   onChange?: (filter: ProposalStatusFilter) => void;
   proposals: ActionProposal[];
 }) {
@@ -1099,14 +1367,14 @@ function ActionStatusFilter({
     <section className="work-section" aria-label={M.actionsPanel.filterLabel}>
       <h3>{M.actionsPanel.filterTitle}</h3>
       <p className="muted">{M.actionsPanel.filterDescription}</p>
-      <div className="segmented" role="tablist" aria-label={M.actionsPanel.filterLabel}>
+      <div className="segmented" role="group" aria-label={M.actionsPanel.filterLabel}>
         {filters.map((filter) => (
           <button
-            aria-selected={activeFilter === filter}
+            aria-pressed={activeFilter === filter}
             className={`segment${activeFilter === filter ? " active" : ""}`}
+            disabled={disabled}
             key={filter}
             onClick={() => onChange?.(filter)}
-            role="tab"
             type="button"
           >
             {filterLabel(filter)} · {filterCount(proposals, filter)}
@@ -1153,10 +1421,12 @@ function normalizeAuditSourceFilter(
 
 function ActionOriginFilter({
   activeFilter,
+  disabled = false,
   onChange,
   proposals
 }: {
   activeFilter: ProposalOriginFilter;
+  disabled?: boolean;
   onChange?: (filter: ProposalOriginFilter) => void;
   proposals: ActionProposal[];
 }) {
@@ -1171,14 +1441,14 @@ function ActionOriginFilter({
     <section className="work-section" aria-label={M.actionsPanel.originFilterLabel}>
       <h3>{M.actionsPanel.originFilterTitle}</h3>
       <p className="muted">{M.actionsPanel.originFilterDescription}</p>
-      <div className="segmented" role="tablist" aria-label={M.actionsPanel.originFilterLabel}>
+      <div className="segmented" role="group" aria-label={M.actionsPanel.originFilterLabel}>
         {filters.map((filter) => (
           <button
-            aria-selected={activeFilter === filter}
+            aria-pressed={activeFilter === filter}
             className={`segment${activeFilter === filter ? " active" : ""}`}
+            disabled={disabled}
             key={filter}
             onClick={() => onChange?.(filter)}
-            role="tab"
             type="button"
           >
             {originFilterLabel(filter)} · {originFilterCount(proposals, filter)}
@@ -1191,10 +1461,12 @@ function ActionOriginFilter({
 
 function ActionAuditSourceFilter({
   activeFilter,
+  disabled = false,
   onChange,
   proposals
 }: {
   activeFilter: ProposalAuditSourceFilter;
+  disabled?: boolean;
   onChange?: (filter: ProposalAuditSourceFilter) => void;
   proposals: ActionProposal[];
 }) {
@@ -1205,16 +1477,16 @@ function ActionAuditSourceFilter({
       <p className="muted">{M.actionsPanel.auditSourceFilterDescription}</p>
       <div
         className="segmented"
-        role="tablist"
+        role="group"
         aria-label={M.actionsPanel.auditSourceFilterLabel}
       >
         {filters.map((filter) => (
           <button
-            aria-selected={activeFilter === filter}
+            aria-pressed={activeFilter === filter}
             className={`segment${activeFilter === filter ? " active" : ""}`}
+            disabled={disabled}
             key={filter}
             onClick={() => onChange?.(filter)}
-            role="tab"
             type="button"
           >
             {auditSourceFilterLabel(filter)} · {auditSourceFilterCount(proposals, filter)}
@@ -1226,6 +1498,8 @@ function ActionAuditSourceFilter({
 }
 
 function BulkReviewControls({
+  disabled = false,
+  error = null,
   onApproveSelected,
   onClearSelection,
   onRejectSelected,
@@ -1234,6 +1508,8 @@ function BulkReviewControls({
   selectedCount,
   visibleProposedCount
 }: {
+  disabled?: boolean;
+  error?: string | null;
   onApproveSelected?: () => void;
   onClearSelection?: () => void;
   onRejectSelected?: () => void;
@@ -1243,19 +1519,24 @@ function BulkReviewControls({
   visibleProposedCount: number;
 }) {
   const bulkPending = isBulkMutationPending(pendingMutation);
+  const controlsDisabled = disabled || bulkPending;
   return (
     <section
       className="decision-room-bulk-bar"
       aria-label={M.actionsPanel.bulkLabel}
-      aria-live="polite"
     >
-      <strong>
+      <strong aria-live="polite" role="status">
         {T.actionsBulkSelection(selectedCount, visibleProposedCount)}
       </strong>
+      {error ? (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      ) : null}
       <div className="actions-row decision-room-bulk-actions">
         <button
           className="button secondary"
-          disabled={bulkPending || visibleProposedCount === 0}
+          disabled={controlsDisabled || visibleProposedCount === 0}
           onClick={onSelectVisibleProposed}
           type="button"
         >
@@ -1263,209 +1544,456 @@ function BulkReviewControls({
         </button>
         <button
           className="button secondary"
-          disabled={bulkPending}
+          disabled={controlsDisabled}
           onClick={onClearSelection}
           type="button"
         >
           {M.actionsPanel.bulkClearSelection}
         </button>
-        <button
-          className="button"
-          disabled={bulkPending}
-          onClick={onApproveSelected}
-          type="button"
-        >
-          {pendingMutation === "bulk-approve"
-            ? M.actionsPanel.bulkApproving
-            : M.actionsPanel.bulkApproveSelected}
-        </button>
-        <button
-          className="button secondary"
-          disabled={bulkPending}
-          onClick={onRejectSelected}
-          type="button"
-        >
-          {pendingMutation === "bulk-reject"
-            ? M.actionsPanel.bulkRejecting
-            : M.actionsPanel.bulkRejectSelected}
-        </button>
       </div>
+      <details className="missions-bulk-confirm">
+        <summary>Проверить последствия</summary>
+        <p>
+          Статус изменится только внутри FounderOS для выбранных миссий. Внешние
+          действия не запустятся.
+        </p>
+        <div className="actions-row decision-room-bulk-actions">
+          <button
+            className="button"
+            disabled={controlsDisabled}
+            onClick={onApproveSelected}
+            type="button"
+          >
+            {pendingMutation === "bulk-approve"
+              ? M.actionsPanel.bulkApproving
+              : M.actionsPanel.bulkApproveSelected}
+          </button>
+          <button
+            className="button secondary"
+            disabled={controlsDisabled}
+            onClick={onRejectSelected}
+            type="button"
+          >
+            {pendingMutation === "bulk-reject"
+              ? M.actionsPanel.bulkRejecting
+              : M.actionsPanel.bulkRejectSelected}
+          </button>
+        </div>
+      </details>
     </section>
   );
 }
 
-function ProposalList({
+function MissionQueue({
+  activeProposalId,
   canReviewProposals,
-  groups,
-  onApprove,
-  onReject,
-  onRefreshProposals,
-  onSelectEvidence,
+  disabled = false,
+  onSelectProposal,
   onToggleProposalSelection,
   pendingMutation,
+  proposals,
   selectedProposalIds,
-  totalProposals,
-  visibleProposals
+  statusFilter
 }: {
+  activeProposalId: string;
   canReviewProposals: boolean;
-  groups: ProposalGroup[];
-  onApprove?: (proposalId: string) => void;
-  onReject?: (proposalId: string) => void;
-  onRefreshProposals?: () => void;
-  onSelectEvidence?: (
-    evidence: ActionProposalEvidenceRef,
-    title: string,
-    count?: number
-  ) => void;
+  disabled?: boolean;
+  onSelectProposal?: (proposalId: string) => void;
   onToggleProposalSelection?: (proposalId: string) => void;
   pendingMutation: PendingMutation;
+  proposals: ActionProposal[];
   selectedProposalIds: string[];
-  totalProposals: number;
-  visibleProposals: number;
+  statusFilter: ProposalStatusFilter;
 }) {
   const bulkPending = isBulkMutationPending(pendingMutation);
   return (
-    <section className="work-section" aria-label={M.actionsPanel.listTitle}>
-      <h3>{M.actionsPanel.listTitle}</h3>
-      {visibleProposals === 0 && totalProposals === 0 ? (
-        <p className="muted">{M.actionsPanel.noProposals}</p>
-      ) : null}
-      {visibleProposals === 0 && totalProposals > 0 ? (
-        <p className="muted">{M.actionsPanel.noProposalsForFilter}</p>
-      ) : null}
-      <div className="proposal-groups" aria-label={M.actionsPanel.groupsLabel}>
-        {groups.map((group) => (
-          <section
-            className="proposal-group"
-            key={group.origin}
-            aria-label={group.title}
-          >
-            <div className="proposal-group-header">
-              <h4>
-                {group.title} · {group.proposals.length}
-              </h4>
-              <MiniHint label={`Что входит в раздел «${group.title}»?`}>
-                <p>{group.description}</p>
-              </MiniHint>
-            </div>
-            <div className="work-list">
-              {group.proposals.map((proposal) => (
-                <article className="work-item decision-room-card" key={proposal.id}>
-                  <div className="work-item-main">
-                    {canReviewProposals ? (
-                      <ProposalSelectionControl
-                        disabled={bulkPending}
-                        isSelected={selectedProposalIds.includes(proposal.id)}
-                        onToggle={onToggleProposalSelection}
-                        proposal={proposal}
-                      />
-                    ) : null}
+    <section className="mission-queue" aria-labelledby="mission-queue-title">
+      <header className="mission-queue-header">
+        <div>
+          <span className="eyebrow">Очередь</span>
+          <h2 id="mission-queue-title" tabIndex={-1}>
+            {missionQueueTitle(statusFilter)}
+          </h2>
+        </div>
+        <span className="mission-queue-count">{proposals.length}</span>
+      </header>
+      <div className="mission-queue-list">
+        {proposals.map((proposal, index) => {
+          const isActive = proposal.id === activeProposalId;
+          const origin = proposalOrigin(proposal);
+          return (
+            <article
+              className={`mission-queue-card${isActive ? " is-active" : ""}`}
+              key={proposal.id}
+            >
+              {canReviewProposals && selectedProposalIds.length > 0 ? (
+                <ProposalSelectionControl
+                  disabled={disabled || bulkPending}
+                  isSelected={selectedProposalIds.includes(proposal.id)}
+                  onToggle={onToggleProposalSelection}
+                  proposal={proposal}
+                />
+              ) : null}
+              <button
+                aria-controls="mission-console"
+                aria-pressed={isActive}
+                className="mission-queue-open"
+                disabled={disabled}
+                id={`mission-queue-${proposal.id}`}
+                onClick={() => {
+                  onSelectProposal?.(proposal.id);
+                  if (typeof document !== "undefined") {
+                    requestAnimationFrame(() => {
+                      document.getElementById("mission-console-title")?.focus();
+                    });
+                  }
+                }}
+                type="button"
+              >
+                <span className="mission-queue-number" aria-hidden="true">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="mission-queue-copy">
+                  <span className="mission-queue-badges">
                     <span
                       className={`badge decision-room-status decision-room-status--${proposalStatusTone(proposal.status)}`}
                     >
                       {proposalStatusLabel(proposal.status)}
                     </span>
-                    {group.origin === "audit" ? (
-                      <>
-                        <span className="badge badge-origin">
-                          {M.actionsPanel.originAuditBadge}
-                        </span>
-                        <span className="badge badge-origin">
-                          {auditSourceBadge(proposal)}
-                        </span>
-                      </>
-                    ) : null}
-                    {group.origin === "briefing" ? (
-                      <span className="badge badge-origin">
-                        {M.actionsPanel.originBriefingBadge}
-                      </span>
-                    ) : null}
-                    <h4>{proposal.title}</h4>
-                  </div>
-                  {proposal.description ? (
-                    <p className="muted decision-room-card-description">
-                      {proposal.description}
-                    </p>
-                  ) : null}
-                  <p className="decision-room-effect">
-                    <strong>Что изменится:</strong> {actionLabel(proposal.action_type)}
-                  </p>
-                  <ActionEvidenceButtons
-                    evidenceRefs={proposal.evidence_refs}
-                    onSelectEvidence={onSelectEvidence}
-                    proposalTitle={proposal.title}
-                  />
-                  {canReviewProposals ? (
-                    <ProposalActions
-                      onApprove={onApprove}
-                      onReject={onReject}
-                      pendingMutation={pendingMutation}
-                      proposal={proposal}
-                    />
-                  ) : null}
-                  {canReviewProposals ? (
-                    <ProposalNextStep
-                      onRefreshProposals={onRefreshProposals}
-                      proposal={proposal}
-                    />
-                  ) : null}
-                  <details className="decision-room-card-details">
-                    <summary>Детали и история</summary>
-                    <div className="decision-room-card-details-body">
-                      <dl className="work-meta">
-                        <div>
-                          <dt>{M.actionsPanel.metaTarget}</dt>
-                          <dd>{proposalTargetLabel(proposal.target_provider)}</dd>
-                        </div>
-                        <div>
-                          <dt>{M.actionsPanel.metaAction}</dt>
-                          <dd>{actionLabel(proposal.action_type)}</dd>
-                        </div>
-                        <div>
-                          <dt>{M.actionsPanel.metaStatus}</dt>
-                          <dd>{proposalStatusLabel(proposal.status)}</dd>
-                        </div>
-                        <div>
-                          <dt>{M.actionsPanel.metaExecution}</dt>
-                          <dd>
-                            {proposal.execution_started
-                              ? M.actionsPanel.executionReported
-                              : M.actionsPanel.executionNotExecuted}
-                          </dd>
-                        </div>
-                      </dl>
-                      <ProposalPayloadDetails proposal={proposal} />
-                      <ProposalAuditDetails proposal={proposal} />
-                      {canReviewProposals &&
-                      !isPreviewReadyGithubIssueProposal(proposal) ? (
-                        <ActionExecutionControls
-                          onRefresh={onRefreshProposals}
-                          proposal={proposal}
-                        />
-                      ) : null}
-                      {proposal.warnings.length > 0 ? (
-                        <ul className="meta-list">
-                          {proposal.warnings.map((warning) => (
-                            <li key={warning}>{warning}</li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </div>
-                  </details>
-                </article>
-              ))}
-            </div>
-          </section>
-        ))}
+                    <span className="badge badge-origin">
+                      {proposalOriginLabel(origin)}
+                    </span>
+                  </span>
+                  <strong>{proposal.title}</strong>
+                  <small>
+                    {proposal.description ||
+                      `Если принять: ${actionLabel(proposal.action_type)}`}
+                  </small>
+                  <span className="mission-queue-meta">
+                    Оснований: {proposal.evidence_refs.length} ·{" "}
+                    {proposalTargetLabel(proposal.target_provider)}
+                  </span>
+                </span>
+                <span className="mission-queue-arrow" aria-hidden="true">→</span>
+              </button>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
+function MissionDecisionConsole({
+  canReviewProposals,
+  drawerCount,
+  drawerEvidence,
+  drawerSelectionMode,
+  drawerTitle,
+  onApprove,
+  onExecutionBusyChange,
+  onExecutionComplete,
+  onRefreshProposals,
+  onReject,
+  onSelectEvidence,
+  pendingMutation,
+  proposal,
+  proposalMutationError
+}: {
+  canReviewProposals: boolean;
+  drawerCount: number | null;
+  drawerEvidence: ActionProposalEvidenceRef | null;
+  drawerSelectionMode: "default" | "manual" | null;
+  drawerTitle: string | null;
+  onApprove?: (proposalId: string) => void;
+  onExecutionBusyChange?: (proposalId: string, isBusy: boolean) => void;
+  onExecutionComplete?: (proposalId: string) => void;
+  onRefreshProposals?: () => void;
+  onReject?: (proposalId: string) => void;
+  onSelectEvidence?: (
+    evidence: ActionProposalEvidenceRef,
+    title: string,
+    count?: number,
+    proposalId?: string
+  ) => void;
+  pendingMutation: PendingMutation;
+  proposal: ActionProposal;
+  proposalMutationError: string | null;
+}) {
+  const stage = missionStage(proposal);
+  const [executionBusy, setExecutionBusy] = useState(false);
+  const [executionOutcome, setExecutionOutcome] =
+    useState<ActionExecutionOutcome | null>(null);
+
+  function handleExecutionBusyChange(isBusy: boolean) {
+    setExecutionBusy(isBusy);
+    onExecutionBusyChange?.(proposal.id, isBusy);
+  }
+
+  function handleExecutionComplete(outcome: ActionExecutionOutcome) {
+    setExecutionOutcome(outcome);
+    if (!outcome.auditRefreshFailed) {
+      onExecutionComplete?.(proposal.id);
+    }
+  }
+
+  return (
+    <article className="mission-console" id="mission-console" aria-labelledby="mission-console-title">
+      <header className="mission-console-header">
+        <div className="mission-console-heading">
+          <span className="eyebrow">Активная миссия</span>
+          <div className="mission-console-heading-actions">
+            <span
+              className={`badge decision-room-status decision-room-status--${proposalStatusTone(proposal.status)}`}
+            >
+              {proposalStatusLabel(proposal.status)}
+            </span>
+            <button
+              className="mission-console-return"
+              disabled={executionBusy}
+              onClick={() =>
+                document.getElementById(`mission-queue-${proposal.id}`)?.focus()
+              }
+              type="button"
+            >
+              Вернуться к очереди
+            </button>
+          </div>
+        </div>
+        <h2 id="mission-console-title" tabIndex={-1}>{proposal.title}</h2>
+        <p>
+          {proposalOriginLabel(proposalOrigin(proposal))} · {proposalTargetLabel(proposal.target_provider)}
+        </p>
+      </header>
+
+      {executionBusy ? (
+        <p className="mission-operation-lock" role="status">
+          Завершаем защищённую операцию. Переключение миссии, компании и раздела
+          временно приостановлено.
+        </p>
+      ) : null}
+
+      <ol className="mission-progress" aria-label="Этапы миссии">
+        {missionProgressLabels(proposal).map((label, index) => (
+          <li
+            aria-current={index === stage ? "step" : undefined}
+            className={`${index < stage ? "is-complete" : ""}${index === stage ? " is-current" : ""}`}
+            key={label}
+          >
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <strong>
+              {label}
+              {index < stage ? <span className="sr-only"> — завершено</span> : null}
+              {index === stage ? <span className="sr-only"> — текущий этап</span> : null}
+            </strong>
+          </li>
+        ))}
+      </ol>
+
+      <section className="mission-why" aria-labelledby="mission-why-title">
+        <span>Почему сейчас</span>
+        <h3 className="sr-only" id="mission-why-title">Причина выбора миссии</h3>
+        <p>{missionWhyNow(proposal)}</p>
+      </section>
+
+      <section className="mission-impact" aria-labelledby="mission-impact-title">
+        <span>Если принять</span>
+        <h3 id="mission-impact-title">{actionLabel(proposal.action_type)}</h3>
+        <p>
+          {isLocalOnlyProposal(proposal)
+            ? "Миссия останется внутри FounderOS; во внешние сервисы ничего не уйдёт."
+            : "Сначала сохранится только решение. Внешний шаг появится отдельно и потребует нового подтверждения."}
+        </p>
+      </section>
+
+      <section className="mission-evidence" aria-labelledby="mission-evidence-title">
+        <div className="mission-section-heading">
+          <div>
+            <span className="eyebrow">Основание</span>
+            <h3 id="mission-evidence-title">Почему FounderOS это предлагает</h3>
+          </div>
+          <span className="badge">{proposal.evidence_refs.length}</span>
+        </div>
+        <ActionEvidenceButtons
+          evidenceRefs={proposal.evidence_refs}
+          onSelectEvidence={onSelectEvidence}
+          proposalId={proposal.id}
+          proposalTitle={proposal.title}
+        />
+        <EvidenceDrawer
+          evidence={drawerEvidence}
+          evidenceCount={drawerCount}
+          itemTitle={drawerTitle}
+          selectionMode={drawerSelectionMode}
+          selectionDescription={
+            drawerSelectionMode === "manual"
+              ? "Показано выбранное основание этой миссии."
+              : drawerSelectionMode === "default"
+                ? "Показано первое основание выбранной миссии."
+                : null
+          }
+        />
+      </section>
+
+      {canReviewProposals ? (
+        <section className="mission-decision" aria-label="Решение по миссии">
+          {proposalMutationError ? (
+            <p className="error-text" role="alert">
+              {proposalMutationError}
+            </p>
+          ) : null}
+          <ProposalActions
+            onApprove={onApprove}
+            onReject={onReject}
+            pendingMutation={pendingMutation}
+            proposal={proposal}
+          />
+          {proposal.status === "proposed" ? (
+            <p>
+              Решение сохранится в FounderOS. Во внешние сервисы ничего не
+              отправится.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {canReviewProposals ? (
+        <ProposalNextStep
+          onExecutionBusyChange={(_proposalId, isBusy) =>
+            handleExecutionBusyChange(isBusy)
+          }
+          onExecutionComplete={handleExecutionComplete}
+          onRefreshProposals={onRefreshProposals}
+          proposal={proposal}
+        />
+      ) : null}
+
+      {executionOutcome ? (
+        <MissionExecutionOutcome outcome={executionOutcome} />
+      ) : null}
+
+      <details className="mission-technical decision-room-card-details">
+        <summary>История и технические детали</summary>
+        <div className="decision-room-card-details-body">
+          <dl className="work-meta">
+            <div>
+              <dt>{M.actionsPanel.metaTarget}</dt>
+              <dd>{proposalTargetLabel(proposal.target_provider)}</dd>
+            </div>
+            <div>
+              <dt>{M.actionsPanel.metaAction}</dt>
+              <dd>{actionLabel(proposal.action_type)}</dd>
+            </div>
+            <div>
+              <dt>{M.actionsPanel.metaStatus}</dt>
+              <dd>{proposalStatusLabel(proposal.status)}</dd>
+            </div>
+            <div>
+              <dt>{M.actionsPanel.metaExecution}</dt>
+              <dd>
+                {proposal.execution_started
+                  ? M.actionsPanel.executionReported
+                  : M.actionsPanel.executionNotExecuted}
+              </dd>
+            </div>
+          </dl>
+          <ProposalPayloadDetails proposal={proposal} />
+          <ProposalAuditDetails proposal={proposal} />
+          {canReviewProposals && !isPreviewReadyGithubIssueProposal(proposal) ? (
+            <ActionExecutionControls
+              key={proposal.id}
+              onBusyChange={handleExecutionBusyChange}
+              onComplete={handleExecutionComplete}
+              onRefresh={onRefreshProposals}
+              proposal={proposal}
+            />
+          ) : null}
+          {proposal.warnings.length > 0 ? (
+            <ul className="meta-list">
+              {proposal.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </details>
+    </article>
+  );
+}
+
+function MissionQueueEmpty({
+  canCreateProposals,
+  hasAnyProposals
+}: {
+  canCreateProposals: boolean;
+  hasAnyProposals: boolean;
+}) {
+  return (
+    <section className="mission-empty" aria-labelledby="mission-empty-title">
+      <span className="mission-empty-number" aria-hidden="true">00</span>
+      <div>
+        <span className="eyebrow">Очередь свободна</span>
+        <h2 id="mission-empty-title" tabIndex={-1}>
+          {hasAnyProposals ? "В этом фокусе миссий нет" : "Добавьте первую миссию"}
+        </h2>
+        <p>
+          {hasAnyProposals
+            ? "Измените фильтры — другие миссии остаются в загруженной очереди."
+            : "Зафиксируйте следующий ход. Он сохранится локально и не запустит внешнее действие."}
+        </p>
+        {!hasAnyProposals && canCreateProposals ? (
+          <a className="button" href="#add-mission">Создать первую миссию</a>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function MissionExecutionOutcome({
+  outcome
+}: {
+  outcome: ActionExecutionOutcome;
+}) {
+  const succeeded = outcome.providerResult === "succeeded";
+  return (
+    <section className="mission-outcome" aria-label="Сохранённый результат миссии">
+      <span className="eyebrow">Результат миссии</span>
+      <h3>{succeeded ? "Внешний результат подтверждён" : "Результат сохранён"}</h3>
+      <p>
+        {outcome.externalWritePerformed
+          ? "FounderOS получил подтверждение внешнего действия и сохранил квитанцию."
+          : "Новая внешняя запись не выполнялась; сохранён безопасный результат запроса."}
+      </p>
+      <dl className="work-meta">
+        <div>
+          <dt>Статус квитанции</dt>
+          <dd>{outcome.receiptStatus ?? "не указан"}</dd>
+        </div>
+        <div>
+          <dt>Результат провайдера</dt>
+          <dd>{outcome.providerResult}</dd>
+        </div>
+      </dl>
+      {outcome.externalResultUrl ? (
+        <SourceLink url={outcome.externalResultUrl}>Открыть внешний результат</SourceLink>
+      ) : null}
+      {outcome.auditRefreshFailed ? (
+        <p className="mission-outcome-warning" role="status">
+          {M.actionExecution.auditRefreshAfterExecuteFailed}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function ProposalNextStep({
+  onExecutionBusyChange,
+  onExecutionComplete,
   onRefreshProposals,
   proposal
 }: {
+  onExecutionBusyChange?: (proposalId: string, isBusy: boolean) => void;
+  onExecutionComplete?: (outcome: ActionExecutionOutcome) => void;
   onRefreshProposals?: () => void;
   proposal: ActionProposal;
 }) {
@@ -1477,6 +2005,11 @@ function ProposalNextStep({
       <div className="decision-room-next-step">
         <span>Следующий шаг</span>
         <ActionExecutionControls
+          key={proposal.id}
+          onBusyChange={(isBusy) =>
+            onExecutionBusyChange?.(proposal.id, isBusy)
+          }
+          onComplete={onExecutionComplete}
           onRefresh={onRefreshProposals}
           proposal={proposal}
         />
@@ -1660,14 +2193,17 @@ function ProposalAuditDetails({ proposal }: { proposal: ActionProposal }) {
 function ActionEvidenceButtons({
   evidenceRefs,
   onSelectEvidence,
+  proposalId,
   proposalTitle
 }: {
   evidenceRefs: ActionProposalEvidenceRef[];
   onSelectEvidence?: (
     evidence: ActionProposalEvidenceRef,
     title: string,
-    count?: number
+    count?: number,
+    proposalId?: string
   ) => void;
+  proposalId: string;
   proposalTitle: string;
 }) {
   if (evidenceRefs.length === 0) {
@@ -1675,24 +2211,27 @@ function ActionEvidenceButtons({
   }
 
   return (
-    <details className="decision-room-evidence">
-      <summary>
-        <span>Доказательства</span>
-        <small>{evidenceRefs.length}</small>
-      </summary>
+    <div className="decision-room-evidence">
       <div className="actions-row" aria-label={T.evidenceFor(proposalTitle)}>
         {evidenceRefs.map((evidence, index) => (
           <button
             className="button secondary"
             key={`${evidence.kind}-${evidence.source}-${evidence.ref}-${index}`}
-            onClick={() => onSelectEvidence?.(evidence, proposalTitle, evidenceRefs.length)}
+            onClick={() =>
+              onSelectEvidence?.(
+                evidence,
+                proposalTitle,
+                evidenceRefs.length,
+                proposalId
+              )
+            }
             type="button"
           >
             {T.evidenceButton(evidence.ref)}
           </button>
         ))}
       </div>
-    </details>
+    </div>
   );
 }
 
@@ -1794,10 +2333,14 @@ function mergeCreatedProposal(
       warnings
     };
   }
+  const proposals = [
+    proposal,
+    ...current.proposals.filter((existing) => existing.id !== proposal.id)
+  ].slice(0, 100);
   return {
     ...current,
-    count: current.count + 1,
-    proposals: [proposal, ...current.proposals],
+    count: proposals.length,
+    proposals,
     warnings
   };
 }
@@ -2088,6 +2631,19 @@ function firstEvidenceSelection(
     }
   }
   return null;
+}
+
+function proposalContainsEvidence(
+  proposal: ActionProposal,
+  selectedEvidence: ActionProposalEvidenceRef
+): boolean {
+  return proposal.evidence_refs.some(
+    (evidence) =>
+      evidence.kind === selectedEvidence.kind &&
+      evidence.source === selectedEvidence.source &&
+      evidence.ref === selectedEvidence.ref &&
+      evidence.url === selectedEvidence.url
+  );
 }
 
 function proposalOrigin(proposal: ActionProposal): ProposalOrigin {

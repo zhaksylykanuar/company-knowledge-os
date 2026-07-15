@@ -4,6 +4,24 @@
 
 ### Changed
 
+- Rebuilt `/actions` as the Missions decision room (DEC-083). One bounded
+  mixed-status window of at most 100 proposals now feeds a compact queue and one
+  active decision console; pulse metrics describe that loaded window and stay
+  stable while local status/origin filters change. The active mission alone
+  owns its why-now context, consequences, evidence, approve/reject controls,
+  external preview, and history. Changing missions resets transient execution
+  confirmation state; an in-flight preview/history/write locks mission filters,
+  workspace switching, and the global navigation shell. Stale responses from a
+  previous workspace are ignored, and a sanitized successful outcome stays
+  pinned in the active console through the background refresh. A later audit
+  history read failure is reported separately and cannot downgrade the already
+  confirmed execution into a retryable action error. Bulk review is
+  revealed only after a consequence check;
+  mutation failures remain inline and filter/selection states are keyboard- and
+  screen-reader-readable. Existing ActionProposal RBAC, local decision audit,
+  evidence, receipts, and explicit external-write approval boundary are
+  unchanged. No backend API, schema, database, provider call/write, external
+  action, or LLM path changed.
 - Promoted `/company-brain` into the full Living World operating surface
   (DEC-082). A compact company command bar, real contour metrics, one current
   review rail, local zone filters, the spatial Company Map, and a contextual

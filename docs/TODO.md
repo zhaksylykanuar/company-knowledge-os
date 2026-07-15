@@ -65,6 +65,21 @@ Implemented foundations:
   an explicitly partial zero state. Canonical Company Brain/entities details
   load only after their disclosure opens. Frontend-only: no schema,
   provider call/write, external action, RBAC, or LLM change.
+- The Missions decision room is in place (DEC-083): `/actions` now leads with a
+  compact bounded queue and exactly one active human decision console. Why-now,
+  consequence, evidence, local approve/reject, external preview, and history
+  stay scoped to that active mission; changing missions resets transient
+  preview/confirmation state. Pending provider operations lock mission,
+  workspace, and shell navigation; stale cross-workspace responses are ignored,
+  and a sanitized successful outcome stays pinned through refresh. A later
+  audit-history read failure remains a separate warning rather than making the
+  completed action look retryable. The page
+  loads one mixed-status window of at most 100 proposals, filters it locally,
+  and labels its pulse as loaded-window metrics rather than workspace totals.
+  Bulk review requires an explicit consequence disclosure. Existing
+  ActionProposal RBAC, persisted decision audit, evidence, receipts, and
+  external-write gate remain unchanged; no provider call/write or LLM starts
+  automatically.
 - Post-auth Command Mode is in place (DEC-078): all five primary zones lead
   with one current mission, the next useful control, and its expected result.
   Secondary forms, filters, readiness diagnostics, evidence, and technical
@@ -341,27 +356,21 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Turn `Миссии` into the human decision room.**
-   Preserve the existing ActionProposal RBAC, evidence drawers, local bulk review,
-   execution preview, and audit receipts, but lead with a small mission queue:
-   why now, what changes if accepted, what remains local, and the recorded result.
-   The current proposal list must remain reachable as detail, not define the page.
-
-2. **Make onboarding the short prologue to the headquarters.**
+1. **Make onboarding the short prologue to the headquarters.**
    Recompose the existing computed onboarding into a visual four-step path:
    company → first radar → first world → first teammate. Each step must be
    completed by real backend state, return directly to the headquarters, and
    avoid terminal/operator handoff. Recipient-verified teammate invitation and
    password-reset delivery remain a separate security-scoped follow-up.
 
-3. **Finish the radar loop one provider at a time.**
+2. **Finish the radar loop one provider at a time.**
    `/github` remains the reference command center and the next external gate is
    still one founder-approved, repository-scoped read through its UI wizard. Then
    bring Gmail, Drive, and Jira to the same setup → scoped read → visible result →
    receipt pattern. No bulk/background sync, provider write, LLM run, or hosted
    change is authorized by this backlog item.
 
-4. **Add a real company-change boundary.**
+3. **Add a real company-change boundary.**
    The new headquarters honestly shows a current evidence snapshot. Design the
    smallest persisted snapshot/event contract that can prove "since your last
    visit" changes, dedupe them, link each one to workspace-resolved evidence, and

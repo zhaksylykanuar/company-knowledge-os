@@ -15,8 +15,10 @@ makes the one-command loopback runtime the active operational target; full local
 doctor/start/authenticated-browser/smoke/restore/stop acceptance passed on
 2026-07-14. DEC-081 now makes the Living Headquarters loop the product direction:
 `Штаб / Мир / Миссии`, with providers backstage as `Радары`. DEC-082 carries
-that model through the full Living World and safe exact-profile navigation. The
-next local UX horizon is the Missions decision room; the
+that model through the full Living World and safe exact-profile navigation.
+DEC-083 completes the Missions decision room around one active human decision,
+a bounded loaded queue, evidence, consequences, and an explicit external gate.
+The next local UX horizon is the visual onboarding prologue; the
 next external gate remains one founder-approved scoped GitHub App read, not a
 hosted deploy. External mutation and LLM narrative remain separate human-gated
 horizons. Docs
@@ -223,6 +225,17 @@ Done:
 - `/actions` exposes live GitHub issue execution controls only when backend
   capabilities enable them, requires explicit confirmation, and renders external
   issue receipt links only from backend success.
+- DEC-083 recomposes those contracts into one decision room: one mixed-status
+  loaded window (up to 100), one compact queue, and one active console for the
+  selected proposal. Loaded-window metrics remain stable under local filters;
+  evidence, approve/reject, preview, and history never leak across mission
+  selection. Pending provider work locks mission, workspace, and global shell
+  navigation; stale cross-workspace responses are ignored, and a sanitized
+  successful outcome stays pinned through refresh. A separate audit-history
+  read failure cannot downgrade that confirmed result into a retryable action
+  error. External preview remains
+  explicit and bulk review adds a separate consequence check. No backend,
+  schema, RBAC, provider/write, or LLM boundary changes.
 - `/connectors` surfaces the MVP connector registry (GitHub/Jira/Gmail/Drive)
   from `GET /api/v1/workspaces/{workspace_id}/connectors`, with local
   connection counts and read-only/no-provider-call/no-secret-read boundaries.
@@ -276,10 +289,11 @@ Missing:
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: follow `../PROGRESS.md`. Recompose `Миссии` as the human decision room
-around DEC-081/082, while keeping one explicit founder-approved GitHub read as the
-next external gate. Keep provider reads human-gated and never add browser-stored
-operator credentials.
+Next step: follow `../PROGRESS.md`. Recompose computed onboarding as a short
+visual prologue into `Штаб`: company → first radar → first world → first
+teammate, with completion derived only from real backend state. Keep one explicit
+founder-approved GitHub read as the next external gate; keep provider reads
+human-gated and never add browser-stored operator credentials.
 
 Definition of Done:
 

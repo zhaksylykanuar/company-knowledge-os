@@ -2449,6 +2449,58 @@ Consequences:
 - this decision is frontend-only. It adds no API, schema, provider call/write,
   external action, LLM execution, or authorization change.
 
+## DEC-083 - Missions Uses One Active Human Decision Console
+
+Decision (2026-07-15): `/actions` is the human decision room for the Living
+Headquarters. It must not present every ActionProposal control at equal visual
+weight. The primary loop is a compact queue plus exactly one active mission
+console:
+
+`why now → consequence → evidence → human decision → explicit action → receipt`.
+
+The frontend applies these rules:
+
+- it loads one mixed-status ActionProposal window with `limit=100`, then applies
+  status/origin/audit-source filters locally. The pulse therefore describes the
+  loaded window, not a workspace total, and must remain stable when a local
+  filter changes. A true total or pagination requires a future backend contract;
+- the initial active mission is chosen deterministically: failed, proposed,
+  approved and previewable, approved, executed, then rejected. A direct current
+  selection wins while it remains in the loaded window;
+- the flat queue provides short origin/status context; why-now, consequences,
+  evidence, approve/reject, preview, and history render for the active mission
+  only. Changing the active proposal remounts execution controls so preview,
+  connection, confirmation, error, and receipt state cannot cross proposals.
+  While preview, history, or confirmed execution is pending, mission switching,
+  local filters, workspace selection, and the global navigation shell are
+  locked. Stale mutation responses from a previous workspace are ignored. The
+  active console remains visible until the request settles; after successful
+  execution, its sanitized outcome and receipt status stay pinned through the
+  background refresh. A failure of the separate audit-history refresh is shown
+  as a history warning and must never downgrade a confirmed execution into a
+  retryable action error;
+- approve and reject remain explicit local decisions. Execution preview also
+  remains explicit and is never prefetched: the existing GET records an audit
+  event, so it is not a side-effect-free read;
+- bulk review is secondary and appears only after the user opens a consequence
+  disclosure. Filters use pressed-button semantics, selection moves focus to the
+  active console, mutation errors remain next to the failed action, and status
+  changes are announced through live regions; and
+- authorization is unchanged: owner/admin can review and execute, member can
+  create local proposals, and viewer is read-only. Evidence refs, local decision
+  audit events, execution receipts, and the external-write confirmation gate
+  retain their existing backend meaning.
+
+This replaces the earlier DEC-081 implementation note that the Missions page
+should repeat one active status in the server request. A mixed loaded window is
+required for one coherent queue and honest cross-status pulse; this does not
+claim complete workspace totals.
+
+Non-goals: no backend endpoint, schema, database behavior, provider call/write,
+LLM path, or autonomous execution changes in this decision. A real total/
+pagination contract and a connection picker richer than the existing controls
+remain separate future work.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

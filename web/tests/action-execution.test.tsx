@@ -198,6 +198,7 @@ function renderControls(
   return renderToStaticMarkup(
     <ActionExecutionControlsView
       auditEvents={props.auditEvents ?? []}
+      auditWarning={props.auditWarning ?? null}
       confirmationChecked={props.confirmationChecked ?? false}
       connectionId={props.connectionId ?? ""}
       error={props.error ?? null}
@@ -543,6 +544,34 @@ test("renders execute result without raw provider response dump", () => {
   assert.match(html, /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/);
   assert.doesNotMatch(html, /raw body is not rendered/);
   assert.doesNotMatch(html, /provider_response/);
+});
+
+test("keeps audit refresh failure separate from a successful external result", () => {
+  const html = renderControls({
+    auditWarning: M.actionExecution.auditRefreshAfterExecuteFailed,
+    executeResult: {
+      execution: {
+        error_message: null,
+        external_id: "https://github.com/qtwin-io/founderos-api/issues/42",
+        finished_at: "2026-06-25T01:06:00+06:00",
+        id: "execution-1",
+        provider_response: {},
+        started_at: "2026-06-25T01:06:00+06:00",
+        status: "succeeded"
+      },
+      external_write_performed: true,
+      is_live: true,
+      proposal: { id: "proposal-2", status: "executed" },
+      provider: "github",
+      receipt: successfulReceipt,
+      warnings: []
+    },
+    successMessage: M.actionExecution.createdIssue
+  });
+
+  assert.ok(html.includes(M.actionExecution.createdIssue));
+  assert.ok(html.includes(M.actionExecution.auditRefreshAfterExecuteFailed));
+  assert.doesNotMatch(html, /class="state error"/);
 });
 
 test("renders blocked execute audit without external-write claim", () => {

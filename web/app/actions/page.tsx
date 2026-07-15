@@ -1,6 +1,4 @@
 import { ActionProposalsPanel } from "../../components/ActionProposalsPanel";
-import { PageHeader } from "../../components/PageHeader";
-import { M } from "../../lib/messages";
 
 type ActionsPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -13,18 +11,11 @@ export default async function ActionsPage({ searchParams }: ActionsPageProps) {
   const status = firstSearchParam(params.status);
 
   return (
-    <>
-      <PageHeader
-        eyebrow={M.actionsPage.eyebrow}
-        title={M.actionsPage.title}
-        description={M.actionsPage.description}
-      />
-      <ActionProposalsPanel
-        initialAuditSourceFilter={auditSource}
-        initialOriginFilter={origin}
-        initialStatusFilter={status}
-      />
-    </>
+    <ActionProposalsPanel
+      initialAuditSourceFilter={auditSource}
+      initialOriginFilter={origin}
+      initialStatusFilter={status}
+    />
   );
 }
 

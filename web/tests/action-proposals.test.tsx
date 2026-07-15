@@ -253,16 +253,22 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <ActionProposalsPanelView
+      activeProposalId={props.activeProposalId ?? null}
       canCreateProposals={props.canCreateProposals ?? true}
       canReviewProposals={props.canReviewProposals ?? true}
       createForm={props.createForm ?? DEFAULT_CREATE_FORM}
       data={"data" in props ? props.data ?? null : sampleList}
       error={props.error ?? null}
+      executionBusyProposalId={props.executionBusyProposalId ?? null}
+      isRefreshing={props.isRefreshing ?? false}
+      mutationError={props.mutationError ?? null}
       onApprove={props.onApprove}
       onCloseEvidence={props.onCloseEvidence}
       onCreate={props.onCreate}
       onCreateFormChange={props.onCreateFormChange}
       onReject={props.onReject}
+      onRefreshProposals={props.onRefreshProposals}
+      onSelectProposal={props.onSelectProposal}
       onRetry={props.onRetry}
       onOriginFilterChange={props.onOriginFilterChange}
       onBulkApprove={props.onBulkApprove}
@@ -271,6 +277,7 @@ function renderPanel(
       onSelectEvidence={props.onSelectEvidence}
       onSelectVisibleProposed={props.onSelectVisibleProposed}
       onAuditSourceFilterChange={props.onAuditSourceFilterChange}
+      onExecutionBusyChange={props.onExecutionBusyChange}
       onStatusFilterChange={props.onStatusFilterChange}
       onToggleProposalSelection={props.onToggleProposalSelection}
       pendingMutation={props.pendingMutation ?? null}
@@ -280,6 +287,7 @@ function renderPanel(
       selectedEvidence={props.selectedEvidence ?? null}
       selectedEvidenceTitle={props.selectedEvidenceTitle ?? null}
       selectedEvidenceCount={props.selectedEvidenceCount ?? null}
+      selectedEvidenceProposalId={props.selectedEvidenceProposalId ?? null}
       statusFilter={props.statusFilter ?? "all"}
       status={props.status ?? "ready"}
       successMessage={props.successMessage ?? null}
@@ -636,7 +644,10 @@ test("surfaces unsupported transition errors", async () => {
 test("renders loading, missing, empty, unsupported, and error states", () => {
   assert.ok(renderPanel({ data: null, status: "loading" }).includes(M.actionsPanel.loading));
   assert.ok(renderPanel({ data: null, status: "missing" }).includes(M.common.noWorkspaceTitle));
-  assert.ok(renderPanel({ data: emptyList, status: "empty" }).includes(M.actionsPanel.emptyTitle));
+  const emptyHtml = renderPanel({ data: emptyList, status: "empty" });
+  assert.ok(emptyHtml.includes("Добавьте первую миссию"));
+  assert.match(emptyHtml, /id="add-mission" open=""/);
+  assert.ok(emptyHtml.includes("Создать первую миссию"));
   assert.ok(
     renderPanel({ data: null, status: "unsupported" }).includes(M.actionsPanel.unsupportedTitle)
   );
@@ -651,15 +662,18 @@ test("renders loading, missing, empty, unsupported, and error states", () => {
   assert.ok(errorHtml.includes(M.common.retry));
 });
 
-test("renders proposal cards, statuses, evidence refs, and local-only boundary", () => {
+test("renders one active mission console, queue statuses, evidence, and local-only boundary", () => {
   const html = renderPanel({
     onApprove: () => undefined,
     onReject: () => undefined,
     onSelectEvidence: () => undefined
   });
-  assert.ok(html.includes("Очередь решений"));
-  assert.ok(html.includes("1 решение ждёт проверки"));
-  assert.match(html, /Внешнее выполнение: отключено в этом интерфейсе/);
+  assert.ok(html.includes("Миссии"));
+  assert.ok(html.includes("Миссии компании"));
+  assert.equal((html.match(/class="mission-console"/g) ?? []).length, 1);
+  assert.equal((html.match(/aria-controls="mission-console"/g) ?? []).length, 3);
+  assert.match(html, /aria-pressed="true"/);
+  assert.match(html, /Ничего не отправится само/);
   assert.match(html, /Create follow-up GitHub issue/);
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /Follow up on FounderOS signal/);
@@ -668,11 +682,14 @@ test("renders proposal cards, statuses, evidence refs, and local-only boundary",
   assert.ok(html.includes("Ждёт решения"));
   assert.ok(html.includes("Принято"));
   assert.ok(html.includes("Отклонено"));
-  assert.ok(html.includes("Детали и история"));
+  assert.ok(html.includes("История и технические детали"));
   assert.match(html, /decision-room-evidence/);
-  assert.ok(html.includes("Доказательства"));
+  assert.ok(html.includes("Почему FounderOS это предлагает"));
   assert.match(html, /Источник: qtwin-io\/founderos-api#issue\/42/);
-  assert.ok(html.includes(M.actionsPanel.noEvidenceRefs));
+  assert.equal((html.match(new RegExp(`>${M.actionsPanel.approve}<`, "g")) ?? []).length, 1);
+  assert.equal((html.match(new RegExp(`>${M.actionsPanel.reject}<`, "g")) ?? []).length, 1);
+  const rejectedHtml = renderPanel({ activeProposalId: rejectedProposal.id });
+  assert.ok(rejectedHtml.includes(M.actionsPanel.noEvidenceRefs));
   assert.doesNotMatch(html, /sent to GitHub/i);
   assert.doesNotMatch(html, /created GitHub issue/i);
   assert.doesNotMatch(html, /source_events/);
@@ -733,6 +750,10 @@ test("filters loaded local proposals without changing provider state", () => {
   assert.doesNotMatch(proposedHtml, /Approved local proposal/);
   assert.doesNotMatch(proposedHtml, /Rejected local proposal/);
   assert.ok(proposedHtml.includes(M.actionsPanel.filterDescription));
+  assert.match(proposedHtml, /<dt>Приняты человеком<\/dt><dd>1<\/dd>/);
+  assert.match(proposedHtml, /role="group"/);
+  assert.match(proposedHtml, /aria-pressed="true"/);
+  assert.doesNotMatch(proposedHtml, /role="tab(list)?"/);
   assert.doesNotMatch(proposedHtml, /provider call started/i);
 
   const rejectedHtml = renderPanel({ statusFilter: "rejected" });
@@ -759,13 +780,14 @@ test("filters loaded proposals by local origin on top of status", () => {
     originFilter: "briefing",
     statusFilter: "proposed"
   });
-  assert.ok(briefingHtml.includes(`${M.actionsPanel.groupBriefingTitle} · 1`));
+  assert.match(briefingHtml, /<span class="mission-queue-count">1<\/span>/);
+  assert.match(briefingHtml, /<span class="badge badge-origin">Сводка<\/span>/);
   assert.match(briefingHtml, /Review synced GitHub work before approving actions/);
   assert.doesNotMatch(briefingHtml, /Create follow-up GitHub issue/);
   assert.doesNotMatch(briefingHtml, /Manual internal follow-up/);
 });
 
-test("groups and badges repo-audit-derived proposals under the audit origin", () => {
+test("keeps audit-derived missions flat while preserving origin and audit-source truth", () => {
   const auditList: ActionProposalListResponse = {
     ...sampleList,
     proposals: [deterministicAuditProposal, auditProposal],
@@ -777,10 +799,7 @@ test("groups and badges repo-audit-derived proposals under the audit origin", ()
     statusFilter: "proposed"
   });
   assert.ok(auditHtml.includes(`${M.actionsPanel.originFilterAudit} · 2`));
-  assert.ok(auditHtml.includes(`${M.actionsPanel.groupAuditTitle} · 2`));
-  assert.ok(auditHtml.includes(M.actionsPanel.originAuditBadge));
-  assert.ok(auditHtml.includes(M.actionsPanel.originAuditDeterministicBadge));
-  assert.ok(auditHtml.includes(M.actionsPanel.originAuditImportedBadge));
+  assert.equal((auditHtml.match(/>Аудит репо<\/span>/g) ?? []).length, 2);
   assert.ok(auditHtml.includes(M.actionsPanel.auditSourceFilterTitle));
   assert.ok(auditHtml.includes(`${M.actionsPanel.auditSourceFilterAll} · 2`));
   assert.ok(
@@ -790,9 +809,16 @@ test("groups and badges repo-audit-derived proposals under the audit origin", ()
   assert.ok(auditHtml.includes("qtwin-io/local-service"));
   assert.ok(auditHtml.includes("qtwin-io/base-collector"));
   assert.ok(auditHtml.includes(M.actionsPanel.payloadAuditSource));
-  assert.ok(auditHtml.includes(M.actionsPanel.auditSourceImported));
-  assert.ok(auditHtml.includes("Add CI before private beta."));
-  assert.ok(auditHtml.includes("ci_not_detected, tests_not_detected"));
+  assert.ok(auditHtml.includes(M.actionsPanel.auditSourceDeterministic));
+  const importedHtml = renderPanel({
+    activeProposalId: auditProposal.id,
+    data: auditList,
+    originFilter: "audit",
+    statusFilter: "proposed"
+  });
+  assert.ok(importedHtml.includes(M.actionsPanel.auditSourceImported));
+  assert.ok(importedHtml.includes("Add CI before private beta."));
+  assert.ok(importedHtml.includes("ci_not_detected, tests_not_detected"));
   assert.doesNotMatch(auditHtml, /provider call started/i);
 });
 
@@ -810,7 +836,8 @@ test("filters audit-origin proposals by deterministic or imported source locally
     statusFilter: "proposed"
   });
 
-  assert.ok(importedHtml.includes(`${M.actionsPanel.groupAuditTitle} · 1`));
+  assert.match(importedHtml, /<span class="mission-queue-count">1<\/span>/);
+  assert.match(importedHtml, />Аудит репо<\/span>/);
   assert.ok(importedHtml.includes("qtwin-io/base-collector"));
   assert.doesNotMatch(importedHtml, /qtwin-io\/local-service/);
   assert.doesNotMatch(importedHtml, /Review synced GitHub work/);
@@ -834,26 +861,26 @@ test("shows empty state for origin and status intersections with no local propos
     originFilter: "briefing",
     statusFilter: "rejected"
   });
-  assert.ok(html.includes(M.actionsPanel.noProposalsForFilter));
-  assert.ok(html.includes("В выбранном фильтре решений нет"));
-  assert.ok(html.includes("Открыть «Фильтры очереди»"));
-  assert.doesNotMatch(html, /Очередь решений пуста/);
+  assert.ok(html.includes("В этом фокусе миссий нет"));
+  assert.ok(html.includes("Измените фильтры"));
+  assert.doesNotMatch(html, /Создать первую миссию/);
   assert.ok(html.includes(`${M.actionsPanel.originFilterAll} · 1`));
   assert.ok(html.includes(`${M.actionsPanel.originFilterBriefing} · 0`));
   assert.doesNotMatch(html, /Review synced GitHub work before approving actions/);
   assert.doesNotMatch(html, /Create follow-up GitHub issue/);
 });
 
-test("origin filtering updates grouped evidence default without provider calls", () => {
+test("origin filtering updates the active mission evidence without provider calls", () => {
   const internalHtml = renderPanel({
     data: groupedList,
     originFilter: "internal",
     statusFilter: "proposed"
   });
-  assert.ok(internalHtml.includes(`${M.actionsPanel.groupInternalTitle} · 1`));
+  assert.match(internalHtml, /<span class="mission-queue-count">1<\/span>/);
+  assert.match(internalHtml, />Внутри<\/span>/);
   assert.match(internalHtml, /Manual internal follow-up/);
   assert.match(internalHtml, /manual-note-1/);
-  assert.ok(internalHtml.includes(M.evidence.contextDefault));
+  assert.ok(internalHtml.includes("Показано первое основание выбранной миссии."));
   assert.doesNotMatch(internalHtml, /Review synced GitHub work before approving actions/);
   assert.doesNotMatch(internalHtml, /href="https:\/\/github.com\/qtwin-io\/founderos-api/);
 });
@@ -873,7 +900,8 @@ test("renders bulk local review controls for visible proposed proposals only", (
   assert.doesNotMatch(html, new RegExp(M.actionsPanel.bulkApproveSelected));
   assert.doesNotMatch(html, new RegExp(M.actionsPanel.bulkRejectSelected));
   assert.doesNotMatch(html, new RegExp(T.actionsBulkSelection(0, 3)));
-  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 3);
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 0);
+  assert.doesNotMatch(html, /missions-bulk-confirm/);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /created GitHub issue/i);
 });
@@ -970,6 +998,7 @@ test("defaults evidence drawer to first visible proposal evidence", () => {
   assert.ok(proposedHtml.includes(M.evidence.source));
   assert.match(proposedHtml, /qtwin-io\/founderos-api#issue\/42/);
   assert.ok(proposedHtml.includes(M.common.openSource));
+  assert.ok(proposedHtml.includes("Показано первое основание выбранной миссии."));
   // Default evidence is contextual and not an explicit selection, so no close button.
   assert.doesNotMatch(proposedHtml, new RegExp(`>${M.common.close}<`));
 
@@ -988,23 +1017,28 @@ test("renders create form and pending local mutations", () => {
     pendingMutation: "create"
   });
   assert.ok(html.includes(M.actionCreate.typeLabel));
-  assert.ok(html.includes("Предложить новое действие"));
+  assert.ok(html.includes("Добавить миссию"));
   assert.ok(html.includes(M.actionCreate.typeGithubIssue));
   assert.ok(html.includes(M.actionCreate.submitting));
   assert.ok(html.includes(M.actionCreate.note));
 });
 
-test("puts the decision queue before creation and advanced readiness", () => {
+test("puts the active mission workspace before creation and safety backstage", () => {
   const html = renderPanel({ data: groupedList, statusFilter: "proposed" });
-  const queueIndex = html.indexOf("proposal-groups");
+  const queueIndex = html.indexOf("missions-workspace");
+  const consoleIndex = html.indexOf("mission-console");
   const createIndex = html.indexOf("decision-room-create");
   const readinessIndex = html.indexOf("decision-room-readiness");
 
   assert.ok(queueIndex >= 0);
+  assert.ok(consoleIndex > queueIndex);
   assert.ok(createIndex > queueIndex);
   assert.ok(readinessIndex > createIndex);
   assert.match(html, /<details class="decision-room-disclosure decision-room-filters">/);
-  assert.match(html, /<details class="decision-room-disclosure decision-room-create">/);
+  assert.match(
+    html,
+    /<details class="decision-room-disclosure decision-room-create" id="add-mission">/
+  );
   assert.match(html, /<details class="decision-room-disclosure decision-room-readiness">/);
 });
 
@@ -1031,10 +1065,15 @@ test("keeps visible proposal status labels in Russian", () => {
 test("guides an approved filter to the visible preview step", () => {
   const html = renderPanel({ statusFilter: "approved" });
 
-  assert.ok(html.includes("1 принятое решение готово к следующему шагу"));
-  assert.ok(html.includes("Подготовить предпросмотр"));
+  assert.ok(html.includes("Approved local proposal"));
+  assert.ok(html.includes(M.actionExecution.preview));
+  assert.match(html, /<li class="is-complete">/);
+  assert.match(html, /<li aria-current="step" class=" is-current">/);
   assert.match(html, /decision-room-next-step/);
-  assert.ok(html.indexOf("decision-room-next-step") < html.indexOf("Детали и история"));
+  assert.ok(
+    html.indexOf("decision-room-next-step") <
+      html.indexOf("История и технические детали")
+  );
   assert.doesNotMatch(html, /решение ждёт проверки/);
 });
 
@@ -1049,7 +1088,7 @@ test("keeps an approved internal todo local instead of promoting external previe
     statusFilter: "approved"
   });
 
-  assert.ok(html.includes("1 решение принято"));
+  assert.ok(html.includes("Approved internal follow-up"));
   assert.match(html, /decision-room-next-step--local/);
   assert.ok(html.includes("Это действие остаётся внутри FounderOS"));
 });
@@ -1065,7 +1104,8 @@ test("renders a failed execution as an explicit attention state", () => {
     statusFilter: "all"
   });
 
-  assert.ok(html.includes("1 выполнение требует внимания"));
+  assert.ok(html.includes("1 выполнение"));
+  assert.ok(html.includes("требует внимания"));
   assert.match(html, /decision-room-status--failed[^>]*>Ошибка выполнения/);
   assert.doesNotMatch(html, /Неизвестный статус/);
 });
@@ -1097,23 +1137,20 @@ test("renders proposal evidence drawer details without raw payload dumps", () =>
   assert.doesNotMatch(html, /access_token/);
 });
 
-test("groups proposals by origin with per-group counts", () => {
+test("renders a flat queue with compact origin badges", () => {
   const html = renderPanel({ data: groupedList, statusFilter: "all" });
-  assert.ok(html.includes(`${M.actionsPanel.groupBriefingTitle} · 1`));
-  assert.ok(html.includes(`${M.actionsPanel.groupGithubTitle} · 3`));
-  assert.ok(html.includes(`${M.actionsPanel.groupInternalTitle} · 1`));
-  assert.ok(html.includes(M.actionsPanel.groupBriefingDescription));
-  // The briefing-derived proposal gets an explicit origin badge.
-  assert.ok(html.includes(M.actionsPanel.originBriefingBadge));
+  assert.equal((html.match(/>Сводка<\/span>/g) ?? []).length, 1);
+  assert.equal((html.match(/>GitHub<\/span>/g) ?? []).length, 3);
+  assert.equal((html.match(/>Внутри<\/span>/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /proposal-group-header/);
   assert.match(html, /Review synced GitHub work before approving actions/);
 });
 
-test("omits empty origin groups for the active filter", () => {
+test("omits non-matching origin badges from the active filter", () => {
   const html = renderPanel({ data: groupedList, statusFilter: "rejected" });
-  // Only the rejected internal-todo-less github proposal remains, so no briefing group.
-  assert.doesNotMatch(html, new RegExp(`${M.actionsPanel.groupBriefingTitle} ·`));
-  assert.doesNotMatch(html, new RegExp(`${M.actionsPanel.groupInternalTitle} ·`));
-  assert.ok(html.includes(`${M.actionsPanel.groupGithubTitle} · 1`));
+  assert.match(html, />GitHub<\/span>/);
+  assert.doesNotMatch(html, />Сводка<\/span>/);
+  assert.doesNotMatch(html, />Внутри<\/span>/);
 });
 
 test("renders briefing internal_todo payload metadata", () => {
@@ -1131,23 +1168,103 @@ test("renders briefing internal_todo payload metadata", () => {
 
 test("evidence drawer shows contextual default hint and evidence count", () => {
   const html = renderPanel({ data: groupedList, statusFilter: "proposed" });
-  assert.ok(html.includes(M.evidence.contextDefault));
+  assert.ok(html.includes("Показано первое основание выбранной миссии."));
   assert.ok(html.includes(M.evidence.countLabel));
   // Briefing proposal is first in grouped order and carries two evidence refs.
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.doesNotMatch(html, new RegExp(`>${M.common.close}<`));
 });
 
-test("evidence drawer marks manual selection and keeps a close affordance", () => {
+test("selected mission drives the single console and its evidence context", () => {
+  const html = renderPanel({
+    activeProposalId: manualInternalProposal.id,
+    data: groupedList,
+    statusFilter: "all"
+  });
+
+  assert.match(
+    html,
+    /aria-pressed="true" class="mission-queue-open"[^>]*>[\s\S]*?Manual internal follow-up/
+  );
+  assert.match(
+    html,
+    /id="mission-console-title" tabindex="-1">Manual internal follow-up<\/h2>/
+  );
+  assert.match(html, /manual-note-1/);
+  assert.doesNotMatch(
+    html,
+    /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/
+  );
+  assert.equal((html.match(/class="mission-console"/g) ?? []).length, 1);
+});
+
+test("evidence drawer marks manual selection without a misleading close affordance", () => {
   const manualEvidence = proposedProposal.evidence_refs[0] ?? null;
   const html = renderPanel({
     data: groupedList,
+    activeProposalId: proposedProposal.id,
     onCloseEvidence: () => undefined,
     selectedEvidence: manualEvidence,
     selectedEvidenceCount: 1,
+    selectedEvidenceProposalId: proposedProposal.id,
     selectedEvidenceTitle: "Create follow-up GitHub issue",
     statusFilter: "all"
   });
-  assert.ok(html.includes(M.evidence.contextManual));
-  assert.match(html, new RegExp(`>${M.common.close}<`));
+  assert.ok(html.includes("Показано выбранное основание этой миссии."));
+  assert.doesNotMatch(html, new RegExp(`>${M.common.close}<`));
+  assert.equal((html.match(/class="mission-console"/g) ?? []).length, 1);
+});
+
+test("manual evidence never crosses into another active mission", () => {
+  const staleEvidence = proposedProposal.evidence_refs[0] ?? null;
+  const html = renderPanel({
+    activeProposalId: manualInternalProposal.id,
+    data: groupedList,
+    selectedEvidence: staleEvidence,
+    selectedEvidenceCount: 1,
+    selectedEvidenceProposalId: proposedProposal.id,
+    selectedEvidenceTitle: proposedProposal.title,
+    statusFilter: "all"
+  });
+
+  assert.match(html, /manual-note-1/);
+  assert.doesNotMatch(html, /Показано выбранное основание этой миссии/);
+  assert.doesNotMatch(
+    html,
+    /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/
+  );
+});
+
+test("busy external control locks mission switching and local filters", () => {
+  const html = renderPanel({
+    activeProposalId: approvedProposal.id,
+    executionBusyProposalId: approvedProposal.id,
+    statusFilter: "all"
+  });
+
+  assert.match(
+    html,
+    /class="mission-queue-open" disabled="" id="mission-queue-proposal-2"/
+  );
+  assert.match(html, /class="segment active" disabled=""/);
+});
+
+test("mutation errors stay next to their proposal or creation form", () => {
+  const proposalHtml = renderPanel({
+    activeProposalId: proposedProposal.id,
+    mutationError: {
+      message: "decision failed",
+      scope: `proposal:${proposedProposal.id}`
+    }
+  });
+  const decisionIndex = proposalHtml.indexOf("mission-decision");
+  const proposalErrorIndex = proposalHtml.indexOf("decision failed");
+  assert.ok(proposalErrorIndex > decisionIndex);
+
+  const createHtml = renderPanel({
+    mutationError: { message: "create failed", scope: "create" }
+  });
+  const createIndex = createHtml.indexOf("decision-room-create");
+  const createErrorIndex = createHtml.indexOf("create failed");
+  assert.ok(createErrorIndex > createIndex);
 });

@@ -4,12 +4,14 @@ import type { AuthWorkspace } from "../lib/auth";
 import styles from "./workspace-selector.module.css";
 
 type WorkspaceSelectorProps = {
+  disabled?: boolean;
   workspaces: AuthWorkspace[];
   workspaceId: string;
   onSelect: (workspaceId: string) => void;
 };
 
 export function WorkspaceSelector({
+  disabled = false,
   workspaces,
   workspaceId,
   onSelect
@@ -27,6 +29,7 @@ export function WorkspaceSelector({
       <span>Компания</span>
       <select
         aria-label="Выбрать компанию"
+        disabled={disabled}
         onChange={(event) => onSelect(event.target.value)}
         value={workspaceId}
       >

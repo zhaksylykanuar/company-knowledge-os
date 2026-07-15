@@ -98,11 +98,11 @@ export function isNavigationItemActive(pathname: string, link: NavLink): boolean
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ locked = false }: { locked?: boolean } = {}) {
   const pathname = usePathname();
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" inert={locked}>
       <Link className="brand" href="/dashboard" aria-label={M.nav.brandHomeLabel}>
         <span className="brand-mark" aria-hidden="true">
           F
@@ -158,11 +158,15 @@ export function Sidebar() {
   );
 }
 
-export function MobilePrimaryNavigation() {
+export function MobilePrimaryNavigation({
+  locked = false
+}: {
+  locked?: boolean;
+} = {}) {
   const pathname = usePathname();
 
   return (
-    <nav className="mobile-nav" aria-label={M.nav.primaryLabel}>
+    <nav className="mobile-nav" aria-label={M.nav.primaryLabel} inert={locked}>
       {PRIMARY_NAV.map((link) => {
         const isActive = isNavigationItemActive(pathname, link);
         return (
@@ -181,7 +185,7 @@ export function MobilePrimaryNavigation() {
   );
 }
 
-export function ContextNavigation() {
+export function ContextNavigation({ locked = false }: { locked?: boolean } = {}) {
   const pathname = usePathname();
   const context = getContextNavigation(pathname);
 
@@ -190,7 +194,7 @@ export function ContextNavigation() {
   }
 
   return (
-    <nav className="context-nav" aria-label={context.label}>
+    <nav className="context-nav" aria-label={context.label} inert={locked}>
       <span className="context-nav-label">{context.label}</span>
       <div className="context-nav-links">
         {context.links.map((link) => {
