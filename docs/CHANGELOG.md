@@ -1,5 +1,28 @@
 # FounderOS Changelog
 
+## 2026-07-15
+
+### Changed
+
+- Promoted `/company-brain` into the full Living World operating surface
+  (DEC-082). A compact company command bar, real contour metrics, one current
+  review rail, local zone filters, the spatial Company Map, and a contextual
+  profile inspector replace the previous stack of page header, mission strip,
+  coach text, board, and profile. Existing human-approved candidate resolution,
+  durable affiliation, evidence, window, idempotency, and viewer/member RBAC
+  behavior remains unchanged. Candidate totals, interactions, and candidate-
+  organization people counts from a truncated window use lower-bound notation;
+  a zero result is explicitly limited to the shown window. `Штаб` mini-map selections and evidenced
+  candidate missions now open the exact full profile through a workspace-scoped
+  opaque selector; raw email/domain-shaped Company Map keys never enter the URL,
+  and stale/foreign selectors safely resolve to no entity. Touchpoints remain
+  local history of the routed parent profile, and stale candidate versions fall
+  back before an invalid profile can paint. The canonical Company Brain/entity
+  layer now mounts only when its disclosure opens. Authenticated
+  browser acceptance passed at 1280×720, 800×800, and 390×844 without horizontal
+  overflow; mobile controls are at least 44 px. No backend API, schema, provider
+  call/write, external action, RBAC, or LLM path changed.
+
 ## 2026-07-14
 
 ### Changed

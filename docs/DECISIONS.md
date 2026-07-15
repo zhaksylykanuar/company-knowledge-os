@@ -2409,6 +2409,46 @@ Existing routes remain available during migration. This first slice is
 frontend-only: it adds no schema, provider call, external write, LLM execution,
 or authorization change.
 
+## DEC-082 - Living World Links Resolve Opaque Selectors Against Current Evidence
+
+Decision (2026-07-15): the full `/company-brain` surface is the operational
+Living World for a workspace. It leads with one compact command bar, one current
+review rail, a zone-filtered world scene, and one contextual profile inspector.
+The canonical Company Brain and normalized-entity panels remain available as a
+collapsed technical layer, but are mounted only after that layer is opened so
+they do not compete with the primary task or start unrelated reads by default.
+
+Profile navigation uses
+`/company-brain?profile=<opaque-selector>#company-world-profile`. A selector may
+refer to the company, a workspace member, a durable person/organization, or the
+current evidence-version of a person/organization candidate. It never contains
+the raw `CompanyMap.key`: candidate keys may include an email domain and must not
+enter browser history or logs. Candidate selectors use `candidate_version`, so a
+changed evidence snapshot safely invalidates an old link. Every selector is
+resolved only against the current workspace-scoped `CompanyMapResponse`; an
+unknown, malformed, stale, or foreign selector resolves to no entity and the UI
+falls back to the current company profile.
+
+Consequences:
+
+- mini-map nodes, evidence-backed world missions, and candidate signal items can
+  open the exact full profile without creating a second entity registry;
+- query data never grants a role, relationship, evidence state, or mutation
+  capability. Those continue to come exclusively from the current Company Map
+  response and `capabilities.can_resolve`;
+- team membership, durable affiliation, candidate resolution, idempotency,
+  evidence, local receipts, and viewer/member RBAC retain their existing
+  contracts. Every window-derived candidate total and candidate-organization
+  people count is a lower bound when the source window is truncated, including
+  explicit partial-zero copy;
+- touchpoints remain profile-local history in this slice rather than a new URL
+  entity type: selecting one does not replace or clear the routed parent
+  profile;
+- a changed candidate evidence version invalidates the selector before the
+  refreshed profile is painted; and
+- this decision is frontend-only. It adds no API, schema, provider call/write,
+  external action, LLM execution, or authorization change.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

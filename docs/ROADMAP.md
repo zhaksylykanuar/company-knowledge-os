@@ -14,8 +14,9 @@ conservative affiliation placement and guided candidate resolution. DEC-077
 makes the one-command loopback runtime the active operational target; full local
 doctor/start/authenticated-browser/smoke/restore/stop acceptance passed on
 2026-07-14. DEC-081 now makes the Living Headquarters loop the product direction:
-`Штаб / Мир / Миссии`, with providers backstage as `Радары`. The next local UX
-horizon is to carry that model through the full World and Missions screens; the
+`Штаб / Мир / Миссии`, with providers backstage as `Радары`. DEC-082 carries
+that model through the full Living World and safe exact-profile navigation. The
+next local UX horizon is the Missions decision room; the
 next external gate remains one founder-approved scoped GitHub App read, not a
 hosted deploy. External mutation and LLM narrative remain separate human-gated
 horizons. Docs
@@ -244,6 +245,14 @@ Done:
   typecheck/lint/build, 537 backend tests plus Ruff/Alembic, and desktop
   1024/1280 px / mobile 390×844 browser QA without overlap, overflow, console
   warnings or console errors.
+- DEC-082 promotes that board into the full Living World operating surface: one
+  compact real-metric command bar, one current candidate rail, local zone
+  filters, the spatial scene, and a sticky/inline contextual profile. `Штаб`
+  selections and evidenced candidate missions use opaque workspace-resolved
+  selectors to open an exact profile without placing raw email/domain-shaped
+  Company Map keys in the URL. Stale or foreign selectors resolve to no entity.
+  Closed Company Brain/entity details mount lazily. This remains frontend-only
+  and preserves the existing Company Map/RBAC/evidence contracts.
 - Product controls mirror backend roles: source setup/import/sync and action
   review/execution require owner/admin; briefing generation and local action
   creation require member+; Company World resolution requires member+; viewer
@@ -267,8 +276,8 @@ Missing:
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: follow `../PROGRESS.md`. Recompose the full World and Missions screens
-around DEC-081, while keeping one explicit founder-approved GitHub read as the
+Next step: follow `../PROGRESS.md`. Recompose `Миссии` as the human decision room
+around DEC-081/082, while keeping one explicit founder-approved GitHub read as the
 next external gate. Keep provider reads human-gated and never add browser-stored
 operator credentials.
 

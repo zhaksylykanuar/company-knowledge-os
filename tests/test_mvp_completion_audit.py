@@ -50,6 +50,7 @@ def test_company_world_completion_requires_wiring_not_empty_files(
 ) -> None:
     paths = (
         "web/components/CompanyWorldPanel.tsx",
+        "web/components/CompanyBrainPageClient.tsx",
         "web/app/company-brain/page.tsx",
         "app/api/company_map.py",
         "app/main.py",
@@ -72,6 +73,9 @@ def test_company_world_completion_requires_wiring_not_empty_files(
     )
     assert any(
         "<CompanyWorldPanel" in item for item in company_world.missing_evidence
+    )
+    assert any(
+        "<CompanyBrainPageClient" in item for item in company_world.missing_evidence
     )
 
 

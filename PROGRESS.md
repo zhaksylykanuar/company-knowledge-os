@@ -10,6 +10,32 @@
 
 ## ▶ СЕЙЧАС
 
+- **UX-RESET-02 Full Living World (DEC-082): РЕАЛИЗОВАН ЛОКАЛЬНО.**
+  `/company-brain` теперь является единым операционным столом компании, а не
+  цепочкой `header → инструкция → панель → ещё одна инструкция`. Компактная
+  командная шапка показывает только реальные контуры команды, подтверждённой
+  сети, неразобранных сигналов и соприкосновений; ниже находятся одна очередь
+  разбора, фильтры `Весь мир / Команда / Деловой контур / Нужно разобрать`,
+  пространственная сцена и контекстный профиль с историей, evidence и
+  существующим human-approved resolution flow. Mini-map в `Штабе`, конкретные
+  world-миссии и candidate-сигналы ведут в выбранный профиль через workspace-
+  scoped opaque selector: raw email/domain и внутренний Company Map key в URL
+  не попадают, stale/foreign selector безопасно возвращает профиль компании.
+  Закрытый слой канонических данных теперь монтируется лениво и не запускает два
+  дополнительных чтения до раскрытия. Усечённые window-счётчики, включая
+  candidate totals и число людей в организации-кандидате, используют `≥`, а
+  нулевое состояние прямо ограничено показанным окном; durable affiliation,
+  RBAC, idempotency и local-only receipts не изменены.
+  Проверено 2026-07-15: frontend **328/328 passed**, typecheck, lint и production
+  build (**17 продуктовых routes**) ✅; browser QA при **1280×720**, **800×800**
+  и **390×844** не выявил horizontal overflow, deep link выбрал точного
+  сотрудника и передал фокус inspector, mobile controls не меньше 44 px, lazy
+  data vault монтируется только при открытии; refresh сохраняет фокус на своей
+  кнопке, свежих console warnings/errors нет. Backend **674 passed / 1 external
+  warning** и Ruff ✅. Backend API/schema/provider calls/writes, DB, RBAC и LLM
+  не менялись. Следующий локальный UX chunk —
+  превратить `/actions` в human decision room, сохранив evidence, preview и
+  receipts как детали.
 - **UX-RESET-01 Living Headquarters (DEC-081): РЕАЛИЗОВАН ЛОКАЛЬНО; ПЕРВЫЙ
   ЭКРАН И НОВАЯ ОБОЛОЧКА ГОТОВЫ.** Основная навигация теперь состоит из трёх
   повседневных зон `Штаб / Мир / Миссии`; `Радары / Настройки` перенесены за

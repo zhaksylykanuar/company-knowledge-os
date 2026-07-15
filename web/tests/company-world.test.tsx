@@ -13,6 +13,7 @@ import {
   completedCompanyWorldResolutionRefresh,
   CompanyWorldPanelView,
   createCompanyWorldResolutionGate,
+  effectiveCompanyWorldSelectedKey,
   failedCompanyWorldResolution,
   failedCompanyWorldResolutionRefresh,
   finishCompanyWorldResolution,
@@ -34,6 +35,11 @@ import {
   fetchCompanyMap,
   resolveCompanyMapCandidate
 } from "../lib/api";
+import {
+  buildCompanyWorldProfileTarget,
+  readCompanyWorldProfileSelector,
+  resolveCompanyWorldProfileSelector
+} from "../lib/company-world-profile";
 import { M } from "../lib/messages";
 import type { CompanyMapResponse } from "../lib/types";
 
@@ -261,6 +267,94 @@ function renderPanel(
   );
 }
 
+test("builds opaque workspace-scoped profile links and resolves them safely", () => {
+  const cases = [
+    [sampleMap.company.key, "v1:company"],
+    [sampleMap.people.internal[0]?.key, "v1:member:user-1"],
+    [sampleMap.people.confirmed_external[0]?.key, "v1:person:confirmed-buyer"],
+    [
+      sampleMap.people.external_candidates[0]?.key,
+      `v1:person-candidate:${PERSON_CANDIDATE_VERSION}`
+    ],
+    [
+      sampleMap.confirmed_organizations[0]?.key,
+      "v1:organization:confirmed-acme"
+    ],
+    [
+      sampleMap.organizations[0]?.key,
+      `v1:organization-candidate:${ORGANIZATION_CANDIDATE_VERSION}`
+    ]
+  ] as const;
+
+  for (const [key, selector] of cases) {
+    assert.ok(key);
+    const target = buildCompanyWorldProfileTarget(sampleMap, key);
+    assert.ok(target);
+    assert.equal(target.selector, selector);
+    assert.equal(
+      target.href,
+      `/company-brain?profile=${encodeURIComponent(selector)}#company-world-profile`
+    );
+    assert.equal(
+      resolveCompanyWorldProfileSelector(sampleMap, target.selector),
+      key
+    );
+  }
+
+  const organizationCandidate = buildCompanyWorldProfileTarget(
+    sampleMap,
+    sampleMap.organizations[0]?.key ?? ""
+  );
+  assert.ok(organizationCandidate);
+  assert.equal(organizationCandidate.href.includes("acme.test"), false);
+  assert.equal(organizationCandidate.href.includes("organization%3Aacme"), false);
+  assert.equal(
+    buildCompanyWorldProfileTarget(
+      sampleMap,
+      sampleMap.touchpoints[0]?.key ?? ""
+    ),
+    null
+  );
+});
+
+test("rejects malformed foreign and stale profile selectors", () => {
+  assert.equal(readCompanyWorldProfileSelector("?profile="), null);
+  assert.equal(
+    readCompanyWorldProfileSelector(`?profile=${"x".repeat(513)}`),
+    null
+  );
+  assert.equal(resolveCompanyWorldProfileSelector(sampleMap, "v1:person:foreign"), null);
+  assert.equal(resolveCompanyWorldProfileSelector(sampleMap, "v2:company"), null);
+
+  const oldTarget = buildCompanyWorldProfileTarget(
+    sampleMap,
+    sampleMap.people.external_candidates[0]?.key ?? ""
+  );
+  assert.ok(oldTarget);
+  const refreshedMap: CompanyMapResponse = {
+    ...sampleMap,
+    people: {
+      ...sampleMap.people,
+      external_candidates: sampleMap.people.external_candidates.map((person) => ({
+        ...person,
+        candidate_version: UPDATED_CANDIDATE_VERSION
+      }))
+    }
+  };
+  assert.equal(
+    resolveCompanyWorldProfileSelector(refreshedMap, oldTarget.selector),
+    null
+  );
+  assert.equal(
+    effectiveCompanyWorldSelectedKey(refreshedMap, null, {
+      data: sampleMap,
+      key: sampleMap.people.external_candidates[0]?.key ?? null,
+      routeKey: sampleMap.people.external_candidates[0]?.key ?? null
+    }),
+    refreshedMap.company.key
+  );
+});
+
 test("builds and fetches the workspace company-map endpoint", async () => {
   assert.equal(
     buildWorkspaceCompanyMapPath("workspace-123"),
@@ -399,9 +493,12 @@ test("renders loading, missing, empty, and error states", () => {
 
 test("renders an evidence-backed company world with provisional candidates", () => {
   const html = renderPanel("ready");
+  const candidateCount =
+    sampleMap.organizations.length + sampleMap.people.external_candidates.length;
 
   assert.ok(html.includes("Northstar Labs"));
-  assert.ok(html.includes("Кого нужно разобрать"));
+  assert.ok(html.includes(M.companyWorld.reviewRailTitle(candidateCount, true)));
+  assert.match(html, /≥2/);
   assert.ok(html.includes("Анна"));
   assert.ok(html.includes("Buyer Person"));
   assert.ok(html.includes("acme.test"));
@@ -425,17 +522,54 @@ test("renders an evidence-backed company world with provisional candidates", () 
   assert.ok(html.includes('aria-labelledby="company-world-profile-title"'));
   assert.ok(html.includes(M.companyWorld.boardTitle));
   assert.ok(html.includes(M.companyWorld.confirmedContour));
-  assert.ok(html.includes(M.companyWorld.discoveryContour));
+  assert.ok(html.includes(M.companyWorld.needsReview));
+  assert.ok(html.includes(M.companyWorld.allContours));
+  assert.ok(html.includes(M.companyWorld.openNextCandidate));
   assert.ok(html.includes(M.companyWorld.evidenceDisclosure));
   assert.ok(html.includes(M.companyWorld.technicalDisclosure));
-  assert.ok(html.includes('class="mission-strip"'));
-  assert.ok(html.includes('class="company-world-coach"'));
-  assert.ok(html.includes("Следующий кандидат"));
+  assert.equal(html.includes('class="mission-strip"'), false);
+  assert.equal(html.includes('class="company-world-coach"'), false);
   assert.doesNotMatch(
     html,
     /<aside[^>]*id="company-world-profile"[^>]*aria-live=/
   );
   assert.doesNotMatch(html, /PRIVATE_BODY|raw_body/);
+});
+
+test("keeps truncated candidate totals and zero states explicitly partial", () => {
+  const zeroCandidateMap: CompanyMapResponse = {
+    ...sampleMap,
+    organizations: [],
+    people: {
+      ...sampleMap.people,
+      external_candidates: []
+    },
+    summary: {
+      ...sampleMap.summary,
+      external_contacts_in_window: 0,
+      organizations_in_window: 0
+    }
+  };
+  const html = renderPanel("ready", zeroCandidateMap);
+
+  assert.ok(html.includes(M.companyWorld.reviewRailWindowClearTitle));
+  assert.ok(html.includes(M.companyWorld.reviewRailWindowClearDescription));
+  assert.ok(html.includes(M.companyWorld.discoveryCompleteInWindow));
+  assert.equal(html.includes(M.companyWorld.reviewRailClearDescription), false);
+});
+
+test("explains when the only candidate is already open", () => {
+  const oneCandidateMap = mapWithStandalonePerson();
+  const candidate = oneCandidateMap.people.external_candidates[0];
+  assert.ok(candidate);
+  const html = renderPanel("ready", oneCandidateMap, candidate.key);
+
+  assert.ok(
+    html.includes(
+      M.companyWorld.reviewRailCurrent(candidate.display_name ?? candidate.email)
+    )
+  );
+  assert.equal(html.includes(M.companyWorld.reviewRailClearDescription), false);
 });
 
 test("builds spatial groups only from explicit durable affiliations", () => {
@@ -473,6 +607,18 @@ test("filters profile touchpoints only by exact response keys", () => {
   assert.equal(
     relatedCompanyWorldTouchpoints(sampleMap, "organization:confirmed-acme").length,
     0
+  );
+  const parentKey = sampleMap.people.external_candidates[0]?.key ?? null;
+  const touchpointKey = sampleMap.touchpoints[0]?.key ?? null;
+  assert.ok(parentKey);
+  assert.ok(touchpointKey);
+  assert.equal(
+    effectiveCompanyWorldSelectedKey(sampleMap, parentKey, {
+      data: sampleMap,
+      key: touchpointKey,
+      routeKey: parentKey
+    }),
+    touchpointKey
   );
 });
 
@@ -889,10 +1035,10 @@ test("keeps a saved receipt visible through reload failure and recovery", () => 
   assert.ok(readyHtml.includes(M.companyWorld.resolutionConfirmedRefreshed));
   assert.ok(
     readyHtml.indexOf("world-resolution-announcer") <
-      readyHtml.indexOf('class="world-profile"')
+      readyHtml.indexOf('id="company-world-profile"')
   );
   assert.ok(
-    readyHtml.indexOf('class="world-profile"') <
+    readyHtml.indexOf('id="company-world-profile"') <
       readyHtml.lastIndexOf("world-resolution-notice--success")
   );
   assert.match(readyHtml, /world-resolution-announcer[^>]*role="status"/);

@@ -1,7 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useState } from "react";
 
+import {
+  buildCompanyWorldProfileTarget,
+  type CompanyWorldProfileTarget
+} from "../lib/company-world-profile";
 import { M } from "../lib/messages";
 import type { CompanyMapResponse } from "../lib/types";
 import styles from "./living-world-mini-map.module.css";
@@ -15,6 +20,7 @@ export type LivingWorldNode = {
   evidenceCount: number;
   key: string;
   label: string;
+  profileTarget: CompanyWorldProfileTarget | null;
   statusLabel: string;
   tone: LivingWorldNodeTone;
   typeLabel: string;
@@ -48,6 +54,7 @@ export function buildLivingWorldMiniMapModel(
         evidenceCount: 0,
         key: "workspace:empty",
         label: workspaceName || COPY.companyFallback,
+        profileTarget: null,
         statusLabel: COPY.waitingData,
         tone: "company",
         typeLabel: COPY.companyCenter
@@ -65,6 +72,7 @@ export function buildLivingWorldMiniMapModel(
     evidenceCount: person.source_refs.length,
     key: person.key,
     label: person.name ?? person.email,
+    profileTarget: buildCompanyWorldProfileTarget(data, person.key),
     statusLabel: roleLabel(person.role),
     tone: "team",
     typeLabel: COPY.employee
@@ -79,6 +87,7 @@ export function buildLivingWorldMiniMapModel(
       evidenceCount: organization.source_refs.length,
       key: organization.key,
       label: organization.name ?? organization.domain ?? COPY.organizationFallback,
+      profileTarget: buildCompanyWorldProfileTarget(data, organization.key),
       statusLabel: organizationRelationshipLabel(organization.relationship_kind),
       tone: "confirmed",
       typeLabel: COPY.confirmedOrganization
@@ -112,6 +121,7 @@ export function buildLivingWorldMiniMapModel(
         evidenceCount: person.source_refs.length,
         key: person.key,
         label: person.display_name ?? person.email,
+        profileTarget: buildCompanyWorldProfileTarget(data, person.key),
         statusLabel: COPY.confirmed,
         tone: "confirmed",
         typeLabel: COPY.externalContact
@@ -121,13 +131,17 @@ export function buildLivingWorldMiniMapModel(
 
   const candidateOrganizations: LivingWorldNode[] = data.organizations.map(
     (organization) => ({
-      detail: `${peopleLabel(organization.people_count)} · ${interactionLabel(
+      detail: `${peopleLabel(
+        organization.people_count,
+        data.window.truncated
+      )} · ${interactionLabel(
         organization.interaction_count,
         data.window.truncated
       )}`,
       evidenceCount: organization.source_refs.length,
       key: organization.key,
       label: organization.name ?? organization.domain,
+      profileTarget: buildCompanyWorldProfileTarget(data, organization.key),
       statusLabel: COPY.needsConfirmation,
       tone: "candidate",
       typeLabel: COPY.possibleOrganization
@@ -139,6 +153,7 @@ export function buildLivingWorldMiniMapModel(
       evidenceCount: person.source_refs.length,
       key: person.key,
       label: person.display_name ?? person.email,
+      profileTarget: buildCompanyWorldProfileTarget(data, person.key),
       statusLabel: COPY.needsConfirmation,
       tone: "candidate",
       typeLabel: COPY.possibleContact
@@ -156,6 +171,7 @@ export function buildLivingWorldMiniMapModel(
       evidenceCount: data.company.source_refs.length,
       key: data.company.key,
       label: data.company.name || workspaceName || COPY.companyFallback,
+      profileTarget: buildCompanyWorldProfileTarget(data, data.company.key),
       statusLabel: COPY.activeContour,
       tone: "company",
       typeLabel: COPY.companyCenter
@@ -267,13 +283,18 @@ export function LivingWorldMiniMap({
 
           <MapZone
             className={styles.candidateZone}
-            emptyLabel={COPY.candidatesEmpty}
+            emptyLabel={
+              data.window.truncated
+                ? COPY.candidatesEmptyInWindow
+                : COPY.candidatesEmpty
+            }
             label={COPY.unknownZone}
             nodes={visibleCandidates}
             onSelect={setSelectedKey}
             selectedKey={selectedNode.key}
             inspectorId={inspectorId}
             totalCount={model.candidates.length}
+            totalIsLowerBound={data.window.truncated}
           />
         </div>
 
@@ -296,6 +317,15 @@ export function LivingWorldMiniMap({
                 )}`
               : COPY.noEvidence}
           </small>
+          {selectedNode.profileTarget ? (
+            <Link
+              className={styles.inspectorAction}
+              href={selectedNode.profileTarget.href}
+            >
+              {COPY.openFullProfile}
+              <span aria-hidden="true">→</span>
+            </Link>
+          ) : null}
         </aside>
       </div>
     </section>
@@ -310,7 +340,8 @@ function MapZone({
   nodes,
   onSelect,
   selectedKey,
-  totalCount
+  totalCount,
+  totalIsLowerBound = false
 }: {
   className?: string;
   emptyLabel: string;
@@ -320,7 +351,9 @@ function MapZone({
   onSelect: (key: string) => void;
   selectedKey: string;
   totalCount: number;
+  totalIsLowerBound?: boolean;
 }) {
+  const displayedCount = `${totalIsLowerBound ? "≥" : ""}${totalCount}`;
   return (
     <section
       className={[styles.zone, className].filter(Boolean).join(" ")}
@@ -328,7 +361,7 @@ function MapZone({
     >
       <header>
         <h3>{label}</h3>
-        <span aria-label={`${label}: ${totalCount}`}>{totalCount}</span>
+        <span aria-label={`${label}: ${displayedCount}`}>{displayedCount}</span>
       </header>
       {nodes.length > 0 ? (
         <div className={styles.nodes}>
@@ -346,7 +379,9 @@ function MapZone({
         <p className={styles.empty}>{emptyLabel}</p>
       )}
       {totalCount > nodes.length ? (
-        <p className={styles.more}>{COPY.moreNodes(totalCount - nodes.length)}</p>
+        <p className={styles.more}>
+          {COPY.moreNodes(totalCount - nodes.length, totalIsLowerBound)}
+        </p>
       ) : null}
     </section>
   );
@@ -430,8 +465,8 @@ function interactionLabel(count: number, isLowerBound = false): string {
   return COPY.interactionLabel(count, isLowerBound);
 }
 
-function peopleLabel(count: number): string {
-  return COPY.peopleLabel(count);
+function peopleLabel(count: number, isLowerBound = false): string {
+  return COPY.peopleLabel(count, isLowerBound);
 }
 
 function evidenceWord(count: number): string {

@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renderToStaticMarkup } from "react-dom/server";
-
 import CompanyBrainPage from "../app/company-brain/page";
+import { CompanyBrainPageClient } from "../components/CompanyBrainPageClient";
 import {
   BACKSTAGE_NAV,
   COMPANY_NAV,
@@ -77,14 +76,20 @@ test("only source and provider routes expose contextual navigation", () => {
   assert.ok(NAV_LINKS.some((item) => item.href === "/documents"));
 });
 
-test("company brain page renders header without a session provider", () => {
-  const html = renderToStaticMarkup(<CompanyBrainPage />);
-  assert.ok(html.includes(M.companyBrainPage.title));
-  assert.ok(html.includes(M.common.refreshStatus));
-  assert.ok(html.includes(M.companyWorld.loading));
-  // The composed panels mount in their initial loading state under static
-  // render (effects do not run), proving the page wires both panels without
-  // crashing when no session context is present.
-  assert.ok(html.includes(M.companyBrain.loading));
-  assert.ok(html.includes(M.companyBrainEntities.loading));
+test("company brain route renders the client world shell", async () => {
+  const page = await CompanyBrainPage({});
+  assert.equal(page.type, CompanyBrainPageClient);
+  assert.equal(page.props.profileSelector, null);
+});
+
+test("company brain route forwards only a normalized opaque profile selector", async () => {
+  const selected = await CompanyBrainPage({
+    searchParams: Promise.resolve({ profile: "v1:member:member-1" })
+  });
+  const invalid = await CompanyBrainPage({
+    searchParams: Promise.resolve({ profile: "v1:member:member-1\u0000" })
+  });
+
+  assert.equal(selected.props.profileSelector, "v1:member:member-1");
+  assert.equal(invalid.props.profileSelector, null);
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
@@ -8,6 +9,10 @@ import {
   fetchCompanyMap,
   resolveCompanyMapCandidate
 } from "../lib/api";
+import {
+  buildCompanyWorldProfileTarget,
+  resolveCompanyWorldProfileSelector
+} from "../lib/company-world-profile";
 import { M } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
@@ -27,9 +32,12 @@ import type {
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
-import { CompanyWorldBoard } from "./CompanyWorldBoard";
-import { MiniHint, MissionStrip } from "./MissionStrip";
+import {
+  CompanyWorldBoard,
+  type CompanyWorldZone
+} from "./CompanyWorldBoard";
 import { SourceLink } from "./SourceLink";
+import styles from "./company-world.module.css";
 
 export type CompanyWorldStatus =
   | "loading"
@@ -39,6 +47,8 @@ export type CompanyWorldStatus =
   | "missing";
 
 type CompanyWorldPanelProps = {
+  onRefresh?: () => void;
+  profileSelector?: string | null;
   refreshSignal?: number;
 };
 
@@ -46,10 +56,18 @@ type CompanyWorldPanelViewProps = {
   data: CompanyMapResponse | null;
   error: string | null;
   initialSelectedKey?: string | null;
+  onProfileNavigate?: (key: string) => void;
+  onRefresh?: () => void;
   onResolve?: (request: CompanyWorldResolutionDraft) => Promise<void>;
   onRetry?: () => void;
   resolutionState?: CompanyWorldResolutionState;
   status: CompanyWorldStatus;
+};
+
+export type CompanyWorldLocalSelection = {
+  data: CompanyMapResponse | null;
+  key: string | null;
+  routeKey: string | null;
 };
 
 export type CompanyWorldResolutionStatus =
@@ -261,7 +279,12 @@ export function failedCompanyWorldResolution(
   };
 }
 
-export function CompanyWorldPanel({ refreshSignal = 0 }: CompanyWorldPanelProps) {
+export function CompanyWorldPanel({
+  onRefresh,
+  profileSelector = null,
+  refreshSignal = 0
+}: CompanyWorldPanelProps) {
+  const router = useRouter();
   const workspaceId = useWorkspaceId();
   const [data, setData] = useState<CompanyMapResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -365,11 +388,30 @@ export function CompanyWorldPanel({ refreshSignal = 0 }: CompanyWorldPanelProps)
     }
   }
 
+  function navigateToProfile(key: string): void {
+    if (!data) {
+      return;
+    }
+    const target = buildCompanyWorldProfileTarget(data, key);
+    // Touchpoints are local history of the currently routed profile. They do
+    // not get a selector of their own and must not clear the parent URL.
+    if (target) {
+      router.replace(target.href, { scroll: false });
+    }
+  }
+
+  const routeSelectedKey = data
+    ? resolveCompanyWorldProfileSelector(data, profileSelector)
+    : null;
+
   return (
     <CompanyWorldPanelView
       data={data}
       error={error}
+      initialSelectedKey={routeSelectedKey}
+      onProfileNavigate={navigateToProfile}
       onResolve={handleResolution}
+      onRefresh={onRefresh ?? (() => setReloadKey((current) => current + 1))}
       onRetry={() => setReloadKey((current) => current + 1)}
       resolutionState={resolutionState}
       status={status}
@@ -381,21 +423,47 @@ export function CompanyWorldPanelView({
   data,
   error,
   initialSelectedKey = null,
+  onProfileNavigate,
+  onRefresh,
   onResolve,
   onRetry,
   resolutionState = INITIAL_RESOLUTION_STATE,
   status
 }: CompanyWorldPanelViewProps) {
-  const [selectedKey, setSelectedKey] = useState<string | null>(initialSelectedKey);
+  const [localSelection, setLocalSelection] = useState<CompanyWorldLocalSelection>({
+    data,
+    key: initialSelectedKey,
+    routeKey: initialSelectedKey
+  });
   const [selectionRevision, setSelectionRevision] = useState(0);
+  const [activeZone, setActiveZone] = useState<CompanyWorldZone>("all");
+  const previousRouteKey = useRef(initialSelectedKey);
   const profileRef = useRef<HTMLElement>(null);
-  const effectiveSelectedKey = validSelectedKey(data, selectedKey);
-  const selectedCandidate = Boolean(
-    data && isCompanyWorldCandidateKey(data, effectiveSelectedKey)
+  const effectiveSelectedKey = effectiveCompanyWorldSelectedKey(
+    data,
+    initialSelectedKey,
+    localSelection
   );
   const nextCandidateKey = data
     ? nextCompanyWorldCandidateKey(data, effectiveSelectedKey)
     : null;
+
+  useEffect(() => {
+    if (previousRouteKey.current === initialSelectedKey) {
+      return;
+    }
+    previousRouteKey.current = initialSelectedKey;
+    if (!data) {
+      return;
+    }
+    const nextRouteKey = validSelectedKey(data, initialSelectedKey);
+    setActiveZone(
+      companyWorldZoneForKey(data, nextRouteKey ?? data.company.key)
+    );
+    if (initialSelectedKey && localSelection.key !== initialSelectedKey) {
+      setSelectionRevision((current) => current + 1);
+    }
+  }, [data, initialSelectedKey, localSelection.key]);
 
   useEffect(() => {
     if (selectionRevision === 0) {
@@ -405,23 +473,65 @@ export function CompanyWorldPanelView({
   }, [effectiveSelectedKey, selectionRevision]);
 
   function selectProfile(key: string): void {
-    setSelectedKey(key);
+    setLocalSelection({ data, key, routeKey: initialSelectedKey });
+    onProfileNavigate?.(key);
     setSelectionRevision((current) => current + 1);
   }
 
+  const candidateCount = data ? companyWorldCandidateCount(data) : 0;
+  const candidatesAreLowerBound = Boolean(data?.window.truncated);
+  const nextCandidateLabel =
+    data && nextCandidateKey ? companyWorldProfileLabel(data, nextCandidateKey) : null;
+  const currentCandidateLabel =
+    data && candidateCount > 0 && !nextCandidateKey
+      ? companyWorldProfileLabel(data, effectiveSelectedKey ?? data.company.key)
+      : null;
+
   return (
-    <section className="panel company-world" aria-labelledby="company-world-title">
-      <div className="section-header company-world-header">
-        <div>
-          <span className="eyebrow">{M.companyWorld.eyebrow}</span>
-          <h2 id="company-world-title">
-            {status === "ready" && data && companyWorldCandidateCount(data) > 0
-              ? "Кого нужно разобрать"
-              : "Контур связей"}
-          </h2>
+    <section className={styles.shell} aria-labelledby="company-world-title">
+      <header className={styles.commandBar} data-state={status}>
+        <div className={styles.commandIdentity}>
+          <span className={styles.commandEyebrow}>{M.companyWorld.worldEyebrow}</span>
+          <h1 id="company-world-title">
+            {data?.company.name ?? M.companyWorld.title}
+          </h1>
+          <p>{M.companyWorld.worldDescription}</p>
         </div>
-        <span className="badge world-badge">{M.companyWorld.badge}</span>
-      </div>
+        {data && status === "ready" ? (
+          <dl className={styles.commandMetrics} aria-label={M.companyWorld.summaryLabel}>
+            <WorldMetric
+              label={M.companyWorld.teamSection}
+              value={String(data.people.internal.length)}
+            />
+            <WorldMetric
+              label={M.companyWorld.confirmedContour}
+              value={String(
+                data.people.confirmed_external.length +
+                  data.confirmed_organizations.length
+              )}
+            />
+            <WorldMetric
+              label={M.companyWorld.needsReview}
+              tone={candidateCount > 0 ? "attention" : "calm"}
+              value={`${candidatesAreLowerBound ? "≥" : ""}${candidateCount}`}
+            />
+            <WorldMetric
+              label={M.companyWorld.touchpoints}
+              value={`${data.window.truncated ? "≥" : ""}${data.summary.touchpoints_in_window}`}
+            />
+          </dl>
+        ) : null}
+        <button
+          aria-disabled={status === "loading"}
+          aria-label={M.companyWorld.refreshWorld}
+          className={styles.refreshButton}
+          onClick={status === "loading" ? undefined : onRefresh ?? onRetry}
+          type="button"
+        >
+          <span aria-hidden="true">↻</span>
+          {M.companyWorld.refreshWorld}
+        </button>
+      </header>
 
       {status === "ready" ? (
         <ResolutionNotice state={resolutionState} visuallyHidden />
@@ -429,17 +539,23 @@ export function CompanyWorldPanelView({
         <ResolutionNotice state={resolutionState} />
       )}
 
-      {status === "loading" ? <LoadingState label={M.companyWorld.loading} /> : null}
+      {status === "loading" ? (
+        <div className={styles.stateCard}>
+          <LoadingState label={M.companyWorld.loading} />
+        </div>
+      ) : null}
 
       {status === "missing" ? (
-        <EmptyState
-          description={M.companyWorld.noWorkspaceDescription}
-          title={M.common.noWorkspaceTitle}
-        />
+        <div className={styles.stateCard}>
+          <EmptyState
+            description={M.companyWorld.noWorkspaceDescription}
+            title={M.common.noWorkspaceTitle}
+          />
+        </div>
       ) : null}
 
       {status === "error" ? (
-        <>
+        <div className={styles.stateCard}>
           <ErrorState
             description={error ?? M.companyWorld.unavailableDescription}
             title={M.companyWorld.unavailableTitle}
@@ -447,61 +563,72 @@ export function CompanyWorldPanelView({
           <button className="button secondary" onClick={onRetry} type="button">
             {M.common.retry}
           </button>
-        </>
+        </div>
       ) : null}
 
       {status === "empty" ? (
-        <EmptyState
-          description={M.companyWorld.emptyDescription}
-          title={M.companyWorld.emptyTitle}
-        />
+        <div className={styles.stateCard}>
+          <EmptyState
+            description={M.companyWorld.emptyDescription}
+            title={M.companyWorld.emptyTitle}
+          />
+        </div>
       ) : null}
 
       {data && status === "ready" ? (
         <>
-          <MissionStrip
-            action={
-              selectedCandidate
-                ? data.capabilities.can_resolve
-                  ? "Ответьте на вопрос в профиле"
-                  : "Проверьте профиль и источники"
-                : nextCandidateKey
-                  ? "Выберите пункт «Нужно разобрать»"
-                  : "Выберите профиль на карте"
-            }
-            current={selectedCandidate ? "Открыт кандидат" : "Карта компании открыта"}
-            details={<p>{M.companyWorld.intro}</p>}
-            outcome={
-              selectedCandidate && data.capabilities.can_resolve
-                ? "Сохраните только известные факты"
-                : "Увидите связи и историю"
-            }
-          />
-          <div className="company-world-coach">
-            <div className="company-world-coach-copy">
-              <strong>Нажмите на человека или компанию</strong>
-              <span>Профиль и история откроются справа.</span>
-              <MiniHint label="Как работать с картой?">
-                Пунктиром отмечены кандидаты. Их роль задаёт только человек.
-              </MiniHint>
+          <aside
+            className={styles.reviewRail}
+            data-state={candidateCount > 0 ? "attention" : "clear"}
+          >
+            <span className={styles.reviewMark} aria-hidden="true">
+              {candidateCount > 0
+                ? `${candidatesAreLowerBound ? "≥" : ""}${candidateCount}`
+                : "✓"}
+            </span>
+            <div className={styles.reviewCopy}>
+              <strong>
+                {candidateCount > 0
+                  ? M.companyWorld.reviewRailTitle(
+                      candidateCount,
+                      candidatesAreLowerBound
+                    )
+                  : candidatesAreLowerBound
+                    ? M.companyWorld.reviewRailWindowClearTitle
+                    : M.companyWorld.reviewRailClearTitle}
+              </strong>
+              <span>
+                {candidateCount > 0 && nextCandidateLabel
+                  ? M.companyWorld.reviewRailNext(nextCandidateLabel)
+                  : candidateCount > 0 && currentCandidateLabel
+                    ? M.companyWorld.reviewRailCurrent(currentCandidateLabel)
+                    : candidatesAreLowerBound
+                      ? M.companyWorld.reviewRailWindowClearDescription
+                      : M.companyWorld.reviewRailClearDescription}
+              </span>
             </div>
             {nextCandidateKey ? (
               <button
                 aria-controls={COMPANY_WORLD_PROFILE_ID}
-                className="button secondary world-next-candidate"
+                className={styles.reviewButton}
                 disabled={resolutionState.status === "pending"}
-                onClick={() => selectProfile(nextCandidateKey)}
+                onClick={() => {
+                  setActiveZone("review");
+                  selectProfile(nextCandidateKey);
+                }}
                 type="button"
               >
-                Следующий кандидат <span aria-hidden="true">→</span>
+                {M.companyWorld.openNextCandidate} <span aria-hidden="true">→</span>
               </button>
             ) : null}
-          </div>
-          <div className="company-world-layout">
+          </aside>
+          <div className={styles.workspace}>
             <CompanyWorldBoard
+              activeZone={activeZone}
               data={data}
               inspectorId={COMPANY_WORLD_PROFILE_ID}
               onSelect={selectProfile}
+              onZoneChange={setActiveZone}
               selectedKey={effectiveSelectedKey}
             />
 
@@ -522,6 +649,86 @@ export function CompanyWorldPanelView({
   );
 }
 
+function WorldMetric({
+  label,
+  tone = "default",
+  value
+}: {
+  label: string;
+  tone?: "attention" | "calm" | "default";
+  value: string;
+}) {
+  return (
+    <div data-tone={tone}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+export function companyWorldZoneForKey(
+  data: CompanyMapResponse,
+  selectedKey: string
+): CompanyWorldZone {
+  if (data.people.internal.some((person) => person.key === selectedKey)) {
+    return "team";
+  }
+  if (
+    data.people.confirmed_external.some((person) => person.key === selectedKey) ||
+    data.confirmed_organizations.some(
+      (organization) => organization.key === selectedKey
+    )
+  ) {
+    return "network";
+  }
+  if (
+    data.people.external_candidates.some((person) => person.key === selectedKey) ||
+    data.organizations.some((organization) => organization.key === selectedKey)
+  ) {
+    return "review";
+  }
+  return "all";
+}
+
+function companyWorldProfileLabel(
+  data: CompanyMapResponse,
+  selectedKey: string
+): string {
+  if (selectedKey === data.company.key) {
+    return data.company.name;
+  }
+  const internal = data.people.internal.find((person) => person.key === selectedKey);
+  if (internal) {
+    return internal.name ?? internal.email;
+  }
+  const confirmedPerson = data.people.confirmed_external.find(
+    (person) => person.key === selectedKey
+  );
+  if (confirmedPerson) {
+    return confirmedPerson.display_name ?? confirmedPerson.email;
+  }
+  const candidatePerson = data.people.external_candidates.find(
+    (person) => person.key === selectedKey
+  );
+  if (candidatePerson) {
+    return candidatePerson.display_name ?? candidatePerson.email;
+  }
+  const confirmedOrganization = data.confirmed_organizations.find(
+    (organization) => organization.key === selectedKey
+  );
+  if (confirmedOrganization) {
+    return (
+      confirmedOrganization.name ??
+      confirmedOrganization.domain ??
+      M.common.unknown
+    );
+  }
+  const candidateOrganization = data.organizations.find(
+    (organization) => organization.key === selectedKey
+  );
+  return candidateOrganization?.name ?? candidateOrganization?.domain ?? M.common.unknown;
+}
+
 export function validSelectedKey(
   data: CompanyMapResponse | null,
   selectedKey: string | null
@@ -539,6 +746,20 @@ export function validSelectedKey(
     ...data.touchpoints.map((touchpoint) => touchpoint.key)
   ]);
   return selectedKey && validKeys.has(selectedKey) ? selectedKey : data.company.key;
+}
+
+export function effectiveCompanyWorldSelectedKey(
+  data: CompanyMapResponse | null,
+  routeSelectedKey: string | null,
+  localSelection: CompanyWorldLocalSelection
+): string | null {
+  const routeKey = validSelectedKey(data, routeSelectedKey);
+  const localSelectionIsCurrent =
+    localSelection.data === data && localSelection.routeKey === routeSelectedKey;
+  return validSelectedKey(
+    data,
+    localSelectionIsCurrent ? localSelection.key : routeKey
+  );
 }
 
 export function nextCompanyWorldCandidateKey(
@@ -561,19 +782,6 @@ export function nextCompanyWorldCandidateKey(
     return null;
   }
   return candidateKeys[(selectedIndex + 1) % candidateKeys.length] ?? null;
-}
-
-function isCompanyWorldCandidateKey(
-  data: CompanyMapResponse,
-  selectedKey: string | null
-): boolean {
-  if (!selectedKey) {
-    return false;
-  }
-  return (
-    data.organizations.some((organization) => organization.key === selectedKey) ||
-    data.people.external_candidates.some((person) => person.key === selectedKey)
-  );
 }
 
 function companyWorldCandidateCount(data: CompanyMapResponse): number {
@@ -682,7 +890,7 @@ function ProfilePanel({
   return (
     <aside
       aria-labelledby="company-world-profile-title"
-      className="world-profile"
+      className={`${styles.profile} world-profile`}
       id={COMPANY_WORLD_PROFILE_ID}
       ref={profileRef}
       tabIndex={-1}
@@ -700,6 +908,7 @@ function ProfilePanel({
       {external ? (
         <ExternalPersonProfile
           headingId="company-world-profile-title"
+          interactionsAreLowerBound={data.window.truncated}
           onSelect={onSelect}
           organizationState={externalOrganizationState ?? { kind: "standalone" }}
           person={external}
@@ -714,6 +923,7 @@ function ProfilePanel({
       {organization ? (
         <OrganizationProfile
           headingId="company-world-profile-title"
+          interactionsAreLowerBound={data.window.truncated}
           organization={organization}
         />
       ) : null}
@@ -859,11 +1069,13 @@ function InternalPersonProfile({
 
 function ExternalPersonProfile({
   headingId,
+  interactionsAreLowerBound,
   onSelect,
   organizationState,
   person
 }: {
   headingId: string;
+  interactionsAreLowerBound: boolean;
   onSelect: (key: string) => void;
   organizationState: CompanyWorldPersonOrganizationState;
   person: CompanyMapExternalCandidate;
@@ -884,7 +1096,10 @@ function ExternalPersonProfile({
         <ProfileMeta label={M.companyWorld.email} value={person.email} />
         <ProfileMeta
           label={M.companyWorld.interactions}
-          value={String(person.interaction_count)}
+          value={formatWindowCount(
+            person.interaction_count,
+            interactionsAreLowerBound
+          )}
         />
         <ProfileMeta
           label={M.companyWorld.lastInteraction}
@@ -989,9 +1204,11 @@ function ConfirmedOrganizationProfile({
 
 function OrganizationProfile({
   headingId,
+  interactionsAreLowerBound,
   organization
 }: {
   headingId: string;
+  interactionsAreLowerBound: boolean;
   organization: CompanyMapOrganizationCandidate;
 }) {
   return (
@@ -1003,10 +1220,19 @@ function OrganizationProfile({
       </span>
       <dl className="world-profile-meta">
         <ProfileMeta label={M.companyWorld.domain} value={organization.domain} />
-        <ProfileMeta label={M.companyWorld.people} value={String(organization.people_count)} />
+        <ProfileMeta
+          label={M.companyWorld.people}
+          value={formatWindowCount(
+            organization.people_count,
+            interactionsAreLowerBound
+          )}
+        />
         <ProfileMeta
           label={M.companyWorld.interactions}
-          value={String(organization.interaction_count)}
+          value={formatWindowCount(
+            organization.interaction_count,
+            interactionsAreLowerBound
+          )}
         />
         <ProfileMeta
           label={M.companyWorld.lastInteraction}
@@ -1724,6 +1950,12 @@ function formatDate(value: string | null): string {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(date);
+}
+
+function formatWindowCount(value: number, isLowerBound: boolean): string {
+  return `${isLowerBound ? "≥" : ""}${value}${
+    isLowerBound ? ` · ${M.companyWorld.inShownWindow}` : ""
+  }`;
 }
 
 function optionalText(value: string): string | undefined {

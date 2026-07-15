@@ -211,6 +211,10 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
             ),
             EvidenceCheck(
                 "web/app/company-brain/page.tsx",
+                "<CompanyBrainPageClient",
+            ),
+            EvidenceCheck(
+                "web/components/CompanyBrainPageClient.tsx",
                 "<CompanyWorldPanel",
             ),
             EvidenceCheck(

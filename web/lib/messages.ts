@@ -383,10 +383,14 @@ export const M = {
       confirmedNetworkEmpty: "Подтверждённая сеть пока пуста.",
       confirmedNetwork: "Подтверждённая сеть",
       candidatesEmpty: "Новых кандидатов для разбора нет.",
+      candidatesEmptyInWindow:
+        "В показанном окне новых кандидатов для разбора нет.",
       unknownZone: "Неизвестное",
       noEvidence: "Доказательств пока нет",
-      moreNodes: (count: number) => `Ещё ${count} — в полном мире`,
+      moreNodes: (count: number, isLowerBound = false) =>
+        `Ещё ${isLowerBound ? "≥" : ""}${count} — в полном мире`,
       openProfile: (label: string) => `Открыть профиль: ${label}`,
+      openFullProfile: "Открыть полный профиль",
       roles: {
         owner: "Владелец",
         admin: "Администратор",
@@ -418,8 +422,13 @@ export const M = {
           "касания",
           "касаний"
         )}${isLowerBound ? " в показанном окне" : ""}`,
-      peopleLabel: (count: number) =>
-        `${count} ${russianPlural(count, "человек", "человека", "человек")}`,
+      peopleLabel: (count: number, isLowerBound = false) =>
+        `${isLowerBound ? "≥" : ""}${count} ${russianPlural(
+          count,
+          "человек",
+          "человека",
+          "человек"
+        )}${isLowerBound ? " в показанном окне" : ""}`,
       evidenceWord: (count: number) =>
         russianPlural(count, "доказательство", "доказательства", "доказательств")
     }
@@ -428,6 +437,10 @@ export const M = {
   companyWorld: {
     eyebrow: "Операционная карта",
     title: "Мир компании",
+    worldEyebrow: "Живой мир",
+    worldDescription:
+      "Команда, подтверждённые связи и новые сигналы в одной рабочей сцене.",
+    refreshWorld: "Обновить мир",
     badge: "Подтверждается источниками",
     intro:
       "Карта строится только из участников рабочего пространства и нормализованных источников. Внешние люди и компании остаются кандидатами до подтверждения.",
@@ -436,19 +449,37 @@ export const M = {
     boardDescription:
       "Компания находится в центре. Сплошной контур — подтверждённые люди и отношения; пунктирный контур — сигналы, которые ещё должен разобрать человек.",
     boardLegend: "Легенда стратегической карты",
+    zoneFilterLabel: "Показать область мира",
+    allContours: "Весь мир",
     confirmedContour: "Подтверждённый контур",
     discoveryContour: "Требует разбора",
     operatingCenter: "Центр управления",
-    companyCoreHint: "Выберите компанию, чтобы увидеть общую историю соприкосновений.",
-    teamZoneDescription: "Люди с подтверждённым участием в рабочем пространстве.",
+    companyCoreHint: "Профиль и общая история",
+    teamZoneDescription: "Подтверждённые участники рабочего пространства.",
     confirmedNetwork: "Деловой контур",
-    confirmedNetworkDescription:
-      "Организации и люди, отношения с которыми уже подтвердил участник команды.",
+    confirmedNetworkDescription: "Связи, которые уже подтвердила команда.",
     discoveryZone: "Разведка",
-    discoveryDescription:
-      "Сигналы из источников. Здесь нет автоматически назначенных заказчиков, сотрудников или ЛПР.",
+    discoveryDescription: "Кандидаты из источников — без автоматически назначенных ролей.",
     discoveryComplete: "Новых людей и организаций для разбора сейчас нет.",
+    discoveryCompleteInWindow:
+      "В показанном окне новых людей и организаций для разбора нет.",
     needsReview: "Нужно разобрать",
+    reviewRailTitle: (count: number, isLowerBound = false) =>
+      `${isLowerBound ? "Не менее " : ""}${count} ${russianPlural(
+        count,
+        "сигнал ждёт",
+        "сигнала ждут",
+        "сигналов ждут"
+      )} разбора`,
+    reviewRailNext: (label: string) => `Следующий: ${label}`,
+    reviewRailCurrent: (label: string) =>
+      `Сейчас открыт ${label} — решение доступно в профиле справа.`,
+    reviewRailClearTitle: "Новых сигналов нет",
+    reviewRailClearDescription: "Текущий контур разобран — можно изучать профили и историю.",
+    reviewRailWindowClearTitle: "В показанном окне новых сигналов нет",
+    reviewRailWindowClearDescription:
+      "Более ранние сообщения не входят в этот снимок; вывод не относится ко всей истории.",
+    openNextCandidate: "Разобрать следующий",
     openAllTouchpoints: "Показать все соприкосновения компании",
     confirmedPeopleInOrganization: "Люди с подтверждённой связью с организацией",
     noConfirmedPeopleInOrganization:
@@ -599,6 +630,7 @@ export const M = {
     domain: "Домен",
     workspace: "Рабочее пространство",
     interactions: "Соприкосновения",
+    inShownWindow: "в показанном окне",
     people: "Люди",
     lastInteraction: "Последний контакт",
     evidence: "Подтверждающие источники",

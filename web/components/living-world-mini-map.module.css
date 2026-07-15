@@ -302,6 +302,34 @@
   font-size: 0.7rem;
 }
 
+.inspectorAction {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid rgb(185 239 80 / 34%);
+  border-radius: 0.75rem;
+  background: #b9ef50;
+  color: #102019;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-decoration: none;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.inspectorAction:hover {
+  background: #ccff69;
+  transform: translateY(-1px);
+}
+
+.inspectorAction:focus-visible {
+  outline: 3px solid #f5f8f5;
+  outline-offset: 3px;
+}
+
 .empty {
   color: #7a867e;
   font-size: 0.72rem;
@@ -437,7 +465,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .node {
+  .node,
+  .inspectorAction {
     transition: none;
   }
 }

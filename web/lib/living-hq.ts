@@ -1,5 +1,6 @@
 import type { TodayFacts } from "./today";
 import { M } from "./messages";
+import { buildCompanyWorldProfileTarget } from "./company-world-profile";
 import type {
   ActionProposal,
   ActionProposalEvidenceRef,
@@ -292,7 +293,7 @@ function buildMission(
       title: worldCandidate.title,
       description: COPY.missions.reviewWorldDescription,
       why: COPY.missions.reviewWorldWhy,
-      href: "/company-brain",
+      href: worldCandidate.href,
       actionLabel: canResolve
         ? COPY.missions.reviewRelationship
         : COPY.missions.viewRelationship,
@@ -382,6 +383,7 @@ function aggregateMission(
 }
 
 type SupportedWorldCandidate = {
+  href: string;
   id: string;
   title: string;
   occurredAt: string | null;
@@ -396,6 +398,9 @@ function firstSupportedWorldCandidate(
   }
   const candidates: SupportedWorldCandidate[] = [
     ...companyMap.people.external_candidates.map((person) => ({
+      href:
+        buildCompanyWorldProfileTarget(companyMap, person.key)?.href ??
+        "/company-brain",
       id: person.key,
       title: COPY.missions.reviewWorldPersonTitle(
         person.display_name || person.email
@@ -404,6 +409,9 @@ function firstSupportedWorldCandidate(
       evidence: normalizeCompanyEvidence(person.source_refs)
     })),
     ...companyMap.organizations.map((organization) => ({
+      href:
+        buildCompanyWorldProfileTarget(companyMap, organization.key)?.href ??
+        "/company-brain",
       id: organization.key,
       title: COPY.missions.reviewWorldOrganizationTitle(
         organization.name || organization.domain
@@ -482,7 +490,9 @@ function buildChangeCandidates(
               title: person.display_name || person.email,
               description: COPY.changes.personCandidateDescription,
               occurredAt: person.last_interaction_at,
-              href: "/company-brain",
+              href:
+                buildCompanyWorldProfileTarget(companyMap, person.key)?.href ??
+                "/company-brain",
               evidenceState: "direct",
               evidence
             }
@@ -501,7 +511,9 @@ function buildChangeCandidates(
               title: organization.name || organization.domain,
               description: COPY.changes.organizationCandidateDescription,
               occurredAt: organization.last_interaction_at,
-              href: "/company-brain",
+              href:
+                buildCompanyWorldProfileTarget(companyMap, organization.key)?.href ??
+                "/company-brain",
               evidenceState: "direct",
               evidence
             }

@@ -253,6 +253,28 @@ test("change feed is a current evidence snapshot and labels evidence trust", () 
   assert.ok(view.changes.every((item) => item.evidence.length > 0));
 });
 
+test("world missions and candidate signals open the exact opaque profile", () => {
+  const view = deriveLivingHqView({
+    facts: { ...facts, proposedDecisionCount: 0 },
+    companyMap: companyMap(),
+    actionProposals: []
+  });
+
+  assert.equal(view.mission.kind, "review_world");
+  assert.equal(
+    view.mission.href,
+    `/company-brain?profile=${encodeURIComponent(
+      `v1:person-candidate:${"a".repeat(64)}`
+    )}#company-world-profile`
+  );
+  const personSignal = view.changes.find((item) =>
+    item.id.startsWith("person:")
+  );
+  assert.ok(personSignal?.href);
+  assert.equal(personSignal.href.includes("buyer@example.test"), false);
+  assert.equal(personSignal.href.includes("example.test"), false);
+});
+
 test("world summary marks window-derived counts as lower bounds", () => {
   const view = deriveLivingHqView({
     facts,

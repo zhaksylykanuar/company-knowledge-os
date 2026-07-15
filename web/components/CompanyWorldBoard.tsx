@@ -6,6 +6,9 @@ import type {
   CompanyMapConfirmedOrganization,
   CompanyMapResponse
 } from "../lib/types";
+import styles from "./company-world.module.css";
+
+export type CompanyWorldZone = "all" | "network" | "review" | "team";
 
 export type CompanyWorldOrganizationGroup = {
   organization: CompanyMapConfirmedOrganization;
@@ -19,9 +22,11 @@ export type CompanyWorldBoardModel = {
 };
 
 type CompanyWorldBoardProps = {
+  activeZone: CompanyWorldZone;
   data: CompanyMapResponse;
   inspectorId: string;
   onSelect: (key: string) => void;
+  onZoneChange: (zone: CompanyWorldZone) => void;
   selectedKey: string | null;
 };
 
@@ -59,9 +64,11 @@ export function buildCompanyWorldBoardModel(
 }
 
 export function CompanyWorldBoard({
+  activeZone,
   data,
   inspectorId,
   onSelect,
+  onZoneChange,
   selectedKey
 }: CompanyWorldBoardProps) {
   const model = buildCompanyWorldBoardModel(data);
@@ -69,44 +76,55 @@ export function CompanyWorldBoard({
     data.confirmed_organizations.length + data.people.confirmed_external.length;
 
   return (
-    <section className="world-board" aria-labelledby="world-board-title">
-      <header className="world-board-header">
+    <section
+      className={`${styles.board} world-board`}
+      aria-labelledby="world-board-title"
+    >
+      <header className={styles.boardHeader}>
         <div>
           <span className="eyebrow">{M.companyWorld.boardEyebrow}</span>
           <h3 id="world-board-title">{M.companyWorld.boardTitle}</h3>
-          <p>{M.companyWorld.boardDescription}</p>
         </div>
-        <div className="world-board-legend" aria-label={M.companyWorld.boardLegend}>
-          <span className="world-board-legend-item world-board-legend-item--confirmed">
-            {M.companyWorld.confirmedContour}
-          </span>
-          <span className="world-board-legend-item world-board-legend-item--candidate">
-            {M.companyWorld.discoveryContour}
-          </span>
+        <div
+          aria-label={M.companyWorld.zoneFilterLabel}
+          className={styles.zoneFilters}
+          role="group"
+        >
+          <ZoneFilter
+            active={activeZone === "all"}
+            count={
+              data.people.internal.length + confirmedNetworkCount + model.pendingCount
+            }
+            countIsLowerBound={data.window.truncated}
+            label={M.companyWorld.allContours}
+            onClick={() => onZoneChange("all")}
+          />
+          <ZoneFilter
+            active={activeZone === "team"}
+            count={data.people.internal.length}
+            label={M.companyWorld.teamSection}
+            onClick={() => onZoneChange("team")}
+          />
+          <ZoneFilter
+            active={activeZone === "network"}
+            count={confirmedNetworkCount}
+            label={M.companyWorld.confirmedNetwork}
+            onClick={() => onZoneChange("network")}
+          />
+          <ZoneFilter
+            active={activeZone === "review"}
+            count={model.pendingCount}
+            countIsLowerBound={data.window.truncated}
+            label={M.companyWorld.needsReview}
+            onClick={() => onZoneChange("review")}
+            tone="candidate"
+          />
         </div>
       </header>
 
-      <div className="world-radar" aria-label={M.companyWorld.summaryLabel}>
-        <RadarSignal label={M.companyWorld.internalPeople} value={data.summary.internal_people} />
-        <RadarSignal
-          label={M.companyWorld.confirmedContour}
-          value={confirmedNetworkCount}
-        />
-        <RadarSignal label={M.companyWorld.needsReview} value={model.pendingCount} />
-        <button
-          aria-label={M.companyWorld.openAllTouchpoints}
-          className="world-radar-signal world-radar-signal--action"
-          onClick={() => onSelect(data.company.key)}
-          type="button"
-        >
-          <strong>{data.summary.touchpoints_in_window}</strong>
-          <span>{M.companyWorld.touchpoints}</span>
-        </button>
-      </div>
-
-      <div className="world-board-stage">
+      <div className={styles.stage} data-active-zone={activeZone}>
         <BoardZone
-          className="world-board-zone--team"
+          className={styles.teamZone}
           count={data.people.internal.length}
           description={M.companyWorld.teamZoneDescription}
           title={M.companyWorld.teamSection}
@@ -119,7 +137,7 @@ export function CompanyWorldBoard({
                 isSelected={selectedKey === person.key}
                 key={person.key}
                 label={person.name ?? person.email}
-                meta={person.email}
+                meta={person.name ? person.email : undefined}
                 onSelect={() => onSelect(person.key)}
                 tone="team"
               />
@@ -127,7 +145,7 @@ export function CompanyWorldBoard({
           </div>
         </BoardZone>
 
-        <section className="world-company-core" aria-label={M.companyWorld.companySection}>
+        <section className={styles.core} aria-label={M.companyWorld.companySection}>
           <span className="world-core-orbit world-core-orbit--outer" aria-hidden="true" />
           <span className="world-core-orbit world-core-orbit--inner" aria-hidden="true" />
           <button
@@ -146,7 +164,7 @@ export function CompanyWorldBoard({
         </section>
 
         <BoardZone
-          className="world-board-zone--network"
+          className={styles.networkZone}
           count={confirmedNetworkCount}
           description={M.companyWorld.confirmedNetworkDescription}
           title={M.companyWorld.confirmedNetwork}
@@ -228,8 +246,9 @@ export function CompanyWorldBoard({
         </BoardZone>
 
         <BoardZone
-          className="world-board-zone--frontier"
+          className={styles.reviewZone}
           count={model.pendingCount}
+          countIsLowerBound={data.window.truncated}
           description={M.companyWorld.discoveryDescription}
           title={M.companyWorld.discoveryZone}
         >
@@ -245,7 +264,7 @@ export function CompanyWorldBoard({
                       isSelected={selectedKey === organization.key}
                       key={organization.key}
                       label={organization.name ?? organization.domain}
-                      meta={`${organization.people_count} · ${M.companyWorld.people.toLocaleLowerCase()}`}
+                      meta={`${lowerBoundCount(organization.people_count, data.window.truncated)} · ${M.companyWorld.people.toLocaleLowerCase()} · ${lowerBoundCount(organization.interaction_count, data.window.truncated)} ${M.companyWorld.interactions.toLocaleLowerCase()}`}
                       onSelect={() => onSelect(organization.key)}
                       tone="candidate"
                     />
@@ -270,7 +289,7 @@ export function CompanyWorldBoard({
                       isSelected={selectedKey === person.key}
                       key={person.key}
                       label={person.display_name ?? person.email}
-                      meta={`${person.interaction_count} · ${M.companyWorld.interactions.toLocaleLowerCase()}`}
+                      meta={`${lowerBoundCount(person.interaction_count, data.window.truncated)} · ${M.companyWorld.interactions.toLocaleLowerCase()}`}
                       onSelect={() => onSelect(person.key)}
                       tone="candidate"
                     />
@@ -283,7 +302,9 @@ export function CompanyWorldBoard({
             </div>
           ) : (
             <p className="world-zone-empty world-zone-empty--complete">
-              {M.companyWorld.discoveryComplete}
+              {data.window.truncated
+                ? M.companyWorld.discoveryCompleteInWindow
+                : M.companyWorld.discoveryComplete}
             </p>
           )}
         </BoardZone>
@@ -296,23 +317,30 @@ function BoardZone({
   children,
   className,
   count,
+  countIsLowerBound = false,
   description,
   title
 }: {
   children: ReactNode;
   className: string;
   count: number;
+  countIsLowerBound?: boolean;
   description: string;
   title: string;
 }) {
   return (
-    <section className={`world-board-zone ${className}`}>
+    <section
+      className={`${styles.zone} ${className}`}
+      data-empty={count === 0 ? "true" : undefined}
+    >
       <header>
         <div>
           <h3>{title}</h3>
           <p>{description}</p>
         </div>
-        <span aria-label={`${title}: ${count}`}>{count}</span>
+        <span aria-label={`${title}: ${lowerBoundCount(count, countIsLowerBound)}`}>
+          {lowerBoundCount(count, countIsLowerBound)}
+        </span>
       </header>
       {children}
     </section>
@@ -334,7 +362,7 @@ function BoardNode({
   inspectorId: string;
   isSelected: boolean;
   label: string;
-  meta: string;
+  meta?: string;
   onSelect: () => void;
   tone: "candidate" | "confirmed" | "team";
 }) {
@@ -352,7 +380,7 @@ function BoardNode({
       </span>
       <span className="world-node-copy">
         <strong>{label}</strong>
-        <span>{meta}</span>
+        {meta ? <span>{meta}</span> : null}
         {hint ? <small>{hint}</small> : null}
       </span>
       <span className={`world-state world-state--${tone}`}>{badge}</span>
@@ -360,13 +388,36 @@ function BoardNode({
   );
 }
 
-function RadarSignal({ label, value }: { label: string; value: number }) {
+function ZoneFilter({
+  active,
+  count,
+  countIsLowerBound = false,
+  label,
+  onClick,
+  tone = "default"
+}: {
+  active: boolean;
+  count: number;
+  countIsLowerBound?: boolean;
+  label: string;
+  onClick: () => void;
+  tone?: "candidate" | "default";
+}) {
   return (
-    <div className="world-radar-signal">
-      <strong>{value}</strong>
+    <button
+      aria-pressed={active}
+      data-tone={tone}
+      onClick={onClick}
+      type="button"
+    >
       <span>{label}</span>
-    </div>
+      <strong>{lowerBoundCount(count, countIsLowerBound)}</strong>
+    </button>
   );
+}
+
+function lowerBoundCount(value: number, isLowerBound: boolean): string {
+  return `${isLowerBound ? "≥" : ""}${value}`;
 }
 
 function roleLabel(role: CompanyMapResponse["people"]["internal"][number]["role"]): string {

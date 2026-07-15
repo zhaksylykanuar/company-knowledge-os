@@ -52,6 +52,19 @@ Implemented foundations:
   a since-last-visit delta. Proposal evidence refs are presented as declared
   source references rather than server-verified facts. This slice changes no
   backend API, schema, provider/write gate, RBAC, or LLM path.
+- The full Living World surface is in place (DEC-082): `/company-brain` is now
+  one command bar, one current review rail, a filterable real-data world scene,
+  and one contextual profile inspector. Existing Company Map affiliation,
+  candidate-resolution, evidence, window, idempotency, and RBAC contracts remain
+  authoritative. `Штаб` mini-map selections and evidence-backed world missions
+  deep-link to an exact current-workspace profile through an opaque selector;
+  email/domain-shaped candidate keys are never written into the URL, and stale
+  or foreign selectors resolve to no entity. Touchpoints stay local history of
+  their routed parent profile. Candidate totals and candidate-organization
+  people counts are lower bounds when the Gmail window is truncated, including
+  an explicitly partial zero state. Canonical Company Brain/entities details
+  load only after their disclosure opens. Frontend-only: no schema,
+  provider call/write, external action, RBAC, or LLM change.
 - Post-auth Command Mode is in place (DEC-078): all five primary zones lead
   with one current mission, the next useful control, and its expected result.
   Secondary forms, filters, readiness diagnostics, evidence, and technical
@@ -59,8 +72,9 @@ Implemented foundations:
   decision guidance is role-aware and distinguishes failed/attention states
   without inventing progress. This is a frontend-only interaction change; API,
   persistence, RBAC, provider/write, and LLM contracts are unchanged. Static
-  frontend acceptance is green; exact desktop/mobile visual acceptance remains
-  pending because the in-app browser currently fails before navigation.
+  frontend acceptance is green; the older tool-blocked five-zone UX-03 pass was
+  not reused as evidence, while newer `Штаб`, GitHub radar, and full `Мир`
+  slices each have their own targeted desktop/mobile browser acceptance.
 - The first provider-specific Source Command Center is in place on `/github`
   (DEC-079): one role-aware mission, a three-step source flow, four bounded
   repository metrics, one selected-repository read action, a compact work pulse,
@@ -327,19 +341,18 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Turn `Мир` into the full living company surface.**
-   Recompose `/company-brain` around the same world grammar as the new mini-map:
-   company, team, confirmed contacts, customer/partner organizations, unresolved
-   signals, and one contextual profile inspector. Keep exact durable affiliation
-   rules and current confirm/dismiss receipts; do not infer an organization role
-   from a domain or email. The mini-map must deep-link to the selected real
-   profile rather than become a second competing registry.
-
-2. **Turn `Миссии` into the human decision room.**
+1. **Turn `Миссии` into the human decision room.**
    Preserve the existing ActionProposal RBAC, evidence drawers, local bulk review,
    execution preview, and audit receipts, but lead with a small mission queue:
    why now, what changes if accepted, what remains local, and the recorded result.
    The current proposal list must remain reachable as detail, not define the page.
+
+2. **Make onboarding the short prologue to the headquarters.**
+   Recompose the existing computed onboarding into a visual four-step path:
+   company → first radar → first world → first teammate. Each step must be
+   completed by real backend state, return directly to the headquarters, and
+   avoid terminal/operator handoff. Recipient-verified teammate invitation and
+   password-reset delivery remain a separate security-scoped follow-up.
 
 3. **Finish the radar loop one provider at a time.**
    `/github` remains the reference command center and the next external gate is
@@ -354,13 +367,6 @@ Implemented foundations:
    visit" changes, dedupe them, link each one to workspace-resolved evidence, and
    close a mission with a receipt. This requires a separate schema/data review and
    must not be simulated from browser-local timestamps.
-
-5. **Make onboarding the short prologue to the headquarters.**
-   Recompose the existing computed onboarding into a visual four-step path:
-   company → first radar → first world → first teammate. Each step must be
-   completed by real backend state, return directly to the headquarters, and
-   avoid terminal/operator handoff. Recipient-verified teammate invitation and
-   password-reset delivery remain a separate security-scoped follow-up.
 
 ## Known Debts / Watch List
 

@@ -166,6 +166,11 @@ test("builds a compact world model without inventing affiliations", () => {
     /Нельзя показывать как связь/
   );
   assert.doesNotMatch(model.candidates[1]?.detail ?? "", /Prospect/);
+  assert.equal(model.company.profileTarget?.selector, "v1:company");
+  assert.equal(
+    model.candidates[0]?.profileTarget?.href.includes("prospect.test"),
+    false
+  );
 });
 
 test("renders real map zones as keyboard-accessible controls with an inspector", () => {
@@ -185,20 +190,65 @@ test("renders real map zones as keyboard-accessible controls with an inspector",
   assert.match(html, /<button[^>]*aria-pressed="true"/);
   assert.match(html, /<aside[^>]*aria-live="polite"/);
   assert.match(html, /Открыть профиль: Анна/);
+  assert.ok(html.includes("Открыть полный профиль"));
+  assert.match(
+    html,
+    /href="\/company-brain\?profile=v1%3Acompany#company-world-profile"/
+  );
   assert.doesNotMatch(html, /<canvas|<svg/);
 });
 
 test("marks touchpoint counts as lower bounds when the source window is truncated", () => {
+  const truncatedMap: CompanyMapResponse = {
+    ...sampleMap,
+    window: { ...sampleMap.window, truncated: true }
+  };
   const model = buildLivingWorldMiniMapModel(
-    {
-      ...sampleMap,
-      window: { ...sampleMap.window, truncated: true }
-    },
+    truncatedMap,
     "Northstar"
   );
 
   assert.match(model.company.detail, /≥4 касания в показанном окне/);
   assert.match(model.confirmedNetwork[0]?.detail ?? "", /≥3 касания/);
+  assert.match(model.candidates[0]?.detail ?? "", /≥1 человек в показанном окне/);
+  const html = renderToStaticMarkup(
+    <LivingWorldMiniMap data={truncatedMap} workspaceName="Northstar" />
+  );
+  assert.match(html, /Неизвестное: ≥2/);
+
+  const candidateTemplate = sampleMap.people.external_candidates[0];
+  assert.ok(candidateTemplate);
+  const crowdedMap: CompanyMapResponse = {
+    ...truncatedMap,
+    people: {
+      ...truncatedMap.people,
+      external_candidates: Array.from({ length: 7 }, (_, index) => ({
+        ...candidateTemplate,
+        candidate_version: String(index).padStart(64, "a"),
+        email: `candidate-${index}@prospect.test`,
+        key: `candidate:${index}`
+      }))
+    }
+  };
+  const crowdedHtml = renderToStaticMarkup(
+    <LivingWorldMiniMap data={crowdedMap} workspaceName="Northstar" />
+  );
+  assert.ok(crowdedHtml.includes("Ещё ≥2 — в полном мире"));
+});
+
+test("limits an empty candidate mini-map to the shown truncated window", () => {
+  const data: CompanyMapResponse = {
+    ...sampleMap,
+    organizations: [],
+    people: { ...sampleMap.people, external_candidates: [] },
+    window: { ...sampleMap.window, truncated: true }
+  };
+  const html = renderToStaticMarkup(
+    <LivingWorldMiniMap data={data} workspaceName="Northstar" />
+  );
+
+  assert.ok(html.includes("В показанном окне новых кандидатов"));
+  assert.match(html, /Неизвестное: ≥0/);
 });
 
 test("uses a compact honest empty state while the world has no data", () => {
