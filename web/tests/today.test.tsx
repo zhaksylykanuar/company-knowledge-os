@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { isPublicShellPath } from "../components/AppShell";
 import { TodayBoardView } from "../components/TodayBoard";
+import { isDemoTourEnabled } from "../lib/demo-tour-access";
 import { M } from "../lib/messages";
 import { deriveTodayView, type TodayFacts } from "../lib/today";
 
@@ -22,7 +23,20 @@ const readyFacts: TodayFacts = {
 test("invite enrollment is public while onboarding stays session-protected", () => {
   assert.equal(isPublicShellPath("/start"), true);
   assert.equal(isPublicShellPath("/login"), true);
+  assert.equal(isPublicShellPath("/demo"), true);
+  assert.equal(isPublicShellPath("/demo/mission"), false);
+  assert.equal(isPublicShellPath("/dashboard"), false);
   assert.equal(isPublicShellPath("/onboarding"), false);
+});
+
+test("demo tour is local by default and requires an explicit production gate", () => {
+  assert.equal(isDemoTourEnabled("development", undefined), true);
+  assert.equal(isDemoTourEnabled("development", "false"), true);
+  assert.equal(isDemoTourEnabled("production", "true"), true);
+  assert.equal(isDemoTourEnabled("production", "false"), false);
+  assert.equal(isDemoTourEnabled("production", "TRUE"), false);
+  assert.equal(isDemoTourEnabled("test", "true"), false);
+  assert.equal(isDemoTourEnabled(undefined, "true"), false);
 });
 
 test("Today prioritizes real gaps before routine navigation", () => {

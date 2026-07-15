@@ -80,6 +80,16 @@ Implemented foundations:
   ActionProposal RBAC, persisted decision audit, evidence, receipts, and
   external-write gate remain unchanged; no provider call/write or LLM starts
   automatically.
+- The desktop product simulation is in place (DEC-084): `/demo` is a gated,
+  synthetic, API-free 12-scene reference for the intended end-to-end FounderOS
+  experience. It demonstrates onboarding, radars, a connected signal, living
+  headquarters, relationships, customer and key-person profiles, team roles,
+  evidence-backed knowledge, briefing, a human decision, safe preview, receipt,
+  and the resulting queue/headquarters update. It is not production data and is
+  not evidence that real sources are connected. Development enables the exact
+  public route locally; production requires `FOUNDEROS_DEMO_ENABLED=true`.
+  Desktop 1280×720 is the only acceptance contract; mobile/tablet are explicitly
+  out of scope for this reference surface.
 - Post-auth Command Mode is in place (DEC-078): all five primary zones lead
   with one current mission, the next useful control, and its expected result.
   Secondary forms, filters, readiness diagnostics, evidence, and technical
@@ -356,11 +366,13 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Make onboarding the short prologue to the headquarters.**
-   Recompose the existing computed onboarding into a visual four-step path:
-   company → first radar → first world → first teammate. Each step must be
-   completed by real backend state, return directly to the headquarters, and
-   avoid terminal/operator handoff. Recipient-verified teammate invitation and
+1. **Promote the validated demo grammar into real onboarding and work screens.**
+   Use `/demo` only as the interaction and narrative reference. Recompose the
+   existing computed onboarding into the first real four-step slice: company →
+   first radar → first world → first teammate. Every completion state must come
+   from current backend evidence, return directly to the real headquarters, and
+   avoid terminal/operator handoff; synthetic demo fixtures must never leak into
+   authenticated product claims. Recipient-verified teammate invitation and
    password-reset delivery remain a separate security-scoped follow-up.
 
 2. **Finish the radar loop one provider at a time.**

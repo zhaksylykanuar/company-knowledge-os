@@ -2501,6 +2501,49 @@ LLM path, or autonomous execution changes in this decision. A real total/
 pagination contract and a connection picker richer than the existing controls
 remain separate future work.
 
+## DEC-084 - The Desktop Demo Is A Synthetic Product Contract, Not Runtime Evidence
+
+Decision (2026-07-15): FounderOS has a separate desktop-only `/demo` simulation
+that acts as the reference interaction contract for the intended completed
+product. It tells one 12-scene causal story:
+
+`onboarding → radars → connected signal → headquarters → relationships → people → knowledge → briefing → human decision → preview → receipt → updated headquarters`.
+
+The reference surface follows these rules:
+
+- all company, people, source, mission, evidence, preview, and receipt values are
+  deterministic synthetic fixtures. The route permanently says that data is
+  invented and that no external action occurs; it must never be cited as proof
+  that a provider is connected, a real read ran, or the authenticated product is
+  complete;
+- the story is stateful enough to prove its own causal model. Direct navigation
+  to the final scene shows an unsaved preview. Only explicit demo confirmation
+  creates the synthetic receipt, changes waiting/completed counts, removes the
+  Atlas mission from the waiting queue, promotes the next mission, and changes
+  the headquarters. A completed decision cannot be simulated twice without an
+  explicit restart;
+- the implementation is isolated from runtime data: no API client, fetch,
+  provider call, form submission, cookie/local-storage persistence, external URL,
+  or provider write is used. The exit link disables framework prefetch so the
+  public demo does not speculatively read the protected dashboard;
+- public access is exact-path only. Development enables `/demo` locally.
+  Production returns not-found unless `FOUNDEROS_DEMO_ENABLED` is exactly
+  `true`; `/demo/*` remains under the normal authenticated shell boundary;
+- this contract targets desktop browsers at 1280×720 or larger. It intentionally
+  does not define or claim mobile/tablet behavior. Autoplay, presenter mode,
+  hints, keyboard navigation, deep links, and visited progress are presentation
+  aids, not persisted product state; and
+- future production work may reuse the information hierarchy and interaction
+  grammar, but every real completion, metric, relationship, signal, decision,
+  and receipt must be derived from the existing workspace-scoped backend and
+  evidence contracts. Demo fixtures must never become an authenticated fallback.
+
+Consequence: the next local product slice is not another broad visual redesign.
+It is the smallest real-data promotion of this contract: computed onboarding as
+a short prologue to the Living Headquarters, followed by one screen at a time.
+The first real GitHub App read, any external write, LLM narrative, hosted change,
+or mobile product contract remains a separate explicitly approved scope.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

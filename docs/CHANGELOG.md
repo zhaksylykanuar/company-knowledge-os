@@ -4,6 +4,22 @@
 
 ### Changed
 
+- Added the desktop-only `/demo` product simulation (DEC-084). Twelve interactive
+  scenes now demonstrate the intended completed loop from onboarding and four
+  source radars through a connected signal, Living Headquarters, relationships,
+  customer/key-person and team profiles, knowledge, briefing, a human decision,
+  safe preview, synthetic receipt, and the resulting headquarters/queue update.
+  The surface includes scene deep links, browser history, visited progress,
+  hints, manual exploration, timed presentation, fullscreen mode, and keyboard
+  controls. Its NovaFlow data is deterministic and permanently labelled as
+  invented. Direct final-scene navigation stays an unsaved preview; an explicit
+  demo confirmation alone moves the queue from `3/2/7` to `2/2/8`, and completed
+  decisions cannot be repeated accidentally. The exact `/demo` path is public in
+  development and requires `FOUNDEROS_DEMO_ENABLED=true` in production; the exit
+  link disables dashboard prefetch. No API/provider call, form submission,
+  persistence, external URL/write, backend, schema, DB, RBAC, or LLM path was
+  added. The acceptance contract is desktop 1280×720 only; no mobile/tablet claim
+  is made.
 - Rebuilt `/actions` as the Missions decision room (DEC-083). One bounded
   mixed-status window of at most 100 proposals now feeds a compact queue and one
   active decision console; pulse metrics describe that loaded window and stay
