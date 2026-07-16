@@ -39,6 +39,28 @@ test("overlay shell renders labelled modal and drawer dialog contracts", () => {
   }
 });
 
+test("closeDisabled exposes a disabled close control while work is pending", () => {
+  const html = renderToStaticMarkup(
+    <OverlayShell
+      backgroundRef={createRef<HTMLElement>()}
+      closeDisabled
+      closeLabel="Закрыть решение"
+      label="Решение по миссии"
+      mode="modal"
+      onClose={() => undefined}
+    >
+      <p>Сохраняем решение…</p>
+    </OverlayShell>
+  );
+  const closeControl = html.match(
+    /<button[^>]*aria-label="Закрыть решение"[^>]*>/
+  )?.[0];
+
+  assert.ok(closeControl);
+  assert.match(closeControl, /disabled=""/);
+  assert.ok(html.includes("Сохраняем решение…"));
+});
+
 test("overlay environment locks and exactly restores background and body", () => {
   const attributes = new Map<string, string>([
     ["aria-hidden", "false"],

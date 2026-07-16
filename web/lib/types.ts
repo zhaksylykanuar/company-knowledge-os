@@ -827,6 +827,7 @@ export type ActionProposal = {
   rejection_reason: string | null;
   created_at: string;
   updated_at: string;
+  proposal_version: string;
   is_live: boolean;
   execution_started: boolean;
   warnings: string[];
@@ -951,6 +952,12 @@ export type ActionProposalMutationResponse = {
   warnings: string[];
 };
 
+export type ActionProposalDecisionResponse = ActionProposalMutationResponse & {
+  decision_receipt: LocalActionDecisionReceipt;
+  is_live: false;
+  execution_started: false;
+};
+
 export type ActionProposalBulkRequest = {
   proposal_ids: string[];
 };
@@ -1019,8 +1026,24 @@ export type RepoAuditImportPreview = {
   findings: RepoAuditImportPreviewFinding[];
 };
 
-export type ActionProposalRejectRequest = {
+export type ActionProposalDecisionRequest = {
+  idempotency_key: string;
+  proposal_version: string;
+  expected_snapshot_id?: string | null;
+};
+
+export type ActionProposalRejectRequest = ActionProposalDecisionRequest & {
   reason?: string | null;
+};
+
+export type LocalActionDecisionReceipt = {
+  receipt_id: string;
+  proposal_id: string;
+  decision: "approved" | "rejected";
+  recorded_at: string;
+  replayed: boolean;
+  external_write_performed: false;
+  proposal_version: string;
 };
 
 export type ActionExecutionPreviewStatus =

@@ -4,6 +4,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
@@ -269,10 +270,60 @@ def serialize_action_proposal(proposal: ActionProposal) -> dict[str, Any]:
         "rejection_reason": proposal.rejection_reason,
         "created_at": proposal.created_at,
         "updated_at": proposal.updated_at,
+        "proposal_version": action_proposal_version(proposal),
         "is_live": False,
         "execution_started": False,
         "warnings": [ACTION_PROPOSAL_NO_EXECUTION_WARNING],
     }
+
+
+def action_proposal_version(proposal: ActionProposal) -> str:
+    """Return one opaque version over the exact persisted proposal row.
+
+    Canonical evidence rows may affect whether Headquarters ranks a proposal,
+    but they do not silently change the proposal command version. A local
+    decision therefore binds to the row the actor reviewed while Headquarters
+    continues to validate evidence independently.
+    """
+
+    material = {
+        "id": proposal.id,
+        "workspace_id": proposal.workspace_id,
+        "briefing_item_id": proposal.briefing_item_id,
+        "target_provider": proposal.target_provider,
+        "action_type": proposal.action_type,
+        "title": proposal.title,
+        "description": proposal.description,
+        "payload": proposal.payload,
+        "status": proposal.status,
+        "evidence_refs": proposal.evidence_refs,
+        "created_by": proposal.created_by,
+        "created_by_user_id": proposal.created_by_user_id,
+        "approved_by_user_id": proposal.approved_by_user_id,
+        "approved_at": proposal.approved_at,
+        "rejected_by_user_id": proposal.rejected_by_user_id,
+        "rejected_at": proposal.rejected_at,
+        "rejection_reason": proposal.rejection_reason,
+        "created_at": proposal.created_at,
+        "updated_at": proposal.updated_at,
+    }
+    serialized = json.dumps(
+        material,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+        default=_proposal_version_json_default,
+    )
+    return f"ap1_{sha256(serialized.encode('utf-8')).hexdigest()}"
+
+
+def _proposal_version_json_default(value: object) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    raise TypeError(f"unsupported proposal version value: {type(value).__name__}")
 
 
 async def _get_action_proposal_or_raise(

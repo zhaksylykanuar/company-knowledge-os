@@ -371,17 +371,15 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Finish exact mission/profile drill-down and the local decision loop.**
-   Execute the bounded LC-05/LC-08 slice in
-   [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md): a
-   queue row, citation, person or customer control must open that exact entity
-   with field-level provenance or an honest `Не определено`. Reuse opaque Company
-   Map selectors and the existing `/actions` proposal APIs/status safety to move
-   one local decision into a compact modal, persist its existing audit/receipt,
-   then refetch the same Headquarters snapshot. Do not add a new mission schema,
-   infer roles/customer health, weaken confirmation, or enable an external write.
+The bounded LC-05/LC-08 local decision slice is complete (DEC-089): exact
+mission and opaque profile disclosure fail closed; local approve/reject is
+version-bound, idempotent and audit-backed; its receipt survives a failed
+Headquarters refetch. Confirmed employee/customer drawer renderers exist, but
+the production mission projection does not yet emit their canonical relation
+IDs, so that end-to-end path remains schema/data gated. No external execution,
+business-profile write or migration was added.
 
-2. **Add the first real read-only company assistant contract.**
+1. **Add the first real read-only company assistant contract.**
    Introduce a bounded workspace-scoped query endpoint over existing read models
    with deterministic intents first: current priority, why-now, company/person,
    sources, briefing, waiting decisions, and evidence. Normalize citations and
@@ -390,27 +388,35 @@ Implemented foundations:
    history, retrieval, generation, and writes require separate schema/security
    decisions. Detailed acceptance is `LC-07` in the command-center checklist.
 
-3. **Finish the radar loop one provider at a time.**
+2. **Finish the radar loop one provider at a time.**
    `/github` remains the reference command center and the next external gate is
    still one founder-approved, repository-scoped read through its UI wizard. Then
    bring Gmail, Drive, and Jira to the same setup → scoped read → visible result →
    receipt pattern. No bulk/background sync, provider write, LLM run, or hosted
    change is authorized by this backlog item.
 
-4. **Design Source Foundry only after the real headquarters UI is accepted.**
+3. **Design Source Foundry only after the real headquarters UI is accepted.**
    Start with the SF-00 contract/threat-model checklist from DEC-087: one
    modular allowlisted intake/promotion plane, immutable envelope/manifest,
    quarantine, conservative resolution and atomic canonical promotion. Do not
    create one service per source, a second knowledge truth, a migration,
    background ingestion or LLM auto-promotion in the design ticket.
 
-5. **Add a real company-change boundary.**
+4. **Add a real company-change boundary.**
    The new headquarters honestly shows a current evidence snapshot. Design the
    smallest persisted snapshot/event contract that can prove "since your last
    visit" changes, dedupe them, link each one to workspace-resolved evidence, and
    close a mission with a receipt. This requires a separate schema/data review and
    must not be simulated from browser-local timestamps. This is `LC-06` and
    remains schema/data-review gated.
+
+5. **Keep the remaining profile/external-action scope behind explicit gates.**
+   Durable employee title/function/focus and mission ownership need a schema
+   review that links membership and internal Person without duplicating
+   identity. External LC-08 needs an immutable exact preview digest, current
+   actor/RBAC/evidence/allowlist re-check, idempotent execute and read-back
+   reconcile before any provider write. Do not widen the local Headquarters
+   modal into either path implicitly.
 
 ## Known Debts / Watch List
 

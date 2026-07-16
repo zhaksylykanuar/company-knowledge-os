@@ -169,6 +169,7 @@ class BriefingGeneratedActionProposalRead(BaseModel):
     rejection_reason: str | None = None
     created_at: datetime
     updated_at: datetime
+    proposal_version: str
     is_live: bool
     execution_started: bool
     warnings: list[str] = Field(default_factory=list)

@@ -106,7 +106,14 @@ tokens, or local environment files.
 
 Primary navigation is «Штаб / Мир / Миссии»; «Радары / Настройки» remain
 backstage controls. Provider routes live under «Радары»; `/dashboard` shows one
-deterministic next move and three signals. Shared shell/status copy is in
+deterministic next move and three signals. Mission/profile disclosure resolves
+only exact current-snapshot entities. A proposed mission may be approved or
+rejected locally in its compact modal only after exact proposal/version checks;
+the audit-backed receipt explicitly performs no external write and remains
+visible if the Headquarters refresh fails. External preview/execute stays a
+separate human-gated path. Confirmed employee/customer drawer renderers are
+fail-closed, but the production Headquarters mission projection does not yet
+populate their relation IDs; do not claim that profile path end-to-end. Shared shell/status copy is in
 `web/lib/messages.ts`; computed setup copy is colocated with the Headquarters
 modal and the zero-workspace recovery page. The UI is Russian. Source
 setup/import/sync and action review/execution require

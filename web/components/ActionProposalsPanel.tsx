@@ -4,14 +4,17 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import {
   ApiRequestError,
-  approveActionProposal,
   bulkApproveActionProposals,
   bulkRejectActionProposals,
   createActionProposal,
   fetchActionProposal,
-  fetchActionProposals,
-  rejectActionProposal
+  fetchActionProposals
 } from "../lib/api";
+import {
+  createLocalActionDecisionIdempotencyKey,
+  isAmbiguousLocalActionDecisionFailure,
+  submitLocalActionDecisionWithOneRetry
+} from "../lib/action-proposal-decision";
 import { M, T } from "../lib/messages";
 import { useSession } from "../lib/session";
 import type {
@@ -127,7 +130,10 @@ type ActionProposalsPanelViewProps = {
     count?: number,
     proposalId?: string
   ) => void;
-  onExecutionBusyChange?: (proposalId: string, isBusy: boolean) => void;
+  onExecutionBusyChange?: (
+    proposalId: string,
+    isBusy: boolean
+  ) => boolean | void;
   onExecutionComplete?: (proposalId: string) => void;
   onSelectVisibleProposed?: () => void;
   onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
@@ -164,6 +170,13 @@ export function actionCapabilitiesForRole(role: string | null): {
     canCreateProposals: canReviewProposals || role === "member",
     canReviewProposals
   };
+}
+
+export function canScheduleProposalRefresh(
+  source: "execution_complete" | "user",
+  operationActive: boolean
+): boolean {
+  return source === "execution_complete" || !operationActive;
 }
 
 export async function loadActionProposalPanelData(
@@ -271,6 +284,11 @@ export function ActionProposalsPanel({
   const focusAfterReloadRef = useRef(false);
   const mountedRef = useRef(true);
   const currentWorkspaceIdRef = useRef<string | null>(workspaceId);
+  const decisionAttemptKeysRef = useRef(new Map<string, string>());
+  const activeMutationTokenRef = useRef<number | null>(null);
+  const mutationSequenceRef = useRef(0);
+  const executionBusyProposalIdRef = useRef<string | null>(null);
+  const operationWorkspaceIdRef = useRef<string | null>(workspaceId);
   currentWorkspaceIdRef.current = workspaceId;
 
   function clearSelectedEvidenceContext() {
@@ -283,6 +301,37 @@ export function ActionProposalsPanel({
   function isCurrentMutationContext(requestWorkspaceId: string): boolean {
     return (
       mountedRef.current && currentWorkspaceIdRef.current === requestWorkspaceId
+    );
+  }
+
+  function beginMutation(mutation: Exclude<PendingMutation, null>): number | null {
+    if (
+      activeMutationTokenRef.current !== null ||
+      executionBusyProposalIdRef.current !== null
+    ) {
+      return null;
+    }
+    const token = mutationSequenceRef.current + 1;
+    mutationSequenceRef.current = token;
+    activeMutationTokenRef.current = token;
+    setPendingMutation(mutation);
+    return token;
+  }
+
+  function finishMutation(token: number, requestWorkspaceId: string) {
+    if (activeMutationTokenRef.current !== token) {
+      return;
+    }
+    activeMutationTokenRef.current = null;
+    if (isCurrentMutationContext(requestWorkspaceId)) {
+      setPendingMutation(null);
+    }
+  }
+
+  function operationIsActive(): boolean {
+    return (
+      activeMutationTokenRef.current !== null ||
+      executionBusyProposalIdRef.current !== null
     );
   }
 
@@ -310,13 +359,21 @@ export function ActionProposalsPanel({
   ]);
 
   useEffect(() => {
+    const workspaceChanged = operationWorkspaceIdRef.current !== workspaceId;
+    operationWorkspaceIdRef.current = workspaceId;
     setActiveProposalId(initialProposalId);
     setSelectedEvidence(null);
     setSelectedEvidenceTitle(null);
     setSelectedEvidenceCount(null);
     setSelectedEvidenceProposalId(null);
     setSelectedProposalIds([]);
-    setExecutionBusyProposalId(null);
+    if (workspaceChanged) {
+      activeMutationTokenRef.current = null;
+      executionBusyProposalIdRef.current = null;
+      decisionAttemptKeysRef.current.clear();
+      setPendingMutation(null);
+      setExecutionBusyProposalId(null);
+    }
     setMutationError(null);
     setSuccessMessage(null);
     focusAfterReloadRef.current = false;
@@ -327,14 +384,14 @@ export function ActionProposalsPanel({
   }, [initialProposalId, workspaceId]);
 
   useEffect(() => {
-    const pending = executionBusyProposalId !== null;
+    const pending = executionBusyProposalId !== null || pendingMutation !== null;
     setExternalOperationPending?.(pending);
     return () => {
       if (pending) {
         setExternalOperationPending?.(false);
       }
     };
-  }, [executionBusyProposalId, setExternalOperationPending]);
+  }, [executionBusyProposalId, pendingMutation, setExternalOperationPending]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -412,6 +469,7 @@ export function ActionProposalsPanel({
     field: keyof ActionProposalCreateFormState,
     value: string
   ) {
+    if (operationIsActive()) return;
     setCreateForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -424,18 +482,18 @@ export function ActionProposalsPanel({
     if (!capabilities.canCreateProposals) {
       return;
     }
-    if (executionBusyProposalId) {
-      return;
-    }
     const request = buildCreateRequest(createForm);
     if (!request) {
       setMutationError({ message: M.actionsPanel.createError, scope: "create" });
       return;
     }
 
+    const mutationToken = beginMutation("create");
+    if (mutationToken === null) {
+      return;
+    }
     setMutationError(null);
     setSuccessMessage(null);
-    setPendingMutation("create");
     const requestWorkspaceId = workspaceId;
     try {
       const response = await createActionProposal(requestWorkspaceId, request);
@@ -457,9 +515,7 @@ export function ActionProposalsPanel({
         scope: "create"
       });
     } finally {
-      if (isCurrentMutationContext(requestWorkspaceId)) {
-        setPendingMutation(null);
-      }
+      finishMutation(mutationToken, requestWorkspaceId);
     }
   }
 
@@ -471,16 +527,32 @@ export function ActionProposalsPanel({
     if (!capabilities.canReviewProposals) {
       return;
     }
-    if (executionBusyProposalId) {
+    const requestWorkspaceId = workspaceId;
+    const proposal = data?.proposals.find((item) => item.id === proposalId);
+    if (!proposal) {
+      setMutationError({
+        message: "Точное решение больше не загружено. Обновите очередь.",
+        scope: `proposal:${proposalId}`
+      });
       return;
     }
-
+    const mutationToken = beginMutation(`approve:${proposalId}`);
+    if (mutationToken === null) {
+      return;
+    }
     setMutationError(null);
     setSuccessMessage(null);
-    setPendingMutation(`approve:${proposalId}`);
-    const requestWorkspaceId = workspaceId;
+    const attemptKey = `approved:${proposalId}`;
+    const idempotencyKey = decisionAttemptKeysRef.current.get(attemptKey) ??
+      createLocalActionDecisionIdempotencyKey(proposalId, "approved");
+    decisionAttemptKeysRef.current.set(attemptKey, idempotencyKey);
     try {
-      const response = await approveActionProposal(requestWorkspaceId, proposalId);
+      const response = await submitLocalActionDecisionWithOneRetry({
+        decision: "approved",
+        idempotencyKey,
+        proposal,
+        workspaceId: requestWorkspaceId
+      });
       if (!isCurrentMutationContext(requestWorkspaceId)) {
         return;
       }
@@ -488,6 +560,7 @@ export function ActionProposalsPanel({
       setStatus("ready");
       clearSelectedEvidenceContext();
       setSuccessMessage(M.actionsPanel.approveSuccess);
+      decisionAttemptKeysRef.current.delete(attemptKey);
       focusMissionDestinationAfterRender();
     } catch (caught: unknown) {
       if (!isCurrentMutationContext(requestWorkspaceId)) {
@@ -497,10 +570,15 @@ export function ActionProposalsPanel({
         message: caught instanceof Error ? caught.message : M.common.requestFailed,
         scope: `proposal:${proposalId}`
       });
-    } finally {
-      if (isCurrentMutationContext(requestWorkspaceId)) {
-        setPendingMutation(null);
+      if (!isAmbiguousLocalActionDecisionFailure(caught)) {
+        decisionAttemptKeysRef.current.delete(attemptKey);
       }
+      if (caught instanceof ApiRequestError && caught.status === 409) {
+        focusAfterReloadRef.current = true;
+        setReloadKey((current) => current + 1);
+      }
+    } finally {
+      finishMutation(mutationToken, requestWorkspaceId);
     }
   }
 
@@ -512,17 +590,32 @@ export function ActionProposalsPanel({
     if (!capabilities.canReviewProposals) {
       return;
     }
-    if (executionBusyProposalId) {
+    const requestWorkspaceId = workspaceId;
+    const proposal = data?.proposals.find((item) => item.id === proposalId);
+    if (!proposal) {
+      setMutationError({
+        message: "Точное решение больше не загружено. Обновите очередь.",
+        scope: `proposal:${proposalId}`
+      });
       return;
     }
-
+    const mutationToken = beginMutation(`reject:${proposalId}`);
+    if (mutationToken === null) {
+      return;
+    }
     setMutationError(null);
     setSuccessMessage(null);
-    setPendingMutation(`reject:${proposalId}`);
-    const requestWorkspaceId = workspaceId;
+    const attemptKey = `rejected:${proposalId}`;
+    const idempotencyKey = decisionAttemptKeysRef.current.get(attemptKey) ??
+      createLocalActionDecisionIdempotencyKey(proposalId, "rejected");
+    decisionAttemptKeysRef.current.set(attemptKey, idempotencyKey);
     try {
-      const response = await rejectActionProposal(requestWorkspaceId, proposalId, {
-        reason: M.actionsPanel.rejectReason
+      const response = await submitLocalActionDecisionWithOneRetry({
+        decision: "rejected",
+        idempotencyKey,
+        proposal,
+        reason: M.actionsPanel.rejectReason,
+        workspaceId: requestWorkspaceId
       });
       if (!isCurrentMutationContext(requestWorkspaceId)) {
         return;
@@ -531,6 +624,7 @@ export function ActionProposalsPanel({
       setStatus("ready");
       clearSelectedEvidenceContext();
       setSuccessMessage(M.actionsPanel.rejectSuccess);
+      decisionAttemptKeysRef.current.delete(attemptKey);
       focusMissionDestinationAfterRender();
     } catch (caught: unknown) {
       if (!isCurrentMutationContext(requestWorkspaceId)) {
@@ -540,14 +634,20 @@ export function ActionProposalsPanel({
         message: caught instanceof Error ? caught.message : M.common.requestFailed,
         scope: `proposal:${proposalId}`
       });
-    } finally {
-      if (isCurrentMutationContext(requestWorkspaceId)) {
-        setPendingMutation(null);
+      if (!isAmbiguousLocalActionDecisionFailure(caught)) {
+        decisionAttemptKeysRef.current.delete(attemptKey);
       }
+      if (caught instanceof ApiRequestError && caught.status === 409) {
+        focusAfterReloadRef.current = true;
+        setReloadKey((current) => current + 1);
+      }
+    } finally {
+      finishMutation(mutationToken, requestWorkspaceId);
     }
   }
 
   function toggleProposalSelection(proposalId: string) {
+    if (operationIsActive()) return;
     setSelectedProposalIds((current) =>
       current.includes(proposalId)
         ? current.filter((existingId) => existingId !== proposalId)
@@ -556,6 +656,7 @@ export function ActionProposalsPanel({
   }
 
   function selectVisibleProposed() {
+    if (operationIsActive()) return;
     setSelectedProposalIds(
       visibleProposedProposalIds(
         data?.proposals ?? [],
@@ -582,9 +683,6 @@ export function ActionProposalsPanel({
     if (!capabilities.canReviewProposals) {
       return;
     }
-    if (executionBusyProposalId) {
-      return;
-    }
     const proposalsToMutate = selectedProposalsForBulkMutation(
       data?.proposals ?? [],
       selectedProposalIds
@@ -593,9 +691,12 @@ export function ActionProposalsPanel({
       return;
     }
 
+    const mutationToken = beginMutation(mutation);
+    if (mutationToken === null) {
+      return;
+    }
     setMutationError(null);
     setSuccessMessage(null);
-    setPendingMutation(mutation);
     const requestWorkspaceId = workspaceId;
     try {
       const proposalIds = proposalsToMutate.map((proposal) => proposal.id);
@@ -668,9 +769,7 @@ export function ActionProposalsPanel({
         scope: "bulk"
       });
     } finally {
-      if (isCurrentMutationContext(requestWorkspaceId)) {
-        setPendingMutation(null);
-      }
+      finishMutation(mutationToken, requestWorkspaceId);
     }
   }
 
@@ -698,6 +797,7 @@ export function ActionProposalsPanel({
       mutationError={mutationError}
       onApprove={capabilities.canReviewProposals ? approve : undefined}
       onCloseEvidence={() => {
+        if (operationIsActive()) return;
         clearSelectedEvidenceContext();
       }}
       onCreate={capabilities.canCreateProposals ? submitCreate : undefined}
@@ -706,21 +806,26 @@ export function ActionProposalsPanel({
       }
       onReject={capabilities.canReviewProposals ? reject : undefined}
       onRefreshProposals={() => {
+        // Trusted completion refresh: execution controls call this while they
+        // still own the operation lock. User-triggered navigation and filters
+        // remain guarded separately until onBusyChange(false).
+        if (!canScheduleProposalRefresh("execution_complete", operationIsActive())) {
+          return;
+        }
         focusAfterReloadRef.current = true;
         setReloadKey((current) => current + 1);
       }}
       onSelectProposal={(proposalId) => {
-        if (executionBusyProposalId) {
-          return;
-        }
+        if (operationIsActive()) return;
         setActiveProposalId(proposalId);
         clearSelectedEvidenceContext();
       }}
-      onRetry={() => setReloadKey((current) => current + 1)}
+      onRetry={() => {
+        if (!canScheduleProposalRefresh("user", operationIsActive())) return;
+        setReloadKey((current) => current + 1);
+      }}
       onOriginFilterChange={(filter) => {
-        if (executionBusyProposalId) {
-          return;
-        }
+        if (operationIsActive()) return;
         setOriginFilter(filter);
         setActiveProposalId(null);
         clearSelectedEvidenceContext();
@@ -733,10 +838,14 @@ export function ActionProposalsPanel({
       }
       onClearSelectedProposals={
         capabilities.canReviewProposals
-          ? () => setSelectedProposalIds([])
+          ? () => {
+              if (operationIsActive()) return;
+              setSelectedProposalIds([]);
+            }
           : undefined
       }
       onSelectEvidence={(evidence, title, count, proposalId) => {
+        if (operationIsActive()) return;
         setSelectedEvidence(evidence);
         setSelectedEvidenceTitle(title);
         setSelectedEvidenceCount(typeof count === "number" ? count : null);
@@ -746,17 +855,23 @@ export function ActionProposalsPanel({
         capabilities.canReviewProposals ? selectVisibleProposed : undefined
       }
       onAuditSourceFilterChange={(filter) => {
-        if (executionBusyProposalId) {
-          return;
-        }
+        if (operationIsActive()) return;
         setAuditSourceFilter(filter);
         setActiveProposalId(null);
         clearSelectedEvidenceContext();
       }}
       onExecutionBusyChange={(proposalId, isBusy) => {
-        setExecutionBusyProposalId((current) =>
-          isBusy ? proposalId : current === proposalId ? null : current
-        );
+        if (isBusy) {
+          if (operationIsActive()) return false;
+          executionBusyProposalIdRef.current = proposalId;
+          setExecutionBusyProposalId(proposalId);
+          return true;
+        }
+        if (executionBusyProposalIdRef.current === proposalId) {
+          executionBusyProposalIdRef.current = null;
+          setExecutionBusyProposalId(null);
+        }
+        return true;
       }}
       onExecutionComplete={(proposalId) => {
         setStatusFilter("all");
@@ -766,9 +881,7 @@ export function ActionProposalsPanel({
         clearSelectedEvidenceContext();
       }}
       onStatusFilterChange={(filter) => {
-        if (executionBusyProposalId) {
-          return;
-        }
+        if (operationIsActive()) return;
         setStatusFilter(filter);
         setActiveProposalId(null);
         clearSelectedEvidenceContext();
@@ -885,6 +998,7 @@ export function ActionProposalsPanelView({
     : null;
   const canCreate = canSubmitCreateForm(createForm);
   const executionBusy = executionBusyProposalId !== null;
+  const operationBusy = executionBusy || pendingMutation !== null;
 
   return (
     <section className="missions-room" aria-labelledby="missions-title">
@@ -961,7 +1075,12 @@ export function ActionProposalsPanelView({
             description={error ?? M.actionsPanel.unavailableDescription}
             title={M.actionsPanel.unavailableTitle}
           />
-          <button className="button secondary" onClick={onRetry} type="button">
+          <button
+            className="button secondary"
+            disabled={operationBusy}
+            onClick={onRetry}
+            type="button"
+          >
             {M.common.retry}
           </button>
         </>
@@ -980,14 +1099,14 @@ export function ActionProposalsPanelView({
               <div className="decision-room-disclosure-body">
                 <ActionStatusFilter
                   activeFilter={statusFilter}
-                  disabled={executionBusy}
+                  disabled={operationBusy}
                   onChange={onStatusFilterChange}
                   proposals={proposals}
                 />
 
                 <ActionOriginFilter
                   activeFilter={originFilter}
-                  disabled={executionBusy}
+                  disabled={operationBusy}
                   onChange={onOriginFilterChange}
                   proposals={statusFilteredProposals}
                 />
@@ -995,7 +1114,7 @@ export function ActionProposalsPanelView({
                 {originFilter === "audit" ? (
                   <ActionAuditSourceFilter
                     activeFilter={auditSourceFilter}
-                    disabled={executionBusy}
+                    disabled={operationBusy}
                     onChange={onAuditSourceFilterChange}
                     proposals={statusFilteredProposals}
                   />
@@ -1004,7 +1123,7 @@ export function ActionProposalsPanelView({
                 {canReviewProposals && selectedProposedCount === 0 ? (
                   <button
                     className="button secondary decision-room-select-visible"
-                    disabled={executionBusy || visibleProposedCount === 0}
+                    disabled={operationBusy || visibleProposedCount === 0}
                     onClick={onSelectVisibleProposed}
                     type="button"
                   >
@@ -1028,7 +1147,7 @@ export function ActionProposalsPanelView({
               onClearSelection={onClearSelectedProposals}
               onRejectSelected={onBulkReject}
               onSelectVisibleProposed={onSelectVisibleProposed}
-              disabled={executionBusy}
+              disabled={operationBusy}
               error={mutationError?.scope === "bulk" ? mutationError.message : null}
               pendingMutation={pendingMutation}
               selectedCount={selectedProposedCount}
@@ -1038,7 +1157,7 @@ export function ActionProposalsPanelView({
 
           {activeProposal ? (
             <section
-              aria-busy={isRefreshing}
+              aria-busy={isRefreshing || operationBusy}
               aria-label="Рабочая зона миссий"
               className="missions-workspace"
             >
@@ -1066,7 +1185,7 @@ export function ActionProposalsPanelView({
               <MissionQueue
                 activeProposalId={activeProposal.id}
                 canReviewProposals={canReviewProposals}
-                disabled={executionBusy}
+                disabled={operationBusy}
                 onSelectProposal={onSelectProposal}
                 onToggleProposalSelection={onToggleProposalSelection}
                 pendingMutation={pendingMutation}
@@ -1104,7 +1223,8 @@ export function ActionProposalsPanelView({
                     isPending={pendingMutation === "create"}
                     onChange={onCreateFormChange}
                     onSubmit={onCreate}
-                    submitDisabled={!canCreate || executionBusy}
+                    operationDisabled={operationBusy}
+                    submitDisabled={!canCreate || operationBusy}
                   />
                 </div>
               </details>
@@ -1392,12 +1512,14 @@ function ActionProposalCreateForm({
   isPending,
   onChange,
   onSubmit,
+  operationDisabled,
   submitDisabled
 }: {
   form: ActionProposalCreateFormState;
   isPending: boolean;
   onChange?: (field: keyof ActionProposalCreateFormState, value: string) => void;
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
+  operationDisabled: boolean;
   submitDisabled: boolean;
 }) {
   const isGitHubIssue = form.proposalKind === "github_issue";
@@ -1407,6 +1529,7 @@ function ActionProposalCreateForm({
       <div className="field">
         <label htmlFor="proposal-kind">{M.actionCreate.typeLabel}</label>
         <select
+          disabled={operationDisabled || isPending}
           id="proposal-kind"
           onChange={(event) => onChange?.("proposalKind", event.target.value)}
           value={form.proposalKind}
@@ -1418,6 +1541,7 @@ function ActionProposalCreateForm({
       <div className="field">
         <label htmlFor="proposal-title">{M.actionCreate.titleLabel}</label>
         <input
+          disabled={operationDisabled || isPending}
           id="proposal-title"
           maxLength={500}
           onChange={(event) => onChange?.("title", event.target.value)}
@@ -1429,6 +1553,7 @@ function ActionProposalCreateForm({
       <div className="field">
         <label htmlFor="proposal-description">{M.actionCreate.descriptionLabel}</label>
         <textarea
+          disabled={operationDisabled || isPending}
           id="proposal-description"
           maxLength={5000}
           onChange={(event) => onChange?.("description", event.target.value)}
@@ -1441,6 +1566,7 @@ function ActionProposalCreateForm({
           <div className="field">
             <label htmlFor="proposal-repository">{M.actionCreate.repositoryLabel}</label>
             <input
+              disabled={operationDisabled || isPending}
               id="proposal-repository"
               onChange={(event) => onChange?.("repositoryFullName", event.target.value)}
               placeholder={M.actionCreate.repositoryPlaceholder}
@@ -1451,6 +1577,7 @@ function ActionProposalCreateForm({
           <div className="field">
             <label htmlFor="proposal-issue-body">{M.actionCreate.issueBodyLabel}</label>
             <textarea
+              disabled={operationDisabled || isPending}
               id="proposal-issue-body"
               onChange={(event) => onChange?.("issueBody", event.target.value)}
               placeholder={M.actionCreate.issueBodyPlaceholder}
@@ -1822,7 +1949,10 @@ function MissionDecisionConsole({
   drawerSelectionMode: "default" | "manual" | null;
   drawerTitle: string | null;
   onApprove?: (proposalId: string) => void;
-  onExecutionBusyChange?: (proposalId: string, isBusy: boolean) => void;
+  onExecutionBusyChange?: (
+    proposalId: string,
+    isBusy: boolean
+  ) => boolean | void;
   onExecutionComplete?: (proposalId: string) => void;
   onRefreshProposals?: () => void;
   onReject?: (proposalId: string) => void;
@@ -1841,9 +1971,13 @@ function MissionDecisionConsole({
   const [executionOutcome, setExecutionOutcome] =
     useState<ActionExecutionOutcome | null>(null);
 
-  function handleExecutionBusyChange(isBusy: boolean) {
+  function handleExecutionBusyChange(isBusy: boolean): boolean | void {
+    const accepted = onExecutionBusyChange?.(proposal.id, isBusy);
+    if (isBusy && accepted === false) {
+      return false;
+    }
     setExecutionBusy(isBusy);
-    onExecutionBusyChange?.(proposal.id, isBusy);
+    return accepted;
   }
 
   function handleExecutionComplete(outcome: ActionExecutionOutcome) {
@@ -1852,6 +1986,8 @@ function MissionDecisionConsole({
       onExecutionComplete?.(proposal.id);
     }
   }
+
+  const operationBusy = executionBusy || pendingMutation !== null;
 
   return (
     <article className="mission-console" id="mission-console" aria-labelledby="mission-console-title">
@@ -1866,7 +2002,7 @@ function MissionDecisionConsole({
             </span>
             <button
               className="mission-console-return"
-              disabled={executionBusy}
+              disabled={operationBusy}
               onClick={() =>
                 document.getElementById(`mission-queue-${proposal.id}`)?.focus()
               }
@@ -1882,7 +2018,7 @@ function MissionDecisionConsole({
         </p>
       </header>
 
-      {executionBusy ? (
+      {operationBusy ? (
         <p className="mission-operation-lock" role="status">
           Завершаем защищённую операцию. Переключение миссии, компании и раздела
           временно приостановлено.
@@ -1975,6 +2111,7 @@ function MissionDecisionConsole({
 
       {canReviewProposals ? (
         <ProposalNextStep
+          disabled={pendingMutation !== null}
           onExecutionBusyChange={(_proposalId, isBusy) =>
             handleExecutionBusyChange(isBusy)
           }
@@ -2017,6 +2154,7 @@ function MissionDecisionConsole({
           <ProposalAuditDetails proposal={proposal} />
           {canReviewProposals && !isPreviewReadyGithubIssueProposal(proposal) ? (
             <ActionExecutionControls
+              disabled={pendingMutation !== null}
               key={proposal.id}
               onBusyChange={handleExecutionBusyChange}
               onComplete={handleExecutionComplete}
@@ -2103,11 +2241,13 @@ function MissionExecutionOutcome({
 }
 
 function ProposalNextStep({
+  disabled = false,
   onExecutionBusyChange,
   onExecutionComplete,
   onRefreshProposals,
   proposal
 }: {
+  disabled?: boolean;
   onExecutionBusyChange?: (proposalId: string, isBusy: boolean) => void;
   onExecutionComplete?: (outcome: ActionExecutionOutcome) => void;
   onRefreshProposals?: () => void;
@@ -2121,6 +2261,7 @@ function ProposalNextStep({
       <div className="decision-room-next-step">
         <span>Следующий шаг</span>
         <ActionExecutionControls
+          disabled={disabled}
           key={proposal.id}
           onBusyChange={(isBusy) =>
             onExecutionBusyChange?.(proposal.id, isBusy)
@@ -2368,12 +2509,12 @@ function ProposalActions({
 
   const approvePending = pendingMutation === `approve:${proposal.id}`;
   const rejectPending = pendingMutation === `reject:${proposal.id}`;
-  const bulkPending = isBulkMutationPending(pendingMutation);
+  const anyMutationPending = pendingMutation !== null;
   return (
     <div className="actions-row">
       <button
         className="button"
-        disabled={approvePending || rejectPending || bulkPending}
+        disabled={anyMutationPending}
         onClick={() => onApprove?.(proposal.id)}
         type="button"
       >
@@ -2381,7 +2522,7 @@ function ProposalActions({
       </button>
       <button
         className="button secondary"
-        disabled={approvePending || rejectPending || bulkPending}
+        disabled={anyMutationPending}
         onClick={() => onReject?.(proposal.id)}
         type="button"
       >

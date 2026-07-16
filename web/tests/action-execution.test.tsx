@@ -45,6 +45,7 @@ const proposedProposal: ActionProposal = {
   rejection_reason: null,
   created_at: "2026-06-25T01:00:00+06:00",
   updated_at: "2026-06-25T01:00:00+06:00",
+  proposal_version: "ap1_proposal_1",
   is_live: false,
   execution_started: false,
   warnings: []
@@ -201,6 +202,7 @@ function renderControls(
       auditWarning={props.auditWarning ?? null}
       confirmationChecked={props.confirmationChecked ?? false}
       connectionId={props.connectionId ?? ""}
+      disabled={props.disabled ?? false}
       error={props.error ?? null}
       executeResult={props.executeResult ?? null}
       isExecutePending={props.isExecutePending ?? false}
@@ -510,6 +512,18 @@ test("requires explicit confirmation before enabled live execution button", () =
     preview: enabledPreview
   });
   assert.ok(enabledHtml.includes(M.actionExecution.execute));
+});
+
+test("disables preview, history, and live controls while another operation owns the session", () => {
+  const html = renderControls({
+    confirmationChecked: true,
+    connectionId: "connection-1",
+    disabled: true,
+    preview: enabledPreview
+  });
+
+  assert.match(html, /<input disabled="" id="execution-connection-proposal-2"/);
+  assert.match(html, /<input disabled="" id="execution-confirm-proposal-2"/);
 });
 
 test("renders execute result without raw provider response dump", () => {

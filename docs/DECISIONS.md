@@ -2787,6 +2787,53 @@ acknowledgement or external action. Source setup continues through the existing
 role-gated product routes; later public company creation requires a separate
 security/product decision.
 
+## DEC-089 - Headquarters Local Decisions Are Version-Bound And Receipt-First
+
+Decision (2026-07-17): a local approve/reject from Headquarters is a distinct
+human command, not a shortened external execute path. The command is bound to
+the exact persisted `ActionProposal` row through a deterministic `ap1_*`
+`proposal_version`; Headquarters additionally sends its visible `hqs1_*`
+`expected_snapshot_id`. The server re-checks active user, workspace membership
+and admin-or-owner authority inside the write session, locks the exact proposal
+row, validates the proposal version and, when supplied, recomputes the current
+Headquarters context before changing status.
+
+Every single local decision requires a client idempotency key. The audit event
+stores a stable request fingerprint and the pre-decision proposal version.
+Replaying the same key and input returns the original durable receipt; reusing
+the key with different decision input, a stale proposal/snapshot or an invalid
+transition fails with `409`. The receipt names the proposal, decision, audit
+event, recorded time and version and always states
+`external_write_performed=false`. The command creates no `ActionExecution` and
+cannot call a provider. Existing bulk review remains a separate compatibility
+path and is not presented as this exact receipt-first Headquarters flow.
+
+The Headquarters modal first re-reads the exact workspace proposal and requires
+its version to match the mission. Pending submission locks overlay dismissal,
+workspace/mission navigation and duplicate submit. An ambiguous response gets
+at most one identical POST retry with the same idempotency key; only the command
+endpoint's validated authoritative receipt can complete the UI. Audit read-back
+must not fabricate or infer a receipt. Exhausted network/5xx failure keeps the
+same key for a manual retry; 4xx and response-contract failures fail closed.
+After a persisted result, Headquarters refetches the same server projection. A
+refetch failure preserves both the receipt and previous confirmed snapshot and
+offers a separate retry; it never relabels a saved decision as failed.
+
+Exact mission/profile disclosure follows the same rule. Opaque Company Map
+selectors may resolve only the requested current-snapshot entity; malformed,
+foreign and stale selectors have no generic company fallback. Mission fields
+without their own provenance display `Не определено`. Employee access role is
+not a business title, and customer people/history is derived only from durable
+relations and exact bounded touchpoints. This slice adds no business-profile
+write, inferred role, customer health, migration, provider call, LLM call or
+external execution preview. External LC-08 confirmation remains gated on a
+separate exact preview digest, current actor/RBAC re-check and explicit human
+permission before any provider write.
+The drawer renderers are implemented, but the production Headquarters mission
+projection still leaves confirmed owner, primary-person and organization IDs
+empty; confirmed employee/customer navigation therefore remains an explicit
+schema/data gate rather than a claimed end-to-end flow.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

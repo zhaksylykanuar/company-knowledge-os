@@ -80,9 +80,10 @@ test("company brain route renders the client world shell", async () => {
   const page = await CompanyBrainPage({});
   assert.equal(page.type, CompanyBrainPageClient);
   assert.equal(page.props.profileSelector, null);
+  assert.equal(page.props.profileSelectorRequested, false);
 });
 
-test("company brain route forwards only a normalized opaque profile selector", async () => {
+test("company brain route preserves explicit profile intent for client validation", async () => {
   const selected = await CompanyBrainPage({
     searchParams: Promise.resolve({ profile: "v1:member:member-1" })
   });
@@ -91,5 +92,7 @@ test("company brain route forwards only a normalized opaque profile selector", a
   });
 
   assert.equal(selected.props.profileSelector, "v1:member:member-1");
+  assert.equal(selected.props.profileSelectorRequested, true);
   assert.equal(invalid.props.profileSelector, null);
+  assert.equal(invalid.props.profileSelectorRequested, true);
 });

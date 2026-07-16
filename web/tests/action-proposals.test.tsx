@@ -22,12 +22,14 @@ import {
 import { M, T } from "../lib/messages";
 import type {
   ActionProposal,
+  ActionProposalDecisionResponse,
   ActionProposalListResponse,
   ActionProposalMutationResponse
 } from "../lib/types";
 import {
   actionCapabilitiesForRole,
   ActionProposalsPanelView,
+  canScheduleProposalRefresh,
   DEFAULT_CREATE_FORM,
   loadActionProposalPanelData,
   mergeExactActionProposal,
@@ -67,6 +69,7 @@ const proposedProposal: ActionProposal = {
   rejection_reason: null,
   created_at: "2026-06-25T01:00:00+06:00",
   updated_at: "2026-06-25T01:00:00+06:00",
+  proposal_version: "ap1_proposal_1",
   is_live: false,
   execution_started: false,
   warnings: ["Action proposal API is local-only and does not execute provider actions."]
@@ -250,6 +253,21 @@ const mutationResponse: ActionProposalMutationResponse = {
     "Action approved locally. Execution is deferred to a later step.",
     "Action proposal API is local-only and does not execute provider actions."
   ]
+};
+
+const decisionResponse: ActionProposalDecisionResponse = {
+  ...mutationResponse,
+  decision_receipt: {
+    decision: "approved",
+    external_write_performed: false,
+    proposal_id: approvedProposal.id,
+    proposal_version: proposedProposal.proposal_version,
+    receipt_id: "receipt-1",
+    recorded_at: "2026-06-25T01:05:00+06:00",
+    replayed: false
+  },
+  execution_started: false,
+  is_live: false
 };
 
 function renderPanel(
@@ -644,27 +662,39 @@ test("approves and rejects locally through supported endpoints", async () => {
   globalThis.fetch = (async (input, init) => {
     calls.push(`${init?.method ?? "GET"} ${String(input)}`);
     if (String(input).endsWith("/reject")) {
-      assert.equal(init?.body, JSON.stringify({ reason: "Not now" }));
+      assert.equal(init?.body, JSON.stringify({
+        expected_snapshot_id: null,
+        idempotency_key: "reject-key",
+        proposal_version: proposedProposal.proposal_version,
+        reason: "Not now"
+      }));
       return new Response(
-        JSON.stringify({ ...mutationResponse, proposal: rejectedProposal }),
+        JSON.stringify({ ...decisionResponse, proposal: rejectedProposal }),
         {
           headers: { "Content-Type": "application/json" },
           status: 200
         }
       );
     }
-    return new Response(JSON.stringify(mutationResponse), {
+    return new Response(JSON.stringify(decisionResponse), {
       headers: { "Content-Type": "application/json" },
       status: 200
     });
   }) as typeof fetch;
 
   try {
-    const approved = await approveActionProposal("workspace-123", "proposal-1", {});
+    const approved = await approveActionProposal("workspace-123", "proposal-1", {
+      idempotency_key: "approve-key",
+      proposal_version: proposedProposal.proposal_version
+    });
     const rejected = await rejectActionProposal(
       "workspace-123",
       "proposal-1",
-      { reason: "Not now" },
+      {
+        idempotency_key: "reject-key",
+        proposal_version: proposedProposal.proposal_version,
+        reason: "Not now"
+      },
       {}
     );
 
@@ -774,7 +804,10 @@ test("surfaces unsupported transition errors", async () => {
 
   try {
     await assert.rejects(
-      approveActionProposal("workspace-123", "proposal-1", {}),
+      approveActionProposal("workspace-123", "proposal-1", {
+        idempotency_key: "approve-key",
+        proposal_version: proposedProposal.proposal_version
+      }),
       /action proposal is not in proposed status/
     );
   } finally {
@@ -1404,6 +1437,32 @@ test("busy external control locks mission switching and local filters", () => {
     /class="mission-queue-open" disabled="" id="mission-queue-proposal-2"/
   );
   assert.match(html, /class="segment active" disabled=""/);
+});
+
+test("a local mutation locks every other mission and execution control", () => {
+  const html = renderPanel({
+    activeProposalId: approvedProposal.id,
+    pendingMutation: "create",
+    statusFilter: "all"
+  });
+
+  assert.match(html, /Завершаем защищённую операцию/);
+  assert.match(
+    html,
+    /class="mission-queue-open" disabled="" id="mission-queue-proposal-1"/
+  );
+  assert.match(html, /class="segment active" disabled=""/);
+  assert.match(html, /<select disabled="" id="proposal-kind"/);
+  assert.match(
+    html,
+    /<button class="button secondary" disabled="" type="button">Проверить внешний шаг<\/button>/
+  );
+});
+
+test("only an execution completion may schedule refresh while the operation lock is held", () => {
+  assert.equal(canScheduleProposalRefresh("user", true), false);
+  assert.equal(canScheduleProposalRefresh("user", false), true);
+  assert.equal(canScheduleProposalRefresh("execution_complete", true), true);
 });
 
 test("mutation errors stay next to their proposal or creation form", () => {

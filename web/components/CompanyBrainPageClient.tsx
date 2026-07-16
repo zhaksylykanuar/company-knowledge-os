@@ -9,10 +9,12 @@ import { NormalizedEntitiesPanel } from "./NormalizedEntitiesPanel";
 
 type CompanyBrainPageClientProps = {
   profileSelector: string | null;
+  profileSelectorRequested: boolean;
 };
 
 export function CompanyBrainPageClient({
-  profileSelector
+  profileSelector,
+  profileSelectorRequested
 }: CompanyBrainPageClientProps) {
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [dataLayerOpen, setDataLayerOpen] = useState(false);
@@ -26,6 +28,7 @@ export function CompanyBrainPageClient({
       <CompanyWorldPanel
         onRefresh={refreshWorld}
         profileSelector={profileSelector}
+        profileSelectorRequested={profileSelectorRequested}
         refreshSignal={refreshSignal}
       />
       <details

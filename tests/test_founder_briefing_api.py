@@ -1450,6 +1450,11 @@ async def test_generate_briefing_action_proposals_from_non_github_items(
         }
         assert all(proposal["briefing_item_id"] for proposal in proposals)
         assert all(proposal["evidence_refs"] for proposal in proposals)
+        assert all(
+            proposal["proposal_version"].startswith("ap1_")
+            and len(proposal["proposal_version"]) == 68
+            for proposal in proposals
+        )
 
         assert repeated.status_code == 200, repeated.text
         repeated_payload = repeated.json()

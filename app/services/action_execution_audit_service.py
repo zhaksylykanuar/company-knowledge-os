@@ -98,6 +98,18 @@ async def list_execution_events(
     return list(rows)
 
 
+async def get_execution_event_by_idempotency_key(
+    session: AsyncSession,
+    *,
+    idempotency_key: str,
+) -> ActionExecutionEvent | None:
+    return await session.scalar(
+        select(ActionExecutionEvent).where(
+            ActionExecutionEvent.idempotency_key == idempotency_key
+        )
+    )
+
+
 def serialize_execution_event(event: ActionExecutionEvent) -> dict[str, Any]:
     return {
         "id": event.id,
@@ -140,6 +152,24 @@ def execution_event_idempotency_key(
     }
     digest = stable_digest(basis)
     return f"action-execution-event:{event_type}:{digest}"
+
+
+def local_decision_event_idempotency_key(
+    *,
+    workspace_id: UUID,
+    action_proposal_id: UUID,
+    client_idempotency_key: str,
+) -> str:
+    """Scope a client key to one proposal without storing the raw value."""
+
+    digest = stable_digest(
+        {
+            "action_proposal_id": str(action_proposal_id),
+            "client_idempotency_key": client_idempotency_key,
+            "workspace_id": str(workspace_id),
+        }
+    )
+    return f"action-local-decision:{digest}"
 
 
 def stable_digest(payload: Mapping[str, Any]) -> str:

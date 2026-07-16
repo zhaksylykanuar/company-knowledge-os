@@ -29,6 +29,7 @@ from app.db.action_models import (
     ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_TARGET_PROVIDER_INTERNAL,
     ACTION_TYPE_INTERNAL_TODO,
+    ActionExecutionEvent,
     ActionProposal,
 )
 from app.db.base import AsyncSessionLocal
@@ -178,6 +179,21 @@ async def _cleanup(marker: str) -> None:
             ).scalars()
         )
         if workspace_ids:
+            proposal_ids = list(
+                (
+                    await session.execute(
+                        select(ActionProposal.id).where(
+                            ActionProposal.workspace_id.in_(workspace_ids)
+                        )
+                    )
+                ).scalars()
+            )
+            if proposal_ids:
+                await session.execute(
+                    delete(ActionExecutionEvent).where(
+                        ActionExecutionEvent.action_proposal_id.in_(proposal_ids)
+                    )
+                )
             briefing_ids = list(
                 (
                     await session.execute(
@@ -752,6 +768,10 @@ async def test_ranking_uses_workspace_verified_evidence_and_trusted_severity(
         )
         assert body["pulse"][0]["value"] == 2
         assert body["queue"][0]["id"] == f"proposal:{valid.json()['proposal']['id']}"
+        assert (
+            body["queue"][0]["proposal_version"]
+            == valid.json()["proposal"]["proposal_version"]
+        )
         assert body["queue"][0]["severity"] == "unknown"
         assert body["queue"][0]["action"]["target"] == (
             f"/actions?proposal={body['queue'][0]['proposal_id']}&status=proposed"
@@ -784,12 +804,12 @@ async def test_ranking_uses_workspace_verified_evidence_and_trusted_severity(
         assert changed_status == 200
         assert changed["priority"]["severity"] == "critical"
         assert changed["priority"]["confidence"] == 0.8
-        assert changed["priority"]["proposal_version"] != trusted_version
+        assert changed["priority"]["proposal_version"] == trusted_version
     finally:
         await _cleanup(marker)
 
 
-async def test_proposal_version_binds_exact_evidence_and_full_action_content(
+async def test_proposal_version_binds_only_exact_action_proposal_row(
     monkeypatch,
 ) -> None:
     marker = uuid4().hex
@@ -873,7 +893,7 @@ async def test_proposal_version_binds_exact_evidence_and_full_action_content(
         )
         assert second_status == 200
         second_version = second["priority"]["proposal_version"]
-        assert second_version != first_version
+        assert second_version == first_version
 
         async with AsyncSessionLocal() as session:
             await session.execute(
@@ -889,7 +909,7 @@ async def test_proposal_version_binds_exact_evidence_and_full_action_content(
         )
         assert third_status == 200
         third_version = third["priority"]["proposal_version"]
-        assert third_version != second_version
+        assert third_version == second_version
         assert third["priority"]["evidence_refs"][0]["target"] is None
 
         async with AsyncSessionLocal() as session:
@@ -915,6 +935,128 @@ async def test_proposal_version_binds_exact_evidence_and_full_action_content(
         )
         assert fourth_status == 200
         assert fourth["priority"]["proposal_version"] != third_version
+    finally:
+        await _cleanup(marker)
+
+
+async def test_snapshot_bound_local_decision_returns_receipt_and_promotes_next_mission(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        owner, workspace = await _seed_workspace(marker)
+        repositories = [
+            f"founderos/decision-a-{marker}",
+            f"founderos/decision-b-{marker}",
+        ]
+        async with AsyncSessionLocal() as session:
+            session.add_all(
+                [
+                    Repository(
+                        workspace_id=workspace.id,
+                        provider="github",
+                        external_id=f"decision-{index}-{marker}",
+                        name=repository.rsplit("/", maxsplit=1)[1],
+                        full_name=repository,
+                        visibility="private",
+                    )
+                    for index, repository in enumerate(repositories)
+                ]
+            )
+            await session.commit()
+
+        created_proposals: dict[str, dict] = {}
+        async with _client() as client:
+            for repository in repositories:
+                response = await client.post(
+                    f"/api/v1/workspaces/{workspace.id}/actions/proposals",
+                    headers=_headers(),
+                    params={"owner_email": owner.email},
+                    json=_proposal_payload(ref=repository),
+                )
+                assert response.status_code == 201, response.text
+                proposal = response.json()["proposal"]
+                created_proposals[proposal["id"]] = proposal
+
+        first_status, first, _first_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert first_status == 200
+        selected = first["priority"]
+        assert selected["proposal_id"] in created_proposals
+        assert (
+            selected["proposal_version"]
+            == created_proposals[selected["proposal_id"]]["proposal_version"]
+        )
+
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                update(Workspace)
+                .where(Workspace.id == workspace.id)
+                .values(name=f"Changed headquarters {marker}")
+            )
+            await session.commit()
+
+        decision_payload = {
+            "idempotency_key": f"hq-decision-{uuid4()}",
+            "proposal_version": selected["proposal_version"],
+            "expected_snapshot_id": first["snapshot"]["id"],
+        }
+        async with _client() as client:
+            stale = await client.post(
+                f"/api/v1/workspaces/{workspace.id}/actions/proposals/{selected['proposal_id']}/approve",
+                headers=_headers(),
+                params={"owner_email": owner.email},
+                json=decision_payload,
+            )
+        assert stale.status_code == 409
+        assert stale.json() == {"detail": "headquarters snapshot changed"}
+
+        refreshed_status, refreshed, _refreshed_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert refreshed_status == 200
+        assert refreshed["snapshot"]["id"] != first["snapshot"]["id"]
+        refreshed_mission = next(
+            mission
+            for mission in [refreshed["priority"], *refreshed["queue"]]
+            if mission["proposal_id"] == selected["proposal_id"]
+        )
+        assert refreshed_mission["proposal_version"] == selected["proposal_version"]
+
+        decision_payload["expected_snapshot_id"] = refreshed["snapshot"]["id"]
+        async with _client() as client:
+            approved = await client.post(
+                f"/api/v1/workspaces/{workspace.id}/actions/proposals/{selected['proposal_id']}/approve",
+                headers=_headers(),
+                params={"owner_email": owner.email},
+                json=decision_payload,
+            )
+        assert approved.status_code == 200, approved.text
+        receipt = approved.json()["decision_receipt"]
+        assert receipt["proposal_id"] == selected["proposal_id"]
+        assert receipt["decision"] == "approved"
+        assert receipt["replayed"] is False
+        assert receipt["external_write_performed"] is False
+        assert receipt["proposal_version"] == selected["proposal_version"]
+
+        final_status, final, _final_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert final_status == 200
+        assert final["snapshot"]["id"] != refreshed["snapshot"]["id"]
+        remaining_proposal_ids = {
+            mission["proposal_id"]
+            for mission in [final["priority"], *final["queue"]]
+            if mission["proposal_id"] is not None
+        }
+        assert selected["proposal_id"] not in remaining_proposal_ids
+        assert remaining_proposal_ids == set(created_proposals) - {selected["proposal_id"]}
     finally:
         await _cleanup(marker)
 

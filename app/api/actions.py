@@ -56,6 +56,14 @@ from app.services.action_execution_audit_service import (
     serialize_execution_event,
     stable_digest,
 )
+from app.services.action_proposal_decision_service import (
+    ActionProposalDecisionCommand,
+    ActionProposalDecisionConflictError,
+    ActionProposalDecisionForbiddenError,
+    ActionProposalDecisionNotFoundError,
+    ActionProposalDecisionResult,
+    decide_action_proposal,
+)
 from app.services.github_issue_execution_service import (
     GITHUB_ISSUE_EXECUTION_CONNECTION_NOT_FOUND,
     GITHUB_ISSUE_EXECUTION_PROPOSAL_NOT_APPROVED,
@@ -117,9 +125,22 @@ class ActionProposalCreateRequest(BaseModel):
     created_by: Literal["user"] = "user"
 
 
-class ActionProposalRejectRequest(BaseModel):
+class ActionProposalDecisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
+    idempotency_key: str = Field(min_length=8, max_length=255)
+    proposal_version: str = Field(pattern=r"^ap1_[0-9a-f]{64}$")
+    expected_snapshot_id: str | None = Field(
+        default=None,
+        pattern=r"^hqs1_[0-9a-f]{64}$",
+    )
+
+
+class ActionProposalApproveRequest(ActionProposalDecisionRequest):
+    pass
+
+
+class ActionProposalRejectRequest(ActionProposalDecisionRequest):
     reason: str | None = Field(default=None, max_length=1000)
 
 
@@ -186,6 +207,7 @@ class ActionProposalRead(BaseModel):
     rejection_reason: str | None = None
     created_at: datetime
     updated_at: datetime
+    proposal_version: str
     is_live: bool
     execution_started: bool
     warnings: list[str] = Field(default_factory=list)
@@ -202,6 +224,24 @@ class ActionProposalMutationResponse(BaseModel):
     proposal: ActionProposalRead
     is_live: bool
     execution_started: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ActionProposalDecisionReceiptRead(BaseModel):
+    receipt_id: UUID
+    proposal_id: UUID
+    decision: Literal["approved", "rejected"]
+    recorded_at: datetime
+    replayed: bool
+    external_write_performed: Literal[False]
+    proposal_version: str
+
+
+class ActionProposalDecisionResponse(BaseModel):
+    proposal: ActionProposalRead
+    decision_receipt: ActionProposalDecisionReceiptRead
+    is_live: Literal[False]
+    execution_started: Literal[False]
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -631,43 +671,49 @@ async def get_action_proposal_endpoint(
 
 @router.post(
     "/proposals/{proposal_id}/approve",
-    response_model=ActionProposalMutationResponse,
+    response_model=ActionProposalDecisionResponse,
 )
 async def approve_action_proposal_endpoint(
     workspace_id: UUID,
     proposal_id: UUID,
+    payload: ActionProposalApproveRequest,
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
-) -> ActionProposalMutationResponse:
+) -> ActionProposalDecisionResponse:
     async with AsyncSessionLocal() as session:
         try:
-            proposal = await approve_action_proposal(
+            result = await decide_action_proposal(
                 session,
                 workspace_id=workspace_id,
                 proposal_id=proposal_id,
-                approved_by_user_id=access.workspace_membership.user.id,
-            )
-            await _record_local_review_event(
-                session,
-                proposal=proposal,
-                event_type=ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
-                decision="approved",
-                bulk=False,
+                actor_user_id=access.workspace_membership.user.id,
+                command=ActionProposalDecisionCommand(
+                    decision="approved",
+                    idempotency_key=payload.idempotency_key,
+                    proposal_version=payload.proposal_version,
+                    expected_snapshot_id=payload.expected_snapshot_id,
+                ),
             )
             await session.commit()
-        except ActionProposalNotFoundError as exc:
+        except ActionProposalDecisionNotFoundError as exc:
             await session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=exc.detail,
             ) from exc
-        except ActionProposalTransitionError as exc:
+        except ActionProposalDecisionForbiddenError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=exc.detail,
+            ) from exc
+        except ActionProposalDecisionConflictError as exc:
             await session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=exc.detail,
             ) from exc
-    return _mutation_response(
-        proposal=ActionProposalRead.model_validate(serialize_action_proposal(proposal)),
+    return _decision_response(
+        result=result,
         warnings=[
             ACTION_PROPOSAL_APPROVAL_WARNING,
             ACTION_PROPOSAL_NO_EXECUTION_WARNING,
@@ -677,45 +723,50 @@ async def approve_action_proposal_endpoint(
 
 @router.post(
     "/proposals/{proposal_id}/reject",
-    response_model=ActionProposalMutationResponse,
+    response_model=ActionProposalDecisionResponse,
 )
 async def reject_action_proposal_endpoint(
     workspace_id: UUID,
     proposal_id: UUID,
     payload: ActionProposalRejectRequest,
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
-) -> ActionProposalMutationResponse:
+) -> ActionProposalDecisionResponse:
     async with AsyncSessionLocal() as session:
         try:
-            proposal = await reject_action_proposal(
+            result = await decide_action_proposal(
                 session,
                 workspace_id=workspace_id,
                 proposal_id=proposal_id,
-                rejected_by_user_id=access.workspace_membership.user.id,
-                reason=payload.reason,
-            )
-            await _record_local_review_event(
-                session,
-                proposal=proposal,
-                event_type=ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
-                decision="rejected",
-                bulk=False,
+                actor_user_id=access.workspace_membership.user.id,
+                command=ActionProposalDecisionCommand(
+                    decision="rejected",
+                    idempotency_key=payload.idempotency_key,
+                    proposal_version=payload.proposal_version,
+                    expected_snapshot_id=payload.expected_snapshot_id,
+                    reason=payload.reason,
+                ),
             )
             await session.commit()
-        except ActionProposalNotFoundError as exc:
+        except ActionProposalDecisionNotFoundError as exc:
             await session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=exc.detail,
             ) from exc
-        except ActionProposalTransitionError as exc:
+        except ActionProposalDecisionForbiddenError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=exc.detail,
+            ) from exc
+        except ActionProposalDecisionConflictError as exc:
             await session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=exc.detail,
             ) from exc
-    return _mutation_response(
-        proposal=ActionProposalRead.model_validate(serialize_action_proposal(proposal)),
+    return _decision_response(
+        result=result,
         warnings=[ACTION_PROPOSAL_NO_EXECUTION_WARNING],
     )
 
@@ -1317,6 +1368,30 @@ def _mutation_response(
 ) -> ActionProposalMutationResponse:
     return ActionProposalMutationResponse(
         proposal=proposal,
+        is_live=False,
+        execution_started=False,
+        warnings=warnings,
+    )
+
+
+def _decision_response(
+    *,
+    result: ActionProposalDecisionResult,
+    warnings: list[str],
+) -> ActionProposalDecisionResponse:
+    return ActionProposalDecisionResponse(
+        proposal=ActionProposalRead.model_validate(
+            serialize_action_proposal(result.proposal)
+        ),
+        decision_receipt=ActionProposalDecisionReceiptRead(
+            receipt_id=result.event.id,
+            proposal_id=result.proposal.id,
+            decision=result.decision,
+            recorded_at=result.event.created_at,
+            replayed=result.replayed,
+            external_write_performed=False,
+            proposal_version=result.proposal_version,
+        ),
         is_live=False,
         execution_started=False,
         warnings=warnings,

@@ -1,5 +1,39 @@
 # FounderOS Changelog
 
+## 2026-07-17
+
+### Added
+
+- Added the version-bound local proposal decision contract (DEC-089). Exact
+  single approve/reject commands require an idempotency key and deterministic
+  `ap1_*` proposal version, may bind to the visible `hqs1_*` Headquarters
+  snapshot, re-check current active membership/admin authority in the write
+  session, lock the workspace proposal row and return a durable audit-backed
+  receipt with `external_write_performed=false`. Same-input replay returns the
+  existing receipt; conflicting key reuse, stale version/snapshot and invalid
+  transitions fail with `409`. This command creates no execution, provider
+  call, external write or migration.
+
+### Changed
+
+- Completed the local Headquarters exact-review loop. Mission detail now keeps
+  unproven owner/customer/due/impact fields explicit, exposes field-level
+  provenance separately from general evidence and opens only exact opaque
+  Company Map profiles. Malformed, foreign or stale selectors fail closed
+  instead of showing the company profile. The employee/customer drawer renderers
+  separate product access from unconfirmed business role and use only durable
+  relations plus exact bounded touchpoints. The current production Headquarters
+  projection does not yet emit confirmed mission owner/customer relation IDs,
+  so that end-to-end navigation remains an explicit schema/data gate; unresolved
+  world candidates are the exact profile path currently reachable from HQ.
+  Proposal missions open one
+  compact role-aware local decision modal; pending work locks duplicate
+  navigation, ambiguous transport results retry the same exact POST once with
+  the same idempotency key and accept only its authoritative receipt, and a
+  saved receipt remains visible if the subsequent Headquarters refetch fails.
+  External preview/execute stays outside this modal and behind its existing
+  separate human gate.
+
 ## 2026-07-16
 
 ### Added

@@ -8,6 +8,8 @@ import type {
   ActionProposalBulkRequest,
   ActionProposalBulkResponse,
   ActionProposalCreateRequest,
+  ActionProposalDecisionResponse,
+  ActionProposalDecisionRequest,
   ActionProposalListRequest,
   ActionProposalListResponse,
   ActionProposalMutationResponse,
@@ -767,12 +769,18 @@ export async function createActionProposal(
 export async function approveActionProposal(
   workspaceId: string,
   proposalId: string,
+  request: ActionProposalDecisionRequest,
   options: ApiFetchOptions = {}
-): Promise<ActionProposalMutationResponse> {
-  return apiFetch<ActionProposalMutationResponse>(
+): Promise<ActionProposalDecisionResponse> {
+  return apiFetch<ActionProposalDecisionResponse>(
     buildWorkspaceActionProposalApprovePath(workspaceId, proposalId),
     {
       ...options,
+      body: JSON.stringify({
+        expected_snapshot_id: request.expected_snapshot_id ?? null,
+        idempotency_key: request.idempotency_key,
+        proposal_version: request.proposal_version
+      }),
       method: "POST"
     }
   );
@@ -781,14 +789,17 @@ export async function approveActionProposal(
 export async function rejectActionProposal(
   workspaceId: string,
   proposalId: string,
-  request: ActionProposalRejectRequest = {},
+  request: ActionProposalRejectRequest,
   options: ApiFetchOptions = {}
-): Promise<ActionProposalMutationResponse> {
-  return apiFetch<ActionProposalMutationResponse>(
+): Promise<ActionProposalDecisionResponse> {
+  return apiFetch<ActionProposalDecisionResponse>(
     buildWorkspaceActionProposalRejectPath(workspaceId, proposalId),
     {
       ...options,
       body: JSON.stringify({
+        expected_snapshot_id: request.expected_snapshot_id ?? null,
+        idempotency_key: request.idempotency_key,
+        proposal_version: request.proposal_version,
         reason: request.reason ?? null
       }),
       method: "POST"

@@ -277,14 +277,18 @@ async def _post_proposal(
 
 async def _approve_proposal(
     workspace_id: str,
-    proposal_id: str,
+    proposal: dict,
     owner_email: str,
 ) -> dict:
     async with _async_client() as client:
         response = await client.post(
-            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
+            f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal['id']}/approve",
             headers=_headers(),
             params={"owner_email": owner_email},
+            json={
+                "idempotency_key": f"approve-{uuid4()}",
+                "proposal_version": proposal["proposal_version"],
+            },
         )
     assert response.status_code == 200, response.text
     return response.json()["proposal"]
@@ -297,7 +301,7 @@ async def _create_approved_proposal(
     payload: dict | None = None,
 ) -> dict:
     proposal = await _post_proposal(workspace_id, owner_email, payload=payload)
-    return await _approve_proposal(workspace_id, proposal["id"], owner_email)
+    return await _approve_proposal(workspace_id, proposal, owner_email)
 
 
 async def _seed_proposal(
@@ -1752,7 +1756,7 @@ async def test_approve_endpoint_still_does_not_execute(monkeypatch) -> None:
 
         approved = await _approve_proposal(
             created["workspace"]["id"],
-            proposal["id"],
+            proposal,
             owner_email,
         )
 

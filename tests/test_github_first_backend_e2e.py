@@ -482,6 +482,10 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
                 f"/api/v1/workspaces/{workspace_id}/actions/proposals/{proposal_id}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
+                json={
+                    "idempotency_key": f"backend-e2e-approve-{proposal_id}",
+                    "proposal_version": proposal["proposal_version"],
+                },
             )
             response_texts.append(approve_response.text)
             assert approve_response.status_code == 200, approve_response.text

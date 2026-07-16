@@ -86,11 +86,11 @@ Authenticated `/dashboard` должен сохранить грамматику 
 | Synthetic reference | ✅ | `/demo`, DEC-085, state transition, assistant shell, drawer/modal | Не переносить fixtures в auth product |
 | Local runtime | ✅ | `make local`, loopback, Postgres, backup/restore, safe stop | Повторять release proof после рискованных изменений |
 | Auth/workspace | ✅ | First-party session, workspace selection, membership roles и HQ capabilities | Повторить full role matrix в release proof |
-| Реальный `/dashboard` | ✅ | Единый server snapshot, priority, queue, pulse, signals, evidence и один overlay | Exact profile/mission drill-down и in-place decision receipt/refetch |
+| Реальный `/dashboard` | ✅ bounded | Единый server snapshot, exact mission, fail-closed profile renderer и local decision receipt/refetch | Confirmed mission-person/customer projection, business-profile authoring и external LC-08 остаются gates |
 | Onboarding | ✅ | Пять server-computed steps, evidence, role-aware actions, modal/resume и zero-workspace recovery | Повторять acceptance при изменении readiness contract |
-| Company World | 🟡 | Люди, компании, кандидаты, touchpoints, evidence, human resolution | Компактные profile drawers, pagination, mission ownership |
+| Company World | 🟡 | Люди, компании, кандидаты, exact compact drawers, touchpoints, evidence, human resolution | Durable business-profile authoring, pagination и mission ownership |
 | Briefing | ✅ foundation | Persisted deterministic Briefing/Items, evidence, history и HQ rank/queue input | Exact briefing detail и assistant citations |
-| Action decisions | ✅ foundation | Proposals, approve/reject, preview, audit, execute, receipts | Exact mission deep link и связка receipt → refreshed headquarters snapshot |
+| Action decisions | ✅ local loop | Version-bound idempotent local decision, audit receipt и snapshot-preserving HQ refetch | Exact external preview digest, execute/reconcile и provider proof |
 | GitHub radar | 🟡 | Managed setup, repository scope, bounded reads, receipts | Первый реальный founder-approved read и global health projection |
 | Jira/Gmail/Drive | 🟡 | Canonical local import/list/evidence | Полный UI lifecycle setup → scope/import/read → receipt → disconnect |
 | Изменения с визита | ⛔ | Только current evidence snapshot | Persisted change cursor/checkpoint/dedupe |
@@ -397,18 +397,22 @@ runtime оператором.
 
 ### LC-05 — Сделать exact mission, people и customer drill-down
 
-- [ ] Конкретная mission row открывает карточку именно этой миссии.
-- [ ] Показывать title, why now, impact, due, owner, customer, source set и
+- [x] Конкретная mission row открывает карточку именно этой миссии.
+- [x] Показывать title, why now, impact, due, owner, customer, source set и
   evidence только если они подтверждены.
-- [ ] Owner, customer, due и impact имеют field-level provenance; общий список
+- [x] Owner, customer, due и impact имеют field-level provenance; общий список
   mission evidence не считается доказательством каждого из этих полей.
-- [ ] Неподтверждённое поле показывает `Не определено`, а не synthetic copy.
-- [ ] Добавить exact `proposal_id` deep link в `/actions`.
-- [ ] Вынести компактный mission decision flow из `/actions`, не дублируя API,
+- [x] Неподтверждённое поле показывает `Не определено`, а не synthetic copy.
+- [x] Добавить exact `proposal_id` deep link в `/actions`.
+- [x] Вынести компактный mission decision flow из `/actions`, не дублируя API,
   status logic и execution safety.
-- [ ] Переиспользовать Company Map selectors для person/company drawer.
-- [ ] Customer drawer: `Обзор / Люди / История` только по durable relations.
-- [ ] Employee profile разделяет RBAC role и business role.
+- [x] Переиспользовать Company Map selectors для person/company drawer.
+- [x] UI renderer customer drawer: `Обзор / Люди / История` только по durable
+  relations и exact bounded touchpoints.
+- [x] UI renderer employee profile разделяет RBAC role и business role.
+- [ ] Production Headquarters projection выдаёт подтверждённые owner/customer
+  IDs с отдельным field-level provenance; до этого confirmed employee/customer
+  drawers не считаются достижимыми из реальной mission.
 - [ ] 🔒 GATE: перед добавлением durable employee business profile провести
   schema review; связать membership/internal Person без дублирования identity.
 - [ ] Owner/admin через UI может задать подтверждённые title/function/focus;
@@ -417,9 +421,9 @@ runtime оператором.
   внутреннего account owner, key people, commitments и evidence-backed history.
 - [ ] Commitment/health не выводятся из tone письма; сначала нужен явный
   structured fact или human confirmation с receipt.
-- [ ] Не писать «в текущей миссии» без канонической mission-person связи.
-- [ ] Candidate resolution остаётся отдельным human action с idempotent receipt.
-- [ ] Profiles/timeline поддерживают pagination или честно показывают window и
+- [x] Не писать «в текущей миссии» без канонической mission-person связи.
+- [x] Candidate resolution остаётся отдельным human action с idempotent receipt.
+- [x] Profiles/timeline поддерживают pagination или честно показывают window и
   truncation.
 
 Готово, когда любой CTA, citation и queue item открывает ту же сущность, которую
@@ -503,19 +507,19 @@ enums без отдельной миграции):
 создал готовое внешнее действие, оно может вернуться в ranking как отдельная
 `approved_external` mission; это не тот же незавершённый decision claim.
 
-- [ ] Открывать точный ActionProposal по mission/proposal id.
-- [ ] В одном modal показывать why now, последствия и evidence; exact execution
+- [x] Открывать точный ActionProposal по mission/proposal id.
+- [x] В одном modal показывать why now, последствия и evidence; exact execution
   preview показывать только на `approved_external` этапе.
-- [ ] Сохранить разделение local approve/reject и external execute.
-- [ ] Owner/admin/member/viewer видят только разрешённые controls.
-- [ ] Pending mutation блокирует смену workspace, mission и повторный submit.
+- [x] Сохранить разделение local approve/reject и external execute.
+- [x] Owner/admin/member/viewer видят только разрешённые controls.
+- [x] Pending mutation блокирует смену workspace, mission и повторный submit.
 - [ ] External execute требует отдельного checkbox/command и backend capability.
 - [ ] Confirmation отправляет `expected_snapshot_id`, `proposal_version` и
   immutable preview digest; stale context возвращает `409` и требует новый
   preview/confirmation.
 - [ ] Непосредственно перед provider call backend повторно проверяет actor,
   membership/RBAC, evidence, target/payload, capability, allowlist и write gate.
-- [ ] Idempotency key обязателен; повтор возвращает существующий receipt.
+- [x] Idempotency key обязателен; повтор возвращает существующий receipt.
 - [ ] Audit фиксирует actor, workspace, preview, confirmation, start и result.
 - [ ] Receipt сообщает local/external effect и provider result только по факту.
 - [ ] Ambiguous result блокирует retry до reconcile.
@@ -523,7 +527,7 @@ enums без отдельной миграции):
   read-only reconcile по точному target/idempotency key, отдельный audit/receipt
   и без повторного write. Retry разрешается только после доказанного
   `not_performed` либо через новый proposal и новое confirmation.
-- [ ] После persisted result refetch’ить headquarters snapshot и поднимать новый
+- [x] После persisted result refetch’ить headquarters snapshot и поднимать новый
   priority; ошибка refetch не превращает успешный receipt в failure.
 - [ ] 🔒 GATE: реальный provider write выполняется только отдельным разрешением и
   никогда не входит в обычный smoke/CI.
@@ -604,8 +608,9 @@ enums без отдельной миграции):
 
 ### A — Полезный локальный штаб
 
-LC-00…LC-03, local/import + honest source-health часть LC-04, LC-05, local-only
-часть LC-08, LC-09 и desktop LC-10 завершены. Основатель может настроить
+LC-00…LC-03, local/import + honest source-health часть LC-04, bounded mission
+drill-down и candidate exact-path часть LC-05, local-only часть LC-08, LC-09 и
+desktop LC-10 завершены. Основатель может настроить
 компанию, импортировать данные, увидеть реальный штаб, проверить миссию и принять
 локальное решение. Assistant, true delta и provider read/write ещё могут быть
 выключены и честно обозначены.
@@ -639,14 +644,16 @@ read-back/reconcile и receipt. Это не превращает assistant в au
 - [x] Штаб показывает один реальный priority, три metrics, queue и signals.
 - [ ] `Почему это №1?` открывает exact evidence и freshness: evidence/ranking
   реализованы в LC-02, source freshness остаётся для LC-05 drill-down.
-- [ ] Person/customer/source controls открывают точные drawers.
+- [ ] Confirmed person/customer/source controls открывают точные drawers из
+  production mission projection; fail-closed renderers готовы, world candidate
+  path достижим, confirmed relation projection ещё gated.
 - [ ] Ассистент отвечает из того же snapshot и открывает citation target.
 - [x] Конкретная queue row открывает конкретную mission.
-- [ ] Founder approve/reject proposal и получает local receipt без внешней записи.
+- [x] Founder approve/reject proposal и получает local receipt без внешней записи.
 - [ ] Для approved external action founder отдельно видит exact preview и
   подтверждает execute.
-- [ ] Receipt честно различает local result и external write.
-- [ ] Штаб refetch’ится и показывает новый priority.
+- [x] Receipt честно различает local result и external write.
+- [x] Штаб refetch’ится и показывает новый priority.
 - [ ] Logout удаляет session; другой workspace не видит данные.
 - [ ] Restart сохраняет records, decisions, audit и receipts.
 - [ ] Backup восстанавливается и даёт те же безопасные aggregate counts.
@@ -659,15 +666,19 @@ read-back/reconcile и receipt. Это не превращает assistant в au
    использующим только единый snapshot.
 3. **LC-03 ✅:** computed onboarding встроен в штаб; readiness и resume
    вычисляются тем же server snapshot.
-4. **LC-05/LC-08:** exact mission/profile drawers и существующий decision modal.
+4. **LC-05/LC-08 🟡 local read/review:** exact mission и fail-closed profile
+   renderers, version-bound local decision, durable receipt и
+   snapshot-preserving refetch готовы; confirmed mission-person/customer
+   projection остаётся schema/data gate.
 5. **LC-07:** deterministic read-only assistant поверх того же service.
 6. **LC-04:** доказать GitHub read, затем доводить остальные радары по одному.
 7. **LC-06:** только после schema review добавить durable change boundary.
 8. **LC-09/LC-10:** privacy, observability и полный release proof.
 
-Первый следующий implementation ticket: **LC-05/LC-08 — exact mission/profile
-drill-down и компактный decision → receipt → refetch flow поверх того же
-snapshot без generic fallback и без ослабления human gate.**
+Первый следующий implementation ticket: **LC-07 — deterministic read-only
+company assistant поверх того же Headquarters service/snapshot**, без LLM,
+provider calls, persistence или mutation. Durable business-profile authoring и
+external LC-08 остаются за своими schema/security gates.
 
 ## Следующий отдельный контур — Source Foundry (DEC-087)
 

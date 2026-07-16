@@ -37,7 +37,9 @@ import {
 } from "../lib/api";
 import {
   buildCompanyWorldProfileTarget,
+  normalizeCompanyWorldProfileSelector,
   readCompanyWorldProfileSelector,
+  resolveCompanyWorldProfileRequest,
   resolveCompanyWorldProfileSelector
 } from "../lib/company-world-profile";
 import { M } from "../lib/messages";
@@ -254,7 +256,8 @@ function deferred<T>(): {
 function renderPanel(
   status: "loading" | "ready" | "empty" | "error" | "missing",
   data: CompanyMapResponse | null = sampleMap,
-  initialSelectedKey: string | null = null
+  initialSelectedKey: string | null = null,
+  profileUnavailable = false
 ): string {
   return renderToStaticMarkup(
     <CompanyWorldPanelView
@@ -262,6 +265,7 @@ function renderPanel(
       error={null}
       initialSelectedKey={initialSelectedKey}
       onResolve={async () => undefined}
+      profileUnavailable={profileUnavailable}
       status={status}
     />
   );
@@ -353,6 +357,65 @@ test("rejects malformed foreign and stale profile selectors", () => {
     }),
     refreshedMap.company.key
   );
+});
+
+test("keeps explicit malformed stale and foreign profile requests unavailable", () => {
+  const candidateKey = sampleMap.people.external_candidates[0]?.key ?? "";
+  const staleTarget = buildCompanyWorldProfileTarget(sampleMap, candidateKey);
+  assert.ok(staleTarget);
+  const refreshedMap: CompanyMapResponse = {
+    ...sampleMap,
+    people: {
+      ...sampleMap.people,
+      external_candidates: sampleMap.people.external_candidates.map((person) => ({
+        ...person,
+        candidate_version: UPDATED_CANDIDATE_VERSION
+      }))
+    }
+  };
+
+  for (const [data, rawSelector] of [
+    [sampleMap, ""],
+    [sampleMap, `v1:person:${"x".repeat(513)}`],
+    [sampleMap, "v1:person:foreign"],
+    [refreshedMap, staleTarget.selector]
+  ] as const) {
+    const resolution = resolveCompanyWorldProfileRequest(
+      data,
+      normalizeCompanyWorldProfileSelector(rawSelector),
+      true
+    );
+    assert.deepEqual(resolution, { state: "unavailable", selectedKey: null });
+
+    const html = renderPanel(
+      "ready",
+      data,
+      resolution.selectedKey,
+      resolution.state === "unavailable"
+    );
+    assert.match(html, /data-state="unavailable"/);
+    assert.ok(html.includes("Профиль больше недоступен в текущем снимке"));
+    assert.doesNotMatch(
+      html,
+      /<h3 id="company-world-profile-title">Northstar Labs<\/h3>/
+    );
+    assert.doesNotMatch(html, /data-candidate-key=/);
+  }
+});
+
+test("defaults to the company profile only when no selector was requested", () => {
+  const resolution = resolveCompanyWorldProfileRequest(sampleMap, null);
+  assert.deepEqual(resolution, {
+    state: "default",
+    selectedKey: sampleMap.company.key
+  });
+
+  const html = renderPanel("ready", sampleMap, resolution.selectedKey);
+  assert.match(
+    html,
+    /<h3 id="company-world-profile-title">Northstar Labs<\/h3>/
+  );
+  assert.doesNotMatch(html, /Профиль больше недоступен в текущем снимке/);
 });
 
 test("builds and fetches the workspace company-map endpoint", async () => {

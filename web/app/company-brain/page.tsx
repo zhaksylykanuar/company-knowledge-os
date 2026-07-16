@@ -16,6 +16,7 @@ export default async function CompanyBrainPage({
   return (
     <CompanyBrainPageClient
       profileSelector={normalizeCompanyWorldProfileSelector(rawProfile)}
+      profileSelectorRequested={rawProfile !== null}
     />
   );
 }

@@ -67,6 +67,7 @@ const baseProposal: ActionProposal = {
   rejection_reason: null,
   created_at: "2026-07-03T10:00:00+00:00",
   updated_at: "2026-07-03T10:00:00+00:00",
+  proposal_version: "ap1_proposal_1",
   is_live: false,
   execution_started: false,
   warnings: []

@@ -34,13 +34,17 @@ launcher all consume that contract without browser ranking or demo fixtures.
 DEC-088 now completes LC-03: five server-computed onboarding steps, evidence and
 role-aware next actions are part of the same Headquarters v2 snapshot, while a
 compact modal replaces browser-derived readiness and the separate journey for
-workspace users. The next UI slice is LC-05/LC-08 exact entity drill-down and
-decision receipt/refetch. The full phased acceptance ledger is
+workspace users. DEC-089 now completes the bounded LC-05/LC-08 local decision
+slice: exact entity disclosure fails closed, single local decisions are bound
+to proposal/snapshot versions and idempotency, and an audit-backed receipt
+survives a failed Headquarters refetch. Confirmed employee/customer renderers
+are present, while their production mission relation projection remains
+schema/data gated. The full phased acceptance ledger is
 `LIVING_COMMAND_CENTER_CHECKLIST.md`. DEC-087 separately approves one
 future modular Source Foundry intake/promotion plane — not one server per source
 and not a second knowledge truth — after the real headquarters UI is accepted.
 The reference still does not claim real provider or LLM readiness; a read-only
-assistant query contract follows as a separate backend slice. The next external
+assistant query contract is the next product slice. The next external
 gate remains one founder-approved scoped GitHub App read, not a hosted deploy.
 External mutation and LLM narrative remain separate human-gated horizons. Docs
 consolidation is complete; this roadmap is planning context, not the live task
@@ -311,11 +315,12 @@ Missing:
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: follow `../PROGRESS.md`. Add exact mission/person/customer drill-down
-and reuse the existing human-gated decision APIs in one compact modal, then
-refetch the same Headquarters snapshot. Keep one explicit founder-approved
-GitHub read as the next external gate; keep provider reads human-gated and never
-add browser-stored operator credentials.
+Next step: follow `../PROGRESS.md`. Add the deterministic workspace-scoped
+read-only assistant contract over the same Headquarters service and snapshot,
+with normalized citations and no LLM, persistence or mutation. Keep one
+explicit founder-approved GitHub read as the next external gate; keep provider
+reads human-gated and never add browser-stored operator credentials. Durable
+business-profile authoring and external execution remain separate gated work.
 
 Definition of Done:
 

@@ -54,6 +54,7 @@ from app.services.action_proposal_service import (
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS,
     ACTION_PROPOSAL_PAYLOAD_MAX_BYTES,
+    action_proposal_version,
 )
 from app.services.company_map_read_service import build_workspace_company_map
 from app.services.identity_service import role_allows
@@ -153,7 +154,6 @@ class MissionCandidate:
 class VerifiedProposal:
     proposal: ActionProposal
     evidence_refs: list[dict[str, Any]]
-    evidence_versions: list[dict[str, Any]]
     trusted_briefing_item: BriefingItem | None
 
 
@@ -992,7 +992,6 @@ async def _verify_proposals(
                 VerifiedProposal(
                     proposal=proposal,
                     evidence_refs=evidence_refs,
-                    evidence_versions=[resolved.version for resolved in resolved_refs],
                     trusted_briefing_item=trusted_item,
                 )
             )
@@ -1211,7 +1210,7 @@ def _build_mission_candidates(
         score = 500 + SEVERITY_RANK.get(severity, 0)
         action_enabled = bool(capabilities["can_review_proposal"])
         proposal = verified.proposal
-        proposal_version = _proposal_version(verified)
+        proposal_version = action_proposal_version(proposal)
         proposal_source_keys = _evidence_source_keys(verified.evidence_refs)
         proposal_correlation = (
             "same_persisted_briefing_item_evidence"
@@ -1964,38 +1963,6 @@ def _action(
         "enabled": enabled,
         "disabled_reason": disabled_reason,
     }
-
-
-def _proposal_version(verified: VerifiedProposal) -> str:
-    proposal = verified.proposal
-    item = verified.trusted_briefing_item
-    material = {
-        "id": proposal.id,
-        "briefing_item_id": proposal.briefing_item_id,
-        "target_provider": proposal.target_provider,
-        "action_type": proposal.action_type,
-        "title": proposal.title,
-        "description": proposal.description,
-        "payload": proposal.payload,
-        "status": proposal.status,
-        "created_by": proposal.created_by,
-        "created_by_user_id": proposal.created_by_user_id,
-        "raw_evidence_refs": proposal.evidence_refs,
-        "resolved_evidence_versions": verified.evidence_versions,
-        "trusted_briefing_item": (
-            {
-                "id": item.id,
-                "briefing_id": item.briefing_id,
-                "severity": item.severity,
-                "confidence": item.confidence,
-                "evidence_refs": item.evidence_refs,
-            }
-            if item is not None
-            else None
-        ),
-        "updated_at": proposal.updated_at,
-    }
-    return f"ap1_{_digest(material)}"
 
 
 def _resolved_source_record_evidence(

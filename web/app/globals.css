@@ -2763,6 +2763,17 @@ textarea {
   background: var(--accent-soft);
 }
 
+.headquarters-refresh-warning {
+  background: var(--warning-soft);
+  border: 1px solid #ead1a8;
+  border-radius: 10px;
+  color: var(--warning);
+  font-size: 10px;
+  line-height: 1.45;
+  margin: -2px 0 0;
+  padding: 9px 11px;
+}
+
 .overlay-shell-backdrop {
   align-items: stretch;
   background: rgb(8 13 11 / 46%);
@@ -2834,6 +2845,11 @@ textarea {
 .overlay-shell-close:hover {
   background: var(--ink);
   color: var(--signal);
+}
+
+.overlay-shell-close:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .overlay-shell-content {
@@ -3114,6 +3130,278 @@ textarea {
   font-size: 12px;
   line-height: 1.48;
   margin: 0;
+}
+
+.headquarters-mission-detail > h3,
+.headquarters-decision > h3,
+.headquarters-decision-receipt > h3 {
+  font-size: 27px;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+  margin: 0;
+}
+
+.headquarters-mission-facts {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.headquarters-mission-facts > div {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px 12px;
+}
+
+.headquarters-mission-facts dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.headquarters-mission-facts dd {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.headquarters-mission-facts small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.headquarters-field-evidence summary {
+  color: var(--accent-text);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.headquarters-field-evidence ul {
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  margin: 7px 0 0;
+  padding: 0;
+}
+
+.headquarters-field-evidence li {
+  border-left: 2px solid var(--accent-soft);
+  display: grid;
+  gap: 2px;
+  padding-left: 7px;
+}
+
+.headquarters-field-evidence a,
+.headquarters-field-evidence strong {
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.headquarters-mission-profiles {
+  display: grid;
+  gap: 8px;
+}
+
+.headquarters-mission-profiles > strong {
+  font-size: 12px;
+}
+
+.headquarters-mission-profiles > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.headquarters-mission-profiles button {
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid #c7ddcf;
+  border-radius: 999px;
+  color: var(--accent-text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 850;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.headquarters-mission-profiles button:hover {
+  border-color: var(--accent-text);
+}
+
+.headquarters-profile-state {
+  color: var(--muted);
+  display: grid;
+  font-size: 11px;
+  gap: 6px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.headquarters-profile-state strong,
+.headquarters-profile-state p {
+  margin: 0;
+}
+
+.headquarters-decision,
+.headquarters-decision-receipt {
+  display: grid;
+  gap: 16px;
+}
+
+.headquarters-decision > section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  gap: 5px;
+  padding: 12px 13px;
+}
+
+.headquarters-decision > section > strong {
+  font-size: 11px;
+}
+
+.headquarters-decision > section > p,
+.headquarters-decision > p,
+.headquarters-decision-receipt > p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.headquarters-decision-state {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  padding: 18px 0;
+  text-align: center;
+}
+
+.headquarters-decision-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.headquarters-decision-actions :where(button, a) {
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 850;
+  min-height: 42px;
+  padding: 10px 13px;
+}
+
+.headquarters-decision-actions :where(button, a):first-child {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--ink);
+}
+
+.headquarters-decision-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.headquarters-decision-readonly {
+  background: var(--panel-muted);
+  border-radius: 12px;
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+}
+
+.headquarters-decision-readonly strong {
+  font-size: 11px;
+}
+
+.headquarters-decision-readonly p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.headquarters-decision-mark {
+  align-items: center;
+  background: var(--accent-soft);
+  border-radius: 50%;
+  color: var(--accent-text);
+  display: inline-flex;
+  font-size: 20px;
+  font-weight: 900;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.headquarters-decision-receipt-facts {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.headquarters-decision-receipt-facts > div {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 11px;
+}
+
+.headquarters-decision-receipt-facts dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.headquarters-decision-receipt-facts dd {
+  font-size: 11px;
+  font-weight: 850;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.headquarters-decision-warning,
+.headquarters-decision-success {
+  border-radius: 10px;
+  font-size: 10px !important;
+  line-height: 1.45;
+  padding: 9px 11px;
+}
+
+.headquarters-decision-warning {
+  background: var(--warning-soft);
+  border: 1px solid #ead1a8;
+  color: var(--warning) !important;
+}
+
+.headquarters-decision-success {
+  background: var(--accent-soft);
+  border: 1px solid #c7ddcf;
+  color: var(--accent-text) !important;
 }
 
 .headquarters-evidence-list {

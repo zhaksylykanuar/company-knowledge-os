@@ -141,6 +141,7 @@ const auditProposal: ActionProposal = {
   target_provider: "internal",
   title: "Repo audit follow-up: qtwin-io/base-collector",
   updated_at: "2026-07-02T16:00:00+00:00",
+  proposal_version: "ap1_audit_1",
   warnings: [],
   workspace_id: "workspace-123"
 };

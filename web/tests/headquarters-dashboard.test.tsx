@@ -4,6 +4,7 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  canOpenHeadquartersAssistantShortcut,
   HeadquartersDashboardView,
   onboardingIntentFromSearch,
   reduceHeadquartersOnboardingIntent,
@@ -57,10 +58,14 @@ test("renders one real priority, fixed pulse order, and backend actions", () => 
 
   assert.ok(html.includes("Acme Systems"));
   assert.ok(html.includes("Подтвердить план запуска Atlas"));
-  assert.equal((html.match(/Проверить решение/g) ?? []).length, 1);
+  assert.equal((html.match(/Открыть решение/g) ?? []).length, 1);
   assert.match(
     html,
-    /href="\/actions\?proposal=11111111-1111-4111-8111-111111111111&amp;status=proposed"/
+    /<button class="headquarters-primary-action" type="button"><span>Открыть решение<\/span>/
+  );
+  assert.doesNotMatch(
+    html,
+    /<a class="headquarters-primary-action" href="\/actions\?proposal=11111111-1111-4111-8111-111111111111/
   );
 
   const waitingDecisions = html.indexOf("Ждут решения");
@@ -219,6 +224,28 @@ test("onboarding has overlay priority until dismissed for the exact snapshot", (
   );
 });
 
+test("assistant shortcut never replaces an open decision or other overlay", () => {
+  const snapshot = makeHeadquartersFixture();
+  assert.ok(snapshot.priority);
+
+  assert.equal(canOpenHeadquartersAssistantShortcut(null), true);
+  assert.equal(
+    canOpenHeadquartersAssistantShortcut({
+      kind: "decision",
+      mission: snapshot.priority
+    }),
+    false
+  );
+  assert.equal(
+    canOpenHeadquartersAssistantShortcut({ kind: "onboarding" }),
+    false
+  );
+  assert.equal(
+    canOpenHeadquartersAssistantShortcut({ kind: "assistant" }),
+    false
+  );
+});
+
 test("recognizes only an explicit onboarding route intent", () => {
   assert.equal(onboardingIntentFromSearch("?onboarding=1"), true);
   assert.equal(onboardingIntentFromSearch("?onboarding=0"), false);
@@ -261,16 +288,18 @@ test("keeps a disabled mission non-clickable and explains the role boundary", ()
   });
   const html = renderReady(snapshot);
 
-  assert.ok(html.includes("Проверить решение"));
+  assert.ok(html.includes("Открыть решение"));
   assert.ok(html.includes("Недостаточно прав для принятия решения"));
   assert.doesNotMatch(
     html,
-    /href="\/actions\?proposal=11111111-1111-4111-8111-111111111111&amp;status=proposed"/
+    /<a class="headquarters-primary-action" href="\/actions\?proposal=11111111-1111-4111-8111-111111111111/
   );
 });
 
 test("does not invent an action when the backend enables it without a target", () => {
   const snapshot = makeHeadquartersFixture((fixture) => {
+    fixture.priority!.proposal_id = null;
+    fixture.priority!.proposal_version = null;
     fixture.priority!.action = {
       kind: "review_proposal",
       label: "Проверить решение",
@@ -334,7 +363,14 @@ test("never turns an unknown signal timestamp into current recency", () => {
 
 test("ignores a late response from the previous workspace request", () => {
   const started = reduceHeadquartersLoadState(
-    { requestId: 1, snapshot: null, status: "loading", workspaceId: "workspace-a" },
+    {
+      refreshError: false,
+      refreshing: false,
+      requestId: 1,
+      snapshot: null,
+      status: "loading",
+      workspaceId: "workspace-a"
+    },
     { requestId: 2, type: "start", workspaceId: "workspace-b" }
   );
   const lateSnapshot = makeHeadquartersFixture((fixture) => {
@@ -350,6 +386,88 @@ test("ignores a late response from the previous workspace request", () => {
   assert.equal(afterLateResponse, started);
   assert.equal(afterLateResponse.status, "loading");
   assert.equal(afterLateResponse.workspaceId, "workspace-b");
+});
+
+test("preserves the current snapshot throughout refresh and refresh failure", () => {
+  const snapshot = makeHeadquartersFixture();
+  const current = {
+    refreshError: false,
+    refreshing: false,
+    requestId: 1,
+    snapshot,
+    status: "ready" as const,
+    workspaceId: snapshot.workspace.id
+  };
+
+  const refreshing = reduceHeadquartersLoadState(current, {
+    requestId: 2,
+    type: "refresh_start",
+    workspaceId: snapshot.workspace.id
+  });
+  assert.equal(refreshing.status, "ready");
+  assert.equal(refreshing.refreshing, true);
+  assert.equal(refreshing.refreshError, false);
+  assert.equal(refreshing.snapshot, snapshot);
+
+  const staleFailure = reduceHeadquartersLoadState(refreshing, {
+    requestId: 1,
+    type: "refresh_failure",
+    workspaceId: snapshot.workspace.id
+  });
+  assert.equal(staleFailure, refreshing);
+
+  const failed = reduceHeadquartersLoadState(refreshing, {
+    requestId: 2,
+    type: "refresh_failure",
+    workspaceId: snapshot.workspace.id
+  });
+  assert.equal(failed.status, "ready");
+  assert.equal(failed.refreshing, false);
+  assert.equal(failed.refreshError, true);
+  assert.equal(failed.snapshot, snapshot);
+});
+
+test("replaces a preserved snapshot only after a successful exact refresh", () => {
+  const snapshot = makeHeadquartersFixture();
+  const refreshing = reduceHeadquartersLoadState(
+    {
+      refreshError: true,
+      refreshing: false,
+      requestId: 4,
+      snapshot,
+      status: "ready",
+      workspaceId: snapshot.workspace.id
+    },
+    {
+      requestId: 5,
+      type: "refresh_start",
+      workspaceId: snapshot.workspace.id
+    }
+  );
+  const refreshedSnapshot = makeHeadquartersFixture((fixture) => {
+    fixture.snapshot.id = "snapshot-refreshed";
+  });
+  const succeeded = reduceHeadquartersLoadState(refreshing, {
+    requestId: 5,
+    snapshot: refreshedSnapshot,
+    type: "success",
+    workspaceId: snapshot.workspace.id
+  });
+
+  assert.equal(succeeded.snapshot, refreshedSnapshot);
+  assert.equal(succeeded.status, "ready");
+  assert.equal(succeeded.refreshing, false);
+  assert.equal(succeeded.refreshError, false);
+
+  const switchedWorkspace = reduceHeadquartersLoadState(succeeded, {
+    requestId: 6,
+    type: "refresh_start",
+    workspaceId: "workspace-other"
+  });
+  assert.equal(switchedWorkspace.snapshot, null);
+  assert.equal(switchedWorkspace.status, "loading");
+  assert.equal(switchedWorkspace.refreshing, false);
+  assert.equal(switchedWorkspace.workspaceId, "workspace-other");
 });
 
 test("renders explicit loading, missing, forbidden, offline, contract, and generic states", () => {

@@ -11,7 +11,7 @@ import {
 } from "../lib/api";
 import {
   buildCompanyWorldProfileTarget,
-  resolveCompanyWorldProfileSelector
+  resolveCompanyWorldProfileRequest
 } from "../lib/company-world-profile";
 import { M } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
@@ -49,6 +49,7 @@ export type CompanyWorldStatus =
 type CompanyWorldPanelProps = {
   onRefresh?: () => void;
   profileSelector?: string | null;
+  profileSelectorRequested?: boolean;
   refreshSignal?: number;
 };
 
@@ -60,6 +61,7 @@ type CompanyWorldPanelViewProps = {
   onRefresh?: () => void;
   onResolve?: (request: CompanyWorldResolutionDraft) => Promise<void>;
   onRetry?: () => void;
+  profileUnavailable?: boolean;
   resolutionState?: CompanyWorldResolutionState;
   status: CompanyWorldStatus;
 };
@@ -282,6 +284,7 @@ export function failedCompanyWorldResolution(
 export function CompanyWorldPanel({
   onRefresh,
   profileSelector = null,
+  profileSelectorRequested = profileSelector !== null,
   refreshSignal = 0
 }: CompanyWorldPanelProps) {
   const router = useRouter();
@@ -400,19 +403,24 @@ export function CompanyWorldPanel({
     }
   }
 
-  const routeSelectedKey = data
-    ? resolveCompanyWorldProfileSelector(data, profileSelector)
+  const profileRequest = data
+    ? resolveCompanyWorldProfileRequest(
+        data,
+        profileSelector,
+        profileSelectorRequested
+      )
     : null;
 
   return (
     <CompanyWorldPanelView
       data={data}
       error={error}
-      initialSelectedKey={routeSelectedKey}
+      initialSelectedKey={profileRequest?.selectedKey ?? null}
       onProfileNavigate={navigateToProfile}
       onResolve={handleResolution}
       onRefresh={onRefresh ?? (() => setReloadKey((current) => current + 1))}
       onRetry={() => setReloadKey((current) => current + 1)}
+      profileUnavailable={profileRequest?.state === "unavailable"}
       resolutionState={resolutionState}
       status={status}
     />
@@ -427,6 +435,7 @@ export function CompanyWorldPanelView({
   onRefresh,
   onResolve,
   onRetry,
+  profileUnavailable = false,
   resolutionState = INITIAL_RESOLUTION_STATE,
   status
 }: CompanyWorldPanelViewProps) {
@@ -438,32 +447,44 @@ export function CompanyWorldPanelView({
   const [selectionRevision, setSelectionRevision] = useState(0);
   const [activeZone, setActiveZone] = useState<CompanyWorldZone>("all");
   const previousRouteKey = useRef(initialSelectedKey);
+  const previousProfileUnavailable = useRef(profileUnavailable);
   const profileRef = useRef<HTMLElement>(null);
-  const effectiveSelectedKey = effectiveCompanyWorldSelectedKey(
-    data,
-    initialSelectedKey,
-    localSelection
-  );
+  const localSelectionIsCurrent =
+    localSelection.data === data && localSelection.routeKey === initialSelectedKey;
+  const explicitLocalSelection =
+    localSelectionIsCurrent && localSelection.key !== null;
+  const unavailableProfileVisible = profileUnavailable && !explicitLocalSelection;
+  const effectiveSelectedKey = unavailableProfileVisible
+    ? null
+    : effectiveCompanyWorldSelectedKey(data, initialSelectedKey, localSelection);
   const nextCandidateKey = data
     ? nextCompanyWorldCandidateKey(data, effectiveSelectedKey)
     : null;
 
   useEffect(() => {
-    if (previousRouteKey.current === initialSelectedKey) {
+    if (
+      previousRouteKey.current === initialSelectedKey &&
+      previousProfileUnavailable.current === profileUnavailable
+    ) {
       return;
     }
     previousRouteKey.current = initialSelectedKey;
+    previousProfileUnavailable.current = profileUnavailable;
     if (!data) {
       return;
     }
+    setLocalSelection({ data, key: initialSelectedKey, routeKey: initialSelectedKey });
     const nextRouteKey = validSelectedKey(data, initialSelectedKey);
     setActiveZone(
       companyWorldZoneForKey(data, nextRouteKey ?? data.company.key)
     );
-    if (initialSelectedKey && localSelection.key !== initialSelectedKey) {
+    if (
+      profileUnavailable ||
+      (initialSelectedKey && localSelection.key !== initialSelectedKey)
+    ) {
       setSelectionRevision((current) => current + 1);
     }
-  }, [data, initialSelectedKey, localSelection.key]);
+  }, [data, initialSelectedKey, localSelection.key, profileUnavailable]);
 
   useEffect(() => {
     if (selectionRevision === 0) {
@@ -636,6 +657,7 @@ export function CompanyWorldPanelView({
               data={data}
               onResolve={onResolve}
               onSelect={selectProfile}
+              profileUnavailable={unavailableProfileVisible}
               profileRef={profileRef}
               resolutionState={resolutionState}
               selectedKey={effectiveSelectedKey}
@@ -841,6 +863,7 @@ function ProfilePanel({
   data,
   onResolve,
   onSelect,
+  profileUnavailable,
   profileRef,
   resolutionState,
   selectedKey
@@ -848,10 +871,33 @@ function ProfilePanel({
   data: CompanyMapResponse;
   onResolve?: (request: CompanyWorldResolutionDraft) => Promise<void>;
   onSelect: (key: string) => void;
+  profileUnavailable: boolean;
   profileRef: RefObject<HTMLElement | null>;
   resolutionState: CompanyWorldResolutionState;
   selectedKey: string | null;
 }) {
+  if (profileUnavailable) {
+    return (
+      <aside
+        aria-labelledby="company-world-profile-title"
+        className={`${styles.profile} world-profile`}
+        data-state="unavailable"
+        id={COMPANY_WORLD_PROFILE_ID}
+        ref={profileRef}
+        tabIndex={-1}
+      >
+        <span className="eyebrow">Профиль</span>
+        <h3 id="company-world-profile-title">
+          Профиль больше недоступен в текущем снимке
+        </h3>
+        <p>
+          Выберите актуального человека или компанию в Мире. FounderOS не
+          подменяет устаревшую ссылку профилем компании.
+        </p>
+      </aside>
+    );
+  }
+
   const internal = data.people.internal.find((person) => person.key === selectedKey);
   const confirmedExternal = data.people.confirmed_external.find(
     (person) => person.key === selectedKey

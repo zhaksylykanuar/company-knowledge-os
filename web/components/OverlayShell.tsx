@@ -23,6 +23,7 @@ type OverlayMode = "drawer" | "modal";
 type OverlayShellProps = {
   backgroundRef: RefObject<HTMLElement | null>;
   children: ReactNode;
+  closeDisabled?: boolean;
   closeLabel?: string;
   label: string;
   mode: OverlayMode;
@@ -97,6 +98,7 @@ export function resolveOverlayTabTarget<T>(
 export function OverlayShell({
   backgroundRef,
   children,
+  closeDisabled = false,
   closeLabel = "Закрыть",
   label,
   mode,
@@ -105,6 +107,7 @@ export function OverlayShell({
   const backdropRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
+  const closeDisabledRef = useRef(closeDisabled);
   const openerRef = useRef<HTMLElement | null>(null);
   const reactId = useId();
   const titleId = `overlay-shell-title-${reactId.replaceAll(":", "")}`;
@@ -112,6 +115,10 @@ export function OverlayShell({
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+
+  useEffect(() => {
+    closeDisabledRef.current = closeDisabled;
+  }, [closeDisabled]);
 
   useEffect(() => {
     const dialogElement = dialogRef.current;
@@ -139,7 +146,9 @@ export function OverlayShell({
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onCloseRef.current();
+        if (!closeDisabledRef.current) {
+          onCloseRef.current();
+        }
         return;
       }
       if (event.key !== "Tab") {
@@ -173,7 +182,7 @@ export function OverlayShell({
   }, [backgroundRef]);
 
   function onBackdropMouseDown(event: ReactMouseEvent<HTMLDivElement>) {
-    if (event.target === event.currentTarget) {
+    if (event.target === event.currentTarget && !closeDisabledRef.current) {
       onCloseRef.current();
     }
   }
@@ -198,6 +207,7 @@ export function OverlayShell({
           <button
             aria-label={closeLabel}
             className="overlay-shell-close"
+            disabled={closeDisabled}
             onClick={() => onCloseRef.current()}
             type="button"
           >

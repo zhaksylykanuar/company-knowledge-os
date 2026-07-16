@@ -9,10 +9,9 @@ import {
   useState
 } from "react";
 
-import { ApiRequestError, fetchHeadquarters } from "../lib/api";
+import { ApiRequestError, fetchCompanyMap, fetchHeadquarters } from "../lib/api";
 import {
   HeadquartersContractError,
-  type HeadquartersEvidenceRef,
   type HeadquartersMission,
   type HeadquartersPrecision,
   type HeadquartersPulseMetric,
@@ -20,10 +19,13 @@ import {
   type HeadquartersSourceHealth
 } from "../lib/headquarters";
 import { useSession } from "../lib/session";
+import type { CompanyMapResponse } from "../lib/types";
 import { HeadquartersActionControl } from "./HeadquartersActionControl";
+import { HeadquartersDecisionModal } from "./HeadquartersDecisionModal";
+import { HeadquartersMissionDetail } from "./HeadquartersMissionDetail";
 import { HeadquartersOnboardingModal } from "./HeadquartersOnboardingModal";
+import { HeadquartersProfileDrawer } from "./HeadquartersProfileDrawer";
 import { OverlayShell } from "./OverlayShell";
-import { SourceLink } from "./SourceLink";
 
 export type HeadquartersDashboardStatus =
   | "contract_error"
@@ -35,6 +37,8 @@ export type HeadquartersDashboardStatus =
   | "ready";
 
 type HeadquartersLoadState = {
+  refreshError: boolean;
+  refreshing: boolean;
   requestId: number;
   snapshot: HeadquartersSnapshotResponse | null;
   status: HeadquartersDashboardStatus;
@@ -44,6 +48,7 @@ type HeadquartersLoadState = {
 type HeadquartersLoadAction =
   | { requestId: number; type: "clear" }
   | { requestId: number; type: "start"; workspaceId: string }
+  | { requestId: number; type: "refresh_start"; workspaceId: string }
   | {
       requestId: number;
       snapshot: HeadquartersSnapshotResponse;
@@ -55,17 +60,22 @@ type HeadquartersLoadAction =
       status: Exclude<HeadquartersDashboardStatus, "loading" | "missing" | "ready">;
       type: "failure";
       workspaceId: string;
-    };
+    }
+  | { requestId: number; type: "refresh_failure"; workspaceId: string };
 
 export type HeadquartersOverlay =
   | { kind: "assistant" }
   | { kind: "coverage" }
+  | { kind: "decision"; mission: HeadquartersMission }
   | { kind: "mission"; mission: HeadquartersMission; position: "priority" | "queue" }
   | { kind: "onboarding" }
+  | { kind: "profile"; label: string; selector: string }
   | { kind: "pulse"; metric: HeadquartersPulseMetric }
   | { kind: "sources" };
 
 const INITIAL_LOAD_STATE: HeadquartersLoadState = {
+  refreshError: false,
+  refreshing: false,
   requestId: 0,
   snapshot: null,
   status: "loading",
@@ -78,6 +88,8 @@ export function reduceHeadquartersLoadState(
 ): HeadquartersLoadState {
   if (action.type === "clear") {
     return {
+      refreshError: false,
+      refreshing: false,
       requestId: action.requestId,
       snapshot: null,
       status: "missing",
@@ -86,6 +98,27 @@ export function reduceHeadquartersLoadState(
   }
   if (action.type === "start") {
     return {
+      refreshError: false,
+      refreshing: false,
+      requestId: action.requestId,
+      snapshot: null,
+      status: "loading",
+      workspaceId: action.workspaceId
+    };
+  }
+  if (action.type === "refresh_start") {
+    if (state.workspaceId === action.workspaceId && state.snapshot !== null) {
+      return {
+        ...state,
+        refreshError: false,
+        refreshing: true,
+        requestId: action.requestId,
+        status: "ready"
+      };
+    }
+    return {
+      refreshError: false,
+      refreshing: false,
       requestId: action.requestId,
       snapshot: null,
       status: "loading",
@@ -101,12 +134,31 @@ export function reduceHeadquartersLoadState(
   if (action.type === "success") {
     return {
       ...state,
+      refreshError: false,
+      refreshing: false,
       snapshot: action.snapshot,
       status: "ready"
     };
   }
+  if (action.type === "refresh_failure") {
+    return state.snapshot !== null
+      ? {
+          ...state,
+          refreshError: true,
+          refreshing: false,
+          status: "ready"
+        }
+      : {
+          ...state,
+          refreshError: false,
+          refreshing: false,
+          status: "error"
+        };
+  }
   return {
     ...state,
+    refreshError: false,
+    refreshing: false,
     snapshot: null,
     status: action.status
   };
@@ -148,6 +200,9 @@ export function resolveVisibleHeadquartersOverlay({
   if (requestedOverlay?.kind === "onboarding") {
     return requestedOverlay;
   }
+  if (requestedOverlay?.kind === "decision") {
+    return requestedOverlay;
+  }
   if (
     (!snapshot.onboarding.ready || onboardingIntent) &&
     dismissedOnboardingSnapshotId !== snapshot.snapshot.id
@@ -155,6 +210,12 @@ export function resolveVisibleHeadquartersOverlay({
     return { kind: "onboarding" };
   }
   return requestedOverlay;
+}
+
+export function canOpenHeadquartersAssistantShortcut(
+  visibleOverlay: HeadquartersOverlay | null
+): boolean {
+  return visibleOverlay === null;
 }
 
 export function HeadquartersDashboard() {
@@ -172,6 +233,33 @@ export function HeadquartersDashboard() {
     reduceHeadquartersOnboardingIntent,
     false
   );
+
+  async function refetchPreservingSnapshot(): Promise<HeadquartersSnapshotResponse> {
+    if (!workspaceId) {
+      throw new Error("Компания не выбрана.");
+    }
+    const requestWorkspaceId = workspaceId;
+    const requestId = ++requestIdRef.current;
+    dispatch({ requestId, type: "refresh_start", workspaceId: requestWorkspaceId });
+    try {
+      const snapshot = await fetchHeadquarters(requestWorkspaceId);
+      if (snapshot.workspace.id !== requestWorkspaceId) {
+        throw new HeadquartersContractError(
+          "headquarters.workspace.id does not match selected workspace"
+        );
+      }
+      dispatch({
+        requestId,
+        snapshot,
+        type: "success",
+        workspaceId: requestWorkspaceId
+      });
+      return snapshot;
+    } catch (error) {
+      dispatch({ requestId, type: "refresh_failure", workspaceId: requestWorkspaceId });
+      throw error;
+    }
+  }
 
   useEffect(() => {
     function syncOnboardingIntent() {
@@ -235,6 +323,8 @@ export function HeadquartersDashboard() {
 
   return (
     <HeadquartersDashboardView
+      isRefreshing={state.refreshing}
+      onDecisionRefetch={refetchPreservingSnapshot}
       onRetry={() => setReloadKey((value) => value + 1)}
       onConsumeOnboardingIntent={() =>
         dispatchOnboardingIntent({ type: "dismiss" })
@@ -242,22 +332,29 @@ export function HeadquartersDashboard() {
       onboardingIntent={onboardingIntent}
       snapshot={visibleSnapshot}
       status={visibleStatus}
+      refreshError={state.refreshError}
       workspaceName={workspaceName}
     />
   );
 }
 
 export function HeadquartersDashboardView({
+  isRefreshing = false,
+  onDecisionRefetch,
   onboardingIntent = false,
   onConsumeOnboardingIntent,
   onRetry,
+  refreshError = false,
   snapshot,
   status,
   workspaceName = null
 }: {
+  isRefreshing?: boolean;
+  onDecisionRefetch?: () => Promise<HeadquartersSnapshotResponse>;
   onboardingIntent?: boolean;
   onConsumeOnboardingIntent?: () => void;
   onRetry?: () => void;
+  refreshError?: boolean;
   snapshot: HeadquartersSnapshotResponse | null;
   status: HeadquartersDashboardStatus;
   workspaceName?: string | null;
@@ -287,7 +384,7 @@ export function HeadquartersDashboardView({
         !(event.metaKey || event.ctrlKey) ||
         event.key.toLowerCase() !== "k" ||
         isEditableTarget(event.target) ||
-        visibleOverlay?.kind === "onboarding"
+        !canOpenHeadquartersAssistantShortcut(visibleOverlay)
       ) {
         return;
       }
@@ -347,6 +444,9 @@ export function HeadquartersDashboardView({
           </header>
 
           <PriorityStage
+            onOpenDecision={(mission) =>
+              setRequestedOverlay({ kind: "decision", mission })
+            }
             onOpen={(mission) =>
               setRequestedOverlay({
                 kind: "mission",
@@ -377,10 +477,16 @@ export function HeadquartersDashboardView({
           </div>
 
           <TruthStrip
+            isRefreshing={isRefreshing}
             onOpenCoverage={() => setRequestedOverlay({ kind: "coverage" })}
             onRetry={onRetry}
             snapshot={snapshot}
           />
+          {refreshError ? (
+            <p className="headquarters-refresh-warning" role="status">
+              Последнее обновление не удалось; показан предыдущий подтверждённый снимок.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -391,6 +497,20 @@ export function HeadquartersDashboardView({
           onClose={closeVisibleOverlay}
           onFinish={finishOnboarding}
           onRetry={onRetry}
+          snapshot={snapshot}
+        />
+      ) : visibleOverlay?.kind === "decision" ? (
+        <HeadquartersDecisionModal
+          backgroundRef={backgroundRef}
+          mission={visibleOverlay.mission}
+          onClose={closeVisibleOverlay}
+          onRefetch={
+            onDecisionRefetch ??
+            (async () => {
+              onRetry?.();
+              throw new Error("Результат обновления Штаба пока не подтверждён.");
+            })
+          }
           snapshot={snapshot}
         />
       ) : visibleOverlay ? (
@@ -490,9 +610,11 @@ function HeadquartersControls({
 }
 
 function PriorityStage({
+  onOpenDecision,
   onOpen,
   snapshot
 }: {
+  onOpenDecision: (mission: HeadquartersMission) => void;
   onOpen: (mission: HeadquartersMission) => void;
   snapshot: HeadquartersSnapshotResponse;
 }) {
@@ -536,7 +658,17 @@ function PriorityStage({
         <p>{mission.summary}</p>
       </div>
       <div className="headquarters-priority-actions">
-        <HeadquartersActionControl action={mission.action} />
+        {mission.proposal_id ? (
+          <button
+            className="headquarters-primary-action"
+            onClick={() => onOpenDecision(mission)}
+            type="button"
+          >
+            <span>Открыть решение</span><span aria-hidden="true">→</span>
+          </button>
+        ) : (
+          <HeadquartersActionControl action={mission.action} />
+        )}
         <button
           className="headquarters-why-action"
           onClick={() => onOpen(mission)}
@@ -679,10 +811,12 @@ function CurrentSignals({ snapshot }: { snapshot: HeadquartersSnapshotResponse }
 }
 
 function TruthStrip({
+  isRefreshing,
   onOpenCoverage,
   onRetry,
   snapshot
 }: {
+  isRefreshing: boolean;
   onOpenCoverage: () => void;
   onRetry?: () => void;
   snapshot: HeadquartersSnapshotResponse;
@@ -706,7 +840,9 @@ function TruthStrip({
           {snapshot.snapshot.partial ? "Что недоступно" : "Как собран снимок"}
         </button>
         {onRetry ? (
-          <button onClick={onRetry} type="button">Обновить</button>
+          <button disabled={isRefreshing} onClick={onRetry} type="button">
+            {isRefreshing ? "Обновляем…" : "Обновить"}
+          </button>
         ) : null}
       </div>
     </footer>
@@ -735,7 +871,20 @@ function HeadquartersDrawer({
       onClose={onClose}
     >
       {overlay.kind === "mission" ? (
-        <MissionDrawer mission={overlay.mission} position={overlay.position} />
+        <HeadquartersMissionDetail
+          mission={overlay.mission}
+          onOpenDecision={(mission) => onOpen({ kind: "decision", mission })}
+          onOpenProfile={(selector, label) =>
+            onOpen({ kind: "profile", label, selector })
+          }
+          position={overlay.position}
+        />
+      ) : null}
+      {overlay.kind === "profile" ? (
+        <HeadquartersProfileLoader
+          selector={overlay.selector}
+          workspaceId={snapshot.workspace.id}
+        />
       ) : null}
       {overlay.kind === "pulse" ? <PulseDrawer metric={overlay.metric} /> : null}
       {overlay.kind === "sources" ? <SourcesDrawer snapshot={snapshot} /> : null}
@@ -759,38 +908,49 @@ function HeadquartersDrawer({
   );
 }
 
-function MissionDrawer({
-  mission,
-  position
+function HeadquartersProfileLoader({
+  selector,
+  workspaceId
 }: {
-  mission: HeadquartersMission;
-  position: "priority" | "queue";
+  selector: string;
+  workspaceId: string;
 }) {
-  const facts = [
-    ["Почему сейчас", mission.why_now],
-    ["Следующий шаг", mission.next_step],
-    ["Ожидаемый эффект", mission.impact],
-    ["Срок", formatDateTime(mission.due_at)]
-  ].filter((item): item is [string, string] => Boolean(item[1]));
+  const [data, setData] = useState<CompanyMapResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    setData(null);
+    setError(null);
+    fetchCompanyMap(workspaceId, { signal: controller.signal })
+      .then((response) => {
+        if (response.workspace_id !== workspaceId) {
+          setError("Сервер вернул профиль из другой компании.");
+          return;
+        }
+        setData(response);
+      })
+      .catch((caught: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Не удалось загрузить точный профиль."
+        );
+      });
+    return () => controller.abort();
+  }, [selector, workspaceId]);
 
-  return (
-    <div className="headquarters-drawer-content">
-      <span className="headquarters-drawer-kicker">
-        {position === "priority" ? "Главный ход" : "Следующий ход"} · {severityLabel(mission.severity)}
-      </span>
-      <p className="headquarters-drawer-lead">{mission.summary}</p>
-      <dl className="headquarters-drawer-facts">
-        {facts.map(([label, value]) => (
-          <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
-        ))}
-      </dl>
-      <EvidenceList evidence={mission.evidence_refs} />
-      <HeadquartersActionControl action={mission.action} />
-      {!mission.action.enabled && mission.action.disabled_reason ? (
-        <p className="headquarters-disabled-reason">{mission.action.disabled_reason}</p>
-      ) : null}
-    </div>
-  );
+  if (error) {
+    return (
+      <div className="headquarters-profile-state" role="alert">
+        <strong>Профиль не загружен</strong><p>{error}</p>
+      </div>
+    );
+  }
+  if (!data) {
+    return <p className="headquarters-profile-state" aria-busy="true">Загружаем точный профиль…</p>;
+  }
+  return <HeadquartersProfileDrawer data={data} selector={selector} />;
 }
 
 function PulseDrawer({ metric }: { metric: HeadquartersPulseMetric }) {
@@ -905,38 +1065,6 @@ function AssistantDrawer({
   );
 }
 
-function EvidenceList({ evidence }: { evidence: HeadquartersEvidenceRef[] }) {
-  return (
-    <section className="headquarters-evidence-list" aria-labelledby="headquarters-evidence-title">
-      <header>
-        <h3 id="headquarters-evidence-title">Основания</h3>
-        <span>{evidence.length}</span>
-      </header>
-      {evidence.length > 0 ? (
-        <ul>
-          {evidence.map((item) => (
-            <li key={item.id}>
-              <span className="headquarters-evidence-trust" data-trust={item.trust}>
-                {item.trust === "verified" ? "✓" : "≈"}
-              </span>
-              <span>
-                {item.target ? (
-                  <SourceLink url={item.target}>{item.label}</SourceLink>
-                ) : (
-                  <strong>{item.label}</strong>
-                )}
-                <small>{sourceLabel(item.source_key)} · {evidenceTrustLabel(item.trust)}</small>
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>Доступно только агрегатное основание; конкретные факты не утверждаются.</p>
-      )}
-    </section>
-  );
-}
-
 function HeadquartersState({
   onRetry,
   status,
@@ -1024,7 +1152,9 @@ function stateContent(status: Exclude<HeadquartersDashboardStatus, "ready">) {
 function overlayTitle(overlay: HeadquartersOverlay): string {
   if (overlay.kind === "assistant") return "Спросить FounderOS";
   if (overlay.kind === "coverage") return "Как собран снимок";
+  if (overlay.kind === "decision") return overlay.mission.title;
   if (overlay.kind === "onboarding") return "Запуск компании";
+  if (overlay.kind === "profile") return overlay.label;
   if (overlay.kind === "sources") return "Радары компании";
   if (overlay.kind === "pulse") return overlay.metric.label;
   return overlay.mission.title;
@@ -1036,6 +1166,12 @@ function overlayIdentity(overlay: HeadquartersOverlay): string {
   }
   if (overlay.kind === "pulse") {
     return `${overlay.kind}:${overlay.metric.key}`;
+  }
+  if (overlay.kind === "profile") {
+    return `${overlay.kind}:${overlay.selector}`;
+  }
+  if (overlay.kind === "decision") {
+    return `${overlay.kind}:${overlay.mission.id}`;
   }
   return overlay.kind;
 }
@@ -1100,10 +1236,6 @@ function sourceAttentionLabel(reason: string): string {
     stale_data: "Данные источника вышли за подтверждённое окно свежести."
   };
   return labels[reason] ?? "Источник требует проверки.";
-}
-
-function evidenceTrustLabel(trust: HeadquartersEvidenceRef["trust"]): string {
-  return trust === "verified" ? "проверено" : "агрегат";
 }
 
 function sourceStateLabel(state: HeadquartersSourceHealth["primary_state"]): string {

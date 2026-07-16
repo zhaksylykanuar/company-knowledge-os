@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -35,6 +36,7 @@ from app.db.identity_models import (
     Workspace,
 )
 from app.main import app
+import app.services.action_proposal_decision_service as action_proposal_decision_service
 from app.services.action_proposal_service import (
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS,
@@ -42,6 +44,12 @@ from app.services.action_proposal_service import (
     ActionProposalCreateInput,
     ActionProposalError,
     validate_action_proposal_input,
+)
+from app.services.action_proposal_decision_service import (
+    ActionProposalDecisionCommand,
+    ActionProposalDecisionConflictError,
+    ActionProposalDecisionForbiddenError,
+    decide_action_proposal,
 )
 
 
@@ -90,6 +98,24 @@ def _proposal_payload(**overrides) -> dict:
         "created_by": "user",
     }
     payload.update(overrides)
+    return payload
+
+
+def _decision_payload(
+    proposal: dict,
+    *,
+    idempotency_key: str | None = None,
+    reason: str | None = None,
+    expected_snapshot_id: str | None = None,
+) -> dict:
+    payload = {
+        "idempotency_key": idempotency_key or f"decision-{uuid4()}",
+        "proposal_version": proposal["proposal_version"],
+    }
+    if reason is not None:
+        payload["reason"] = reason
+    if expected_snapshot_id is not None:
+        payload["expected_snapshot_id"] = expected_snapshot_id
     return payload
 
 
@@ -710,10 +736,12 @@ async def test_owner_admin_can_approve_without_execution(
         executions_before = await _count(ActionExecution)
 
         async with _async_client() as client:
+            decision_payload = _decision_payload(proposal)
             response = await client.post(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": actor_email},
+                json=decision_payload,
             )
             audit_response = await client.get(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/audit",
@@ -724,8 +752,18 @@ async def test_owner_admin_can_approve_without_execution(
         assert response.status_code == 200
         body = response.json()
         assert body["proposal"]["status"] == ACTION_PROPOSAL_STATUS_APPROVED
+        assert body["proposal"]["proposal_version"] != proposal["proposal_version"]
         assert body["execution_started"] is False
         assert body["is_live"] is False
+        assert body["decision_receipt"] == {
+            "receipt_id": body["decision_receipt"]["receipt_id"],
+            "proposal_id": proposal["id"],
+            "decision": "approved",
+            "recorded_at": body["decision_receipt"]["recorded_at"],
+            "replayed": False,
+            "external_write_performed": False,
+            "proposal_version": proposal["proposal_version"],
+        }
         assert any("deferred" in warning for warning in body["warnings"])
         assert await _count(ActionExecution) == executions_before
         assert audit_response.status_code == 200, audit_response.text
@@ -738,6 +776,7 @@ async def test_owner_admin_can_approve_without_execution(
         assert audit["events"][0]["confirmation_received"] is False
         assert audit["events"][0]["event_metadata"]["decision"] == "approved"
         assert audit["events"][0]["event_metadata"]["bulk"] is False
+        assert audit["events"][0]["id"] == body["decision_receipt"]["receipt_id"]
         assert audit["receipt"]["external_write_performed"] is False
         assert audit["receipt"]["provider_result"] == "none"
     finally:
@@ -768,6 +807,7 @@ async def test_member_viewer_cannot_approve(monkeypatch, role: str) -> None:
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": actor_email},
+                json=_decision_payload(proposal),
             )
 
         assert response.status_code == 403
@@ -776,7 +816,264 @@ async def test_member_viewer_cannot_approve(monkeypatch, role: str) -> None:
         await _cleanup_action_fixture(marker)
 
 
-async def test_approve_reject_invalid_transitions_fail(monkeypatch) -> None:
+async def test_decision_service_rechecks_admin_role_in_write_session(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        member_email = await _add_workspace_user(
+            created["workspace"]["id"],
+            marker,
+            role=MEMBERSHIP_ROLE_MEMBER,
+            suffix="write-session-member",
+        )
+        proposal = await _post_proposal(created["workspace"]["id"], owner_email)
+        async with AsyncSessionLocal() as session:
+            member_id = await session.scalar(
+                select(User.id).where(User.email == member_email)
+            )
+            assert member_id is not None
+            with pytest.raises(
+                ActionProposalDecisionForbiddenError,
+                match="insufficient workspace role",
+            ):
+                await decide_action_proposal(
+                    session,
+                    workspace_id=UUID(created["workspace"]["id"]),
+                    proposal_id=UUID(proposal["id"]),
+                    actor_user_id=member_id,
+                    command=ActionProposalDecisionCommand(
+                        decision="approved",
+                        idempotency_key=f"direct-role-check-{uuid4()}",
+                        proposal_version=proposal["proposal_version"],
+                    ),
+                )
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def _run_contended_approval_decisions(
+    monkeypatch,
+    *,
+    workspace_id: UUID,
+    proposal: dict,
+    actor_user_ids: list[UUID],
+    idempotency_keys: list[str],
+) -> tuple[list[dict[str, object]], int]:
+    original_require_current_admin = (
+        action_proposal_decision_service._require_current_admin
+    )
+    both_admin_checks_completed = asyncio.Event()
+    arrival_count = 0
+
+    async def synchronized_require_current_admin(*args, **kwargs) -> None:
+        nonlocal arrival_count
+        await original_require_current_admin(*args, **kwargs)
+        arrival_count += 1
+        if arrival_count == len(actor_user_ids):
+            both_admin_checks_completed.set()
+        await asyncio.wait_for(both_admin_checks_completed.wait(), timeout=5)
+
+    monkeypatch.setattr(
+        action_proposal_decision_service,
+        "_require_current_admin",
+        synchronized_require_current_admin,
+    )
+
+    async def decide(actor_user_id: UUID, idempotency_key: str) -> dict[str, object]:
+        async with AsyncSessionLocal() as session:
+            try:
+                result = await decide_action_proposal(
+                    session,
+                    workspace_id=workspace_id,
+                    proposal_id=UUID(proposal["id"]),
+                    actor_user_id=actor_user_id,
+                    command=ActionProposalDecisionCommand(
+                        decision="approved",
+                        idempotency_key=idempotency_key,
+                        proposal_version=proposal["proposal_version"],
+                    ),
+                )
+                outcome: dict[str, object] = {
+                    "kind": "success",
+                    "event_id": result.event.id,
+                    "proposal_status": result.proposal.status,
+                    "replayed": result.replayed,
+                }
+                await session.commit()
+                return outcome
+            except ActionProposalDecisionConflictError as exc:
+                await session.rollback()
+                return {"kind": "conflict", "detail": exc.detail}
+
+    outcomes = await asyncio.gather(
+        *(
+            decide(actor_user_id, idempotency_key)
+            for actor_user_id, idempotency_key in zip(
+                actor_user_ids,
+                idempotency_keys,
+                strict=True,
+            )
+        )
+    )
+    return outcomes, arrival_count
+
+
+async def test_concurrent_same_key_decisions_transition_once_and_replay(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        admin_email = await _add_workspace_user(
+            str(workspace_id),
+            marker,
+            role=MEMBERSHIP_ROLE_ADMIN,
+            suffix="contention-admin",
+        )
+        proposal = await _post_proposal(str(workspace_id), owner_email)
+        async with AsyncSessionLocal() as session:
+            actor_rows = (
+                await session.execute(
+                    select(User.email, User.id).where(
+                        User.email.in_([owner_email, admin_email])
+                    )
+                )
+            ).all()
+        actor_ids_by_email = {email: user_id for email, user_id in actor_rows}
+        actor_user_ids = [
+            actor_ids_by_email[owner_email],
+            actor_ids_by_email[admin_email],
+        ]
+        shared_key = f"concurrent-same-{uuid4()}"
+
+        outcomes, arrival_count = await _run_contended_approval_decisions(
+            monkeypatch,
+            workspace_id=workspace_id,
+            proposal=proposal,
+            actor_user_ids=actor_user_ids,
+            idempotency_keys=[shared_key, shared_key],
+        )
+
+        assert arrival_count == 2
+        assert [outcome["kind"] for outcome in outcomes] == ["success", "success"]
+        assert sorted(outcome["replayed"] for outcome in outcomes) == [False, True]
+        assert len({outcome["event_id"] for outcome in outcomes}) == 1
+        assert {
+            outcome["proposal_status"] for outcome in outcomes
+        } == {ACTION_PROPOSAL_STATUS_APPROVED}
+
+        async with AsyncSessionLocal() as session:
+            stored = await session.get(ActionProposal, UUID(proposal["id"]))
+            events = list(
+                (
+                    await session.scalars(
+                        select(ActionExecutionEvent).where(
+                            ActionExecutionEvent.action_proposal_id
+                            == UUID(proposal["id"])
+                        )
+                    )
+                ).all()
+            )
+        assert stored is not None
+        assert stored.status == ACTION_PROPOSAL_STATUS_APPROVED
+        assert stored.approved_by_user_id in actor_user_ids
+        assert stored.approved_at is not None
+        assert len(events) == 1
+        assert events[0].id == outcomes[0]["event_id"]
+        assert events[0].event_type == ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_concurrent_different_key_decisions_yield_one_conflict(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        admin_email = await _add_workspace_user(
+            str(workspace_id),
+            marker,
+            role=MEMBERSHIP_ROLE_ADMIN,
+            suffix="contention-admin",
+        )
+        proposal = await _post_proposal(str(workspace_id), owner_email)
+        async with AsyncSessionLocal() as session:
+            actor_rows = (
+                await session.execute(
+                    select(User.email, User.id).where(
+                        User.email.in_([owner_email, admin_email])
+                    )
+                )
+            ).all()
+        actor_ids_by_email = {email: user_id for email, user_id in actor_rows}
+        actor_user_ids = [
+            actor_ids_by_email[owner_email],
+            actor_ids_by_email[admin_email],
+        ]
+
+        outcomes, arrival_count = await _run_contended_approval_decisions(
+            monkeypatch,
+            workspace_id=workspace_id,
+            proposal=proposal,
+            actor_user_ids=actor_user_ids,
+            idempotency_keys=[
+                f"concurrent-first-{uuid4()}",
+                f"concurrent-second-{uuid4()}",
+            ],
+        )
+
+        successes = [outcome for outcome in outcomes if outcome["kind"] == "success"]
+        conflicts = [outcome for outcome in outcomes if outcome["kind"] == "conflict"]
+        assert arrival_count == 2
+        assert len(successes) == 1
+        assert successes[0]["replayed"] is False
+        assert successes[0]["proposal_status"] == ACTION_PROPOSAL_STATUS_APPROVED
+        assert conflicts == [
+            {
+                "kind": "conflict",
+                "detail": "action proposal is not in proposed status",
+            }
+        ]
+
+        async with AsyncSessionLocal() as session:
+            stored = await session.get(ActionProposal, UUID(proposal["id"]))
+            events = list(
+                (
+                    await session.scalars(
+                        select(ActionExecutionEvent).where(
+                            ActionExecutionEvent.action_proposal_id
+                            == UUID(proposal["id"])
+                        )
+                    )
+                ).all()
+            )
+        assert stored is not None
+        assert stored.status == ACTION_PROPOSAL_STATUS_APPROVED
+        assert stored.approved_by_user_id in actor_user_ids
+        assert stored.approved_at is not None
+        assert len(events) == 1
+        assert events[0].id == successes[0]["event_id"]
+        assert events[0].event_type == ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_single_decisions_replay_same_intent_and_reject_conflicts(monkeypatch) -> None:
     marker = uuid4().hex
     _set_auth(monkeypatch)
     await _cleanup_action_fixture(marker)
@@ -792,45 +1089,123 @@ async def test_approve_reject_invalid_transitions_fail(monkeypatch) -> None:
         )
 
         async with _async_client() as client:
+            approve_key = f"approve-{uuid4()}"
+            approve_payload = _decision_payload(
+                approved,
+                idempotency_key=approve_key,
+            )
             approve_once = await client.post(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
+                json=approve_payload,
             )
             approve_twice = await client.post(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
+                json=approve_payload,
+            )
+            approve_with_new_key = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/approve",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json=_decision_payload(approved),
+            )
+            reject_key = f"reject-{uuid4()}"
+            reject_payload = _decision_payload(
+                rejected,
+                idempotency_key=reject_key,
+                reason="Not needed",
             )
             reject_once = await client.post(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{rejected['id']}/reject",
                 headers=_headers(),
                 params={"owner_email": owner_email},
-                json={"reason": "Not needed"},
+                json=reject_payload,
             )
             reject_twice = await client.post(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{rejected['id']}/reject",
                 headers=_headers(),
                 params={"owner_email": owner_email},
-                json={"reason": "Still not needed"},
+                json=reject_payload,
             )
             reject_approved = await client.post(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approved['id']}/reject",
                 headers=_headers(),
                 params={"owner_email": owner_email},
-                json={"reason": "Too late"},
+                json=_decision_payload(
+                    approved,
+                    idempotency_key=approve_key,
+                    reason="Too late",
+                ),
             )
 
         assert approve_once.status_code == 200
-        assert approve_twice.status_code == 409
-        assert approve_twice.json() == {
+        assert approve_twice.status_code == 200
+        assert approve_twice.json()["decision_receipt"]["replayed"] is True
+        assert (
+            approve_twice.json()["decision_receipt"]["receipt_id"]
+            == approve_once.json()["decision_receipt"]["receipt_id"]
+        )
+        assert approve_with_new_key.status_code == 409
+        assert approve_with_new_key.json() == {
             "detail": "action proposal is not in proposed status"
         }
         assert reject_once.status_code == 200
         assert reject_once.json()["proposal"]["status"] == ACTION_PROPOSAL_STATUS_REJECTED
         assert reject_once.json()["proposal"]["rejection_reason"] == "Not needed"
-        assert reject_twice.status_code == 409
+        assert reject_twice.status_code == 200
+        assert reject_twice.json()["decision_receipt"]["replayed"] is True
+        assert (
+            reject_twice.json()["decision_receipt"]["receipt_id"]
+            == reject_once.json()["decision_receipt"]["receipt_id"]
+        )
         assert reject_approved.status_code == 409
+        assert reject_approved.json() == {
+            "detail": "idempotency key was already used with different decision input"
+        }
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_single_decision_rejects_stale_proposal_version_without_audit(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _post_proposal(created["workspace"]["id"], owner_email)
+        async with AsyncSessionLocal() as session:
+            stored = await session.get(ActionProposal, UUID(proposal["id"]))
+            assert stored is not None
+            stored.title = "Changed after the actor opened the decision"
+            await session.commit()
+
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json=_decision_payload(proposal),
+            )
+
+        assert response.status_code == 409
+        assert response.json() == {"detail": "action proposal version changed"}
+        async with AsyncSessionLocal() as session:
+            stored = await session.get(ActionProposal, UUID(proposal["id"]))
+            assert stored is not None
+            assert stored.status == ACTION_PROPOSAL_STATUS_PROPOSED
+            event_count = await session.scalar(
+                select(func.count())
+                .select_from(ActionExecutionEvent)
+                .where(ActionExecutionEvent.action_proposal_id == stored.id)
+            )
+        assert event_count == 0
     finally:
         await _cleanup_action_fixture(marker)
 
@@ -855,6 +1230,7 @@ async def test_bulk_approve_partially_succeeds_without_execution(monkeypatch) ->
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{already_approved['id']}/approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
+                json=_decision_payload(already_approved),
             )
         assert approved_once.status_code == 200
         executions_before = await _count(ActionExecution)

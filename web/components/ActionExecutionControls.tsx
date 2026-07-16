@@ -19,7 +19,8 @@ import type {
 import { SourceLink } from "./SourceLink";
 
 type ActionExecutionControlsProps = {
-  onBusyChange?: (isBusy: boolean) => void;
+  disabled?: boolean;
+  onBusyChange?: (isBusy: boolean) => boolean | void;
   onComplete?: (outcome: ActionExecutionOutcome) => void;
   onRefresh?: () => void;
   proposal: ActionProposal;
@@ -38,6 +39,7 @@ type ActionExecutionControlsViewProps = {
   auditWarning?: string | null;
   confirmationChecked: boolean;
   connectionId: string;
+  disabled?: boolean;
   error: string | null;
   executeResult: ActionExecutionResponse | null;
   isExecutePending: boolean;
@@ -55,6 +57,7 @@ type ActionExecutionControlsViewProps = {
 };
 
 export function ActionExecutionControls({
+  disabled = false,
   onBusyChange,
   onComplete,
   onRefresh,
@@ -81,8 +84,12 @@ export function ActionExecutionControls({
   }
 
   async function loadHistory() {
+    if (disabled || onBusyChange?.(true) === false) {
+      return;
+    }
     if (!workspaceId) {
       setError(M.actionExecution.noWorkspacePreview);
+      onBusyChange?.(false);
       return;
     }
 
@@ -90,7 +97,6 @@ export function ActionExecutionControls({
     setAuditWarning(null);
     setSuccessMessage(null);
     setIsHistoryPending(true);
-    onBusyChange?.(true);
     try {
       await refreshAudit(workspaceId);
       setSuccessMessage(M.actionExecution.historyLoaded);
@@ -103,8 +109,12 @@ export function ActionExecutionControls({
   }
 
   async function previewExecution() {
+    if (disabled || onBusyChange?.(true) === false) {
+      return;
+    }
     if (!workspaceId) {
       setError(M.actionExecution.noWorkspacePreview);
+      onBusyChange?.(false);
       return;
     }
 
@@ -112,7 +122,6 @@ export function ActionExecutionControls({
     setAuditWarning(null);
     setSuccessMessage(null);
     setIsPreviewPending(true);
-    onBusyChange?.(true);
     try {
       const response = await fetchActionExecutionPreview(workspaceId, proposal.id);
       setPreview(response);
@@ -132,16 +141,22 @@ export function ActionExecutionControls({
   }
 
   async function executeWithConfirmation() {
+    if (disabled || onBusyChange?.(true) === false) {
+      return;
+    }
     if (!workspaceId) {
       setError(M.actionExecution.noWorkspaceExecute);
+      onBusyChange?.(false);
       return;
     }
     if (!preview?.capabilities.external_execution || !preview.capabilities.live_provider_write) {
       setError(M.actionExecution.externalDisabledError);
+      onBusyChange?.(false);
       return;
     }
     if (!confirmationChecked || !connectionId.trim()) {
       setError(M.actionExecution.confirmRequired);
+      onBusyChange?.(false);
       return;
     }
 
@@ -149,7 +164,6 @@ export function ActionExecutionControls({
     setAuditWarning(null);
     setSuccessMessage(null);
     setIsExecutePending(true);
-    onBusyChange?.(true);
     try {
       const response = await executeActionProposal(workspaceId, proposal.id, {
         connection_id: connectionId.trim(),
@@ -200,6 +214,7 @@ export function ActionExecutionControls({
       auditWarning={auditWarning}
       confirmationChecked={confirmationChecked}
       connectionId={connectionId}
+      disabled={disabled}
       error={error}
       executeResult={executeResult}
       isExecutePending={isExecutePending}
@@ -223,6 +238,7 @@ export function ActionExecutionControlsView({
   auditWarning = null,
   confirmationChecked,
   connectionId,
+  disabled = false,
   error,
   executeResult,
   isExecutePending,
@@ -246,7 +262,7 @@ export function ActionExecutionControlsView({
   const externalExecutionEnabled = Boolean(
     preview?.capabilities.external_execution && preview.capabilities.live_provider_write
   );
-  const isBusy = isExecutePending || isHistoryPending || isPreviewPending;
+  const isBusy = disabled || isExecutePending || isHistoryPending || isPreviewPending;
   const canExecute =
     externalExecutionEnabled &&
     preview?.status === "preview_ready" &&
@@ -379,6 +395,7 @@ export function ActionExecutionControlsView({
               <div className="field">
                 <label htmlFor={`execution-connection-${proposal.id}`}>{M.actionExecution.connectionIdLabel}</label>
                 <input
+                  disabled={isBusy}
                   id={`execution-connection-${proposal.id}`}
                   onChange={(event) => onConnectionIdChange?.(event.target.value)}
                   placeholder={M.actionExecution.connectionIdPlaceholder}
@@ -388,6 +405,7 @@ export function ActionExecutionControlsView({
               <label className="actions-row" htmlFor={`execution-confirm-${proposal.id}`}>
                 <input
                   checked={confirmationChecked}
+                  disabled={isBusy}
                   id={`execution-confirm-${proposal.id}`}
                   onChange={(event) => onConfirmationChange?.(event.target.checked)}
                   type="checkbox"

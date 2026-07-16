@@ -143,6 +143,7 @@ const briefingActionProposal: ActionProposal = {
   target_provider: "internal",
   title: "Review synced GitHub work before approving actions.",
   updated_at: "2026-06-24T10:05:00+00:00",
+  proposal_version: "ap1_briefing_1",
   warnings: [],
   workspace_id: "workspace-123"
 };

@@ -10,6 +10,42 @@
 
 ## ▶ СЕЙЧАС
 
+- **LC-05/LC-08 Exact drill-down + local decision receipt (DEC-089):
+  РЕАЛИЗОВАНО ЛОКАЛЬНО.** Каждая Headquarters mission теперь открывает точную
+  карточку с `why now`, impact, due, owner, customer, sources и evidence;
+  отсутствие отдельного field-level provenance честно даёт `Не определено`.
+  Opaque Company Map selector открывает только запрошенную сущность и больше не
+  подменяется профилем компании при malformed/stale/foreign значении. UI-контур
+  employee/customer drawer готов: access role отделён от business role, а
+  customer tabs используют только durable relations и exact touchpoints.
+  Однако production Headquarters projection пока не выдаёт confirmed
+  owner/customer relation IDs: из реальной mission сейчас достижим exact
+  unresolved world candidate, а confirmed employee/customer переход остаётся
+  schema/data gate и не считается завершённым end-to-end flow. Proposal mission
+  открывает компактный modal,
+  который перечитывает exact workspace proposal и сверяет одинаковую
+  `proposal_version` со снимком. Single approve/reject теперь требуют
+  idempotency key и proposal version, опционально связываются с
+  `expected_snapshot_id`, повторно проверяют active membership/admin role в
+  write-session, блокируют exact row и возвращают persisted local receipt.
+  Same-key replay возвращает ту же квитанцию; stale/conflicting context даёт
+  `409`. Pending decision блокирует закрытие overlay и глобальную навигацию;
+  неоднозначный transport result делает ровно один повтор того же POST с тем же
+  idempotency key; UI принимает только authoritative endpoint receipt и не
+  синтезирует его из audit read-back. После успешной записи Headquarters refetch’ится без
+  потери квитанции: ошибка refresh сохраняет подтверждённый receipt и прежний
+  snapshot. `external_write_performed=false`; provider preview/execute не
+  добавлялся и остаётся отдельным future gate. Миграций, provider/LLM calls и
+  business-profile writes нет. Проверено 2026-07-17: frontend **413/413
+  passed**, lint/typecheck и production build **19 routes**; backend **711
+  passed / 1 external deprecation warning**, Ruff; real PostgreSQL contention
+  покрывает same-key replay и different-key conflict. Local smoke: login
+  **200**, health **200**, unauthenticated auth probe **401**. `local-doctor`
+  видит PostgreSQL 16 и валидный credential aggregate, но ожидаемо сообщает
+  занятые `8765/3000`, потому что локальный runtime уже запущен. Следующая задача
+  после этого среза: **LC-07 — deterministic
+  read-only company assistant поверх того же
+  Headquarters snapshot.**
 - **LC-03 Computed onboarding inside Headquarters (DEC-088): РЕАЛИЗОВАН
   ЛОКАЛЬНО.** `HeadquartersSnapshot` теперь честно версионирован как
   `headquarters.v2` и содержит один server-computed `onboarding.v1` из пяти

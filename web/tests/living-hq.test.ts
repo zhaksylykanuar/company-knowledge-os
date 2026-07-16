@@ -63,6 +63,7 @@ function proposal(
     rejection_reason: null,
     created_at: "2026-07-14T08:00:00Z",
     updated_at: "2026-07-14T08:00:00Z",
+    proposal_version: "ap1_proposal_1",
     is_live: false,
     execution_started: false,
     warnings: [],

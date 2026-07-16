@@ -11,6 +11,11 @@ export type CompanyWorldProfileTarget = {
   selector: string;
 };
 
+export type CompanyWorldProfileRequestResolution =
+  | { state: "default"; selectedKey: string }
+  | { state: "resolved"; selectedKey: string }
+  | { state: "unavailable"; selectedKey: null };
+
 /**
  * Build a deep link without putting raw Company Map keys into browser history.
  *
@@ -74,6 +79,30 @@ export function resolveCompanyWorldProfileSelector(
   return (
     keys.find((key) => profileSelectorForKey(data, key) === normalizedSelector) ?? null
   );
+}
+
+/**
+ * Preserve the difference between an ordinary World visit and an explicit
+ * profile deep link. An invalid, foreign, or stale explicit selector must not
+ * degrade to the company profile.
+ */
+export function resolveCompanyWorldProfileRequest(
+  data: CompanyMapResponse,
+  selector: string | null,
+  requested = selector !== null
+): CompanyWorldProfileRequestResolution {
+  if (!requested) {
+    return { state: "default", selectedKey: data.company.key };
+  }
+
+  if (selector === null) {
+    return { state: "unavailable", selectedKey: null };
+  }
+
+  const selectedKey = resolveCompanyWorldProfileSelector(data, selector);
+  return selectedKey
+    ? { state: "resolved", selectedKey }
+    : { state: "unavailable", selectedKey: null };
 }
 
 function profileSelectorForKey(
