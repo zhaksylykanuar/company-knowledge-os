@@ -2544,6 +2544,67 @@ a short prologue to the Living Headquarters, followed by one screen at a time.
 The first real GitHub App read, any external write, LLM narrative, hosted change,
 or mobile product contract remains a separate explicitly approved scope.
 
+## DEC-085 - The Demo Uses One Command Center With Progressive Disclosure
+
+Decision (2026-07-16): the presentation grammar of DEC-084 is superseded. The
+desktop `/demo` reference is one Living Command Center, not a tour through many
+screens. The causal fixtures, exact-path gate, synthetic-data honesty, and
+external-write boundary from DEC-084 remain authoritative.
+
+The interaction contract is:
+
+- the default surface spends attention on one main priority and one primary
+  action. It may additionally show three compact pulse metrics, at most two next
+  decisions, and three recent signals. Profiles, source coverage, documents,
+  timelines, queue logic, and evidence do not render on the surface;
+- clicking a tile opens one right-side drawer with the relevant card. A drawer
+  may use short `Overview / People / History` tabs, but it must not become a
+  hidden second application or stack another drawer. Only one overlay exists at
+  a time. A selected mission carries its own id, owner, consequence, requested
+  decision, evidence count, and exact source set; a specific row must never open
+  an unrelated generic queue;
+- a consequential decision uses one focused modal that keeps why-now context,
+  owners, evidence, the exact synthetic preview, explicit confirmation, and the
+  receipt together. The dimmed command center remains visually present so the
+  decision feels like a temporary command mode, not navigation to another page;
+- motion and expressive shape are reserved for orientation, focus, and state
+  change. They may reinforce the game-like feeling of managing a living system,
+  but decorative gauges, scores, points, streaks, resource clutter, and copied
+  game visual identities are not part of FounderOS;
+- the assistant is a persistent entry point inside the headquarters context,
+  opened by the command field or `Cmd/Ctrl+K`. In the demo it is a deterministic
+  intent resolver over synthetic fixtures, with short answers, citation chips,
+  and explicit navigation/actions. Its local form prevents network submission;
+  it has no API/fetch/provider call, persistence, free-form LLM execution, or
+  direct mutation path;
+- assistant suggestions can open a profile, evidence, team, source detail, or
+  decision preview. A human still confirms the decision separately. Completing
+  the demo decision changes the derived queue, primary mission, counts, and
+  receipt together; the primary action follows the promoted mission while the
+  old receipt becomes secondary. Refresh/reset discards the whole synthetic
+  session, including assistant transcript. Overlay replacement preserves the
+  original opener, completion moves focus to the receipt heading, and meaningful
+  desktop text uses a 10 px floor with core facts/actions at 11–12 px or larger;
+  and
+- a future real assistant must be a separate workspace-scoped, read-only backend
+  contract over Company Brain, Company Map, Briefing, and ActionProposal reads.
+  It must normalize citations, expose `is_live`/`llm_used`/warnings, respect
+  current RBAC, and remain unable to persist or execute a suggestion implicitly.
+  Chat history, retrieval/LLM generation, and any write capability require their
+  own schema, privacy, retention, validation, and approval decisions.
+
+Rationale: current 2025–2026 management interfaces increasingly use overview
+tiles that reveal deeper cards, temporary command-focus layers for consequential
+choices, and agents embedded into the workspace that owns the context. These are
+durable hierarchy patterns rather than a short-lived visual trend. FounderOS
+adopts the patterns while preserving readable typography, evidence visibility,
+human accountability, and product honesty.
+
+Consequence: the old scene outline, autoplay/tempo controls, transport, guide
+rail, browser-window frame, deep-link scene model, and scene-specific CSS/tests
+are deleted. DEC-084 remains the source for the synthetic/runtime boundary but
+must no longer be used as the visual or navigation reference.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

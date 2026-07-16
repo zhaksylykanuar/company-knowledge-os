@@ -1,5 +1,36 @@
 # FounderOS Changelog
 
+## 2026-07-16
+
+### Changed
+
+- Replaced the 12-scene `/demo` tour with one desktop Living Command Center
+  (DEC-085). The default surface now budgets attention to one priority, three
+  pulse metrics, at most two next decisions, three recent signals, and one
+  contextual FounderOS assistant launcher. Sources, evidence, people, customer
+  history, documents, and queue detail open in a single overlay drawer; the
+  decision context, exact preview, explicit confirmation, and receipt share one
+  focused modal. The assistant is session-only and deterministic over the
+  existing synthetic NovaFlow fixtures, exposes citation chips, and can navigate
+  to context or prepare the demo decision without executing it. `Cmd/Ctrl+K`
+  opens the same assistant instead of adding a separate command surface.
+  Completing the simulation still changes `3/2/7` to `2/2/8`, promotes the next
+  priority, prevents duplicate execution, and records only `DEMO-*`/`SIM-*`
+  values with `externalWrite=false`. The exact-path production gate, disabled
+  dashboard prefetch, permanent invented-data label, and API/provider/storage/
+  external-write isolation from DEC-084 remain unchanged. The presentation
+  outline, autoplay, scene navigation, guide rail, browser-window mock, and
+  related dead styles/tests were removed. The stale-test-output cleanup now
+  drops compiled tests whose TypeScript source was renamed or deleted.
+- Finished the command-center interaction loop after independent review. Every
+  next-decision row now opens its own mission card instead of a generic queue,
+  exact source keys drive both counts and the orbit, and the promoted mission
+  becomes the new primary action while the Atlas receipt stays secondary.
+  Reset clears post-result assistant claims; team detail follows the active
+  mission; overlay-to-overlay navigation preserves the original focus target;
+  the receipt is announced on state change; and the desktop type floor was
+  raised so progressive disclosure, rather than 8–9 px copy, carries density.
+
 ## 2026-07-15
 
 ### Changed

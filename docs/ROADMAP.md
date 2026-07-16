@@ -18,11 +18,16 @@ doctor/start/authenticated-browser/smoke/restore/stop acceptance passed on
 that model through the full Living World and safe exact-profile navigation.
 DEC-083 completes the Missions decision room around one active human decision,
 a bounded loaded queue, evidence, consequences, and an explicit external gate.
-DEC-084 adds a desktop-only, synthetic 12-scene `/demo` contract for the intended
-completed product loop; it is isolated from runtime data and does not claim real
-provider or authenticated-product readiness. The next local UX horizon is to
-promote that approved grammar into the real computed onboarding prologue and
-then into one evidence-backed work surface at a time; the
+DEC-084 establishes the isolated synthetic/runtime boundary for `/demo`; DEC-085
+supersedes its presentation grammar with one minimalist desktop Living Command
+Center, progressive-disclosure drawers, one decision modal, and a deterministic
+contextual assistant. Mission-specific drill-down and state-following primary
+actions now complete the reference loop without exposing the whole queue on the
+surface. The reference still does not claim real provider,
+authenticated-product, or LLM readiness. The next local UX horizon is to promote
+that approved command-center grammar into real workspace-scoped Company Brain,
+Company Map, Briefing, and ActionProposal reads; a read-only assistant query
+contract follows as a separate backend slice. The
 next external gate remains one founder-approved scoped GitHub App read, not a
 hosted deploy. External mutation and LLM narrative remain separate human-gated
 horizons. Docs

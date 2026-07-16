@@ -80,16 +80,19 @@ Implemented foundations:
   ActionProposal RBAC, persisted decision audit, evidence, receipts, and
   external-write gate remain unchanged; no provider call/write or LLM starts
   automatically.
-- The desktop product simulation is in place (DEC-084): `/demo` is a gated,
-  synthetic, API-free 12-scene reference for the intended end-to-end FounderOS
-  experience. It demonstrates onboarding, radars, a connected signal, living
-  headquarters, relationships, customer and key-person profiles, team roles,
-  evidence-backed knowledge, briefing, a human decision, safe preview, receipt,
-  and the resulting queue/headquarters update. It is not production data and is
-  not evidence that real sources are connected. Development enables the exact
+- The desktop product reference is in place (DEC-084/DEC-085): `/demo` is a
+  gated, synthetic, API-free Living Command Center, not a tour. One priority,
+  three pulse metrics, the next decisions, and recent signals form the default
+  surface; sources, evidence, people, customer history, documents, the decision,
+  and its receipt use one drawer/modal layer. A deterministic session-only
+  assistant answers from the same synthetic fixtures, exposes citation chips,
+  and can navigate or prepare a decision without executing it. The completed
+  simulation updates the headquarters and queue together; promoted and queued
+  missions open their own source-scoped context cards instead of a generic
+  detail dump. It is not production
+  data and does not prove source or LLM readiness. Development enables the exact
   public route locally; production requires `FOUNDEROS_DEMO_ENABLED=true`.
-  Desktop 1280×720 is the only acceptance contract; mobile/tablet are explicitly
-  out of scope for this reference surface.
+  Desktop 1280×720 is the only contract; mobile/tablet remain out of scope.
 - Post-auth Command Mode is in place (DEC-078): all five primary zones lead
   with one current mission, the next useful control, and its expected result.
   Secondary forms, filters, readiness diagnostics, evidence, and technical
@@ -366,23 +369,31 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Promote the validated demo grammar into real onboarding and work screens.**
-   Use `/demo` only as the interaction and narrative reference. Recompose the
-   existing computed onboarding into the first real four-step slice: company →
-   first radar → first world → first teammate. Every completion state must come
-   from current backend evidence, return directly to the real headquarters, and
-   avoid terminal/operator handoff; synthetic demo fixtures must never leak into
-   authenticated product claims. Recipient-verified teammate invitation and
-   password-reset delivery remain a separate security-scoped follow-up.
+1. **Promote the minimal command center into the real headquarters.**
+   Use `/demo` only as an interaction reference. Feed one priority, three pulse
+   metrics, next decisions, recent changes, and every drill-down from current
+   workspace-scoped Company Brain, Company Map, Briefing, and ActionProposal
+   reads. Incomplete setup opens one compact computed onboarding modal and then
+   returns to the same headquarters. Synthetic fixtures must never become an
+   authenticated fallback or completion claim.
 
-2. **Finish the radar loop one provider at a time.**
+2. **Add the first real read-only company assistant contract.**
+   Introduce a bounded workspace-scoped query endpoint over existing read models
+   with deterministic intents first: current priority, why-now, company/person,
+   sources, briefing, waiting decisions, and evidence. Normalize citations and
+   return `is_live`, `llm_used`, warnings, suggestions, and action proposals;
+   do not persist chat, call an LLM, or mutate data in this slice. Conversation
+   history, retrieval, generation, and writes require separate schema/security
+   decisions.
+
+3. **Finish the radar loop one provider at a time.**
    `/github` remains the reference command center and the next external gate is
    still one founder-approved, repository-scoped read through its UI wizard. Then
    bring Gmail, Drive, and Jira to the same setup → scoped read → visible result →
    receipt pattern. No bulk/background sync, provider write, LLM run, or hosted
    change is authorized by this backlog item.
 
-3. **Add a real company-change boundary.**
+4. **Add a real company-change boundary.**
    The new headquarters honestly shows a current evidence snapshot. Design the
    smallest persisted snapshot/event contract that can prove "since your last
    visit" changes, dedupe them, link each one to workspace-resolved evidence, and
