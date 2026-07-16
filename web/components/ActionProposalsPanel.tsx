@@ -3,10 +3,12 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import {
+  ApiRequestError,
   approveActionProposal,
   bulkApproveActionProposals,
   bulkRejectActionProposals,
   createActionProposal,
+  fetchActionProposal,
   fetchActionProposals,
   rejectActionProposal
 } from "../lib/api";
@@ -32,7 +34,15 @@ import { MiniHint } from "./MissionStrip";
 import { SourceLink } from "./SourceLink";
 import { StatusCard } from "./StatusCard";
 
-type PanelStatus = "empty" | "error" | "loading" | "missing" | "ready" | "unsupported";
+type PanelStatus =
+  | "empty"
+  | "error"
+  | "forbidden"
+  | "loading"
+  | "missing"
+  | "not_found"
+  | "ready"
+  | "unsupported";
 type ProposalKind = "github_issue" | "internal_todo";
 type ProposalStatusFilter = "all" | "proposed" | "approved" | "rejected";
 type ProposalOrigin = "audit" | "briefing" | "github" | "internal";
@@ -83,6 +93,7 @@ type ActionProposalCreateFormState = {
 type ActionProposalsPanelProps = {
   initialAuditSourceFilter?: string | null;
   initialOriginFilter?: string | null;
+  initialProposalId?: string | null;
   initialStatusFilter?: string | null;
 };
 
@@ -155,9 +166,65 @@ export function actionCapabilitiesForRole(role: string | null): {
   };
 }
 
+export async function loadActionProposalPanelData(
+  workspaceId: string,
+  initialProposalId: string | null
+): Promise<{
+  data: ActionProposalListResponse | null;
+  error: string | null;
+  status: PanelStatus;
+}> {
+  const data = await fetchActionProposals(workspaceId, { limit: 100 });
+  if (!initialProposalId) {
+    return {
+      data,
+      error: null,
+      status: data.proposals.length > 0 ? "ready" : "empty"
+    };
+  }
+
+  const listedProposal = data.proposals.find(
+    (proposal) => proposal.id === initialProposalId
+  );
+  if (listedProposal) {
+    if (listedProposal.workspace_id !== workspaceId) {
+      return { data: null, error: null, status: "not_found" };
+    }
+    return { data, error: null, status: "ready" };
+  }
+
+  try {
+    const proposal = await fetchActionProposal(workspaceId, initialProposalId);
+    if (
+      proposal.id !== initialProposalId ||
+      proposal.workspace_id !== workspaceId
+    ) {
+      return { data: null, error: null, status: "not_found" };
+    }
+    return {
+      data: mergeExactActionProposal(data, proposal),
+      error: null,
+      status: "ready"
+    };
+  } catch (caught: unknown) {
+    if (caught instanceof ApiRequestError && caught.status === 404) {
+      return { data: null, error: null, status: "not_found" };
+    }
+    if (caught instanceof ApiRequestError && caught.status === 403) {
+      return { data: null, error: null, status: "forbidden" };
+    }
+    return {
+      data: null,
+      error: M.actionsPanel.linkedProposalUnavailableDescription,
+      status: "error"
+    };
+  }
+}
+
 export function ActionProposalsPanel({
   initialAuditSourceFilter = null,
   initialOriginFilter = null,
+  initialProposalId = null,
   initialStatusFilter = null
 }: ActionProposalsPanelProps = {}) {
   const session = useSession();
@@ -192,11 +259,14 @@ export function ActionProposalsPanel({
     normalizeStatusFilter(initialStatusFilter)
   );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [activeProposalId, setActiveProposalId] = useState<string | null>(null);
+  const [activeProposalId, setActiveProposalId] = useState<string | null>(
+    initialProposalId
+  );
   const [executionBusyProposalId, setExecutionBusyProposalId] =
     useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [mutationError, setMutationError] = useState<MutationError | null>(null);
+  const loadedInitialProposalIdRef = useRef<string | null>(null);
   const loadedWorkspaceIdRef = useRef<string | null>(null);
   const focusAfterReloadRef = useRef(false);
   const mountedRef = useRef(true);
@@ -227,15 +297,20 @@ export function ActionProposalsPanel({
     setAuditSourceFilter(normalizeAuditSourceFilter(initialAuditSourceFilter));
     setOriginFilter(normalizeOriginFilter(initialOriginFilter));
     setStatusFilter(normalizeStatusFilter(initialStatusFilter));
-    setActiveProposalId(null);
+    setActiveProposalId(initialProposalId);
     setSelectedEvidence(null);
     setSelectedEvidenceTitle(null);
     setSelectedEvidenceCount(null);
     setSelectedEvidenceProposalId(null);
-  }, [initialAuditSourceFilter, initialOriginFilter, initialStatusFilter]);
+  }, [
+    initialAuditSourceFilter,
+    initialOriginFilter,
+    initialProposalId,
+    initialStatusFilter
+  ]);
 
   useEffect(() => {
-    setActiveProposalId(null);
+    setActiveProposalId(initialProposalId);
     setSelectedEvidence(null);
     setSelectedEvidenceTitle(null);
     setSelectedEvidenceCount(null);
@@ -246,9 +321,10 @@ export function ActionProposalsPanel({
     setSuccessMessage(null);
     focusAfterReloadRef.current = false;
     if (!workspaceId) {
+      loadedInitialProposalIdRef.current = null;
       loadedWorkspaceIdRef.current = null;
     }
-  }, [workspaceId]);
+  }, [initialProposalId, workspaceId]);
 
   useEffect(() => {
     const pending = executionBusyProposalId !== null;
@@ -271,7 +347,10 @@ export function ActionProposalsPanel({
 
     let cancelled = false;
     const canRefreshInPlace =
-      data !== null && loadedWorkspaceIdRef.current === workspaceId;
+      initialProposalId === null &&
+      data !== null &&
+      loadedInitialProposalIdRef.current === initialProposalId &&
+      loadedWorkspaceIdRef.current === workspaceId;
     if (canRefreshInPlace) {
       setIsRefreshing(true);
     } else {
@@ -279,16 +358,21 @@ export function ActionProposalsPanel({
       setStatus("loading");
     }
     setError(null);
-    fetchActionProposals(workspaceId, { limit: 100 })
-      .then((payload) => {
+    loadActionProposalPanelData(workspaceId, initialProposalId)
+      .then((result) => {
         if (cancelled) {
           return;
         }
+        loadedInitialProposalIdRef.current = initialProposalId;
         loadedWorkspaceIdRef.current = workspaceId;
-        setData(payload);
-        setStatus(payload.proposals.length > 0 ? "ready" : "empty");
+        setData(result.data);
+        setError(result.error);
+        setStatus(result.status);
         setIsRefreshing(false);
-        if (focusAfterReloadRef.current) {
+        if (
+          focusAfterReloadRef.current &&
+          (result.status === "ready" || result.status === "empty")
+        ) {
           focusAfterReloadRef.current = false;
           focusMissionDestinationAfterRender();
         }
@@ -300,6 +384,7 @@ export function ActionProposalsPanel({
         setIsRefreshing(false);
         setError(caught instanceof Error ? caught.message : M.common.requestFailed);
         if (!canRefreshInPlace) {
+          loadedInitialProposalIdRef.current = initialProposalId;
           loadedWorkspaceIdRef.current = workspaceId;
           setData(null);
           setStatus("error");
@@ -309,7 +394,7 @@ export function ActionProposalsPanel({
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, reloadKey]);
+  }, [initialProposalId, workspaceId, reloadKey]);
 
   useEffect(() => {
     const visibleProposedIds = visibleProposedProposalIds(
@@ -589,12 +674,14 @@ export function ActionProposalsPanel({
     }
   }
 
-  const workspaceContextMatches =
-    workspaceId !== null && loadedWorkspaceIdRef.current === workspaceId;
-  const visibleData = workspaceContextMatches ? data : null;
+  const loadedContextMatches =
+    workspaceId !== null &&
+    loadedInitialProposalIdRef.current === initialProposalId &&
+    loadedWorkspaceIdRef.current === workspaceId;
+  const visibleData = loadedContextMatches ? data : null;
   const visibleStatus: PanelStatus = !workspaceId
     ? "missing"
-    : workspaceContextMatches
+    : loadedContextMatches
       ? status
       : "loading";
 
@@ -750,10 +837,21 @@ export function ActionProposalsPanelView({
     statusFilteredProposals,
     originFilter
   );
-  const filteredProposals =
+  const normallyFilteredProposals =
     originFilter === "audit"
       ? filterProposalsByAuditSource(originFilteredProposals, auditSourceFilter)
       : originFilteredProposals;
+  const linkedProposal = activeProposalId
+    ? proposals.find((proposal) => proposal.id === activeProposalId) ?? null
+    : null;
+  const linkedProposalOutsideFilter = Boolean(
+    linkedProposal &&
+      !normallyFilteredProposals.some((proposal) => proposal.id === linkedProposal.id)
+  );
+  const filteredProposals =
+    linkedProposal && linkedProposalOutsideFilter
+      ? [linkedProposal, ...normallyFilteredProposals]
+      : normallyFilteredProposals;
   const visibleProposedIds = proposedProposalIds(filteredProposals);
   const visibleProposedCount = visibleProposedIds.length;
   const selectedProposedCount = selectedProposalIds.filter((proposalId) =>
@@ -836,6 +934,20 @@ export function ActionProposalsPanelView({
         />
       ) : null}
 
+      {status === "not_found" ? (
+        <EmptyState
+          description={M.actionsPanel.linkedProposalNotFoundDescription}
+          title={M.actionsPanel.linkedProposalNotFoundTitle}
+        />
+      ) : null}
+
+      {status === "forbidden" ? (
+        <ErrorState
+          description={M.actionsPanel.linkedProposalForbiddenDescription}
+          title={M.actionsPanel.linkedProposalForbiddenTitle}
+        />
+      ) : null}
+
       {status === "unsupported" ? (
         <EmptyState
           description={M.actionsPanel.unsupportedDescription}
@@ -855,7 +967,7 @@ export function ActionProposalsPanelView({
         </>
       ) : null}
 
-      {data && status !== "loading" && status !== "missing" && status !== "error" ? (
+      {data && (status === "ready" || status === "empty") ? (
         <>
           <DecisionRoomSummary proposals={proposals} />
 
@@ -902,7 +1014,11 @@ export function ActionProposalsPanelView({
               </div>
             </details>
             <span className="missions-loaded-note">
-              {isRefreshing ? "Обновляем очередь…" : "В загруженной очереди · до 100 миссий"}
+              {linkedProposalOutsideFilter
+                ? M.actionsPanel.linkedProposalOutsideFilter
+                : isRefreshing
+                  ? "Обновляем очередь…"
+                  : "В загруженной очереди · до 100 миссий"}
             </span>
           </div>
 
@@ -2342,6 +2458,21 @@ function mergeCreatedProposal(
     count: proposals.length,
     proposals,
     warnings
+  };
+}
+
+export function mergeExactActionProposal(
+  current: ActionProposalListResponse,
+  proposal: ActionProposal
+): ActionProposalListResponse {
+  const proposals = [
+    proposal,
+    ...current.proposals.filter((existing) => existing.id !== proposal.id)
+  ].slice(0, 100);
+  return {
+    ...current,
+    count: proposals.length,
+    proposals
   };
 }
 

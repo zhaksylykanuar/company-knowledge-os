@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -34,6 +35,14 @@ from app.db.identity_models import (
     Workspace,
 )
 from app.main import app
+from app.services.action_proposal_service import (
+    ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
+    ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS,
+    ACTION_PROPOSAL_PAYLOAD_MAX_BYTES,
+    ActionProposalCreateInput,
+    ActionProposalError,
+    validate_action_proposal_input,
+)
 
 
 def _headers() -> dict[str, str]:
@@ -296,6 +305,40 @@ async def test_owner_admin_member_can_create_proposal(monkeypatch, role: str) ->
         await _cleanup_action_fixture(marker)
 
 
+async def test_public_proposal_origin_defaults_to_user_and_rejects_internal_origins(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        default_payload = _proposal_payload()
+        default_payload.pop("created_by")
+
+        proposal = await _post_proposal(
+            created["workspace"]["id"],
+            owner_email,
+            payload=default_payload,
+        )
+        assert proposal["created_by"] == "user"
+        assert proposal["created_by_user_id"] is not None
+
+        async with _async_client() as client:
+            for internal_origin in ("ai", "system"):
+                response = await client.post(
+                    f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals",
+                    headers=_headers(),
+                    params={"owner_email": owner_email},
+                    json=_proposal_payload(created_by=internal_origin),
+                )
+                assert response.status_code == 422
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
 async def test_viewer_cannot_create_proposal(monkeypatch) -> None:
     marker = uuid4().hex
     _set_auth(monkeypatch)
@@ -482,6 +525,80 @@ async def test_create_proposal_rejects_invalid_payloads(
             assert response.json() == {"detail": expected_detail}
     finally:
         await _cleanup_action_fixture(marker)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "oversized_value", "max_bytes"),
+    (
+        (
+            "payload",
+            {"note": "é" * (ACTION_PROPOSAL_PAYLOAD_MAX_BYTES // 2 + 1)},
+            ACTION_PROPOSAL_PAYLOAD_MAX_BYTES,
+        ),
+        (
+            "evidence_refs",
+            [
+                {
+                    "kind": "repository",
+                    "note": "é" * (ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES // 2 + 1),
+                }
+            ],
+            ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
+        ),
+    ),
+)
+async def test_create_proposal_rejects_oversized_utf8_json(
+    monkeypatch,
+    field_name: str,
+    oversized_value: object,
+    max_bytes: int,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        payload = _proposal_payload()
+        payload[field_name] = oversized_value
+        assert len(json.dumps(oversized_value).encode("utf-8")) > max_bytes
+        async with _async_client() as client:
+            response = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+                json=payload,
+            )
+
+        assert response.status_code == 400
+        assert response.json() == {
+            "detail": (f"{field_name} exceeds {max_bytes} UTF-8 serialized bytes")
+        }
+        async with AsyncSessionLocal() as session:
+            persisted_count = await session.scalar(
+                select(func.count(ActionProposal.id)).where(
+                    ActionProposal.workspace_id == UUID(created["workspace"]["id"])
+                )
+            )
+        assert persisted_count == 0
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+def test_shared_action_validation_caps_evidence_ref_items() -> None:
+    with pytest.raises(
+        ActionProposalError,
+        match=f"evidence_refs exceeds {ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS} items",
+    ):
+        validate_action_proposal_input(
+            ActionProposalCreateInput(
+                target_provider=ACTION_TARGET_PROVIDER_INTERNAL,
+                action_type=ACTION_TYPE_INTERNAL_TODO,
+                title="Bound internal evidence",
+                payload={},
+                evidence_refs=[{}] * (ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS + 1),
+            )
+        )
 
 
 async def test_list_filters_and_workspace_scoping(monkeypatch) -> None:

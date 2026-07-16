@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -31,6 +32,9 @@ ACTION_PROPOSAL_NO_EXECUTION_WARNING = (
 )
 ACTION_PROPOSAL_NOT_FOUND = "action proposal not found"
 ACTION_PROPOSAL_INVALID_TRANSITION = "action proposal is not in proposed status"
+ACTION_PROPOSAL_PAYLOAD_MAX_BYTES = 64 * 1024
+ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES = 64 * 1024
+ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS = 50
 
 VALID_TARGET_PROVIDERS = {
     ACTION_TARGET_PROVIDER_GITHUB,
@@ -112,6 +116,22 @@ def validate_action_proposal_input(payload: ActionProposalCreateInput) -> None:
         raise ActionProposalError("payload must be an object")
     if not isinstance(payload.evidence_refs, list):
         raise ActionProposalError("evidence_refs must be a list")
+    if len(payload.evidence_refs) > ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS:
+        raise ActionProposalError(
+            f"evidence_refs exceeds {ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS} items"
+        )
+    if any(not isinstance(ref, Mapping) for ref in payload.evidence_refs):
+        raise ActionProposalError("evidence_refs items must be objects")
+    _validate_json_byte_size(
+        payload.payload,
+        field_name="payload",
+        max_bytes=ACTION_PROPOSAL_PAYLOAD_MAX_BYTES,
+    )
+    _validate_json_byte_size(
+        payload.evidence_refs,
+        field_name="evidence_refs",
+        max_bytes=ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
+    )
     if created_by not in VALID_CREATED_BY:
         raise ActionProposalError("unknown created_by")
     secret_key = _first_secret_like_key(payload.payload)
@@ -303,3 +323,22 @@ def _first_secret_like_key(payload: Mapping[str, Any]) -> str | None:
                     if nested is not None:
                         return nested
     return None
+
+
+def _validate_json_byte_size(
+    value: object,
+    *,
+    field_name: str,
+    max_bytes: int,
+) -> None:
+    try:
+        # Match SQLAlchemy's default JSON serializer so PostgreSQL
+        # octet_length(...::text) enforces the same boundary for HQ reads.
+        serialized = json.dumps(
+            value,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise ActionProposalError(f"{field_name} must be JSON serializable") from exc
+    if len(serialized) > max_bytes:
+        raise ActionProposalError(f"{field_name} exceeds {max_bytes} UTF-8 serialized bytes")

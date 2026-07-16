@@ -24,17 +24,18 @@ Center, progressive-disclosure drawers, one decision modal, and a deterministic
 contextual assistant. Mission-specific drill-down and state-following primary
 actions now complete the reference loop without exposing the whole queue on the
 surface. DEC-086 now fixes the promotion path: one workspace-scoped server-side
-headquarters projection must become the shared read boundary for the UI,
-deterministic assistant, and post-receipt refresh before the authenticated shell
-adopts the reference grammar. The full phased acceptance ledger is
-`LIVING_COMMAND_CENTER_CHECKLIST.md`. The reference still does not claim real provider,
-authenticated-product, or LLM readiness. The next local UX horizon is to promote
-that approved command-center grammar into real workspace-scoped Company Brain,
-Company Map, Briefing, and ActionProposal reads; a read-only assistant query
-contract follows as a separate backend slice. The
-next external gate remains one founder-approved scoped GitHub App read, not a
-hosted deploy. External mutation and LLM narrative remain separate human-gated
-horizons. Docs
+headquarters projection is now implemented locally as the shared, consistent
+read boundary over real Company Brain, Company Map, Briefing, ActionProposal,
+connector and membership state. It adds no migration/provider/LLM/write path;
+LC-02 now promotes the approved minimal command-center grammar into the
+authenticated `/dashboard` using that contract. The full phased acceptance
+ledger is `LIVING_COMMAND_CENTER_CHECKLIST.md`. DEC-087 separately approves one
+future modular Source Foundry intake/promotion plane — not one server per source
+and not a second knowledge truth — after the real headquarters UI is accepted.
+The reference still does not claim real provider or LLM readiness; a read-only
+assistant query contract follows as a separate backend slice. The next external
+gate remains one founder-approved scoped GitHub App read, not a hosted deploy.
+External mutation and LLM narrative remain separate human-gated horizons. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
 

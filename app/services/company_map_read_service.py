@@ -8,7 +8,7 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.canonical_models import SOURCE_RECORD_PROVIDER_GMAIL, SourceRecord
@@ -21,12 +21,16 @@ from app.db.company_world_models import (
     Organization,
     Person,
 )
-from app.db.identity_models import Workspace
-from app.services.company_brain_github_read_service import build_workspace_company_brain
-from app.services.identity_service import list_workspace_members
+from app.db.identity_models import USER_STATUS_ACTIVE, Membership, User, Workspace
+from app.services.company_brain_github_read_service import (
+    _gmail_message_payload,
+    build_workspace_company_brain,
+)
+from app.services.identity_service import WorkspaceMembership, list_workspace_members
 
 COMPANY_MAP_MODE = "evidence_backed_projection"
 COMPANY_MAP_SOURCE = "workspace_and_company_brain_projection"
+RESOLUTION_ONLY_MESSAGE_LIMIT = 100
 
 # Consumer mailbox domains do not identify a customer organization. They remain
 # external people candidates until a founder confirms their real affiliation.
@@ -56,6 +60,7 @@ async def build_workspace_company_map(
     workspace_id: UUID,
     limit: int = 100,
     include_durable: bool = True,
+    resolution_only: bool = False,
     access_role: str | None = None,
 ) -> dict[str, Any]:
     """Build a read-only, evidence-backed map of people and organizations.
@@ -63,17 +68,40 @@ async def build_workspace_company_map(
     The projection deliberately labels external people and email-domain
     organizations as candidates. It never infers that somebody is an employee,
     customer, decision maker, or account owner without founder confirmation.
+    ``resolution_only`` reads only a bounded Gmail window, participant-matched
+    active members, and durable keys needed to suppress resolved candidates.
     """
 
     workspace = await session.get(Workspace, workspace_id)
     if workspace is None:
         raise ValueError("workspace not found")
 
-    memberships = await list_workspace_members(session, workspace_id=workspace_id)
-    brain = await build_workspace_company_brain(
-        session=session,
-        workspace_id=workspace_id,
-        limit=limit,
+    message_limit = min(max(limit, 0), RESOLUTION_ONLY_MESSAGE_LIMIT) if resolution_only else limit
+    if resolution_only:
+        messages = await _bounded_gmail_message_rows(
+            session=session,
+            workspace_id=workspace_id,
+            limit=message_limit,
+        )
+    else:
+        brain = await build_workspace_company_brain(
+            session=session,
+            workspace_id=workspace_id,
+            limit=message_limit,
+        )
+        communications = brain.get("communications")
+        raw_messages = (
+            communications.get("messages", []) if isinstance(communications, Mapping) else []
+        )
+        messages = raw_messages if isinstance(raw_messages, list) else []
+    memberships = (
+        await _matching_active_workspace_members(
+            session=session,
+            workspace=workspace,
+            participant_emails=_message_participant_emails(messages),
+        )
+        if resolution_only
+        else await list_workspace_members(session, workspace_id=workspace_id)
     )
     gmail_messages_available = await _gmail_message_count(
         session=session,
@@ -111,10 +139,6 @@ async def build_workspace_company_map(
     organizations: dict[str, dict[str, Any]] = {}
     touchpoints: list[dict[str, Any]] = []
 
-    communications = brain.get("communications")
-    raw_messages = communications.get("messages", []) if isinstance(communications, Mapping) else []
-    messages = raw_messages if isinstance(raw_messages, list) else []
-
     for raw_message in messages:
         if not isinstance(raw_message, Mapping):
             continue
@@ -126,7 +150,10 @@ async def build_workspace_company_map(
             mailbox for email, mailbox in participant_by_email.items() if email not in internal_keys
         ]
 
-        source_refs = _source_refs(raw_message.get("source_refs"))
+        source_refs = _source_refs(
+            raw_message.get("source_refs"),
+            canonical_source=SOURCE_RECORD_PROVIDER_GMAIL,
+        )
         occurred_at = _datetime_or_none(raw_message.get("received_at"))
         person_keys = [
             internal_keys[email] if email in internal_keys else _external_person_key(email)
@@ -248,14 +275,20 @@ async def build_workspace_company_map(
         reverse=True,
     )
 
-    durable = (
-        await _durable_company_world_rows(
+    if resolution_only:
+        durable = await _resolution_only_company_world_rows(
+            session=session,
+            workspace_id=workspace_id,
+            external_candidate_keys={row["key"] for row in external_rows},
+            organization_candidate_keys={row["key"] for row in organization_rows},
+        )
+    elif include_durable:
+        durable = await _durable_company_world_rows(
             session=session,
             workspace_id=workspace_id,
         )
-        if include_durable
-        else _empty_durable_rows()
-    )
+    else:
+        durable = _empty_durable_rows()
     resolved_candidates = durable["resolved_candidates"]
     external_rows = [
         row
@@ -329,7 +362,7 @@ async def build_workspace_company_map(
         "window": {
             "gmail_messages_available": gmail_messages_available,
             "gmail_messages_considered": len(messages),
-            "message_limit": limit,
+            "message_limit": message_limit,
             "truncated": gmail_messages_available > len(messages),
             "order": "newest_first",
         },
@@ -365,6 +398,53 @@ def _empty_durable_rows() -> dict[str, Any]:
         "candidate_person_key_map": {},
         "candidate_organization_key_map": {},
     }
+
+
+async def _resolution_only_company_world_rows(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    external_candidate_keys: set[str],
+    organization_candidate_keys: set[str],
+) -> dict[str, Any]:
+    """Load only resolutions needed to filter the current bounded projection."""
+
+    candidate_pairs = {("external_person", key) for key in external_candidate_keys} | {
+        ("organization", key) for key in organization_candidate_keys
+    }
+    durable = _empty_durable_rows()
+    if not candidate_pairs:
+        return durable
+
+    rows = (
+        await session.execute(
+            select(
+                CompanyWorldResolution.candidate_type,
+                CompanyWorldResolution.candidate_key,
+            ).where(
+                CompanyWorldResolution.workspace_id == workspace_id,
+                tuple_(
+                    CompanyWorldResolution.candidate_type,
+                    CompanyWorldResolution.candidate_key,
+                ).in_(sorted(candidate_pairs)),
+            )
+        )
+    ).all()
+    durable["resolved_candidates"] = {
+        (candidate_type, candidate_key) for candidate_type, candidate_key in rows
+    }
+    if organization_candidate_keys:
+        confirmed_organization_keys = (
+            await session.execute(
+                select(Organization.canonical_key).where(
+                    Organization.workspace_id == workspace_id,
+                    Organization.status == PROFILE_STATUS_ACTIVE,
+                    Organization.canonical_key.in_(sorted(organization_candidate_keys)),
+                )
+            )
+        ).scalars()
+        durable["confirmed_organization_candidate_keys"] = set(confirmed_organization_keys)
+    return durable
 
 
 async def _durable_company_world_rows(
@@ -604,6 +684,72 @@ async def _gmail_message_count(
     return int(count or 0)
 
 
+async def _bounded_gmail_message_rows(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    limit: int,
+) -> list[dict[str, Any]]:
+    records = (
+        await session.execute(
+            select(SourceRecord)
+            .where(
+                SourceRecord.workspace_id == workspace_id,
+                SourceRecord.provider == SOURCE_RECORD_PROVIDER_GMAIL,
+                SourceRecord.record_type == "message",
+                SourceRecord.is_deleted.is_(False),
+            )
+            .order_by(
+                SourceRecord.source_updated_at.desc().nullslast(),
+                SourceRecord.created_at.desc(),
+                SourceRecord.id.desc(),
+            )
+            .limit(limit)
+        )
+    ).scalars()
+    return [_gmail_message_payload(record) for record in records]
+
+
+def _message_participant_emails(messages: list[Any]) -> set[str]:
+    participant_emails: set[str] = set()
+    for message in messages:
+        if not isinstance(message, Mapping):
+            continue
+        sender = _parse_mailbox(message.get("from_address"))
+        if sender is not None:
+            participant_emails.add(sender[1])
+        participant_emails.update(
+            email for _display_name, email in _mailboxes(message.get("to_addresses"))
+        )
+    return participant_emails
+
+
+async def _matching_active_workspace_members(
+    *,
+    session: AsyncSession,
+    workspace: Workspace,
+    participant_emails: set[str],
+) -> list[WorkspaceMembership]:
+    if not participant_emails:
+        return []
+    rows = (
+        await session.execute(
+            select(User, Membership)
+            .join(Membership, Membership.user_id == User.id)
+            .where(
+                Membership.workspace_id == workspace.id,
+                User.status == USER_STATUS_ACTIVE,
+                User.email.in_(sorted(participant_emails)),
+            )
+            .order_by(Membership.created_at.asc(), User.email.asc())
+        )
+    ).all()
+    return [
+        WorkspaceMembership(user=user, workspace=workspace, membership=membership)
+        for user, membership in rows
+    ]
+
+
 def _parse_mailbox(value: Any) -> tuple[str | None, str] | None:
     text = _safe_text(value)
     if text is None:
@@ -656,10 +802,18 @@ def _direction(
     return "unknown"
 
 
-def _source_refs(value: Any) -> list[dict[str, Any]]:
+def _source_refs(
+    value: Any,
+    *,
+    canonical_source: str | None = None,
+) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
-    return [dict(ref) for ref in value if isinstance(ref, Mapping)]
+    refs = [dict(ref) for ref in value if isinstance(ref, Mapping)]
+    if canonical_source is not None:
+        for ref in refs:
+            ref["source"] = canonical_source
+    return refs
 
 
 def _merge_source_refs(

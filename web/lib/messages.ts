@@ -1128,6 +1128,16 @@ export const M = {
     unsupportedDescription: "Бэкенд не сообщил о поддержке локальных предложений действий.",
     unavailableTitle: "Предложения действий недоступны",
     unavailableDescription: "Запрос предложений действий не удался.",
+    linkedProposalNotFoundTitle: "Миссия не найдена",
+    linkedProposalNotFoundDescription:
+      "Эта миссия удалена, устарела или относится к другой компании.",
+    linkedProposalForbiddenTitle: "Нет доступа к миссии",
+    linkedProposalForbiddenDescription:
+      "У вашей роли нет доступа к миссии по этой ссылке.",
+    linkedProposalUnavailableDescription:
+      "Не удалось безопасно открыть миссию по ссылке. Повторите попытку.",
+    linkedProposalOutsideFilter:
+      "Миссия из ссылки показана поверх текущего фильтра.",
     emptyTitle: "Миссий пока нет",
     emptyDescription: "Добавьте первый следующий ход компании.",
     summaryLabel: "Сводка предложений",

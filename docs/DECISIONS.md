@@ -2658,6 +2658,98 @@ the headquarters schema/service/endpoint plus contract tests, with no migration,
 provider call, LLM, or write. UI promotion follows only after that read contract
 is proven.
 
+Implementation receipt (2026-07-16): the first read slice now exists at
+`GET /api/v1/workspaces/{workspace_id}/headquarters`. It revalidates membership
+inside one PostgreSQL `REPEATABLE READ, READ ONLY` transaction, returns a
+content-addressed `hqs1_*` snapshot/ETag, fixed three-metric pulse, one ranked
+priority plus a two-item queue, source axes, current-snapshot signals and
+backend capabilities. Proposal ranking resolves references in the workspace,
+ignores caller payload severity, and trusts Briefing severity only for an
+internal system proposal linked to the exact same persisted BriefingItem
+evidence. The public proposal endpoint now fixes caller origin to `user`;
+internal services retain the reviewed system path. The read does not add a
+migration, provider call, LLM, acknowledgement, or write. Source and decision
+inputs are bounded: connection/job/record history is aggregated, Company World
+uses only the newest 100 Gmail records plus matching resolution keys, proposal
+ranking scans at most 100 rows, and legacy oversized proposal JSON is counted
+but excluded before ORM materialization with `partial/at_least` precision. A
+five-second statement timeout and DB-level READ ONLY guard bound the read;
+outside the explicitly isolated Company World timeout, failures remain
+fail-closed.
+`proposal_version` binds the complete current action plus raw refs and resolved
+current evidence identity/hash/field/URL state plus trusted Briefing severity
+and confidence; EvidenceRef provenance remains at its exact row grain. Explicit
+selectors never fall back to a looser ref and must match the canonical provider.
+Source-health missions use derived aggregate provenance rather than an
+unrelated latest row, payload-declared Gmail evidence cannot invent a second
+provider, and malformed source URLs are omitted before response validation. A
+Company World SQLSTATE `57014` inside its savepoint becomes typed partial;
+unknown DB/invariant failures still fail the request. Immutable historical
+observations still require the SourceObservation/Foundry schema gate below, and
+exact preview confirmation digest remains LC-08 rather than being simulated by
+this read model.
+
+## DEC-087 - Source Foundry Is One Promotion Pipeline, Not One Server Per Source
+
+Decision (2026-07-16): future intake and preprocessing use one logical
+workspace-scoped **Source Foundry**. GitHub, Jira, Gmail, Drive, document and
+later source integrations provide allowlisted adapter/parser/mapper modules to
+one orchestrator; they do not become separately deployed source servers. The
+first topology stays inside the current FastAPI application with one bounded
+runner. If volume later requires asynchronous work, one shared worker pool uses
+database leases, heartbeat, idempotency and single-flight rather than a service
+fleet per provider.
+
+The pipeline boundary is:
+
+`scoped acquisition -> immutable raw envelope + PostgreSQL manifest -> schema,
+privacy and security validation -> quarantine or versioned normalization ->
+entity/relationship candidates -> deterministic or human resolution -> atomic
+promotion receipt -> existing canonical FounderOS tables`.
+
+Only the acquisition adapter may use provider network access and short-lived
+credentials. Parser, normalizer, resolver and promoter have no provider access.
+Unknown schemas, unsafe files, secret-like fields outside an allowlist, malformed
+or oversized inputs, parser failures, ambiguous identity matches and hash
+mismatches remain quarantined and cannot become product facts. Dynamic
+third-party plugin loading is not part of the first version. An LLM may later
+propose a typed candidate, but it can never promote or mutate canonical data
+directly.
+
+FounderOS product reads — including Headquarters, Company Brain and the future
+assistant — consume only atomically promoted canonical state. Raw, quarantined,
+rejected, merely normalized and unresolved staging records never participate in
+priority, pulse, relationships or assistant answers. Promotion rechecks
+workspace/RBAC, immutable hashes, pipeline versions, evidence and required
+human decisions; it is idempotent, creates canonical rows/lineage/receipt in one
+transaction, performs no provider/LLM/external write, and then emits only an
+internal refresh signal.
+
+Внешний provider остаётся источником истины о своём состоянии. Локально
+immutable raw envelope в raw storage вместе с PostgreSQL manifest, canonical
+rows, lineage и promotion receipts образуют authoritative replay/audit state;
+Obsidian остаётся только export-проекцией. Текущий `SourceRecord` — sanitized
+current projection, а не raw envelope и не immutable historical observation.
+
+This extends rather than replaces DEC-028/DEC-070/DEC-074/DEC-086. There is no
+second authoritative graph: the knowledge graph is a read projection over
+canonical `Person`, `Organization`, `Affiliation`, `Interaction`, `Task`,
+`Repository` and evidence-backed edges. Similar names, text, embeddings, email
+addresses or domains may create a review candidate but cannot prove an
+employment, customer, decision-maker or cross-source relationship.
+
+The present `SourceRecord` remains the sanitized current logical object used by
+the product. Before Source Foundry persistence is implemented, a separate
+schema review must add immutable observation/lineage grain (preferred:
+`SourceObservation` revisions linked to exact raw-envelope and payload hashes),
+quarantine lifecycle and promotion receipts. This decision adds no migration or
+runtime ingestion path now. Promotion receipt обязан связывать workspace,
+input/envelope hash, adapter/parser/mapper versions, candidate version,
+deterministic либо human decision, canonical row ids/versions и idempotency key.
+Broken/hash-mismatched lineage закрывается fail-closed; receipt не содержит raw
+body или secret values. SF-00 contracts/threat model и fixture-only shadow
+pipeline следуют только после приёмки реального headquarters UI slice.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

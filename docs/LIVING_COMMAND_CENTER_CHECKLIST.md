@@ -175,69 +175,120 @@ preview и confirmation передают `expected_snapshot_id`; если сос
 
 ### LC-00 — Зафиксировать честные контракты
 
-- [ ] Добавить Pydantic/TypeScript схемы `HeadquartersSnapshot`, `Mission`,
+- [x] Добавить Pydantic/TypeScript схемы `HeadquartersSnapshot`, `Mission`,
   `PulseMetric`, `SourceHealth`, `ChangeItem` и `CapabilitySet`.
-- [ ] Для каждого числа определить precision: `exact`, `at_least` или
+- [x] Для каждого числа определить precision: `exact`, `at_least` или
   `unavailable`.
-- [ ] Для каждого факта определить обязательные `evidence_refs` и поведение при
+- [x] Для каждого факта определить обязательные `evidence_refs` и поведение при
   их отсутствии.
-- [ ] Зафиксировать ranking version и deterministic tie-breaker.
-- [ ] Зафиксировать state machine миссии и решения.
-- [ ] Определить `snapshot.id` как immutable/versioned state reference; preview
-  получает `proposal_version` и digest точного payload/target.
-- [ ] Зафиксировать consistency strategy: одна repeatable-read transaction либо
+- [x] Зафиксировать ranking version и deterministic tie-breaker.
+- [x] Зафиксировать derived state machine миссии и решения; её runtime mapping
+  и confirmation flow остаются проверками LC-08.
+- [x] Определить `snapshot.id` как immutable/versioned state reference и
+  возвращать `proposal_version` для ожидающего решения.
+- [ ] Связать confirmation с digest точного preview payload/target; это не
+  является частью read-only GET и остаётся gate LC-08.
+- [x] Зафиксировать consistency strategy: одна repeatable-read transaction либо
   explicit source watermarks; несколько независимых READ COMMITTED запросов не
   считаются одним snapshot.
-- [ ] Перед server ranking разрешать каждый proposal/evidence/reference id в
+- [x] Перед server ranking разрешать каждый proposal/evidence/reference id в
   текущем workspace и присваивать provenance/trust class.
-- [ ] Declared, missing или cross-workspace refs не считаются verified evidence
+- [x] Declared, missing или cross-workspace refs не считаются verified evidence
   и не участвуют в evidence-backed priority ranking.
-- [ ] `created_by`, origin и system/AI trust class задаёт backend; caller не может
+- [x] В текущем v1 Mission получает `verified_canonical` только когда каждый
+  supporting ref разрешается в текущем workspace в активную canonical row;
+  deleted, foreign и missing refs исключаются.
+- [ ] После появления Source Foundry расширить тот же gate на quarantined,
+  rejected, normalized-only и broken-lineage observations; этих состояний и
+  immutable observation grain в текущей схеме ещё нет.
+- [x] Для поддержанных v1 действий проверять не только существование ref:
+  GitHub proposal обязан ссылаться на exact target repository, EvidenceRef
+  сохраняет field identity, а trusted Briefing severity — exact persisted item
+  evidence.
+- [ ] До расширения каталога действий зафиксировать generic claim/entity/field
+  relevance policy; один разрешимый ref не должен автоматически доказывать
+  произвольный новый тип claim/action.
+- [x] `proposal_version` связывает exact target/action/title/description/payload,
+  raw evidence identities и текущие canonical evidence identity/hash/field
+  revisions; изменение любого доступного компонента меняет version.
+- [ ] Immutable historical evidence revision остаётся gate SourceObservation /
+  Source Foundry schema review и не имитируется текущим `SourceRecord`.
+- [x] `created_by`, origin и system/AI trust class задаёт backend; caller не может
   повысить собственный proposal до system/AI или подложить severity из payload.
-- [ ] Составить RBAC-матрицу `owner/admin/member/viewer × control`.
-- [ ] Зафиксировать, какие данные считаются live, imported, local canonical,
+- [x] Составить RBAC-матрицу `owner/admin/member/viewer × control`.
+- [x] Зафиксировать, какие данные считаются live, imported, local canonical,
   stale, partial и unavailable.
-- [ ] Написать contract tests до замены `/dashboard`.
+- [x] Написать contract tests до замены `/dashboard`.
 
 Готово, когда одинаковый workspace snapshot даёт одинаковый priority/queue во
 всех потребителях, а unsupported fact не может попасть в payload.
 
 ### LC-01 — Собрать единый read-only штаб
 
-- [ ] Реализовать headquarters service поверх существующих Company Brain,
+- [x] Реализовать headquarters service поверх существующих Company Brain,
   Company Map, Briefing, ActionProposal, connector и membership reads.
-- [ ] Перенести deterministic ranking из browser view model на backend.
-- [ ] Возвращать один приоритет и не дублировать его в очереди.
-- [ ] Возвращать максимум два следующих элемента того же ranking.
-- [ ] Выбрать три честные метрики из реально доступных данных; не использовать
+- [x] Перенести deterministic ranking из browser view model на backend.
+- [x] Возвращать один приоритет и не дублировать его в очереди.
+- [x] Возвращать максимум два следующих элемента того же ranking.
+- [x] Выбрать три честные метрики из реально доступных данных; не использовать
   `critical risk` или `employees in focus`, пока для них нет канонической связи.
-- [ ] Зафиксировать эти три v1 keys и формулы:
+- [x] Зафиксировать эти три v1 keys и формулы:
   `waiting_decisions` = evidence-eligible proposed actions;
   `sources_attention` = configured sources с failed/partial/stale/no-data;
   `pending_relationships` = unresolved evidence-backed people/organization
   candidates. Каждая метрика возвращает precision, empty behavior и точный
   drawer target.
-- [ ] Возвращать source health, freshness, last success/attempt, record count,
+- [x] Возвращать source health, freshness, last success/attempt, record count,
   blocker и safe next action.
-- [ ] Прикреплять несколько source keys к одной mission только через
+- [x] Прикреплять несколько source keys к одной mission только через
   воспроизводимое правило корреляции по канонической сущности/work item/customer,
   времени и прямым refs; возвращать `correlation_reason` и `rule_version`.
-- [ ] Не объединять сигналы только по похожему тексту, имени, email domain или
+- [x] Не объединять сигналы только по похожему тексту, имени, email domain или
   LLM similarity.
-- [ ] Сохранять полезные данные при частичном падении одного projection и
+- [x] Сохранять полезные данные при частичном падении одного projection и
   возвращать warnings.
-- [ ] Partial `200` разрешён только для typed ожидаемой недоступности независимо
+- [x] Partial `200` разрешён только для typed ожидаемой недоступности независимо
   изолированного subprojection и обязан перечислить coverage/watermarks.
   Auth/tenancy mismatch, DB transaction/invariant/corruption и неизвестная
   ошибка проваливают весь request; broad catch не превращает их в правдоподобный
   partial штаб.
-- [ ] Защитить endpoint от cross-workspace IDs и stale responses.
-- [ ] Не добавлять provider calls, LLM или writes в headquarters GET.
-- [ ] Покрыть exact/lower-bound counts, partial data, deterministic order,
+- [x] Защитить endpoint от cross-workspace IDs и stale responses.
+- [x] Не добавлять provider calls, LLM или writes в headquarters GET.
+- [x] Покрыть exact/lower-bound counts, partial data, deterministic order,
   missing evidence и RBAC contract tests.
+- [x] Headquarters не материализует неограниченную историю: counts считаются
+  агрегатами, latest state выбирается per active connection/provider, ranking
+  inputs и history windows ограничены с честным `exact`/`at_least` precision.
+- [x] Negative tests покрывают missing/foreign/deleted EvidenceRef и
+  SourceRecord, trusted BriefingItem с неразрешимым ref, unrelated target/ref,
+  explicit-id fallback/provider mismatch, disabled/revoked и competing active
+  connections, spoofed Company World source, malformed URL, старый failed job и
+  ambiguous source hint.
+- [x] DB-only boundary проверяется не только флагами ответа: session-auth path,
+  READ ONLY write rejection и guards на provider/LLM/secret-reading clients
+  должны быть зелёными.
 
 Готово, когда один API payload полностью объясняет поверхность штаба и
 повторный запрос без изменения данных возвращает тот же порядок.
+
+Implementation receipt (2026-07-16): `app/api/headquarters.py` и
+`app/services/headquarters_read_service.py` дают workspace-scoped read contract
+в одной `REPEATABLE READ, READ ONLY` транзакции; `web/lib/headquarters.ts` и
+`web/lib/api.ts` фиксируют и валидируют браузерный контракт. Snapshot получает
+content id/ETag, а endpoint не вызывает providers, LLM и mutations. Exact
+proposal deep links загружают конкретную запись даже вне bounded list window;
+source counts/latest state читаются агрегатами, proposal ranking ограничен 100
+строками, oversized legacy JSON исключается до ORM-materialization с честным
+`partial/at_least`, а Company World для HQ использует только bounded Gmail
+projection, participant-matched memberships и resolution keys текущего окна.
+Explicit EvidenceRef/SourceRecord selectors не имеют fallback и обязаны
+совпасть с canonical provider; payload source не может подделать Company World
+correlation. Source-attention mission ссылается на exact derived aggregate и не
+выдаётся за `verified_canonical`; malformed evidence URL отбрасывается, а
+реальный Company World statement timeout откатывается в savepoint и даёт typed
+partial. Exact confirmation preview digest, immutable historical
+SourceObservation и generic relevance для будущих action types сознательно
+остаются отдельными gates LC-08/Source Foundry.
 
 ### LC-02 — Перенести дизайн-грамматику в authenticated `/dashboard`
 
@@ -599,8 +650,8 @@ read-back/reconcile и receipt. Это не превращает assistant в au
 
 ## Порядок реализации без расползания scope
 
-1. **LC-00/LC-01:** headquarters schema, service, endpoint и contract tests — без
-   миграции и без нового UI.
+1. **LC-00/LC-01 ✅:** headquarters schema, service, endpoint и contract tests —
+   без миграции и без нового UI. Exact confirmation digest остаётся в LC-08.
 2. **LC-02:** заменить реальный `/dashboard` на минимальный command center,
    используя только новый snapshot.
 3. **LC-03:** встроить computed onboarding и возврат в штаб.
@@ -610,9 +661,47 @@ read-back/reconcile и receipt. Это не превращает assistant в au
 7. **LC-06:** только после schema review добавить durable change boundary.
 8. **LC-09/LC-10:** privacy, observability и полный release proof.
 
-Первый следующий implementation ticket: **LC-00/LC-01 — единый read-only
-`HeadquartersSnapshot` поверх существующих данных, без миграции, provider calls,
-LLM и writes.**
+Первый следующий implementation ticket: **LC-02 — подключить authenticated
+`/dashboard` к единому `HeadquartersSnapshot` и перенести минимальную грамматику
+штаба без synthetic fixtures и browser ranking.**
+
+## Следующий отдельный контур — Source Foundry (DEC-087)
+
+Source Foundry не блокирует LC-02 и не превращается в отдельный сервер для
+каждого источника. После приёмки реального штаба создаётся один модульный intake
+и promotion plane с allowlisted adapters и, при необходимости, одним общим
+worker pool.
+
+### SF-00 — Контракты и threat model до persistence
+
+- [ ] Зафиксировать typed `RawEnvelope`, `SourceManifest`,
+  `NormalizedCandidate`, `ResolutionCandidate`, `PromotionReceipt` и lineage.
+- [ ] Зафиксировать state machine acquisition → validation/quarantine →
+  normalization → resolution/review → atomic promotion/rejection.
+- [ ] Разрешить provider network/short-lived credentials только acquisition
+  adapter; parser, normalizer, resolver и promoter работают без provider access.
+- [ ] Определить per-workspace bounds, allowlists, file/schema checks,
+  secret/PII policy, immutable hashes, replay и retention/delete behavior.
+- [ ] Запретить dynamic plugins; один источник означает модуль адаптера, а не
+  deployment/service/database.
+- [ ] Разрешать identity/relationship только детерминированным правилом либо
+  явным человеком; похожее имя, текст, embedding, email/domain остаются
+  кандидатом, а не фактом.
+- [ ] Сохранить единственный source of truth: knowledge graph строится как read
+  projection канонических FounderOS rows, а не как параллельная база истины.
+- [ ] Promotion повторно проверяет workspace, evidence, hashes и pipeline
+  versions, идемпотентно пишет canonical rows + lineage + receipt в одной
+  транзакции и не делает provider/LLM/external write.
+- [ ] Product reads не видят raw, quarantine, rejected, normalized-only и
+  unresolved staging состояния.
+- [ ] Quarantined/unpromoted rows невидимы всем product reads; replay
+  идемпотентен; reprocessing не переписывает promoted evidence без нового
+  receipt; hash/version mismatch fail-closed; graph остаётся projection над
+  canonical typed rows, не вторым source of truth.
+- [ ] После отдельного schema review доказать fixture-only shadow pipeline и
+  только затем один низкорисковый local-import record type.
+- [ ] LLM, если появится позже, возвращает только strict validated candidate и
+  никогда не вызывает promotion напрямую.
 
 ## Что не делать до завершения checklist
 

@@ -10,19 +10,46 @@
 
 ## ▶ СЕЙЧАС
 
-- **PRODUCT-CHECKLIST-01 Real Command Center completion ledger (DEC-086):
-  ГОТОВ ЛОКАЛЬНО.** Добавлен
-  `docs/LIVING_COMMAND_CENTER_CHECKLIST.md`: он переводит понравившийся
-  синтетический `/demo` в конкретный план реального продукта и отделяет уже
-  существующие foundations от недоказанных claims. Checklist фиксирует один
-  server-side `HeadquartersSnapshot`, общий для UI, deterministic read-only
-  assistant и post-receipt refresh; точные mission/profile/source drill-downs;
-  computed onboarding; provider gates; persisted change boundary; RBAC,
-  evidence, privacy, observability, desktop acceptance, backup/restore и полный
-  E2E. Новый durable `Mission` model пока не нужен: первая реализация является
-  read-only projection поверх Company Brain/Map, Briefing, ActionProposal,
-  connectors и memberships без migration/provider/LLM/write. Следующая задача
-  однозначна: **LC-00/LC-01 — schema/service/endpoint + contract tests**.
+- **LC-BACKEND-01 Unified Headquarters read model (DEC-086): РЕАЛИЗОВАН
+  ЛОКАЛЬНО.** Новый workspace-scoped
+  `GET /api/v1/workspaces/{workspace_id}/headquarters` собирает Company
+  Brain/Map, Briefing, ActionProposal, connector и membership state в одной
+  PostgreSQL `REPEATABLE READ, READ ONLY` транзакции. Backend возвращает
+  content-addressed snapshot/ETag, один deterministic priority, максимум две
+  следующие миссии, ровно три честные pulse-метрики, current-snapshot signals,
+  независимые оси source health, computed onboarding и capability matrix.
+  Proposal ranking принимает только разрешимые внутри workspace canonical
+  evidence refs, не доверяет caller severity/origin и исключает missing,
+  foreign и soft-deleted основания; public proposal origin теперь только
+  `user`. Typed недоступность Company World даёт объяснимый partial, а обычная
+  ошибка source sync остаётся локальным состоянием радара, не ложным partial
+  всего штаба. История источников считается агрегатами; Company World в штабе
+  читает только newest-100 Gmail window и совпавшие resolution keys; proposal
+  ranking ограничен 100 строками, а oversized legacy JSON учитывается, но не
+  материализуется (`partial/at_least`). Exact proposal deep-link при этом
+  загружает выбранную запись отдельно от bounded списка. Pydantic и
+  runtime-validated TypeScript contract добавлены до замены UI. Explicit
+  evidence selector не имеет fallback, canonical provider обязан совпасть;
+  source-health использует aggregate provenance, spoofed Gmail payload не
+  создаёт multi-source correlation, malformed URL безопасно исчезает. Реальный
+  timeout Company World изолирован savepoint и даёт typed partial, неизвестная
+  DB/invariant ошибка остаётся `500`. Миграций, provider calls, LLM,
+  acknowledgement и writes нет. Immutable historical SourceObservation и exact
+  confirmation preview digest честно остаются gates Source Foundry/LC-08.
+  Проверено 2026-07-16: полный backend gate — **705 passed / 1 external
+  warning**, Ruff, Alembic upgrade/schema check и tracked-secret scan; frontend
+  — **362/362 passed**, typecheck, lint и production build (**19 routes**).
+  Повторный независимый security/contract аудит не нашёл P0/P1/P2 замечаний.
+  Следующая задача: **LC-02 — подключить authenticated `/dashboard` к этому
+  snapshot без synthetic fixtures и browser ranking.**
+- **ARCH-SOURCE-01 Source Foundry direction (DEC-087): УТВЕРЖДЕНО, КОД
+  ОТЛОЖЕН.** Вместо отдельного сервера на каждый источник принят один модульный
+  intake/promotion plane: allowlisted adapters → immutable raw envelope и
+  manifest → validation/quarantine → versioned normalization → conservative
+  entity/relationship resolution → atomic canonical promotion с lineage и
+  receipt. Product читает только promoted canonical state; staging не является
+  второй базой истины. Первый будущий gate SF-00 (контракты/threat model) идёт
+  после приёмки реального штаба и не блокирует LC-02.
 - **UX-DEMO-02 Minimal Living Command Center (DEC-085): РЕАЛИЗОВАН ЛОКАЛЬНО.**
   `/demo` больше не является презентацией из 12 экранов. Один desktop-штаб
   показывает один главный приоритет, три кликабельных показателя, максимум два
@@ -790,13 +817,13 @@ DONE строго = есть код + проходящий тест/рабочи
 
 | Gate | Status | Last checked | Evidence |
 |---|---|---|---|
-| `alembic upgrade head` | ✅ pass | 2026-07-14 | Local PostgreSQL 16 upgraded to the single head `c5d6e7f8a9b0`; product `heads/current/check` are green with no new operations |
+| `alembic upgrade head` | ✅ pass | 2026-07-16 | Dedicated local PostgreSQL test database upgraded to the single head `c5d6e7f8a9b0`; schema check found no new operations |
 | **Lineage-2 purge** (DEC-029) | ✅ done | 2026-06-24 | ~139 модулей + 27 таблиц + ~150 тестов + 55 скриптов + non-canon доки удалены; leftover static UI artifact/test removed by FOS-PURGE-01; tag `pre-purge-20260624` |
 | **CHUNK 1 gate** (model tests + encryption roundtrip) | ✅ pass | 2026-06-24 | `tests/test_canonical_models.py` (9) + `test_integration_models.py` + encryption roundtrip — зелёные |
-| backend tests (`pytest`) | ✅ pass | 2026-07-14 | Full local suite: **674 passed / 0 failed / 1 external warning** |
-| `ruff` | ✅ pass | 2026-07-14 | Isolated backend gate: `uv run ruff check .` → `All checks passed!` |
+| backend tests (`pytest`) | ✅ pass | 2026-07-16 | Full dedicated-PostgreSQL suite: **705 passed / 0 failed / 1 external warning** |
+| `ruff` | ✅ pass | 2026-07-16 | Full backend gate: `uv run ruff check .` → `All checks passed!` |
 | API namespace `/api/v1` (DEC-023) | ✅ done | 2026-06-24 | 660 `/v1`→`/api/v1`; нет stray `/v1` |
-| frontend build | ✅ pass | 2026-07-14 | `npm test` **308 passed**; production build **17 routes**, typecheck and lint passed |
+| frontend build | ✅ pass | 2026-07-16 | `npm test` **362/362 passed**; production build **19 routes**, typecheck and lint passed |
 | UX-03 authenticated browser QA | ❓ unknown | 2026-07-14 | Exact UX-03 tree was not visually inspected: the in-app browser failed before navigation with `Cannot redefine property: process`; prior LOCAL-01 QA predates UX-03 and is not reused as proof |
 | UX-04 `/github` + DEC-080 setup browser QA | ✅ pass | 2026-07-14 | Authenticated real-local-data pass at **1280×720** and **390×844**; self-service wizard, mission, metrics, repository chooser and work pulse have no global overflow or new console warnings/errors. Organization choice is keyboard/semantic native; dynamic phases have focus + polite status announcement. External GitHub phases remain human-gated |
 | docs navigation | ✅ pass | 2026-07-14 | `test_local_runtime_docs.py`, `test_external_action_result_runbook.py`, and `test_docs_navigation_integrity.py` — **12 passed** |

@@ -804,7 +804,7 @@ export type ActionProposalCreateRequest = {
   description?: string | null;
   payload?: Record<string, unknown>;
   evidence_refs?: ActionProposalEvidenceRef[];
-  created_by?: "ai" | "system" | "user";
+  created_by?: "user";
 };
 
 export type ActionProposal = {

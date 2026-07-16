@@ -17,6 +17,7 @@ from app.api.drive import router as drive_router
 from app.api.github import router as github_router
 from app.api.gmail import router as gmail_router
 from app.api.health import router as health_router
+from app.api.headquarters import router as headquarters_router
 from app.api.jira import router as jira_router
 from app.api.workspace_company_brain import router as workspace_company_brain_router
 from app.api.workspaces import router as workspaces_router
@@ -76,6 +77,7 @@ app.include_router(jira_router, dependencies=protected_api_dependencies)
 app.include_router(gmail_router, dependencies=protected_api_dependencies)
 app.include_router(drive_router, dependencies=protected_api_dependencies)
 app.include_router(documents_router, dependencies=protected_api_dependencies)
+app.include_router(headquarters_router, dependencies=protected_api_dependencies)
 app.include_router(company_map_router, dependencies=protected_api_dependencies)
 app.include_router(workspace_company_brain_router, dependencies=protected_api_dependencies)
 app.include_router(briefings_router, dependencies=protected_api_dependencies)

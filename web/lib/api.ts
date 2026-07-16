@@ -1,4 +1,5 @@
 import type {
+  ActionProposal,
   ActionExecutionPreviewResponse,
   ActionExecutionResponse,
   ActionProposalAuditResponse,
@@ -65,6 +66,10 @@ import type {
   WorkspaceMemberProvisionResponse,
   WorkspaceMembersResponse
 } from "./types";
+import {
+  parseHeadquartersSnapshotResponse,
+  type HeadquartersSnapshotResponse
+} from "./headquarters";
 
 // Same-origin base: the browser calls the web origin, and next.config.mjs
 // proxies /api/* to the backend, keeping the session cookie first-party.
@@ -167,6 +172,21 @@ export function buildWorkspaceCompanyBrainPath(workspaceId: string): string {
 
 export function buildWorkspaceCompanyMapPath(workspaceId: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/company-map`;
+}
+
+export function buildWorkspaceHeadquartersPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/headquarters`;
+}
+
+export async function fetchHeadquarters(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<HeadquartersSnapshotResponse> {
+  const payload = await apiFetch<unknown>(
+    buildWorkspaceHeadquartersPath(workspaceId),
+    options
+  );
+  return parseHeadquartersSnapshotResponse(payload);
 }
 
 export function buildWorkspaceCompanyMapResolutionsPath(workspaceId: string): string {
@@ -686,6 +706,17 @@ export async function fetchActionProposals(
 ): Promise<ActionProposalListResponse> {
   return apiFetch<ActionProposalListResponse>(
     buildWorkspaceActionProposalsPath(workspaceId, request),
+    options
+  );
+}
+
+export async function fetchActionProposal(
+  workspaceId: string,
+  proposalId: string,
+  options: ApiFetchOptions = {}
+): Promise<ActionProposal> {
+  return apiFetch<ActionProposal>(
+    buildWorkspaceActionProposalPath(workspaceId, proposalId),
     options
   );
 }

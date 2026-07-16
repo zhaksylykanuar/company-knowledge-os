@@ -83,6 +83,26 @@ Current posture: defer.
 
 Reason: explicitly outside MVP.
 
+### Source Foundry preprocessing and promotion plane (DEC-087)
+
+Current posture: architecture approved, implementation deferred until the real
+Headquarters read/UI loop is accepted. Build one modular intake pipeline, not a
+server per source: immutable raw envelope and manifest, validation/quarantine,
+versioned normalization, conservative entity-resolution candidates and atomic
+promotion into existing canonical FounderOS state with lineage and a receipt.
+
+First future gate: SF-00 contracts, threat model, state machine and promotion
+policy without a migration; then schema review, fixture-only shadow flow and one
+low-risk local-import record type. Headquarters and the assistant must never
+read raw/quarantine/unpromoted staging data.
+
+До этого gate запрещены migration, runtime ingestion, background/provider read
+и LLM auto-promotion; Foundry не является prerequisite для LC-00…LC-02.
+
+Reason: preprocessing is necessary for reliable multi-source knowledge, but it
+must not create a second truth system or delay the already-defined LC-02 real
+headquarters UI promotion.
+
 ### Mobile app
 
 Current posture: defer.

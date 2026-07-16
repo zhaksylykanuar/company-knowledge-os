@@ -369,13 +369,15 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Promote the minimal command center into the real headquarters.**
-   Execute `LC-00/LC-01` in
+1. **Promote the proven read contract into the authenticated headquarters.**
+   Execute `LC-02` in
    [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md):
-   define and implement one read-only workspace-scoped `HeadquartersSnapshot`
-   over existing data, move deterministic ranking to that service, and prove
-   the contract before replacing `/dashboard`. No migration, provider call, LLM
-   or write belongs in this first ticket. `/demo` remains reference-only.
+   replace browser-composed `/dashboard` state with the workspace-scoped
+   `HeadquartersSnapshot`, preserving one priority, three pulse metrics, two
+   queued missions and progressive disclosure. Use backend actions,
+   capabilities, precision, coverage and warnings directly; do not import
+   `/demo` fixtures or recreate ranking/RBAC in the browser. No migration,
+   provider call, LLM or write belongs in this UI ticket.
 
 2. **Add the first real read-only company assistant contract.**
    Introduce a bounded workspace-scoped query endpoint over existing read models
@@ -393,7 +395,14 @@ Implemented foundations:
    receipt pattern. No bulk/background sync, provider write, LLM run, or hosted
    change is authorized by this backlog item.
 
-4. **Add a real company-change boundary.**
+4. **Design Source Foundry only after the real headquarters UI is accepted.**
+   Start with the SF-00 contract/threat-model checklist from DEC-087: one
+   modular allowlisted intake/promotion plane, immutable envelope/manifest,
+   quarantine, conservative resolution and atomic canonical promotion. Do not
+   create one service per source, a second knowledge truth, a migration,
+   background ingestion or LLM auto-promotion in the design ticket.
+
+5. **Add a real company-change boundary.**
    The new headquarters honestly shows a current evidence snapshot. Design the
    smallest persisted snapshot/event contract that can prove "since your last
    visit" changes, dedupe them, link each one to workspace-resolved evidence, and

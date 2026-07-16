@@ -10,10 +10,12 @@ import {
   buildWorkspaceActionProposalApprovePath,
   buildWorkspaceActionProposalBulkApprovePath,
   buildWorkspaceActionProposalBulkRejectPath,
+  buildWorkspaceActionProposalPath,
   buildWorkspaceActionProposalRejectPath,
   buildWorkspaceActionProposalsCollectionPath,
   buildWorkspaceActionProposalsPath,
   createActionProposal,
+  fetchActionProposal,
   fetchActionProposals,
   rejectActionProposal
 } from "../lib/api";
@@ -27,6 +29,8 @@ import {
   actionCapabilitiesForRole,
   ActionProposalsPanelView,
   DEFAULT_CREATE_FORM,
+  loadActionProposalPanelData,
+  mergeExactActionProposal,
   summarizeActionReviewReadiness,
   summarizeBulkResponse
 } from "../components/ActionProposalsPanel";
@@ -314,6 +318,10 @@ test("builds action proposal URLs", () => {
     "/api/v1/workspaces/workspace-123/actions/proposals?limit=10&status=proposed&target_provider=github&action_type=create_github_issue"
   );
   assert.equal(
+    buildWorkspaceActionProposalPath("workspace-123", "proposal/1"),
+    "/api/v1/workspaces/workspace-123/actions/proposals/proposal%2F1"
+  );
+  assert.equal(
     buildWorkspaceActionProposalApprovePath("workspace-123", "proposal-1"),
     "/api/v1/workspaces/workspace-123/actions/proposals/proposal-1/approve"
   );
@@ -401,6 +409,139 @@ test("fetches and parses local action proposals", async () => {
     assert.equal(payload.count, 3);
     assert.equal(payload.proposals[0]?.execution_started, false);
     assert.equal(payload.is_live, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("fetches one exact workspace-scoped action proposal", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-5"
+    );
+    return new Response(JSON.stringify(manualInternalProposal), {
+      headers: { "Content-Type": "application/json" },
+      status: 200
+    });
+  }) as typeof fetch;
+
+  try {
+    const proposal = await fetchActionProposal("workspace-123", "proposal-5");
+    assert.equal(proposal.id, manualInternalProposal.id);
+    assert.equal(proposal.workspace_id, "workspace-123");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("loads and deduplicates an exact linked proposal outside the bounded list", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input) => {
+    const request = String(input);
+    requests.push(request);
+    if (request.endsWith("/actions/proposals?limit=100")) {
+      return new Response(JSON.stringify(sampleList), {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      });
+    }
+    return new Response(JSON.stringify(manualInternalProposal), {
+      headers: { "Content-Type": "application/json" },
+      status: 200
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await loadActionProposalPanelData(
+      "workspace-123",
+      manualInternalProposal.id
+    );
+    assert.equal(result.status, "ready");
+    assert.equal(result.error, null);
+    assert.equal(result.data?.proposals[0]?.id, manualInternalProposal.id);
+    assert.equal(
+      result.data?.proposals.filter(
+        (proposal) => proposal.id === manualInternalProposal.id
+      ).length,
+      1
+    );
+    assert.deepEqual(requests, [
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals?limit=100",
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-5"
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("exact proposal merge replaces a duplicate without exceeding the bounded list", () => {
+  const merged = mergeExactActionProposal(
+    {
+      ...sampleList,
+      proposals: [manualInternalProposal, ...sampleList.proposals],
+      count: 4
+    },
+    { ...manualInternalProposal, title: "Fresh exact mission" }
+  );
+
+  assert.equal(merged.proposals[0]?.title, "Fresh exact mission");
+  assert.equal(
+    merged.proposals.filter((proposal) => proposal.id === manualInternalProposal.id)
+      .length,
+    1
+  );
+  assert.equal(merged.count, merged.proposals.length);
+});
+
+test("linked proposal 404 and forbidden responses never fall back to another mission", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    for (const failure of [
+      {
+        expectedStatus: "not_found" as const,
+        httpStatus: 404,
+        title: M.actionsPanel.linkedProposalNotFoundTitle
+      },
+      {
+        expectedStatus: "forbidden" as const,
+        httpStatus: 403,
+        title: M.actionsPanel.linkedProposalForbiddenTitle
+      }
+    ]) {
+      globalThis.fetch = (async (input) => {
+        const request = String(input);
+        if (request.endsWith("/actions/proposals?limit=100")) {
+          return new Response(JSON.stringify(sampleList), {
+            headers: { "Content-Type": "application/json" },
+            status: 200
+          });
+        }
+        return new Response(JSON.stringify({ detail: "private backend detail" }), {
+          headers: { "Content-Type": "application/json" },
+          status: failure.httpStatus
+        });
+      }) as typeof fetch;
+
+      const result = await loadActionProposalPanelData(
+        "workspace-123",
+        manualInternalProposal.id
+      );
+      assert.equal(result.status, failure.expectedStatus);
+      assert.equal(result.data, null);
+      const html = renderPanel({
+        data: sampleList,
+        error: result.error,
+        status: result.status
+      });
+      assert.ok(html.includes(failure.title));
+      assert.doesNotMatch(html, /private backend detail/);
+      assert.doesNotMatch(html, /class="mission-console"/);
+      assert.doesNotMatch(html, /Create follow-up GitHub issue/);
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1194,6 +1335,22 @@ test("selected mission drives the single console and its evidence context", () =
   assert.doesNotMatch(
     html,
     /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/
+  );
+  assert.equal((html.match(/class="mission-console"/g) ?? []).length, 1);
+});
+
+test("keeps an exact linked mission visible outside the current filters", () => {
+  const html = renderPanel({
+    activeProposalId: approvedProposal.id,
+    data: sampleList,
+    originFilter: "internal",
+    statusFilter: "proposed"
+  });
+
+  assert.ok(html.includes(M.actionsPanel.linkedProposalOutsideFilter));
+  assert.match(
+    html,
+    /id="mission-console-title" tabindex="-1">Approved local proposal<\/h2>/
   );
   assert.equal((html.match(/class="mission-console"/g) ?? []).length, 1);
 });

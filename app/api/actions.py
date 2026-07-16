@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import re
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -111,7 +111,10 @@ class ActionProposalCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=5000)
     payload: dict[str, Any] = Field(default_factory=dict)
     evidence_refs: list[dict[str, Any]] = Field(default_factory=list, max_length=50)
-    created_by: str = Field(default="user", max_length=20)
+    # Public callers can create only user-originated proposals. System/AI
+    # provenance is reserved for reviewed internal services and must never be
+    # caller-upgradable.
+    created_by: Literal["user"] = "user"
 
 
 class ActionProposalRejectRequest(BaseModel):

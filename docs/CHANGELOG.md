@@ -4,6 +4,36 @@
 
 ### Added
 
+- Added the first real unified Headquarters read contract (DEC-086):
+  `GET /api/v1/workspaces/{workspace_id}/headquarters` composes existing
+  canonical company, source, briefing, proposal and membership state inside one
+  PostgreSQL `REPEATABLE READ, READ ONLY` transaction. It returns a
+  content-addressed snapshot/ETag, deterministic priority and bounded queue,
+  fixed three-metric pulse, source health axes, computed required/recommended
+  onboarding, current-snapshot signals, evidence/provenance and backend
+  capabilities. Missing, foreign, unresolved and soft-deleted evidence cannot
+  enter evidence-backed ranking; public callers cannot claim system/AI origin
+  or supply trusted severity. Typed backend and runtime-validated browser
+  contracts plus tenancy/RBAC/precision/partial/boundary regressions precede UI
+  adoption. Source history is aggregated, the Headquarters Company World path
+  reads only the newest 100 Gmail records and matching resolution keys,
+  proposal ranking scans at most 100 rows, and 64 KiB UTF-8 JSON caps prevent
+  new oversized action payload/evidence fields. Legacy oversized proposals are
+  counted but excluded before ORM materialization with honest partial/lower-
+  bound coverage. Exact proposal deep links fetch the selected workspace row
+  independently from the bounded list. Exact evidence selectors are provider-
+  coherent and cannot fall back to looser refs; source-health missions use
+  aggregate provenance; spoofed Gmail payload sources cannot manufacture
+  cross-source correlation; malformed evidence URLs are omitted. A real
+  Company World statement timeout is isolated by savepoint and returns typed
+  partial while unknown DB/invariant errors still fail closed. This read slice
+  adds no migration, provider call, LLM, secret read, acknowledgement or write.
+- Added DEC-087 and the future SF-00 checklist for one modular Source Foundry
+  intake/promotion plane. Provider adapters feed an immutable envelope/manifest,
+  validation/quarantine, versioned normalization, conservative resolution and
+  atomic canonical promotion with lineage/receipt. It is explicitly not one
+  server per source, not a second knowledge source of truth and not a runtime
+  feature or migration in this slice.
 - Added `docs/LIVING_COMMAND_CENTER_CHECKLIST.md`, the end-to-end execution and
   acceptance ledger for turning the synthetic `/demo` command center into the
   real authenticated local product. It maps current foundations and gaps, locks

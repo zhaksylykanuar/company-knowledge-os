@@ -360,6 +360,7 @@ async def _source_records_by_provider_record_type(
                 .order_by(
                     SourceRecord.source_updated_at.desc().nullslast(),
                     SourceRecord.created_at.desc(),
+                    SourceRecord.id.desc(),
                 )
                 .limit(limit)
             )
