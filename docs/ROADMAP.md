@@ -23,7 +23,11 @@ supersedes its presentation grammar with one minimalist desktop Living Command
 Center, progressive-disclosure drawers, one decision modal, and a deterministic
 contextual assistant. Mission-specific drill-down and state-following primary
 actions now complete the reference loop without exposing the whole queue on the
-surface. The reference still does not claim real provider,
+surface. DEC-086 now fixes the promotion path: one workspace-scoped server-side
+headquarters projection must become the shared read boundary for the UI,
+deterministic assistant, and post-receipt refresh before the authenticated shell
+adopts the reference grammar. The full phased acceptance ledger is
+`LIVING_COMMAND_CENTER_CHECKLIST.md`. The reference still does not claim real provider,
 authenticated-product, or LLM readiness. The next local UX horizon is to promote
 that approved command-center grammar into real workspace-scoped Company Brain,
 Company Map, Briefing, and ActionProposal reads; a read-only assistant query

@@ -10,6 +10,19 @@
 
 ## ▶ СЕЙЧАС
 
+- **PRODUCT-CHECKLIST-01 Real Command Center completion ledger (DEC-086):
+  ГОТОВ ЛОКАЛЬНО.** Добавлен
+  `docs/LIVING_COMMAND_CENTER_CHECKLIST.md`: он переводит понравившийся
+  синтетический `/demo` в конкретный план реального продукта и отделяет уже
+  существующие foundations от недоказанных claims. Checklist фиксирует один
+  server-side `HeadquartersSnapshot`, общий для UI, deterministic read-only
+  assistant и post-receipt refresh; точные mission/profile/source drill-downs;
+  computed onboarding; provider gates; persisted change boundary; RBAC,
+  evidence, privacy, observability, desktop acceptance, backup/restore и полный
+  E2E. Новый durable `Mission` model пока не нужен: первая реализация является
+  read-only projection поверх Company Brain/Map, Briefing, ActionProposal,
+  connectors и memberships без migration/provider/LLM/write. Следующая задача
+  однозначна: **LC-00/LC-01 — schema/service/endpoint + contract tests**.
 - **UX-DEMO-02 Minimal Living Command Center (DEC-085): РЕАЛИЗОВАН ЛОКАЛЬНО.**
   `/demo` больше не является презентацией из 12 экранов. Один desktop-штаб
   показывает один главный приоритет, три кликабельных показателя, максимум два

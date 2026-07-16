@@ -370,12 +370,12 @@ Implemented foundations:
 ## Next Priority / Near-Term Backlog
 
 1. **Promote the minimal command center into the real headquarters.**
-   Use `/demo` only as an interaction reference. Feed one priority, three pulse
-   metrics, next decisions, recent changes, and every drill-down from current
-   workspace-scoped Company Brain, Company Map, Briefing, and ActionProposal
-   reads. Incomplete setup opens one compact computed onboarding modal and then
-   returns to the same headquarters. Synthetic fixtures must never become an
-   authenticated fallback or completion claim.
+   Execute `LC-00/LC-01` in
+   [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md):
+   define and implement one read-only workspace-scoped `HeadquartersSnapshot`
+   over existing data, move deterministic ranking to that service, and prove
+   the contract before replacing `/dashboard`. No migration, provider call, LLM
+   or write belongs in this first ticket. `/demo` remains reference-only.
 
 2. **Add the first real read-only company assistant contract.**
    Introduce a bounded workspace-scoped query endpoint over existing read models
@@ -384,7 +384,7 @@ Implemented foundations:
    return `is_live`, `llm_used`, warnings, suggestions, and action proposals;
    do not persist chat, call an LLM, or mutate data in this slice. Conversation
    history, retrieval, generation, and writes require separate schema/security
-   decisions.
+   decisions. Detailed acceptance is `LC-07` in the command-center checklist.
 
 3. **Finish the radar loop one provider at a time.**
    `/github` remains the reference command center and the next external gate is
@@ -398,7 +398,8 @@ Implemented foundations:
    smallest persisted snapshot/event contract that can prove "since your last
    visit" changes, dedupe them, link each one to workspace-resolved evidence, and
    close a mission with a receipt. This requires a separate schema/data review and
-   must not be simulated from browser-local timestamps.
+   must not be simulated from browser-local timestamps. This is `LC-06` and
+   remains schema/data-review gated.
 
 ## Known Debts / Watch List
 

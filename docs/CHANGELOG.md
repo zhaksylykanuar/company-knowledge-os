@@ -2,6 +2,18 @@
 
 ## 2026-07-16
 
+### Added
+
+- Added `docs/LIVING_COMMAND_CENTER_CHECKLIST.md`, the end-to-end execution and
+  acceptance ledger for turning the synthetic `/demo` command center into the
+  real authenticated local product. It maps current foundations and gaps, locks
+  the minimal `HeadquartersSnapshot` shape, and orders onboarding, source
+  radars, exact mission/profile drill-down, persisted changes, read-only
+  assistant, human-approved decisions, privacy, observability, desktop QA, and
+  release proof. DEC-086 makes one server-side read projection the shared truth
+  boundary for the UI, assistant, and post-receipt refresh; the first ticket
+  explicitly adds no migration, provider call, LLM, or write.
+
 ### Changed
 
 - Replaced the 12-scene `/demo` tour with one desktop Living Command Center

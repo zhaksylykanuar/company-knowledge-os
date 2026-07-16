@@ -2605,6 +2605,59 @@ rail, browser-window frame, deep-link scene model, and scene-specific CSS/tests
 are deleted. DEC-084 remains the source for the synthetic/runtime boundary but
 must no longer be used as the visual or navigation reference.
 
+## DEC-086 - The Real Headquarters Uses One Server-Side Read Projection
+
+Decision (2026-07-16): promoting the DEC-085 command-center grammar into the
+authenticated product starts with one workspace-scoped, read-only headquarters
+projection. The recommended contract is
+`GET /api/v1/workspaces/{workspace_id}/headquarters`. It composes existing
+Company Brain, Company Map, Briefing, ActionProposal, connector, and membership
+data and returns one timestamped/partial-aware snapshot: one priority, at most
+two next missions, three pulse metrics, up to three current signals, source
+health, onboarding state, capabilities, evidence, and warnings.
+
+The first implementation is a projection, not a new durable `Mission` table.
+Stable mission ids derive from existing canonical references such as an action
+proposal, briefing item, Company Map candidate, or setup gap. A durable Mission
+schema remains gated until real use proves a need for persistent assignment,
+composite cross-source decisions, closure, and lifecycle history. A real
+since-last-visit feed remains a separate schema/data decision because it needs
+server snapshots, dedupe, a per-user checkpoint, and restore-safe persistence.
+Company Map mission references use existing opaque selectors rather than raw
+candidate keys that may contain email/domain data. Snapshot ids are immutable
+state/version references built from a consistent transaction or explicit input
+watermarks; assistant reads bind to the screen snapshot. Any later confirmation
+must bind to the exact proposal version and preview digest and fail stale with
+`409`.
+
+The same headquarters service must feed the UI, the first deterministic
+read-only assistant, and the refresh after a decision receipt. An ordinary
+headquarters read cannot call providers, run an LLM, acknowledge a visit, or
+mutate canonical data. Every specific claim remains evidence-backed; every
+count declares exact/lower-bound/unavailable precision; partial inputs remain
+visible as warnings. The synthetic `/demo` remains a UI reference only and is
+never an authenticated fallback.
+
+The current browser ranking policy is not copied blindly. Before a proposal can
+become evidence-backed priority, the backend resolves its reference ids inside
+the workspace and assigns a provenance/trust class. Caller-declared refs,
+caller-supplied severity, or a caller-supplied system/AI origin do not become
+verified facts. Missing or foreign refs are excluded from specific ranking and
+surface only through an honest unsupported/aggregate state.
+
+Rationale: the current dashboard composes several independent reads and ranks
+the main mission in browser code. That is useful foundation work but cannot
+guarantee that the screen, assistant, decision modal, and receipt refer to the
+same ordered company state. A single server projection creates one reproducible
+truth boundary without prematurely adding a migration or duplicating canonical
+models.
+
+Consequence: `docs/LIVING_COMMAND_CENTER_CHECKLIST.md` is the execution and
+acceptance ledger for this product slice. The first implementation ticket is
+the headquarters schema/service/endpoint plus contract tests, with no migration,
+provider call, LLM, or write. UI promotion follows only after that read contract
+is proven.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

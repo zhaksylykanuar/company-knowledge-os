@@ -19,6 +19,9 @@ recovering deleted context.
 5. [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md),
    [`POST_MVP.md`](POST_MVP.md), and [`CHANGELOG.md`](CHANGELOG.md) - planning,
    near-term backlog, deferred scope, and dated change history.
+6. [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md) -
+   executable acceptance ledger for promoting the synthetic `/demo` grammar into
+   the real authenticated local product.
 
 ## Source-of-truth Matrix
 
@@ -31,6 +34,7 @@ recovering deleted context.
 | What is the current development workflow for agents? | [`../AGENTS.md`](../AGENTS.md) and [`../CLAUDE.md`](../CLAUDE.md) |
 | What are the safety/security boundaries? | [`../AGENTS.md`](../AGENTS.md), [`../CLAUDE.md`](../CLAUDE.md), [`../SECURITY_BASELINE.md`](../SECURITY_BASELINE.md) |
 | What should be built next? | [`../PROGRESS.md`](../PROGRESS.md), then [`TODO.md`](TODO.md) |
+| How does the `/demo` command center become the real product? | [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
 | How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
 | How do we prove a bounded provider read or external action? | [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) and [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) |
@@ -55,6 +59,7 @@ as current operating instructions.
 - [`TODO.md`](TODO.md)
 - [`POST_MVP.md`](POST_MVP.md)
 - [`CHANGELOG.md`](CHANGELOG.md)
+- [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md)
 
 ## Audit Trail
 
