@@ -31,8 +31,12 @@ LC-02 now implements the approved minimal command-center grammar in the
 authenticated `/dashboard`: one server-ranked priority, three pulse metrics,
 bounded queue/signals, progressive-disclosure drawers and an honest assistant
 launcher all consume that contract without browser ranking or demo fixtures.
-LC-03 computed onboarding is the next UI slice. The full phased acceptance
-ledger is `LIVING_COMMAND_CENTER_CHECKLIST.md`. DEC-087 separately approves one
+DEC-088 now completes LC-03: five server-computed onboarding steps, evidence and
+role-aware next actions are part of the same Headquarters v2 snapshot, while a
+compact modal replaces browser-derived readiness and the separate journey for
+workspace users. The next UI slice is LC-05/LC-08 exact entity drill-down and
+decision receipt/refetch. The full phased acceptance ledger is
+`LIVING_COMMAND_CENTER_CHECKLIST.md`. DEC-087 separately approves one
 future modular Source Foundry intake/promotion plane — not one server per source
 and not a second knowledge truth — after the real headquarters UI is accepted.
 The reference still does not claim real provider or LLM readiness; a read-only
@@ -201,24 +205,25 @@ Definition of Done:
 ## Phase 3 - Frontend Core
 
 Current status: `web/` is a Living Headquarters shell behind a server-side
-session. Invite-only `/start` and focused `/onboarding` cover first run;
-`/dashboard` is `Штаб` with one evidence-aware mission, a compact Company World,
-current-snapshot signals, and a world pulse. Workspace context comes from
-memberships and requires an explicit choice when ambiguous.
+session. Invite-only `/start` and the in-Headquarters computed onboarding cover
+first run; `/dashboard` is `Штаб` with one evidence-aware mission, a compact
+Company World, current-snapshot signals, and a world pulse. Workspace context
+comes from memberships and requires an explicit choice when ambiguous.
 
 Done:
 
 - Legacy static `/ui` has been removed; `web/` is the only product frontend
   shell to extend.
 - `/login`, session client, `AuthGate`, and Settings→account/change-password
-  gate the app behind email+password. `/start` consumes an invite and
-  `/onboarding` guides company/source/map/team state without a decorative
-  completion flag. Founder and teammate setup bearers are fragment-only and
-  cleared after capture; the onboarding step is hash-backed with explicit
-  Sources/Settings return links. The old browser operator-key/owner-email config
-  remains removed.
-- Shared shell/status copy is Russian through `web/lib/messages.ts`; focused
-  page-specific journey copy is colocated with its page (no i18n framework yet).
+  gate the app behind email+password. `/start` consumes an invite; for an account
+  with a workspace, `/onboarding` enters the real Headquarters and opens the
+  five-step server-computed modal. Required readiness, evidence and next action
+  come from the same snapshot; zero-workspace recovery remains separate. Founder
+  and teammate setup bearers are fragment-only and cleared after capture. The
+  old browser operator-key/owner-email config remains removed.
+- Shared shell/status copy is Russian through `web/lib/messages.ts`; computed
+  setup copy stays with the Headquarters modal and zero-workspace recovery page
+  (no i18n framework yet).
 - Company Brain has a product dashboard panel backed by canonical GitHub
   repositories/tasks/PRs and source refs.
 - Next.js + TypeScript, a typed API client, and session-derived workspace context
@@ -306,11 +311,11 @@ Missing:
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: follow `../PROGRESS.md`. Recompose computed onboarding as a short
-visual prologue into `Штаб`: company → first radar → first world → first
-teammate, with completion derived only from real backend state. Keep one explicit
-founder-approved GitHub read as the next external gate; keep provider reads
-human-gated and never add browser-stored operator credentials.
+Next step: follow `../PROGRESS.md`. Add exact mission/person/customer drill-down
+and reuse the existing human-gated decision APIs in one compact modal, then
+refetch the same Headquarters snapshot. Keep one explicit founder-approved
+GitHub read as the next external gate; keep provider reads human-gated and never
+add browser-stored operator credentials.
 
 Definition of Done:
 

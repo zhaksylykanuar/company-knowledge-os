@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -19,6 +20,7 @@ from app.api.auth import settings
 from app.api.headquarters import (
     HeadquartersActionRead,
     HeadquartersEvidenceRefRead,
+    HeadquartersOnboardingRead,
     HeadquartersPulseMetricRead,
 )
 from app.db.action_models import (
@@ -145,6 +147,20 @@ async def _get_headquarters(
     return response.status_code, body, dict(response.headers)
 
 
+async def _get_headquarters_onboarding(
+    *,
+    workspace_id: UUID,
+    email: str,
+) -> tuple[int, dict, dict[str, str]]:
+    async with _client() as client:
+        response = await client.get(
+            f"/api/v1/workspaces/{workspace_id}/headquarters/onboarding",
+            headers=_headers(),
+            params={"owner_email": email},
+        )
+    return response.status_code, response.json(), dict(response.headers)
+
+
 async def _cleanup(marker: str) -> None:
     async with AsyncSessionLocal() as session:
         workspace_ids = list(
@@ -264,6 +280,51 @@ def test_contract_rejects_inconsistent_action_and_metric_states() -> None:
         )
 
 
+def test_onboarding_contract_preserves_unknown_and_required_readiness() -> None:
+    payload = headquarters_service._build_onboarding(
+        member_count=1,
+        configured_source_count=None,
+        canonical_source_record_count=None,
+        briefing_count=0,
+        decided_proposal_count=0,
+        company_world=None,
+        company_world_status="unavailable",
+        capabilities={
+            "can_manage_team": False,
+            "can_manage_source": False,
+            "can_import_source": False,
+        },
+    )
+
+    result = HeadquartersOnboardingRead.model_validate(payload)
+    steps = {step.key: step for step in result.steps}
+    assert result.contract_version == "onboarding.v1"
+    assert result.readiness_version == "onboarding-readiness.v1"
+    assert result.ready is False
+    assert result.completed_count == 2
+    assert result.total_count == 5
+    assert result.completed_required == 2
+    assert result.required_total == 3
+    assert result.current_step_key == "canonical_data"
+    assert result.next_action == steps["canonical_data"].action
+    assert steps["source"].state == "unknown"
+    assert steps["source"].requirement == "recommended"
+    assert steps["canonical_data"].state == "unknown"
+    assert steps["context"].state == "unknown"
+    assert all(
+        fact.precision == "unavailable" and fact.value is None
+        for fact in steps["canonical_data"].evidence
+    )
+
+    with pytest.raises(ValidationError, match="ready must match"):
+        HeadquartersOnboardingRead.model_validate({**payload, "ready": True})
+
+    inconsistent = json.loads(json.dumps(payload))
+    inconsistent["steps"][2]["state"] = "complete"
+    with pytest.raises(ValidationError, match="step state must match its evidence"):
+        HeadquartersOnboardingRead.model_validate(inconsistent)
+
+
 @pytest.mark.parametrize(
     "target",
     (
@@ -368,14 +429,33 @@ async def test_empty_headquarters_is_deterministic_and_read_only(monkeypatch) ->
             workspace_id=workspace.id,
             email=owner.email,
         )
+        onboarding_status, onboarding, onboarding_headers = await _get_headquarters_onboarding(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
 
-        assert first_status == second_status == 200
-        assert first["contract_version"] == "headquarters.v1"
+        assert first_status == second_status == onboarding_status == 200
+        assert first["contract_version"] == "headquarters.v2"
         assert first["ranking_version"] == "headquarters-ranking.v1"
         assert first["snapshot"]["id"] == second["snapshot"]["id"]
         assert first["snapshot"]["as_of"] != second["snapshot"]["as_of"]
         assert first_headers["etag"] == f'"{first["snapshot"]["id"]}"'
         assert first_headers["cache-control"] == "private, no-store"
+        assert set(onboarding) == {
+            "contract_version",
+            "snapshot",
+            "workspace",
+            "onboarding",
+            "capabilities",
+            "boundary",
+        }
+        assert onboarding["snapshot"]["id"] == first["snapshot"]["id"]
+        assert onboarding["workspace"] == first["workspace"]
+        assert onboarding["onboarding"] == first["onboarding"]
+        assert onboarding["capabilities"] == first["capabilities"]
+        assert onboarding["boundary"] == first["boundary"]
+        assert onboarding_headers["etag"] == f'"{first["snapshot"]["id"]}"'
+        assert onboarding_headers["cache-control"] == "private, no-store"
         assert [metric["key"] for metric in first["pulse"]] == [
             "waiting_decisions",
             "sources_attention",
@@ -386,19 +466,33 @@ async def test_empty_headquarters_is_deterministic_and_read_only(monkeypatch) ->
         assert first["priority"]["id"] == "setup:connect-source"
         assert first["priority"]["evidence_state"] == "aggregate"
         onboarding_steps = {step["key"]: step for step in first["onboarding"]["steps"]}
+        assert first["onboarding"]["contract_version"] == "onboarding.v1"
+        assert first["onboarding"]["readiness_version"] == "onboarding-readiness.v1"
         assert first["onboarding"]["ready"] is False
+        assert first["onboarding"]["completed_count"] == 2
+        assert first["onboarding"]["total_count"] == 5
+        assert first["onboarding"]["completed_required"] == 2
+        assert first["onboarding"]["required_total"] == 3
+        assert first["onboarding"]["current_step_key"] == "canonical_data"
         assert first["onboarding"]["next_action"]["target"] == "/connectors"
-        assert onboarding_steps["workspace"]["requirement"] == "required"
-        assert onboarding_steps["workspace"]["complete"] is True
-        assert onboarding_steps["source_data"]["requirement"] == "required"
-        assert onboarding_steps["source_data"]["complete"] is False
+        assert list(onboarding_steps) == [
+            "company",
+            "source",
+            "canonical_data",
+            "context",
+            "headquarters",
+        ]
+        assert onboarding_steps["company"]["requirement"] == "required"
+        assert onboarding_steps["company"]["state"] == "complete"
+        assert onboarding_steps["source"]["requirement"] == "recommended"
+        assert onboarding_steps["source"]["state"] == "pending"
+        assert onboarding_steps["canonical_data"]["requirement"] == "required"
+        assert onboarding_steps["canonical_data"]["state"] == "pending"
         assert onboarding_steps["headquarters"]["requirement"] == "required"
-        assert onboarding_steps["headquarters"]["complete"] is True
-        assert onboarding_steps["team"]["requirement"] == "recommended"
-        assert onboarding_steps["team"]["complete"] is False
-        assert onboarding_steps["team"]["action"]["target"] == "/settings"
-        assert onboarding_steps["briefing"]["requirement"] == "recommended"
-        assert onboarding_steps["first_decision"]["requirement"] == "recommended"
+        assert onboarding_steps["headquarters"]["state"] == "complete"
+        assert onboarding_steps["context"]["requirement"] == "recommended"
+        assert onboarding_steps["context"]["state"] == "pending"
+        assert onboarding_steps["context"]["action"]["target"] == "/settings"
         assert len(first["queue"]) <= 2
         assert len(first["changes"]["items"]) <= 3
         assert first["changes"] == {
@@ -1171,14 +1265,19 @@ async def test_onboarding_ready_uses_required_canonical_data_only(monkeypatch) -
         steps = {step["key"]: step for step in body["onboarding"]["steps"]}
         assert body["sources"]["data_ready_count"] == 0
         assert body["onboarding"]["ready"] is True
+        assert body["onboarding"]["completed_required"] == 3
+        assert body["onboarding"]["required_total"] == 3
+        assert body["onboarding"]["current_step_key"] is None
         assert body["onboarding"]["next_action"] is None
-        assert steps["source_data"]["complete"] is True
-        assert steps["team"]["complete"] is False
-        assert steps["team"]["requirement"] == "recommended"
-        assert steps["briefing"]["complete"] is False
-        assert steps["briefing"]["requirement"] == "recommended"
-        assert steps["first_decision"]["complete"] is True
-        assert steps["first_decision"]["requirement"] == "recommended"
+        assert steps["source"]["state"] == "pending"
+        assert steps["source"]["requirement"] == "recommended"
+        assert steps["canonical_data"]["state"] == "complete"
+        assert steps["canonical_data"]["requirement"] == "required"
+        assert steps["context"]["state"] == "complete"
+        assert steps["context"]["requirement"] == "recommended"
+        context_facts = {fact["key"]: fact for fact in steps["context"]["evidence"]}
+        assert context_facts["decisions"]["state"] == "complete"
+        assert context_facts["decisions"]["value"] == 1
     finally:
         await _cleanup(marker)
 
@@ -1691,6 +1790,13 @@ async def test_headquarters_capabilities_follow_in_transaction_role(
         assert capabilities["can_review_proposal"] is expected["review"]
         assert capabilities["can_execute_external"] is False
         assert capabilities["can_acknowledge_changes"] is False
+        onboarding_steps = {step["key"]: step for step in body["onboarding"]["steps"]}
+        assert onboarding_steps["source"]["action"]["enabled"] is expected["manage"]
+        assert onboarding_steps["canonical_data"]["action"]["enabled"] is expected["manage"]
+        assert onboarding_steps["context"]["action"]["target"] == (
+            "/settings" if expected["manage"] else "/company-brain"
+        )
+        assert onboarding_steps["context"]["action"]["enabled"] is True
     finally:
         await _cleanup(marker)
 
@@ -1760,6 +1866,20 @@ async def test_truncated_company_world_is_lower_bound_partial_with_window_waterm
         assert first_coverage["warning"] == "company_world_window_truncated"
         assert first_coverage["watermark"].startswith("sha256:")
         assert first_coverage["watermark"] != second_coverage["watermark"]
+        context_step = next(
+            step for step in first["onboarding"]["steps"] if step["key"] == "context"
+        )
+        assert context_step["state"] == "unknown"
+        map_facts = [
+            fact for fact in context_step["evidence"] if fact["key"].startswith("company_map_")
+        ]
+        assert map_facts
+        assert all(
+            fact["state"] == "unknown"
+            and fact["value"] is None
+            and fact["precision"] == "unavailable"
+            for fact in map_facts
+        )
     finally:
         await _cleanup(marker)
 
@@ -1796,6 +1916,10 @@ async def test_typed_company_world_unavailability_is_partial_but_unknown_error_f
         assert company_world_coverage["status"] == "unavailable"
         assert body["pulse"][2]["precision"] == "unavailable"
         assert body["pulse"][2]["value"] is None
+        onboarding_steps = {step["key"]: step for step in body["onboarding"]["steps"]}
+        assert onboarding_steps["context"]["state"] == "unknown"
+        assert body["onboarding"]["ready"] is False
+        assert body["onboarding"]["current_step_key"] == "canonical_data"
 
         async def database_timeout(*, session, **_kwargs):
             await session.execute(text("SET LOCAL statement_timeout = '1ms'"))
@@ -1966,8 +2090,18 @@ async def test_headquarters_rejects_cross_workspace_access(monkeypatch) -> None:
             workspace_id=workspace.id,
             email=other_owner.email,
         )
+        (
+            onboarding_status,
+            onboarding_body,
+            _onboarding_headers,
+        ) = await _get_headquarters_onboarding(
+            workspace_id=workspace.id,
+            email=other_owner.email,
+        )
         assert status_code == 404
         assert body == {"detail": "workspace not found"}
+        assert onboarding_status == 404
+        assert onboarding_body == {"detail": "workspace not found"}
         assert owner.email not in str(body)
     finally:
         await _cleanup(marker)

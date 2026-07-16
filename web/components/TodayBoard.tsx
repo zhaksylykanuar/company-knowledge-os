@@ -1,9 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
-import { fetchActionProposals, listBriefings } from "../lib/api";
 import {
   deriveLivingHqView,
   type LivingHqChange,
@@ -11,13 +9,9 @@ import {
   type LivingHqWorldMetric
 } from "../lib/living-hq";
 import { M } from "../lib/messages";
-import {
-  loadOnboardingSnapshot,
-  type OnboardingSnapshot
-} from "../lib/onboarding";
-import { useSession } from "../lib/session";
 import type { TodayFacts } from "../lib/today";
 import type { ActionProposal, CompanyMapResponse } from "../lib/types";
+import { HeadquartersDashboard } from "./HeadquartersDashboard";
 import { LivingWorldMiniMap } from "./LivingWorldMiniMap";
 import { SourceLink } from "./SourceLink";
 
@@ -38,132 +32,9 @@ type RadarSummary = {
   state: "attention" | "connected" | "empty" | "unknown";
 };
 
-type TodayBoardState = {
-  actionProposals: ActionProposal[] | null;
-  companyMapState: CompanyMapLoadState;
-  companyMap: CompanyMapResponse | null;
-  facts: TodayFacts;
-  isDataPartial: boolean;
-  radarSummary: RadarSummary;
-};
-
+/** Compatibility export: every production Today entry now uses the canonical HQ read. */
 export function TodayBoard() {
-  const session = useSession();
-  const workspaceId = session?.workspaceId ?? null;
-  const workspace =
-    session?.workspaces.find((item) => item.id === workspaceId) ?? null;
-  const [state, setState] = useState<TodayBoardState | null>(null);
-  const [loadingWorkspaceId, setLoadingWorkspaceId] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    if (!workspaceId) {
-      setState({
-        actionProposals: [],
-        companyMapState: "empty",
-        companyMap: null,
-        facts: emptyFacts(),
-        isDataPartial: true,
-        radarSummary: unknownRadarSummary()
-      });
-      setLoadingWorkspaceId(null);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadingWorkspaceId(workspaceId);
-
-    Promise.allSettled([
-      loadOnboardingSnapshot(workspaceId),
-      listBriefings(workspaceId, { limit: 1 }),
-      fetchActionProposals(workspaceId, { limit: 100, status: "proposed" }),
-      fetchActionProposals(workspaceId, { limit: 50 })
-    ]).then(([
-      onboardingResult,
-      briefingResult,
-      proposedActionResult,
-      recentActionResult
-    ]) => {
-      if (cancelled) {
-        return;
-      }
-
-      const snapshot =
-        onboardingResult.status === "fulfilled" ? onboardingResult.value : null;
-      const actionProposals = mergeActionProposals(
-        proposedActionResult.status === "fulfilled"
-          ? proposedActionResult.value.proposals
-          : null,
-        recentActionResult.status === "fulfilled"
-          ? recentActionResult.value.proposals
-          : null
-      );
-      const proposedCount =
-        proposedActionResult.status === "fulfilled"
-          ? proposedActionResult.value.count
-          : null;
-      const snapshotUnavailable = snapshot?.unavailable ?? [];
-
-      setState({
-        actionProposals,
-        companyMapState:
-          onboardingResult.status === "rejected" ||
-          snapshotUnavailable.includes("company-map")
-            ? "error"
-            : snapshot?.companyMap
-              ? "ready"
-              : "empty",
-        companyMap: snapshot?.companyMap ?? null,
-        facts: factsFromResponses({
-          actionCount: proposedCount,
-          actionCountIsLowerBound:
-            proposedActionResult.status === "fulfilled" &&
-            proposedActionResult.value.count >= 100,
-          briefingCount:
-            briefingResult.status === "fulfilled" ? briefingResult.value.count : null,
-          role: workspace?.role ?? null,
-          snapshot,
-          workspaceId,
-          workspaceName: workspace?.name ?? null
-        }),
-        isDataPartial:
-          onboardingResult.status === "rejected" ||
-          briefingResult.status === "rejected" ||
-          proposedActionResult.status === "rejected" ||
-          recentActionResult.status === "rejected" ||
-          snapshotUnavailable.length > 0,
-        radarSummary: radarSummaryFromSnapshot(snapshot)
-      });
-      setLoadingWorkspaceId(null);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [reloadKey, workspace?.name, workspace?.role, workspaceId]);
-
-  if (
-    workspaceId &&
-    (state?.facts.workspaceId !== workspaceId || loadingWorkspaceId)
-  ) {
-    return <TodayLoading workspaceName={workspace?.name ?? null} />;
-  }
-
-  if (!state) {
-    return <TodayLoading workspaceName={workspace?.name ?? null} />;
-  }
-
-  return (
-    <TodayBoardView
-      actionProposals={state.actionProposals}
-      companyMapState={state.companyMapState}
-      companyMap={state.companyMap}
-      facts={state.facts}
-      isDataPartial={state.isDataPartial}
-      onRetry={() => setReloadKey((current) => current + 1)}
-      radarSummary={state.radarSummary}
-    />
-  );
+  return <HeadquartersDashboard />;
 }
 
 export function TodayBoardView({
@@ -424,115 +295,8 @@ function WorldPulse({
   );
 }
 
-function TodayLoading({ workspaceName }: { workspaceName: string | null }) {
-  return (
-    <section className="living-hq living-hq--loading" aria-busy="true" aria-live="polite">
-      <header className="living-hq-header">
-        <div>
-          <span className="eyebrow">{M.livingHq.eyebrow}</span>
-          <h1>{workspaceName ?? M.livingHq.fallbackCompany}</h1>
-          <p>{M.livingHq.loading}</p>
-        </div>
-      </header>
-      <div className="living-hq-loading-card">
-        <span className="living-hq-loading-mark" aria-hidden="true" />
-        <span>{M.livingHq.loading}</span>
-      </div>
-    </section>
-  );
-}
-
-function emptyFacts(): TodayFacts {
-  return {
-    briefingCount: null,
-    candidateCount: null,
-    candidateCountIsLowerBound: false,
-    memberCount: null,
-    proposedDecisionCount: null,
-    proposedDecisionCountIsLowerBound: false,
-    role: null,
-    sourceRecordCount: null,
-    workspaceId: null,
-    workspaceName: null
-  };
-}
-
-function factsFromResponses({
-  actionCount,
-  actionCountIsLowerBound,
-  briefingCount,
-  role,
-  snapshot,
-  workspaceId,
-  workspaceName
-}: {
-  actionCount: number | null;
-  actionCountIsLowerBound: boolean;
-  briefingCount: number | null;
-  role: string | null;
-  snapshot: OnboardingSnapshot | null;
-  workspaceId: string;
-  workspaceName: string | null;
-}): TodayFacts {
-  const sourceRecordCount =
-    snapshot?.companyBrain?.source_records?.total ??
-    (snapshot?.companyBrain ? 0 : null);
-  const companyMap = snapshot?.companyMap ?? null;
-
-  return {
-    briefingCount,
-    candidateCount: companyMap
-      ? companyMap.people.external_candidates.length + companyMap.organizations.length
-      : null,
-    candidateCountIsLowerBound: companyMap?.window.truncated ?? false,
-    memberCount: snapshot?.members?.members.length ?? null,
-    proposedDecisionCount: actionCount,
-    proposedDecisionCountIsLowerBound: actionCountIsLowerBound,
-    role,
-    sourceRecordCount,
-    workspaceId,
-    workspaceName
-  };
-}
-
-function mergeActionProposals(
-  proposed: readonly ActionProposal[] | null,
-  recent: readonly ActionProposal[] | null
-): ActionProposal[] | null {
-  if (proposed === null && recent === null) {
-    return null;
-  }
-  const byId = new Map<string, ActionProposal>();
-  for (const proposal of [...(proposed ?? []), ...(recent ?? [])]) {
-    byId.set(proposal.id, proposal);
-  }
-  return [...byId.values()];
-}
-
 function unknownRadarSummary(): RadarSummary {
   return { connectedCount: null, state: "unknown" };
-}
-
-function radarSummaryFromSnapshot(
-  snapshot: OnboardingSnapshot | null
-): RadarSummary {
-  const connectors = snapshot?.connectors;
-  if (!connectors) {
-    return unknownRadarSummary();
-  }
-  const hasAttention = connectors.connectors.some(
-    (connector) => connector.connection_count > connector.connected_count
-  );
-  if (hasAttention) {
-    return {
-      connectedCount: connectors.summary.connected,
-      state: "attention"
-    };
-  }
-  return {
-    connectedCount: connectors.summary.connected,
-    state: connectors.summary.connected > 0 ? "connected" : "empty"
-  };
 }
 
 function formatRadarSummary(summary: RadarSummary): string {

@@ -97,7 +97,7 @@ const HEADQUARTERS_TEST_SOURCE: HeadquartersSourceHealth = {
 };
 
 const BASE_HEADQUARTERS_FIXTURE = {
-  contract_version: "headquarters.v1",
+  contract_version: "headquarters.v2",
   ranking_version: "headquarters-ranking.v1",
   snapshot: {
     id: "hqs1_workspace-1_20260716",
@@ -137,14 +137,30 @@ const BASE_HEADQUARTERS_FIXTURE = {
     role: "owner"
   },
   onboarding: {
+    contract_version: "onboarding.v1",
+    readiness_version: "onboarding-readiness.v1",
     ready: true,
+    completed_count: 5,
+    total_count: 5,
+    completed_required: 3,
+    required_total: 3,
+    current_step_key: null,
     steps: [
       {
-        key: "workspace",
+        key: "company",
+        state: "complete",
         requirement: "required",
         label: "Компания создана",
-        complete: true,
         benefit: "У штаба есть рабочее пространство.",
+        evidence: [
+          {
+            key: "workspace",
+            label: "Компания доступна текущему аккаунту",
+            state: "complete",
+            value: 1,
+            precision: "exact"
+          }
+        ],
         action: {
           kind: "open_settings",
           label: "Открыть компанию",
@@ -154,11 +170,20 @@ const BASE_HEADQUARTERS_FIXTURE = {
         }
       },
       {
-        key: "source_data",
-        requirement: "required",
-        label: "Первый источник дал данные",
-        complete: true,
-        benefit: "Штаб видит подтверждённые факты.",
+        key: "source",
+        state: "complete",
+        requirement: "recommended",
+        label: "Выбран первый источник",
+        benefit: "Понятно, откуда FounderOS получает контекст.",
+        evidence: [
+          {
+            key: "configured_sources",
+            label: "Настроенные источники",
+            state: "complete",
+            value: 1,
+            precision: "exact"
+          }
+        ],
         action: {
           kind: "open_sources",
           label: "Открыть источники",
@@ -168,11 +193,66 @@ const BASE_HEADQUARTERS_FIXTURE = {
         }
       },
       {
+        key: "canonical_data",
+        state: "complete",
+        requirement: "required",
+        label: "Первые данные подтверждены",
+        benefit: "Штаб видит подтверждённые факты.",
+        evidence: [
+          {
+            key: "canonical_records",
+            label: "Канонические записи",
+            state: "complete",
+            value: 42,
+            precision: "exact"
+          }
+        ],
+        action: {
+          kind: "open_sources",
+          label: "Открыть источники",
+          target: "/connectors",
+          enabled: true,
+          disabled_reason: null
+        }
+      },
+      {
+        key: "context",
+        state: "complete",
+        requirement: "recommended",
+        label: "Контекст компании появился",
+        benefit: "Команда, карта и решения делают картину полезнее.",
+        evidence: [
+          {
+            key: "context_signals",
+            label: "Подтверждённые элементы контекста",
+            state: "complete",
+            value: 3,
+            precision: "exact"
+          }
+        ],
+        action: {
+          kind: "open_company_world",
+          label: "Открыть карту",
+          target: "/company-brain",
+          enabled: true,
+          disabled_reason: null
+        }
+      },
+      {
         key: "headquarters",
+        state: "complete",
         requirement: "required",
         label: "Первый снимок рассчитан",
-        complete: true,
         benefit: "Компания видна как единая система.",
+        evidence: [
+          {
+            key: "snapshot",
+            label: "Согласованный снимок штаба",
+            state: "complete",
+            value: 1,
+            precision: "exact"
+          }
+        ],
         action: {
           kind: "open_headquarters",
           label: "Открыть штаб",

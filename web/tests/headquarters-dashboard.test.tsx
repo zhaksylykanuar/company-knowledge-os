@@ -5,6 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   HeadquartersDashboardView,
+  onboardingIntentFromSearch,
+  reduceHeadquartersOnboardingIntent,
+  resolveVisibleHeadquartersOverlay,
   reduceHeadquartersLoadState
 } from "../components/HeadquartersDashboard";
 import type { HeadquartersSnapshotResponse } from "../lib/headquarters";
@@ -18,6 +21,35 @@ function renderReady(snapshot: HeadquartersSnapshotResponse): string {
       workspaceName={snapshot.workspace.name}
     />
   );
+}
+
+function pendingOnboardingSnapshot(
+  state: "pending" | "unknown" = "pending"
+): HeadquartersSnapshotResponse {
+  return makeHeadquartersFixture((fixture) => {
+    const step = fixture.onboarding.steps[2];
+    assert.equal(step?.key, "canonical_data");
+    if (!step) return;
+    step.state = state;
+    step.evidence[0] = {
+      ...step.evidence[0]!,
+      state,
+      value: state === "unknown" ? null : 0,
+      precision: state === "unknown" ? "unavailable" : "exact"
+    };
+    step.action = {
+      kind: "import_source_data",
+      label: "Получить первые данные",
+      target: "/connectors",
+      enabled: true,
+      disabled_reason: null
+    };
+    fixture.onboarding.ready = false;
+    fixture.onboarding.completed_count = 4;
+    fixture.onboarding.completed_required = 2;
+    fixture.onboarding.current_step_key = "canonical_data";
+    fixture.onboarding.next_action = structuredClone(step.action);
+  });
 }
 
 test("renders one real priority, fixed pulse order, and backend actions", () => {
@@ -47,20 +79,169 @@ test("renders one real priority, fixed pulse order, and backend actions", () => 
 test("renders a calm state without inventing a priority", () => {
   const snapshot = makeHeadquartersFixture((fixture) => {
     fixture.priority = null;
-    fixture.onboarding.next_action = {
-      kind: "create_briefing",
-      label: "Собрать первую сводку",
-      target: "/briefings",
-      enabled: true,
-      disabled_reason: null
-    };
   });
   const html = renderReady(snapshot);
 
   assert.ok(html.includes("Подтверждённых приоритетов сейчас нет"));
-  assert.ok(html.includes("Собрать первую сводку"));
-  assert.match(html, /href="\/briefings"/);
   assert.doesNotMatch(html, /Подтвердить план запуска Atlas/);
+});
+
+test("auto-opens one compact modal for the server-provided required blocker", () => {
+  const snapshot = pendingOnboardingSnapshot();
+  const html = renderReady(snapshot);
+
+  assert.equal((html.match(/role="dialog"/g) ?? []).length, 1);
+  assert.ok(html.includes("Запуск компании"));
+  assert.ok(html.includes("Готово 2 из 3 обязательных"));
+  assert.ok(html.includes("Первые данные подтверждены"));
+  assert.ok(html.includes("Штаб видит подтверждённые факты"));
+  assert.ok(html.includes("Получить первые данные"));
+  assert.ok(html.includes("Галочка появляется только после серверной проверки"));
+  assert.equal(
+    (html.match(/aria-label="(?:Компания|Источник|Факты|Контекст|Штаб):/g) ?? [])
+      .length,
+    5
+  );
+  assert.doesNotMatch(html, /Отметить выполненным|Пропустить и завершить/);
+});
+
+test("keeps an unknown required step unresolved and offers a read-only retry", () => {
+  const snapshot = pendingOnboardingSnapshot("unknown");
+  const html = renderToStaticMarkup(
+    <HeadquartersDashboardView
+      onRetry={() => undefined}
+      snapshot={snapshot}
+      status="ready"
+      workspaceName={snapshot.workspace.name}
+    />
+  );
+
+  assert.ok(html.includes("Состояние пока неизвестно"));
+  assert.ok(html.includes("Проверить снова"));
+  assert.ok(html.includes("Не удалось подтвердить"));
+  assert.doesNotMatch(html, /Обязательные шаги завершены|Штаб готов к работе/);
+});
+
+test("explains the administrator path when an unknown step is read-only", () => {
+  const snapshot = pendingOnboardingSnapshot("unknown");
+  const step = snapshot.onboarding.steps[2];
+  assert.equal(step?.key, "canonical_data");
+  if (!step) return;
+  step.action.enabled = false;
+  step.action.disabled_reason = "Импорт запускает администратор или владелец.";
+  snapshot.onboarding.next_action = structuredClone(step.action);
+  snapshot.workspace.role = "viewer";
+  const html = renderToStaticMarkup(
+    <HeadquartersDashboardView
+      onRetry={() => undefined}
+      snapshot={snapshot}
+      status="ready"
+      workspaceName={snapshot.workspace.name}
+    />
+  );
+
+  assert.ok(html.includes("Проверить снова"));
+  assert.ok(html.includes("Импорт запускает администратор или владелец."));
+  assert.doesNotMatch(html, /href="\/connectors"/);
+});
+
+test("shows a disabled server action and role reason without inventing a link", () => {
+  const snapshot = pendingOnboardingSnapshot();
+  const step = snapshot.onboarding.steps[2];
+  assert.equal(step?.key, "canonical_data");
+  if (!step) return;
+  step.action.enabled = false;
+  step.action.disabled_reason = "Импорт запускает администратор или владелец.";
+  snapshot.onboarding.next_action = structuredClone(step.action);
+  snapshot.workspace.role = "viewer";
+  const parsed = makeHeadquartersFixture((fixture) => Object.assign(fixture, snapshot));
+  const html = renderReady(parsed);
+
+  assert.ok(html.includes("Импорт запускает администратор или владелец."));
+  assert.match(html, /<button class="headquarters-primary-action" disabled=""/);
+  assert.doesNotMatch(
+    html,
+    /<a class="headquarters-primary-action" href="\/connectors"><span>Получить первые данные/
+  );
+});
+
+test("ready onboarding stays quiet unless the route explicitly requests its completion view", () => {
+  const snapshot = makeHeadquartersFixture();
+  const ordinary = renderReady(snapshot);
+  const requested = renderToStaticMarkup(
+    <HeadquartersDashboardView
+      onboardingIntent
+      snapshot={snapshot}
+      status="ready"
+      workspaceName={snapshot.workspace.name}
+    />
+  );
+
+  assert.doesNotMatch(ordinary, /role="dialog"/);
+  assert.equal((requested.match(/role="dialog"/g) ?? []).length, 1);
+  assert.ok(requested.includes("Штаб готов к работе"));
+  assert.ok(requested.includes("Войти в штаб"));
+});
+
+test("onboarding has overlay priority until dismissed for the exact snapshot", () => {
+  const snapshot = pendingOnboardingSnapshot();
+  const assistant = { kind: "assistant" } as const;
+
+  assert.equal(
+    resolveVisibleHeadquartersOverlay({
+      dismissedOnboardingSnapshotId: null,
+      onboardingIntent: false,
+      requestedOverlay: assistant,
+      snapshot
+    })?.kind,
+    "onboarding"
+  );
+  assert.equal(
+    resolveVisibleHeadquartersOverlay({
+      dismissedOnboardingSnapshotId: snapshot.snapshot.id,
+      onboardingIntent: false,
+      requestedOverlay: assistant,
+      snapshot
+    })?.kind,
+    "assistant"
+  );
+
+  const refreshed = structuredClone(snapshot);
+  refreshed.snapshot.id = `${snapshot.snapshot.id}-next`;
+  assert.equal(
+    resolveVisibleHeadquartersOverlay({
+      dismissedOnboardingSnapshotId: snapshot.snapshot.id,
+      onboardingIntent: false,
+      requestedOverlay: assistant,
+      snapshot: refreshed
+    })?.kind,
+    "onboarding"
+  );
+});
+
+test("recognizes only an explicit onboarding route intent", () => {
+  assert.equal(onboardingIntentFromSearch("?onboarding=1"), true);
+  assert.equal(onboardingIntentFromSearch("?onboarding=0"), false);
+  assert.equal(onboardingIntentFromSearch("?mode=onboarding"), false);
+  assert.equal(onboardingIntentFromSearch(""), false);
+});
+
+test("a dismissed route intent stays consumed when the workspace changes", () => {
+  let state = reduceHeadquartersOnboardingIntent(false, {
+    search: "?onboarding=1",
+    type: "location"
+  });
+  assert.equal(state, true);
+  state = reduceHeadquartersOnboardingIntent(state, { type: "dismiss" });
+  assert.equal(state, false);
+  state = reduceHeadquartersOnboardingIntent(state, { type: "workspace_changed" });
+  assert.equal(state, false);
+
+  state = reduceHeadquartersOnboardingIntent(state, {
+    search: "?onboarding=1",
+    type: "location"
+  });
+  assert.equal(state, true);
 });
 
 test("keeps a disabled mission non-clickable and explains the role boundary", () => {

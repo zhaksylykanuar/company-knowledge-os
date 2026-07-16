@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.api.workspace_auth import WorkspaceAccess, require_workspace_access
 from app.services.headquarters_read_service import (
     HEADQUARTERS_CONTRACT_VERSION,
+    HEADQUARTERS_ONBOARDING_CONTRACT_VERSION,
+    HEADQUARTERS_ONBOARDING_READINESS_VERSION,
     HEADQUARTERS_RANKING_VERSION,
     HeadquartersAccessChangedError,
     read_workspace_headquarters,
@@ -246,26 +248,118 @@ class HeadquartersCapabilitySetRead(StrictReadModel):
     can_acknowledge_changes: bool
 
 
+class HeadquartersOnboardingEvidenceFactRead(StrictReadModel):
+    key: str
+    label: str
+    state: Literal["complete", "pending", "unknown"]
+    value: int | None = Field(default=None, ge=0)
+    precision: Literal["exact", "unavailable"]
+
+    @model_validator(mode="after")
+    def validate_precision(self) -> HeadquartersOnboardingEvidenceFactRead:
+        if self.precision == "unavailable":
+            if self.value is not None or self.state != "unknown":
+                raise ValueError("unavailable onboarding evidence must be unknown")
+        elif self.value is None or self.state == "unknown":
+            raise ValueError("exact onboarding evidence requires a known value and state")
+        return self
+
+
 class HeadquartersOnboardingStepRead(StrictReadModel):
     key: Literal[
-        "workspace",
-        "source_data",
+        "company",
+        "source",
+        "canonical_data",
+        "context",
         "headquarters",
-        "team",
-        "briefing",
-        "first_decision",
     ]
+    state: Literal["complete", "pending", "unknown"]
     requirement: Literal["required", "recommended"]
     label: str
-    complete: bool
     benefit: str
+    evidence: list[HeadquartersOnboardingEvidenceFactRead] = Field(min_length=1)
     action: HeadquartersActionRead
+
+    @model_validator(mode="after")
+    def validate_state_from_evidence(self) -> HeadquartersOnboardingStepRead:
+        evidence_states = {fact.state for fact in self.evidence}
+        expected_state = (
+            "complete"
+            if "complete" in evidence_states
+            else "unknown"
+            if "unknown" in evidence_states
+            else "pending"
+        )
+        if self.state != expected_state:
+            raise ValueError("onboarding step state must match its evidence")
+        return self
 
 
 class HeadquartersOnboardingRead(StrictReadModel):
+    contract_version: Literal[HEADQUARTERS_ONBOARDING_CONTRACT_VERSION]
+    readiness_version: Literal[HEADQUARTERS_ONBOARDING_READINESS_VERSION]
     ready: bool
-    steps: list[HeadquartersOnboardingStepRead] = Field(default_factory=list)
+    completed_count: int = Field(ge=0)
+    total_count: Literal[5]
+    completed_required: int = Field(ge=0)
+    required_total: Literal[3]
+    current_step_key: (
+        Literal[
+            "company",
+            "source",
+            "canonical_data",
+            "context",
+            "headquarters",
+        ]
+        | None
+    ) = None
+    steps: list[HeadquartersOnboardingStepRead] = Field(min_length=5, max_length=5)
     next_action: HeadquartersActionRead | None = None
+
+    @model_validator(mode="after")
+    def validate_readiness(self) -> HeadquartersOnboardingRead:
+        expected_keys = [
+            "company",
+            "source",
+            "canonical_data",
+            "context",
+            "headquarters",
+        ]
+        expected_requirements = {
+            "company": "required",
+            "source": "recommended",
+            "canonical_data": "required",
+            "context": "recommended",
+            "headquarters": "required",
+        }
+        if [step.key for step in self.steps] != expected_keys:
+            raise ValueError("onboarding must contain the five v1 steps in order")
+        if any(step.requirement != expected_requirements[step.key] for step in self.steps):
+            raise ValueError("onboarding requirements must match readiness v1")
+
+        required_steps = [step for step in self.steps if step.requirement == "required"]
+        completed_count = sum(step.state == "complete" for step in self.steps)
+        completed_required = sum(step.state == "complete" for step in required_steps)
+        if self.completed_count != completed_count:
+            raise ValueError("completed_count must match onboarding steps")
+        if self.completed_required != completed_required:
+            raise ValueError("completed_required must match required onboarding steps")
+        if self.ready != (completed_required == self.required_total):
+            raise ValueError("ready must match required onboarding steps")
+
+        current_step = next(
+            (step for step in required_steps if step.state != "complete"),
+            None,
+        )
+        expected_current_key = current_step.key if current_step is not None else None
+        if self.current_step_key != expected_current_key:
+            raise ValueError("current_step_key must be the first incomplete required step")
+        if current_step is None:
+            if self.next_action is not None:
+                raise ValueError("ready onboarding cannot have next_action")
+        elif self.next_action != current_step.action:
+            raise ValueError("next_action must match the current required step")
+        return self
 
 
 class HeadquartersCoverageRead(StrictReadModel):
@@ -340,6 +434,15 @@ class HeadquartersSnapshotResponse(StrictReadModel):
         return self
 
 
+class HeadquartersOnboardingResponse(StrictReadModel):
+    contract_version: Literal[HEADQUARTERS_CONTRACT_VERSION]
+    snapshot: HeadquartersSnapshotMetaRead
+    workspace: HeadquartersWorkspaceRead
+    onboarding: HeadquartersOnboardingRead
+    capabilities: HeadquartersCapabilitySetRead
+    boundary: HeadquartersBoundaryRead
+
+
 def _validate_internal_target(value: str) -> str:
     if (
         not value.startswith("/")
@@ -378,9 +481,44 @@ async def get_workspace_headquarters(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="workspace not found",
+            headers={"Cache-Control": "private, no-store"},
         ) from exc
 
     result = HeadquartersSnapshotResponse.model_validate(payload)
+    response.headers["ETag"] = f'"{result.snapshot.id}"'
+    response.headers["Cache-Control"] = "private, no-store"
+    return result
+
+
+@router.get("/onboarding", response_model=HeadquartersOnboardingResponse)
+async def get_workspace_headquarters_onboarding(
+    workspace_id: UUID,
+    response: Response,
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> HeadquartersOnboardingResponse:
+    try:
+        payload = await read_workspace_headquarters(
+            workspace_id=workspace_id,
+            user_id=access.workspace_membership.user.id,
+        )
+    except HeadquartersAccessChangedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="workspace not found",
+            headers={"Cache-Control": "private, no-store"},
+        ) from exc
+
+    snapshot = HeadquartersSnapshotResponse.model_validate(payload)
+    result = HeadquartersOnboardingResponse.model_validate(
+        {
+            "contract_version": snapshot.contract_version,
+            "snapshot": snapshot.snapshot,
+            "workspace": snapshot.workspace,
+            "onboarding": snapshot.onboarding,
+            "capabilities": snapshot.capabilities,
+            "boundary": snapshot.boundary,
+        }
+    )
     response.headers["ETag"] = f'"{result.snapshot.id}"'
     response.headers["Cache-Control"] = "private, no-store"
     return result

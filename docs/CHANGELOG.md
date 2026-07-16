@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added the LC-03 detailed onboarding read at
+  `GET /api/v1/workspaces/{workspace_id}/headquarters/onboarding`. It slices the
+  same `headquarters.v2` service and content-addressed snapshot as the compact
+  Headquarters block, with `onboarding.v1`, five evidence-derived steps,
+  required/recommended semantics, role-aware actions, ETag and private/no-store
+  headers. Unknown or partial facts remain unresolved; the Python and browser
+  validators reject any step state that contradicts its evidence.
 - Added the first real unified Headquarters read contract (DEC-086):
   `GET /api/v1/workspaces/{workspace_id}/headquarters` composes existing
   canonical company, source, briefing, proposal and membership state inside one
@@ -46,6 +53,16 @@
 
 ### Changed
 
+- Replaced the separate browser-computed onboarding journey with one compact
+  setup modal over the real authenticated Headquarters (DEC-088). Workspace
+  users entering `/onboarding` continue in `/dashboard`; zero-workspace accounts
+  retain the explicit recovery surface without workspace reads. The modal shows
+  one server-selected blocker, benefit, evidence disclosure and role-aware
+  action, takes priority over every drawer/assistant overlay, resumes from the
+  server snapshot after reload and refetches after completion. Explicit query
+  intent is consumed without reappearing on workspace change, and the dark
+  stage uses a high-contrast focus indicator. The old source/map/team fan-out,
+  browser readiness derivation and six-step production journey were removed.
 - Replaced the authenticated `/dashboard` browser-composed Today board with the
   real workspace-scoped Headquarters snapshot. The production surface now shows
   one server-ranked priority, exactly three pulse metrics, at most two queued

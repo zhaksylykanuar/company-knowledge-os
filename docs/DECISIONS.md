@@ -2750,6 +2750,43 @@ Broken/hash-mismatched lineage закрывается fail-closed; receipt не 
 body или secret values. SF-00 contracts/threat model и fixture-only shadow
 pipeline следуют только после приёмки реального headquarters UI slice.
 
+## DEC-088 - Onboarding Is A Server-Computed Headquarters State, Not A Browser Journey
+
+Decision (2026-07-16): workspace onboarding is part of the unified Headquarters
+read projection. `headquarters.v2` embeds `onboarding.v1` with five ordered
+steps — company, source, canonical data, context and headquarters — and the
+same service exposes the detailed read-only slice at
+`GET /api/v1/workspaces/{workspace_id}/headquarters/onboarding`. Both endpoints
+return the same content-addressed snapshot, evidence, capabilities, role-aware
+actions, `next_action`, ETag and private/no-store boundary; the detailed route
+does not compose another readiness model.
+
+Three steps are required: the workspace/company exists, at least one canonical
+`SourceRecord` exists, and the Headquarters snapshot was computed successfully.
+Source configuration and context from team, Company World, briefings or prior
+decisions are recommended. They improve the product but do not block a single
+founder. `priority=null` remains a valid calm Headquarters state. Every step is
+derived from evidence; `unknown`, unavailable and partial inputs never become
+complete. Step state and evidence state are validated together at the Python
+and browser contract boundaries.
+
+For a session with a workspace, `/onboarding` redirects into the real
+`/dashboard` and opens one compact modal over the Headquarters. It shows only
+the current required blocker, benefit, evidence disclosure and one backend
+action. The modal has priority over drawers and the assistant, supports resume
+after reload, clears explicit route intent after dismissal, and refetches the
+same Headquarters after completion. Browser-side source/map/team fan-out and
+manual completion flags are removed. An account with no workspace remains on a
+separate honest recovery surface and does not call workspace endpoints.
+
+This partially supersedes the separate hash-driven workspace journey in
+DEC-075 while preserving its private invite, fragment-only bearer, explicit
+workspace selection, one-time teammate setup and closed public-signup
+boundaries. The slice adds no migration, provider call, LLM, canonical write,
+acknowledgement or external action. Source setup continues through the existing
+role-gated product routes; later public company creation requires a separate
+security/product decision.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

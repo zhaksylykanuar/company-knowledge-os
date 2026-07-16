@@ -85,18 +85,18 @@ Authenticated `/dashboard` должен сохранить грамматику 
 |---|---|---|---|
 | Synthetic reference | ✅ | `/demo`, DEC-085, state transition, assistant shell, drawer/modal | Не переносить fixtures в auth product |
 | Local runtime | ✅ | `make local`, loopback, Postgres, backup/restore, safe stop | Повторять release proof после рискованных изменений |
-| Auth/workspace | ✅ | First-party session, workspace selection, membership roles | Полная capability/RBAC матрица нового штаба |
-| Реальный `/dashboard` | 🟡 | Один вычисляемый ход, Company Map, signals, pulse, evidence | Единый server snapshot, очередь, overlays и точный post-decision refresh |
-| Onboarding | 🟡 | Computed checks по connectors/brain/map/members | Server contract, resumable UI flow и возврат в тот же штаб |
+| Auth/workspace | ✅ | First-party session, workspace selection, membership roles и HQ capabilities | Повторить full role matrix в release proof |
+| Реальный `/dashboard` | ✅ | Единый server snapshot, priority, queue, pulse, signals, evidence и один overlay | Exact profile/mission drill-down и in-place decision receipt/refetch |
+| Onboarding | ✅ | Пять server-computed steps, evidence, role-aware actions, modal/resume и zero-workspace recovery | Повторять acceptance при изменении readiness contract |
 | Company World | 🟡 | Люди, компании, кандидаты, touchpoints, evidence, human resolution | Компактные profile drawers, pagination, mission ownership |
-| Briefing | ✅ foundation | Persisted deterministic Briefing/Items, evidence, history | Включить в единый rank/queue и штабные details |
+| Briefing | ✅ foundation | Persisted deterministic Briefing/Items, evidence, history и HQ rank/queue input | Exact briefing detail и assistant citations |
 | Action decisions | ✅ foundation | Proposals, approve/reject, preview, audit, execute, receipts | Exact mission deep link и связка receipt → refreshed headquarters snapshot |
 | GitHub radar | 🟡 | Managed setup, repository scope, bounded reads, receipts | Первый реальный founder-approved read и global health projection |
 | Jira/Gmail/Drive | 🟡 | Canonical local import/list/evidence | Полный UI lifecycle setup → scope/import/read → receipt → disconnect |
 | Изменения с визита | ⛔ | Только current evidence snapshot | Persisted change cursor/checkpoint/dedupe |
 | Company assistant | ⛔ | Только synthetic demo resolver | Workspace-scoped read-only backend contract |
 | Privacy lifecycle | ⛔ | Secret/redaction foundations | Notice, scopes, disconnect, retention, export/delete rules |
-| Real command-center browser QA | ⛔ | Проверен только synthetic reference | Полный authenticated desktop pass |
+| Real command-center browser QA | ✅ | Authenticated 1280×720: HQ/onboarding, overlay, focus, overflow и console | Повторить полный pass после LC-05/LC-08 и release proof |
 
 ## Целевой backend read model
 
@@ -313,37 +313,37 @@ SourceObservation и generic relevance для будущих action types соз
 Готово, когда authenticated экран визуально работает как `/demo`, но каждый
 показанный факт приходит из текущего workspace и имеет честный статус.
 
-### LC-03 — Встроить вычисляемый onboarding
+### LC-03 — Встроить вычисляемый onboarding ✅
 
-- [ ] Добавить `GET .../onboarding` с server-computed steps, evidence,
+- [x] Добавить `GET .../onboarding` с server-computed steps, evidence,
   capabilities и `next_action`.
 - [x] Сохранить private-beta pre-workspace boundary DEC-075: `/start` по
   одноразовому invite атомарно создаёт User, Workspace, owner Membership и
   Session до входа в workspace-scoped onboarding.
-- [ ] Не вызывать workspace endpoints для zero-workspace account; показывать
+- [x] Не вызывать workspace endpoints для zero-workspace account; показывать
   честный recovery. Будущий public self-service create требует отдельного
   security/product decision и не подменяется bootstrap route.
-- [ ] Оставить пять пользовательских шагов: компания, первый источник, первое
+- [x] Оставить пять пользовательских шагов: компания, первый источник, первое
   canonical чтение/снимок, контекст карты/команды и вход в штаб.
-- [ ] Команду оставить optional для single-founder readiness.
-- [ ] Required step со state `unknown` не считается complete.
-- [ ] Required: workspace/company, хотя бы один canonical source record и
+- [x] Команду оставить optional для single-founder readiness.
+- [x] Required step со state `unknown` не считается complete.
+- [x] Required: workspace/company, хотя бы один canonical source record и
   успешно вычисленный headquarters snapshot. Team, дополнительный map context и
   первое решение — recommended; `priority=null` является допустимым calm state и
   не блокирует доступ к штабу.
-- [ ] Compact onboarding внутри headquarters и detailed onboarding endpoint
+- [x] Compact onboarding внутри headquarters и detailed onboarding endpoint
   используют один service/version; второго source of truth нет.
-- [ ] Открывать один компактный modal поверх штаба, а не отдельную админку.
-- [ ] Onboarding modal имеет приоритет над остальными overlays и не создаёт
+- [x] Открывать один компактный modal поверх штаба, а не отдельную админку.
+- [x] Onboarding modal имеет приоритет над остальными overlays и не создаёт
   drawer/modal stack.
-- [ ] Для каждого шага показывать одно действие, «что это даст», status и
+- [x] Для каждого шага показывать одно действие, «что это даст», status и
   disclosure «Подробнее».
-- [ ] Галочки вычисляет backend; пользователь не отмечает их вручную.
-- [ ] Resume после reload возвращает на первый реальный blocker.
-- [ ] После завершения modal закрывается и refetch’ит тот же штаб.
-- [ ] Owner/admin получает setup controls; member/viewer — результат и понятный
+- [x] Галочки вычисляет backend; пользователь не отмечает их вручную.
+- [x] Resume после reload возвращает на первый реальный blocker.
+- [x] После завершения modal закрывается и refetch’ит тот же штаб.
+- [x] Owner/admin получает setup controls; member/viewer — результат и понятный
   путь обратиться к администратору.
-- [ ] Добавление команды использует one-time self-setup/invite flow и не
+- [x] Добавление команды использует one-time self-setup/invite flow и не
   показывает пароль или bearer secret в общем UI.
 
 Готово, когда после получения private invite новый founder проходит обязательную
@@ -632,7 +632,7 @@ read-back/reconcile и receipt. Это не превращает assistant в au
 ## Финальный end-to-end сценарий
 
 - [ ] Founder входит и видит только свой workspace.
-- [ ] Незавершённая настройка открывает компактный computed onboarding.
+- [x] Незавершённая настройка открывает компактный computed onboarding.
 - [ ] Founder добавляет/проверяет компанию и роли команды через UI.
 - [ ] Founder подключает или импортирует первый источник через UI.
 - [ ] Явное первое чтение создаёт canonical records, evidence и no-write receipt.
@@ -657,16 +657,17 @@ read-back/reconcile и receipt. Это не превращает assistant в au
    без миграции и без нового UI. Exact confirmation digest остаётся в LC-08.
 2. **LC-02 ✅:** реальный `/dashboard` заменён минимальным command center,
    использующим только единый snapshot.
-3. **LC-03:** встроить computed onboarding и возврат в штаб.
+3. **LC-03 ✅:** computed onboarding встроен в штаб; readiness и resume
+   вычисляются тем же server snapshot.
 4. **LC-05/LC-08:** exact mission/profile drawers и существующий decision modal.
 5. **LC-07:** deterministic read-only assistant поверх того же service.
 6. **LC-04:** доказать GitHub read, затем доводить остальные радары по одному.
 7. **LC-06:** только после schema review добавить durable change boundary.
 8. **LC-09/LC-10:** privacy, observability и полный release proof.
 
-Первый следующий implementation ticket: **LC-03 — встроить вычисляемый
-onboarding в тот же authenticated контур без дублирования readiness-логики в
-браузере.**
+Первый следующий implementation ticket: **LC-05/LC-08 — exact mission/profile
+drill-down и компактный decision → receipt → refetch flow поверх того же
+snapshot без generic fallback и без ослабления human gate.**
 
 ## Следующий отдельный контур — Source Foundry (DEC-087)
 

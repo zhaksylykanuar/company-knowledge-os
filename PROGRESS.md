@@ -10,6 +10,34 @@
 
 ## ▶ СЕЙЧАС
 
+- **LC-03 Computed onboarding inside Headquarters (DEC-088): РЕАЛИЗОВАН
+  ЛОКАЛЬНО.** `HeadquartersSnapshot` теперь честно версионирован как
+  `headquarters.v2` и содержит один server-computed `onboarding.v1` из пяти
+  фиксированных шагов: компания, источник, первые canonical данные, контекст и
+  штаб. Required readiness зависит только от workspace/company, хотя бы одной
+  canonical source record и успешно вычисленного снимка штаба; source и
+  team/map/briefing/decision context рекомендованы и не блокируют single
+  founder. `unknown` и partial projection остаются unresolved, step state
+  валидируется против evidence, а browser не вычисляет readiness и не ставит
+  галочки. Новый read-only `GET .../headquarters/onboarding` срезает тот же
+  service/snapshot/version, ETag и capabilities без второго source of truth.
+  `/onboarding` для пользователя с workspace переводит в `/dashboard` с одним
+  компактным modal поверх реального штаба; zero-workspace recovery остаётся
+  отдельным и не вызывает workspace API. Modal показывает один текущий blocker,
+  benefit, evidence disclosure и одну role-aware action, имеет приоритет над
+  drawer/assistant, сохраняет focus/scroll/inert contract, resume после reload и
+  закрывается с refetch. Query intent очищается и не оживает при смене workspace;
+  browser-side fan-out и прежний шестишаговый journey удалены. Provider calls,
+  LLM, migration, persistence и external writes не добавлены. Проверено
+  2026-07-16: frontend **378/378 passed**, typecheck, lint и production build
+  (**19 routes**); backend **706 passed / 1 external deprecation warning**,
+  Ruff. Authenticated browser QA на 1280×720 подтвердил auto-open первого
+  server blocker, один modal без page overflow, expanded evidence, scroll lock,
+  shell-wide inert/aria-hidden, focus trap/restore, Escape, контрастный
+  focus-ring, очистку route intent и resume того же blocker после reload;
+  console warnings/errors — 0. Два независимых contract/security/UX review дали
+  **SHIP** без P0/P1/P2. Следующая задача: **LC-05/LC-08 — exact
+  mission/profile drill-down и компактный decision → receipt → refetch flow.**
 - **LC-UI-02 Authenticated Living Headquarters: РЕАЛИЗОВАН ЛОКАЛЬНО.**
   `/dashboard` больше не собирает Today/Living-HQ состояние из нескольких
   browser reads и не ранжирует миссии на клиенте. Новый
@@ -33,8 +61,8 @@
   один экран без vertical/horizontal overflow, реальные
   empty/source/evidence drawers, shell-wide inert/aria-hidden, focus restore и
   отсутствие console warnings/errors. Повторный независимый UX/a11y-аудит
-  подтвердил **SHIP** без оставшихся P1/P2. Следующая задача: **LC-03 — встроить
-  server-computed onboarding в этот же command loop.**
+  подтвердил **SHIP** без оставшихся P1/P2. Последующий LC-03 уже завершён выше;
+  текущая следующая задача — **LC-05/LC-08 exact drill-down и decision flow.**
 - **LC-BACKEND-01 Unified Headquarters read model (DEC-086): РЕАЛИЗОВАН
   ЛОКАЛЬНО.** Новый workspace-scoped
   `GET /api/v1/workspaces/{workspace_id}/headquarters` собирает Company
@@ -65,8 +93,8 @@
   warning**, Ruff, Alembic upgrade/schema check и tracked-secret scan; frontend
   — **362/362 passed**, typecheck, lint и production build (**19 routes**).
   Повторный независимый security/contract аудит не нашёл P0/P1/P2 замечаний.
-  Следующая задача: **LC-02 — подключить authenticated `/dashboard` к этому
-  snapshot без synthetic fixtures и browser ranking.**
+  Последующие LC-02/LC-03 уже завершены выше; текущая следующая задача —
+  **LC-05/LC-08 exact drill-down и decision flow.**
 - **ARCH-SOURCE-01 Source Foundry direction (DEC-087): УТВЕРЖДЕНО, КОД
   ОТЛОЖЕН.** Вместо отдельного сервера на каждый источник принят один модульный
   intake/promotion plane: allowlisted adapters → immutable raw envelope и
@@ -74,7 +102,7 @@
   entity/relationship resolution → atomic canonical promotion с lineage и
   receipt. Product читает только promoted canonical state; staging не является
   второй базой истины. Первый будущий gate SF-00 (контракты/threat model) идёт
-  после приёмки реального штаба и не блокирует LC-02.
+  после приёмки реального штаба; он не блокировал уже завершённые LC-02/LC-03.
 - **UX-DEMO-02 Minimal Living Command Center (DEC-085): РЕАЛИЗОВАН ЛОКАЛЬНО.**
   `/demo` больше не является презентацией из 12 экранов. Один desktop-штаб
   показывает один главный приоритет, три кликабельных показателя, максимум два

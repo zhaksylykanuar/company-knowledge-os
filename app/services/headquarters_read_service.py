@@ -59,8 +59,10 @@ from app.services.company_map_read_service import build_workspace_company_map
 from app.services.identity_service import role_allows
 
 
-HEADQUARTERS_CONTRACT_VERSION = "headquarters.v1"
+HEADQUARTERS_CONTRACT_VERSION = "headquarters.v2"
 HEADQUARTERS_RANKING_VERSION = "headquarters-ranking.v1"
+HEADQUARTERS_ONBOARDING_CONTRACT_VERSION = "onboarding.v1"
+HEADQUARTERS_ONBOARDING_READINESS_VERSION = "onboarding-readiness.v1"
 HEADQUARTERS_SOURCE_HEALTH_VERSION = "source-health.v1"
 HEADQUARTERS_CORRELATION_VERSION = "canonical-reference.v1"
 
@@ -300,9 +302,12 @@ async def _build_headquarters_snapshot(
 
     onboarding = _build_onboarding(
         member_count=member_count,
+        configured_source_count=sources["configured_count"],
         canonical_source_record_count=canonical_source_record_count,
         briefing_count=decision_rows.briefing_count,
         decided_proposal_count=decision_rows.decided_proposal_count,
+        company_world=company_world,
+        company_world_status=company_world_status,
         capabilities=capabilities,
     )
     mission_candidates = _build_mission_candidates(
@@ -1580,38 +1585,94 @@ def _build_changes(ranked: list[MissionCandidate]) -> dict[str, Any]:
 def _build_onboarding(
     *,
     member_count: int,
-    canonical_source_record_count: int,
+    configured_source_count: int | None,
+    canonical_source_record_count: int | None,
     briefing_count: int,
     decided_proposal_count: int,
+    company_world: Mapping[str, Any] | None,
+    company_world_status: str,
     capabilities: Mapping[str, bool],
 ) -> dict[str, Any]:
     can_manage_team = bool(capabilities["can_manage_team"])
     can_manage_source = bool(capabilities["can_manage_source"])
-    can_generate = bool(capabilities["can_generate_briefing"])
+    can_import_source = bool(capabilities["can_import_source"])
+    company_map_summary = (
+        company_world.get("summary")
+        if company_world_status == "complete" and isinstance(company_world, Mapping)
+        else None
+    )
+    company_map_people = _onboarding_summary_count(
+        company_map_summary,
+        "external_contacts_in_window",
+        "confirmed_external_people",
+    )
+    company_map_organizations = _onboarding_summary_count(
+        company_map_summary,
+        "organizations_in_window",
+        "confirmed_organizations",
+    )
+    company_map_touchpoints = _onboarding_summary_count(
+        company_map_summary,
+        "touchpoints_in_window",
+    )
+    context_known_complete = any(
+        (
+            member_count > 1,
+            briefing_count > 0,
+            decided_proposal_count > 0,
+            (company_map_people or 0) > 0,
+            (company_map_organizations or 0) > 0,
+            (company_map_touchpoints or 0) > 0,
+        )
+    )
+    if context_known_complete:
+        context_state = "complete"
+    elif company_world_status == "complete":
+        context_state = "pending"
+    else:
+        context_state = "unknown"
+
+    canonical_data_state = _onboarding_count_state(canonical_source_record_count)
+    source_state = _onboarding_count_state(configured_source_count)
     steps = [
         {
-            "key": "workspace",
+            "key": "company",
             "requirement": "required",
             "label": "Компания создана",
-            "complete": True,
+            "state": "complete",
             "benefit": "Все данные и решения изолированы внутри вашей компании.",
+            "evidence": [
+                _onboarding_fact(
+                    key="workspace_profile",
+                    label="Профиль компании",
+                    value=1,
+                )
+            ],
             "action": _action(
                 kind="view_workspace",
-                label="Готово",
+                label="Открыть компанию",
                 target="/dashboard",
-                enabled=False,
-                disabled_reason="Шаг уже завершён.",
+                enabled=True,
             ),
         },
         {
-            "key": "source_data",
-            "requirement": "required",
-            "label": "Есть данные источника",
-            "complete": canonical_source_record_count > 0,
-            "benefit": "Штаб сможет показывать реальные сигналы, людей и работу.",
+            "key": "source",
+            "requirement": "recommended",
+            "label": "Источник подключён",
+            "state": source_state,
+            "benefit": "Подключение позволит регулярно обновлять картину компании.",
+            "evidence": [
+                _onboarding_fact(
+                    key="configured_sources",
+                    label="Подключённые источники",
+                    value=configured_source_count,
+                )
+            ],
             "action": _action(
                 kind="manage_source",
-                label="Открыть радары",
+                label=(
+                    "Управлять источниками" if source_state == "complete" else "Подключить источник"
+                ),
                 target="/connectors",
                 enabled=can_manage_source,
                 disabled_reason=(
@@ -1622,76 +1683,157 @@ def _build_onboarding(
             ),
         },
         {
-            "key": "headquarters",
+            "key": "canonical_data",
             "requirement": "required",
-            "label": "Первый снимок штаба рассчитан",
-            "complete": True,
-            "benefit": "FounderOS уже может собрать согласованный снимок состояния компании.",
+            "label": "Первые данные приняты",
+            "state": canonical_data_state,
+            "benefit": "Штаб сможет показывать реальные сигналы, людей и работу.",
+            "evidence": [
+                _onboarding_fact(
+                    key="canonical_records",
+                    label="Канонические записи",
+                    value=canonical_source_record_count,
+                )
+            ],
             "action": _action(
-                kind="view_headquarters",
-                label="Готово",
-                target="/dashboard",
-                enabled=False,
-                disabled_reason="Шаг уже завершён.",
-            ),
-        },
-        {
-            "key": "team",
-            "requirement": "recommended",
-            "label": "Добавлен ещё один участник команды",
-            "complete": member_count > 1,
-            "benefit": "Роли определяют, кто читает данные и принимает решения.",
-            "action": _action(
-                kind="manage_team",
-                label="Настроить команду",
-                target="/settings",
-                enabled=can_manage_team,
-                disabled_reason=(
-                    None if can_manage_team else "Команду настраивает администратор или владелец."
+                kind=(
+                    "view_canonical_data"
+                    if canonical_data_state == "complete"
+                    else "import_source_data"
                 ),
-            ),
-        },
-        {
-            "key": "briefing",
-            "requirement": "recommended",
-            "label": "Первый брифинг готов",
-            "complete": briefing_count > 0,
-            "benefit": "FounderOS соберёт данные в короткую проверяемую картину.",
-            "action": _action(
-                kind="generate_briefing",
-                label="Создать брифинг",
-                target="/briefings",
-                enabled=can_generate,
-                disabled_reason=(
-                    None if can_generate else "Для генерации нужна роль участника или выше."
+                label=(
+                    "Открыть данные"
+                    if canonical_data_state == "complete"
+                    else "Получить первые данные"
                 ),
-            ),
-        },
-        {
-            "key": "first_decision",
-            "requirement": "recommended",
-            "label": "Первое решение принято",
-            "complete": decided_proposal_count > 0,
-            "benefit": "Штаб покажет полный цикл от сигнала до решения человека.",
-            "action": _action(
-                kind="review_proposals",
-                label="Открыть решения",
-                target="/actions?status=proposed",
-                enabled=bool(capabilities["can_create_proposal"]),
+                target=("/company-brain" if canonical_data_state == "complete" else "/connectors"),
+                enabled=(canonical_data_state == "complete" or can_import_source),
                 disabled_reason=(
                     None
-                    if capabilities["can_create_proposal"]
-                    else "Для работы с решениями нужна роль участника или выше."
+                    if canonical_data_state == "complete" or can_import_source
+                    else "Импорт запускает администратор или владелец."
                 ),
+            ),
+        },
+        {
+            "key": "context",
+            "requirement": "recommended",
+            "label": "Контекст компании наполнен",
+            "state": context_state,
+            "benefit": "Команда, карта, брифинги и решения делают рекомендации точнее.",
+            "evidence": [
+                _onboarding_fact(
+                    key="team_members",
+                    label="Участники команды",
+                    value=member_count,
+                    complete_at=2,
+                ),
+                _onboarding_fact(
+                    key="company_map_people",
+                    label="Люди на карте компании",
+                    value=company_map_people,
+                ),
+                _onboarding_fact(
+                    key="company_map_organizations",
+                    label="Организации на карте компании",
+                    value=company_map_organizations,
+                ),
+                _onboarding_fact(
+                    key="company_map_touchpoints",
+                    label="Касания на карте компании",
+                    value=company_map_touchpoints,
+                ),
+                _onboarding_fact(
+                    key="briefings",
+                    label="Брифинги",
+                    value=briefing_count,
+                ),
+                _onboarding_fact(
+                    key="decisions",
+                    label="Принятые решения",
+                    value=decided_proposal_count,
+                ),
+            ],
+            "action": _action(
+                kind="manage_team" if can_manage_team else "view_company_map",
+                label="Настроить команду" if can_manage_team else "Открыть карту компании",
+                target="/settings" if can_manage_team else "/company-brain",
+                enabled=True,
+            ),
+        },
+        {
+            "key": "headquarters",
+            "requirement": "required",
+            "label": "Штаб готов",
+            "state": "complete",
+            "benefit": "FounderOS уже собрал согласованный снимок состояния компании.",
+            "evidence": [
+                _onboarding_fact(
+                    key="headquarters_snapshot",
+                    label="Успешный снимок штаба",
+                    value=1,
+                )
+            ],
+            "action": _action(
+                kind="view_headquarters",
+                label="Войти в штаб",
+                target="/dashboard",
+                enabled=True,
             ),
         },
     ]
     required_steps = [step for step in steps if step["requirement"] == "required"]
-    next_step = next((step for step in required_steps if not step["complete"]), None)
+    next_step = next(
+        (step for step in required_steps if step["state"] != "complete"),
+        None,
+    )
     return {
-        "ready": all(step["complete"] for step in required_steps),
+        "contract_version": HEADQUARTERS_ONBOARDING_CONTRACT_VERSION,
+        "readiness_version": HEADQUARTERS_ONBOARDING_READINESS_VERSION,
+        "ready": all(step["state"] == "complete" for step in required_steps),
+        "completed_count": sum(step["state"] == "complete" for step in steps),
+        "total_count": len(steps),
+        "completed_required": sum(step["state"] == "complete" for step in required_steps),
+        "required_total": len(required_steps),
+        "current_step_key": next_step["key"] if next_step is not None else None,
         "steps": steps,
         "next_action": next_step["action"] if next_step is not None else None,
+    }
+
+
+def _onboarding_summary_count(
+    summary: Any,
+    *keys: str,
+) -> int | None:
+    if not isinstance(summary, Mapping):
+        return None
+    values = [summary.get(key) for key in keys]
+    if not all(
+        isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in values
+    ):
+        return None
+    return sum(values)
+
+
+def _onboarding_count_state(value: int | None, *, complete_at: int = 1) -> str:
+    if value is None:
+        return "unknown"
+    return "complete" if value >= complete_at else "pending"
+
+
+def _onboarding_fact(
+    *,
+    key: str,
+    label: str,
+    value: int | None,
+    complete_at: int = 1,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "state": _onboarding_count_state(value, complete_at=complete_at),
+        "value": value,
+        "precision": "exact" if value is not None else "unavailable",
     }
 
 

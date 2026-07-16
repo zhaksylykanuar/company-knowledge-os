@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildWorkspaceHeadquartersOnboardingPath,
   buildWorkspaceHeadquartersPath,
-  fetchHeadquarters
+  fetchHeadquarters,
+  fetchHeadquartersOnboarding
 } from "../lib/api";
 import {
   HEADQUARTERS_PULSE_KEYS,
@@ -35,7 +37,7 @@ const VALID_EVIDENCE: HeadquartersEvidenceRef = {
 };
 
 const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
-  contract_version: "headquarters.v1",
+  contract_version: "headquarters.v2",
   ranking_version: "headquarters-ranking.v1",
   snapshot: {
     id: "hqs1_test",
@@ -75,22 +77,98 @@ const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
     role: "owner"
   },
   onboarding: {
+    contract_version: "onboarding.v1",
+    readiness_version: "onboarding-readiness.v1",
     ready: true,
+    completed_count: 5,
+    total_count: 5,
+    completed_required: 3,
+    required_total: 3,
+    current_step_key: null,
     steps: [
       {
-        key: "headquarters",
+        key: "company",
+        state: "complete",
         requirement: "required",
-        label: "Первый снимок штаба рассчитан",
-        complete: true,
-        benefit: "Компания уже видна как единая система.",
+        label: "Компания создана",
+        benefit: "Данные изолированы внутри компании.",
+        evidence: [
+          {
+            key: "workspace",
+            label: "Компания доступна",
+            state: "complete",
+            value: 1,
+            precision: "exact"
+          }
+        ],
         action: ENABLED_ACTION
       },
       {
-        key: "first_decision",
+        key: "source",
+        state: "complete",
         requirement: "recommended",
-        label: "Первое решение принято",
-        complete: true,
-        benefit: "Проверен полный цикл решения.",
+        label: "Первый источник выбран",
+        benefit: "Понятно, откуда поступают данные.",
+        evidence: [
+          {
+            key: "configured_sources",
+            label: "Настроенные источники",
+            state: "complete",
+            value: 1,
+            precision: "exact"
+          }
+        ],
+        action: ENABLED_ACTION
+      },
+      {
+        key: "canonical_data",
+        state: "complete",
+        requirement: "required",
+        label: "Первые данные подтверждены",
+        benefit: "Штаб видит канонические факты.",
+        evidence: [
+          {
+            key: "canonical_records",
+            label: "Канонические записи",
+            state: "complete",
+            value: 1,
+            precision: "exact"
+          }
+        ],
+        action: ENABLED_ACTION
+      },
+      {
+        key: "context",
+        state: "complete",
+        requirement: "recommended",
+        label: "Контекст компании появился",
+        benefit: "Карта, команда и решения делают картину полезнее.",
+        evidence: [
+          {
+            key: "context_signals",
+            label: "Элементы контекста",
+            state: "complete",
+            value: 1,
+            precision: "exact"
+          }
+        ],
+        action: ENABLED_ACTION
+      },
+      {
+        key: "headquarters",
+        state: "complete",
+        requirement: "required",
+        label: "Первый снимок штаба рассчитан",
+        benefit: "Компания уже видна как единая система.",
+        evidence: [
+          {
+            key: "snapshot",
+            label: "Снимок штаба",
+            state: "complete",
+            value: 1,
+            precision: "exact"
+          }
+        ],
         action: ENABLED_ACTION
       }
     ],
@@ -163,10 +241,23 @@ const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
   }
 };
 
-test("exposes the fixed v1 headquarters path and pulse order", () => {
+const VALID_ONBOARDING_DETAIL = {
+  contract_version: VALID_HEADQUARTERS_FIXTURE.contract_version,
+  snapshot: VALID_HEADQUARTERS_FIXTURE.snapshot,
+  workspace: VALID_HEADQUARTERS_FIXTURE.workspace,
+  onboarding: VALID_HEADQUARTERS_FIXTURE.onboarding,
+  capabilities: VALID_HEADQUARTERS_FIXTURE.capabilities,
+  boundary: VALID_HEADQUARTERS_FIXTURE.boundary
+};
+
+test("exposes the fixed v2 headquarters paths and pulse order", () => {
   assert.equal(
     buildWorkspaceHeadquartersPath("workspace/with slash"),
     "/api/v1/workspaces/workspace%2Fwith%20slash/headquarters"
+  );
+  assert.equal(
+    buildWorkspaceHeadquartersOnboardingPath("workspace/with slash"),
+    "/api/v1/workspaces/workspace%2Fwith%20slash/headquarters/onboarding"
   );
   assert.deepEqual(HEADQUARTERS_PULSE_KEYS, [
     "waiting_decisions",
@@ -199,6 +290,98 @@ test("fetches and validates the full headquarters contract", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("fetches the detailed onboarding projection from the versioned headquarters path", async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  globalThis.fetch = mockHeadquartersResponse(VALID_ONBOARDING_DETAIL, (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/headquarters/onboarding"
+    );
+    assert.equal(init?.credentials, "include");
+    assert.equal(init?.signal, controller.signal);
+  });
+
+  try {
+    const payload = await fetchHeadquartersOnboarding("workspace-123", {
+      signal: controller.signal
+    });
+    assert.deepEqual(payload, VALID_ONBOARDING_DETAIL);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("fails closed when a required onboarding step is unknown but ready is claimed", () => {
+  const malformed = structuredClone(VALID_HEADQUARTERS_FIXTURE);
+  const canonical = malformed.onboarding.steps[2];
+  assert.equal(canonical?.key, "canonical_data");
+  if (!canonical) return;
+  canonical.state = "unknown";
+  canonical.evidence[0] = {
+    ...canonical.evidence[0]!,
+    state: "unknown",
+    value: null,
+    precision: "unavailable"
+  };
+
+  assert.throws(
+    () => parseHeadquartersSnapshotResponse(malformed),
+    contractFailure(/onboarding\.completed_count: expected must match completed steps/)
+  );
+});
+
+test("rejects unavailable onboarding evidence that claims a known state", () => {
+  const malformed = structuredClone(VALID_HEADQUARTERS_FIXTURE);
+  const evidence = malformed.onboarding.steps[3]?.evidence[0];
+  assert.ok(evidence);
+  evidence.state = "pending";
+  evidence.value = null;
+  evidence.precision = "unavailable";
+
+  assert.throws(
+    () => parseHeadquartersSnapshotResponse(malformed),
+    contractFailure(/unavailable evidence must be unknown without a value/)
+  );
+});
+
+test("rejects a completed onboarding step backed only by unknown evidence", () => {
+  const malformed = structuredClone(VALID_HEADQUARTERS_FIXTURE);
+  const canonical = malformed.onboarding.steps[2];
+  assert.equal(canonical?.key, "canonical_data");
+  if (!canonical) return;
+  canonical.evidence[0] = {
+    ...canonical.evidence[0]!,
+    state: "unknown",
+    value: null,
+    precision: "unavailable"
+  };
+
+  assert.throws(
+    () => parseHeadquartersSnapshotResponse(malformed),
+    contractFailure(/onboarding\.steps\[2\]\.state: expected must match onboarding evidence/)
+  );
+});
+
+test("rejects reordered or incomplete onboarding milestones", () => {
+  const reordered = structuredClone(VALID_HEADQUARTERS_FIXTURE);
+  [reordered.onboarding.steps[0], reordered.onboarding.steps[1]] = [
+    reordered.onboarding.steps[1],
+    reordered.onboarding.steps[0]
+  ];
+  const missing = structuredClone(VALID_HEADQUARTERS_FIXTURE);
+  missing.onboarding.steps.pop();
+
+  assert.throws(
+    () => parseHeadquartersSnapshotResponse(reordered),
+    contractFailure(/onboarding\.steps\[0\]\.key: expected company/)
+  );
+  assert.throws(
+    () => parseHeadquartersSnapshotResponse(missing),
+    contractFailure(/onboarding\.steps: expected exactly five ordered onboarding steps/)
+  );
 });
 
 test("rejects a headquarters payload with a missing contract section", async () => {

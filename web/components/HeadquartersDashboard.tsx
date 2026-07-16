@@ -12,7 +12,6 @@ import {
 import { ApiRequestError, fetchHeadquarters } from "../lib/api";
 import {
   HeadquartersContractError,
-  type HeadquartersAction,
   type HeadquartersEvidenceRef,
   type HeadquartersMission,
   type HeadquartersPrecision,
@@ -21,6 +20,8 @@ import {
   type HeadquartersSourceHealth
 } from "../lib/headquarters";
 import { useSession } from "../lib/session";
+import { HeadquartersActionControl } from "./HeadquartersActionControl";
+import { HeadquartersOnboardingModal } from "./HeadquartersOnboardingModal";
 import { OverlayShell } from "./OverlayShell";
 import { SourceLink } from "./SourceLink";
 
@@ -56,10 +57,11 @@ type HeadquartersLoadAction =
       workspaceId: string;
     };
 
-type HeadquartersOverlay =
+export type HeadquartersOverlay =
   | { kind: "assistant" }
   | { kind: "coverage" }
   | { kind: "mission"; mission: HeadquartersMission; position: "priority" | "queue" }
+  | { kind: "onboarding" }
   | { kind: "pulse"; metric: HeadquartersPulseMetric }
   | { kind: "sources" };
 
@@ -110,6 +112,51 @@ export function reduceHeadquartersLoadState(
   };
 }
 
+export function onboardingIntentFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get("onboarding") === "1";
+}
+
+type HeadquartersOnboardingIntentEvent =
+  | { search: string; type: "location" }
+  | { type: "dismiss" }
+  | { type: "workspace_changed" };
+
+export function reduceHeadquartersOnboardingIntent(
+  state: boolean,
+  event: HeadquartersOnboardingIntentEvent
+): boolean {
+  if (event.type === "location") {
+    return onboardingIntentFromSearch(event.search);
+  }
+  if (event.type === "dismiss") {
+    return false;
+  }
+  return state;
+}
+
+export function resolveVisibleHeadquartersOverlay({
+  dismissedOnboardingSnapshotId,
+  onboardingIntent,
+  requestedOverlay,
+  snapshot
+}: {
+  dismissedOnboardingSnapshotId: string | null;
+  onboardingIntent: boolean;
+  requestedOverlay: HeadquartersOverlay | null;
+  snapshot: HeadquartersSnapshotResponse;
+}): HeadquartersOverlay | null {
+  if (requestedOverlay?.kind === "onboarding") {
+    return requestedOverlay;
+  }
+  if (
+    (!snapshot.onboarding.ready || onboardingIntent) &&
+    dismissedOnboardingSnapshotId !== snapshot.snapshot.id
+  ) {
+    return { kind: "onboarding" };
+  }
+  return requestedOverlay;
+}
+
 export function HeadquartersDashboard() {
   const session = useSession();
   const workspaceId = session?.workspaceId ?? null;
@@ -121,6 +168,26 @@ export function HeadquartersDashboard() {
   );
   const requestIdRef = useRef(0);
   const [reloadKey, setReloadKey] = useState(0);
+  const [onboardingIntent, dispatchOnboardingIntent] = useReducer(
+    reduceHeadquartersOnboardingIntent,
+    false
+  );
+
+  useEffect(() => {
+    function syncOnboardingIntent() {
+      dispatchOnboardingIntent({
+        search: window.location.search,
+        type: "location"
+      });
+    }
+    syncOnboardingIntent();
+    window.addEventListener("popstate", syncOnboardingIntent);
+    return () => window.removeEventListener("popstate", syncOnboardingIntent);
+  }, []);
+
+  useEffect(() => {
+    dispatchOnboardingIntent({ type: "workspace_changed" });
+  }, [workspaceId]);
 
   useEffect(() => {
     const requestId = ++requestIdRef.current;
@@ -169,6 +236,10 @@ export function HeadquartersDashboard() {
   return (
     <HeadquartersDashboardView
       onRetry={() => setReloadKey((value) => value + 1)}
+      onConsumeOnboardingIntent={() =>
+        dispatchOnboardingIntent({ type: "dismiss" })
+      }
+      onboardingIntent={onboardingIntent}
       snapshot={visibleSnapshot}
       status={visibleStatus}
       workspaceName={workspaceName}
@@ -177,21 +248,37 @@ export function HeadquartersDashboard() {
 }
 
 export function HeadquartersDashboardView({
+  onboardingIntent = false,
+  onConsumeOnboardingIntent,
   onRetry,
   snapshot,
   status,
   workspaceName = null
 }: {
+  onboardingIntent?: boolean;
+  onConsumeOnboardingIntent?: () => void;
   onRetry?: () => void;
   snapshot: HeadquartersSnapshotResponse | null;
   status: HeadquartersDashboardStatus;
   workspaceName?: string | null;
 }) {
-  const [overlay, setOverlay] = useState<HeadquartersOverlay | null>(null);
+  const [requestedOverlay, setRequestedOverlay] =
+    useState<HeadquartersOverlay | null>(null);
+  const [dismissedOnboardingSnapshotId, setDismissedOnboardingSnapshotId] =
+    useState<string | null>(null);
   const backgroundRef = useRef<HTMLDivElement>(null);
+  const visibleOverlay = snapshot
+    ? resolveVisibleHeadquartersOverlay({
+        dismissedOnboardingSnapshotId,
+        onboardingIntent,
+        requestedOverlay,
+        snapshot
+      })
+    : null;
 
   useEffect(() => {
-    setOverlay(null);
+    setRequestedOverlay(null);
+    setDismissedOnboardingSnapshotId(null);
   }, [snapshot?.workspace.id]);
 
   useEffect(() => {
@@ -199,16 +286,17 @@ export function HeadquartersDashboardView({
       if (
         !(event.metaKey || event.ctrlKey) ||
         event.key.toLowerCase() !== "k" ||
-        isEditableTarget(event.target)
+        isEditableTarget(event.target) ||
+        visibleOverlay?.kind === "onboarding"
       ) {
         return;
       }
       event.preventDefault();
-      setOverlay({ kind: "assistant" });
+      setRequestedOverlay({ kind: "assistant" });
     }
     window.addEventListener("keydown", openAssistant);
     return () => window.removeEventListener("keydown", openAssistant);
-  }, []);
+  }, [visibleOverlay?.kind]);
 
   if (status !== "ready" || snapshot === null) {
     return (
@@ -218,6 +306,21 @@ export function HeadquartersDashboardView({
         workspaceName={workspaceName}
       />
     );
+  }
+  const snapshotId = snapshot.snapshot.id;
+
+  function closeVisibleOverlay() {
+    if (visibleOverlay?.kind === "onboarding") {
+      setDismissedOnboardingSnapshotId(snapshotId);
+      onConsumeOnboardingIntent?.();
+      clearOnboardingIntentFromLocation();
+    }
+    setRequestedOverlay(null);
+  }
+
+  function finishOnboarding() {
+    closeVisibleOverlay();
+    onRetry?.();
   }
 
   return (
@@ -232,9 +335,12 @@ export function HeadquartersDashboardView({
             <div className="headquarters-intro-meta">
               <p>Один подтверждённый ход — затем вся картина по запросу.</p>
               <HeadquartersControls
-                onOpenAssistant={() => setOverlay({ kind: "assistant" })}
-                onOpenCoverage={() => setOverlay({ kind: "coverage" })}
-                onOpenSources={() => setOverlay({ kind: "sources" })}
+                onOpenAssistant={() => setRequestedOverlay({ kind: "assistant" })}
+                onOpenCoverage={() => setRequestedOverlay({ kind: "coverage" })}
+                onOpenOnboarding={() =>
+                  setRequestedOverlay({ kind: "onboarding" })
+                }
+                onOpenSources={() => setRequestedOverlay({ kind: "sources" })}
                 snapshot={snapshot}
               />
             </div>
@@ -242,41 +348,58 @@ export function HeadquartersDashboardView({
 
           <PriorityStage
             onOpen={(mission) =>
-              setOverlay({ kind: "mission", mission, position: "priority" })
+              setRequestedOverlay({
+                kind: "mission",
+                mission,
+                position: "priority"
+              })
             }
             snapshot={snapshot}
           />
 
           <PulseRow
             metrics={snapshot.pulse}
-            onOpen={(metric) => setOverlay({ kind: "pulse", metric })}
+            onOpen={(metric) => setRequestedOverlay({ kind: "pulse", metric })}
           />
 
           <div className="headquarters-lower-deck">
             <MissionQueue
               missions={snapshot.queue}
               onOpen={(mission) =>
-                setOverlay({ kind: "mission", mission, position: "queue" })
+                setRequestedOverlay({
+                  kind: "mission",
+                  mission,
+                  position: "queue"
+                })
               }
             />
             <CurrentSignals snapshot={snapshot} />
           </div>
 
           <TruthStrip
-            onOpenCoverage={() => setOverlay({ kind: "coverage" })}
+            onOpenCoverage={() => setRequestedOverlay({ kind: "coverage" })}
             onRetry={onRetry}
             snapshot={snapshot}
           />
         </div>
       </div>
 
-      {overlay ? (
+      {visibleOverlay?.kind === "onboarding" ? (
+        <HeadquartersOnboardingModal
+          backgroundRef={backgroundRef}
+          key={`onboarding:${snapshot.snapshot.id}`}
+          onClose={closeVisibleOverlay}
+          onFinish={finishOnboarding}
+          onRetry={onRetry}
+          snapshot={snapshot}
+        />
+      ) : visibleOverlay ? (
         <HeadquartersDrawer
           backgroundRef={backgroundRef}
-          key={overlayIdentity(overlay)}
-          onClose={() => setOverlay(null)}
-          onOpen={setOverlay}
-          overlay={overlay}
+          key={overlayIdentity(visibleOverlay)}
+          onClose={closeVisibleOverlay}
+          onOpen={setRequestedOverlay}
+          overlay={visibleOverlay}
           snapshot={snapshot}
         />
       ) : null}
@@ -287,11 +410,13 @@ export function HeadquartersDashboardView({
 function HeadquartersControls({
   onOpenAssistant,
   onOpenCoverage,
+  onOpenOnboarding,
   onOpenSources,
   snapshot
 }: {
   onOpenAssistant: () => void;
   onOpenCoverage: () => void;
+  onOpenOnboarding: () => void;
   onOpenSources: () => void;
   snapshot: HeadquartersSnapshotResponse;
 }) {
@@ -304,6 +429,23 @@ function HeadquartersControls({
 
   return (
     <div className="headquarters-command-actions">
+      {!snapshot.onboarding.ready ? (
+        <button
+          aria-haspopup="dialog"
+          className="headquarters-onboarding-launcher"
+          onClick={onOpenOnboarding}
+          type="button"
+        >
+          <span aria-hidden="true">◌</span>
+          <span>
+            <strong>
+              Настройка {snapshot.onboarding.completed_required}/
+              {snapshot.onboarding.required_total}
+            </strong>
+            <small>Продолжить запуск</small>
+          </span>
+        </button>
+      ) : null}
       {snapshot.snapshot.partial ? (
         <button
           aria-haspopup="dialog"
@@ -367,7 +509,7 @@ function PriorityStage({
           <p>Штаб продолжает наблюдать за доступным снимком и ничего не придумывает.</p>
         </div>
         {snapshot.onboarding.next_action ? (
-          <ActionControl action={snapshot.onboarding.next_action} />
+          <HeadquartersActionControl action={snapshot.onboarding.next_action} />
         ) : null}
       </article>
     );
@@ -394,7 +536,7 @@ function PriorityStage({
         <p>{mission.summary}</p>
       </div>
       <div className="headquarters-priority-actions">
-        <ActionControl action={mission.action} />
+        <HeadquartersActionControl action={mission.action} />
         <button
           className="headquarters-why-action"
           onClick={() => onOpen(mission)}
@@ -643,7 +785,7 @@ function MissionDrawer({
         ))}
       </dl>
       <EvidenceList evidence={mission.evidence_refs} />
-      <ActionControl action={mission.action} />
+      <HeadquartersActionControl action={mission.action} />
       {!mission.action.enabled && mission.action.disabled_reason ? (
         <p className="headquarters-disabled-reason">{mission.action.disabled_reason}</p>
       ) : null}
@@ -663,7 +805,7 @@ function PulseDrawer({ metric }: { metric: HeadquartersPulseMetric }) {
           ? metric.empty_state
           : "Показатель рассчитан сервером из текущего согласованного снимка."}
       </p>
-      <ActionControl action={metric.action} />
+      <HeadquartersActionControl action={metric.action} />
       {!metric.action.enabled && metric.action.disabled_reason ? (
         <p className="headquarters-disabled-reason">{metric.action.disabled_reason}</p>
       ) : null}
@@ -707,7 +849,7 @@ function SourceHealthCard({ source }: { source: HeadquartersSourceHealth }) {
         </p>
       ) : null}
       {source.blocker ? <p>{source.blocker}</p> : null}
-      <ActionControl action={source.next_action} />
+      <HeadquartersActionControl action={source.next_action} />
     </article>
   );
 }
@@ -792,26 +934,6 @@ function EvidenceList({ evidence }: { evidence: HeadquartersEvidenceRef[] }) {
         <p>Доступно только агрегатное основание; конкретные факты не утверждаются.</p>
       )}
     </section>
-  );
-}
-
-function ActionControl({ action }: { action: HeadquartersAction }) {
-  if (action.enabled && action.target) {
-    return (
-      <Link className="headquarters-primary-action" href={action.target}>
-        <span>{action.label}</span><span aria-hidden="true">→</span>
-      </Link>
-    );
-  }
-  return (
-    <button
-      className="headquarters-primary-action"
-      disabled
-      title={action.disabled_reason ?? undefined}
-      type="button"
-    >
-      <span>{action.label}</span><span aria-hidden="true">—</span>
-    </button>
   );
 }
 
@@ -902,6 +1024,7 @@ function stateContent(status: Exclude<HeadquartersDashboardStatus, "ready">) {
 function overlayTitle(overlay: HeadquartersOverlay): string {
   if (overlay.kind === "assistant") return "Спросить FounderOS";
   if (overlay.kind === "coverage") return "Как собран снимок";
+  if (overlay.kind === "onboarding") return "Запуск компании";
   if (overlay.kind === "sources") return "Радары компании";
   if (overlay.kind === "pulse") return overlay.metric.label;
   return overlay.mission.title;
@@ -915,6 +1038,18 @@ function overlayIdentity(overlay: HeadquartersOverlay): string {
     return `${overlay.kind}:${overlay.metric.key}`;
   }
   return overlay.kind;
+}
+
+function clearOnboardingIntentFromLocation(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("onboarding")) {
+    return;
+  }
+  url.searchParams.delete("onboarding");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function formatMetric(value: number | null, precision: HeadquartersPrecision): string {

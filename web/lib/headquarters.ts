@@ -11,6 +11,14 @@ export const HEADQUARTERS_PULSE_KEYS = [
   "pending_relationships"
 ] as const;
 
+export const HEADQUARTERS_ONBOARDING_STEP_KEYS = [
+  "company",
+  "source",
+  "canonical_data",
+  "context",
+  "headquarters"
+] as const;
+
 const HEADQUARTERS_COVERAGE_KEYS = [
   "identity",
   "sources",
@@ -40,6 +48,9 @@ export type HeadquartersPulseKey =
 export type HeadquartersPrecision = "at_least" | "exact" | "unavailable";
 export type HeadquartersRole = "admin" | "member" | "owner" | "viewer";
 export type HeadquartersSourceKey = "drive" | "github" | "gmail" | "jira";
+export type HeadquartersOnboardingState = "complete" | "pending" | "unknown";
+export type HeadquartersOnboardingStepKey =
+  (typeof HEADQUARTERS_ONBOARDING_STEP_KEYS)[number];
 
 export type HeadquartersAction = {
   kind: string;
@@ -180,8 +191,45 @@ export type HeadquartersCapabilitySet = {
   can_acknowledge_changes: boolean;
 };
 
+export type HeadquartersOnboardingEvidence = {
+  key: string;
+  label: string;
+  state: HeadquartersOnboardingState;
+  value: number | null;
+  precision: "exact" | "unavailable";
+};
+
+export type HeadquartersOnboardingStep = {
+  key: HeadquartersOnboardingStepKey;
+  state: HeadquartersOnboardingState;
+  requirement: "recommended" | "required";
+  label: string;
+  benefit: string;
+  evidence: HeadquartersOnboardingEvidence[];
+  action: HeadquartersAction;
+};
+
+export type HeadquartersOnboarding = {
+  contract_version: "onboarding.v1";
+  readiness_version: "onboarding-readiness.v1";
+  ready: boolean;
+  completed_count: number;
+  total_count: 5;
+  completed_required: number;
+  required_total: 3;
+  current_step_key: HeadquartersOnboardingStepKey | null;
+  steps: [
+    HeadquartersOnboardingStep,
+    HeadquartersOnboardingStep,
+    HeadquartersOnboardingStep,
+    HeadquartersOnboardingStep,
+    HeadquartersOnboardingStep
+  ];
+  next_action: HeadquartersAction | null;
+};
+
 export type HeadquartersSnapshotResponse = {
-  contract_version: "headquarters.v1";
+  contract_version: "headquarters.v2";
   ranking_version: "headquarters-ranking.v1";
   snapshot: {
     id: string;
@@ -196,24 +244,7 @@ export type HeadquartersSnapshotResponse = {
     }>;
   };
   workspace: { id: string; name: string; role: HeadquartersRole };
-  onboarding: {
-    ready: boolean;
-    steps: Array<{
-      key:
-        | "briefing"
-        | "first_decision"
-        | "headquarters"
-        | "source_data"
-        | "team"
-        | "workspace";
-      requirement: "recommended" | "required";
-      label: string;
-      complete: boolean;
-      benefit: string;
-      action: HeadquartersAction;
-    }>;
-    next_action: HeadquartersAction | null;
-  };
+  onboarding: HeadquartersOnboarding;
   sources: {
     healthy: number;
     total: number;
@@ -255,6 +286,11 @@ export type HeadquartersSnapshotResponse = {
   };
 };
 
+export type HeadquartersOnboardingDetailResponse = Pick<
+  HeadquartersSnapshotResponse,
+  "boundary" | "capabilities" | "contract_version" | "onboarding" | "snapshot" | "workspace"
+>;
+
 type HeadquartersRecord = Record<string, unknown>;
 
 export class HeadquartersContractError extends Error {
@@ -286,7 +322,7 @@ export function parseHeadquartersSnapshotResponse(
     ],
     "headquarters"
   );
-  expectEnum(response.contract_version, ["headquarters.v1"] as const, "contract_version");
+  expectEnum(response.contract_version, ["headquarters.v2"] as const, "contract_version");
   expectEnum(
     response.ranking_version,
     ["headquarters-ranking.v1"] as const,
@@ -338,6 +374,51 @@ export function parseHeadquartersSnapshotResponse(
   }
 
   return value as HeadquartersSnapshotResponse;
+}
+
+export function parseHeadquartersOnboardingDetailResponse(
+  value: unknown
+): HeadquartersOnboardingDetailResponse {
+  const response = expectRecord(value, "headquarters_onboarding");
+  expectKeys(
+    response,
+    [
+      "contract_version",
+      "snapshot",
+      "workspace",
+      "onboarding",
+      "capabilities",
+      "boundary"
+    ],
+    "headquarters_onboarding"
+  );
+  expectEnum(
+    response.contract_version,
+    ["headquarters.v2"] as const,
+    "headquarters_onboarding.contract_version"
+  );
+  validateSnapshot(response.snapshot, "headquarters_onboarding.snapshot");
+  validateWorkspace(response.workspace, "headquarters_onboarding.workspace");
+  validateOnboarding(response.onboarding, "headquarters_onboarding.onboarding");
+  validateCapabilities(
+    response.capabilities,
+    "headquarters_onboarding.capabilities"
+  );
+  validateBoundary(response.boundary, "headquarters_onboarding.boundary");
+
+  const snapshot = response.snapshot as HeadquartersRecord;
+  const coverage = snapshot.coverage as unknown[];
+  const expectedPartial = coverage.some(
+    (item) => (item as HeadquartersRecord).status !== "complete"
+  );
+  if (snapshot.partial !== expectedPartial) {
+    contractError(
+      "headquarters_onboarding.snapshot.partial",
+      "must match coverage status"
+    );
+  }
+
+  return value as HeadquartersOnboardingDetailResponse;
 }
 
 function validateAction(value: unknown, path: string): void {
@@ -725,42 +806,226 @@ function validateCapabilities(value: unknown, path: string): void {
 
 function validateOnboarding(value: unknown, path: string): void {
   const onboarding = expectRecord(value, path);
-  expectKeys(onboarding, ["ready", "steps", "next_action"], path);
-  expectBoolean(onboarding.ready, `${path}.ready`);
+  expectKeys(
+    onboarding,
+    [
+      "contract_version",
+      "readiness_version",
+      "ready",
+      "completed_count",
+      "total_count",
+      "completed_required",
+      "required_total",
+      "current_step_key",
+      "steps",
+      "next_action"
+    ],
+    path
+  );
+  expectEnum(
+    onboarding.contract_version,
+    ["onboarding.v1"] as const,
+    `${path}.contract_version`
+  );
+  expectEnum(
+    onboarding.readiness_version,
+    ["onboarding-readiness.v1"] as const,
+    `${path}.readiness_version`
+  );
+  const ready = expectBoolean(onboarding.ready, `${path}.ready`);
+  const completedCount = expectNonNegativeInteger(
+    onboarding.completed_count,
+    `${path}.completed_count`
+  );
+  const totalCount = expectNonNegativeInteger(
+    onboarding.total_count,
+    `${path}.total_count`
+  );
+  const completedRequired = expectNonNegativeInteger(
+    onboarding.completed_required,
+    `${path}.completed_required`
+  );
+  const requiredTotal = expectNonNegativeInteger(
+    onboarding.required_total,
+    `${path}.required_total`
+  );
+  if (totalCount !== HEADQUARTERS_ONBOARDING_STEP_KEYS.length) {
+    contractError(`${path}.total_count`, "exactly five onboarding steps");
+  }
+  if (requiredTotal !== 3) {
+    contractError(`${path}.required_total`, "exactly three required steps");
+  }
+
   const steps = expectArray(onboarding.steps, `${path}.steps`);
+  if (steps.length !== HEADQUARTERS_ONBOARDING_STEP_KEYS.length) {
+    contractError(`${path}.steps`, "exactly five ordered onboarding steps");
+  }
+  const stepRecords: HeadquartersRecord[] = [];
   steps.forEach((value, index) => {
     const stepPath = `${path}.steps[${index}]`;
     const step = expectRecord(value, stepPath);
+    stepRecords.push(step);
     expectKeys(
       step,
-      ["key", "requirement", "label", "complete", "benefit", "action"],
+      ["key", "state", "requirement", "label", "benefit", "evidence", "action"],
       stepPath
     );
-    expectEnum(
+    const key = expectEnum(
       step.key,
-      [
-        "briefing",
-        "first_decision",
-        "headquarters",
-        "source_data",
-        "team",
-        "workspace"
-      ] as const,
+      HEADQUARTERS_ONBOARDING_STEP_KEYS,
       `${stepPath}.key`
     );
-    expectEnum(
+    if (key !== HEADQUARTERS_ONBOARDING_STEP_KEYS[index]) {
+      contractError(
+        `${stepPath}.key`,
+        HEADQUARTERS_ONBOARDING_STEP_KEYS[index] ?? "known onboarding step"
+      );
+    }
+    const stepState = expectEnum(
+      step.state,
+      ["complete", "pending", "unknown"] as const,
+      `${stepPath}.state`
+    );
+    const requirement = expectEnum(
       step.requirement,
       ["recommended", "required"] as const,
       `${stepPath}.requirement`
     );
+    const expectedRequirement = [
+      "required",
+      "recommended",
+      "required",
+      "recommended",
+      "required"
+    ][index];
+    if (requirement !== expectedRequirement) {
+      contractError(
+        `${stepPath}.requirement`,
+        expectedRequirement ?? "known onboarding requirement"
+      );
+    }
     expectString(step.label, `${stepPath}.label`);
-    expectBoolean(step.complete, `${stepPath}.complete`);
     expectString(step.benefit, `${stepPath}.benefit`);
+    const evidence = expectArray(step.evidence, `${stepPath}.evidence`);
+    if (evidence.length === 0) {
+      contractError(`${stepPath}.evidence`, "at least one evidence fact");
+    }
+    const evidenceStates: HeadquartersOnboardingState[] = [];
+    evidence.forEach((value, evidenceIndex) => {
+      const evidencePath = `${stepPath}.evidence[${evidenceIndex}]`;
+      const item = expectRecord(value, evidencePath);
+      expectKeys(
+        item,
+        ["key", "label", "state", "value", "precision"],
+        evidencePath
+      );
+      expectString(item.key, `${evidencePath}.key`);
+      expectString(item.label, `${evidencePath}.label`);
+      const state = expectEnum(
+        item.state,
+        ["complete", "pending", "unknown"] as const,
+        `${evidencePath}.state`
+      );
+      evidenceStates.push(state);
+      const precision = expectEnum(
+        item.precision,
+        ["exact", "unavailable"] as const,
+        `${evidencePath}.precision`
+      );
+      const evidenceValue = expectNullableNonNegativeInteger(
+        item.value,
+        `${evidencePath}.value`
+      );
+      if (
+        precision === "unavailable" &&
+        (evidenceValue !== null || state !== "unknown")
+      ) {
+        contractError(evidencePath, "unavailable evidence must be unknown without a value");
+      }
+      if (
+        precision === "exact" &&
+        (evidenceValue === null || state === "unknown")
+      ) {
+        contractError(evidencePath, "exact evidence requires a known value and state");
+      }
+    });
+    const expectedStepState: HeadquartersOnboardingState = evidenceStates.includes(
+      "complete"
+    )
+      ? "complete"
+      : evidenceStates.includes("unknown")
+        ? "unknown"
+        : "pending";
+    if (stepState !== expectedStepState) {
+      contractError(`${stepPath}.state`, "must match onboarding evidence");
+    }
     validateAction(step.action, `${stepPath}.action`);
   });
+
+  const completeCount = stepRecords.filter((step) => step.state === "complete").length;
+  if (completedCount !== completeCount) {
+    contractError(`${path}.completed_count`, "must match completed steps");
+  }
+  const requiredSteps = stepRecords.filter((step) => step.requirement === "required");
+  if (requiredSteps.length !== requiredTotal) {
+    contractError(`${path}.required_total`, "must match required steps");
+  }
+  const requiredCompleteCount = requiredSteps.filter(
+    (step) => step.state === "complete"
+  ).length;
+  if (completedRequired !== requiredCompleteCount) {
+    contractError(`${path}.completed_required`, "must match completed required steps");
+  }
+  const expectedReady = requiredCompleteCount === requiredTotal;
+  if (ready !== expectedReady) {
+    contractError(`${path}.ready`, "must match required step states");
+  }
+
+  const expectedCurrent = requiredSteps.find((step) => step.state !== "complete")?.key ?? null;
+  if (onboarding.current_step_key !== null) {
+    expectEnum(
+      onboarding.current_step_key,
+      HEADQUARTERS_ONBOARDING_STEP_KEYS,
+      `${path}.current_step_key`
+    );
+  }
+  if (onboarding.current_step_key !== expectedCurrent) {
+    contractError(`${path}.current_step_key`, "first incomplete required step or null");
+  }
   if (onboarding.next_action !== null) {
     validateAction(onboarding.next_action, `${path}.next_action`);
   }
+  if (ready && onboarding.next_action !== null) {
+    contractError(`${path}.next_action`, "null when onboarding is ready");
+  }
+  if (!ready && onboarding.next_action === null) {
+    contractError(`${path}.next_action`, "the first required blocker action");
+  }
+  if (
+    !ready &&
+    onboarding.next_action !== null &&
+    expectedCurrent !== null
+  ) {
+    const currentStep = stepRecords.find((step) => step.key === expectedCurrent);
+    if (
+      !currentStep ||
+      !sameHeadquartersAction(
+        expectRecord(onboarding.next_action, `${path}.next_action`),
+        expectRecord(currentStep.action, `${path}.steps.current.action`)
+      )
+    ) {
+      contractError(`${path}.next_action`, "must match the current required step");
+    }
+  }
+}
+
+function sameHeadquartersAction(
+  first: HeadquartersRecord,
+  second: HeadquartersRecord
+): boolean {
+  return ["disabled_reason", "enabled", "kind", "label", "target"].every(
+    (key) => first[key] === second[key]
+  );
 }
 
 function validateSnapshot(value: unknown, path: string): void {

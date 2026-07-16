@@ -126,15 +126,17 @@ Implemented foundations:
   acceptance is complete: 272 frontend tests plus typecheck/lint/build, 537
   backend tests plus Ruff/Alembic, and desktop 1024/1280 px / mobile 390×844
   browser QA without overlap, overflow, console warnings or console errors.
-- Guided shell and founder onboarding are in place (DEC-075): an operator-issued
-  one-time `/start` link atomically creates the founder/company/owner membership
-  and session; `/onboarding` derives source/map/team readiness from real data;
-  multiple companies require explicit selection. `/dashboard` is now «Сегодня»
-  with one deterministic next move and three signals, while five primary zones
-  replace the old flat technical navigation. Role-gated admin operations remain
-  available in context. A new teammate automatically receives one one-time setup
-  link and chooses their own password; the inviter cannot set credentials.
-  Public signup and email delivery stay closed.
+- Guided founder enrollment and computed onboarding are in place
+  (DEC-075/DEC-088): an operator-issued one-time `/start` link atomically creates
+  the founder/company/owner membership and session. Workspace-scoped
+  `/onboarding` now opens one five-step server-computed modal inside the real
+  Headquarters; the browser no longer derives readiness from source/map/team
+  fan-out. Required completion is backed by company, canonical records and a
+  successful headquarters snapshot; `unknown` remains unresolved and optional
+  team/map context does not block a single founder. Zero-workspace recovery stays
+  explicit and multiple companies require deliberate selection. A new teammate
+  receives one one-time setup link and chooses their own password; the inviter
+  cannot set credentials. Public signup and email delivery stay closed.
 - Email+password founder login uses server-side sessions (Argon2id, httpOnly
   first-party cookie through the same-origin Next.js proxy, DB login throttle).
 - GitHub manual/provider-token bridge and selected-repo issue/PR sync paths with
@@ -369,15 +371,15 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Bring computed onboarding into the authenticated command loop.**
-   Execute `LC-03` in
-   [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md):
-   reuse the server-computed onboarding block and canonical readiness facts for
-   company → first source → first canonical snapshot → optional context/team →
-   headquarters. Keep zero-workspace recovery explicit, never turn `unknown`
-   into complete, and do not duplicate readiness rules in the browser. The
-   shipped LC-02 headquarters remains the destination and truth surface; no
-   provider call, LLM, migration or external write belongs in this UI ticket.
+1. **Finish exact mission/profile drill-down and the local decision loop.**
+   Execute the bounded LC-05/LC-08 slice in
+   [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md): a
+   queue row, citation, person or customer control must open that exact entity
+   with field-level provenance or an honest `Не определено`. Reuse opaque Company
+   Map selectors and the existing `/actions` proposal APIs/status safety to move
+   one local decision into a compact modal, persist its existing audit/receipt,
+   then refetch the same Headquarters snapshot. Do not add a new mission schema,
+   infer roles/customer health, weaken confirmation, or enable an external write.
 
 2. **Add the first real read-only company assistant contract.**
    Introduce a bounded workspace-scoped query endpoint over existing read models

@@ -63,9 +63,12 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8765
 The app uses invite-only founder enrollment and email+password server sessions:
 
 - A one-time `/start#token=...` link calls `POST /api/v1/auth/enroll` and then
-  opens the focused `/onboarding` journey. The bearer is accepted from the URL
-  fragment only; query fallback is forbidden, and the address is cleared after
-  capture. Public signup stays closed.
+  opens `/onboarding`. For a session with a workspace, that route enters the real
+  `/dashboard` and opens one five-step server-computed setup modal; an account
+  without a workspace stays on the explicit recovery screen and makes no
+  workspace read. The bearer is accepted from the URL fragment only; query
+  fallback is forbidden, and the address is cleared after capture. Public signup
+  stays closed.
 - A `/login` page calls `POST /api/v1/auth/login`; an `AuthGate` redirects
   unauthenticated users to `/login`.
 - The session is an httpOnly first-party cookie (set by the backend); the
@@ -101,18 +104,21 @@ for server/CI/admin tooling only. The frontend never calls GitHub, Jira, Gmail,
 Drive, or other providers directly. Do not commit secrets, API keys, provider
 tokens, or local environment files.
 
-Primary navigation is «Сегодня / Компания / Решения / Источники / Настройки».
-Provider routes are nested under «Источники»; `/dashboard` shows one
+Primary navigation is «Штаб / Мир / Миссии»; «Радары / Настройки» remain
+backstage controls. Provider routes live under «Радары»; `/dashboard` shows one
 deterministic next move and three signals. Shared shell/status copy is in
-`web/lib/messages.ts`; focused journey copy is colocated with its page. The UI
-is Russian. Source setup/import/sync and action review/execution require
+`web/lib/messages.ts`; computed setup copy is colocated with the Headquarters
+modal and the zero-workspace recovery page. The UI is Russian. Source
+setup/import/sync and action review/execution require
 owner/admin; briefing generation, local action creation, and Company World
 resolution require member+; viewer keeps evidence-backed read access only.
 
 ## Local product boundary
 
-The frontend is the local FounderOS product surface (DEC-077). Session auth,
-invite-only founder onboarding, and the spatial durable Company World are in
-place. The first real GitHub App read and any external action remain separate,
-human-approved operations after `make local-smoke`; email delivery and password
-reset remain deferred.
+The frontend is the local FounderOS product surface (DEC-077/DEC-088). Session
+auth, invite-only founder enrollment, computed onboarding inside Headquarters,
+and the spatial durable Company World are in place. Onboarding readiness and its
+next action come from the unified server snapshot, not browser fan-out. The first
+real GitHub App read and any external action remain separate, human-approved
+operations after `make local-smoke`; email delivery and password reset remain
+deferred.

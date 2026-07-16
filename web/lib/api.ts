@@ -67,7 +67,9 @@ import type {
   WorkspaceMembersResponse
 } from "./types";
 import {
+  parseHeadquartersOnboardingDetailResponse,
   parseHeadquartersSnapshotResponse,
+  type HeadquartersOnboardingDetailResponse,
   type HeadquartersSnapshotResponse
 } from "./headquarters";
 
@@ -178,6 +180,12 @@ export function buildWorkspaceHeadquartersPath(workspaceId: string): string {
   return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/headquarters`;
 }
 
+export function buildWorkspaceHeadquartersOnboardingPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceHeadquartersPath(workspaceId)}/onboarding`;
+}
+
 export async function fetchHeadquarters(
   workspaceId: string,
   options: ApiFetchOptions = {}
@@ -187,6 +195,17 @@ export async function fetchHeadquarters(
     options
   );
   return parseHeadquartersSnapshotResponse(payload);
+}
+
+export async function fetchHeadquartersOnboarding(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<HeadquartersOnboardingDetailResponse> {
+  const payload = await apiFetch<unknown>(
+    buildWorkspaceHeadquartersOnboardingPath(workspaceId),
+    options
+  );
+  return parseHeadquartersOnboardingDetailResponse(payload);
 }
 
 export function buildWorkspaceCompanyMapResolutionsPath(workspaceId: string): string {
