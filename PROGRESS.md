@@ -10,6 +10,31 @@
 
 ## ▶ СЕЙЧАС
 
+- **LC-UI-02 Authenticated Living Headquarters: РЕАЛИЗОВАН ЛОКАЛЬНО.**
+  `/dashboard` больше не собирает Today/Living-HQ состояние из нескольких
+  browser reads и не ранжирует миссии на клиенте. Новый
+  `HeadquartersDashboard` делает один abortable workspace-scoped запрос к
+  `HeadquartersSnapshot`, отбрасывает late/foreign response и показывает один
+  server-ranked priority, ровно три pulse-метрики, максимум две queue mission и
+  три current-snapshot signal. Backend action target/disabled reason,
+  precision, partial/coverage и source health используются без догадок; enabled
+  action без target остаётся disabled. Реальные evidence, ranking reason,
+  source health и coverage раскрываются через production `OverlayShell` с
+  labelled dialog, focus trap, inert background, Escape/backdrop close,
+  scroll-lock и возвратом фокуса. Assistant launcher пока честно является
+  навигатором по тому же snapshot и не изображает готовый чат до LC-07.
+  Loading, no-workspace, calm, partial/stale, forbidden, offline, contract и
+  retry states остаются на одной поверхности. `/demo` fixtures, provider/LLM
+  calls, persistence и external writes в production path не добавлены.
+  Проверено 2026-07-16: frontend **375/375 passed**, typecheck, lint и
+  production build (**19 routes**); backend **705 passed / 1 external
+  warning**, Ruff, tracked-secret scan, whitespace gate и local-runtime smoke
+  зелёные. Authenticated browser QA на desktop 1280×720 подтвердил один `main`,
+  один экран без vertical/horizontal overflow, реальные
+  empty/source/evidence drawers, shell-wide inert/aria-hidden, focus restore и
+  отсутствие console warnings/errors. Повторный независимый UX/a11y-аудит
+  подтвердил **SHIP** без оставшихся P1/P2. Следующая задача: **LC-03 — встроить
+  server-computed onboarding в этот же command loop.**
 - **LC-BACKEND-01 Unified Headquarters read model (DEC-086): РЕАЛИЗОВАН
   ЛОКАЛЬНО.** Новый workspace-scoped
   `GET /api/v1/workspaces/{workspace_id}/headquarters` собирает Company

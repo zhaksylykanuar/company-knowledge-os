@@ -369,15 +369,15 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-1. **Promote the proven read contract into the authenticated headquarters.**
-   Execute `LC-02` in
+1. **Bring computed onboarding into the authenticated command loop.**
+   Execute `LC-03` in
    [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md):
-   replace browser-composed `/dashboard` state with the workspace-scoped
-   `HeadquartersSnapshot`, preserving one priority, three pulse metrics, two
-   queued missions and progressive disclosure. Use backend actions,
-   capabilities, precision, coverage and warnings directly; do not import
-   `/demo` fixtures or recreate ranking/RBAC in the browser. No migration,
-   provider call, LLM or write belongs in this UI ticket.
+   reuse the server-computed onboarding block and canonical readiness facts for
+   company → first source → first canonical snapshot → optional context/team →
+   headquarters. Keep zero-workspace recovery explicit, never turn `unknown`
+   into complete, and do not duplicate readiness rules in the browser. The
+   shipped LC-02 headquarters remains the destination and truth surface; no
+   provider call, LLM, migration or external write belongs in this UI ticket.
 
 2. **Add the first real read-only company assistant contract.**
    Introduce a bounded workspace-scoped query endpoint over existing read models

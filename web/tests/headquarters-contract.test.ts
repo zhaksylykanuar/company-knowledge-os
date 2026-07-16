@@ -177,16 +177,25 @@ test("exposes the fixed v1 headquarters path and pulse order", () => {
 
 test("fetches and validates the full headquarters contract", async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = mockHeadquartersResponse(VALID_HEADQUARTERS_FIXTURE, (input) => {
+  const controller = new AbortController();
+  let requestCount = 0;
+  globalThis.fetch = mockHeadquartersResponse(VALID_HEADQUARTERS_FIXTURE, (input, init) => {
+    requestCount += 1;
     assert.equal(
       String(input),
       "http://localhost/api/v1/workspaces/workspace-123/headquarters"
     );
+    assert.equal(init?.credentials, "include");
+    assert.equal(init?.signal, controller.signal);
+    assert.equal(new Headers(init?.headers).get("Accept"), "application/json");
   });
 
   try {
-    const payload = await fetchHeadquarters("workspace-123");
+    const payload = await fetchHeadquarters("workspace-123", {
+      signal: controller.signal
+    });
     assert.deepEqual(payload, VALID_HEADQUARTERS_FIXTURE);
+    assert.equal(requestCount, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -350,10 +359,10 @@ test("rejects unsafe evidence URLs, secret queries, invalid ports, and oversize 
 
 function mockHeadquartersResponse(
   payload: unknown,
-  onRequest?: (input: string | URL | Request) => void
+  onRequest?: (input: string | URL | Request, init?: RequestInit) => void
 ): typeof fetch {
-  return (async (input) => {
-    onRequest?.(input);
+  return (async (input, init) => {
+    onRequest?.(input, init);
     return new Response(JSON.stringify(payload), {
       headers: { "Content-Type": "application/json" },
       status: 200

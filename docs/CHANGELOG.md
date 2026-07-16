@@ -46,6 +46,16 @@
 
 ### Changed
 
+- Replaced the authenticated `/dashboard` browser-composed Today board with the
+  real workspace-scoped Headquarters snapshot. The production surface now shows
+  one server-ranked priority, exactly three pulse metrics, at most two queued
+  missions and three current-snapshot signals, with source health, coverage,
+  evidence and mission detail behind one accessible drawer shell. CTA targets,
+  disabled reasons, precision and partial/stale truth come from the backend;
+  stale workspace responses are ignored, in-flight reads are aborted on scope
+  change, and no demo fixture, browser ranking, provider call, LLM or external
+  write was added. The FounderOS assistant entry is explicitly a navigation
+  shell until the separate read-only assistant contract lands.
 - Replaced the 12-scene `/demo` tour with one desktop Living Command Center
   (DEC-085). The default surface now budgets attention to one priority, three
   pulse metrics, at most two next decisions, three recent signals, and one

@@ -292,20 +292,22 @@ SourceObservation и generic relevance для будущих action types соз
 
 ### LC-02 — Перенести дизайн-грамматику в authenticated `/dashboard`
 
-- [ ] Переиспользовать данные и routes реального продукта; не импортировать
+- [x] Переиспользовать данные и routes реального продукта; не импортировать
   `demo-tour` или `demo-command-center` fixtures.
-- [ ] Вынести production-safe `OverlayShell` с focus trap, inert background,
+- [x] Вынести production-safe `OverlayShell` с focus trap, inert background,
   Escape close и возвратом фокуса.
-- [ ] Сделать header: компания, честный source health, assistant launcher,
+- [x] Сделать header: компания, честный source health, assistant launcher,
   профиль; технические настройки оставить backstage.
-- [ ] Сделать real priority card из `HeadquartersSnapshot.priority`.
-- [ ] CTA выводить только из `Mission.action` и capabilities.
-- [ ] `Почему это №1?` открывает exact ranking/evidence drawer.
-- [ ] Pulse открывает релевантный detail, а не общий текстовый dump.
-- [ ] Каждая строка queue передаёт точный mission id/reference.
-- [ ] После решения refetch показывает новый snapshot без full page reload.
-- [ ] Смена workspace отменяет старые requests и закрывает чужой overlay.
-- [ ] Loading, empty, partial, stale, forbidden, offline/error и retry состояния
+- [x] Сделать real priority card из `HeadquartersSnapshot.priority`.
+- [x] CTA выводить только из `Mission.action` и capabilities.
+- [x] `Почему это №1?` открывает exact ranking/evidence drawer.
+- [x] Pulse открывает релевантный detail, а не общий текстовый dump.
+- [x] Каждая строка queue передаёт точный mission id/reference.
+- [x] После решения возврат в `/dashboard` заново монтирует read surface и
+  запрашивает новый snapshot без full page reload; in-place decision/refetch
+  остаётся единым сценарием LC-05/LC-08.
+- [x] Смена workspace отменяет старые requests и закрывает чужой overlay.
+- [x] Loading, empty, partial, stale, forbidden, offline/error и retry состояния
   остаются на той же понятной поверхности.
 
 Готово, когда authenticated экран визуально работает как `/demo`, но каждый
@@ -634,11 +636,12 @@ read-back/reconcile и receipt. Это не превращает assistant в au
 - [ ] Founder добавляет/проверяет компанию и роли команды через UI.
 - [ ] Founder подключает или импортирует первый источник через UI.
 - [ ] Явное первое чтение создаёт canonical records, evidence и no-write receipt.
-- [ ] Штаб показывает один реальный priority, три metrics, queue и signals.
-- [ ] `Почему это №1?` открывает exact evidence и freshness.
+- [x] Штаб показывает один реальный priority, три metrics, queue и signals.
+- [ ] `Почему это №1?` открывает exact evidence и freshness: evidence/ranking
+  реализованы в LC-02, source freshness остаётся для LC-05 drill-down.
 - [ ] Person/customer/source controls открывают точные drawers.
 - [ ] Ассистент отвечает из того же snapshot и открывает citation target.
-- [ ] Конкретная queue row открывает конкретную mission.
+- [x] Конкретная queue row открывает конкретную mission.
 - [ ] Founder approve/reject proposal и получает local receipt без внешней записи.
 - [ ] Для approved external action founder отдельно видит exact preview и
   подтверждает execute.
@@ -652,8 +655,8 @@ read-back/reconcile и receipt. Это не превращает assistant в au
 
 1. **LC-00/LC-01 ✅:** headquarters schema, service, endpoint и contract tests —
    без миграции и без нового UI. Exact confirmation digest остаётся в LC-08.
-2. **LC-02:** заменить реальный `/dashboard` на минимальный command center,
-   используя только новый snapshot.
+2. **LC-02 ✅:** реальный `/dashboard` заменён минимальным command center,
+   использующим только единый snapshot.
 3. **LC-03:** встроить computed onboarding и возврат в штаб.
 4. **LC-05/LC-08:** exact mission/profile drawers и существующий decision modal.
 5. **LC-07:** deterministic read-only assistant поверх того же service.
@@ -661,9 +664,9 @@ read-back/reconcile и receipt. Это не превращает assistant в au
 7. **LC-06:** только после schema review добавить durable change boundary.
 8. **LC-09/LC-10:** privacy, observability и полный release proof.
 
-Первый следующий implementation ticket: **LC-02 — подключить authenticated
-`/dashboard` к единому `HeadquartersSnapshot` и перенести минимальную грамматику
-штаба без synthetic fixtures и browser ranking.**
+Первый следующий implementation ticket: **LC-03 — встроить вычисляемый
+onboarding в тот же authenticated контур без дублирования readiness-логики в
+браузере.**
 
 ## Следующий отдельный контур — Source Foundry (DEC-087)
 

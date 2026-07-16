@@ -27,8 +27,11 @@ surface. DEC-086 now fixes the promotion path: one workspace-scoped server-side
 headquarters projection is now implemented locally as the shared, consistent
 read boundary over real Company Brain, Company Map, Briefing, ActionProposal,
 connector and membership state. It adds no migration/provider/LLM/write path;
-LC-02 now promotes the approved minimal command-center grammar into the
-authenticated `/dashboard` using that contract. The full phased acceptance
+LC-02 now implements the approved minimal command-center grammar in the
+authenticated `/dashboard`: one server-ranked priority, three pulse metrics,
+bounded queue/signals, progressive-disclosure drawers and an honest assistant
+launcher all consume that contract without browser ranking or demo fixtures.
+LC-03 computed onboarding is the next UI slice. The full phased acceptance
 ledger is `LIVING_COMMAND_CENTER_CHECKLIST.md`. DEC-087 separately approves one
 future modular Source Foundry intake/promotion plane — not one server per source
 and not a second knowledge truth — after the real headquarters UI is accepted.
