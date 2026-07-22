@@ -2860,6 +2860,46 @@ resolved runtime tree, while CodeQL and Renovate cover different static-analysis
 and update-discovery roles. Passing these gates does not prove deployed or live
 provider behavior.
 
+## DEC-091 - The Company Assistant Is A Deterministic View Of One HQ Snapshot
+
+Decision (2026-07-22): the first real company assistant is a workspace-scoped,
+read-only projection over the same `read_workspace_headquarters` service used
+by the authenticated Headquarters screen. Every query must carry the exact
+visible content-addressed `hqs1_*` snapshot. If the current projection differs,
+the server returns `409 snapshot_changed` and no answer; the browser clears the
+old result, refreshes the snapshot and requires a deliberate retry. The screen
+and assistant therefore cannot silently name priorities from different
+versions.
+
+Version `assistant.v1` is deterministic and allowlisted. It classifies only
+priority, why-now, owners, company/person, sources, briefing, waiting decisions,
+evidence, decision status and explicit action-request boundaries. The response
+contains bounded text, normalized workspace-scoped citations, safe suggestions,
+optional capability-filtered navigation, snapshot/as-of/partial/warnings,
+`is_live=true` and `llm_used=false`. Missing evidence returns
+`Недостаточно подтверждённых данных.` Unsafe instructions are ignored without
+echoing the query, and unsafe URLs, credentials or sensitive query parameters
+never become clickable citations.
+
+The endpoint persists no chat, reads no raw/private provider body, invokes no
+provider or LLM and calls no mutation service. Query length, execution time,
+response bytes, citation/suggestion counts, per-user/workspace request rate and
+identical-query single-flight are backend invariants. Request logging records
+method/path/status only, never the full question or citation contents. The
+process-local limiter is sufficient for the current single-process local
+runtime; any multi-worker/hosted topology must replace it with a shared bounded
+store before claiming equivalent enforcement.
+
+There is one launcher in the authenticated shell, including non-HQ product
+zones. Headquarters registers its exact visible snapshot; other zones fetch the
+same server projection before asking. `Cmd/Ctrl+K`, overlay focus restoration
+and normalized citation navigation use the shared production overlay contract.
+«Сделай сам» never creates, approves, rejects or executes a proposal: an
+authorized reviewer may only navigate to the existing human confirmation
+screen, while a viewer receives no confirmation action. A future generative
+assistant requires a separate privacy/retention, retrieval, model/schema,
+budget and persistence decision and may never mutate production data directly.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

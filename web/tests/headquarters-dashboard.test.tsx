@@ -4,7 +4,6 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
-  canOpenHeadquartersAssistantShortcut,
   HeadquartersDashboardView,
   onboardingIntentFromSearch,
   reduceHeadquartersOnboardingIntent,
@@ -190,13 +189,13 @@ test("ready onboarding stays quiet unless the route explicitly requests its comp
 
 test("onboarding has overlay priority until dismissed for the exact snapshot", () => {
   const snapshot = pendingOnboardingSnapshot();
-  const assistant = { kind: "assistant" } as const;
+  const coverage = { kind: "coverage" } as const;
 
   assert.equal(
     resolveVisibleHeadquartersOverlay({
       dismissedOnboardingSnapshotId: null,
       onboardingIntent: false,
-      requestedOverlay: assistant,
+      requestedOverlay: coverage,
       snapshot
     })?.kind,
     "onboarding"
@@ -205,10 +204,10 @@ test("onboarding has overlay priority until dismissed for the exact snapshot", (
     resolveVisibleHeadquartersOverlay({
       dismissedOnboardingSnapshotId: snapshot.snapshot.id,
       onboardingIntent: false,
-      requestedOverlay: assistant,
+      requestedOverlay: coverage,
       snapshot
     })?.kind,
-    "assistant"
+    "coverage"
   );
 
   const refreshed = structuredClone(snapshot);
@@ -217,32 +216,10 @@ test("onboarding has overlay priority until dismissed for the exact snapshot", (
     resolveVisibleHeadquartersOverlay({
       dismissedOnboardingSnapshotId: snapshot.snapshot.id,
       onboardingIntent: false,
-      requestedOverlay: assistant,
+      requestedOverlay: coverage,
       snapshot: refreshed
     })?.kind,
     "onboarding"
-  );
-});
-
-test("assistant shortcut never replaces an open decision or other overlay", () => {
-  const snapshot = makeHeadquartersFixture();
-  assert.ok(snapshot.priority);
-
-  assert.equal(canOpenHeadquartersAssistantShortcut(null), true);
-  assert.equal(
-    canOpenHeadquartersAssistantShortcut({
-      kind: "decision",
-      mission: snapshot.priority
-    }),
-    false
-  );
-  assert.equal(
-    canOpenHeadquartersAssistantShortcut({ kind: "onboarding" }),
-    false
-  );
-  assert.equal(
-    canOpenHeadquartersAssistantShortcut({ kind: "assistant" }),
-    false
   );
 });
 

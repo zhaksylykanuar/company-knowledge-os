@@ -89,14 +89,14 @@ Authenticated `/dashboard` должен сохранить грамматику 
 | Реальный `/dashboard` | ✅ bounded | Единый server snapshot, exact mission, fail-closed profile renderer и local decision receipt/refetch | Confirmed mission-person/customer projection, business-profile authoring и external LC-08 остаются gates |
 | Onboarding | ✅ | Пять server-computed steps, evidence, role-aware actions, modal/resume и zero-workspace recovery | Повторять acceptance при изменении readiness contract |
 | Company World | 🟡 | Люди, компании, кандидаты, exact compact drawers, touchpoints, evidence, human resolution | Durable business-profile authoring, pagination и mission ownership |
-| Briefing | ✅ foundation | Persisted deterministic Briefing/Items, evidence, history и HQ rank/queue input | Exact briefing detail и assistant citations |
+| Briefing | ✅ foundation | Persisted deterministic Briefing/Items, evidence, history, HQ rank/queue input и assistant aggregate citations | Exact briefing detail |
 | Action decisions | ✅ local loop | Version-bound idempotent local decision, audit receipt и snapshot-preserving HQ refetch | Exact external preview digest, execute/reconcile и provider proof |
 | GitHub radar | 🟡 | Managed setup, repository scope, bounded reads, receipts | Первый реальный founder-approved read и global health projection |
 | Jira/Gmail/Drive | 🟡 | Canonical local import/list/evidence | Полный UI lifecycle setup → scope/import/read → receipt → disconnect |
 | Изменения с визита | ⛔ | Только current evidence snapshot | Persisted change cursor/checkpoint/dedupe |
-| Company assistant | ⛔ | Только synthetic demo resolver | Workspace-scoped read-only backend contract |
+| Company assistant | ✅ | Shared HQ snapshot, deterministic intents, citations, stale/RBAC/rate bounds, global launcher | Future LLM mode остаётся отдельным gate |
 | Privacy lifecycle | ⛔ | Secret/redaction foundations | Notice, scopes, disconnect, retention, export/delete rules |
-| Real command-center browser QA | ✅ | Authenticated 1280×720: HQ/onboarding, overlay, focus, overflow и console | Повторить полный pass после LC-05/LC-08 и release proof |
+| Real command-center browser QA | ✅ | Authenticated HQ/assistant/radars, stale retry, citations, focus и 0 console errors | Повторить полный pass в release proof |
 
 ## Целевой backend read model
 
@@ -450,31 +450,31 @@ runtime оператором.
 
 ### LC-07 — Подключить реального read-only ассистента компании
 
-- [ ] Реализовать `POST /api/v1/workspaces/{workspace_id}/assistant/query`.
-- [ ] Первая версия — deterministic allowlisted intents без LLM.
-- [ ] Intents: current priority, why now, owners, company/person, sources,
+- [x] Реализовать `POST /api/v1/workspaces/{workspace_id}/assistant/query`.
+- [x] Первая версия — deterministic allowlisted intents без LLM.
+- [x] Intents: current priority, why now, owners, company/person, sources,
   briefing, waiting decisions, evidence и decision status.
-- [ ] Читать тот же headquarters service/snapshot, что и экран.
-- [ ] Ответ: `intent`, короткий `text`, normalized citations, `suggestions`,
+- [x] Читать тот же headquarters service/snapshot, что и экран.
+- [x] Ответ: `intent`, короткий `text`, normalized citations, `suggestions`,
   optional safe UI action, `snapshot_id`, `as_of`, `partial`, `warnings`,
   `is_live`, `llm_used=false`.
-- [ ] Query передаёт экранный `expected_snapshot_id`; если snapshot изменился,
+- [x] Query передаёт экранный `expected_snapshot_id`; если snapshot изменился,
   assistant возвращает `snapshot_changed` вместо ответа из другой версии.
-- [ ] Не сохранять conversation history в первой версии.
-- [ ] Не вызывать providers и ничего не мутировать.
-- [ ] Suggestion может открыть drawer/mission или вернуть неперсистентный UI
+- [x] Не сохранять conversation history в первой версии.
+- [x] Не вызывать providers и ничего не мутировать.
+- [x] Suggestion может открыть drawer/mission или вернуть неперсистентный UI
   prefill draft, но не создаёт, approve или execute proposal.
-- [ ] `ActionProposal` создаёт только отдельный явный пользовательский POST после
+- [x] `ActionProposal` создаёт только отдельный явный пользовательский POST после
   просмотра prefill и повторной backend validation.
-- [ ] При отсутствии evidence отвечать `Недостаточно подтверждённых данных`.
-- [ ] Фильтровать ответ и suggestions по backend capabilities/RBAC.
-- [ ] Ограничить query length, evidence count, response size и execution time.
-- [ ] Добавить backend per-user/workspace rate limit и single-flight для
+- [x] При отсутствии evidence отвечать `Недостаточно подтверждённых данных`.
+- [x] Фильтровать ответ и suggestions по backend capabilities/RBAC.
+- [x] Ограничить query length, evidence count, response size и execution time.
+- [x] Добавить backend per-user/workspace rate limit и single-flight для
   одинакового assistant query/snapshot, а не полагаться на disabled UI button.
-- [ ] Не логировать полный вопрос, raw bodies или private citation content.
-- [ ] Покрыть unsupported intent, prompt injection, cross-workspace, viewer,
+- [x] Не логировать полный вопрос, raw bodies или private citation content.
+- [x] Покрыть unsupported intent, prompt injection, cross-workspace, viewer,
   stale snapshot и missing-evidence tests.
-- [ ] Подключить один launcher во всех authenticated product zones и сохранить
+- [x] Подключить один launcher во всех authenticated product zones и сохранить
   `Cmd/Ctrl+K`, focus и citations navigation.
 
 Будущий LLM-режим — отдельный gate: bounded retrieval, strict JSON schema,
@@ -670,15 +670,15 @@ read-back/reconcile и receipt. Это не превращает assistant в au
    renderers, version-bound local decision, durable receipt и
    snapshot-preserving refetch готовы; confirmed mission-person/customer
    projection остаётся schema/data gate.
-5. **LC-07:** deterministic read-only assistant поверх того же service.
+5. **LC-07 ✅:** deterministic read-only assistant поверх того же service.
 6. **LC-04:** доказать GitHub read, затем доводить остальные радары по одному.
 7. **LC-06:** только после schema review добавить durable change boundary.
 8. **LC-09/LC-10:** privacy, observability и полный release proof.
 
-Первый следующий implementation ticket: **LC-07 — deterministic read-only
-company assistant поверх того же Headquarters service/snapshot**, без LLM,
-provider calls, persistence или mutation. Durable business-profile authoring и
-external LC-08 остаются за своими schema/security gates.
+Первый следующий implementation ticket: **LC-04 — первый реальный
+founder-approved repository-scoped GitHub read**, с visible result и receipt.
+Durable business-profile authoring, LC-06 changes и external LC-08 остаются за
+своими schema/security gates.
 
 ## Следующий отдельный контур — Source Foundry (DEC-087)
 

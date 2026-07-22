@@ -18,6 +18,14 @@ Implemented foundations:
   Next/PostCSS/Sharp versions are locked, CI rejects moderate-or-higher runtime
   npm advisories, CodeQL covers JavaScript/TypeScript as well as Python and
   Actions, and Renovate tracks both `web/package.json` and Python dependencies.
+- The real company assistant is in place (DEC-091): one global authenticated
+  launcher sends a bounded query plus the exact visible Headquarters snapshot
+  to a deterministic workspace-scoped endpoint. It uses the same Headquarters
+  service, validates a strict no-LLM response, exposes normalized evidence and
+  safe role-aware navigation, returns `409 snapshot_changed` instead of mixing
+  versions, and adds no chat persistence, provider call or mutation. Backend
+  rate limits and identical-query single-flight are authoritative; browser
+  disabled state is only UX.
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -375,38 +383,32 @@ Implemented foundations:
 
 ## Next Priority / Near-Term Backlog
 
-The bounded LC-05/LC-08 local decision slice is complete (DEC-089): exact
+The bounded LC-05/LC-08 local decision slice and LC-07 assistant are complete
+(DEC-089/DEC-091): exact
 mission and opaque profile disclosure fail closed; local approve/reject is
 version-bound, idempotent and audit-backed; its receipt survives a failed
 Headquarters refetch. Confirmed employee/customer drawer renderers exist, but
 the production mission projection does not yet emit their canonical relation
 IDs, so that end-to-end path remains schema/data gated. No external execution,
-business-profile write or migration was added.
+business-profile write or migration was added. The assistant reads the same
+content-addressed Headquarters snapshot, never executes a proposal and does not
+weaken those remaining gates.
 
-1. **Add the first real read-only company assistant contract.**
-   Introduce a bounded workspace-scoped query endpoint over existing read models
-   with deterministic intents first: current priority, why-now, company/person,
-   sources, briefing, waiting decisions, and evidence. Normalize citations and
-   return `is_live`, `llm_used`, warnings, suggestions, and action proposals;
-   do not persist chat, call an LLM, or mutate data in this slice. Conversation
-   history, retrieval, generation, and writes require separate schema/security
-   decisions. Detailed acceptance is `LC-07` in the command-center checklist.
-
-2. **Finish the radar loop one provider at a time.**
+1. **Finish the radar loop one provider at a time.**
    `/github` remains the reference command center and the next external gate is
    still one founder-approved, repository-scoped read through its UI wizard. Then
    bring Gmail, Drive, and Jira to the same setup → scoped read → visible result →
    receipt pattern. No bulk/background sync, provider write, LLM run, or hosted
    change is authorized by this backlog item.
 
-3. **Design Source Foundry only after the real headquarters UI is accepted.**
+2. **Design Source Foundry as a separate bounded contract.**
    Start with the SF-00 contract/threat-model checklist from DEC-087: one
    modular allowlisted intake/promotion plane, immutable envelope/manifest,
    quarantine, conservative resolution and atomic canonical promotion. Do not
    create one service per source, a second knowledge truth, a migration,
    background ingestion or LLM auto-promotion in the design ticket.
 
-4. **Add a real company-change boundary.**
+3. **Add a real company-change boundary.**
    The new headquarters honestly shows a current evidence snapshot. Design the
    smallest persisted snapshot/event contract that can prove "since your last
    visit" changes, dedupe them, link each one to workspace-resolved evidence, and
@@ -414,7 +416,7 @@ business-profile write or migration was added.
    must not be simulated from browser-local timestamps. This is `LC-06` and
    remains schema/data-review gated.
 
-5. **Keep the remaining profile/external-action scope behind explicit gates.**
+4. **Keep the remaining profile/external-action scope behind explicit gates.**
    Durable employee title/function/focus and mission ownership need a schema
    review that links membership and internal Person without duplicating
    identity. External LC-08 needs an immutable exact preview digest, current

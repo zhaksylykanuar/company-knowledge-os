@@ -270,6 +270,29 @@ class Settings(BaseSettings):
         ge=1,
         validation_alias=AliasChoices("FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS"),
     )
+    # Deterministic read-only assistant admission. The current runtime is one
+    # Uvicorn process; any future multi-worker/public topology must replace this
+    # process-local availability guard with a shared limiter.
+    assistant_query_rate_limit_window_seconds: int = Field(
+        default=60,
+        ge=1,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_ASSISTANT_QUERY_RATE_LIMIT_WINDOW_SECONDS"
+        ),
+    )
+    assistant_query_rate_limit_per_user_workspace: int = Field(
+        default=30,
+        ge=1,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_ASSISTANT_QUERY_RATE_LIMIT_PER_USER_WORKSPACE"
+        ),
+    )
+    assistant_query_timeout_seconds: float = Field(
+        default=6.0,
+        gt=0,
+        le=30,
+        validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_QUERY_TIMEOUT_SECONDS"),
+    )
 
     cors_allowed_origins: str | None = Field(
         default=None,

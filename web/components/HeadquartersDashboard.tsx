@@ -3,12 +3,14 @@
 import Link from "next/link";
 import {
   type RefObject,
+  useCallback,
   useEffect,
   useReducer,
   useRef,
   useState
 } from "react";
 
+import { useAssistantSnapshotRegistration } from "../lib/assistant-snapshot";
 import { ApiRequestError, fetchCompanyMap, fetchHeadquarters } from "../lib/api";
 import {
   HeadquartersContractError,
@@ -64,7 +66,6 @@ type HeadquartersLoadAction =
   | { requestId: number; type: "refresh_failure"; workspaceId: string };
 
 export type HeadquartersOverlay =
-  | { kind: "assistant" }
   | { kind: "coverage" }
   | { kind: "decision"; mission: HeadquartersMission }
   | { kind: "mission"; mission: HeadquartersMission; position: "priority" | "queue" }
@@ -212,14 +213,9 @@ export function resolveVisibleHeadquartersOverlay({
   return requestedOverlay;
 }
 
-export function canOpenHeadquartersAssistantShortcut(
-  visibleOverlay: HeadquartersOverlay | null
-): boolean {
-  return visibleOverlay === null;
-}
-
 export function HeadquartersDashboard() {
   const session = useSession();
+  const registerAssistantSnapshot = useAssistantSnapshotRegistration();
   const workspaceId = session?.workspaceId ?? null;
   const workspaceName =
     session?.workspaces.find((workspace) => workspace.id === workspaceId)?.name ?? null;
@@ -234,7 +230,7 @@ export function HeadquartersDashboard() {
     false
   );
 
-  async function refetchPreservingSnapshot(): Promise<HeadquartersSnapshotResponse> {
+  const refetchPreservingSnapshot = useCallback(async (): Promise<HeadquartersSnapshotResponse> => {
     if (!workspaceId) {
       throw new Error("Компания не выбрана.");
     }
@@ -259,7 +255,7 @@ export function HeadquartersDashboard() {
       dispatch({ requestId, type: "refresh_failure", workspaceId: requestWorkspaceId });
       throw error;
     }
-  }
+  }, [workspaceId]);
 
   useEffect(() => {
     function syncOnboardingIntent() {
@@ -321,6 +317,20 @@ export function HeadquartersDashboard() {
       ? state.snapshot
       : null;
 
+  useEffect(() => {
+    if (!registerAssistantSnapshot || !visibleSnapshot || !workspaceId) return;
+    return registerAssistantSnapshot({
+      refresh: refetchPreservingSnapshot,
+      snapshot: visibleSnapshot,
+      workspaceId
+    });
+  }, [
+    refetchPreservingSnapshot,
+    registerAssistantSnapshot,
+    visibleSnapshot,
+    workspaceId
+  ]);
+
   return (
     <HeadquartersDashboardView
       isRefreshing={state.refreshing}
@@ -378,23 +388,6 @@ export function HeadquartersDashboardView({
     setDismissedOnboardingSnapshotId(null);
   }, [snapshot?.workspace.id]);
 
-  useEffect(() => {
-    function openAssistant(event: KeyboardEvent) {
-      if (
-        !(event.metaKey || event.ctrlKey) ||
-        event.key.toLowerCase() !== "k" ||
-        isEditableTarget(event.target) ||
-        !canOpenHeadquartersAssistantShortcut(visibleOverlay)
-      ) {
-        return;
-      }
-      event.preventDefault();
-      setRequestedOverlay({ kind: "assistant" });
-    }
-    window.addEventListener("keydown", openAssistant);
-    return () => window.removeEventListener("keydown", openAssistant);
-  }, [visibleOverlay?.kind]);
-
   if (status !== "ready" || snapshot === null) {
     return (
       <HeadquartersState
@@ -432,7 +425,6 @@ export function HeadquartersDashboardView({
             <div className="headquarters-intro-meta">
               <p>Один подтверждённый ход — затем вся картина по запросу.</p>
               <HeadquartersControls
-                onOpenAssistant={() => setRequestedOverlay({ kind: "assistant" })}
                 onOpenCoverage={() => setRequestedOverlay({ kind: "coverage" })}
                 onOpenOnboarding={() =>
                   setRequestedOverlay({ kind: "onboarding" })
@@ -528,13 +520,11 @@ export function HeadquartersDashboardView({
 }
 
 function HeadquartersControls({
-  onOpenAssistant,
   onOpenCoverage,
   onOpenOnboarding,
   onOpenSources,
   snapshot
 }: {
-  onOpenAssistant: () => void;
   onOpenCoverage: () => void;
   onOpenOnboarding: () => void;
   onOpenSources: () => void;
@@ -591,19 +581,6 @@ function HeadquartersControls({
               : "Состояние источников"}
           </small>
         </span>
-      </button>
-      <button
-        aria-haspopup="dialog"
-        className="headquarters-assistant-launcher"
-        onClick={onOpenAssistant}
-        type="button"
-      >
-        <span aria-hidden="true">✦</span>
-        <span>
-          <strong>Спросить FounderOS</strong>
-          <small>Навигатор по штабу</small>
-        </span>
-        <kbd>⌘ K</kbd>
       </button>
     </div>
   );
@@ -889,21 +866,6 @@ function HeadquartersDrawer({
       {overlay.kind === "pulse" ? <PulseDrawer metric={overlay.metric} /> : null}
       {overlay.kind === "sources" ? <SourcesDrawer snapshot={snapshot} /> : null}
       {overlay.kind === "coverage" ? <CoverageDrawer snapshot={snapshot} /> : null}
-      {overlay.kind === "assistant" ? (
-        <AssistantDrawer
-          onOpenMission={
-            snapshot.priority
-              ? () =>
-                  onOpen({
-                    kind: "mission",
-                    mission: snapshot.priority as HeadquartersMission,
-                    position: "priority"
-                  })
-              : null
-          }
-          onOpenSources={() => onOpen({ kind: "sources" })}
-        />
-      ) : null}
     </OverlayShell>
   );
 }
@@ -1041,30 +1003,6 @@ function CoverageDrawer({ snapshot }: { snapshot: HeadquartersSnapshotResponse }
   );
 }
 
-function AssistantDrawer({
-  onOpenMission,
-  onOpenSources
-}: {
-  onOpenMission: (() => void) | null;
-  onOpenSources: () => void;
-}) {
-  return (
-    <div className="headquarters-drawer-content headquarters-assistant-empty">
-      <span className="headquarters-assistant-symbol" aria-hidden="true">✦</span>
-      <p className="headquarters-drawer-lead">
-        Диалоговый режим ещё не включён. FounderOS не будет изображать ответ без отдельного проверенного read-only контура.
-      </p>
-      <div className="headquarters-assistant-shortcuts">
-        {onOpenMission ? (
-          <button onClick={onOpenMission} type="button">Почему этот ход главный?</button>
-        ) : null}
-        <button onClick={onOpenSources} type="button">Что с источниками?</button>
-        <Link href="/actions?status=proposed">Какие решения ждут?</Link>
-      </div>
-    </div>
-  );
-}
-
 function HeadquartersState({
   onRetry,
   status,
@@ -1123,13 +1061,6 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
-  );
-}
-
 function stateContent(status: Exclude<HeadquartersDashboardStatus, "ready">) {
   if (status === "loading") {
     return { description: "Собираем один согласованный снимок компании.", icon: "", title: "Штаб просыпается" };
@@ -1150,7 +1081,6 @@ function stateContent(status: Exclude<HeadquartersDashboardStatus, "ready">) {
 }
 
 function overlayTitle(overlay: HeadquartersOverlay): string {
-  if (overlay.kind === "assistant") return "Спросить FounderOS";
   if (overlay.kind === "coverage") return "Как собран снимок";
   if (overlay.kind === "decision") return overlay.mission.title;
   if (overlay.kind === "onboarding") return "Запуск компании";

@@ -40,12 +40,15 @@ to proposal/snapshot versions and idempotency, and an audit-backed receipt
 survives a failed Headquarters refetch. Confirmed employee/customer renderers
 are present, while their production mission relation projection remains
 schema/data gated. The full phased acceptance ledger is
-`LIVING_COMMAND_CENTER_CHECKLIST.md`. DEC-087 separately approves one
+`LIVING_COMMAND_CENTER_CHECKLIST.md`. DEC-091 now completes LC-07: one global
+authenticated launcher reads deterministic allowlisted answers from the exact
+shared Headquarters snapshot, rejects stale versions and performs no LLM,
+provider, persistence or mutation work. DEC-087 separately approves one
 future modular Source Foundry intake/promotion plane — not one server per source
 and not a second knowledge truth — after the real headquarters UI is accepted.
-The reference still does not claim real provider or LLM readiness; a read-only
-assistant query contract is the next product slice. The next external
-gate remains one founder-approved scoped GitHub App read, not a hosted deploy.
+The reference still does not claim real provider or LLM readiness. The next
+product and external gate is one founder-approved scoped GitHub App read, not a
+hosted deploy.
 External mutation and LLM narrative remain separate human-gated horizons. Docs
 consolidation is complete; this roadmap is planning context, not the live task
 source.
@@ -315,12 +318,12 @@ Missing:
   Live Jira/Gmail/Drive provider OAuth/sync remains deferred beyond the
   local-import MVP surface.
 
-Next step: follow `../PROGRESS.md`. Add the deterministic workspace-scoped
-read-only assistant contract over the same Headquarters service and snapshot,
-with normalized citations and no LLM, persistence or mutation. Keep one
-explicit founder-approved GitHub read as the next external gate; keep provider
-reads human-gated and never add browser-stored operator credentials. Durable
-business-profile authoring and external execution remain separate gated work.
+Next step: follow `../PROGRESS.md`. Prove one explicit founder-approved,
+repository-scoped GitHub read with a visible result and receipt; keep provider
+reads human-gated and never add browser-stored operator credentials. The
+deterministic shared-snapshot assistant is complete in DEC-091. Durable
+business-profile authoring, LLM mode and external execution remain separate
+gated work.
 
 Definition of Done:
 

@@ -74,6 +74,11 @@ import {
   type HeadquartersOnboardingDetailResponse,
   type HeadquartersSnapshotResponse
 } from "./headquarters";
+import {
+  parseAssistantQueryResponse,
+  type AssistantQueryRequest,
+  type AssistantQueryResponse
+} from "./assistant";
 
 // Same-origin base: the browser calls the web origin, and next.config.mjs
 // proxies /api/* to the backend, keeping the session cookie first-party.
@@ -208,6 +213,26 @@ export async function fetchHeadquartersOnboarding(
     options
   );
   return parseHeadquartersOnboardingDetailResponse(payload);
+}
+
+export function buildWorkspaceAssistantQueryPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/assistant/query`;
+}
+
+export async function queryWorkspaceAssistant(
+  workspaceId: string,
+  request: AssistantQueryRequest,
+  options: ApiFetchOptions = {}
+): Promise<AssistantQueryResponse> {
+  const payload = await apiFetch<unknown>(
+    buildWorkspaceAssistantQueryPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+  return parseAssistantQueryResponse(payload);
 }
 
 export function buildWorkspaceCompanyMapResolutionsPath(workspaceId: string): string {

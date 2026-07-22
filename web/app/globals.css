@@ -2150,13 +2150,11 @@ textarea {
   min-width: 0;
 }
 
-.headquarters-source-health > span,
-.headquarters-assistant-launcher > span:nth-child(2) {
+.headquarters-source-health > span {
   display: grid;
 }
 
-.headquarters-source-health small,
-.headquarters-assistant-launcher small {
+.headquarters-source-health small {
   color: var(--muted);
   font-size: 10px;
   line-height: 1.35;
@@ -2169,7 +2167,6 @@ textarea {
 }
 
 .headquarters-source-health,
-.headquarters-assistant-launcher,
 .headquarters-onboarding-launcher {
   align-items: center;
   background: var(--panel);
@@ -2185,7 +2182,6 @@ textarea {
 }
 
 .headquarters-source-health:hover,
-.headquarters-assistant-launcher:hover,
 .headquarters-onboarding-launcher:hover {
   border-color: #8ca397;
   box-shadow: 0 8px 22px rgb(16 24 21 / 7%);
@@ -2210,7 +2206,6 @@ textarea {
 }
 
 .headquarters-source-health strong,
-.headquarters-assistant-launcher strong,
 .headquarters-onboarding-launcher strong {
   font-size: 11px;
 }
@@ -2239,26 +2234,6 @@ textarea {
 .headquarters-onboarding-launcher small {
   color: var(--muted);
   font-size: 10px;
-}
-
-.headquarters-assistant-launcher > span:first-child {
-  align-items: center;
-  background: var(--ink);
-  border-radius: 9px;
-  color: var(--signal);
-  display: inline-flex;
-  height: 28px;
-  justify-content: center;
-  width: 28px;
-}
-
-.headquarters-assistant-launcher kbd {
-  background: var(--panel-muted);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 10px;
-  padding: 3px 5px;
 }
 
 .headquarters-command-deck {
@@ -3623,46 +3598,6 @@ textarea {
   margin: 0;
 }
 
-.headquarters-assistant-empty {
-  align-content: start;
-}
-
-.headquarters-assistant-symbol {
-  align-items: center;
-  background: var(--ink);
-  border-radius: 16px;
-  color: var(--signal);
-  display: inline-flex;
-  font-size: 22px;
-  height: 54px;
-  justify-content: center;
-  width: 54px;
-}
-
-.headquarters-assistant-shortcuts {
-  display: grid;
-  gap: 7px;
-}
-
-.headquarters-assistant-shortcuts :is(button, a) {
-  align-items: center;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  color: var(--text);
-  cursor: pointer;
-  display: flex;
-  font-size: 11px;
-  font-weight: 750;
-  min-height: 44px;
-  padding: 10px;
-  text-align: left;
-}
-
-.headquarters-assistant-shortcuts :is(button, a):hover {
-  border-color: #8ca397;
-}
-
 .headquarters--state {
   display: grid;
   gap: 12px;
@@ -3741,10 +3676,6 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .headquarters-assistant-launcher small,
-  .headquarters-assistant-launcher kbd {
-    display: none;
-  }
 }
 
 @media (max-width: 760px) {
@@ -3754,8 +3685,7 @@ textarea {
     display: grid;
   }
 
-  .headquarters-source-health,
-  .headquarters-assistant-launcher {
+  .headquarters-source-health {
     justify-content: center;
   }
 

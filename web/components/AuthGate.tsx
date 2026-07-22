@@ -3,10 +3,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { MeResponse } from "../lib/auth";
 import { fetchMe, logout } from "../lib/auth";
+import {
+  AssistantSnapshotRegistrationContext,
+  type AssistantSnapshotSource
+} from "../lib/assistant-snapshot";
 import { M } from "../lib/messages";
 import {
   isWorkspaceSelectionValid,
@@ -20,6 +24,7 @@ import {
   MobilePrimaryNavigation,
   Sidebar
 } from "./Sidebar";
+import { CompanyAssistant } from "./CompanyAssistant";
 import { WorkspaceChoice, WorkspaceSelector } from "./WorkspaceSelector";
 import styles from "./workspace-selector.module.css";
 
@@ -31,6 +36,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [workspaceSelectionResolved, setWorkspaceSelectionResolved] = useState(false);
   const [externalOperationPending, setExternalOperationPending] = useState(false);
+  const [assistantSnapshotSource, setAssistantSnapshotSource] =
+    useState<AssistantSnapshotSource | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+
+  const registerAssistantSnapshotSource = useCallback(
+    (source: AssistantSnapshotSource) => {
+      setAssistantSnapshotSource(source);
+      return () => {
+        setAssistantSnapshotSource((current) =>
+          current === source ? null : current
+        );
+      };
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +103,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       }
     }
   }, [me]);
+
+  useEffect(() => {
+    setAssistantSnapshotSource(null);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (
@@ -190,28 +214,38 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext.Provider value={session}>
-      <div className="app-shell">
-        <Sidebar locked={externalOperationPending} />
-        <main className="main">
-          <div className="topbar" inert={externalOperationPending}>
-            <div className="topbar-system-links" aria-label={M.nav.backstage}>
-              <Link className="topbar-radar-link" href="/connectors">
-                {M.nav.radars}
-              </Link>
-              <Link className="topbar-settings-link" href="/settings">
-                {M.nav.settings}
-              </Link>
+      <AssistantSnapshotRegistrationContext.Provider
+        value={registerAssistantSnapshotSource}
+      >
+        <div className="app-shell" ref={shellRef}>
+          <Sidebar locked={externalOperationPending} />
+          <main className="main">
+            <div className="topbar" inert={externalOperationPending}>
+              <div className="topbar-system-links" aria-label={M.nav.backstage}>
+                <Link className="topbar-radar-link" href="/connectors">
+                  {M.nav.radars}
+                </Link>
+                <Link className="topbar-settings-link" href="/settings">
+                  {M.nav.settings}
+                </Link>
+              </div>
+              <CompanyAssistant
+                backgroundRef={shellRef}
+                disabled={externalOperationPending}
+                snapshotSource={assistantSnapshotSource}
+                workspaceId={workspaceId}
+              />
+              {workspaceControl}
+              <ProfileMenu onLogout={onLogout} user={me.user} />
             </div>
-            {workspaceControl}
-            <ProfileMenu onLogout={onLogout} user={me.user} />
-          </div>
-          <ContextNavigation locked={externalOperationPending} />
-          <div className="content" key={workspaceId ?? "no-workspace"}>
-            {children}
-          </div>
-        </main>
-        <MobilePrimaryNavigation locked={externalOperationPending} />
-      </div>
+            <ContextNavigation locked={externalOperationPending} />
+            <div className="content" key={workspaceId ?? "no-workspace"}>
+              {children}
+            </div>
+          </main>
+          <MobilePrimaryNavigation locked={externalOperationPending} />
+        </div>
+      </AssistantSnapshotRegistrationContext.Provider>
     </SessionContext.Provider>
   );
 }

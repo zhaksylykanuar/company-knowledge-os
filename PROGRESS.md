@@ -10,6 +10,30 @@
 
 ## ▶ СЕЙЧАС
 
+- **LC-07 Deterministic read-only company assistant (DEC-091): РЕАЛИЗОВАН
+  ЛОКАЛЬНО.** Один глобальный `Спросить` launcher теперь доступен во всех
+  authenticated product zones и открывается через `Cmd/Ctrl+K`. Новый
+  workspace-scoped `POST .../assistant/query` читает тот же
+  `read_workspace_headquarters` и требует точный экранный `hqs1_*` snapshot;
+  изменившийся snapshot даёт `409 snapshot_changed`, очищает прежний ответ и
+  требует явного повтора после refetch. Первая версия без LLM классифицирует
+  только allowlisted intents, возвращает bounded text/citations/suggestions и
+  capability-filtered navigation, не хранит историю, не вызывает providers и
+  не мутирует данные. Запросы ограничены по длине, времени, размеру ответа,
+  evidence count, per-user/workspace rate и identical-query single-flight;
+  вопрос и private citation content не логируются. Viewer остаётся read-only,
+  cross-workspace и prompt-injection paths fail closed, unsafe links и secret
+  query params отбрасываются, а отсутствие evidence даёт ровно
+  `Недостаточно подтверждённых данных.` Просьба «Сделай сам» может только
+  открыть существующий human confirmation flow для роли с правом review.
+  Проверено 2026-07-22: backend **731/731 passed / 1 external deprecation
+  warning**, Ruff; frontend **420/420 passed**, typecheck и production build
+  (**19 routes**). Authenticated browser QA подтвердил совпадение priority HQ и
+  assistant, launcher на HQ и Radars, keyboard shortcut, focus restore,
+  citation navigation, no-write action boundary, живой 409 → refetch → explicit
+  retry и 0 console warnings/errors. Временные QA user/workspace удалены.
+  Следующий продуктовый gate — **LC-04: первый founder-approved
+  repository-scoped GitHub read с видимым результатом и receipt.**
 - **SECURITY-01 Frontend supply-chain hardening (DEC-090): РЕАЛИЗОВАНО
   ЛОКАЛЬНО.** Next обновлён до `16.2.11`, а уязвимые транзитивные PostCSS и
   Sharp зафиксированы на исправленных `8.5.21` и `0.35.3`; React намеренно не
@@ -23,9 +47,8 @@
   frontend **413/413 passed** плюс typecheck/lint и production build; backend
   **711/711 passed / 1 external deprecation warning**, Ruff и tracked-secret
   scan; Alembic head/current/check зелёные на `c5d6e7f8a9b0`; актуальный
-  Renovate validator принял конфигурацию. Следующий продуктовый срез остаётся
-  **LC-07 — deterministic read-only company assistant**; dependency fix не
-  расширяет runtime/provider/write/LLM scope.
+  Renovate validator принял конфигурацию. Dependency fix не расширяет
+  runtime/provider/write/LLM scope; последующий LC-07 завершён выше.
 - **LC-05/LC-08 Exact drill-down + local decision receipt (DEC-089):
   РЕАЛИЗОВАНО ЛОКАЛЬНО.** Каждая Headquarters mission теперь открывает точную
   карточку с `why now`, impact, due, owner, customer, sources и evidence;
@@ -58,10 +81,8 @@
   покрывает same-key replay и different-key conflict. Local smoke: login
   **200**, health **200**, unauthenticated auth probe **401**. `local-doctor`
   видит PostgreSQL 16 и валидный credential aggregate, но ожидаемо сообщает
-  занятые `8765/3000`, потому что локальный runtime уже запущен. Следующая задача
-  после этого среза: **LC-07 — deterministic
-  read-only company assistant поверх того же
-  Headquarters snapshot.**
+  занятые `8765/3000`, потому что локальный runtime уже запущен. Последующий
+  LC-07 завершён выше; внешний LC-08 остаётся отдельным future gate.
 - **LC-03 Computed onboarding inside Headquarters (DEC-088): РЕАЛИЗОВАН
   ЛОКАЛЬНО.** `HeadquartersSnapshot` теперь честно версионирован как
   `headquarters.v2` и содержит один server-computed `onboarding.v1` из пяти
@@ -101,8 +122,8 @@
   action без target остаётся disabled. Реальные evidence, ranking reason,
   source health и coverage раскрываются через production `OverlayShell` с
   labelled dialog, focus trap, inert background, Escape/backdrop close,
-  scroll-lock и возвратом фокуса. Assistant launcher пока честно является
-  навигатором по тому же snapshot и не изображает готовый чат до LC-07.
+  scroll-lock и возвратом фокуса. Последующий LC-07 заменил navigation shell
+  реальным deterministic read-only assistant поверх того же snapshot.
   Loading, no-workspace, calm, partial/stale, forbidden, offline, contract и
   retry states остаются на одной поверхности. `/demo` fixtures, provider/LLM
   calls, persistence и external writes в production path не добавлены.
@@ -185,7 +206,7 @@
   desktop-проход 1280×720 ещё нельзя заявлять завершённым. Mobile/tablet не входят
   в контракт. Следующий реальный продуктовый срез — перенести этот минимальный
   штаб на workspace-scoped Company Brain/Map/Briefing/ActionProposal данные;
-  реальный read-only assistant endpoint остаётся отдельным backend-контрактом.
+  оба последующих read model и read-only assistant уже реализованы выше.
 - **UX-RESET-03 Missions Decision Room (DEC-083): РЕАЛИЗОВАН ЛОКАЛЬНО.**
   `/actions` теперь выглядит как комната решений, а не реестр операций: одна
   выбранная миссия остаётся в фокусе, компактная очередь показывает остальные,

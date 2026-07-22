@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added the real deterministic company assistant (DEC-091). The
+  workspace-scoped `POST /api/v1/workspaces/{workspace_id}/assistant/query`
+  reads the exact shared Headquarters snapshot, requires the caller's visible
+  `expected_snapshot_id`, and returns bounded allowlisted intents, normalized
+  citations, suggestions, optional safe navigation, partial/warnings metadata,
+  `is_live=true` and `llm_used=false`. It persists no conversation, calls no
+  provider/LLM and performs no mutation. Per-user/workspace rate limiting,
+  identical-query single-flight, timeout/size bounds, prompt-injection tests,
+  RBAC/tenancy checks and safe citation filtering protect the backend boundary.
 - Added the frontend runtime dependency security gate (DEC-090). CI now runs
   `npm audit --omit=dev --audit-level=moderate`; CodeQL scans
   JavaScript/TypeScript in addition to Python and GitHub Actions; Renovate now
@@ -13,6 +22,15 @@
 
 ### Changed
 
+- Replaced the Headquarters-only placeholder with one authenticated-shell
+  assistant launcher across product zones. `Cmd/Ctrl+K`, overlay focus restore,
+  strict runtime response validation and internal/external citation navigation
+  are preserved. Headquarters registers its exact visible snapshot; other
+  zones fetch the same server projection. A stale query returns
+  `409 snapshot_changed`, clears the old answer, refetches and requires an
+  explicit retry. «Сделай сам» only links an authorized reviewer to the
+  existing human confirmation screen and never creates, approves or executes a
+  proposal.
 - Updated Next from `16.2.9` to `16.2.11` and constrained its vulnerable
   transitive PostCSS and Sharp packages to patched `8.5.21` and `0.35.3`.
   React was intentionally left unchanged. A clean lockfile install resolves the
