@@ -73,6 +73,7 @@ def test_ci_runs_frontend_test_build_typecheck_and_lint() -> None:
     assert "working-directory: web" in workflow
     for command in (
         "npm ci",
+        "npm audit --omit=dev --audit-level=moderate",
         "npm test",
         "npm run build",
         "npm run typecheck",

@@ -2834,6 +2834,32 @@ projection still leaves confirmed owner, primary-person and organization IDs
 empty; confirmed employee/customer navigation therefore remains an explicit
 schema/data gate rather than a claimed end-to-end flow.
 
+## DEC-090 - Frontend Runtime Dependency Risk Is A CI Gate
+
+Decision (2026-07-22): the committed frontend lockfile must resolve without any
+moderate-or-higher npm advisory in runtime dependencies. CI enforces this with
+`npm audit --omit=dev --audit-level=moderate` after a clean `npm ci`. CodeQL
+must analyze JavaScript/TypeScript alongside Python and GitHub Actions, and
+Renovate must track the `web/package.json` npm manifest as well as Python
+dependencies with a minimum release age.
+
+The immediate remediation updates Next to `16.2.11` and constrains its
+transitive PostCSS and Sharp packages to patched `8.5.21` and `0.35.3` through
+npm overrides. These overrides are an explicit lock-level compatibility guard,
+not permission for broad or forced dependency rewrites. Future routine updates
+may remove an override only after the direct dependency resolves a non-vulnerable
+version and clean install, audit, tests, typecheck and production build pass.
+`npm audit fix --force` is not an accepted remediation because it may replace a
+supported framework with an unrelated breaking version.
+
+This extends DEC-027/DEC-037 and does not change the provider-free CI boundary.
+Dependency metadata may be queried during install/audit, but CI gains no
+provider credential, product data, runtime API call or external-write ability.
+Dependency Review remains the pull-request diff guard; npm audit protects the
+resolved runtime tree, while CodeQL and Renovate cover different static-analysis
+and update-discovery roles. Passing these gates does not prove deployed or live
+provider behavior.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

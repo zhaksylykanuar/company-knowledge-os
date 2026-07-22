@@ -1,5 +1,26 @@
 # FounderOS Changelog
 
+## 2026-07-22
+
+### Added
+
+- Added the frontend runtime dependency security gate (DEC-090). CI now runs
+  `npm audit --omit=dev --audit-level=moderate`; CodeQL scans
+  JavaScript/TypeScript in addition to Python and GitHub Actions; Renovate now
+  tracks `web/package.json` with the same three-day stability delay as Python.
+  Contract tests pin these supply-chain expectations without calling providers
+  or reading secrets.
+
+### Changed
+
+- Updated Next from `16.2.9` to `16.2.11` and constrained its vulnerable
+  transitive PostCSS and Sharp packages to patched `8.5.21` and `0.35.3`.
+  React was intentionally left unchanged. A clean lockfile install resolves the
+  expected versions and reports zero runtime npm advisories.
+- Corrected the Roadmap's stale Alembic-head reference to the actual single head
+  `c5d6e7f8a9b0` and aligned the security baseline with the current dual
+  browser-session/operator authentication boundary.
+
 ## 2026-07-17
 
 ### Added

@@ -39,7 +39,7 @@ def test_ci_uses_least_privilege_token_and_pinned_python() -> None:
     assert (ROOT / ".python-version").read_text(encoding="utf-8").strip() == "3.12"
 
 
-def test_codeql_scans_python_and_github_actions_with_v4() -> None:
+def test_codeql_scans_python_javascript_and_github_actions_with_v4() -> None:
     workflow = _text(".github/workflows/codeql.yml")
 
     assert "github/codeql-action/init@411bbbe57033eedfc1a82d68c01345aa96c737d7 # v4" in workflow
@@ -49,7 +49,7 @@ def test_codeql_scans_python_and_github_actions_with_v4() -> None:
     assert "contents: read" in workflow
     assert "pull-requests: read" in workflow
     assert "security-events: write" in workflow
-    assert "language: [python, actions]" in workflow
+    assert "language: [python, javascript-typescript, actions]" in workflow
     assert "queries: security-and-quality" in workflow
     assert "schedule:" in workflow
     assert "pull_request:" in workflow
@@ -154,21 +154,29 @@ def test_dependabot_tracks_github_actions() -> None:
     assert 'interval: "weekly"' in dependabot
 
 
-def test_renovate_tracks_uv_python_dependencies_without_action_duplicates() -> None:
+def test_renovate_tracks_python_and_frontend_without_action_duplicates() -> None:
     renovate = json.loads(_text("renovate.json"))
 
     assert renovate["$schema"] == "https://docs.renovatebot.com/renovate-schema.json"
-    assert renovate["enabledManagers"] == ["pep621"]
+    assert renovate["enabledManagers"] == ["npm", "pep621"]
     assert renovate["dependencyDashboard"] is True
     assert renovate["rangeStrategy"] == "bump"
     assert renovate["lockFileMaintenance"] == {
         "enabled": True,
         "schedule": ["before 6am on monday"],
     }
-    assert "uv" in renovate["labels"]
+    assert renovate["labels"] == ["dependencies"]
 
-    package_rule = renovate["packageRules"][0]
-    assert package_rule["matchManagers"] == ["pep621"]
-    assert package_rule["matchDatasources"] == ["pypi"]
-    assert package_rule["minimumReleaseAge"] == "3 days"
+    package_rules = {
+        rule["matchManagers"][0]: rule for rule in renovate["packageRules"]
+    }
+    python_rule = package_rules["pep621"]
+    assert python_rule["matchDatasources"] == ["pypi"]
+    assert python_rule["minimumReleaseAge"] == "3 days"
+    assert python_rule["addLabels"] == ["python", "uv"]
+
+    npm_rule = package_rules["npm"]
+    assert npm_rule["matchFileNames"] == ["web/package.json"]
+    assert npm_rule["minimumReleaseAge"] == "3 days"
+    assert npm_rule["addLabels"] == ["javascript", "npm"]
     assert "github-actions" not in json.dumps(renovate)

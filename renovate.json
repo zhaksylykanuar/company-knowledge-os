@@ -1,10 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "enabledManagers": ["pep621"],
+  "enabledManagers": ["npm", "pep621"],
   "dependencyDashboard": true,
   "timezone": "Asia/Almaty",
-  "labels": ["dependencies", "python", "uv"],
+  "labels": ["dependencies"],
   "rangeStrategy": "bump",
   "prConcurrentLimit": 5,
   "lockFileMaintenance": {
@@ -17,7 +17,16 @@
       "matchManagers": ["pep621"],
       "matchDatasources": ["pypi"],
       "minimumReleaseAge": "3 days",
-      "groupName": "python dependencies"
+      "groupName": "python dependencies",
+      "addLabels": ["python", "uv"]
+    },
+    {
+      "description": "Keep frontend dependency updates stable enough for npm lockfile regeneration.",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["web/package.json"],
+      "minimumReleaseAge": "3 days",
+      "groupName": "frontend dependencies",
+      "addLabels": ["javascript", "npm"]
     }
   ]
 }

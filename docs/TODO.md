@@ -14,6 +14,10 @@ Implemented foundations:
 
 - FastAPI backend with canonical `/api/v1` routes, async SQLAlchemy/Postgres,
   Alembic migrations, and one current Alembic head (`c5d6e7f8a9b0`).
+- Frontend runtime dependencies are supply-chain gated (DEC-090): patched
+  Next/PostCSS/Sharp versions are locked, CI rejects moderate-or-higher runtime
+  npm advisories, CodeQL covers JavaScript/TypeScript as well as Python and
+  Actions, and Renovate tracks both `web/package.json` and Python dependencies.
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -420,6 +424,16 @@ business-profile write or migration was added.
 
 ## Known Debts / Watch List
 
+- **Static-analysis depth:** `web` lint currently aliases TypeScript typecheck,
+  and the existing backend mypy configuration is not a viable gate against the
+  current codebase. Introduce real frontend lint and typed-backend adoption only
+  as scoped cleanup with an explicit baseline; do not mass-reformat/refactor the
+  repository to manufacture a green gate.
+- **Coverage and hotspots:** the backend suite is broad but real-provider/error
+  branches are materially weaker than auth/Headquarters paths, no coverage floor
+  is enforced, and several read/UI modules remain large. Add focused failure-path
+  coverage and extract seams alongside product slices rather than starting an
+  unrelated large refactor.
 - **Local backup continuity:** the current private bundle passed checksum,
   matching-major restore, Alembic/count, raw-digest and credential-decryptability
   proof. Keep creating a new verified bundle before future schema/data-risk work;

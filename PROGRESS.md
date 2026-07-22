@@ -10,6 +10,22 @@
 
 ## ▶ СЕЙЧАС
 
+- **SECURITY-01 Frontend supply-chain hardening (DEC-090): РЕАЛИЗОВАНО
+  ЛОКАЛЬНО.** Next обновлён до `16.2.11`, а уязвимые транзитивные PostCSS и
+  Sharp зафиксированы на исправленных `8.5.21` и `0.35.3`; React намеренно не
+  обновлялся вне скоупа. `npm audit --omit=dev --audit-level=moderate` теперь
+  является обязательным frontend CI-gate, CodeQL анализирует Python,
+  JavaScript/TypeScript и GitHub Actions, а Renovate обслуживает и Python, и
+  `web/package.json` с трёхдневной выдержкой. Конфигурационные contract-тесты
+  не дают незаметно убрать эти границы. Проверено 2026-07-22: чистый `npm ci`,
+  разрешённые версии `next@16.2.11` / `postcss@8.5.21` / `sharp@0.35.3`, npm
+  runtime audit **0 vulnerabilities**, supply-chain/CI contracts **14 passed**,
+  frontend **413/413 passed** плюс typecheck/lint и production build; backend
+  **711/711 passed / 1 external deprecation warning**, Ruff и tracked-secret
+  scan; Alembic head/current/check зелёные на `c5d6e7f8a9b0`; актуальный
+  Renovate validator принял конфигурацию. Следующий продуктовый срез остаётся
+  **LC-07 — deterministic read-only company assistant**; dependency fix не
+  расширяет runtime/provider/write/LLM scope.
 - **LC-05/LC-08 Exact drill-down + local decision receipt (DEC-089):
   РЕАЛИЗОВАНО ЛОКАЛЬНО.** Каждая Headquarters mission теперь открывает точную
   карточку с `why now`, impact, due, owner, customer, sources и evidence;

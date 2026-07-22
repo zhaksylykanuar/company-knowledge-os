@@ -99,7 +99,7 @@ Done:
   `uq_tasks_workspace_provider_external_id` and idempotent `ON CONFLICT` upserts
   across the GitHub sync path. Canonical `repositories` also have a
   workspace/provider/full_name unique guard for cross-path GitHub identity.
-- Existing migrations are at one Alembic head/current: `b4d5e6f7a8c9`.
+- Existing migrations are at one Alembic head/current: `c5d6e7f8a9b0`.
 - Evidence refs are a repository invariant.
 - `source_events` / `normalized_activity_items` / `ingested_events` are retained
   compatibility substrate; FOS-009 repointed workspace repository reads to

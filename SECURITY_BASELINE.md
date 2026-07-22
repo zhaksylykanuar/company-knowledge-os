@@ -26,20 +26,22 @@ when webhook routes exist, append-only audit logs.
 ## CI / Supply Chain Baseline
 
 GitHub Actions run least-privilege tokens, SHA-pinned actions, digest-pinned
-service containers, tracked-secret scanning, CodeQL, Dependency Review, uv
-dependency submission, and OpenSSF Scorecard SARIF upload. Dependency Review
+service containers, tracked-secret scanning, Python/JavaScript/TypeScript/Actions
+CodeQL, Dependency Review, uv dependency submission, runtime npm audit at the
+moderate threshold, and OpenSSF Scorecard SARIF upload. Renovate tracks Python
+and the frontend npm manifest with a minimum release age. Dependency Review
 blocks high-or-critical vulnerable runtime, development, or unknown-scope PR
 dependency changes. Local-only `.env`, `secrets/`, `raw_storage/`,
 `obsidian_vault/`, and `operator_outputs/` paths must not be tracked.
 
 ## API boundary status
-The boundary contract lives in code: `app/main.py` registers the protected API
-routers behind `require_api_key`, and `app/api/auth.py` enforces it. Endpoint-level
-auth is implemented for selected protected API routes. A second, coexisting
-identity exists for the founder-facing web app: email+password login on
-server-side, revocable sessions (`/api/v1/auth/*`, `require_session`), resolved
-alongside the operator key by `get_current_actor` (the operator API key is for
-server/CI/admin tooling). Auth is fail-closed outside local/dev:
+The boundary contract lives in code: `app/main.py` registers workspace product
+routers behind `get_current_actor`, which accepts either a valid browser session
+or the operator API key; the legacy non-workspace Company Brain preview remains
+operator-only behind `require_api_key`. Founder-facing email+password auth uses
+server-side revocable sessions (`/api/v1/auth/*`, `require_session`), while the
+operator key remains for server/CI/admin tooling. Auth is fail-closed outside
+local/dev:
 `enforce_fail_closed_auth` aborts startup when a non-local `APP_ENV` runs with
 auth disabled or without a configured API key, so a forgotten flag is a loud
 startup failure rather than a silent fail-open exposure. Write/action approval
