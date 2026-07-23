@@ -452,6 +452,94 @@ async def test_managed_github_probe_reads_only_one_bounded_repository_page(
     assert result.scopes == ("contents",)
 
 
+async def test_manual_provider_probes_use_fixed_bounded_read_endpoints(
+    monkeypatch,
+) -> None:
+    github_url = "https://api.github.com/user"
+    jira_url = "https://founderos-test.atlassian.net/rest/api/3/myself"
+    gmail_url = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+    drive_url = (
+        "https://www.googleapis.com/drive/v3/about?"
+        "fields=user(displayName,emailAddress)"
+    )
+    responses = {
+        github_url: (
+            {"login": "qtwin-io"},
+            {"x-oauth-scopes": "repo, read:org"},
+        ),
+        jira_url: ({"displayName": "FounderOS Jira"}, {}),
+        gmail_url: (
+            {"emailAddress": "founder@example.test", "messagesTotal": 42},
+            {},
+        ),
+        drive_url: (
+            {"user": {"emailAddress": "founder@example.test"}},
+            {},
+        ),
+    }
+    observed: list[dict[str, object]] = []
+
+    async def _fake_get_json(url: str, *, headers, auth=None):
+        observed.append(
+            {
+                "url": url,
+                "bearer_auth": headers.get("Authorization", "").startswith(
+                    "Bearer "
+                ),
+                "basic_auth": auth is not None,
+                "user_agent": headers.get("User-Agent"),
+            }
+        )
+        return responses[url]
+
+    monkeypatch.setattr(connector_control_service, "_get_json", _fake_get_json)
+
+    github = await connector_control_service._probe_github_token(TEST_TOKEN)
+    jira = await connector_control_service._probe_jira(
+        TEST_TOKEN,
+        base_url="https://founderos-test.atlassian.net",
+        account_email="founder@example.test",
+    )
+    gmail = await connector_control_service._probe_gmail(TEST_TOKEN)
+    drive = await connector_control_service._probe_drive(TEST_TOKEN)
+
+    assert observed == [
+        {
+            "url": github_url,
+            "bearer_auth": True,
+            "basic_auth": False,
+            "user_agent": "founderOS",
+        },
+        {
+            "url": jira_url,
+            "bearer_auth": False,
+            "basic_auth": True,
+            "user_agent": "founderOS",
+        },
+        {
+            "url": gmail_url,
+            "bearer_auth": True,
+            "basic_auth": False,
+            "user_agent": "founderOS",
+        },
+        {
+            "url": drive_url,
+            "bearer_auth": True,
+            "basic_auth": False,
+            "user_agent": "founderOS",
+        },
+    ]
+    assert github == ProviderProbeResult(
+        account_label="qtwin-io",
+        records_visible=None,
+        scopes=("repo", "read:org"),
+    )
+    assert jira.account_label == "FounderOS Jira"
+    assert gmail.account_label == "founder@example.test"
+    assert gmail.records_visible == 42
+    assert drive.account_label == "founder@example.test"
+
+
 async def test_disconnect_removes_only_control_center_credential_and_receipts(
     monkeypatch,
 ) -> None:

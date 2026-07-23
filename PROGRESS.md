@@ -33,7 +33,7 @@
   idempotency/read-back. Managed GitHub App рекомендован, PAT оставлен
   advanced fallback; полный Google OAuth consent/refresh и Jira/Gmail/Drive
   write executors честно отсутствуют. Проверено 2026-07-23: backend
-  **739/739 passed / 1 external deprecation warning**, Ruff; frontend
+  **740/740 passed / 1 external deprecation warning**, Ruff; frontend
   **426/426 passed**, typecheck, production build (**20 routes**) и runtime npm
   audit (**0 vulnerabilities**). Authenticated browser QA на 1280×720 и
   390×844 подтвердил role-aware control center, provider switching с очисткой
