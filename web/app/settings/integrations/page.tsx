@@ -45,6 +45,18 @@ type IntegrationsControlCenterViewProps = {
 
 const PROVIDER_ORDER: ConnectorProvider[] = ["github", "jira", "gmail", "drive"];
 
+export function connectorDisconnectSuccessMessage(
+  provider: ConnectorProvider,
+  managedGitHub: boolean
+): string {
+  if (provider === "github") {
+    return managedGitHub
+      ? "Сохранённый personal access token удалён. Managed GitHub App, canonical данные и история не изменены."
+      : "Сохранённый personal access token удалён. Canonical данные и история источника не изменены.";
+  }
+  return "Сохранённый секрет удалён. Canonical данные и история источника не изменены.";
+}
+
 export default function IntegrationsSettingsPage() {
   const session = useSession();
   const workspaceId = session?.workspaceId ?? null;
@@ -151,6 +163,10 @@ export default function IntegrationsSettingsPage() {
     if (!workspaceId || pendingAction) {
       return;
     }
+    const managedGitHub =
+      provider === "github" &&
+      data?.connectors.find((connector) => connector.provider === provider)
+        ?.auth_method === "github_app_installation";
     setPendingAction("disconnect");
     setActionError(null);
     setActionMessage(null);
@@ -158,9 +174,7 @@ export default function IntegrationsSettingsPage() {
       await disconnectConnectorConfiguration(workspaceId, provider);
       await refreshControlCenter();
       setActionMessage(
-        provider === "github"
-          ? "Сохранённый personal access token удалён. Managed GitHub App, canonical данные и история не изменены."
-          : "Сохранённый секрет удалён. Canonical данные и история источника не изменены."
+        connectorDisconnectSuccessMessage(provider, managedGitHub)
       );
     } catch (caught: unknown) {
       setActionError(

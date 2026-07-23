@@ -23,6 +23,7 @@ from app.api.jira import router as jira_router
 from app.api.workspace_company_brain import router as workspace_company_brain_router
 from app.api.workspaces import router as workspaces_router
 from app.core.config import resolved_cors_allowed_origins, settings
+from app.core.http_security import ConnectorResponseNoStoreMiddleware
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 
 # Configure basic application logging as early as possible (MVP §1.5 "basic
@@ -48,6 +49,9 @@ app = FastAPI(
 
 # Basic request logging: method, path, status, duration — no bodies/secrets.
 app.add_middleware(RequestLoggingMiddleware)
+# Connector configuration and verification responses are never cacheable,
+# including auth/validation failures created before endpoint execution.
+app.add_middleware(ConnectorResponseNoStoreMiddleware)
 
 cors_allowed_origins = resolved_cors_allowed_origins(settings)
 if cors_allowed_origins:

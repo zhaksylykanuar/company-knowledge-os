@@ -21,8 +21,9 @@
   HTTPS `*.atlassian.net` origin, остальные probes используют фиксированные
   official hosts. `connector-control.v1` переиспользует
   `IntegrationConnection.provider_metadata`, поэтому migration не добавлена.
-  Все control responses являются `private, no-store`; локальная ошибка до
-  network boundary больше не может заявить provider-call. Owner/admin после
+  Все connector responses, включая auth/validation/application errors,
+  являются `private, no-store` на ASGI boundary; локальная ошибка до network
+  boundary больше не может заявить provider-call. Owner/admin после
   отдельного подтверждения может удалить UI-saved credential и receipts, не
   удаляя durable connection row, imported canonical data и sync history;
   managed GitHub App при удалении отдельного PAT fallback не затрагивается.
@@ -32,8 +33,8 @@
   idempotency/read-back. Managed GitHub App рекомендован, PAT оставлен
   advanced fallback; полный Google OAuth consent/refresh и Jira/Gmail/Drive
   write executors честно отсутствуют. Проверено 2026-07-23: backend
-  **738/738 passed / 1 external deprecation warning**, Ruff; frontend
-  **425/425 passed**, typecheck, production build (**20 routes**) и runtime npm
+  **739/739 passed / 1 external deprecation warning**, Ruff; frontend
+  **426/426 passed**, typecheck, production build (**20 routes**) и runtime npm
   audit (**0 vulnerabilities**). Authenticated browser QA на 1280×720 и
   390×844 подтвердил role-aware control center, provider switching с очисткой
   secret state, локализованный dry-run receipt и полный

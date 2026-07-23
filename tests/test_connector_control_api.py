@@ -244,8 +244,10 @@ async def test_configuration_rejects_unsafe_or_arbitrary_provider_urls(
             )
 
         assert unsafe_jira.status_code == 400
+        assert unsafe_jira.headers["cache-control"] == "private, no-store"
         assert "*.atlassian.net" in unsafe_jira.json()["detail"]
         assert arbitrary_github.status_code == 400
+        assert arbitrary_github.headers["cache-control"] == "private, no-store"
         assert arbitrary_github.json()["detail"] == (
             "custom provider URLs are not supported"
         )
@@ -388,8 +390,11 @@ async def test_member_can_view_but_cannot_change_or_check_connectors(
 
         assert center.status_code == 200
         assert apply_response.status_code == 403
+        assert apply_response.headers["cache-control"] == "private, no-store"
         assert check_response.status_code == 403
+        assert check_response.headers["cache-control"] == "private, no-store"
         assert disconnect_response.status_code == 403
+        assert disconnect_response.headers["cache-control"] == "private, no-store"
         assert apply_response.json() == {"detail": "insufficient workspace role"}
     finally:
         await _cleanup(marker)
@@ -491,6 +496,7 @@ async def test_disconnect_removes_only_control_center_credential_and_receipts(
         assert body["base_url"] is None
         assert TEST_TOKEN not in disconnected.text
         assert repeated.status_code == 409
+        assert repeated.headers["cache-control"] == "private, no-store"
 
         async with AsyncSessionLocal() as session:
             connection = await session.scalar(
@@ -511,6 +517,29 @@ async def test_disconnect_removes_only_control_center_credential_and_receipts(
             assert control["read_check"] is None
             assert control["write_check"] is None
             assert control["credential_removed_at"]
+    finally:
+        await _cleanup(marker)
+
+
+async def test_validation_errors_are_private_no_store(monkeypatch) -> None:
+    marker = uuid4().hex[:10]
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        owner, workspace, _ = await _seed_workspace(marker)
+        async with _client() as client:
+            response = await client.post(
+                _configuration_path(workspace.id, "github"),
+                headers=_headers(),
+                params={"owner_email": owner.email},
+                json={
+                    "access_token": "",
+                    "auth_method": "manual_provider_token",
+                },
+            )
+
+        assert response.status_code == 422
+        assert response.headers["cache-control"] == "private, no-store"
     finally:
         await _cleanup(marker)
 

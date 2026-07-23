@@ -3,7 +3,10 @@ import test from "node:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { IntegrationsControlCenterView } from "../app/settings/integrations/page";
+import {
+  connectorDisconnectSuccessMessage,
+  IntegrationsControlCenterView
+} from "../app/settings/integrations/page";
 import {
   buildWorkspaceConnectorCheckPath,
   buildWorkspaceConnectorConfigurationPath,
@@ -197,4 +200,19 @@ test("does not mistake a managed GitHub App for a stored PAT fallback", () => {
 
   assert.ok(html.includes('placeholder="Вставьте секрет"'));
   assert.doesNotMatch(html, /Удалить резервный personal access token/);
+});
+
+test("reports the actual GitHub credential lifecycle after removal", () => {
+  assert.equal(
+    connectorDisconnectSuccessMessage("github", false),
+    "Сохранённый personal access token удалён. Canonical данные и история источника не изменены."
+  );
+  assert.equal(
+    connectorDisconnectSuccessMessage("github", true),
+    "Сохранённый personal access token удалён. Managed GitHub App, canonical данные и история не изменены."
+  );
+  assert.equal(
+    connectorDisconnectSuccessMessage("jira", false),
+    "Сохранённый секрет удалён. Canonical данные и история источника не изменены."
+  );
 });

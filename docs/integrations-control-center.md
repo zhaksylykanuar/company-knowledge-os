@@ -14,8 +14,9 @@ second connector engine or a replacement for provider-specific radars.
   `integration_connections.encrypted_access_token`.
 - API responses never return encrypted values, token hints, raw provider
   payloads, connection UUIDs, installation IDs, or refresh tokens.
-- Control-center status and mutation responses use `Cache-Control: private,
-  no-store`.
+- Every workspace connector response uses `Cache-Control: private, no-store`
+  at the ASGI boundary, including authentication, authorization, validation
+  and application errors created before endpoint execution.
 - Applying a configuration makes no provider request and leaves it
   `saved_unverified`.
 - A read check is an explicit bounded GET request to a fixed provider endpoint.

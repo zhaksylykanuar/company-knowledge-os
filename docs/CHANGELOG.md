@@ -33,9 +33,12 @@
   owner/admin can now remove a control-center credential after a second UI
   confirmation without deleting the durable connection row, imported canonical
   data, or sync history; a managed GitHub App is unaffected when its separate
-  PAT fallback is removed. Every control response is `private, no-store`, and a
-  failed read receipt reports `provider_call_performed=false` when validation
-  stopped before the network boundary.
+  PAT fallback is removed. Every workspace connector response is
+  `private, no-store` at the ASGI boundary, including auth, validation and
+  application errors; a failed read receipt reports
+  `provider_call_performed=false` when validation stopped before the network
+  boundary. GitHub disconnect confirmation now distinguishes a standalone PAT
+  from a PAT fallback attached to an active managed GitHub App.
 
 ## 2026-07-22
 
