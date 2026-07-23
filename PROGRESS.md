@@ -10,6 +10,32 @@
 
 ## ▶ СЕЙЧАС
 
+- **INT-CTRL-01 Центр интеграций (DEC-092): РЕАЛИЗОВАН ЛОКАЛЬНО.**
+  В `/settings` добавлен отдельный вход в `/settings/integrations`, где
+  owner/admin управляет GitHub, Jira Cloud, Gmail и Google Drive: сохраняет
+  credential, запускает реальную ограниченную проверку чтения и видит
+  readiness записи. Секрет существует в browser только в password-поле до
+  отправки, шифруется backend до persistence и никогда не возвращается;
+  members/viewers получают только безопасный status. Apply не вызывает
+  provider и сбрасывает прежнюю верификацию. Jira допускает только точный
+  HTTPS `*.atlassian.net` origin, остальные probes используют фиксированные
+  official hosts. `connector-control.v1` переиспользует
+  `IntegrationConnection.provider_metadata`, поэтому migration не добавлена.
+  Write check является только dry-run: не расшифровывает credential, не
+  вызывает provider и не меняет внешний сервис; реальный GitHub write
+  по-прежнему возможен только через approved ActionProposal + allowlist +
+  idempotency/read-back. Managed GitHub App рекомендован, PAT оставлен
+  advanced fallback; полный Google OAuth consent/refresh и Jira/Gmail/Drive
+  write executors честно отсутствуют. Проверено 2026-07-23: backend
+  **736/736 passed / 1 external deprecation warning**, Ruff; frontend
+  **424/424 passed**, typecheck, production build (**20 routes**) и runtime npm
+  audit (**0 vulnerabilities**). Authenticated browser QA на 1280×720 и
+  390×844 подтвердил role-aware control center, provider switching с очисткой
+  secret state, локализованный dry-run receipt, отсутствие horizontal overflow
+  и 0 console warnings/errors. Временные QA user/workspace удалены, запущенный
+  для QA runtime остановлен. Следующий внешний gate остаётся **LC-04: один
+  founder-approved repository-scoped GitHub read с видимым canonical
+  результатом и receipt.**
 - **LC-07 Deterministic read-only company assistant (DEC-091): РЕАЛИЗОВАН
   ЛОКАЛЬНО.** Один глобальный `Спросить` launcher теперь доступен во всех
   authenticated product zones и открывается через `Cmd/Ctrl+K`. Новый

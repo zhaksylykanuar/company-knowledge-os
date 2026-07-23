@@ -173,7 +173,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow={M.settings.eyebrow}
         title={M.settings.title}
-        description="Управляйте людьми компании и безопасностью своего локального аккаунта в двух понятных разделах."
+        description="Управляйте людьми компании, внешними подключениями и безопасностью локального аккаунта."
       />
       <MissionStrip
         action={teamMission.action}
@@ -186,6 +186,18 @@ export default function SettingsPage() {
           </p>
         }
       />
+      <Link className="settings-integrations-entry" href="/settings/integrations">
+        <span className="settings-integrations-entry-icon" aria-hidden="true">
+          ↗
+        </span>
+        <span>
+          <strong>Интеграции и API</strong>
+          <small>
+            Секреты, scopes, проверка чтения и безопасный dry-run записи
+          </small>
+        </span>
+        <span className="settings-integrations-entry-action">Открыть центр</span>
+      </Link>
       <div className="settings-hub">
         <SettingsTeamPanelView
           canProvision={workspaceRole === "owner" || workspaceRole === "admin"}

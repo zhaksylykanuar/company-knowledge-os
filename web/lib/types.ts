@@ -84,6 +84,75 @@ export type ConnectorRegistryResponse = {
   boundary: ConnectorRegistryBoundary;
 };
 
+export type ConnectorProvider = "github" | "jira" | "gmail" | "drive";
+
+export type ConnectorControlState =
+  | "not_configured"
+  | "saved_unverified"
+  | "read_verified"
+  | "error";
+
+export type ConnectorCheckReceipt = {
+  status: "failed" | "guarded" | "passed" | "ready";
+  code: string;
+  message: string;
+  checked_at: string;
+  provider_call_performed: boolean;
+  external_write_performed: boolean;
+  account_label?: string | null;
+  scopes?: string[] | null;
+  records_visible?: number | null;
+  checks?: Record<string, boolean> | null;
+};
+
+export type ConnectorControl = {
+  provider: ConnectorProvider;
+  name: string;
+  state: ConnectorControlState;
+  connection_status: string | null;
+  configured: boolean;
+  credential_present: boolean;
+  auth_method: string | null;
+  display_name: string | null;
+  account_label: string | null;
+  base_url: string | null;
+  scopes: string[];
+  last_checked_at: string | null;
+  read_check: ConnectorCheckReceipt | null;
+  write_check: ConnectorCheckReceipt | null;
+  read_test_supported: boolean;
+  write_test_mode: "dry_run";
+  manage_path: string | null;
+  warnings: string[];
+};
+
+export type ConnectorControlCenterResponse = {
+  contract: "connector-control.v1";
+  workspace_id: string;
+  connectors: ConnectorControl[];
+  summary: {
+    total: number;
+    configured: number;
+    verified: number;
+    errors: number;
+  };
+  boundary: {
+    provider_calls: boolean;
+    external_writes: boolean;
+    stored_secrets_returned: boolean;
+    write_checks_are_dry_run: boolean;
+  };
+};
+
+export type ConnectorConfigurationApplyRequest = {
+  auth_method: string;
+  access_token: string;
+  display_name?: string | null;
+  base_url?: string | null;
+  account_email?: string | null;
+  scopes?: string[];
+};
+
 
 export type JiraEvidenceRef = {
   kind: string;

@@ -63,6 +63,11 @@ import type {
   RepoAuditImportRequest,
   RepoAuditImportResponse,
   RepoAuditResponse,
+  ConnectorCheckReceipt,
+  ConnectorConfigurationApplyRequest,
+  ConnectorControl,
+  ConnectorControlCenterResponse,
+  ConnectorProvider,
   ConnectorRegistryResponse,
   WorkspaceMemberProvisionRequest,
   WorkspaceMemberProvisionResponse,
@@ -300,6 +305,79 @@ export async function fetchWorkspaceConnectors(
   return apiFetch<ConnectorRegistryResponse>(
     buildWorkspaceConnectorsPath(workspaceId),
     options
+  );
+}
+
+export function buildWorkspaceConnectorControlCenterPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceConnectorsPath(workspaceId)}/control-center`;
+}
+
+export function buildWorkspaceConnectorConfigurationPath(
+  workspaceId: string,
+  provider: ConnectorProvider
+): string {
+  return `${buildWorkspaceConnectorsPath(workspaceId)}/${encodeURIComponent(
+    provider
+  )}/configuration`;
+}
+
+export function buildWorkspaceConnectorCheckPath(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  capability: "read" | "write"
+): string {
+  return `${buildWorkspaceConnectorsPath(workspaceId)}/${encodeURIComponent(
+    provider
+  )}/checks/${capability}`;
+}
+
+export async function fetchConnectorControlCenter(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorControlCenterResponse> {
+  return apiFetch<ConnectorControlCenterResponse>(
+    buildWorkspaceConnectorControlCenterPath(workspaceId),
+    options
+  );
+}
+
+export async function applyConnectorConfiguration(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  request: ConnectorConfigurationApplyRequest,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorControl> {
+  return apiFetch<ConnectorControl>(
+    buildWorkspaceConnectorConfigurationPath(workspaceId, provider),
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+}
+
+export async function checkConnectorReadAccess(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorCheckReceipt> {
+  return apiFetch<ConnectorCheckReceipt>(
+    buildWorkspaceConnectorCheckPath(workspaceId, provider, "read"),
+    { ...options, method: "POST" }
+  );
+}
+
+export async function checkConnectorWriteReadiness(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorCheckReceipt> {
+  return apiFetch<ConnectorCheckReceipt>(
+    buildWorkspaceConnectorCheckPath(workspaceId, provider, "write"),
+    { ...options, method: "POST" }
   );
 }
 

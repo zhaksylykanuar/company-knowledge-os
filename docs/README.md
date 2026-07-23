@@ -37,10 +37,14 @@ recovering deleted context.
 | How does the `/demo` command center become the real product? | [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
 | How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
+| How are connector credentials saved and verified in the product? | [`integrations-control-center.md`](integrations-control-center.md) |
 | How do we prove a bounded provider read or external action? | [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) and [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) |
 
 ## Operations And Human-Gated Runbooks
 
+- [`integrations-control-center.md`](integrations-control-center.md) - secure
+  owner/admin configuration, fixed provider read probes, dry-run write
+  readiness, runtime gates, and explicitly missing OAuth/write capabilities.
 - [`operations/local-runtime.md`](operations/local-runtime.md) - canonical local start, doctor, smoke, backup/restore, stop, recovery, and external-resource deletion boundary.
 - [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook; managed `/github` setup is primary and legacy env/manual preflight is compatibility-only.
 - [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after local acceptance and read-only provider proof.

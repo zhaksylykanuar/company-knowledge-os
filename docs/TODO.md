@@ -26,6 +26,15 @@ Implemented foundations:
   versions, and adds no chat persistence, provider call or mutation. Backend
   rate limits and identical-query single-flight are authoritative; browser
   disabled state is only UX.
+- The integration control center is in place (DEC-092):
+  `/settings/integrations` gives owner/admin one workspace-scoped surface for
+  encrypted GitHub/Jira/Gmail/Drive configuration, fixed-host bounded read
+  checks and no-provider write-readiness dry-runs. Members/viewers see safe
+  status only. Jira rejects non-Atlassian/arbitrary URLs, secrets and raw
+  provider payloads never return to the browser, and safe receipts reuse
+  `IntegrationConnection.provider_metadata` without a migration. Managed
+  GitHub App stays the recommended path; complete Google OAuth refresh and
+  Jira/Gmail/Drive write executors remain explicit gaps.
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -395,11 +404,14 @@ content-addressed Headquarters snapshot, never executes a proposal and does not
 weaken those remaining gates.
 
 1. **Finish the radar loop one provider at a time.**
-   `/github` remains the reference command center and the next external gate is
-   still one founder-approved, repository-scoped read through its UI wizard. Then
-   bring Gmail, Drive, and Jira to the same setup → scoped read → visible result →
-   receipt pattern. No bulk/background sync, provider write, LLM run, or hosted
-   change is authorized by this backlog item.
+   The control center now owns safe setup and connection receipts; `/github`
+   remains the reference command center and the next external gate is still one
+   founder-approved, repository-scoped read through its UI wizard with a visible
+   canonical result. Then bring Gmail, Drive, and Jira from connection health to
+   the same scoped sync → visible result → evidence receipt pattern. Complete
+   Google OAuth consent/refresh before calling those connectors durable. No
+   bulk/background sync, provider write, LLM run, or hosted change is authorized
+   by this backlog item.
 
 2. **Design Source Foundry as a separate bounded contract.**
    Start with the SF-00 contract/threat-model checklist from DEC-087: one

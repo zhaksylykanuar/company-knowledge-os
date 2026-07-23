@@ -1,5 +1,35 @@
 # FounderOS Changelog
 
+## 2026-07-23
+
+### Added
+
+- Added the workspace integration control center at
+  `/settings/integrations` (DEC-092). Owners and administrators can configure
+  GitHub, Jira Cloud, Gmail, and Google Drive, apply an encrypted credential,
+  run an explicit bounded read check, and inspect a safe write-readiness
+  dry-run. Members and viewers retain a status-only view.
+- Added `connector-control.v1` endpoints under the existing workspace connector
+  router. Configuration writes reuse `IntegrationConnection`, keep safe
+  receipts in `provider_metadata.control_center`, and add no schema migration.
+  The status read never decrypts credentials; API responses expose no token,
+  encrypted field, raw provider payload, connection UUID, or installation ID.
+- Added the integration control reference covering the provider matrix, API
+  contract, runtime gates, state model, and remaining OAuth/write gaps.
+
+### Changed
+
+- Added a direct “Интеграции и API” entry to Settings. GitHub App remains the
+  recommended GitHub path, while a personal token is an advanced fallback.
+  Jira is restricted to exact HTTPS `*.atlassian.net` origins; Gmail and Drive
+  honestly accept expiring manual OAuth access tokens until a complete
+  authorization-code and refresh flow is implemented.
+- Defined “write check” as readiness-only. It evaluates stored credential,
+  successful read, write feature, approval and repository allowlist gates
+  without decrypting the credential or calling a provider. External GitHub
+  mutation remains available only through the existing exact approved
+  ActionProposal execution boundary.
+
 ## 2026-07-22
 
 ### Added

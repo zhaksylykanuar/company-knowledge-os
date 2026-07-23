@@ -2900,6 +2900,39 @@ screen, while a viewer receives no confirmation action. A future generative
 assistant requires a separate privacy/retention, retrieval, model/schema,
 budget and persistence decision and may never mutate production data directly.
 
+## DEC-092 - Connector Configuration Is Encrypted, Fixed-Host, And Receipt-First
+
+Decision (2026-07-23): workspace connector configuration belongs in one
+owner/admin product control surface at `/settings/integrations`, backed by the
+existing `IntegrationConnection` table. A submitted credential is encrypted
+before the ORM row is populated, is never returned to the browser, and is
+represented in reads only by safe configured/status booleans. Applying a
+configuration performs no provider call and resets prior verification.
+Successful verification requires a separate explicit bounded read and stores a
+versioned safe receipt in `provider_metadata.control_center`; no schema
+migration or parallel secret store is introduced.
+
+The first contract supports only GitHub, Jira Cloud, Gmail and Google Drive.
+GitHub App is the recommended GitHub method and remains independent from the
+advanced personal-token fallback. Jira URLs must be exact HTTPS
+`*.atlassian.net` origins; every other probe uses a fixed official provider
+host. Arbitrary APIs, private hosts, redirect targets, provider response bodies,
+opaque installation/connection IDs and token hints are not accepted or
+returned. The status projection does not decrypt secrets. Explicit
+session-authenticated owner/admin read checks may make their one requested
+provider GET; operator/API-key calls remain behind
+`FOUNDEROS_ENABLE_REAL_CONNECTORS`.
+
+“Check write” is deliberately a local readiness dry-run. It reads feature,
+approval, read-verification and allowlist gates but does not decrypt a secret,
+call a provider or mutate external state. A real GitHub write still requires
+the existing exact approved ActionProposal execution path with evidence, target
+allowlist, idempotency and read-back receipt. Jira/Gmail/Drive writes are not
+implemented. Manual Gmail/Drive OAuth access tokens are an honest first slice:
+authorization-code consent, refresh-token rotation and automatic renewal remain
+future work and the UI must not imply otherwise. PostgreSQL and raw storage
+remain authoritative; Obsidian remains export-only.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
