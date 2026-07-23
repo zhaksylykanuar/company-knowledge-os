@@ -21,19 +21,26 @@
   HTTPS `*.atlassian.net` origin, остальные probes используют фиксированные
   official hosts. `connector-control.v1` переиспользует
   `IntegrationConnection.provider_metadata`, поэтому migration не добавлена.
+  Все control responses являются `private, no-store`; локальная ошибка до
+  network boundary больше не может заявить provider-call. Owner/admin после
+  отдельного подтверждения может удалить UI-saved credential и receipts, не
+  удаляя durable connection row, imported canonical data и sync history;
+  managed GitHub App при удалении отдельного PAT fallback не затрагивается.
   Write check является только dry-run: не расшифровывает credential, не
   вызывает provider и не меняет внешний сервис; реальный GitHub write
   по-прежнему возможен только через approved ActionProposal + allowlist +
   idempotency/read-back. Managed GitHub App рекомендован, PAT оставлен
   advanced fallback; полный Google OAuth consent/refresh и Jira/Gmail/Drive
   write executors честно отсутствуют. Проверено 2026-07-23: backend
-  **736/736 passed / 1 external deprecation warning**, Ruff; frontend
-  **424/424 passed**, typecheck, production build (**20 routes**) и runtime npm
+  **738/738 passed / 1 external deprecation warning**, Ruff; frontend
+  **425/425 passed**, typecheck, production build (**20 routes**) и runtime npm
   audit (**0 vulnerabilities**). Authenticated browser QA на 1280×720 и
   390×844 подтвердил role-aware control center, provider switching с очисткой
-  secret state, локализованный dry-run receipt, отсутствие horizontal overflow
-  и 0 console warnings/errors. Временные QA user/workspace удалены, запущенный
-  для QA runtime остановлен. Следующий внешний gate остаётся **LC-04: один
+  secret state, локализованный dry-run receipt и полный
+  apply → confirm → disconnect lifecycle; horizontal overflow отсутствует,
+  console содержит только штатные dev/HMR-сообщения. Временные QA
+  user/workspace удалены, запущенный для QA runtime остановлен. Следующий
+  внешний gate остаётся **LC-04: один
   founder-approved repository-scoped GitHub read с видимым canonical
   результатом и receipt.**
 - **LC-07 Deterministic read-only company assistant (DEC-091): РЕАЛИЗОВАН

@@ -29,6 +29,13 @@
   without decrypting the credential or calling a provider. External GitHub
   mutation remains available only through the existing exact approved
   ActionProposal execution boundary.
+- Completed the credential lifecycle and response privacy boundary. An
+  owner/admin can now remove a control-center credential after a second UI
+  confirmation without deleting the durable connection row, imported canonical
+  data, or sync history; a managed GitHub App is unaffected when its separate
+  PAT fallback is removed. Every control response is `private, no-store`, and a
+  failed read receipt reports `provider_call_performed=false` when validation
+  stopped before the network boundary.
 
 ## 2026-07-22
 

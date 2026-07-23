@@ -2004,6 +2004,74 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.integration-disconnect {
+  border: 1px solid #e2c7c2;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.integration-disconnect > summary {
+  color: #8b3a32;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  list-style: none;
+  padding: 11px 13px;
+}
+
+.integration-disconnect > summary::-webkit-details-marker {
+  display: none;
+}
+
+.integration-disconnect > summary::after {
+  content: "+";
+  float: right;
+}
+
+.integration-disconnect[open] > summary::after {
+  content: "−";
+}
+
+.integration-disconnect > div {
+  background: #fff8f6;
+  border-top: 1px solid #e2c7c2;
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+}
+
+.integration-disconnect p {
+  color: #75514c;
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.integration-disconnect-confirm {
+  align-items: flex-start;
+  color: #5d4642;
+  display: flex;
+  font-size: 10px;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.integration-disconnect-confirm input {
+  margin-top: 2px;
+}
+
+.integration-disconnect .button.danger {
+  background: #9f3026;
+  border-color: #9f3026;
+  color: #fff;
+  justify-self: start;
+}
+
+.integration-disconnect .button.danger:disabled {
+  background: #d7bfbb;
+  border-color: #d7bfbb;
+}
+
 .integration-checks {
   border-top: 1px solid var(--border);
   display: grid;

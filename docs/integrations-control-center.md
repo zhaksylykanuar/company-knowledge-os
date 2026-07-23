@@ -14,6 +14,8 @@ second connector engine or a replacement for provider-specific radars.
   `integration_connections.encrypted_access_token`.
 - API responses never return encrypted values, token hints, raw provider
   payloads, connection UUIDs, installation IDs, or refresh tokens.
+- Control-center status and mutation responses use `Cache-Control: private,
+  no-store`.
 - Applying a configuration makes no provider request and leaves it
   `saved_unverified`.
 - A read check is an explicit bounded GET request to a fixed provider endpoint.
@@ -21,6 +23,11 @@ second connector engine or a replacement for provider-specific radars.
   `read_verified`.
 - A write check is always a local dry-run. It does not decrypt a credential,
   call a provider, or perform an external write.
+- A credential saved through this control center can be explicitly removed
+  after an additional UI confirmation. The encrypted value, account label,
+  scopes and check receipts are cleared; the durable connection row, imported
+  canonical data and sync history remain. Managed GitHub App credentials stay
+  owned by the GitHub setup flow.
 - Real GitHub writes remain exclusively behind the existing approved
   `ActionProposal` execution contract, write feature flag, repository allowlist,
   evidence, idempotency, and read-back reconciliation.
@@ -50,6 +57,9 @@ All routes are under
   call.
 - `POST /{provider}/configuration` — validate, encrypt, and save one supported
   configuration; owner/admin only.
+- `DELETE /{provider}/configuration` — remove only the credential saved through
+  this control center while preserving the durable row and imported history;
+  owner/admin only.
 - `POST /{provider}/checks/read` — explicit bounded provider read; owner/admin
   only.
 - `POST /{provider}/checks/write` — local readiness receipt; owner/admin only,
@@ -90,3 +100,8 @@ comments.
 The status projection can be read without decrypting credentials. Replacing a
 secret resets read and write receipts so a previous verification cannot be
 mistaken for proof of the new credential.
+
+Removing a credential returns the provider to `not_configured`. A failed check
+that stops before any network request records
+`provider_call_performed=false`; a receipt may claim a provider call only after
+the network boundary was actually attempted.

@@ -9,6 +9,7 @@ import {
   applyConnectorConfiguration,
   checkConnectorReadAccess,
   checkConnectorWriteReadiness,
+  disconnectConnectorConfiguration,
   fetchConnectorControlCenter
 } from "../../../lib/api";
 import { M } from "../../../lib/messages";
@@ -22,7 +23,7 @@ import type {
 } from "../../../lib/types";
 
 type PanelStatus = "error" | "loading" | "missing" | "ready";
-type PendingAction = "apply" | "read" | "write" | null;
+type PendingAction = "apply" | "disconnect" | "read" | "write" | null;
 
 type IntegrationsControlCenterViewProps = {
   actionError?: string | null;
@@ -34,6 +35,7 @@ type IntegrationsControlCenterViewProps = {
     provider: ConnectorProvider,
     request: ConnectorConfigurationApplyRequest
   ) => Promise<boolean> | boolean;
+  onDisconnect?: (provider: ConnectorProvider) => Promise<void> | void;
   onReadCheck?: (provider: ConnectorProvider) => Promise<void> | void;
   onRetry?: () => void;
   onWriteCheck?: (provider: ConnectorProvider) => Promise<void> | void;
@@ -145,6 +147,30 @@ export default function IntegrationsSettingsPage() {
     }
   }
 
+  async function onDisconnect(provider: ConnectorProvider): Promise<void> {
+    if (!workspaceId || pendingAction) {
+      return;
+    }
+    setPendingAction("disconnect");
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      await disconnectConnectorConfiguration(workspaceId, provider);
+      await refreshControlCenter();
+      setActionMessage(
+        provider === "github"
+          ? "Сохранённый personal access token удалён. Managed GitHub App, canonical данные и история не изменены."
+          : "Сохранённый секрет удалён. Canonical данные и история источника не изменены."
+      );
+    } catch (caught: unknown) {
+      setActionError(
+        caught instanceof Error ? caught.message : M.common.requestFailed
+      );
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
   async function onWriteCheck(provider: ConnectorProvider): Promise<void> {
     if (!workspaceId || pendingAction) {
       return;
@@ -183,6 +209,7 @@ export default function IntegrationsSettingsPage() {
         data={data}
         error={error}
         onApply={onApply}
+        onDisconnect={onDisconnect}
         onReadCheck={onReadCheck}
         onRetry={() => setReloadKey((current) => current + 1)}
         onWriteCheck={onWriteCheck}
@@ -200,6 +227,7 @@ export function IntegrationsControlCenterView({
   data,
   error,
   onApply,
+  onDisconnect,
   onReadCheck,
   onRetry,
   onWriteCheck,
@@ -322,6 +350,7 @@ export function IntegrationsControlCenterView({
                 connector={selected}
                 key={selected.provider}
                 onApply={onApply}
+                onDisconnect={onDisconnect}
                 onReadCheck={onReadCheck}
                 onWriteCheck={onWriteCheck}
                 pendingAction={pendingAction}
@@ -340,6 +369,7 @@ function ConnectorConfigurationPanel({
   canManage,
   connector,
   onApply,
+  onDisconnect,
   onReadCheck,
   onWriteCheck,
   pendingAction
@@ -349,6 +379,7 @@ function ConnectorConfigurationPanel({
   canManage: boolean;
   connector: ConnectorControl;
   onApply?: IntegrationsControlCenterViewProps["onApply"];
+  onDisconnect?: IntegrationsControlCenterViewProps["onDisconnect"];
   onReadCheck?: IntegrationsControlCenterViewProps["onReadCheck"];
   onWriteCheck?: IntegrationsControlCenterViewProps["onWriteCheck"];
   pendingAction: PendingAction;
@@ -357,6 +388,7 @@ function ConnectorConfigurationPanel({
   const [accountEmail, setAccountEmail] = useState("");
   const [baseUrl, setBaseUrl] = useState(connector.base_url ?? "");
   const [displayName, setDisplayName] = useState(connector.display_name ?? "");
+  const [disconnectConfirmed, setDisconnectConfirmed] = useState(false);
   const [scopes, setScopes] = useState(connector.scopes.join(", "));
 
   useEffect(() => {
@@ -364,12 +396,17 @@ function ConnectorConfigurationPanel({
     setAccountEmail("");
     setBaseUrl(connector.base_url ?? "");
     setDisplayName(connector.display_name ?? "");
+    setDisconnectConfirmed(false);
     setScopes(connector.scopes.join(", "));
   }, [connector.provider, connector.base_url, connector.display_name, connector.scopes]);
 
   const managedGitHub =
     connector.provider === "github" &&
     connector.auth_method === "github_app_installation";
+  const editableCredentialPresent =
+    connector.provider === "github"
+      ? connector.removable_credential_present
+      : connector.credential_present;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -390,6 +427,19 @@ function ConnectorConfigurationPanel({
     if (succeeded) {
       setAccessToken("");
     }
+  }
+
+  async function disconnectCredential() {
+    if (
+      !disconnectConfirmed ||
+      !onDisconnect ||
+      !canManage ||
+      pendingAction
+    ) {
+      return;
+    }
+    await onDisconnect(connector.provider);
+    setDisconnectConfirmed(false);
   }
 
   return (
@@ -502,7 +552,7 @@ function ConnectorConfigurationPanel({
               maxLength={8192}
               onChange={(event) => setAccessToken(event.target.value)}
               placeholder={
-                connector.credential_present
+                editableCredentialPresent
                   ? "Секрет уже сохранён — введите новый только для замены"
                   : "Вставьте секрет"
               }
@@ -541,6 +591,43 @@ function ConnectorConfigurationPanel({
           </div>
         </form>
       )}
+
+      {canManage && connector.removable_credential_present ? (
+        <details className="integration-disconnect">
+          <summary>
+            {managedGitHub
+              ? "Удалить резервный personal access token"
+              : "Отключить сохранённый credential"}
+          </summary>
+          <div>
+            <p>
+              {managedGitHub
+                ? "Будет удалён только PAT, сохранённый через этот центр. Managed GitHub App останется подключён."
+                : "Будут удалены зашифрованный секрет и квитанции проверок. Уже импортированные canonical данные и история останутся."}
+            </p>
+            <label className="integration-disconnect-confirm">
+              <input
+                checked={disconnectConfirmed}
+                onChange={(event) =>
+                  setDisconnectConfirmed(event.target.checked)
+                }
+                type="checkbox"
+              />
+              <span>Я понимаю последствие и хочу удалить сохранённый секрет.</span>
+            </label>
+            <button
+              className="button danger"
+              disabled={!disconnectConfirmed || pendingAction !== null}
+              onClick={disconnectCredential}
+              type="button"
+            >
+              {pendingAction === "disconnect"
+                ? "Удаляем секрет…"
+                : "Удалить сохранённый секрет"}
+            </button>
+          </div>
+        </details>
+      ) : null}
 
       <section className="integration-checks" aria-labelledby="integration-checks-title">
         <div>

@@ -172,13 +172,16 @@ async def test_configuration_is_encrypted_and_control_center_never_returns_secre
             )
 
         assert response.status_code == 200, response.text
+        assert response.headers["cache-control"] == "private, no-store"
         assert response.json()["state"] == "saved_unverified"
         assert response.json()["credential_present"] is True
+        assert response.json()["removable_credential_present"] is True
         assert response.json()["base_url"] == "https://founderos-test.atlassian.net"
         assert TEST_TOKEN not in response.text
         assert "encrypted_access_token" not in response.text
 
         assert center.status_code == 200, center.text
+        assert center.headers["cache-control"] == "private, no-store"
         assert center.json()["boundary"] == {
             "external_writes": False,
             "provider_calls": False,
@@ -307,12 +310,14 @@ async def test_read_check_uses_bounded_probe_and_write_check_is_dry_run(
 
         assert applied.status_code == 200, applied.text
         assert read_check.status_code == 200, read_check.text
+        assert read_check.headers["cache-control"] == "private, no-store"
         assert read_check.json()["status"] == "passed"
         assert read_check.json()["records_visible"] == 7
         assert read_check.json()["external_write_performed"] is False
         assert calls == ["github"]
 
         assert write_check.status_code == 200, write_check.text
+        assert write_check.headers["cache-control"] == "private, no-store"
         assert write_check.json()["status"] == "ready"
         assert write_check.json()["provider_call_performed"] is False
         assert write_check.json()["external_write_performed"] is False
@@ -375,10 +380,16 @@ async def test_member_can_view_but_cannot_change_or_check_connectors(
                 headers=_headers(),
                 params={"owner_email": member.email},
             )
+            disconnect_response = await client.delete(
+                _configuration_path(workspace.id, "github"),
+                headers=_headers(),
+                params={"owner_email": member.email},
+            )
 
         assert center.status_code == 200
         assert apply_response.status_code == 403
         assert check_response.status_code == 403
+        assert disconnect_response.status_code == 403
         assert apply_response.json() == {"detail": "insufficient workspace role"}
     finally:
         await _cleanup(marker)
@@ -434,3 +445,118 @@ async def test_managed_github_probe_reads_only_one_bounded_repository_page(
     assert result.account_label == "qtwin-io"
     assert result.records_visible == 321
     assert result.scopes == ("contents",)
+
+
+async def test_disconnect_removes_only_control_center_credential_and_receipts(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex[:10]
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        owner, workspace, _ = await _seed_workspace(marker)
+        async with _client() as client:
+            applied = await client.post(
+                _configuration_path(workspace.id, "jira"),
+                headers=_headers(),
+                params={"owner_email": owner.email},
+                json={
+                    "access_token": TEST_TOKEN,
+                    "account_email": owner.email,
+                    "auth_method": "jira_cloud_api_token",
+                    "base_url": "https://founderos-test.atlassian.net",
+                    "scopes": ["read:jira-work"],
+                },
+            )
+            disconnected = await client.delete(
+                _configuration_path(workspace.id, "jira"),
+                headers=_headers(),
+                params={"owner_email": owner.email},
+            )
+            repeated = await client.delete(
+                _configuration_path(workspace.id, "jira"),
+                headers=_headers(),
+                params={"owner_email": owner.email},
+            )
+
+        assert applied.status_code == 200, applied.text
+        assert disconnected.status_code == 200, disconnected.text
+        assert disconnected.headers["cache-control"] == "private, no-store"
+        body = disconnected.json()
+        assert body["configured"] is False
+        assert body["credential_present"] is False
+        assert body["removable_credential_present"] is False
+        assert body["state"] == "not_configured"
+        assert body["account_label"] is None
+        assert body["base_url"] is None
+        assert TEST_TOKEN not in disconnected.text
+        assert repeated.status_code == 409
+
+        async with AsyncSessionLocal() as session:
+            connection = await session.scalar(
+                select(IntegrationConnection).where(
+                    IntegrationConnection.workspace_id == workspace.id,
+                    IntegrationConnection.provider == "jira",
+                )
+            )
+            assert connection is not None
+            assert connection.status == INTEGRATION_CONNECTION_STATUS_DISABLED
+            assert connection.encrypted_access_token is None
+            assert connection.encrypted_refresh_token is None
+            assert connection.external_account_id is None
+            assert connection.scopes == []
+            control = connection.provider_metadata["control_center"]
+            assert control["base_url"] is None
+            assert control["account_email"] is None
+            assert control["read_check"] is None
+            assert control["write_check"] is None
+            assert control["credential_removed_at"]
+    finally:
+        await _cleanup(marker)
+
+
+async def test_read_receipt_does_not_claim_provider_call_before_network(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex[:10]
+    await _cleanup(marker)
+
+    async def _unexpected_network(*args, **kwargs):
+        raise AssertionError("provider network must not be reached")
+
+    monkeypatch.setattr(connector_control_service, "_get_json", _unexpected_network)
+    try:
+        _, workspace, _ = await _seed_workspace(marker)
+        async with AsyncSessionLocal() as session:
+            connection = IntegrationConnection(
+                workspace_id=workspace.id,
+                provider="gmail",
+                status=INTEGRATION_CONNECTION_STATUS_DISABLED,
+                display_name="Gmail without credential",
+                provider_metadata={
+                    "created_via": "settings_integrations",
+                    "connection_method": "oauth_access_token",
+                    "control_center": {
+                        "auth_method": "oauth_access_token",
+                        "contract": "connector-control.v1",
+                    },
+                },
+            )
+            session.add(connection)
+            await session.commit()
+
+        async with AsyncSessionLocal() as session:
+            receipt = await connector_control_service.run_connector_read_check(
+                session,
+                workspace_id=workspace.id,
+                provider="gmail",
+                requested_by_operator=False,
+            )
+            await session.commit()
+
+        assert receipt["status"] == "failed"
+        assert receipt["code"] == "credential_missing"
+        assert receipt["provider_call_performed"] is False
+        assert receipt["external_write_performed"] is False
+    finally:
+        await _cleanup(marker)

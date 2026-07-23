@@ -359,6 +359,17 @@ export async function applyConnectorConfiguration(
   );
 }
 
+export async function disconnectConnectorConfiguration(
+  workspaceId: string,
+  provider: ConnectorProvider,
+  options: ApiFetchOptions = {}
+): Promise<ConnectorControl> {
+  return apiFetch<ConnectorControl>(
+    buildWorkspaceConnectorConfigurationPath(workspaceId, provider),
+    { ...options, method: "DELETE" }
+  );
+}
+
 export async function checkConnectorReadAccess(
   workspaceId: string,
   provider: ConnectorProvider,

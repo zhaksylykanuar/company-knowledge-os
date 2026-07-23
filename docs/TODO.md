@@ -32,9 +32,12 @@ Implemented foundations:
   checks and no-provider write-readiness dry-runs. Members/viewers see safe
   status only. Jira rejects non-Atlassian/arbitrary URLs, secrets and raw
   provider payloads never return to the browser, and safe receipts reuse
-  `IntegrationConnection.provider_metadata` without a migration. Managed
-  GitHub App stays the recommended path; complete Google OAuth refresh and
-  Jira/Gmail/Drive write executors remain explicit gaps.
+  `IntegrationConnection.provider_metadata` without a migration. Responses are
+  private/no-store; owner/admin can explicitly remove a UI-saved credential
+  while retaining the durable row and canonical history, and pre-network
+  failures cannot claim a provider call. Managed GitHub App stays the
+  recommended path; complete Google OAuth refresh and Jira/Gmail/Drive write
+  executors remain explicit gaps.
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.

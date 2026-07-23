@@ -79,10 +79,17 @@ class ProviderProbeResult:
 
 
 class ProviderProbeError(RuntimeError):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        provider_call_performed: bool = False,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
+        self.provider_call_performed = provider_call_performed
 
 
 async def build_connector_control_center(
@@ -108,6 +115,10 @@ async def build_connector_control_center(
 
     connectors: list[dict[str, Any]] = []
     for provider in SUPPORTED_PROVIDERS:
+        removable_connection = _settings_connection_from_rows(
+            rows,
+            provider=provider,
+        )
         connection = _select_connection(
             rows,
             provider=provider,
@@ -122,6 +133,10 @@ async def build_connector_control_center(
                 and installation is not None
                 and connection.id == installation.connection_id
                 else None,
+                removable_credential_present=bool(
+                    removable_connection is not None
+                    and removable_connection.encrypted_access_token
+                ),
             )
         )
 
@@ -221,6 +236,64 @@ async def apply_connector_configuration(
         provider=provider,
         connection=connection,
         installation=None,
+        removable_credential_present=True,
+    )
+
+
+async def disconnect_connector_configuration(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    provider: str,
+) -> dict[str, Any]:
+    """Remove only the credential saved through the control center.
+
+    The durable row is retained so sync history and foreign-key references stay
+    valid. Managed GitHub App credentials are owned by the GitHub setup flow and
+    are never removed here.
+    """
+
+    normalized_provider = _provider(provider)
+    connection = await _settings_connection(
+        session,
+        workspace_id=workspace_id,
+        provider=normalized_provider,
+    )
+    if connection is None or not connection.encrypted_access_token:
+        raise ConnectorControlError(
+            "no control-center credential is configured for this provider"
+        )
+
+    metadata = _metadata(connection)
+    control = dict(_control_metadata(connection))
+    control.update(
+        {
+            "contract": CONNECTOR_CONTROL_CONTRACT,
+            "credential_removed_at": _utcnow().isoformat(),
+            "base_url": None,
+            "account_email": None,
+            "read_check": None,
+            "write_check": None,
+        }
+    )
+    metadata["token_validated"] = False
+    metadata["control_center"] = control
+
+    connection.status = INTEGRATION_CONNECTION_STATUS_DISABLED
+    connection.external_account_id = None
+    connection.scopes = []
+    connection.encrypted_access_token = None
+    connection.encrypted_refresh_token = None
+    connection.token_expires_at = None
+    connection.provider_metadata = metadata
+    connection.last_error = None
+    await session.flush()
+
+    return _connector_payload(
+        provider=normalized_provider,
+        connection=connection,
+        installation=None,
+        removable_credential_present=False,
     )
 
 
@@ -278,7 +351,7 @@ async def run_connector_read_check(
             "code": exc.code,
             "message": exc.message,
             "checked_at": checked_at,
-            "provider_call_performed": True,
+            "provider_call_performed": exc.provider_call_performed,
             "external_write_performed": False,
         }
         connection.status = INTEGRATION_CONNECTION_STATUS_ERROR
@@ -466,6 +539,15 @@ async def _probe_managed_github(
                 "credential_missing",
                 "The managed GitHub App credential is unavailable.",
             )
+    except ProviderProbeError:
+        raise
+    except Exception as exc:
+        raise ProviderProbeError(
+            "credential_unavailable",
+            "The managed GitHub App credential could not be opened.",
+        ) from exc
+
+    try:
         token = await mint_installation_access_token(
             installation_id=installation.installation_id,
             credential=credential,
@@ -485,6 +567,7 @@ async def _probe_managed_github(
         raise ProviderProbeError(
             "provider_unavailable",
             "GitHub App read verification failed.",
+            provider_call_performed=True,
         ) from exc
     records_visible = _safe_nonnegative_int(data.get("total_count"))
     if records_visible is None:
@@ -591,22 +674,29 @@ async def _get_json(
         raise ProviderProbeError(
             "provider_unavailable",
             "The provider could not be reached.",
+            provider_call_performed=True,
         ) from exc
 
     if response.status_code < 200 or response.status_code >= 300:
         code, message = _safe_provider_error(response.status_code)
-        raise ProviderProbeError(code, message)
+        raise ProviderProbeError(
+            code,
+            message,
+            provider_call_performed=True,
+        )
     try:
         data = response.json()
     except ValueError as exc:
         raise ProviderProbeError(
             "invalid_provider_response",
             "The provider returned an invalid response.",
+            provider_call_performed=True,
         ) from exc
     if not isinstance(data, Mapping):
         raise ProviderProbeError(
             "invalid_provider_response",
             "The provider returned an invalid response.",
+            provider_call_performed=True,
         )
     return dict(data), response.headers
 
@@ -616,6 +706,7 @@ def _connector_payload(
     provider: str,
     connection: IntegrationConnection | None,
     installation: GitHubAppInstallation | None,
+    removable_credential_present: bool = False,
 ) -> dict[str, Any]:
     managed_github = bool(
         provider == "github"
@@ -655,7 +746,7 @@ def _connector_payload(
     account_label: str | None = None
     if managed_github and installation is not None:
         account_label = installation.account_login[:255]
-    elif connection is not None:
+    elif connection is not None and credential_present:
         account_label = (
             _optional_text(connection.external_account_id, max_length=255)
             or _optional_text(connection.display_name, max_length=255)
@@ -677,6 +768,7 @@ def _connector_payload(
         "connection_status": connection.status if connection is not None else None,
         "configured": configured,
         "credential_present": credential_present,
+        "removable_credential_present": removable_credential_present,
         "auth_method": auth_method,
         "display_name": connection.display_name if connection is not None else None,
         "account_label": account_label,
@@ -708,13 +800,9 @@ async def _settings_connection(
             .order_by(IntegrationConnection.created_at.desc())
         )
     ).all()
-    return next(
-        (
-            row
-            for row in rows
-            if _metadata(row).get("created_via") == CONNECTOR_CONTROL_SOURCE
-        ),
-        None,
+    return _settings_connection_from_rows(
+        list(rows),
+        provider=provider,
     )
 
 
@@ -758,6 +846,22 @@ def _select_connection(
         None,
     )
     return settings_row or (provider_rows[0] if provider_rows else None)
+
+
+def _settings_connection_from_rows(
+    rows: list[IntegrationConnection],
+    *,
+    provider: str,
+) -> IntegrationConnection | None:
+    return next(
+        (
+            row
+            for row in rows
+            if row.provider == provider
+            and _metadata(row).get("created_via") == CONNECTOR_CONTROL_SOURCE
+        ),
+        None,
+    )
 
 
 def _set_control_receipt(

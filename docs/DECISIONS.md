@@ -2911,6 +2911,9 @@ configuration performs no provider call and resets prior verification.
 Successful verification requires a separate explicit bounded read and stores a
 versioned safe receipt in `provider_metadata.control_center`; no schema
 migration or parallel secret store is introduced.
+Every control response is private/no-store. A check may report
+`provider_call_performed=true` only after the provider network boundary was
+attempted; local credential/configuration failures report false.
 
 The first contract supports only GitHub, Jira Cloud, Gmail and Google Drive.
 GitHub App is the recommended GitHub method and remains independent from the
@@ -2932,6 +2935,14 @@ implemented. Manual Gmail/Drive OAuth access tokens are an honest first slice:
 authorization-code consent, refresh-token rotation and automatic renewal remain
 future work and the UI must not imply otherwise. PostgreSQL and raw storage
 remain authoritative; Obsidian remains export-only.
+
+A credential created through the control center can be removed only by an
+owner/admin after a second explicit UI confirmation. Removal clears encrypted
+secret fields, account label, scopes and verification receipts but retains the
+durable connection row, imported canonical facts and sync history. This avoids
+breaking foreign-key/audit lineage. Managed GitHub App material remains owned
+by the separate GitHub App setup flow; the control-center removal can clear
+only its separately stored PAT fallback.
 
 ## ASK - Open Questions For The Human (not decided)
 

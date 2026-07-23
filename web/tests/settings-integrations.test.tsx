@@ -39,6 +39,7 @@ function connector(
     provider,
     read_check: null,
     read_test_supported: true,
+    removable_credential_present: false,
     scopes: [],
     state: "not_configured",
     warnings: [],
@@ -75,6 +76,7 @@ const controlCenter: ConnectorControlCenterResponse = {
         scopes: ["contents"],
         status: "passed"
       },
+      removable_credential_present: true,
       scopes: ["contents"],
       state: "read_verified",
       warnings: [
@@ -103,11 +105,14 @@ const controlCenter: ConnectorControlCenterResponse = {
   workspace_id: "workspace-1"
 };
 
-function renderControlCenter(canManage = true): string {
+function renderControlCenter(
+  canManage = true,
+  data: ConnectorControlCenterResponse = controlCenter
+): string {
   return renderToStaticMarkup(
     <IntegrationsControlCenterView
       canManage={canManage}
-      data={controlCenter}
+      data={data}
       error={null}
       status="ready"
     />
@@ -142,6 +147,10 @@ test("renders one integration control center with honest safety boundaries", () 
   assert.ok(html.includes("GitHub App — рекомендуемый способ"));
   assert.ok(html.includes("Проверить чтение"));
   assert.ok(html.includes("Проверить запись · dry-run"));
+  assert.ok(html.includes("Удалить резервный personal access token"));
+  assert.ok(html.includes("Managed GitHub App останется подключён"));
+  assert.ok(html.includes("Я понимаю последствие"));
+  assert.match(html, /disabled=""[^>]*>Удалить сохранённый секрет/);
   assert.ok(html.includes("не вызывает API провайдера"));
   assert.ok(html.includes("никогда не возвращается в браузер"));
   assert.ok(html.includes("Рекомендуется управляемый GitHub App"));
@@ -170,6 +179,22 @@ test("keeps connector configuration read-only for non-admin roles", () => {
     )
   );
   assert.doesNotMatch(html, /integration-config-form/);
+  assert.doesNotMatch(html, /integration-disconnect/);
   assert.match(html, /disabled=""[^>]*>Проверить чтение/);
   assert.match(html, /disabled=""[^>]*>Проверить запись · dry-run/);
+});
+
+test("does not mistake a managed GitHub App for a stored PAT fallback", () => {
+  const withoutFallback: ConnectorControlCenterResponse = {
+    ...controlCenter,
+    connectors: controlCenter.connectors.map((item) =>
+      item.provider === "github"
+        ? { ...item, removable_credential_present: false }
+        : item
+    )
+  };
+  const html = renderControlCenter(true, withoutFallback);
+
+  assert.ok(html.includes('placeholder="Вставьте секрет"'));
+  assert.doesNotMatch(html, /Удалить резервный personal access token/);
 });

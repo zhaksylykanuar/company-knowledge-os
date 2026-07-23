@@ -112,6 +112,7 @@ export type ConnectorControl = {
   connection_status: string | null;
   configured: boolean;
   credential_present: boolean;
+  removable_credential_present: boolean;
   auth_method: string | null;
   display_name: string | null;
   account_label: string | null;

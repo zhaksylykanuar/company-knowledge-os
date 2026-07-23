@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field, SecretStr
 
 from app.api.workspace_auth import (
@@ -17,6 +17,7 @@ from app.services.connector_control_service import (
     ConnectorControlError,
     apply_connector_configuration,
     build_connector_control_center,
+    disconnect_connector_configuration,
     run_connector_read_check,
     run_connector_write_readiness_check,
 )
@@ -72,6 +73,7 @@ class ConnectorControlRead(BaseModel):
     connection_status: str | None = None
     configured: bool
     credential_present: bool
+    removable_credential_present: bool
     auth_method: str | None = None
     display_name: str | None = None
     account_label: str | None = None
@@ -144,8 +146,10 @@ async def list_workspace_connectors(
 
 @router.get("/control-center", response_model=ConnectorControlCenterResponse)
 async def get_connector_control_center(
+    response: Response,
     access: WorkspaceAccess = Depends(require_workspace_access),
 ) -> ConnectorControlCenterResponse:
+    _set_private_no_store(response)
     async with AsyncSessionLocal() as session:
         result = await build_connector_control_center(
             session,
@@ -161,8 +165,10 @@ async def get_connector_control_center(
 async def save_connector_configuration(
     provider: str,
     payload: ConnectorConfigurationApplyRequest,
+    response: Response,
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
 ) -> ConnectorControlRead:
+    _set_private_no_store(response)
     try:
         async with AsyncSessionLocal() as session:
             result = await apply_connector_configuration(
@@ -192,14 +198,42 @@ async def save_connector_configuration(
     return ConnectorControlRead.model_validate(result)
 
 
+@router.delete(
+    "/{provider}/configuration",
+    response_model=ConnectorControlRead,
+)
+async def disconnect_connector_configuration_route(
+    provider: str,
+    response: Response,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> ConnectorControlRead:
+    _set_private_no_store(response)
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await disconnect_connector_configuration(
+                session,
+                workspace_id=access.workspace_membership.workspace.id,
+                provider=provider,
+            )
+            await session.commit()
+    except ConnectorControlError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    return ConnectorControlRead.model_validate(result)
+
+
 @router.post(
     "/{provider}/checks/read",
     response_model=ConnectorCheckResponse,
 )
 async def check_connector_read_access(
     provider: str,
+    response: Response,
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
 ) -> ConnectorCheckResponse:
+    _set_private_no_store(response)
     try:
         async with AsyncSessionLocal() as session:
             result = await run_connector_read_check(
@@ -228,8 +262,10 @@ async def check_connector_read_access(
 )
 async def check_connector_write_readiness(
     provider: str,
+    response: Response,
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
 ) -> ConnectorCheckResponse:
+    _set_private_no_store(response)
     try:
         async with AsyncSessionLocal() as session:
             result = await run_connector_write_readiness_check(
@@ -244,3 +280,7 @@ async def check_connector_write_readiness(
             detail=str(exc),
         ) from exc
     return ConnectorCheckResponse.model_validate(result)
+
+
+def _set_private_no_store(response: Response) -> None:
+    response.headers["Cache-Control"] = "private, no-store"
