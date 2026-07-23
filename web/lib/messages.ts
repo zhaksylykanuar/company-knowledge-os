@@ -658,7 +658,7 @@ export const M = {
     eyebrow: "Источники",
     title: "GitHub",
     description:
-      "Репозитории, задачи и PR — в одном понятном потоке. Вы выбираете, что читать; FounderOS не меняет содержимое репозиториев."
+      "Подключение, репозиторий и текущая работа — без технической настройки."
   },
 
   githubAppSetup: {
@@ -756,6 +756,42 @@ export const M = {
     badgeReadOnly: "Репозитории — только чтение",
     description:
       "Выберите один репозиторий и загрузите его задачи и пулреквесты в рабочую картину FounderOS.",
+    notConnectedBadge: "Не подключён",
+    connectionAttentionBadge: "Нужно завершить",
+    connectedBadge: "Подключён",
+    connectTitle: "Подключите GitHub",
+    connectDescription:
+      "Выберите аккаунт и репозитории — FounderOS соберёт задачи и pull requests в одном месте.",
+    connectionAttentionTitle: "Завершите подключение",
+    connectionAttentionDescription:
+      "Установка уже начата. Продолжите с текущего шага — повторно создавать приложение не нужно.",
+    connectedTitle: "GitHub готов к работе",
+    connectedDescription:
+      "Доступ подтверждён. Выберите репозиторий и обновите данные.",
+    capabilitiesLabel: "Что появится после подключения",
+    capabilityRepositories: "Доступ только к выбранным репозиториям",
+    capabilityIssues: "Задачи и их текущие статусы",
+    capabilityPullRequests: "Pull requests без изменений в GitHub",
+    connectAction: "Подключить GitHub",
+    continueSetupAction: "Продолжить подключение",
+    closeSetupAction: "Закрыть",
+    manageConnection: "Управление",
+    setupPanelTitle: "Подключение GitHub",
+    readOnlyPromise: "Только чтение · GitHub не изменяется",
+    repositoryControlEyebrow: "Рабочий репозиторий",
+    repositoryControlTitle: "Что обновить?",
+    repositoryControlDescription:
+      "FounderOS загрузит задачи и pull requests только из выбранного репозитория.",
+    repositorySelectLabel: "Репозиторий",
+    updateData: "Обновить данные",
+    updatingData: "Обновляем…",
+    openRepository: "Открыть в GitHub",
+    manageRepositoryAccess: "Изменить доступ",
+    lastUpdatedLabel: "Последнее обновление",
+    repositoryCountLabel: "Доступно репозиториев",
+    safetyDetails: "Доступ и безопасность",
+    safetyDescription:
+      "FounderOS использует временный токен установки и не выполняет запись в GitHub.",
     loading: "Проверяем подключение и репозитории…",
     noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — подключать нечего.",
     unavailableTitle: "Состояние GitHub App недоступно",
@@ -940,9 +976,12 @@ export const M = {
   },
 
   githubWork: {
-    eyebrow: "После загрузки",
-    title: "Пульс работы",
-    stateLabel: "Состояние работы GitHub",
+    eyebrow: "Работа",
+    title: "Задачи и pull requests",
+    description: "Последние сохранённые данные GitHub.",
+    repositoryPrefix: "Репозиторий:",
+    stateLabel: "Статус",
+    kindLabel: "Тип работы",
     stateAll: "Все",
     stateOpen: "Открытые",
     stateClosed: "Закрытые",
@@ -959,9 +998,12 @@ export const M = {
     emptyDescription:
       "Запустите локальную нормализацию GitHub с канонической записью, чтобы наполнить задачи и пулреквесты.",
     issuesTitle: "Задачи",
-    pullRequestsTitle: "Пулреквесты",
+    pullRequestsTitle: "Pull requests",
     noIssuesForFilter: "Нет задач для этого фильтра.",
     noPullRequestsForFilter: "Нет пулреквестов для этого фильтра.",
+    nothingFoundTitle: "Здесь пока пусто",
+    showMore: "Показать ещё",
+    openInGitHub: "Открыть",
     badgeIssue: "Задача",
     badgePr: "PR",
     metaRepository: "Репозиторий",

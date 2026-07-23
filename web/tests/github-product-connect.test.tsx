@@ -195,15 +195,16 @@ function renderPanel(
       canAdminister={props.canAdminister}
       connectionStatus={props.connectionStatus ?? connectedAppStatus}
       error={props.error ?? null}
-      onRepositoryFocusChange={props.onRepositoryFocusChange}
+      onCloseSetup={props.onCloseSetup}
+      onOpenSetup={props.onOpenSetup}
       onRepositorySelect={props.onRepositorySelect ?? (() => undefined)}
       onRetry={props.onRetry}
       onRunRepositorySync={props.onRunRepositorySync ?? (() => undefined)}
-      repositoryFocus={props.repositoryFocus}
       repositorySync={props.repositorySync ?? {}}
       repositories={props.repositories ?? repositories}
       selectedRepository={props.selectedRepository}
       selfServiceSetupEnabled={props.selfServiceSetupEnabled}
+      setupOpen={props.setupOpen}
       setupWizard={props.setupWizard}
       state={props.state ?? "ready"}
     />
@@ -278,50 +279,24 @@ test("posts GitHub App live sync request with explicit repository", async () => 
   }
 });
 
-test("renders a mission-first GitHub command center with one sync action", () => {
+test("renders one connected workspace with one repository selector and update action", () => {
   const html = renderPanel();
 
-  assert.ok(html.includes(M.githubProductConnect.title));
-  assert.ok(html.includes(M.githubProductConnect.missionReadyCurrent));
-  assert.ok(html.includes(M.githubProductConnect.missionReadyOutcome));
-  assert.ok(html.includes(M.githubProductConnect.flowConnectionTitle));
-  assert.ok(html.includes(M.githubProductConnect.flowRepositoryTitle));
-  assert.ok(html.includes(M.githubProductConnect.flowFounderOSTitle));
-  assert.ok(html.includes(M.githubProductConnect.metricsTitle));
-  assert.ok(html.includes(T.githubLoadedRepositorySample(2, 25)));
-  assert.match(html, /github-command-metric-value">2</);
-  assert.ok(html.includes(M.githubProductConnect.repositoryWorkbenchTitle));
+  assert.ok(html.includes(M.githubProductConnect.connectedBadge));
+  assert.ok(html.includes(M.githubProductConnect.repositoryControlTitle));
   assert.ok(html.includes("qtwin-io/company-knowledge-os"));
   assert.ok(html.includes("qtwin-io/another-repo"));
   assert.equal(
-    (html.match(new RegExp(M.githubProductConnect.liveSyncRun, "g")) ?? []).length,
+    (html.match(new RegExp(M.githubProductConnect.updateData, "g")) ?? []).length,
     1
   );
-
-  // Readiness and provider mechanics stay available, but only in disclosure.
-  assert.match(html, /<details class="github-command-technical">/);
-  assert.ok(html.includes(M.githubProductConnect.realReadReadinessTitle));
-  assert.ok(html.includes(M.githubProductConnect.realReadReady));
-  assert.ok(
-    html.includes(T.githubRealReadNextStep(true, true, true, true, true))
-  );
+  assert.match(html, /<select/);
+  assert.match(html, /<details class="github-source__safety">/);
   assert.ok(html.includes(M.githubProductConnect.tokenTitle));
   assert.ok(html.includes(M.githubProductConnect.writeTitle));
-  assert.doesNotMatch(html, /operator API key/);
-  assert.doesNotMatch(html, /provider token/i);
-  assert.doesNotMatch(html, /write enabled/i);
-});
-
-test("keeps GitHub repository facts but removes setup and sync controls in read-only mode", () => {
-  const html = renderPanel({ canAdminister: false });
-
-  assert.ok(html.includes("qtwin-io/company-knowledge-os"));
-  assert.ok(html.includes(M.common.sourceAdminOnlyNote));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
-  assert.ok(html.includes(M.githubProductConnect.missionViewerCurrent));
-  assert.ok(html.includes(M.githubProductConnect.missionViewerOutcome));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.missionReadyOutcome));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.metricsTitle));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.flowLabel));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.title));
 });
 
 test("summarizes GitHub App real-read readiness from loaded local state", () => {
@@ -363,87 +338,30 @@ test("summarizes GitHub App real-read readiness from loaded local state", () => 
   assert.equal(disconnected.nextStep, T.githubRealReadNextStep(true, true, false, true, false));
 });
 
-test("renders blocked GitHub App real-read readiness without provider calls", () => {
-  const html = renderPanel({
-    connectionStatus: missingAppStatus,
-    repositories: { ...repositories, count: 0, repositories: [] }
-  });
-
-  assert.ok(html.includes(M.githubProductConnect.realReadReadinessTitle));
-  assert.ok(html.includes(M.githubProductConnect.realReadBlocked));
-  assert.ok(html.includes(M.githubProductConnect.realReadBlockersTitle));
-  assert.ok(html.includes(M.githubProductConnect.realReadBlockerEnv));
-  assert.ok(html.includes(M.githubProductConnect.realReadBlockerConnectionMissing));
-  assert.ok(html.includes(M.githubProductConnect.realReadBlockerReposEmpty));
-  assert.ok(html.includes(T.githubRealReadNextStep(false, false, false, false, false)));
-  assert.ok(html.includes(M.githubProductConnect.realReadBoundary));
-  assert.doesNotMatch(html, /provider read started/i);
-  assert.doesNotMatch(html, /external write performed/i);
-  assert.doesNotMatch(html, /installation access token/i);
-});
-
-test("filters the loaded repository surface locally without provider calls", () => {
-  const archivedHtml = renderPanel({
-    repositoryFocus: "archived"
-  });
-  assert.ok(archivedHtml.includes(M.githubProductConnect.repositoryFocusArchived));
-  assert.ok(archivedHtml.includes("qtwin-io/another-repo"));
-  assert.doesNotMatch(archivedHtml, /qtwin-io\/company-knowledge-os/);
-  assert.equal(
-    (archivedHtml.match(new RegExp(M.githubProductConnect.liveSyncRun, "g")) ?? [])
-      .length,
-    1
-  );
-  assert.match(
-    archivedHtml,
-    new RegExp(
-      `aria-pressed="true"[^>]*>${M.githubProductConnect.repositoryFocusArchived}`
-    )
-  );
-
-  const evidenceHtml = renderPanel({
-    repositoryFocus: "with_evidence"
-  });
-  assert.ok(evidenceHtml.includes(M.githubProductConnect.repositoryFocusWithEvidence));
-  assert.ok(evidenceHtml.includes("qtwin-io/company-knowledge-os"));
-  assert.doesNotMatch(evidenceHtml, /qtwin-io\/another-repo/);
-  assert.doesNotMatch(evidenceHtml, /provider read запущен/i);
-  assert.doesNotMatch(evidenceHtml, /bulk sync started/i);
-  assert.doesNotMatch(evidenceHtml, /external write performed/i);
-});
-
-test("renders missing GitHub App env contract", () => {
-  const html = renderPanel({
-    connectionStatus: missingAppStatus,
-    repositories: { ...repositories, count: 0 }
-  });
-
-  assert.ok(html.includes(M.githubProductConnect.connectionMetricAttention));
-  assert.ok(html.includes(M.githubProductConnect.missingEnvTitle));
-  assert.ok(html.includes("FOUNDEROS_GITHUB_APP_ID"));
-  assert.ok(html.includes(M.githubProductConnect.refreshConnection));
-});
-
-test("self-service mode replaces the legacy env handoff with the in-platform wizard", () => {
-  const html = renderPanel({
+test("keeps setup behind one explicit action", () => {
+  const closed = renderPanel({
     connectionStatus: missingAppStatus,
     repositories: { ...repositories, count: 0, repositories: [] },
     selfServiceSetupEnabled: true,
     setupWizard: <div>SELF_SERVICE_GITHUB_SETUP</div>
   });
+  assert.ok(closed.includes(M.githubProductConnect.connectTitle));
+  assert.ok(closed.includes(M.githubProductConnect.connectAction));
+  assert.doesNotMatch(closed, /SELF_SERVICE_GITHUB_SETUP/);
+  assert.doesNotMatch(closed, /FOUNDEROS_GITHUB_APP_ID/);
 
-  assert.ok(html.includes("SELF_SERVICE_GITHUB_SETUP"));
-  assert.ok(html.includes(M.githubProductConnect.missionSelfServiceSetupAction));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.missionTechnicalAction));
-  assert.doesNotMatch(html, /FOUNDEROS_GITHUB_APP_ID/);
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.missingEnvTitle));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.realReadReadinessTitle));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
-  assert.ok(html.includes(M.githubProductConnect.appManagedSetupDescription));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.appMissingDescription));
+  const open = renderPanel({
+    connectionStatus: missingAppStatus,
+    repositories: { ...repositories, count: 0, repositories: [] },
+    selfServiceSetupEnabled: true,
+    setupOpen: true,
+    setupWizard: <div>SELF_SERVICE_GITHUB_SETUP</div>
+  });
+  assert.ok(open.includes("SELF_SERVICE_GITHUB_SETUP"));
+  assert.ok(open.includes(M.githubProductConnect.closeSetupAction));
 });
 
-test("self-service setup stays the only CTA while its installation is disabled", () => {
+test("shows a continue action for an existing installation instead of creating another", () => {
   const html = renderPanel({
     connectionStatus: {
       ...connectedAppStatus,
@@ -452,23 +370,23 @@ test("self-service setup stays the only CTA while its installation is disabled",
       live_read_available: false,
       app: { ...appConfigured, credential_source: "managed" }
     },
-    selfServiceSetupEnabled: true,
-    setupWizard: <div>SELF_SERVICE_REPOSITORY_SELECTION</div>
+    selfServiceSetupEnabled: true
   });
 
-  assert.ok(html.includes("SELF_SERVICE_REPOSITORY_SELECTION"));
-  assert.ok(html.includes(M.githubProductConnect.missionSelfServiceSetupAction));
-  assert.doesNotMatch(
-    html,
-    new RegExp(M.githubProductConnect.missionConnectionAttentionAction)
-  );
-  assert.doesNotMatch(
-    html,
-    new RegExp(M.githubProductConnect.connectionAttentionActionHint)
-  );
+  assert.ok(html.includes(M.githubProductConnect.connectionAttentionTitle));
+  assert.ok(html.includes(M.githubProductConnect.continueSetupAction));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.updateData));
 });
 
-test("managed self-service workbench shows only the saved repository subset", () => {
+test("keeps connected data visible but removes mutation controls for viewers", () => {
+  const html = renderPanel({ canAdminister: false });
+
+  assert.ok(html.includes("qtwin-io/company-knowledge-os"));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.updateData));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.manageConnection));
+});
+
+test("managed setup shows only the saved repository subset", () => {
   const html = renderPanel({
     connectionStatus: {
       ...connectedAppStatus,
@@ -482,10 +400,9 @@ test("managed self-service workbench shows only the saved repository subset", ()
 
   assert.ok(html.includes("qtwin-io/company-knowledge-os"));
   assert.doesNotMatch(html, /qtwin-io\/another-repo/);
-  assert.ok(html.includes(T.githubLoadedRepositorySample(1, 25)));
 });
 
-test("renders invalid repository and missing app sync states", () => {
+test("renders invalid repository and blocks update when GitHub is not ready", () => {
   const invalid = renderPanel({
     repositories: {
       ...repositories,
@@ -502,39 +419,23 @@ test("renders invalid repository and missing app sync states", () => {
   const missingApp = renderPanel({
     connectionStatus: missingAppStatus
   });
-  assert.ok(missingApp.includes(M.githubProductConnect.missionConnectionCurrent));
-  assert.doesNotMatch(
-    missingApp,
-    new RegExp(M.githubProductConnect.liveSyncRun)
-  );
+  assert.ok(missingApp.includes(M.githubProductConnect.connectTitle));
+  assert.doesNotMatch(missingApp, new RegExp(M.githubProductConnect.updateData));
 });
 
-test("does not offer sync for a non-connected installation record", () => {
-  const html = renderPanel({ connectionStatus: disconnectedAppStatus });
-
-  assert.ok(
-    html.includes(M.githubProductConnect.missionConnectionAttentionCurrent)
-  );
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
-  assert.ok(html.includes(M.githubProductConnect.refreshConnection));
-  assert.ok(html.includes(M.githubProductConnect.connectionAttentionActionHint));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
-});
-
-test("keeps a stale connected installation blocked when GitHub App env is incomplete", () => {
+test("legacy configuration keeps missing env names inside safety details", () => {
   const html = renderPanel({
-    connectionStatus: {
-      ...connectedAppStatus,
-      app: appMissing
-    }
+    connectionStatus: missingAppStatus,
+    repositories: { ...repositories, count: 0, repositories: [] },
+    selfServiceSetupEnabled: false
   });
 
-  assert.ok(html.includes(M.githubProductConnect.connectionMetricAttention));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
-  assert.ok(html.includes(M.githubProductConnect.realReadBlockerEnv));
+  assert.ok(html.includes(M.githubProductConnect.missingEnvTitle));
+  assert.ok(html.includes("FOUNDEROS_GITHUB_APP_ID"));
+  assert.match(html, /<details class="github-source__safety">/);
 });
 
-test("never sends an existing installation into a new-install setup URL", () => {
+test("connected empty state offers repository access management", () => {
   const html = renderPanel({
     repositories: {
       ...repositories,
@@ -543,16 +444,12 @@ test("never sends an existing installation into a new-install setup URL", () => 
     }
   });
 
-  assert.ok(html.includes(M.githubProductConnect.missionEmptyCurrent));
-  assert.ok(html.includes(M.githubProductConnect.refreshConnection));
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.openSetup));
-  assert.doesNotMatch(
-    html,
-    new RegExp(M.githubProductConnect.openSetupSettings)
-  );
+  assert.ok(html.includes(M.githubProductConnect.repositoryListEmptyTitle));
+  assert.ok(html.includes(M.githubProductConnect.manageRepositoryAccess));
+  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.updateData));
 });
 
-test("uses a global sync lock for the chooser and primary action", () => {
+test("uses a global sync lock for the selector and update action", () => {
   const html = renderPanel({
     repositorySync: {
       "qtwin-io/another-repo": {
@@ -563,40 +460,9 @@ test("uses a global sync lock for the chooser and primary action", () => {
     }
   });
 
-  assert.ok(html.includes(M.githubProductConnect.liveSyncRunning));
-  assert.match(
-    html,
-    /class="github-repository-choice-main" disabled=""/
-  );
-  assert.doesNotMatch(html, new RegExp(M.githubProductConnect.liveSyncRun));
-});
-
-test("keeps at most eight repository choices before the disclosure", () => {
-  const manyRepositories: GitHubRepositoryListResponse = {
-    ...repositories,
-    count: 10,
-    repositories: Array.from({ length: 10 }, (_, index) => ({
-      ...repositories.repositories[0],
-      id: `repo-${index + 1}`,
-      name: `repo-${index + 1}`,
-      full_name: `qtwin-io/repo-${index + 1}`,
-      source_url: `https://github.com/qtwin-io/repo-${index + 1}`
-    }))
-  };
-  const html = renderPanel({ repositories: manyRepositories });
-  const beforeDisclosure = html.split(
-    '<details class="github-repository-more">'
-  )[0];
-
-  assert.equal(
-    (
-      beforeDisclosure.match(
-        /<article class="github-repository-choice(?: |")/g
-      ) ?? []
-    ).length,
-    8
-  );
-  assert.ok(html.includes(T.githubShowMoreRepositories(2)));
+  assert.ok(html.includes(M.githubProductConnect.updatingData));
+  assert.match(html, /<select disabled=""/);
+  assert.match(html, /<button class="button github-source__primary" disabled=""/);
 });
 
 test("renders live sync success and error states without write claim", () => {
@@ -626,7 +492,7 @@ test("renders live sync success and error states without write claim", () => {
   });
   assert.ok(error.includes(M.githubProductConnect.liveSyncFailedTitle));
   assert.match(error, /not part of the app installation/);
-  assert.match(error, /<details class="github-command-error-details">/);
+  assert.match(error, /<details class="github-source__error-details">/);
 });
 
 test("classifies resolved sync jobs without treating HTTP success as job success", () => {
@@ -654,8 +520,7 @@ test("classifies resolved sync jobs without treating HTTP success as job success
   });
   assert.ok(running.includes(M.githubProductConnect.liveSyncPendingTitle));
   assert.ok(running.includes(M.githubProductConnect.liveSyncPendingDescription));
-  assert.ok(running.includes(M.githubProductConnect.liveSyncRun));
-  assert.doesNotMatch(running, new RegExp(M.githubProductConnect.liveSyncRunning));
+  assert.ok(running.includes(M.githubProductConnect.updateData));
   assert.match(running, /github-sync-receipt--pending/);
   assert.doesNotMatch(
     running,
@@ -676,7 +541,6 @@ test("classifies resolved sync jobs without treating HTTP success as job success
   });
   assert.ok(partial.includes(M.githubProductConnect.liveSyncPartialTitle));
   assert.ok(partial.includes(M.githubProductConnect.liveSyncPartialDescription));
-  assert.ok(partial.includes(M.githubProductConnect.missionPartialCurrent));
   assert.match(partial, /github-sync-receipt--partial/);
   assert.doesNotMatch(
     partial,

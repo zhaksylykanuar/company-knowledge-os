@@ -10,6 +10,27 @@
 
 ## ▶ СЕЙЧАС
 
+- **GH-UX-01 GitHub workspace reset (DEC-094): РЕАЛИЗОВАНО ЛОКАЛЬНО.**
+  `/github` больше не показывает одновременно мастер, «центр», путь данных,
+  четыре метрики, фильтры карточек и отдельный «пульс». Экран теперь
+  state-driven: неподключённый источник даёт одну кнопку подключения; текущая
+  незавершённая установка — одну кнопку продолжения; готовое подключение —
+  один selector репозитория и одну кнопку обновления. Мастер монтируется только
+  внутри явной setup-панели, а при его открытии исходный CTA исчезает.
+  После выбора репозитория работа показывается на той же спокойной поверхности
+  во вкладках «Задачи» / «Pull requests» с одним status selector; список
+  client-side ограничен точным выбранным репозиторием. Технические факты,
+  warnings и read-only гарантия сохранены под disclosure; viewer видит данные
+  без setup/sync controls. Backend API, GitHub App security, RBAC, persistence,
+  provider scope и external-write boundary не менялись.
+  Проверено 2026-07-23: frontend **423 passed**, TypeScript и production build
+  (**20 routes**); backend **745 passed / 1 external deprecation warning** и
+  Ruff. Browser QA production-компонентов на desktop и 390×844
+  подтвердил состояния connect/ready/empty, один CTA, отсутствие horizontal
+  overflow, читаемые tabs/selects и чистую console кроме штатного Fast Refresh.
+  Временная QA route удалена. Следующий внешний gate остаётся **LC-04: один
+  founder-approved repository-scoped GitHub read с видимым canonical
+  результатом и receipt.**
 - **INT-CTRL-01 Центр интеграций + UX/tenancy hardening
   (DEC-092/DEC-093): РЕАЛИЗОВАНО ЛОКАЛЬНО.**
   `/settings/integrations` теперь является одним спокойным двухшаговым путём:

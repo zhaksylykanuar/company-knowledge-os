@@ -19,6 +19,16 @@
 
 ### Changed
 
+- Rebuilt `/github` as one state-driven workspace (DEC-094). Disconnected,
+  incomplete, connected and empty-repository states now expose one obvious
+  action each. The setup wizard is opened explicitly and replaces the original
+  connect CTA instead of competing with a command center, progress strip,
+  metrics and repository-card filters.
+- Replaced the separate GitHub “work pulse” with repository-scoped
+  «Задачи» / «Pull requests» tabs and one status selector. A connected source
+  has one repository selector and one read-only update button; viewer mode keeps
+  facts visible without setup or sync controls. Technical details, warnings and
+  the no-write/token-persistence facts remain available under disclosure.
 - Rebuilt the integration screen as a minimal save → read-check workflow.
   Provider tabs are compact, checks stay disabled until configuration exists,
   empty receipts are omitted, and write readiness, credential removal, and the

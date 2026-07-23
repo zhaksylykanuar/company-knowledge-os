@@ -16,18 +16,14 @@ import {
 import type {
   GitHubAppLiveSyncResponse,
   GitHubConnectionStatusResponse,
-  GitHubRepositoryRead,
-  GitHubRepositoryListResponse
+  GitHubRepositoryListResponse,
+  GitHubRepositoryRead
 } from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { GitHubAppSetupWizard } from "./GitHubAppSetupWizard";
 import { LoadingState } from "./LoadingState";
-import { MiniHint, MissionStrip } from "./MissionStrip";
 import { SourceLink } from "./SourceLink";
-import { StatusCard } from "./StatusCard";
-
-const REPOSITORY_PREVIEW_LIMIT = 8;
 
 type ProductConnectState = "loading" | "ready" | "error" | "missing";
 type LiveSyncState =
@@ -37,12 +33,6 @@ type LiveSyncState =
   | "partial"
   | "success"
   | "error";
-type RepositoryFocusFilter =
-  | "active"
-  | "all"
-  | "archived"
-  | "private"
-  | "with_evidence";
 type RepositorySyncStatus = {
   error: string | null;
   result: GitHubAppLiveSyncResponse | null;
@@ -60,6 +50,8 @@ type GitHubRealReadReadiness = {
 };
 
 type GitHubProductConnectPanelProps = {
+  onConnectionReadyChange?: (ready: boolean) => void;
+  onSelectedRepositoryChange?: (repositoryFullName: string | null) => void;
   onSyncComplete?: () => void;
 };
 
@@ -67,20 +59,23 @@ type GitHubProductConnectPanelViewProps = {
   canAdminister?: boolean;
   connectionStatus: GitHubConnectionStatusResponse | null;
   error: string | null;
-  onRepositoryFocusChange?: (filter: RepositoryFocusFilter) => void;
+  onCloseSetup?: () => void;
+  onOpenSetup?: () => void;
   onRepositorySelect?: (repositoryFullName: string) => void;
   onRetry?: () => void;
   onRunRepositorySync?: (repositoryFullName: string) => void;
-  repositoryFocus?: RepositoryFocusFilter;
   repositorySync: Record<string, RepositorySyncStatus>;
   repositories: GitHubRepositoryListResponse | null;
   selectedRepository?: string | null;
   selfServiceSetupEnabled?: boolean;
+  setupOpen?: boolean;
   setupWizard?: ReactNode;
   state: ProductConnectState;
 };
 
 export function GitHubProductConnectPanel({
+  onConnectionReadyChange,
+  onSelectedRepositoryChange,
   onSyncComplete
 }: GitHubProductConnectPanelProps = {}) {
   const session = useSession();
@@ -98,11 +93,10 @@ export function GitHubProductConnectPanel({
   const [repositorySync, setRepositorySync] = useState<
     Record<string, RepositorySyncStatus>
   >({});
-  const [repositoryFocus, setRepositoryFocus] =
-    useState<RepositoryFocusFilter>("all");
   const [selectedRepository, setSelectedRepository] = useState<string | null>(
     null
   );
+  const [setupOpen, setSetupOpen] = useState(false);
   const [state, setState] = useState<ProductConnectState>("loading");
   const syncInFlightRef = useRef(false);
 
@@ -127,10 +121,14 @@ export function GitHubProductConnectPanel({
         if (cancelled) {
           return;
         }
+        const visibleRepositories = githubVisibleRepositories(
+          status,
+          repositoryList.repositories
+        );
         setConnectionStatus(status);
         setRepositories(repositoryList);
         setSelectedRepository((current) =>
-          chooseAvailableRepository(repositoryList.repositories, current)
+          chooseAvailableRepository(visibleRepositories, current)
         );
         setState("ready");
       })
@@ -150,16 +148,15 @@ export function GitHubProductConnectPanel({
     };
   }, [workspaceId, reloadKey]);
 
-  function changeRepositoryFocus(filter: RepositoryFocusFilter) {
-    const filteredRepositories = filterRepositoriesByFocus(
-      repositories?.repositories ?? [],
-      filter
+  useEffect(() => {
+    onSelectedRepositoryChange?.(selectedRepository);
+  }, [onSelectedRepositoryChange, selectedRepository]);
+
+  useEffect(() => {
+    onConnectionReadyChange?.(
+      connectionStatus ? isGitHubAppConnectionReady(connectionStatus) : false
     );
-    setRepositoryFocus(filter);
-    setSelectedRepository((current) =>
-      chooseAvailableRepository(filteredRepositories, current)
-    );
-  }
+  }, [connectionStatus, onConnectionReadyChange]);
 
   async function syncRepository(repositoryFullName: string) {
     const repository = repositoryFullName.trim();
@@ -167,13 +164,9 @@ export function GitHubProductConnectPanel({
       syncInFlightRef.current ||
       !workspaceId ||
       !canAdminister ||
-      !connectionStatus?.app.configured ||
-      !connectionStatus.installation_verified ||
-      !connectionStatus.live_read_available ||
-      connectionStatus?.status !== "connected" ||
+      !connectionStatus ||
+      !isGitHubAppConnectionReady(connectionStatus) ||
       !connectionStatus.connection_id ||
-      connectionStatus.connection_method !== "github_app_installation" ||
-      !connectionStatus.has_connection_record ||
       !isRepositoryFullName(repository)
     ) {
       return;
@@ -224,15 +217,16 @@ export function GitHubProductConnectPanel({
       canAdminister={canAdminister}
       connectionStatus={connectionStatus}
       error={error}
-      onRepositoryFocusChange={changeRepositoryFocus}
+      onCloseSetup={() => setSetupOpen(false)}
+      onOpenSetup={() => setSetupOpen(true)}
       onRepositorySelect={setSelectedRepository}
       onRetry={() => setReloadKey((current) => current + 1)}
       onRunRepositorySync={canAdminister ? syncRepository : undefined}
-      repositoryFocus={repositoryFocus}
       repositorySync={repositorySync}
       repositories={repositories}
       selectedRepository={selectedRepository}
       selfServiceSetupEnabled
+      setupOpen={setupOpen}
       setupWizard={
         workspaceId ? (
           <GitHubAppSetupWizard
@@ -251,49 +245,77 @@ export function GitHubProductConnectPanelView({
   canAdminister = true,
   connectionStatus,
   error,
-  onRepositoryFocusChange,
+  onCloseSetup,
+  onOpenSetup,
   onRepositorySelect,
   onRetry,
   onRunRepositorySync,
-  repositoryFocus = "all",
   repositorySync,
   repositories,
   selectedRepository,
   selfServiceSetupEnabled = false,
+  setupOpen = false,
   setupWizard,
   state
 }: GitHubProductConnectPanelViewProps) {
-  const appStatus = connectionStatus?.app ?? null;
-  const appConnectionReady = Boolean(
-    connectionStatus?.app.configured &&
-      connectionStatus.installation_verified &&
-      connectionStatus.live_read_available &&
-      connectionStatus.status === "connected" &&
-      connectionStatus.connection_id &&
-      connectionStatus.connection_method === "github_app_installation" &&
-      connectionStatus.has_connection_record
+  if (state === "loading") {
+    return (
+      <section
+        aria-busy="true"
+        aria-label={M.githubProductConnect.loading}
+        className="panel github-source github-source--state"
+      >
+        <LoadingState label={M.githubProductConnect.loading} />
+      </section>
+    );
+  }
+
+  if (state === "missing") {
+    return (
+      <section className="panel github-source github-source--state">
+        <EmptyState
+          description={M.githubProductConnect.noWorkspaceDescription}
+          title={M.common.noWorkspaceTitle}
+        />
+      </section>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <section className="panel github-source github-source--state">
+        <ErrorState
+          description={M.githubProductConnect.unavailableDescription}
+          title={M.githubProductConnect.unavailableTitle}
+        />
+        <button className="button secondary" onClick={onRetry} type="button">
+          {M.common.retry}
+        </button>
+        {error ? (
+          <details className="github-source__error-details">
+            <summary>{M.githubProductConnect.errorDetails}</summary>
+            <p>{error}</p>
+          </details>
+        ) : null}
+      </section>
+    );
+  }
+
+  if (!connectionStatus) {
+    return null;
+  }
+
+  const appConnectionReady = isGitHubAppConnectionReady(connectionStatus);
+  const hasInstallationRecord = Boolean(
+    connectionStatus.has_connection_record &&
+      connectionStatus.connection_method === "github_app_installation"
   );
-  const loadedRepositoryItems = repositories?.repositories ?? [];
-  const managedSelectedRepositories = new Set(
-    (connectionStatus?.selected_repositories ?? []).map((repository) =>
-      repository.toLowerCase()
-    )
+  const repositoryItems = githubVisibleRepositories(
+    connectionStatus,
+    repositories?.repositories ?? []
   );
-  const repositoryItems =
-    connectionStatus?.app.credential_source === "managed" &&
-    connectionStatus.installation_verified &&
-    managedSelectedRepositories.size > 0
-      ? loadedRepositoryItems.filter((repository) =>
-          managedSelectedRepositories.has(repository.full_name.toLowerCase())
-        )
-      : loadedRepositoryItems;
-  const filteredRepositoryItems = filterRepositoriesByFocus(
-    repositoryItems,
-    repositoryFocus
-  );
-  const repositoryStats = repositoryFocusStats(repositoryItems);
   const selectedRepositoryItem = chooseSelectedRepository(
-    filteredRepositoryItems,
+    repositoryItems,
     selectedRepository
   );
   const selectedSync = selectedRepositoryItem
@@ -302,600 +324,360 @@ export function GitHubProductConnectPanelView({
   const globalSyncInProgress = Object.values(repositorySync).some(
     (sync) => sync.state === "syncing"
   );
-  const selectedRepositoryValid = selectedRepositoryItem
-    ? isRepositoryFullName(selectedRepositoryItem.full_name)
-    : false;
   const canRunSelectedSync = Boolean(
     canAdminister &&
       appConnectionReady &&
-      selectedRepositoryValid &&
+      selectedRepositoryItem &&
+      isRepositoryFullName(selectedRepositoryItem.full_name) &&
       onRunRepositorySync &&
       !globalSyncInProgress
   );
-  const hasAppInstallationRecord = Boolean(
-    connectionStatus?.has_connection_record &&
-      connectionStatus.connection_method === "github_app_installation"
-  );
-  const showSetupAction = Boolean(
-    !selfServiceSetupEnabled &&
-      canAdminister &&
-      appStatus?.setup_url &&
-      !appConnectionReady &&
-      !hasAppInstallationRecord
-  );
-  const showConnectionAttentionAction = Boolean(
-    !selfServiceSetupEnabled &&
-      canAdminister &&
-      hasAppInstallationRecord &&
-      !appConnectionReady
-  );
 
-  return (
-    <section
-      aria-busy={state === "loading" || globalSyncInProgress}
-      aria-labelledby="github-product-connect-title"
-      className="panel github-product-connect github-command-center"
-    >
-      <div className="section-header">
-        <div>
-          <span className="eyebrow">{M.githubProductConnect.eyebrow}</span>
-          <h2 id="github-product-connect-title">
-            {M.githubProductConnect.title}
-          </h2>
+  if (!appConnectionReady) {
+    return (
+      <section
+        aria-labelledby="github-connect-title"
+        className="panel github-source github-connect"
+      >
+        <div className="github-connect__hero">
+          <GitHubMark />
+          <div className="github-connect__copy">
+            <span className="github-source__status github-source__status--idle">
+              {hasInstallationRecord
+                ? M.githubProductConnect.connectionAttentionBadge
+                : M.githubProductConnect.notConnectedBadge}
+            </span>
+            <h2 id="github-connect-title">
+              {hasInstallationRecord
+                ? M.githubProductConnect.connectionAttentionTitle
+                : M.githubProductConnect.connectTitle}
+            </h2>
+            <p>
+              {hasInstallationRecord
+                ? M.githubProductConnect.connectionAttentionDescription
+                : M.githubProductConnect.connectDescription}
+            </p>
+          </div>
         </div>
-        <span className="badge">{M.githubProductConnect.badgeReadOnly}</span>
-      </div>
 
-      <p className="muted github-command-intro">
-        {M.githubProductConnect.description}
-      </p>
-
-      {setupWizard}
-
-      {state === "loading" ? (
-        <LoadingState label={M.githubProductConnect.loading} />
-      ) : null}
-
-      {state === "missing" ? (
-        <EmptyState
-          description={M.githubProductConnect.noWorkspaceDescription}
-          title={M.common.noWorkspaceTitle}
-        />
-      ) : null}
-
-      {state === "error" ? (
-        <>
-          <ErrorState
-            description={M.githubProductConnect.unavailableDescription}
-            title={M.githubProductConnect.unavailableTitle}
-          />
-          <button className="button secondary" onClick={onRetry} type="button">
-            {M.common.retry}
-          </button>
-          {error ? (
-            <details className="github-command-error-details">
-              <summary>{M.githubProductConnect.errorDetails}</summary>
-              <p>{error}</p>
-            </details>
-          ) : null}
-        </>
-      ) : null}
-
-      {state === "ready" && connectionStatus && appStatus ? (
-        <>
-          <MissionStrip
-            action={githubMissionAction({
-              appConnectionReady,
-              canAdminister,
-              hasAppInstallationRecord,
-              hasRepositories: repositoryItems.length > 0,
-              selfServiceSetupEnabled,
-              setupAvailable: Boolean(appStatus.setup_url),
-              syncPartial: selectedSync.state === "partial"
-            })}
-            current={githubMissionCurrent({
-              appConnectionReady,
-              canAdminister,
-              hasAppInstallationRecord,
-              hasRepositories: repositoryItems.length > 0,
-              selfServiceSetupEnabled,
-              syncPartial: selectedSync.state === "partial",
-              syncSucceeded: selectedSync.state === "success"
-            })}
-            details={<p>{M.githubProductConnect.missionSafeDetails}</p>}
-            outcome={githubMissionOutcome({
-              appConnectionReady,
-              canAdminister,
-              hasRepositories: repositoryItems.length > 0,
-              syncPartial: selectedSync.state === "partial",
-              syncSucceeded: selectedSync.state === "success"
-            })}
-          />
-
-          {!canAdminister ? (
-            <p className="muted github-command-role-note">
-              {M.common.sourceAdminOnlyNote}
-            </p>
-          ) : null}
-
-          <GitHubCommandFlow
-            connected={appConnectionReady}
-            repositorySelected={Boolean(selectedRepositoryItem)}
-            synchronized={selectedSync.state === "success"}
-          />
-
-          <section
-            aria-labelledby="github-command-metrics-title"
-            className="github-command-metrics-section"
-          >
-            <div className="github-command-subheader">
-              <h3 id="github-command-metrics-title">
-                {M.githubProductConnect.metricsTitle}
-              </h3>
-              <MiniHint label={M.githubProductConnect.metricsHintLabel}>
-                <p>{M.githubProductConnect.metricsHint}</p>
-              </MiniHint>
-            </div>
-            <div
-              aria-label={M.githubProductConnect.metricsLabel}
-              className="github-command-metrics"
+        {!setupOpen ? (
+          <>
+            <ul
+              aria-label={M.githubProductConnect.capabilitiesLabel}
+              className="github-connect__capabilities"
             >
-              <GitHubMetric
-                hint={githubAppDescription(
-                  connectionStatus,
-                  selfServiceSetupEnabled
-                )}
-                label={M.githubProductConnect.connectionMetricTitle}
-                tone={appConnectionReady ? "positive" : "attention"}
-                value={
-                  appConnectionReady
-                    ? M.githubProductConnect.connectionMetricConnected
-                    : M.githubProductConnect.connectionMetricAttention
-                }
-              />
-              <GitHubMetric
-                hint={T.githubLoadedRepositorySample(
-                  repositoryItems.length,
-                  repositories?.count ?? 0
-                )}
-                label={M.githubProductConnect.loadedMetricTitle}
-                value={String(repositoryItems.length)}
-              />
-              <GitHubMetric
-                hint={M.githubProductConnect.activeMetricHint}
-                label={M.githubProductConnect.activeMetricTitle}
-                value={String(repositoryStats.active)}
-              />
-              <GitHubMetric
-                hint={M.githubProductConnect.lastSyncMetricHint}
-                label={M.githubProductConnect.lastSyncMetricTitle}
-                value={formatLastSync(connectionStatus.last_sync_at)}
-              />
-            </div>
-          </section>
+              <li>
+                <span aria-hidden="true">✓</span>
+                {M.githubProductConnect.capabilityRepositories}
+              </li>
+              <li>
+                <span aria-hidden="true">✓</span>
+                {M.githubProductConnect.capabilityIssues}
+              </li>
+              <li>
+                <span aria-hidden="true">✓</span>
+                {M.githubProductConnect.capabilityPullRequests}
+              </li>
+            </ul>
 
-          {showSetupAction && appStatus.setup_url ? (
-            <p className="github-command-primary-action">
-              <SourceLink className="button" url={appStatus.setup_url}>
-                {appConnectionReady
-                  ? M.githubProductConnect.openSetupSettings
-                  : M.githubProductConnect.openSetup}
-              </SourceLink>
-              <span className="muted">
-                {appConnectionReady
-                  ? M.githubProductConnect.repositoryAccessActionHint
-                  : M.githubProductConnect.setupActionHint}
-              </span>
-              <button
-                className="button secondary"
-                onClick={onRetry}
-                type="button"
-              >
-                {M.githubProductConnect.refreshConnection}
-              </button>
-            </p>
-          ) : null}
-
-          {showConnectionAttentionAction ? (
-            <div className="github-command-primary-action">
-              <button className="button" onClick={onRetry} type="button">
-                {M.githubProductConnect.refreshConnection}
-              </button>
-              <span className="muted">
-                {M.githubProductConnect.connectionAttentionActionHint}
-              </span>
-            </div>
-          ) : null}
-
-          <section
-            aria-labelledby="github-repository-workbench-title"
-            className="github-repository-workbench"
-          >
-            <div className="github-command-subheader">
-              <div>
-                <span className="eyebrow">
-                  {M.githubProductConnect.repositoryWorkbenchEyebrow}
-                </span>
-                <h3 id="github-repository-workbench-title">
-                  {M.githubProductConnect.repositoryWorkbenchTitle}
-                </h3>
-              </div>
-              <p className="muted">
-                {M.githubProductConnect.repositoryWorkbenchDescription}
-              </p>
-            </div>
-
-            {repositoryItems.length === 0 ? (
-              <EmptyState
-                description={M.githubProductConnect.repositoryListEmptyDescription}
-                title={M.githubProductConnect.repositoryListEmptyTitle}
-              />
-            ) : (
-              <>
-                <RepositoryFocusControl
-                  activeFilter={repositoryFocus}
-                  onChange={onRepositoryFocusChange}
-                  repositories={repositoryItems}
-                />
-
-                {filteredRepositoryItems.length === 0 ? (
-                  <p className="muted">
-                    {M.githubProductConnect.repositoryListNoReposForFilter}
-                  </p>
-                ) : (
-                  <RepositoryChooser
-                    disabled={globalSyncInProgress}
-                    onSelect={onRepositorySelect}
-                    repositories={filteredRepositoryItems}
-                    selectedRepository={selectedRepositoryItem?.full_name ?? null}
-                  />
-                )}
-
-                {selectedRepositoryItem && canAdminister && appConnectionReady ? (
-                  <div className="github-command-primary-action">
-                    <button
-                      className="button"
-                      disabled={!canRunSelectedSync}
-                      onClick={() =>
-                        onRunRepositorySync?.(selectedRepositoryItem.full_name)
-                      }
-                      type="button"
-                    >
-                      {globalSyncInProgress
-                        ? M.githubProductConnect.liveSyncRunning
-                        : M.githubProductConnect.liveSyncRun}
-                    </button>
-                    <span className="muted">
-                      {T.githubSelectedRepositoryAction(
-                        selectedRepositoryItem.full_name
-                      )}
-                    </span>
-                  </div>
-                ) : null}
-
-                {selectedRepositoryItem && !selectedRepositoryValid ? (
-                  <p className="error-text">
-                    {M.githubProductConnect.liveSyncRepositoryInvalid}
-                  </p>
-                ) : null}
-
-                {selectedSync.state === "error" && !selectedSync.result ? (
-                  <div className="github-sync-error">
-                    <ErrorState
-                      description={M.githubProductConnect.liveSyncFailedDescription}
-                      title={M.githubProductConnect.liveSyncFailedTitle}
-                    />
-                    {selectedSync.error ? (
-                      <details className="github-command-error-details">
-                        <summary>{M.githubProductConnect.errorDetails}</summary>
-                        <p>{selectedSync.error}</p>
-                      </details>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {selectedSync.result ? (
-                  <GitHubSyncReceipt
-                    result={selectedSync.result}
-                    state={classifyGitHubSyncState(
-                      selectedSync.result.sync_job.status
-                    )}
-                  />
-                ) : null}
-              </>
-            )}
-          </section>
-
-          <details className="github-command-technical">
-            <summary>{M.githubProductConnect.technicalDetails}</summary>
-            <div className="github-command-technical-body">
-              <p className="muted">
-                {M.githubProductConnect.technicalDescription}
-              </p>
-
-              {!selfServiceSetupEnabled ? (
-                <GitHubRealReadinessPanel
-                  connectionStatus={connectionStatus}
-                  repositories={repositories}
-                />
-              ) : null}
-
-              {!selfServiceSetupEnabled &&
-              !appStatus.configured &&
-              appStatus.missing_env.length > 0 ? (
-                <section className="callout">
-                  <strong>{M.githubProductConnect.missingEnvTitle}</strong>
-                  <ul className="meta-list">
-                    {appStatus.missing_env.map((name) => (
-                      <li key={name}>{name}</li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-
-              <dl className="github-command-facts">
-                <div>
-                  <dt>{M.githubProductConnect.tokenTitle}</dt>
-                  <dd>
-                    {appStatus.installation_tokens_persisted
-                      ? M.common.yes
-                      : M.common.no}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{M.githubProductConnect.writeTitle}</dt>
-                  <dd>
-                    {appStatus.provider_writes_enabled
-                      ? M.common.enabled
-                      : M.common.notEnabled}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{M.githubProductConnect.repositorySourceTitle}</dt>
-                  <dd>{repositories?.source ?? M.common.unknown}</dd>
-                </div>
-              </dl>
-
-              {canAdminister ? (
-                <div className="actions-row">
+            {canAdminister ? (
+              <div className="github-connect__actions">
+                {selfServiceSetupEnabled ? (
                   <button
-                    className="button secondary"
+                    className="button github-source__primary"
+                    onClick={onOpenSetup}
+                    type="button"
+                  >
+                    {hasInstallationRecord
+                      ? M.githubProductConnect.continueSetupAction
+                      : M.githubProductConnect.connectAction}
+                  </button>
+                ) : connectionStatus.app.setup_url &&
+                  !hasInstallationRecord ? (
+                  <SourceLink
+                    className="button github-source__primary"
+                    url={connectionStatus.app.setup_url}
+                  >
+                    {M.githubProductConnect.connectAction}
+                  </SourceLink>
+                ) : (
+                  <button
+                    className="button github-source__primary"
                     onClick={onRetry}
                     type="button"
                   >
                     {M.githubProductConnect.refreshConnection}
                   </button>
-                </div>
-              ) : null}
+                )}
+                <span>{M.githubProductConnect.readOnlyPromise}</span>
+              </div>
+            ) : (
+              <p className="github-connect__viewer-note">
+                {M.common.sourceAdminOnlyNote}
+              </p>
+            )}
+          </>
+        ) : null}
 
-              {[
-                ...connectionStatus.warnings,
-                ...(repositories?.warnings ?? [])
-              ].length > 0 ? (
-                <ul className="meta-list" aria-label={M.common.warnings}>
-                  {[
-                    ...connectionStatus.warnings,
-                    ...(repositories?.warnings ?? [])
-                  ].map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              ) : null}
+        {setupOpen && setupWizard ? (
+          <div className="github-source__setup-shell">
+            <div className="github-source__setup-toolbar">
+              <strong>{M.githubProductConnect.setupPanelTitle}</strong>
+              <button
+                className="button ghost"
+                onClick={onCloseSetup}
+                type="button"
+              >
+                {M.githubProductConnect.closeSetupAction}
+              </button>
             </div>
-          </details>
-        </>
+            {setupWizard}
+          </div>
+        ) : null}
+
+        <GitHubSafetyDetails
+          connectionStatus={connectionStatus}
+          repositories={repositories}
+          selfServiceSetupEnabled={selfServiceSetupEnabled}
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section
+      aria-busy={globalSyncInProgress}
+      aria-labelledby="github-source-title"
+      className="panel github-source github-source--connected"
+    >
+      <div className="github-source__topbar">
+        <div className="github-source__identity">
+          <GitHubMark />
+          <div>
+            <span className="github-source__status github-source__status--ready">
+              <span aria-hidden="true" />
+              {M.githubProductConnect.connectedBadge}
+            </span>
+            <h2 id="github-source-title">
+              {connectionStatus.display_name ??
+                M.githubProductConnect.connectedTitle}
+            </h2>
+            <p>{M.githubProductConnect.connectedDescription}</p>
+          </div>
+        </div>
+        {canAdminister && selfServiceSetupEnabled ? (
+          <button
+            className="button ghost github-source__manage"
+            onClick={setupOpen ? onCloseSetup : onOpenSetup}
+            type="button"
+          >
+            {setupOpen
+              ? M.githubProductConnect.closeSetupAction
+              : M.githubProductConnect.manageConnection}
+          </button>
+        ) : null}
+      </div>
+
+      {setupOpen && setupWizard ? (
+        <div className="github-source__setup-shell">{setupWizard}</div>
       ) : null}
+
+      <div className="github-source__workspace">
+        <div className="github-source__workspace-copy">
+          <span className="eyebrow">
+            {M.githubProductConnect.repositoryControlEyebrow}
+          </span>
+          <h3>{M.githubProductConnect.repositoryControlTitle}</h3>
+          <p>{M.githubProductConnect.repositoryControlDescription}</p>
+        </div>
+
+        {repositoryItems.length > 0 ? (
+          <div className="github-source__controls">
+            <label className="github-source__repository-field">
+              <span>{M.githubProductConnect.repositorySelectLabel}</span>
+              <select
+                disabled={globalSyncInProgress}
+                onChange={(event) => onRepositorySelect?.(event.target.value)}
+                value={selectedRepositoryItem?.full_name ?? ""}
+              >
+                {repositoryItems.map((repository) => (
+                  <option key={repository.full_name} value={repository.full_name}>
+                    {repository.full_name}
+                    {repository.archived
+                      ? ` · ${M.githubProductConnect.repositoryArchived}`
+                      : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selectedRepositoryItem?.source_url ? (
+              <SourceLink
+                className="github-source__repo-link"
+                url={selectedRepositoryItem.source_url}
+              >
+                {M.githubProductConnect.openRepository}
+              </SourceLink>
+            ) : null}
+            {canAdminister ? (
+              <button
+                className="button github-source__primary"
+                disabled={!canRunSelectedSync}
+                onClick={() =>
+                  selectedRepositoryItem
+                    ? onRunRepositorySync?.(selectedRepositoryItem.full_name)
+                    : undefined
+                }
+                type="button"
+              >
+                {globalSyncInProgress
+                  ? M.githubProductConnect.updatingData
+                  : M.githubProductConnect.updateData}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="github-source__empty-repositories">
+            <strong>{M.githubProductConnect.repositoryListEmptyTitle}</strong>
+            <p>{M.githubProductConnect.repositoryListEmptyDescription}</p>
+            {canAdminister ? (
+              <button
+                className="button secondary"
+                onClick={onOpenSetup}
+                type="button"
+              >
+                {M.githubProductConnect.manageRepositoryAccess}
+              </button>
+            ) : null}
+          </div>
+        )}
+
+        <div className="github-source__meta">
+          <span>
+            {M.githubProductConnect.lastUpdatedLabel}:{" "}
+            <strong>{formatLastSync(connectionStatus.last_sync_at)}</strong>
+          </span>
+          <span>
+            {M.githubProductConnect.repositoryCountLabel}:{" "}
+            <strong>{repositoryItems.length}</strong>
+          </span>
+          <span>{M.githubProductConnect.readOnlyPromise}</span>
+        </div>
+      </div>
+
+      {selectedRepositoryItem &&
+      !isRepositoryFullName(selectedRepositoryItem.full_name) ? (
+        <p className="error-text">
+          {M.githubProductConnect.liveSyncRepositoryInvalid}
+        </p>
+      ) : null}
+
+      {selectedSync.state === "error" && !selectedSync.result ? (
+        <div className="github-source__sync-error">
+          <ErrorState
+            description={M.githubProductConnect.liveSyncFailedDescription}
+            title={M.githubProductConnect.liveSyncFailedTitle}
+          />
+          {selectedSync.error ? (
+            <details className="github-source__error-details">
+              <summary>{M.githubProductConnect.errorDetails}</summary>
+              <p>{selectedSync.error}</p>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+
+      {selectedSync.result ? (
+        <GitHubSyncReceipt
+          result={selectedSync.result}
+          state={classifyGitHubSyncState(selectedSync.result.sync_job.status)}
+        />
+      ) : null}
+
+      <GitHubSafetyDetails
+        connectionStatus={connectionStatus}
+        repositories={repositories}
+        selfServiceSetupEnabled={selfServiceSetupEnabled}
+      />
     </section>
   );
 }
 
-function GitHubCommandFlow({
-  connected,
-  repositorySelected,
-  synchronized
-}: {
-  connected: boolean;
-  repositorySelected: boolean;
-  synchronized: boolean;
-}) {
-  const steps = [
-    {
-      complete: connected,
-      description: M.githubProductConnect.flowConnectionDescription,
-      title: M.githubProductConnect.flowConnectionTitle
-    },
-    {
-      complete: connected && repositorySelected,
-      description: M.githubProductConnect.flowRepositoryDescription,
-      title: M.githubProductConnect.flowRepositoryTitle
-    },
-    {
-      complete: connected && repositorySelected && synchronized,
-      description: M.githubProductConnect.flowFounderOSDescription,
-      title: M.githubProductConnect.flowFounderOSTitle
-    }
-  ];
-  const currentStep = steps.findIndex((step) => !step.complete);
-
+function GitHubMark() {
   return (
-    <ol aria-label={M.githubProductConnect.flowLabel} className="github-command-flow">
-      {steps.map((step, index) => {
-        const current = index === (currentStep === -1 ? steps.length - 1 : currentStep);
-        return (
-          <li
-            aria-current={current ? "step" : undefined}
-            className={`github-command-flow-step${
-              step.complete ? " github-command-flow-step--complete" : ""
-            }${current ? " github-command-flow-step--current" : ""}`}
-            key={step.title}
-          >
-            <span className="github-command-flow-index" aria-hidden="true">
-              {step.complete ? "✓" : index + 1}
-            </span>
-            <div>
-              <strong>{step.title}</strong>
-              <span>{step.description}</span>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+    <span className="github-source__mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <path
+          d="M12 2.4a9.8 9.8 0 0 0-3.1 19.1c.5.1.7-.2.7-.5v-1.9c-2.9.6-3.5-1.2-3.5-1.2-.5-1.2-1.2-1.5-1.2-1.5-.9-.7.1-.7.1-.7 1.1.1 1.7 1.1 1.7 1.1 1 1.7 2.6 1.2 3.2.9.1-.7.4-1.2.7-1.5-2.3-.3-4.7-1.1-4.7-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.4 4.6-4.7 4.9.4.3.7 1 .7 2V21c0 .3.2.6.7.5A9.8 9.8 0 0 0 12 2.4Z"
+          fill="currentColor"
+        />
+      </svg>
+    </span>
   );
 }
 
-function GitHubMetric({
-  hint,
-  label,
-  tone,
-  value
-}: {
-  hint: string;
-  label: string;
-  tone?: "attention" | "positive";
-  value: string;
-}) {
-  return (
-    <article
-      className={`github-command-metric${
-        tone ? ` github-command-metric--${tone}` : ""
-      }`}
-    >
-      <span className="github-command-metric-label">{label}</span>
-      <strong className="github-command-metric-value">{value}</strong>
-      <span className="github-command-metric-hint">{hint}</span>
-    </article>
-  );
-}
-
-function RepositoryChooser({
-  disabled,
-  onSelect,
+function GitHubSafetyDetails({
+  connectionStatus,
   repositories,
-  selectedRepository
+  selfServiceSetupEnabled
 }: {
-  disabled: boolean;
-  onSelect?: (repositoryFullName: string) => void;
-  repositories: GitHubRepositoryRead[];
-  selectedRepository: string | null;
+  connectionStatus: GitHubConnectionStatusResponse;
+  repositories: GitHubRepositoryListResponse | null;
+  selfServiceSetupEnabled: boolean;
 }) {
-  const selected = selectedRepository
-    ? repositories.find(
-        (repository) => repository.full_name === selectedRepository
-      )
-    : null;
-  const orderedRepositories = selected
-    ? [
-        selected,
-        ...repositories.filter(
-          (repository) => repository.full_name !== selected.full_name
-        )
-      ]
-    : repositories;
-  const previewRepositories = orderedRepositories.slice(
-    0,
-    REPOSITORY_PREVIEW_LIMIT
-  );
-  const remainingRepositories = orderedRepositories.slice(
-    REPOSITORY_PREVIEW_LIMIT
-  );
-
+  const warnings = [
+    ...connectionStatus.warnings,
+    ...(repositories?.warnings ?? [])
+  ];
   return (
-    <div className="github-repository-chooser">
-      <div
-        aria-label={M.githubProductConnect.repositoryListTitle}
-        className="github-repository-grid"
-        role="group"
-      >
-        {previewRepositories.map((repository) => (
-          <RepositoryChoice
-            disabled={disabled}
-            key={repository.full_name}
-            onSelect={onSelect}
-            repository={repository}
-            selected={selectedRepository === repository.full_name}
-          />
-        ))}
-      </div>
-
-      {remainingRepositories.length > 0 ? (
-        <details className="github-repository-more">
-          <summary>
-            {T.githubShowMoreRepositories(remainingRepositories.length)}
-          </summary>
-          <div className="github-repository-grid">
-            {remainingRepositories.map((repository) => (
-              <RepositoryChoice
-                disabled={disabled}
-                key={repository.full_name}
-                onSelect={onSelect}
-                repository={repository}
-                selected={selectedRepository === repository.full_name}
-              />
-            ))}
+    <details className="github-source__safety">
+      <summary>{M.githubProductConnect.safetyDetails}</summary>
+      <div className="github-source__safety-body">
+        <p>{M.githubProductConnect.safetyDescription}</p>
+        <dl>
+          <div>
+            <dt>{M.githubProductConnect.tokenTitle}</dt>
+            <dd>
+              {connectionStatus.app.installation_tokens_persisted
+                ? M.common.yes
+                : M.common.no}
+            </dd>
           </div>
-        </details>
-      ) : null}
-    </div>
-  );
-}
-
-function RepositoryChoice({
-  disabled,
-  onSelect,
-  repository,
-  selected
-}: {
-  disabled: boolean;
-  onSelect?: (repositoryFullName: string) => void;
-  repository: GitHubRepositoryRead;
-  selected: boolean;
-}) {
-  return (
-    <article
-      className={`github-repository-choice${
-        selected ? " github-repository-choice--selected" : ""
-      }`}
-    >
-      <button
-        aria-pressed={selected}
-        className="github-repository-choice-main"
-        disabled={disabled}
-        onClick={() => onSelect?.(repository.full_name)}
-        type="button"
-      >
-        <span className="github-repository-choice-copy">
-          <strong>{repository.full_name}</strong>
-          <span className="github-repository-badges">
-            <span className="github-repository-badge">
-              {repository.archived
-                ? M.githubProductConnect.repositoryArchived
-                : M.githubProductConnect.repositoryActive}
-            </span>
-            <span className="github-repository-badge">
-              {repository.visibility || M.common.unknown}
-            </span>
-          </span>
-          {repository.last_activity_at ? (
-            <span className="muted">
-              {T.githubRepositoryLastActivity(
-                formatTimestamp(repository.last_activity_at)
-              )}
-            </span>
-          ) : null}
-        </span>
-        <span className="github-repository-choice-state" aria-hidden="true">
-          {selected ? "✓" : "→"}
-        </span>
-      </button>
-
-      {repository.source_url ? (
-        <div className="github-repository-actions">
-          <SourceLink url={repository.source_url}>
-            {M.common.openSource}
-          </SourceLink>
-        </div>
-      ) : null}
-    </article>
+          <div>
+            <dt>{M.githubProductConnect.writeTitle}</dt>
+            <dd>
+              {connectionStatus.app.provider_writes_enabled
+                ? M.common.enabled
+                : M.common.notEnabled}
+            </dd>
+          </div>
+          <div>
+            <dt>{M.githubProductConnect.repositorySourceTitle}</dt>
+            <dd>{repositories?.source ?? M.common.unknown}</dd>
+          </div>
+        </dl>
+        {!selfServiceSetupEnabled &&
+        connectionStatus.app.missing_env.length > 0 ? (
+          <div className="github-source__technical-note">
+            <strong>{M.githubProductConnect.missingEnvTitle}</strong>
+            <ul>
+              {connectionStatus.app.missing_env.map((name) => (
+                <li key={name}>{name}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {warnings.length > 0 ? (
+          <div className="github-source__technical-note">
+            <strong>{M.common.warnings}</strong>
+            <ul>
+              {warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -904,10 +686,7 @@ function GitHubSyncReceipt({
   state
 }: {
   result: GitHubAppLiveSyncResponse;
-  state: Extract<
-    LiveSyncState,
-    "error" | "partial" | "pending" | "success"
-  >;
+  state: Extract<LiveSyncState, "error" | "partial" | "pending" | "success">;
 }) {
   const receiptCopy =
     state === "success"
@@ -938,17 +717,10 @@ function GitHubSyncReceipt({
       aria-label={M.githubProductConnect.liveSyncResultTitle}
       className={`github-sync-receipt github-sync-receipt--${state}`}
     >
-      <div
-        aria-atomic="true"
-        aria-live="polite"
-        className="github-sync-receipt-status"
-        role="status"
-      >
+      <div aria-atomic="true" aria-live="polite" role="status">
         <span className="eyebrow">{receiptCopy.eyebrow}</span>
         <h3>{receiptCopy.title}</h3>
-        {receiptCopy.description ? (
-          <p className="muted">{receiptCopy.description}</p>
-        ) : null}
+        {receiptCopy.description ? <p>{receiptCopy.description}</p> : null}
         <p>
           {T.githubAppLiveSyncResult(
             result.totals.repositories,
@@ -962,7 +734,7 @@ function GitHubSyncReceipt({
         </p>
       </div>
       {result.warnings.length > 0 ? (
-        <details className="github-sync-receipt-details">
+        <details>
           <summary>{M.githubProductConnect.receiptTechnicalDetails}</summary>
           <ul className="meta-list" aria-label={M.common.warnings}>
             {result.warnings.map((warning) => (
@@ -975,160 +747,35 @@ function GitHubSyncReceipt({
   );
 }
 
-function GitHubRealReadinessPanel({
-  connectionStatus,
-  repositories
-}: {
-  connectionStatus: GitHubConnectionStatusResponse;
-  repositories: GitHubRepositoryListResponse | null;
-}) {
-  const readiness = summarizeGitHubRealReadReadiness(connectionStatus, repositories);
-  return (
-    <section
-      className="work-section"
-      aria-label={M.githubProductConnect.realReadReadinessLabel}
-    >
-      <h3>{M.githubProductConnect.realReadReadinessTitle}</h3>
-      <p className="muted">{M.githubProductConnect.realReadReadinessDescription}</p>
-      <section className="grid" aria-label={M.githubProductConnect.realReadReadinessLabel}>
-        <StatusCard
-          description={M.githubProductConnect.realReadStatusDescription}
-          title={M.githubProductConnect.realReadStatusTitle}
-          value={
-            readiness.ready
-              ? M.githubProductConnect.realReadReady
-              : M.githubProductConnect.realReadBlocked
-          }
-        />
-        <StatusCard
-          description={M.githubProductConnect.realReadEnvDescription}
-          title={M.githubProductConnect.realReadEnvTitle}
-          value={
-            readiness.appEnvConfigured ? M.common.available : M.common.unavailable
-          }
-        />
-        <StatusCard
-          description={M.githubProductConnect.realReadInstallationDescription}
-          title={M.githubProductConnect.realReadInstallationTitle}
-          value={
-            readiness.installationConnected ? M.common.available : M.common.unavailable
-          }
-        />
-        <StatusCard
-          description={M.githubProductConnect.realReadRepoSurfaceDescription}
-          title={M.githubProductConnect.realReadRepoSurfaceTitle}
-          value={String(readiness.localRepositoryCount)}
-        />
-      </section>
-      {readiness.blockers.length > 0 ? (
-        <section className="callout">
-          <strong>{M.githubProductConnect.realReadBlockersTitle}</strong>
-          <ul className="meta-list">
-            {readiness.blockers.map((blocker) => (
-              <li key={blocker}>{githubRealReadBlockerLabel(blocker)}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      <p className="muted">{readiness.nextStep}</p>
-      <p className="muted">{M.githubProductConnect.realReadBoundary}</p>
-    </section>
-  );
-}
-
-function RepositoryFocusControl({
-  activeFilter,
-  onChange,
-  repositories
-}: {
-  activeFilter: RepositoryFocusFilter;
-  onChange?: (filter: RepositoryFocusFilter) => void;
-  repositories: GitHubRepositoryRead[];
-}) {
-  const filters: RepositoryFocusFilter[] = [
-    "all",
-    "active",
-    "archived",
-    "private",
-    "with_evidence"
-  ];
-  return (
-    <div
-      className="github-repository-filters"
-      role="group"
-      aria-label={M.githubProductConnect.repositoryFocusLabel}
-    >
-      {filters.map((filter) => (
-        <button
-          aria-pressed={activeFilter === filter}
-          className={`segment${activeFilter === filter ? " active" : ""}`}
-          key={filter}
-          onClick={() => onChange?.(filter)}
-          type="button"
-        >
-          {repositoryFocusLabel(filter)} · {repositoryFocusCount(repositories, filter)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function repositoryFocusLabel(filter: RepositoryFocusFilter): string {
-  switch (filter) {
-    case "active":
-      return M.githubProductConnect.repositoryFocusActive;
-    case "archived":
-      return M.githubProductConnect.repositoryFocusArchived;
-    case "private":
-      return M.githubProductConnect.repositoryFocusPrivate;
-    case "with_evidence":
-      return M.githubProductConnect.repositoryFocusWithEvidence;
-    case "all":
-    default:
-      return M.githubProductConnect.repositoryFocusAll;
-  }
-}
-
-function repositoryFocusCount(
-  repositories: GitHubRepositoryRead[],
-  filter: RepositoryFocusFilter
-): number {
-  return filterRepositoriesByFocus(repositories, filter).length;
-}
-
-function filterRepositoriesByFocus(
-  repositories: GitHubRepositoryRead[],
-  filter: RepositoryFocusFilter
+function githubVisibleRepositories(
+  connectionStatus: GitHubConnectionStatusResponse,
+  repositories: GitHubRepositoryRead[]
 ): GitHubRepositoryRead[] {
-  switch (filter) {
-    case "active":
-      return repositories.filter((repository) => !repository.archived);
-    case "archived":
-      return repositories.filter((repository) => repository.archived);
-    case "private":
-      return repositories.filter((repository) => repository.visibility === "private");
-    case "with_evidence":
-      return repositories.filter((repository) => repository.evidence_refs.length > 0);
-    case "all":
-    default:
-      return repositories;
+  const selected = new Set(
+    (connectionStatus.selected_repositories ?? []).map((repository) =>
+      repository.toLowerCase()
+    )
+  );
+  if (
+    connectionStatus.app.credential_source !== "managed" ||
+    !connectionStatus.installation_verified ||
+    selected.size === 0
+  ) {
+    return repositories;
   }
-}
-
-function repositoryFocusStats(repositories: GitHubRepositoryRead[]) {
-  return {
-    active: filterRepositoriesByFocus(repositories, "active").length,
-    archived: filterRepositoriesByFocus(repositories, "archived").length,
-    private: filterRepositoriesByFocus(repositories, "private").length,
-    withEvidence: filterRepositoriesByFocus(repositories, "with_evidence").length
-  };
+  return repositories.filter((repository) =>
+    selected.has(repository.full_name.toLowerCase())
+  );
 }
 
 function chooseAvailableRepository(
   repositories: GitHubRepositoryRead[],
   current: string | null
 ): string | null {
-  if (current && repositories.some((repository) => repository.full_name === current)) {
+  if (
+    current &&
+    repositories.some((repository) => repository.full_name === current)
+  ) {
     return current;
   }
   return (
@@ -1157,6 +804,20 @@ function chooseSelectedRepository(
 
 function idleSyncStatus(): RepositorySyncStatus {
   return { error: null, result: null, state: "idle" };
+}
+
+function isGitHubAppConnectionReady(
+  status: GitHubConnectionStatusResponse
+): boolean {
+  return Boolean(
+    status.app.configured &&
+      status.installation_verified &&
+      status.live_read_available &&
+      status.status === "connected" &&
+      status.connection_id &&
+      status.connection_method === "github_app_installation" &&
+      status.has_connection_record
+  );
 }
 
 function summarizeGitHubRealReadReadiness(
@@ -1195,189 +856,20 @@ function summarizeGitHubRealReadReadiness(
     installationConnected,
     localRepositoryCount,
     localRepositorySurfaceAvailable,
-    nextStep: githubRealReadNextStep({
+    nextStep: T.githubRealReadNextStep(
       appEnvConfigured,
       hasAppInstallationConnection,
       installationConnected,
       localRepositorySurfaceAvailable,
       ready
-    }),
+    ),
     ready
   };
 }
 
-function githubRealReadNextStep({
-  appEnvConfigured,
-  hasAppInstallationConnection,
-  installationConnected,
-  localRepositorySurfaceAvailable,
-  ready
-}: {
-  appEnvConfigured: boolean;
-  hasAppInstallationConnection: boolean;
-  installationConnected: boolean;
-  localRepositorySurfaceAvailable: boolean;
-  ready: boolean;
-}): string {
-  return T.githubRealReadNextStep(
-    appEnvConfigured,
-    hasAppInstallationConnection,
-    installationConnected,
-    localRepositorySurfaceAvailable,
-    ready
-  );
-}
-
-function githubRealReadBlockerLabel(blocker: string): string {
-  if (blocker === "github_app_env_incomplete") {
-    return M.githubProductConnect.realReadBlockerEnv;
-  }
-  if (blocker === "github_app_installation_connection_missing") {
-    return M.githubProductConnect.realReadBlockerConnectionMissing;
-  }
-  if (blocker === "github_app_installation_connection_not_connected") {
-    return M.githubProductConnect.realReadBlockerConnectionNotConnected;
-  }
-  if (blocker === "local_repository_surface_empty") {
-    return M.githubProductConnect.realReadBlockerReposEmpty;
-  }
-  return blocker;
-}
-
-function githubAppDescription(
-  status: GitHubConnectionStatusResponse,
-  selfServiceSetupEnabled: boolean
-): string {
-  if (selfServiceSetupEnabled && !status.live_read_available) {
-    return M.githubProductConnect.appManagedSetupDescription;
-  }
-  if (status.connection_method === "github_app_installation") {
-    if (status.status !== "connected" || !status.connection_id) {
-      return M.githubProductConnect.appConnectionAttentionDescription;
-    }
-    return status.display_name ?? M.githubProductConnect.appInstallationDescription;
-  }
-  if (status.app.configured) {
-    return M.githubProductConnect.appReadyDescription;
-  }
-  return M.githubProductConnect.appMissingDescription;
-}
-
-function githubMissionCurrent({
-  appConnectionReady,
-  canAdminister,
-  hasAppInstallationRecord,
-  hasRepositories,
-  selfServiceSetupEnabled,
-  syncPartial,
-  syncSucceeded
-}: {
-  appConnectionReady: boolean;
-  canAdminister: boolean;
-  hasAppInstallationRecord: boolean;
-  hasRepositories: boolean;
-  selfServiceSetupEnabled: boolean;
-  syncPartial: boolean;
-  syncSucceeded: boolean;
-}): string {
-  if (!canAdminister) {
-    return M.githubProductConnect.missionViewerCurrent;
-  }
-  if (!appConnectionReady) {
-    if (selfServiceSetupEnabled) {
-      return M.githubProductConnect.missionConnectionCurrent;
-    }
-    return hasAppInstallationRecord
-      ? M.githubProductConnect.missionConnectionAttentionCurrent
-      : M.githubProductConnect.missionConnectionCurrent;
-  }
-  if (!hasRepositories) {
-    return M.githubProductConnect.missionEmptyCurrent;
-  }
-  if (syncPartial) {
-    return M.githubProductConnect.missionPartialCurrent;
-  }
-  if (syncSucceeded) {
-    return M.githubProductConnect.missionSyncedCurrent;
-  }
-  return M.githubProductConnect.missionReadyCurrent;
-}
-
-function githubMissionAction({
-  appConnectionReady,
-  canAdminister,
-  hasAppInstallationRecord,
-  hasRepositories,
-  selfServiceSetupEnabled,
-  setupAvailable,
-  syncPartial
-}: {
-  appConnectionReady: boolean;
-  canAdminister: boolean;
-  hasAppInstallationRecord: boolean;
-  hasRepositories: boolean;
-  selfServiceSetupEnabled: boolean;
-  setupAvailable: boolean;
-  syncPartial: boolean;
-}): string {
-  if (!canAdminister) {
-    return M.githubProductConnect.missionViewerAction;
-  }
-  if (!appConnectionReady) {
-    if (selfServiceSetupEnabled) {
-      return M.githubProductConnect.missionSelfServiceSetupAction;
-    }
-    if (hasAppInstallationRecord) {
-      return M.githubProductConnect.missionConnectionAttentionAction;
-    }
-    return setupAvailable
-      ? M.githubProductConnect.missionConnectionAction
-      : M.githubProductConnect.missionTechnicalAction;
-  }
-  if (!hasRepositories) {
-    return M.githubProductConnect.missionEmptyAction;
-  }
-  if (syncPartial) {
-    return M.githubProductConnect.missionPartialAction;
-  }
-  return M.githubProductConnect.missionReadyAction;
-}
-
-function githubMissionOutcome({
-  appConnectionReady,
-  canAdminister,
-  hasRepositories,
-  syncPartial,
-  syncSucceeded
-}: {
-  appConnectionReady: boolean;
-  canAdminister: boolean;
-  hasRepositories: boolean;
-  syncPartial: boolean;
-  syncSucceeded: boolean;
-}): string {
-  if (!canAdminister) {
-    return M.githubProductConnect.missionViewerOutcome;
-  }
-  if (!appConnectionReady) {
-    return M.githubProductConnect.missionConnectionOutcome;
-  }
-  if (!hasRepositories) {
-    return M.githubProductConnect.missionEmptyOutcome;
-  }
-  if (syncPartial) {
-    return M.githubProductConnect.missionPartialOutcome;
-  }
-  if (syncSucceeded) {
-    return M.githubProductConnect.missionSyncedOutcome;
-  }
-  return M.githubProductConnect.missionReadyOutcome;
-}
-
-function classifyGitHubSyncState(status: string): Extract<
-  LiveSyncState,
-  "error" | "partial" | "pending" | "success"
-> {
+function classifyGitHubSyncState(
+  status: string
+): Extract<LiveSyncState, "error" | "partial" | "pending" | "success"> {
   const normalized = status.trim().toLowerCase();
   if (normalized === "succeeded") {
     return "success";
@@ -1400,10 +892,6 @@ function formatLastSync(value: string | null): string {
   if (!value) {
     return M.githubProductConnect.lastSyncNever;
   }
-  return formatTimestamp(value);
-}
-
-function formatTimestamp(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;

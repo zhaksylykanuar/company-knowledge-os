@@ -75,10 +75,13 @@ function renderPanel(
 ): string {
   return renderToStaticMarkup(
     <GitHubOperationalWorkPanelView
+      activeKind={props.activeKind}
       data={props.data ?? sampleWork}
       error={props.error ?? null}
+      onKindChange={props.onKindChange}
       onRetry={props.onRetry}
       onStateChange={props.onStateChange}
+      repositoryFullName={props.repositoryFullName}
       selectedState={props.selectedState ?? "open"}
       status={props.status ?? "ready"}
     />
@@ -133,7 +136,7 @@ test("renders a truthful zero-count sample for an empty filter", () => {
   const html = renderPanel({ data: emptyWork, status: "empty" });
   assert.match(html, /data-scope="loaded-sample"/);
   assert.ok(html.includes(M.githubWork.noIssuesForFilter));
-  assert.ok(html.includes(M.githubWork.noPullRequestsForFilter));
+  assert.ok(html.includes(M.githubWork.nothingFoundTitle));
   assert.doesNotMatch(html, new RegExp(M.githubWork.emptyTitle));
 });
 
@@ -147,34 +150,33 @@ test("renders backend error state with retry affordance", () => {
   assert.ok(html.includes(M.githubWork.unavailableTitle));
   assert.match(html, /backend unavailable/);
   assert.ok(html.includes(M.common.retry));
-  assert.match(html, /<details class="github-work-pulse__error-details">/);
+  assert.match(html, /<details class="github-work__error-details">/);
 });
 
-test("renders issue and pull request records with repository identity", () => {
+test("renders one work type at a time with repository identity", () => {
   const html = renderPanel();
   assert.match(html, /Investigate failing sync/);
-  assert.match(html, /Wire operational dashboard/);
+  assert.doesNotMatch(html, /Wire operational dashboard/);
   assert.match(html, /qtwin-io\/founderos-api/);
   assert.match(html, /#42/);
-  assert.match(html, /#7/);
-  assert.match(html, /<ul class="work-list github-work-pulse__list">/);
-  assert.match(
-    html,
-    new RegExp(`${M.githubWork.metaState}: ${M.githubWork.stateOpen}`)
-  );
+  assert.match(html, /<ul class="github-work__list">/);
+  assert.match(html, /role="tablist"/);
   assert.doesNotMatch(html, /source_events/);
   assert.doesNotMatch(html, /Placeholder/);
+
+  const pullRequests = renderPanel({ activeKind: "pull_requests" });
+  assert.match(pullRequests, /Wire operational dashboard/);
+  assert.match(pullRequests, /#7/);
+  assert.doesNotMatch(pullRequests, /Investigate failing sync/);
 });
 
-test("renders issue and PR counts as a loaded sample without total claims", () => {
+test("renders compact issue and PR tabs without duplicate metric cards", () => {
   const html = renderPanel();
-  assert.match(html, /class="github-work-pulse__snapshot"/);
   assert.match(html, /data-scope="loaded-sample"/);
-  assert.ok(html.includes(M.githubWork.sampleNote));
-  assert.equal((html.match(/<meter/g) ?? []).length, 2);
-  assert.match(html, /max="2" value="1"/);
-  assert.ok(html.includes("1 из 2 записей текущего фильтра."));
-  assert.doesNotMatch(html, />Всего</);
+  assert.ok(html.includes(M.githubWork.issuesTitle));
+  assert.ok(html.includes(M.githubWork.pullRequestsTitle));
+  assert.equal((html.match(/role="tab"/g) ?? []).length, 2);
+  assert.doesNotMatch(html, /<meter/);
 });
 
 test("renders open, closed, merged, and all filters", () => {
@@ -183,11 +185,12 @@ test("renders open, closed, merged, and all filters", () => {
   assert.ok(html.includes(M.githubWork.stateClosed));
   assert.ok(html.includes(M.githubWork.stateMerged));
   assert.ok(html.includes(M.githubWork.stateAll));
-  assert.match(html, /aria-pressed="true"/);
+  assert.match(html, /<select/);
+  assert.match(html, /<option value="merged" selected=""/);
 });
 
 test("keeps long loaded lists compact behind a native disclosure", () => {
-  const issues = Array.from({ length: 6 }, (_, index) => ({
+  const issues = Array.from({ length: 10 }, (_, index) => ({
     ...sampleWork.issues[0]!,
     id: `issue-row-${index + 1}`,
     number: index + 1,
@@ -201,14 +204,23 @@ test("keeps long loaded lists compact behind a native disclosure", () => {
     }
   });
 
-  assert.match(html, /<details class="github-work-pulse__more">/);
-  assert.match(
-    html,
-    new RegExp(`<summary>${M.githubWork.issuesTitle} \\+2</summary>`)
+  assert.match(html, /<details class="github-work__more">/);
+  assert.ok(html.includes(`${M.githubWork.showMore} · 2`));
+});
+
+test("filters the loaded work to the selected repository", () => {
+  const hidden = renderPanel({ repositoryFullName: "qtwin-io/another-repo" });
+  assert.ok(hidden.includes(M.githubWork.nothingFoundTitle));
+  assert.doesNotMatch(hidden, /Investigate failing sync/);
+
+  const visible = renderPanel({ repositoryFullName: "qtwin-io/founderos-api" });
+  assert.match(visible, /Investigate failing sync/);
+  assert.ok(
+    visible.includes(`${M.githubWork.repositoryPrefix} qtwin-io/founderos-api`)
   );
 });
 
-test("keeps backend warnings available without crowding the pulse", () => {
+test("keeps backend warnings available without crowding the work list", () => {
   const html = renderPanel({
     data: {
       ...sampleWork,
@@ -216,7 +228,7 @@ test("keeps backend warnings available without crowding the pulse", () => {
     }
   });
 
-  assert.match(html, /<details class="github-work-pulse__warnings">/);
+  assert.match(html, /<details class="github-work__warnings">/);
   assert.ok(html.includes(`${M.common.warnings} (1)`));
   assert.match(html, /partial canonical sample/);
 });

@@ -185,18 +185,21 @@ Implemented foundations:
   explicitly repository-scoped; backend can mint just-in-time installation
   tokens, read installation repositories/issues/PRs for requested repositories,
   and persist through existing idempotent normalization without storing tokens or
-  performing provider writes. `/github` now renders known repositories with an
-  adjacent explicit single-repository read-only sync button for each repo; no
-  bulk sync control exists. Tests verify mocked synced data reaches
+  performing provider writes. `/github` now exposes one state-driven workspace:
+  one repository selector, one explicit read-only update button and work tabs
+  filtered to the selected repository; no bulk sync control exists. Setup,
+  connection attention, ready and empty states never compete on the same
+  surface (DEC-094). Tests verify mocked synced data reaches
   Company Brain and persisted deterministic Briefings with evidence while
   workspace B cannot see workspace A's synced canonical state/evidence. Safe
   provider error/rate-limit details surface HTTP status/message/retry metadata
   without leaking tokens or provider payloads.
-- `/github` now owns the primary setup flow. Legacy env readiness remains hidden
-  compatibility diagnostics; it does not define managed setup readiness. The
-  wizard itself performs no provider read until the human confirms GitHub,
-  verifies the installation, saves the repository subset, and later presses the
-  separate one-repository sync action.
+- `/github` now owns the primary setup flow. The wizard opens only after the
+  explicit connect/continue action and replaces that CTA while active. Legacy
+  env readiness remains hidden compatibility diagnostics; it does not define
+  managed setup readiness. The wizard itself performs no provider read until
+  the human confirms GitHub, verifies the installation, saves the repository
+  subset, and later presses the separate one-repository update action.
 - Deterministic Company Brain, dashboard Source Coverage over the existing
   Company Brain endpoint, and persisted deterministic Founder Briefings with
   history, evidence refs, and local source-coverage signals. No LLM generation

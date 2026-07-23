@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { fetchGitHubOperationalWork } from "../lib/api";
-import { M, T } from "../lib/messages";
+import { M } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
 import type {
   GitHubOperationalIssue,
@@ -11,12 +11,12 @@ import type {
   GitHubOperationalWorkResponse,
   GitHubOperationalWorkState
 } from "../lib/types";
-import { SourceLink } from "./SourceLink";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
+import { SourceLink } from "./SourceLink";
 
-const visibleWorkItems = 4;
+const VISIBLE_WORK_ITEMS = 8;
 
 const stateOptions: { value: GitHubOperationalWorkState; label: string }[] = [
   { value: "open", label: M.githubWork.stateOpen },
@@ -26,24 +26,31 @@ const stateOptions: { value: GitHubOperationalWorkState; label: string }[] = [
 ];
 
 type PanelStatus = "loading" | "ready" | "empty" | "error" | "missing";
+type WorkKind = "issues" | "pull_requests";
 
 type GitHubOperationalWorkPanelProps = {
   refreshSignal?: number;
+  repositoryFullName?: string | null;
 };
 
 type GitHubOperationalWorkPanelViewProps = {
+  activeKind?: WorkKind;
   data: GitHubOperationalWorkResponse | null;
   error: string | null;
+  onKindChange?: (kind: WorkKind) => void;
   onRetry?: () => void;
   onStateChange?: (state: GitHubOperationalWorkState) => void;
+  repositoryFullName?: string | null;
   selectedState: GitHubOperationalWorkState;
   status: PanelStatus;
 };
 
 export function GitHubOperationalWorkPanel({
-  refreshSignal = 0
+  refreshSignal = 0,
+  repositoryFullName = null
 }: GitHubOperationalWorkPanelProps) {
   const workspaceId = useWorkspaceId();
+  const [activeKind, setActiveKind] = useState<WorkKind>("issues");
   const [data, setData] = useState<GitHubOperationalWorkResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -93,10 +100,13 @@ export function GitHubOperationalWorkPanel({
 
   return (
     <GitHubOperationalWorkPanelView
+      activeKind={activeKind}
       data={data}
       error={error}
+      onKindChange={setActiveKind}
       onRetry={() => setReloadKey((current) => current + 1)}
       onStateChange={setSelectedState}
+      repositoryFullName={repositoryFullName}
       selectedState={selectedState}
       status={status}
     />
@@ -104,59 +114,73 @@ export function GitHubOperationalWorkPanel({
 }
 
 export function GitHubOperationalWorkPanelView({
+  activeKind = "issues",
   data,
   error,
+  onKindChange,
   onRetry,
   onStateChange,
+  repositoryFullName = null,
   selectedState,
   status
 }: GitHubOperationalWorkPanelViewProps) {
+  const issues = data
+    ? filterRepositoryItems(data.issues, repositoryFullName)
+    : [];
+  const pullRequests = data
+    ? filterRepositoryItems(data.pull_requests, repositoryFullName)
+    : [];
+  const activeItems = activeKind === "issues" ? issues : pullRequests;
+  const activeTitle =
+    activeKind === "issues"
+      ? M.githubWork.issuesTitle
+      : M.githubWork.pullRequestsTitle;
+  const activeEmptyText =
+    activeKind === "issues"
+      ? M.githubWork.noIssuesForFilter
+      : M.githubWork.noPullRequestsForFilter;
+
   return (
     <section
       aria-busy={status === "loading"}
       aria-labelledby="github-work-title"
-      className="panel operational-work github-work-pulse"
+      className="panel github-work"
     >
-      <div className="section-header github-work-pulse__header">
+      <div className="github-work__header">
         <div>
           <span className="eyebrow">{M.githubWork.eyebrow}</span>
           <h2 id="github-work-title">{M.githubWork.title}</h2>
+          <p>
+            {repositoryFullName
+              ? `${M.githubWork.repositoryPrefix} ${repositoryFullName}`
+              : M.githubWork.description}
+          </p>
         </div>
-        <div
-          aria-label={M.githubWork.stateLabel}
-          className="segmented github-work-pulse__filters"
-          role="group"
-        >
-          {stateOptions.map((option) => (
-            <button
-              aria-pressed={selectedState === option.value}
-              className={
-                selectedState === option.value
-                  ? "segment active github-work-pulse__filter"
-                  : "segment github-work-pulse__filter"
-              }
-              key={option.value}
-              onClick={() => onStateChange?.(option.value)}
-              type="button"
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <label className="github-work__state-filter">
+          <span>{M.githubWork.stateLabel}</span>
+          <select
+            onChange={(event) =>
+              onStateChange?.(event.target.value as GitHubOperationalWorkState)
+            }
+            value={selectedState}
+          >
+            {stateOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {status === "loading" ? (
-        <div
-          aria-live="polite"
-          className="github-work-pulse__state"
-          role="status"
-        >
+        <div aria-live="polite" className="github-work__state" role="status">
           <LoadingState label={M.githubWork.loading} />
         </div>
       ) : null}
 
       {status === "missing" ? (
-        <div className="github-work-pulse__state">
+        <div className="github-work__state">
           <EmptyState
             description={M.githubWork.noWorkspaceDescription}
             title={M.common.noWorkspaceTitle}
@@ -165,7 +189,7 @@ export function GitHubOperationalWorkPanelView({
       ) : null}
 
       {status === "error" ? (
-        <div className="github-work-pulse__state">
+        <div className="github-work__state">
           <ErrorState
             description={M.githubWork.unavailableDescription}
             title={M.githubWork.unavailableTitle}
@@ -174,7 +198,7 @@ export function GitHubOperationalWorkPanelView({
             {M.common.retry}
           </button>
           {error ? (
-            <details className="github-work-pulse__error-details">
+            <details className="github-work__error-details">
               <summary>{M.githubWork.errorDetails}</summary>
               <p>{error}</p>
             </details>
@@ -190,201 +214,154 @@ export function GitHubOperationalWorkPanelView({
       ) : null}
 
       {data && status !== "loading" && status !== "error" && status !== "missing" ? (
-        <div className="github-work-pulse__results" id="github-work-results">
-          <p className="muted github-work-pulse__sample-note">
-            {M.githubWork.sampleNote}
-          </p>
-          <section
-            aria-label={M.githubWork.title}
-            aria-live="polite"
-            className="github-work-pulse__snapshot"
-            data-scope="loaded-sample"
-            role="status"
+        <div className="github-work__results" id="github-work-results">
+          <div
+            aria-label={M.githubWork.kindLabel}
+            className="github-work__tabs"
+            role="tablist"
           >
-            <PulseMetric
-              count={data.counts.issues}
-              description={T.workIssuesDescription(stateLabel(selectedState))}
-              kind="issue"
-              sampleSize={data.counts.issues + data.counts.pull_requests}
-              title={M.githubWork.issuesTitle}
-            />
-            <PulseMetric
-              count={data.counts.pull_requests}
-              description={T.workPullRequestsDescription(stateLabel(selectedState))}
-              kind="pull-request"
-              sampleSize={data.counts.issues + data.counts.pull_requests}
-              title={M.githubWork.pullRequestsTitle}
-            />
-          </section>
+            <button
+              aria-controls="github-work-tab-panel"
+              aria-selected={activeKind === "issues"}
+              className={activeKind === "issues" ? "active" : ""}
+              onClick={() => onKindChange?.("issues")}
+              role="tab"
+              type="button"
+            >
+              <span>{M.githubWork.issuesTitle}</span>
+              <strong>{issues.length}</strong>
+            </button>
+            <button
+              aria-controls="github-work-tab-panel"
+              aria-selected={activeKind === "pull_requests"}
+              className={activeKind === "pull_requests" ? "active" : ""}
+              onClick={() => onKindChange?.("pull_requests")}
+              role="tab"
+              type="button"
+            >
+              <span>{M.githubWork.pullRequestsTitle}</span>
+              <strong>{pullRequests.length}</strong>
+            </button>
+          </div>
+
+          <div
+            aria-label={activeTitle}
+            className="github-work__tab-panel"
+            data-scope="loaded-sample"
+            id="github-work-tab-panel"
+            role="tabpanel"
+          >
+            {activeItems.length === 0 ? (
+              <div className="github-work__empty">
+                <span aria-hidden="true">✓</span>
+                <div>
+                  <strong>{M.githubWork.nothingFoundTitle}</strong>
+                  <p>{activeEmptyText}</p>
+                </div>
+              </div>
+            ) : (
+              <WorkList items={activeItems} type={activeKind} />
+            )}
+          </div>
+
           {data.warnings.length > 0 ? (
-            <details className="github-work-pulse__warnings">
+            <details className="github-work__warnings">
               <summary>
                 {M.common.warnings} ({data.warnings.length})
               </summary>
-              <ul className="github-work-pulse__warning-list">
+              <ul>
                 {data.warnings.map((warning, index) => (
                   <li key={`${index}-${warning}`}>{warning}</li>
                 ))}
               </ul>
             </details>
           ) : null}
-          <div className="work-columns github-work-pulse__columns">
-            <WorkSection
-              emptyText={M.githubWork.noIssuesForFilter}
-              items={data.issues}
-              title={M.githubWork.issuesTitle}
-              type="issue"
-            />
-            <WorkSection
-              emptyText={M.githubWork.noPullRequestsForFilter}
-              items={data.pull_requests}
-              title={M.githubWork.pullRequestsTitle}
-              type="pull_request"
-            />
-          </div>
         </div>
       ) : null}
     </section>
   );
 }
 
-type PulseMetricProps = {
-  count: number;
-  description: string;
-  kind: "issue" | "pull-request";
-  sampleSize: number;
-  title: string;
-};
-
-function PulseMetric({
-  count,
-  description,
-  kind,
-  sampleSize,
-  title
-}: PulseMetricProps) {
-  const composition = T.githubWorkMetricComposition(count, sampleSize);
-  const metricDescription = `${description} ${composition}`;
-  return (
-    <article
-      aria-label={metricDescription}
-      className={`github-work-pulse__metric github-work-pulse__metric--${kind}`}
-    >
-      <span className="github-work-pulse__metric-title">{title}</span>
-      <strong className="github-work-pulse__metric-value">{count}</strong>
-      <meter
-        aria-label={metricDescription}
-        className="github-work-pulse__meter"
-        max={Math.max(sampleSize, 1)}
-        value={count}
-      >
-        {count}
-      </meter>
-      <span className="github-work-pulse__metric-caption">{composition}</span>
-    </article>
-  );
-}
-
-type WorkSectionProps =
-  | {
-      emptyText: string;
-      items: GitHubOperationalIssue[];
-      title: string;
-      type: "issue";
-    }
-  | {
-      emptyText: string;
-      items: GitHubOperationalPullRequest[];
-      title: string;
-      type: "pull_request";
-    };
-
-function WorkSection({ emptyText, items, title, type }: WorkSectionProps) {
-  const firstItems = items.slice(0, visibleWorkItems);
-  const remainingItems = items.slice(visibleWorkItems);
-  const typeClass = type === "issue" ? "issue" : "pull-request";
-
-  return (
-    <section
-      aria-label={title}
-      className={`work-section github-work-pulse__section github-work-pulse__section--${typeClass}`}
-    >
-      <div className="github-work-pulse__section-header">
-        <h3>{title}</h3>
-        <span className="badge github-work-pulse__section-count">{items.length}</span>
-      </div>
-      {items.length === 0 ? (
-        <p className="muted github-work-pulse__empty" role="status">
-          {emptyText}
-        </p>
-      ) : (
-        <>
-          <WorkList items={firstItems} type={type} />
-          {remainingItems.length > 0 ? (
-            <details className="github-work-pulse__more">
-              <summary>
-                {title} +{remainingItems.length}
-              </summary>
-              <WorkList items={remainingItems} type={type} />
-            </details>
-          ) : null}
-        </>
-      )}
-    </section>
-  );
-}
-
 type WorkListProps = {
   items: (GitHubOperationalIssue | GitHubOperationalPullRequest)[];
-  type: "issue" | "pull_request";
+  type: WorkKind;
 };
 
 function WorkList({ items, type }: WorkListProps) {
+  const visibleItems = items.slice(0, VISIBLE_WORK_ITEMS);
+  const remainingItems = items.slice(VISIBLE_WORK_ITEMS);
   return (
-    <ul className="work-list github-work-pulse__list">
-      {items.map((item) => (
-        <li className="github-work-pulse__list-item" key={item.id}>
-          <article className="work-item github-work-pulse__item">
-            <div className="work-item-main github-work-pulse__item-main">
-              <div className="github-work-pulse__item-badges">
-                <span className="badge">
-                  {type === "issue"
-                    ? M.githubWork.badgeIssue
-                    : M.githubWork.badgePr}{" "}
-                  {referenceLabel(item)}
-                </span>
-                <span
-                  aria-label={`${M.githubWork.metaState}: ${workItemStateLabel(item.state)}`}
-                  className="badge github-work-pulse__item-state"
-                >
-                  {workItemStateLabel(item.state)}
-                </span>
-              </div>
-              <h4>{item.title}</h4>
-            </div>
-            <dl className="work-meta github-work-pulse__item-meta">
-              <div>
-                <dt>{M.githubWork.metaRepository}</dt>
-                <dd>{repositoryLabel(item)}</dd>
-              </div>
-              {timestampLabel(item) ? (
-                <div>
-                  <dt>{M.githubWork.metaUpdated}</dt>
-                  <dd>
-                    <time dateTime={timestampLabel(item) ?? undefined}>
-                      {formatSourceTimestamp(timestampLabel(item))}
-                    </time>
-                  </dd>
-                </div>
-              ) : null}
-            </dl>
-            {item.source_url ? (
-              <SourceLink url={item.source_url}>{M.common.openSource}</SourceLink>
-            ) : null}
-          </article>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="github-work__list">
+        {visibleItems.map((item) => (
+          <WorkListItem item={item} key={item.id} type={type} />
+        ))}
+      </ul>
+      {remainingItems.length > 0 ? (
+        <details className="github-work__more">
+          <summary>
+            {M.githubWork.showMore} · {remainingItems.length}
+          </summary>
+          <ul className="github-work__list">
+            {remainingItems.map((item) => (
+              <WorkListItem item={item} key={item.id} type={type} />
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </>
+  );
+}
+
+function WorkListItem({
+  item,
+  type
+}: {
+  item: GitHubOperationalIssue | GitHubOperationalPullRequest;
+  type: WorkKind;
+}) {
+  const timestamp = timestampLabel(item);
+  return (
+    <li className="github-work__item">
+      <div className="github-work__item-icon" aria-hidden="true">
+        {type === "issues" ? "○" : "↗"}
+      </div>
+      <div className="github-work__item-copy">
+        <div className="github-work__item-heading">
+          <h3>{item.title}</h3>
+          <span className="github-work__item-state">
+            {workItemStateLabel(item.state)}
+          </span>
+        </div>
+        <p>
+          <span>{referenceLabel(item)}</span>
+          <span>{repositoryLabel(item)}</span>
+          {timestamp ? (
+            <time dateTime={timestamp}>{formatSourceTimestamp(timestamp)}</time>
+          ) : null}
+        </p>
+      </div>
+      {item.source_url ? (
+        <SourceLink className="github-work__item-link" url={item.source_url}>
+          {M.githubWork.openInGitHub}
+        </SourceLink>
+      ) : null}
+    </li>
+  );
+}
+
+function filterRepositoryItems<
+  T extends GitHubOperationalIssue | GitHubOperationalPullRequest
+>(items: T[], repositoryFullName: string | null): T[] {
+  if (!repositoryFullName) {
+    return items;
+  }
+  return items.filter(
+    (item) =>
+      item.repository_full_name?.toLowerCase() ===
+        repositoryFullName.toLowerCase() ||
+      item.repository_external_id?.toLowerCase() ===
+        repositoryFullName.toLowerCase()
   );
 }
 
@@ -434,14 +411,4 @@ export function formatSourceTimestamp(value: string | null): string {
     return M.githubWork.timestampUnknown;
   }
   return value.replace("T", " ").replace("+00:00", " UTC").replace("Z", " UTC");
-}
-
-function stateLabel(state: GitHubOperationalWorkState): string {
-  const labels: Record<GitHubOperationalWorkState, string> = {
-    open: M.githubWork.stateOpen,
-    closed: M.githubWork.stateClosed,
-    merged: M.githubWork.stateMerged,
-    all: M.githubWork.stateAll
-  };
-  return labels[state];
 }

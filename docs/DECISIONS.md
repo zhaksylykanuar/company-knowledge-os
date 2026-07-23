@@ -2974,6 +2974,32 @@ labelled as though it belonged to the current company. Regression coverage must
 combine an empty workspace with populated global events/discovery state and
 prove the result stays empty.
 
+## DEC-094 - GitHub Product UI Has One State And One Primary Action
+
+Decision (2026-07-23): `/github` is a state-driven product workspace, not an
+operator command center. The visible state is exactly one of loading,
+unavailable, disconnected, connection-attention, connected-without-repositories,
+or connected-ready. Each actionable state exposes one primary next step.
+Setup progress, repository selection, synchronization readiness, metrics and
+operational work must not render as competing journeys.
+
+Disconnected and connection-attention states expose an explicit
+connect/continue action. The managed GitHub App wizard stays mounted only when
+needed for its current product interaction and becomes visible inside one setup
+panel; while that panel is open, the original CTA and benefit cards are hidden.
+A ready connection exposes one repository selector and one explicit
+repository-scoped read action. Operational data is then shown as one tabbed
+list for issues or pull requests and is filtered in the browser to the exact
+selected repository. Empty repository access leads back to management instead
+of rendering an empty dashboard.
+
+This is a presentation and orchestration decision. It does not change the
+workspace-scoped backend API, GitHub App credential lifecycle, selected
+repository allowlist, just-in-time installation tokens, RBAC, canonical
+persistence or external-write boundary. Technical facts and provider warnings
+remain available through progressive disclosure. A viewer may inspect already
+available facts but receives no setup or sync controls.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

@@ -9,6 +9,10 @@ import { M } from "../../lib/messages";
 
 export default function GitHubPage() {
   const [refreshSignal, setRefreshSignal] = useState(0);
+  const [connectionReady, setConnectionReady] = useState(false);
+  const [selectedRepository, setSelectedRepository] = useState<string | null>(
+    null
+  );
 
   return (
     <div className="github-page">
@@ -17,10 +21,19 @@ export default function GitHubPage() {
         title={M.githubPage.title}
         description={M.githubPage.description}
       />
-      <GitHubProductConnectPanel
-        onSyncComplete={() => setRefreshSignal((current) => current + 1)}
-      />
-      <GitHubOperationalWorkPanel refreshSignal={refreshSignal} />
+      <div className="github-page__content">
+        <GitHubProductConnectPanel
+          onConnectionReadyChange={setConnectionReady}
+          onSelectedRepositoryChange={setSelectedRepository}
+          onSyncComplete={() => setRefreshSignal((current) => current + 1)}
+        />
+        {connectionReady && selectedRepository ? (
+          <GitHubOperationalWorkPanel
+            refreshSignal={refreshSignal}
+            repositoryFullName={selectedRepository}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
