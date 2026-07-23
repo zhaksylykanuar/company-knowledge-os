@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 import { PageHeader } from "../../components/PageHeader";
@@ -109,9 +110,9 @@ export default function GmailPage() {
   return (
     <>
       <PageHeader
-        eyebrow={M.gmail.eyebrow}
-        title={M.gmail.title}
-        description={M.gmail.description}
+        eyebrow="Источники"
+        title="Gmail"
+        description="Письма и рабочая переписка с людьми и компаниями."
       />
       <GmailConnectorPanelView
         canImport={canImport}
@@ -147,10 +148,12 @@ export function GmailConnectorPanelView({
     <section className="panel gmail" aria-labelledby="gmail-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">{M.gmail.eyebrow}</span>
-          <h2 id="gmail-title">{M.gmail.title}</h2>
+          <span className="eyebrow">Данные Gmail</span>
+          <h2 id="gmail-title">Письма</h2>
         </div>
-        <span className="badge">{M.gmail.badgeLocalOnly}</span>
+        <Link className="button secondary" href="/settings/integrations?provider=gmail">
+          Настроить Gmail
+        </Link>
       </div>
 
       {status === "loading" ? <p className="state loading">{M.gmail.loading}</p> : null}
@@ -175,26 +178,29 @@ export function GmailConnectorPanelView({
         <>
           <section className="grid" aria-label={M.gmail.summaryLabel}>
             <StatusCard
-              description={M.gmail.totalDescription}
-              title={M.gmail.totalTitle}
+              description="Сохранено в FounderOS"
+              title="Все письма"
               value={String(data.counts.total)}
             />
             <StatusCard
-              description={M.gmail.unreadDescription}
-              title={M.gmail.unreadTitle}
+              description="Требуют просмотра"
+              title="Непрочитанные"
               value={String(data.counts.unread)}
             />
             <StatusCard
-              description={M.gmail.readDescription}
-              title={M.gmail.readTitle}
+              description="Уже просмотрены"
+              title="Прочитанные"
               value={String(data.counts.read)}
             />
           </section>
 
           {data.messages.length === 0 ? (
             <section className="state empty">
-              <strong>{M.gmail.emptyTitle}</strong>
-              <p>{M.gmail.emptyDescription}</p>
+              <strong>Писем Gmail пока нет</strong>
+              <p>Подключите Gmail и проверьте доступ. После синхронизации письма появятся здесь.</p>
+              <Link className="button" href="/settings/integrations?provider=gmail">
+                Подключить Gmail
+              </Link>
             </section>
           ) : (
             <div className="work-list" aria-label={M.gmail.listLabel}>
@@ -207,31 +213,21 @@ export function GmailConnectorPanelView({
             </div>
           )}
 
-          {data.warnings.length > 0 ? (
-            <section className="callout" aria-label={M.gmail.warningsTitle}>
-              <strong>{M.gmail.warningsTitle}</strong>
-              <ul>
-                {data.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
           {canImport ? (
-            <GmailImportForm
-              importError={importError}
-              importMessage={importMessage}
-              importPending={importPending}
-              importText={importText}
-              onImport={onImport}
-              onImportTextChange={onImportTextChange}
-            />
+            <details className="source-developer-import">
+              <summary>Импортировать JSON вручную</summary>
+              <GmailImportForm
+                importError={importError}
+                importMessage={importMessage}
+                importPending={importPending}
+                importText={importText}
+                onImport={onImport}
+                onImportTextChange={onImportTextChange}
+              />
+            </details>
           ) : (
             <p className="muted">{M.common.sourceAdminOnlyNote}</p>
           )}
-
-          <p className="muted">{M.gmail.boundaryNote}</p>
         </>
       ) : null}
     </section>

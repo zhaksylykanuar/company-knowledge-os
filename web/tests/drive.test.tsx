@@ -101,20 +101,21 @@ test("extracts Drive files from array or object JSON", () => {
   assert.throws(() => extractDriveFilesFromJson('{"items":[]}'), /JSON/);
 });
 
-test("renders local Drive files and import boundary without provider-write claims", () => {
+test("renders Drive files with one setup path and a collapsed manual import", () => {
   const html = renderPanel({
     importMessage: M.drive.importSuccess(2, 0),
     importText: '[{"id":"file-1"}]'
   });
 
-  assert.ok(html.includes(M.drive.title));
-  assert.ok(html.includes(M.drive.badgeLocalOnly));
+  assert.ok(html.includes("Данные Google Drive"));
+  assert.ok(html.includes('href="/settings/integrations?provider=drive"'));
   assert.ok(html.includes("Private beta launch checklist"));
   assert.ok(html.includes(M.drive.sharedBadge));
+  assert.ok(html.includes("Импортировать JSON вручную"));
   assert.ok(html.includes(M.drive.importTitle));
-  assert.ok(html.includes(M.drive.boundaryNote));
   assert.ok(html.includes(M.drive.importSuccess(2, 0)));
   assert.ok(html.includes('href="https://drive.google.com/file/d/file-1/view"'));
+  assert.doesNotMatch(html, /Local-only|provider_calls|sync_started/);
   assert.doesNotMatch(html, /provider call started/i);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /LLM started/i);
@@ -134,7 +135,8 @@ test("renders empty loading missing and error states", () => {
   const emptyHtml = renderPanel({
     data: { ...driveFiles, counts: { not_shared: 0, shared: 0, total: 0 }, files: [] }
   });
-  assert.ok(emptyHtml.includes(M.drive.emptyTitle));
+  assert.ok(emptyHtml.includes("Файлов Google Drive пока нет"));
+  assert.ok(emptyHtml.includes("Подключить Drive"));
   assert.ok(renderPanel({ data: null, status: "loading" }).includes(M.drive.loading));
   assert.ok(
     renderPanel({ data: null, status: "missing" }).includes(M.drive.noWorkspaceDescription)

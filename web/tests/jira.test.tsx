@@ -103,20 +103,21 @@ test("extracts Jira issues from array or object JSON", () => {
   assert.throws(() => extractJiraIssuesFromJson('{"items":[]}'), /JSON/);
 });
 
-test("renders local Jira issues and import boundary without provider-write claims", () => {
+test("renders Jira issues with one setup path and a collapsed manual import", () => {
   const html = renderPanel({
     importMessage: M.jira.importSuccess(2, 0),
     importText: '[{"key":"FOS-123"}]'
   });
 
-  assert.ok(html.includes(M.jira.title));
-  assert.ok(html.includes(M.jira.badgeLocalOnly));
+  assert.ok(html.includes("Данные Jira"));
+  assert.ok(html.includes('href="/settings/integrations?provider=jira"'));
   assert.ok(html.includes("FOS-123"));
   assert.ok(html.includes("Review private beta onboarding"));
+  assert.ok(html.includes("Импортировать JSON вручную"));
   assert.ok(html.includes(M.jira.importTitle));
-  assert.ok(html.includes(M.jira.boundaryNote));
   assert.ok(html.includes(M.jira.importSuccess(2, 0)));
   assert.ok(html.includes('href="https://jira.example/browse/FOS-123"'));
+  assert.doesNotMatch(html, /Local-only|provider_calls|sync_started/);
   assert.doesNotMatch(html, /provider call started/i);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /LLM started/i);
@@ -136,7 +137,8 @@ test("renders empty loading missing and error states", () => {
   const emptyHtml = renderPanel({
     data: { ...jiraIssues, counts: { done: 0, not_done: 0, total: 0 }, issues: [] }
   });
-  assert.ok(emptyHtml.includes(M.jira.emptyTitle));
+  assert.ok(emptyHtml.includes("Задач Jira пока нет"));
+  assert.ok(emptyHtml.includes("Подключить Jira"));
   assert.ok(renderPanel({ data: null, status: "loading" }).includes(M.jira.loading));
   assert.ok(
     renderPanel({ data: null, status: "missing" }).includes(M.jira.noWorkspaceDescription)

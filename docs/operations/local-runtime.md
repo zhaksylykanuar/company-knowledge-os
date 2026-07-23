@@ -56,6 +56,10 @@ The doctor reports readiness and blocker categories without printing secret or
 environment values. Resolve every required blocker before starting. If an
 existing loopback PostgreSQL is healthy, Docker may remain unavailable. Redis
 may be reported as optional; it does not block the current product runtime.
+If the exact recorded supervisor and both child processes already belong to
+this repository, their `8765` and `3000` listeners are reported as healthy
+rather than as port conflicts. An occupied port without that ownership proof
+still fails.
 
 ## 2. Start FounderOS
 
@@ -81,6 +85,13 @@ Open `http://127.0.0.1:3000`. By default the supervisor opens `/login` for an
 existing founder. For an empty database it creates a private founder invite and
 opens the fragment URL without printing the bearer. Keep the command running
 while using FounderOS.
+
+Running `make local` again is safe: when the exact recorded supervisor,
+backend, frontend, launch signatures, working directories, and app listeners
+are still verified, the command reports the existing URL and exits
+successfully. An incomplete or unverified runtime does not get replaced or
+stopped implicitly; use `make local-stop`, inspect the reported blocker, and
+start again.
 
 ## 3. First-founder fallback
 

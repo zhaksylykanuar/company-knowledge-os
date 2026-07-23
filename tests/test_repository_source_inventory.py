@@ -312,3 +312,83 @@ async def test_repository_inventory_prefers_canonical_repositories_before_source
         assert f"discovery-only-{marker}" not in repo_keys
     finally:
         await _cleanup(marker)
+
+
+async def test_workspace_inventory_never_falls_back_to_unscoped_sources(
+    tmp_path,
+) -> None:
+    await _ensure_tables()
+    marker = uuid4().hex[:8]
+    raw_path = tmp_path / "discovery" / "github" / "snap-4" / "raw" / "repos.json"
+    _write_discovery(
+        raw_path,
+        [
+            {
+                "name": f"foreign-discovery-{marker}",
+                "full_name": f"org/foreign-discovery-{marker}",
+                "updated_at": "2026-06-20T00:00:00+00:00",
+            }
+        ],
+    )
+    try:
+        async with AsyncSessionLocal() as session:
+            user = User(
+                email=f"repo-inventory-{marker}@example.test",
+                name="Repo Inventory Isolation",
+            )
+            session.add(user)
+            await session.flush()
+            workspace = Workspace(
+                name=f"Repo Inventory Isolation {marker}",
+                slug=f"repo-inventory-{marker}",
+                created_by_user_id=user.id,
+            )
+            session.add(workspace)
+            session.add(
+                IngestedEvent(
+                    event_id=f"ie-repo-inventory-{marker}",
+                    event_type="github.pull_request.synchronized",
+                    source_system="github",
+                    source_object_id=f"org/foreign-event-{marker}#pull/1",
+                    idempotency_key=f"repo-inventory-{marker}",
+                    correlation_id=f"corr-repo-inventory-{marker}",
+                    trace_id=f"trace-repo-inventory-{marker}",
+                    raw_object_ref=f"raw://github/repo-inventory/{marker}",
+                    payload={"source_object_type": "pull_request"},
+                    status="received",
+                )
+            )
+            await session.flush()
+            session.add(
+                SourceEvent(
+                    source_event_id=f"sevt-repo-inventory-{marker}",
+                    source_event_key=f"sevt-key-repo-inventory-{marker}",
+                    ingested_event_id=f"ie-repo-inventory-{marker}",
+                    event_type="github.pull_request.synchronized",
+                    source_system="github",
+                    source_object_type="pull_request",
+                    source_object_id=f"org/foreign-event-{marker}#pull/1",
+                    title="Foreign source event repository",
+                    raw_object_ref=f"raw://github/repo-inventory/{marker}",
+                    evidence_refs=[],
+                    metadata_json={},
+                )
+            )
+            await session.commit()
+
+            inventory = await load_repository_source_inventory(
+                session=session,
+                workspace_id=workspace.id,
+                workspace_path=tmp_path,
+                raw_path=raw_path,
+                now=datetime(2026, 6, 21, tzinfo=timezone.utc),
+            )
+
+        assert inventory["source_class"] == INVENTORY_CANONICAL_REPOSITORIES
+        assert inventory["repositories"] == []
+        assert inventory["canonical_repo_count"] == 0
+        assert inventory["source_event_repo_count"] == 0
+        assert inventory["source_snapshot"]["available"] is False
+        assert inventory["fallback_used"] is False
+    finally:
+        await _cleanup(marker)

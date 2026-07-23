@@ -211,9 +211,12 @@ function ConnectorCard({
         </p>
       ) : null}
       {connector.status === "available" && connector.manage_path ? (
-        <a className={state === "connected" ? "button secondary" : "button"} href={connector.manage_path}>
+        <Link
+          className={state === "connected" ? "button secondary" : "button"}
+          href={connectorActionPath(connector, state)}
+        >
           {connectorActionLabel(state, canManageSources)}
-        </a>
+        </Link>
       ) : (
         <p className="connector-later-note">Этот источник появится позже.</p>
       )}
@@ -305,6 +308,16 @@ function connectorActionLabel(
     return "Посмотреть источник";
   }
   return state === "attention" ? "Проверить подключение" : "Настроить источник";
+}
+
+function connectorActionPath(
+  connector: Connector,
+  state: ConnectorVisualState
+): string {
+  if (state === "connected") {
+    return connector.manage_path ?? "/connectors";
+  }
+  return `/settings/integrations?provider=${connector.provider}`;
 }
 
 function recommendedOutcome(

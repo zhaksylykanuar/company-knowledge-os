@@ -619,16 +619,33 @@ def collect_doctor_checks(root: Path, config: Any) -> list[DoctorCheck]:
         )
     )
 
+    state = read_runtime_state(root)
+    owned_runtime = bool(
+        state is not None
+        and runtime_process_matches(root, state)
+        and runtime_child_matches(root, state, "backend")
+        and runtime_child_matches(root, state, "frontend")
+    )
     for name, host, port in (
         ("backend-port", BACKEND_HOST, BACKEND_PORT),
         ("web-port", WEB_HOST, WEB_PORT),
     ):
         busy = tcp_port_in_use(host, port)
+        owned_and_busy = owned_runtime and busy
+        port_ok = owned_and_busy or (not owned_runtime and not busy)
         checks.append(
             DoctorCheck(
                 name,
-                "fail" if busy else "ok",
-                f"{port} is already in use" if busy else f"{port} is free",
+                "ok" if port_ok else "fail",
+                (
+                    f"{port} is serving this repository's FounderOS runtime"
+                    if owned_and_busy
+                    else f"{port} is not listening for the recorded FounderOS runtime"
+                    if owned_runtime
+                    else f"{port} is already in use"
+                    if busy
+                    else f"{port} is free"
+                ),
             )
         )
     return checks
@@ -1767,6 +1784,13 @@ def _runtime_ports_busy() -> bool:
     )
 
 
+def _runtime_ports_ready() -> bool:
+    return all(
+        tcp_port_in_use(host, port)
+        for host, port in ((BACKEND_HOST, BACKEND_PORT), (WEB_HOST, WEB_PORT))
+    )
+
+
 def _recorded_children_alive(state: RuntimeState) -> list[str]:
     return [
         child
@@ -2091,7 +2115,6 @@ def run_backend_only(root: Path, config: Any) -> int:
 
 def supervise_local_runtime(root: Path, config: Any, *, no_open: bool) -> int:
     validate_local_settings(config)
-    recover_stale_restore_clusters(root)
     supervisor_signature = process_start_signature(os.getpid())
     if process_cwd(os.getpid()) != root.resolve() or supervisor_signature is None:
         raise LocalRuntimeError(
@@ -2109,14 +2132,24 @@ def supervise_local_runtime(root: Path, config: Any, *, no_open: bool) -> int:
             if not _reconcile_dead_supervisor(root, state, timeout_seconds=8.0):
                 raise LocalRuntimeError("A stale local runtime could not be cleaned up safely.")
         elif runtime_process_matches(root, state):
-            raise LocalRuntimeError(
-                "FounderOS local runtime is already running. Use make local-stop first."
+            children_match = all(
+                runtime_child_matches(root, state, child)
+                for child in ("backend", "frontend")
             )
+            if not children_match or not _runtime_ports_ready():
+                raise LocalRuntimeError(
+                    "FounderOS runtime ownership is verified, but its backend or web "
+                    "process is incomplete. Run make local-stop, then make local."
+                )
+            print("FounderOS is already running for this repository.")
+            open_local_product(no_open=no_open)
+            return 0
         else:
             raise LocalRuntimeError(
                 "A live process is referenced by the local runtime record but ownership "
                 "cannot be verified; inspect it before removing the record."
             )
+    recover_stale_restore_clusters(root)
     for host, port, label in (
         (BACKEND_HOST, BACKEND_PORT, "backend"),
         (WEB_HOST, WEB_PORT, "web"),

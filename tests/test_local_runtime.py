@@ -271,6 +271,95 @@ def test_doctor_fails_when_required_runtime_port_is_occupied(monkeypatch, tmp_pa
     assert local_runtime.print_doctor_checks(checks) is False
 
 
+def test_doctor_accepts_ports_owned_by_verified_runtime(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "web/node_modules/.bin").mkdir(parents=True)
+    (tmp_path / "web/node_modules/.bin/next").write_text("", encoding="utf-8")
+    state = RuntimeState(
+        101,
+        102,
+        103,
+        "2026-07-14T00:00:00+00:00",
+        str(tmp_path.resolve()),
+        "supervisor-start",
+        "backend-start",
+        "frontend-start",
+    )
+    write_runtime_state(tmp_path, state)
+    monkeypatch.setattr(local_runtime, "command_available", lambda _command: True)
+    monkeypatch.setattr(
+        local_runtime,
+        "probe_database",
+        lambda _url: DatabaseProbe(reachable=True, has_public_tables=False),
+    )
+    monkeypatch.setattr(local_runtime, "database_server_major", lambda _url: 16)
+    monkeypatch.setattr(local_runtime, "_postgres_tool_major", lambda _tool: 16)
+    monkeypatch.setattr(
+        local_runtime,
+        "verify_persisted_connector_credentials",
+        lambda _url, _config: _empty_credential_proof(),
+    )
+    monkeypatch.setattr(local_runtime, "runtime_process_matches", lambda *_args: True)
+    monkeypatch.setattr(local_runtime, "runtime_child_matches", lambda *_args: True)
+    monkeypatch.setattr(local_runtime, "tcp_port_in_use", lambda _host, _port: True)
+
+    checks = collect_doctor_checks(tmp_path, _config())
+
+    backend = next(check for check in checks if check.name == "backend-port")
+    web = next(check for check in checks if check.name == "web-port")
+    assert backend.status == "ok"
+    assert web.status == "ok"
+    assert "this repository" in backend.detail
+    assert local_runtime.print_doctor_checks(checks) is True
+
+
+def test_doctor_fails_when_verified_runtime_is_not_listening_on_both_ports(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "web/node_modules/.bin").mkdir(parents=True)
+    (tmp_path / "web/node_modules/.bin/next").write_text("", encoding="utf-8")
+    write_runtime_state(
+        tmp_path,
+        RuntimeState(
+            101,
+            102,
+            103,
+            "2026-07-14T00:00:00+00:00",
+            str(tmp_path.resolve()),
+            "supervisor-start",
+            "backend-start",
+            "frontend-start",
+        ),
+    )
+    monkeypatch.setattr(local_runtime, "command_available", lambda _command: True)
+    monkeypatch.setattr(
+        local_runtime,
+        "probe_database",
+        lambda _url: DatabaseProbe(reachable=True, has_public_tables=False),
+    )
+    monkeypatch.setattr(local_runtime, "database_server_major", lambda _url: 16)
+    monkeypatch.setattr(local_runtime, "_postgres_tool_major", lambda _tool: 16)
+    monkeypatch.setattr(
+        local_runtime,
+        "verify_persisted_connector_credentials",
+        lambda _url, _config: _empty_credential_proof(),
+    )
+    monkeypatch.setattr(local_runtime, "runtime_process_matches", lambda *_args: True)
+    monkeypatch.setattr(local_runtime, "runtime_child_matches", lambda *_args: True)
+    monkeypatch.setattr(
+        local_runtime,
+        "tcp_port_in_use",
+        lambda _host, port: port == local_runtime.BACKEND_PORT,
+    )
+
+    checks = collect_doctor_checks(tmp_path, _config())
+
+    web = next(check for check in checks if check.name == "web-port")
+    assert web.status == "fail"
+    assert "not listening" in web.detail
+    assert local_runtime.print_doctor_checks(checks) is False
+
+
 def test_doctor_fails_tool_major_mismatch_against_reachable_server(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -1003,6 +1092,85 @@ def test_runtime_identity_accepts_default_cli_only_for_same_root_and_start(
 
     assert local_runtime.runtime_process_matches(tmp_path, state) is True
     assert local_runtime.runtime_process_matches(tmp_path / "other", state) is False
+
+
+def test_repeated_start_accepts_verified_running_runtime(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    state = RuntimeState(
+        101,
+        102,
+        103,
+        "2026-07-14T00:00:00+00:00",
+        str(tmp_path.resolve()),
+        "supervisor-start",
+        "backend-start",
+        "frontend-start",
+    )
+    write_runtime_state(tmp_path, state)
+    monkeypatch.setattr(local_runtime, "process_cwd", lambda _pid: tmp_path.resolve())
+    monkeypatch.setattr(
+        local_runtime,
+        "process_start_signature",
+        lambda _pid: "new-invocation-start",
+    )
+    monkeypatch.setattr(
+        local_runtime,
+        "process_command",
+        lambda pid: "python scripts/start_local.py" if pid == state.supervisor_pid else "child",
+    )
+    monkeypatch.setattr(local_runtime, "runtime_process_matches", lambda *_args: True)
+    monkeypatch.setattr(local_runtime, "runtime_child_matches", lambda *_args: True)
+    monkeypatch.setattr(local_runtime, "tcp_port_in_use", lambda _host, _port: True)
+    monkeypatch.setattr(
+        local_runtime,
+        "recover_stale_restore_clusters",
+        lambda _root: pytest.fail("a running runtime must not trigger recovery"),
+    )
+    opened: list[bool] = []
+    monkeypatch.setattr(
+        local_runtime,
+        "open_local_product",
+        lambda *, no_open: opened.append(no_open),
+    )
+
+    assert local_runtime.supervise_local_runtime(tmp_path, _config(), no_open=True) == 0
+    assert opened == [True]
+
+
+def test_repeated_start_rejects_incomplete_owned_runtime(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    state = RuntimeState(
+        101,
+        102,
+        103,
+        "2026-07-14T00:00:00+00:00",
+        str(tmp_path.resolve()),
+        "supervisor-start",
+        "backend-start",
+        "frontend-start",
+    )
+    write_runtime_state(tmp_path, state)
+    monkeypatch.setattr(local_runtime, "process_cwd", lambda _pid: tmp_path.resolve())
+    monkeypatch.setattr(local_runtime, "process_start_signature", lambda _pid: "start")
+    monkeypatch.setattr(
+        local_runtime,
+        "process_command",
+        lambda pid: "python scripts/start_local.py" if pid == state.supervisor_pid else "child",
+    )
+    monkeypatch.setattr(local_runtime, "runtime_process_matches", lambda *_args: True)
+    monkeypatch.setattr(local_runtime, "runtime_child_matches", lambda *_args: True)
+    monkeypatch.setattr(
+        local_runtime,
+        "tcp_port_in_use",
+        lambda _host, port: port == local_runtime.BACKEND_PORT,
+    )
+
+    with pytest.raises(LocalRuntimeError, match="incomplete"):
+        local_runtime.supervise_local_runtime(tmp_path, _config(), no_open=True)
 
 
 def test_stale_runtime_record_never_stops_an_unrelated_process(monkeypatch, tmp_path: Path) -> None:

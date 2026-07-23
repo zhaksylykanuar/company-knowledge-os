@@ -38,10 +38,11 @@ async def load_repository_source_inventory(
 ) -> dict[str, Any]:
     """Build the current repository inventory read model.
 
-    Precedence is canonical Repository/Postgres rows first when a workspace is
-    known, retained SourceEvent/Postgres compatibility second, saved GitHub
-    discovery snapshots third, and the static repository portfolio only as a
-    legacy seed fallback. The function is read-only and never calls providers.
+    Product reads with a workspace id are fail-closed: only canonical
+    Repository rows for that exact workspace may be returned. Retained
+    SourceEvent rows and filesystem discovery snapshots have no workspace key,
+    so they are available only to unscoped operator/script reads. The function
+    is read-only and never calls providers.
     """
 
     safe_now = now or datetime.now(timezone.utc)
@@ -60,6 +61,19 @@ async def load_repository_source_inventory(
                 legacy_items=legacy_items,
                 now=safe_now,
                 canonical_repo_count=len(canonical_items),
+                source_event_count=0,
+                discovery_snapshot=_empty_snapshot(),
+            )
+        )
+
+    if workspace_id is not None:
+        return _finalize(
+            _inventory_payload(
+                source_class=INVENTORY_CANONICAL_REPOSITORIES,
+                items=[],
+                legacy_items=legacy_items,
+                now=safe_now,
+                canonical_repo_count=0,
                 source_event_count=0,
                 discovery_snapshot=_empty_snapshot(),
             )

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 import { PageHeader } from "../../components/PageHeader";
@@ -109,9 +110,9 @@ export default function DrivePage() {
   return (
     <>
       <PageHeader
-        eyebrow={M.drive.eyebrow}
-        title={M.drive.title}
-        description={M.drive.description}
+        eyebrow="Источники"
+        title="Google Drive"
+        description="Документы и рабочие файлы, которые уже хранит команда."
       />
       <DriveConnectorPanelView
         canImport={canImport}
@@ -147,10 +148,12 @@ export function DriveConnectorPanelView({
     <section className="panel drive" aria-labelledby="drive-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">{M.drive.eyebrow}</span>
-          <h2 id="drive-title">{M.drive.title}</h2>
+          <span className="eyebrow">Данные Google Drive</span>
+          <h2 id="drive-title">Файлы</h2>
         </div>
-        <span className="badge">{M.drive.badgeLocalOnly}</span>
+        <Link className="button secondary" href="/settings/integrations?provider=drive">
+          Настроить Drive
+        </Link>
       </div>
 
       {status === "loading" ? <p className="state loading">{M.drive.loading}</p> : null}
@@ -175,26 +178,29 @@ export function DriveConnectorPanelView({
         <>
           <section className="grid" aria-label={M.drive.summaryLabel}>
             <StatusCard
-              description={M.drive.totalDescription}
-              title={M.drive.totalTitle}
+              description="Сохранено в FounderOS"
+              title="Все файлы"
               value={String(data.counts.total)}
             />
             <StatusCard
-              description={M.drive.sharedDescription}
-              title={M.drive.sharedTitle}
+              description="Доступны команде"
+              title="Общие"
               value={String(data.counts.shared)}
             />
             <StatusCard
-              description={M.drive.notSharedDescription}
-              title={M.drive.notSharedTitle}
+              description="Доступны только владельцам"
+              title="Без общего доступа"
               value={String(data.counts.not_shared)}
             />
           </section>
 
           {data.files.length === 0 ? (
             <section className="state empty">
-              <strong>{M.drive.emptyTitle}</strong>
-              <p>{M.drive.emptyDescription}</p>
+              <strong>Файлов Google Drive пока нет</strong>
+              <p>Подключите Drive и проверьте доступ. После синхронизации файлы появятся здесь.</p>
+              <Link className="button" href="/settings/integrations?provider=drive">
+                Подключить Drive
+              </Link>
             </section>
           ) : (
             <div className="work-list" aria-label={M.drive.listLabel}>
@@ -204,31 +210,21 @@ export function DriveConnectorPanelView({
             </div>
           )}
 
-          {data.warnings.length > 0 ? (
-            <section className="callout" aria-label={M.drive.warningsTitle}>
-              <strong>{M.drive.warningsTitle}</strong>
-              <ul>
-                {data.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
           {canImport ? (
-            <DriveImportForm
-              importError={importError}
-              importMessage={importMessage}
-              importPending={importPending}
-              importText={importText}
-              onImport={onImport}
-              onImportTextChange={onImportTextChange}
-            />
+            <details className="source-developer-import">
+              <summary>Импортировать JSON вручную</summary>
+              <DriveImportForm
+                importError={importError}
+                importMessage={importMessage}
+                importPending={importPending}
+                importText={importText}
+                onImport={onImport}
+                onImportTextChange={onImportTextChange}
+              />
+            </details>
           ) : (
             <p className="muted">{M.common.sourceAdminOnlyNote}</p>
           )}
-
-          <p className="muted">{M.drive.boundaryNote}</p>
         </>
       ) : null}
     </section>

@@ -5,6 +5,21 @@ Jira Cloud, Gmail, and Google Drive credentials. It is a configuration and
 verification layer over the existing `IntegrationConnection` model, not a
 second connector engine or a replacement for provider-specific radars.
 
+## Product Flow
+
+The default UI exposes only two steps:
+
+1. save or replace the supported connection;
+2. run the explicit read check.
+
+The read check stays disabled until a connection exists. Empty receipts are not
+rendered. Write-readiness, credential removal, and the GitHub personal-token
+fallback remain available under progressive disclosure instead of competing
+with first-time setup. An unconfigured card on `/connectors` links directly to
+`/settings/integrations?provider=<provider>`; a source with imported data links
+to its data page. Jira, Gmail, and Drive keep manual JSON import only as a
+collapsed developer fallback.
+
 ## Security Boundary
 
 - Only a workspace owner or administrator may save credentials or run checks.
@@ -32,6 +47,11 @@ second connector engine or a replacement for provider-specific radars.
 - Real GitHub writes remain exclusively behind the existing approved
   `ActionProposal` execution contract, write feature flag, repository allowlist,
   evidence, idempotency, and read-back reconciliation.
+- A workspace-scoped product read may use only canonical `Repository` rows for
+  that exact workspace. If none exist, the inventory is empty. Global
+  `SourceEvent`, discovery-snapshot, and legacy-file fallbacks are restricted to
+  explicit unscoped operator/script reads and can never populate another
+  workspace's `/github` surface.
 
 Jira accepts only an HTTPS `*.atlassian.net` site without credentials, custom
 port, path, query, or fragment. GitHub, Gmail, and Drive use fixed official API

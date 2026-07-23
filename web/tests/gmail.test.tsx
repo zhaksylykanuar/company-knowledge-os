@@ -101,20 +101,21 @@ test("extracts Gmail messages from array or object JSON", () => {
   assert.throws(() => extractGmailMessagesFromJson('{"items":[]}'), /JSON/);
 });
 
-test("renders local Gmail messages and import boundary without provider-write claims", () => {
+test("renders Gmail messages with one setup path and a collapsed manual import", () => {
   const html = renderPanel({
     importMessage: M.gmail.importSuccess(2, 0),
     importText: '[{"id":"msg-1"}]'
   });
 
-  assert.ok(html.includes(M.gmail.title));
-  assert.ok(html.includes(M.gmail.badgeLocalOnly));
+  assert.ok(html.includes("Данные Gmail"));
+  assert.ok(html.includes('href="/settings/integrations?provider=gmail"'));
   assert.ok(html.includes("Investor intro follow-up"));
   assert.ok(html.includes(M.gmail.unreadBadge));
+  assert.ok(html.includes("Импортировать JSON вручную"));
   assert.ok(html.includes(M.gmail.importTitle));
-  assert.ok(html.includes(M.gmail.boundaryNote));
   assert.ok(html.includes(M.gmail.importSuccess(2, 0)));
   assert.ok(html.includes('href="https://mail.google.com/mail/u/0/#inbox/msg-1"'));
+  assert.doesNotMatch(html, /Local-only|provider_calls|sync_started/);
   assert.doesNotMatch(html, /provider call started/i);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /LLM started/i);
@@ -134,7 +135,8 @@ test("renders empty loading missing and error states", () => {
   const emptyHtml = renderPanel({
     data: { ...gmailMessages, counts: { read: 0, total: 0, unread: 0 }, messages: [] }
   });
-  assert.ok(emptyHtml.includes(M.gmail.emptyTitle));
+  assert.ok(emptyHtml.includes("Писем Gmail пока нет"));
+  assert.ok(emptyHtml.includes("Подключить Gmail"));
   assert.ok(renderPanel({ data: null, status: "loading" }).includes(M.gmail.loading));
   assert.ok(
     renderPanel({ data: null, status: "missing" }).includes(M.gmail.noWorkspaceDescription)

@@ -37,7 +37,13 @@ Implemented foundations:
   while retaining the durable row and canonical history, and pre-network
   failures cannot claim a provider call. Managed GitHub App stays the
   recommended path; complete Google OAuth refresh and Jira/Gmail/Drive write
-  executors remain explicit gaps.
+  executors remain explicit gaps. The product UI now exposes a minimal
+  save-then-read-check flow, keeps write/removal/PAT controls under progressive
+  disclosure, routes unconfigured Radar cards into the exact provider tab, and
+  keeps manual JSON import collapsed on source data pages. Workspace GitHub
+  inventory fails closed to an empty result when that workspace has no
+  canonical repositories; unscoped discovery and legacy fallbacks are
+  operator/script-only (DEC-093).
 - Evidence-first canonical spine: `SourceRecord`, `EvidenceRef`, `Repository`,
   `PullRequest`, `Task`, `ActionProposal`, `ActionExecution`, `Briefing`, and
   `BriefingItem` foundations.
@@ -407,7 +413,8 @@ content-addressed Headquarters snapshot, never executes a proposal and does not
 weaken those remaining gates.
 
 1. **Finish the radar loop one provider at a time.**
-   The control center now owns safe setup and connection receipts; `/github`
+   The control center now owns the single safe setup path and connection
+   receipts; `/github`
    remains the reference command center and the next external gate is still one
    founder-approved, repository-scoped read through its UI wizard with a visible
    canonical result. Then bring Gmail, Drive, and Jira from connection health to

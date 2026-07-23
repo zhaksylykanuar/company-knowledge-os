@@ -109,9 +109,9 @@ test("renders a recommended source mission and clear provider states without wri
   assert.ok(html.includes(M.connectors.boundaryNote));
   assert.ok(html.includes("mission-strip-details"));
   assert.ok(html.includes('href="/github"'));
-  assert.ok(html.includes('href="/jira"'));
-  assert.ok(html.includes('href="/gmail"'));
-  assert.ok(html.includes('href="/drive"'));
+  assert.ok(html.includes('href="/settings/integrations?provider=jira"'));
+  assert.ok(html.includes('href="/settings/integrations?provider=gmail"'));
+  assert.ok(html.includes('href="/settings/integrations?provider=drive"'));
   assert.doesNotMatch(html, /provider call started/i);
   assert.doesNotMatch(html, /external write performed/i);
   assert.doesNotMatch(html, /SHOULD_NOT_LEAK/);

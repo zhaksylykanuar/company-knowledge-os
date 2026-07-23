@@ -2205,6 +2205,12 @@ Consequences:
   performs graceful cleanup; after supervisor death, `make local-stop` reclaims
   only verified recorded orphans and otherwise fails closed without touching
   data.
+- Startup and diagnosis distinguish owned runtime processes from arbitrary
+  occupied ports. Repeating `make local` against the exact verified supervisor
+  and both verified children is an idempotent success that reopens or reports
+  the existing product URL. `make local-doctor` reports those owned ports as
+  healthy. A missing/mismatched child, stale identity, or unowned occupied port
+  remains a failure and is never stopped implicitly.
 - DEC-039 and the Railway-specific part of DEC-042 are superseded. Historical
   Railway rehearsal facts stay in the changelog, session log, and git history;
   target-specific active runbooks/templates are removed.
@@ -2943,6 +2949,30 @@ durable connection row, imported canonical facts and sync history. This avoids
 breaking foreign-key/audit lineage. Managed GitHub App material remains owned
 by the separate GitHub App setup flow; the control-center removal can clear
 only its separately stored PAT fallback.
+
+The default product interaction is intentionally narrower than the full API
+contract: select a provider, save access, then check reading. A missing
+configuration disables the check and renders no empty receipt. Write readiness,
+removal and PAT fallback are progressive details. Unconfigured Radar cards
+deep-link into the exact provider tab; source data pages do not expose raw JSON
+import as their primary workflow.
+
+## DEC-093 - Workspace Repository Inventory Fails Closed
+
+Decision (2026-07-23): any product read that supplies a `workspace_id` may load
+GitHub repository inventory only from canonical `Repository` rows belonging to
+that exact workspace. When the workspace has no canonical repository rows, the
+correct product result is an empty inventory.
+
+The retained `SourceEvent` table has no workspace identity. Local discovery
+snapshots and legacy inventory files are also unscoped. They may remain as
+compatibility inputs for explicit operator/script reads that omit
+`workspace_id`, but they must never be a fallback for `/github`, workspace API,
+Company Brain, or another tenant-visible product surface. This is a tenancy
+boundary, not a ranking preference: an unscoped record cannot be shown and
+labelled as though it belonged to the current company. Regression coverage must
+combine an empty workspace with populated global events/discovery state and
+prove the result stays empty.
 
 ## ASK - Open Questions For The Human (not decided)
 

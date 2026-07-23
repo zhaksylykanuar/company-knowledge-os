@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 
 import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
@@ -109,9 +110,9 @@ export default function JiraPage() {
   return (
     <>
       <PageHeader
-        eyebrow={M.jira.eyebrow}
-        title={M.jira.title}
-        description={M.jira.description}
+        eyebrow="Источники"
+        title="Jira"
+        description="Задачи, ответственные, сроки и статусы работы."
       />
       <JiraConnectorPanelView
         canImport={canImport}
@@ -147,10 +148,12 @@ export function JiraConnectorPanelView({
     <section className="panel jira" aria-labelledby="jira-title">
       <div className="section-header">
         <div>
-          <span className="eyebrow">{M.jira.eyebrow}</span>
-          <h2 id="jira-title">{M.jira.title}</h2>
+          <span className="eyebrow">Данные Jira</span>
+          <h2 id="jira-title">Задачи</h2>
         </div>
-        <span className="badge">{M.jira.badgeLocalOnly}</span>
+        <Link className="button secondary" href="/settings/integrations?provider=jira">
+          Настроить Jira
+        </Link>
       </div>
 
       {status === "loading" ? <p className="state loading">{M.jira.loading}</p> : null}
@@ -175,26 +178,29 @@ export function JiraConnectorPanelView({
         <>
           <section className="grid" aria-label={M.jira.summaryLabel}>
             <StatusCard
-              description={M.jira.totalDescription}
-              title={M.jira.totalTitle}
+              description="Сохранено в FounderOS"
+              title="Все задачи"
               value={String(data.counts.total)}
             />
             <StatusCard
-              description={M.jira.notDoneDescription}
-              title={M.jira.notDoneTitle}
+              description="Требуют дальнейшей работы"
+              title="В работе"
               value={String(data.counts.not_done)}
             />
             <StatusCard
-              description={M.jira.doneDescription}
-              title={M.jira.doneTitle}
+              description="Завершённые задачи"
+              title="Готово"
               value={String(data.counts.done)}
             />
           </section>
 
           {data.issues.length === 0 ? (
             <section className="state empty">
-              <strong>{M.jira.emptyTitle}</strong>
-              <p>{M.jira.emptyDescription}</p>
+              <strong>Задач Jira пока нет</strong>
+              <p>Подключите Jira и проверьте доступ. После синхронизации задачи появятся здесь.</p>
+              <Link className="button" href="/settings/integrations?provider=jira">
+                Подключить Jira
+              </Link>
             </section>
           ) : (
             <div className="work-list" aria-label={M.jira.listLabel}>
@@ -204,31 +210,21 @@ export function JiraConnectorPanelView({
             </div>
           )}
 
-          {data.warnings.length > 0 ? (
-            <section className="callout" aria-label={M.jira.warningsTitle}>
-              <strong>{M.jira.warningsTitle}</strong>
-              <ul>
-                {data.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
           {canImport ? (
-            <JiraImportForm
-              importError={importError}
-              importMessage={importMessage}
-              importPending={importPending}
-              importText={importText}
-              onImport={onImport}
-              onImportTextChange={onImportTextChange}
-            />
+            <details className="source-developer-import">
+              <summary>Импортировать JSON вручную</summary>
+              <JiraImportForm
+                importError={importError}
+                importMessage={importMessage}
+                importPending={importPending}
+                importText={importText}
+                onImport={onImport}
+                onImportTextChange={onImportTextChange}
+              />
+            </details>
           ) : (
             <p className="muted">{M.common.sourceAdminOnlyNote}</p>
           )}
-
-          <p className="muted">{M.jira.boundaryNote}</p>
         </>
       ) : null}
     </section>

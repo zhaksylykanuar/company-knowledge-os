@@ -10,38 +10,35 @@
 
 ## ▶ СЕЙЧАС
 
-- **INT-CTRL-01 Центр интеграций (DEC-092): РЕАЛИЗОВАН ЛОКАЛЬНО.**
-  В `/settings` добавлен отдельный вход в `/settings/integrations`, где
-  owner/admin управляет GitHub, Jira Cloud, Gmail и Google Drive: сохраняет
-  credential, запускает реальную ограниченную проверку чтения и видит
-  readiness записи. Секрет существует в browser только в password-поле до
-  отправки, шифруется backend до persistence и никогда не возвращается;
-  members/viewers получают только безопасный status. Apply не вызывает
-  provider и сбрасывает прежнюю верификацию. Jira допускает только точный
-  HTTPS `*.atlassian.net` origin, остальные probes используют фиксированные
-  official hosts. `connector-control.v1` переиспользует
-  `IntegrationConnection.provider_metadata`, поэтому migration не добавлена.
-  Все connector responses, включая auth/validation/application errors,
-  являются `private, no-store` на ASGI boundary; локальная ошибка до network
-  boundary больше не может заявить provider-call. Owner/admin после
-  отдельного подтверждения может удалить UI-saved credential и receipts, не
-  удаляя durable connection row, imported canonical data и sync history;
-  managed GitHub App при удалении отдельного PAT fallback не затрагивается.
-  Write check является только dry-run: не расшифровывает credential, не
-  вызывает provider и не меняет внешний сервис; реальный GitHub write
-  по-прежнему возможен только через approved ActionProposal + allowlist +
-  idempotency/read-back. Managed GitHub App рекомендован, PAT оставлен
-  advanced fallback; полный Google OAuth consent/refresh и Jira/Gmail/Drive
-  write executors честно отсутствуют. Проверено 2026-07-23: backend
-  **740/740 passed / 1 external deprecation warning**, Ruff; frontend
-  **426/426 passed**, typecheck, production build (**20 routes**) и runtime npm
-  audit (**0 vulnerabilities**). Authenticated browser QA на 1280×720 и
-  390×844 подтвердил role-aware control center, provider switching с очисткой
-  secret state, локализованный dry-run receipt и полный
-  apply → confirm → disconnect lifecycle; horizontal overflow отсутствует,
-  console содержит только штатные dev/HMR-сообщения. Временные QA
-  user/workspace удалены, запущенный для QA runtime остановлен. Следующий
-  внешний gate остаётся **LC-04: один
+- **INT-CTRL-01 Центр интеграций + UX/tenancy hardening
+  (DEC-092/DEC-093): РЕАЛИЗОВАНО ЛОКАЛЬНО.**
+  `/settings/integrations` теперь является одним спокойным двухшаговым путём:
+  сохранить подключение → проверить чтение. До сохранения проверка
+  заблокирована, пустые receipts не показываются, а write-readiness,
+  отключение и PAT fallback находятся в дополнительных настройках. Managed
+  GitHub App остаётся рекомендуемым способом. «Радары» ведут неподключённые
+  Jira/Gmail/Drive/GitHub сразу в соответствующую вкладку центра; экраны данных
+  получили русские empty states и одну настройку, а ручной JSON-импорт спрятан
+  в developer disclosure. Секрет шифруется backend и никогда не возвращается;
+  provider read остаётся отдельным явным действием, write check — локальным
+  dry-run без provider call/write.
+  Закрыта критичная tenancy-ошибка GitHub: workspace product-read без своих
+  canonical `Repository` rows теперь возвращает пустой inventory и никогда не
+  наследует глобальные `SourceEvent`/discovery/legacy данные. Unscoped fallback
+  сохранён только для явных operator/script reads. Повторный `make local`
+  теперь успешно подтверждает уже работающий verified runtime, а
+  `make local-doctor` считает принадлежащие этому repo порты здоровыми; чужие
+  процессы по-прежнему fail closed.
+  Проверено 2026-07-23: backend **745 passed / 1 external deprecation
+  warning**, Ruff; frontend **427 passed**, typecheck, production build
+  (**20 routes**) и runtime npm audit (**0 vulnerabilities**).
+  `make local-doctor` полностью зелёный на уже работающем runtime, повторный
+  `make local` идемпотентен. Authenticated desktop browser QA подтвердил
+  минимальный flow, provider deep links, скрытый ручной import, отсутствие
+  бесполезной проверки до подключения и чистую console кроме штатного HMR.
+  Временные QA user/workspace и credential-файл удалены. Backend runtime был
+  сохранён запущенным, поэтому новая tenancy-логика вступит в его живой процесс
+  после штатного перезапуска. Следующий внешний gate остаётся **LC-04: один
   founder-approved repository-scoped GitHub read с видимым canonical
   результатом и receipt.**
 - **LC-07 Deterministic read-only company assistant (DEC-091): РЕАЛИЗОВАН

@@ -51,10 +51,10 @@ export function connectorDisconnectSuccessMessage(
 ): string {
   if (provider === "github") {
     return managedGitHub
-      ? "Сохранённый personal access token удалён. Managed GitHub App, canonical данные и история не изменены."
-      : "Сохранённый personal access token удалён. Canonical данные и история источника не изменены.";
+      ? "Резервный GitHub token удалён. GitHub App продолжает работать."
+      : "GitHub token удалён. Уже загруженные данные сохранены.";
   }
-  return "Сохранённый секрет удалён. Canonical данные и история источника не изменены.";
+  return "Подключение удалено. Уже загруженные данные сохранены.";
 }
 
 export default function IntegrationsSettingsPage() {
@@ -122,12 +122,12 @@ export default function IntegrationsSettingsPage() {
       await applyConnectorConfiguration(workspaceId, provider, request);
       await refreshControlCenter();
       setActionMessage(
-        "Конфигурация зашифрована и сохранена. Теперь запустите проверку чтения."
+        "Доступ сохранён. Теперь проверьте подключение."
       );
       return true;
     } catch (caught: unknown) {
       setActionError(
-        caught instanceof Error ? caught.message : M.common.requestFailed
+        connectorActionError(caught)
       );
       return false;
     } finally {
@@ -147,13 +147,11 @@ export default function IntegrationsSettingsPage() {
       await refreshControlCenter();
       setActionMessage(
         receipt.status === "passed"
-          ? "Чтение подтверждено реальным ограниченным запросом к провайдеру."
+          ? "Подключение работает. FounderOS получил доступ на чтение."
           : checkReceiptMessage(receipt)
       );
     } catch (caught: unknown) {
-      setActionError(
-        caught instanceof Error ? caught.message : M.common.requestFailed
-      );
+      setActionError(connectorActionError(caught));
     } finally {
       setPendingAction(null);
     }
@@ -177,9 +175,7 @@ export default function IntegrationsSettingsPage() {
         connectorDisconnectSuccessMessage(provider, managedGitHub)
       );
     } catch (caught: unknown) {
-      setActionError(
-        caught instanceof Error ? caught.message : M.common.requestFailed
-      );
+      setActionError(connectorActionError(caught));
     } finally {
       setPendingAction(null);
     }
@@ -197,9 +193,7 @@ export default function IntegrationsSettingsPage() {
       await refreshControlCenter();
       setActionMessage(checkReceiptMessage(receipt));
     } catch (caught: unknown) {
-      setActionError(
-        caught instanceof Error ? caught.message : M.common.requestFailed
-      );
+      setActionError(connectorActionError(caught));
     } finally {
       setPendingAction(null);
     }
@@ -212,9 +206,9 @@ export default function IntegrationsSettingsPage() {
         Вернуться в настройки
       </Link>
       <PageHeader
-        eyebrow="Настройки · Интеграции"
-        title="Центр интеграций"
-        description="Подключайте источники, проверяйте фактическое чтение и контролируйте готовность безопасной записи из одного места."
+        eyebrow="Настройки"
+        title="Подключения"
+        description="Выберите источник, сохраните доступ и проверьте, что FounderOS действительно может читать данные."
       />
       <IntegrationsControlCenterView
         actionError={actionError}
@@ -250,6 +244,12 @@ export function IntegrationsControlCenterView({
 }: IntegrationsControlCenterViewProps) {
   const [selectedProvider, setSelectedProvider] =
     useState<ConnectorProvider>("github");
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("provider");
+    if (PROVIDER_ORDER.includes(requested as ConnectorProvider)) {
+      setSelectedProvider(requested as ConnectorProvider);
+    }
+  }, []);
   const selected = useMemo(
     () =>
       data?.connectors.find((connector) => connector.provider === selectedProvider) ??
@@ -259,39 +259,18 @@ export function IntegrationsControlCenterView({
 
   return (
     <section
-      className="panel integrations-control-center"
-      aria-labelledby="integrations-control-title"
+      className="integrations-control-center"
+      aria-label="Источники данных"
     >
-      <div className="section-header integrations-control-header">
-        <div>
-          <span className="eyebrow">Контур подключений</span>
-          <h2 id="integrations-control-title">API и коннекторы</h2>
-        </div>
-        {data && status === "ready" ? (
-          <span className="badge">
-            {data.summary.verified} из {data.summary.total} проверено
-          </span>
-        ) : null}
-      </div>
-
-      <div className="integration-safety-strip">
-        <span aria-hidden="true">◈</span>
-        <p>
-          Секрет сохраняется только на backend в зашифрованном виде и никогда не
-          возвращается в браузер. Проверка записи — только dry-run без изменения
-          внешнего сервиса.
-        </p>
-      </div>
-
       {status === "loading" ? (
-        <p className="state loading">Загружаем состояние подключений…</p>
+        <p className="state loading">Загружаем подключения…</p>
       ) : null}
       {status === "missing" ? (
         <p className="muted">Сначала выберите компанию.</p>
       ) : null}
       {status === "error" ? (
         <section className="state error">
-          <strong>Центр интеграций недоступен</strong>
+          <strong>Не удалось загрузить подключения</strong>
           <p>{error ?? M.common.requestFailed}</p>
           {onRetry ? (
             <button className="button secondary" onClick={onRetry} type="button">
@@ -303,20 +282,15 @@ export function IntegrationsControlCenterView({
 
       {data && status === "ready" ? (
         <>
-          <dl className="integration-summary" aria-label="Сводка подключений">
+          <header className="connections-overview">
             <div>
-              <dt>Сохранено</dt>
-              <dd>{data.summary.configured}</dd>
+              <h2>Источники данных</h2>
+              <p>Начните с одного. Остальные можно подключить позже.</p>
             </div>
-            <div>
-              <dt>Чтение проверено</dt>
-              <dd>{data.summary.verified}</dd>
-            </div>
-            <div>
-              <dt>Требуют внимания</dt>
-              <dd>{data.summary.errors}</dd>
-            </div>
-          </dl>
+            <span>
+              {data.summary.verified} из {data.summary.total} работают
+            </span>
+          </header>
 
           <div className="integration-workbench">
             <nav className="integration-provider-nav" aria-label="Провайдеры">
@@ -334,7 +308,12 @@ export function IntegrationsControlCenterView({
                       selectedProvider === provider ? " is-active" : ""
                     }`}
                     key={provider}
-                    onClick={() => setSelectedProvider(provider)}
+                    onClick={() => {
+                      setSelectedProvider(provider);
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("provider", provider);
+                      window.history.replaceState(null, "", url);
+                    }}
                     type="button"
                   >
                     <span
@@ -401,18 +380,14 @@ function ConnectorConfigurationPanel({
   const [accessToken, setAccessToken] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
   const [baseUrl, setBaseUrl] = useState(connector.base_url ?? "");
-  const [displayName, setDisplayName] = useState(connector.display_name ?? "");
   const [disconnectConfirmed, setDisconnectConfirmed] = useState(false);
-  const [scopes, setScopes] = useState(connector.scopes.join(", "));
 
   useEffect(() => {
     setAccessToken("");
     setAccountEmail("");
     setBaseUrl(connector.base_url ?? "");
-    setDisplayName(connector.display_name ?? "");
     setDisconnectConfirmed(false);
-    setScopes(connector.scopes.join(", "));
-  }, [connector.provider, connector.base_url, connector.display_name, connector.scopes]);
+  }, [connector.provider, connector.base_url]);
 
   const managedGitHub =
     connector.provider === "github" &&
@@ -432,11 +407,8 @@ function ConnectorConfigurationPanel({
       account_email: connector.provider === "jira" ? accountEmail : null,
       auth_method: authMethod(connector.provider),
       base_url: connector.provider === "jira" ? baseUrl : null,
-      display_name: displayName || null,
-      scopes: scopes
-        .split(",")
-        .map((scope) => scope.trim())
-        .filter(Boolean)
+      display_name: null,
+      scopes: []
     });
     if (succeeded) {
       setAccessToken("");
@@ -456,238 +428,255 @@ function ConnectorConfigurationPanel({
     setDisconnectConfirmed(false);
   }
 
+  const configurationForm = (
+    <form className="form integration-config-form" onSubmit={onSubmit}>
+      {connector.provider === "jira" ? (
+        <>
+          <div className="field">
+            <label htmlFor="jira-base-url">Адрес Jira Cloud</label>
+            <input
+              id="jira-base-url"
+              onChange={(event) => setBaseUrl(event.target.value)}
+              placeholder="https://company.atlassian.net"
+              required
+              type="url"
+              value={baseUrl}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="jira-account-email">Email аккаунта Atlassian</label>
+            <input
+              id="jira-account-email"
+              maxLength={320}
+              onChange={(event) => setAccountEmail(event.target.value)}
+              placeholder="you@company.com"
+              required
+              type="email"
+              value={accountEmail}
+            />
+          </div>
+        </>
+      ) : null}
+
+      <div className="field">
+        <label htmlFor={`${connector.provider}-access-token`}>
+          {credentialLabel(connector.provider)}
+        </label>
+        <input
+          autoComplete="new-password"
+          id={`${connector.provider}-access-token`}
+          maxLength={8192}
+          onChange={(event) => setAccessToken(event.target.value)}
+          placeholder={
+            editableCredentialPresent
+              ? "Введите новый токен для замены"
+              : "Вставьте токен"
+          }
+          required
+          type="password"
+          value={accessToken}
+        />
+      </div>
+
+      <p className="integration-secure-note">
+        <span aria-hidden="true">⌁</span>
+        Токен шифруется и больше не показывается в браузере.
+      </p>
+
+      <button
+        className="button"
+        disabled={!accessToken || pendingAction !== null}
+        type="submit"
+      >
+        {pendingAction === "apply"
+          ? "Сохраняем…"
+          : connector.configured
+            ? "Заменить токен"
+            : "Сохранить подключение"}
+      </button>
+    </form>
+  );
+
   return (
     <div className="integration-editor">
       <header className="integration-editor-header">
-        <div>
+        <span
+          className={`integration-provider-icon integration-provider-icon--${connector.provider}`}
+          aria-hidden="true"
+        >
+          {connector.name.slice(0, 1)}
+        </span>
+        <div className="integration-editor-title">
           <span className={`integration-state-pill integration-state-pill--${connector.state}`}>
             {connectorStateLabel(connector)}
           </span>
           <h3>{connector.name}</h3>
           <p>{connectorIntro(connector.provider)}</p>
         </div>
-        {connector.last_checked_at ? (
-          <small>Последняя проверка: {connector.last_checked_at}</small>
-        ) : null}
       </header>
 
-      {connector.account_label ? (
-        <p className="integration-account-fact">
-          Текущий аккаунт: <strong>{connector.account_label}</strong>
-        </p>
-      ) : null}
-
-      {connector.warnings.map((warning) => (
-        <p className="integration-warning" key={warning}>
-          {connectorWarning(warning)}
-        </p>
-      ))}
-
-      {connector.provider === "github" ? (
-        <div className="integration-recommended-path">
-          <div>
-            <strong>GitHub App — рекомендуемый способ</strong>
-            <span>
-              Короткоживущие токены, выбор репозиториев и отдельный управляемый
-              контур.
-            </span>
-          </div>
-          <Link className="button secondary" href="/github">
-            {managedGitHub ? "Управлять GitHub App" : "Подключить GitHub App"}
-          </Link>
-        </div>
-      ) : null}
-
-      {!canManage ? (
-        <p className="settings-permission-note">
-          Изменять и проверять подключения может владелец или администратор
-          компании.
-        </p>
-      ) : (
-        <form className="form integration-config-form" onSubmit={onSubmit}>
-          <div className="integration-form-heading">
-            <strong>
-              {connector.provider === "github"
-                ? "Расширенный способ: personal access token"
-                : "Параметры подключения"}
-            </strong>
-            <span>После сохранения прежний секрет будет заменён.</span>
-          </div>
-
-          <div className="field">
-            <label htmlFor={`${connector.provider}-display-name`}>
-              Название подключения
-            </label>
-            <input
-              id={`${connector.provider}-display-name`}
-              maxLength={255}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={`${connector.name} · основной аккаунт`}
-              type="text"
-              value={displayName}
-            />
-          </div>
-
-          {connector.provider === "jira" ? (
-            <div className="integration-field-grid">
-              <div className="field">
-                <label htmlFor="jira-base-url">Jira Cloud site</label>
-                <input
-                  id="jira-base-url"
-                  onChange={(event) => setBaseUrl(event.target.value)}
-                  placeholder="https://company.atlassian.net"
-                  required
-                  type="url"
-                  value={baseUrl}
-                />
-                <span className="muted">Только HTTPS *.atlassian.net без пути.</span>
-              </div>
-              <div className="field">
-                <label htmlFor="jira-account-email">Email аккаунта Atlassian</label>
-                <input
-                  id="jira-account-email"
-                  maxLength={320}
-                  onChange={(event) => setAccountEmail(event.target.value)}
-                  required
-                  type="email"
-                  value={accountEmail}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          <div className="field">
-            <label htmlFor={`${connector.provider}-access-token`}>
-              {credentialLabel(connector.provider)}
-            </label>
-            <input
-              autoComplete="new-password"
-              id={`${connector.provider}-access-token`}
-              maxLength={8192}
-              onChange={(event) => setAccessToken(event.target.value)}
-              placeholder={
-                editableCredentialPresent
-                  ? "Секрет уже сохранён — введите новый только для замены"
-                  : "Вставьте секрет"
-              }
-              required
-              type="password"
-              value={accessToken}
-            />
-            <span className="muted">
-              Значение существует только в этой форме до отправки и не
-              отображается после сохранения.
-            </span>
-          </div>
-
-          <div className="field">
-            <label htmlFor={`${connector.provider}-scopes`}>
-              Ожидаемые scopes
-            </label>
-            <input
-              id={`${connector.provider}-scopes`}
-              onChange={(event) => setScopes(event.target.value)}
-              placeholder={scopePlaceholder(connector.provider)}
-              type="text"
-              value={scopes}
-            />
-            <span className="muted">Через запятую; результат чтения уточнит доступ.</span>
-          </div>
-
-          <div className="actions-row">
-            <button
-              className="button"
-              disabled={!accessToken || pendingAction !== null}
-              type="submit"
-            >
-              {pendingAction === "apply" ? "Сохраняем…" : "Применить"}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {canManage && connector.removable_credential_present ? (
-        <details className="integration-disconnect">
-          <summary>
-            {managedGitHub
-              ? "Удалить резервный personal access token"
-              : "Отключить сохранённый credential"}
-          </summary>
-          <div>
-            <p>
-              {managedGitHub
-                ? "Будет удалён только PAT, сохранённый через этот центр. Managed GitHub App останется подключён."
-                : "Будут удалены зашифрованный секрет и квитанции проверок. Уже импортированные canonical данные и история останутся."}
-            </p>
-            <label className="integration-disconnect-confirm">
-              <input
-                checked={disconnectConfirmed}
-                onChange={(event) =>
-                  setDisconnectConfirmed(event.target.checked)
-                }
-                type="checkbox"
-              />
-              <span>Я понимаю последствие и хочу удалить сохранённый секрет.</span>
-            </label>
-            <button
-              className="button danger"
-              disabled={!disconnectConfirmed || pendingAction !== null}
-              onClick={disconnectCredential}
-              type="button"
-            >
-              {pendingAction === "disconnect"
-                ? "Удаляем секрет…"
-                : "Удалить сохранённый секрет"}
-            </button>
-          </div>
-        </details>
-      ) : null}
-
-      <section className="integration-checks" aria-labelledby="integration-checks-title">
-        <div>
-          <span className="eyebrow">Контроль доступа</span>
-          <h4 id="integration-checks-title">Проверить подключение</h4>
-        </div>
-        <div className="integration-check-actions">
-          <button
-            className="button secondary"
-            disabled={!canManage || !connector.configured || pendingAction !== null}
-            onClick={() => onReadCheck?.(connector.provider)}
-            type="button"
-          >
-            {pendingAction === "read" ? "Проверяем чтение…" : "Проверить чтение"}
-          </button>
-          <button
-            className="button secondary"
-            disabled={!canManage || pendingAction !== null}
-            onClick={() => onWriteCheck?.(connector.provider)}
-            type="button"
-          >
-            {pendingAction === "write"
-              ? "Проверяем контур…"
-              : "Проверить запись · dry-run"}
-          </button>
-        </div>
-        <p className="muted">
-          Чтение выполняет один ограниченный GET-запрос; GitHub App перед ним
-          получает короткоживущий токен. Проверка записи анализирует feature
-          flags, approval и allowlist, но не вызывает API провайдера.
-        </p>
-        <div className="integration-receipts">
-          <CheckReceipt label="Чтение" receipt={connector.read_check} />
-          <CheckReceipt label="Запись · dry-run" receipt={connector.write_check} />
-        </div>
-      </section>
-
       {actionMessage ? (
-        <p className="success-text" role="status">
+        <p className="state success" role="status">
           {actionMessage}
         </p>
       ) : null}
       {actionError ? (
-        <p className="error-text" role="alert">
+        <p className="state error" role="alert">
           {actionError}
         </p>
+      ) : null}
+
+      {connector.account_label ? (
+        <p className="integration-account-fact">
+          Аккаунт: <strong>{connector.account_label}</strong>
+        </p>
+      ) : null}
+
+      <section className="integration-step" aria-labelledby="integration-connect-step">
+        <div className="integration-step-heading">
+          <span aria-hidden="true">1</span>
+          <div>
+            <h4 id="integration-connect-step">Подключение</h4>
+            <p>
+              {connector.configured
+                ? "Доступ сохранён. При необходимости его можно заменить."
+                : "Добавьте доступ к источнику."}
+            </p>
+          </div>
+        </div>
+
+        {!canManage ? (
+          <p className="settings-permission-note">
+            Подключения меняет владелец или администратор компании.
+          </p>
+        ) : connector.provider === "github" ? (
+          <>
+            <div className="integration-recommended-path">
+              <div>
+                <strong>GitHub App</strong>
+                <span>Безопасный способ с выбором конкретных репозиториев.</span>
+              </div>
+              <Link className="button" href="/github">
+                {managedGitHub ? "Открыть GitHub" : "Подключить GitHub"}
+              </Link>
+            </div>
+            <details className="integration-advanced">
+              <summary>
+                {editableCredentialPresent
+                  ? "Заменить резервный personal access token"
+                  : "Другой способ: personal access token"}
+              </summary>
+              {configurationForm}
+            </details>
+          </>
+        ) : connector.configured ? (
+          <details className="integration-advanced">
+            <summary>Заменить данные подключения</summary>
+            {configurationForm}
+          </details>
+        ) : (
+          configurationForm
+        )}
+      </section>
+
+      <section
+        className={`integration-step integration-step--${connector.state}`}
+        aria-labelledby="integration-check-step"
+      >
+        <div className="integration-step-heading">
+          <span aria-hidden="true">2</span>
+          <div>
+            <h4 id="integration-check-step">{readStepTitle(connector)}</h4>
+            <p>{readStepDescription(connector)}</p>
+          </div>
+        </div>
+        <button
+          className="button"
+          disabled={!canManage || !connector.configured || pendingAction !== null}
+          onClick={() => onReadCheck?.(connector.provider)}
+          type="button"
+        >
+          {pendingAction === "read"
+            ? "Проверяем…"
+            : connector.state === "read_verified"
+              ? "Проверить ещё раз"
+              : "Проверить подключение"}
+        </button>
+        {connector.read_check ? (
+          <CheckReceipt label="Результат проверки" receipt={connector.read_check} />
+        ) : null}
+      </section>
+
+      {connector.configured ? (
+        <details className="integration-technical">
+          <summary>Дополнительные настройки</summary>
+          <div>
+            {connector.warnings.map((warning) => (
+              <p className="integration-warning" key={warning}>
+                {connectorWarning(warning)}
+              </p>
+            ))}
+            <section>
+              <h4>Готовность записи</h4>
+              <p>
+                Локальная проверка защитных условий. Она ничего не меняет во
+                внешнем сервисе.
+              </p>
+              <button
+                className="button secondary"
+                disabled={!canManage || pendingAction !== null}
+                onClick={() => onWriteCheck?.(connector.provider)}
+                type="button"
+              >
+                {pendingAction === "write"
+                  ? "Проверяем…"
+                  : "Проверить готовность записи"}
+              </button>
+              {connector.write_check ? (
+                <CheckReceipt
+                  label="Результат проверки записи"
+                  receipt={connector.write_check}
+                />
+              ) : null}
+            </section>
+
+            {canManage && connector.removable_credential_present ? (
+              <details className="integration-disconnect">
+                <summary>
+                  {managedGitHub
+                    ? "Удалить резервный token"
+                    : "Удалить подключение"}
+                </summary>
+                <div>
+                  <p>
+                    Секрет и результаты проверок будут удалены. Уже загруженные
+                    данные останутся.
+                  </p>
+                  <label className="integration-disconnect-confirm">
+                    <input
+                      checked={disconnectConfirmed}
+                      onChange={(event) =>
+                        setDisconnectConfirmed(event.target.checked)
+                      }
+                      type="checkbox"
+                    />
+                    <span>Подтверждаю удаление сохранённого доступа.</span>
+                  </label>
+                  <button
+                    className="button danger"
+                    disabled={!disconnectConfirmed || pendingAction !== null}
+                    onClick={disconnectCredential}
+                    type="button"
+                  >
+                    {pendingAction === "disconnect"
+                      ? "Удаляем…"
+                      : "Удалить подключение"}
+                  </button>
+                </div>
+              </details>
+            ) : null}
+          </div>
+        </details>
       ) : null}
     </div>
   );
@@ -707,7 +696,7 @@ function CheckReceipt({
       <small>
         {receipt
           ? checkReceiptMessage(receipt)
-          : "Здесь появится безопасная квитанция без provider payload и секретов."}
+          : "Результат появится после проверки."}
       </small>
       {receipt?.checks ? (
         <ul>
@@ -725,28 +714,28 @@ function CheckReceipt({
 
 function connectorStateLabel(connector: ConnectorControl): string {
   if (connector.state === "read_verified") {
-    return "Чтение проверено";
+    return "Работает";
   }
   if (connector.state === "saved_unverified") {
-    return "Сохранено · нужна проверка";
+    return "Нужно проверить";
   }
   if (connector.state === "error") {
-    return "Требует внимания";
+    return "Ошибка подключения";
   }
-  return "Не настроено";
+  return "Не подключено";
 }
 
 function connectorIntro(provider: ConnectorProvider): string {
   if (provider === "github") {
-    return "Репозитории, issues и pull requests.";
+    return "Репозитории, задачи и pull requests.";
   }
   if (provider === "jira") {
-    return "Задачи, статусы, приоритеты и сроки из Jira Cloud.";
+    return "Задачи, статусы и сроки.";
   }
   if (provider === "gmail") {
-    return "Письма и цепочки как фактический источник контекста.";
+    return "Письма и переписка с людьми и компаниями.";
   }
-  return "Документы и файлы Google Drive.";
+  return "Документы и рабочие файлы.";
 }
 
 function authMethod(provider: ConnectorProvider): string {
@@ -761,25 +750,12 @@ function authMethod(provider: ConnectorProvider): string {
 
 function credentialLabel(provider: ConnectorProvider): string {
   if (provider === "github") {
-    return "GitHub personal access token";
+    return "Personal access token";
   }
   if (provider === "jira") {
     return "Atlassian API token";
   }
-  return "OAuth access token";
-}
-
-function scopePlaceholder(provider: ConnectorProvider): string {
-  if (provider === "github") {
-    return "repo, read:org";
-  }
-  if (provider === "jira") {
-    return "read:jira-work, read:jira-user";
-  }
-  if (provider === "gmail") {
-    return "gmail.readonly";
-  }
-  return "drive.metadata.readonly, drive.readonly";
+  return "Временный OAuth access token";
 }
 
 function checkStatusLabel(status: ConnectorCheckReceipt["status"]): string {
@@ -787,50 +763,98 @@ function checkStatusLabel(status: ConnectorCheckReceipt["status"]): string {
     return "Успешно";
   }
   if (status === "ready") {
-    return "Контур готов";
+    return "Готово";
   }
   if (status === "failed") {
     return "Ошибка";
   }
-  return "Защищено ограничениями";
+  return "Пока не готово";
 }
 
 function checkName(key: string): string {
   const labels: Record<string, string> = {
-    approval_required: "Approval обязателен",
-    credential_configured: "Секрет настроен",
-    provider_write_supported: "Запись провайдера реализована",
+    approval_required: "Действия требуют подтверждения",
+    credential_configured: "Доступ сохранён",
+    provider_write_supported: "Запись поддерживается",
     read_verified: "Чтение проверено",
-    target_allowlist_configured: "Allowlist целей настроен",
-    write_feature_enabled: "Write feature flag включён"
+    target_allowlist_configured: "Разрешённые цели настроены",
+    write_feature_enabled: "Запись включена"
   };
-  return labels[key] ?? key;
+  return labels[key] ?? "Защитное условие";
 }
 
 function connectorWarning(warning: string): string {
   if (warning.includes("Manual OAuth access tokens")) {
-    return "Ручной OAuth access token может истечь: автоматическое обновление OAuth пока не реализовано.";
+    return "Сейчас используется временный token. После истечения его потребуется заменить.";
   }
   if (warning.includes("managed GitHub App")) {
-    return "Рекомендуется управляемый GitHub App; personal access token оставлен как расширенный резервный способ.";
+    return "Для постоянной работы лучше использовать GitHub App.";
   }
-  return warning;
+  return "Проверьте настройки этого подключения.";
 }
 
 function checkReceiptMessage(receipt: ConnectorCheckReceipt): string {
   const messages: Record<string, string> = {
-    authorization_failed: "Провайдер отклонил сохранённые учётные данные.",
-    credential_missing: "Сначала сохраните учётные данные провайдера.",
-    credential_unavailable: "Сохранённый секрет сейчас невозможно расшифровать.",
-    invalid_provider_response: "Провайдер вернул неожиданный ответ.",
-    provider_rate_limited: "Достигнут лимит запросов провайдера.",
-    provider_resource_not_found: "Проверяемый ресурс провайдера не найден.",
-    provider_unavailable: "Провайдер временно недоступен.",
-    read_verified: "Ограниченное чтение подтверждено.",
+    authorization_failed: "Сервис не принял сохранённый доступ. Проверьте token.",
+    credential_missing: "Сначала сохраните доступ.",
+    credential_unavailable: "Сохранённый доступ невозможно открыть. Замените token.",
+    invalid_provider_response: "Сервис вернул неожиданный ответ. Повторите позже.",
+    provider_rate_limited: "Сервис временно ограничил запросы. Повторите позже.",
+    provider_resource_not_found: "Аккаунт или ресурс не найден.",
+    provider_unavailable: "Сервис сейчас недоступен. Повторите позже.",
+    read_verified: "FounderOS получил доступ на чтение.",
     write_guarded:
-      "Внешняя запись не выполнялась. Сначала закройте неподготовленные защитные условия.",
+      "Запись не выполнялась. Не все защитные условия готовы.",
     write_ready:
-      "Контур записи готов, но реальное действие всё равно требует подтверждённый ActionProposal и точную цель."
+      "Защитные условия готовы. Любое реальное действие всё равно потребует подтверждения."
   };
-  return messages[receipt.code] ?? receipt.message;
+  return messages[receipt.code] ?? "Проверка завершена.";
+}
+
+function readStepTitle(connector: ConnectorControl): string {
+  if (connector.state === "read_verified") {
+    return "Подключение работает";
+  }
+  if (connector.state === "error") {
+    return "Проверка не пройдена";
+  }
+  if (connector.configured) {
+    return "Проверьте подключение";
+  }
+  return "Проверка подключения";
+}
+
+function readStepDescription(connector: ConnectorControl): string {
+  if (connector.state === "read_verified") {
+    return "FounderOS подтвердил доступ на чтение.";
+  }
+  if (connector.state === "error") {
+    return connector.read_check
+      ? checkReceiptMessage(connector.read_check)
+      : "Проверьте сохранённый доступ и повторите.";
+  }
+  if (connector.configured) {
+    return "Один безопасный запрос покажет, работает ли доступ.";
+  }
+  return "Станет доступна после сохранения подключения.";
+}
+
+function connectorActionError(caught: unknown): string {
+  const message = caught instanceof Error ? caught.message : "";
+  if (message.includes("insufficient workspace role")) {
+    return "Недостаточно прав для изменения подключения.";
+  }
+  if (message.includes("secure connector credential storage")) {
+    return "Безопасное хранилище недоступно. Проверьте настройки сервера.";
+  }
+  if (message.includes("atlassian.net")) {
+    return "Укажите адрес Jira Cloud вида https://company.atlassian.net.";
+  }
+  if (message.includes("account email")) {
+    return "Укажите email аккаунта Atlassian.";
+  }
+  if (message.includes("credential")) {
+    return "Проверьте token и повторите.";
+  }
+  return M.common.requestFailed;
 }

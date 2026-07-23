@@ -19,6 +19,20 @@
 
 ### Changed
 
+- Rebuilt the integration screen as a minimal save → read-check workflow.
+  Provider tabs are compact, checks stay disabled until configuration exists,
+  empty receipts are omitted, and write readiness, credential removal, and the
+  GitHub PAT fallback are progressive details. Unconfigured Radar cards now
+  deep-link to the exact provider tab. Jira, Gmail, and Drive data pages use
+  localized empty states and keep manual JSON import collapsed.
+- Made local startup idempotent. A repeated `make local` recognizes a verified
+  running supervisor and returns the existing product URL successfully;
+  `make local-doctor` reports app ports owned by that exact repository runtime
+  as healthy. Occupied unowned ports still fail closed.
+- Closed a cross-workspace GitHub inventory fallback (DEC-093). Product reads
+  now use canonical repositories from the exact workspace or return an empty
+  inventory; unscoped `SourceEvent`, discovery-snapshot, and legacy fallbacks
+  remain available only to explicit operator/script reads.
 - Added a direct “Интеграции и API” entry to Settings. GitHub App remains the
   recommended GitHub path, while a personal token is an advanced fallback.
   Jira is restricted to exact HTTPS `*.atlassian.net` origins; Gmail and Drive

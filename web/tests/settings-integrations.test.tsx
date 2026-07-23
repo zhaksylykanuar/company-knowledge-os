@@ -137,26 +137,27 @@ test("builds safe same-origin connector control paths", () => {
   );
 });
 
-test("renders one integration control center with honest safety boundaries", () => {
+test("renders one minimal connect-then-check workflow", () => {
   const html = renderControlCenter();
 
-  assert.ok(html.includes("API и коннекторы"));
-  assert.ok(html.includes("1 из 4 проверено"));
+  assert.ok(html.includes("Источники данных"));
+  assert.ok(html.includes("1 из 4 работают"));
   assert.ok(html.includes("GitHub"));
   assert.ok(html.includes("Jira"));
   assert.ok(html.includes("Gmail"));
   assert.ok(html.includes("Google Drive"));
-  assert.ok(html.includes("Чтение проверено"));
-  assert.ok(html.includes("GitHub App — рекомендуемый способ"));
-  assert.ok(html.includes("Проверить чтение"));
-  assert.ok(html.includes("Проверить запись · dry-run"));
-  assert.ok(html.includes("Удалить резервный personal access token"));
-  assert.ok(html.includes("Managed GitHub App останется подключён"));
-  assert.ok(html.includes("Я понимаю последствие"));
-  assert.match(html, /disabled=""[^>]*>Удалить сохранённый секрет/);
-  assert.ok(html.includes("не вызывает API провайдера"));
-  assert.ok(html.includes("никогда не возвращается в браузер"));
-  assert.ok(html.includes("Рекомендуется управляемый GitHub App"));
+  assert.ok(html.includes("Работает"));
+  assert.ok(html.includes("GitHub App"));
+  assert.ok(html.includes("Подключение работает"));
+  assert.ok(html.includes("Проверить ещё раз"));
+  assert.ok(html.includes("Дополнительные настройки"));
+  assert.ok(html.includes("Проверить готовность записи"));
+  assert.ok(html.includes("Удалить резервный token"));
+  assert.ok(html.includes("Подтверждаю удаление сохранённого доступа"));
+  assert.match(html, /disabled=""[^>]*>Удалить подключение/);
+  assert.ok(html.includes("Токен шифруется и больше не показывается в браузере"));
+  assert.ok(html.includes("Для постоянной работы лучше использовать GitHub App"));
+  assert.doesNotMatch(html, /dry-run|provider payload|ActionProposal|allowlist/);
   assert.doesNotMatch(html, /managed GitHub App is recommended/);
 });
 
@@ -168,23 +169,17 @@ test("never renders credential values or internal encrypted fields", () => {
   assert.doesNotMatch(html, /fernet:v1/);
   assert.doesNotMatch(html, /installation_id/);
   assert.ok(html.includes('type="password"'));
-  assert.ok(
-    html.includes("Секрет уже сохранён — введите новый только для замены")
-  );
+  assert.ok(html.includes('placeholder="Введите новый токен для замены"'));
 });
 
 test("keeps connector configuration read-only for non-admin roles", () => {
   const html = renderControlCenter(false);
 
-  assert.ok(
-    html.includes(
-      "Изменять и проверять подключения может владелец или администратор"
-    )
-  );
+  assert.ok(html.includes("Подключения меняет владелец или администратор компании"));
   assert.doesNotMatch(html, /integration-config-form/);
   assert.doesNotMatch(html, /integration-disconnect/);
-  assert.match(html, /disabled=""[^>]*>Проверить чтение/);
-  assert.match(html, /disabled=""[^>]*>Проверить запись · dry-run/);
+  assert.match(html, /disabled=""[^>]*>Проверить ещё раз/);
+  assert.match(html, /disabled=""[^>]*>Проверить готовность записи/);
 });
 
 test("does not mistake a managed GitHub App for a stored PAT fallback", () => {
@@ -198,21 +193,37 @@ test("does not mistake a managed GitHub App for a stored PAT fallback", () => {
   };
   const html = renderControlCenter(true, withoutFallback);
 
-  assert.ok(html.includes('placeholder="Вставьте секрет"'));
-  assert.doesNotMatch(html, /Удалить резервный personal access token/);
+  assert.ok(html.includes('placeholder="Вставьте токен"'));
+  assert.doesNotMatch(html, /Удалить резервный token/);
+});
+
+test("blocks meaningless checks until a connection is saved", () => {
+  const unconfigured: ConnectorControlCenterResponse = {
+    ...controlCenter,
+    connectors: controlCenter.connectors.map((item) =>
+      item.provider === "github" ? connector("github") : item
+    ),
+    summary: { ...controlCenter.summary, configured: 1, verified: 0 }
+  };
+  const html = renderControlCenter(true, unconfigured);
+
+  assert.ok(html.includes("Станет доступна после сохранения подключения"));
+  assert.match(html, /disabled=""[^>]*>Проверить подключение/);
+  assert.doesNotMatch(html, /Проверить готовность записи/);
+  assert.doesNotMatch(html, /integration-receipt/);
 });
 
 test("reports the actual GitHub credential lifecycle after removal", () => {
   assert.equal(
     connectorDisconnectSuccessMessage("github", false),
-    "Сохранённый personal access token удалён. Canonical данные и история источника не изменены."
+    "GitHub token удалён. Уже загруженные данные сохранены."
   );
   assert.equal(
     connectorDisconnectSuccessMessage("github", true),
-    "Сохранённый personal access token удалён. Managed GitHub App, canonical данные и история не изменены."
+    "Резервный GitHub token удалён. GitHub App продолжает работать."
   );
   assert.equal(
     connectorDisconnectSuccessMessage("jira", false),
-    "Сохранённый секрет удалён. Canonical данные и история источника не изменены."
+    "Подключение удалено. Уже загруженные данные сохранены."
   );
 });
