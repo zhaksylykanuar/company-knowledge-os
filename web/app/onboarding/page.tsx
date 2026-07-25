@@ -57,7 +57,7 @@ export default function OnboardingPage() {
   return (
     <div className={styles.loadingPage} aria-busy="true">
       <div className={styles.loadingPulse} />
-      <p>Открываем живой штаб компании…</p>
+      <p>Открываем текущую картину компании…</p>
     </div>
   );
 }

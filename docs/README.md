@@ -1,9 +1,8 @@
 # FounderOS Docs
 
-This is the single navigation entry for the current FounderOS documentation set.
-After the Lineage-2 purge (DEC-029), the active docs are intentionally small:
-source-of-truth docs for the current product and audit-only history for
-recovering deleted context.
+This is the single navigation entry for the active FounderOS 2.0 documentation.
+The product is an AI partner with evidence-backed company memory. Superseded
+Command Center documentation is not part of the active set.
 
 ## Reading Order
 
@@ -19,9 +18,8 @@ recovering deleted context.
 5. [`ROADMAP.md`](ROADMAP.md), [`TODO.md`](TODO.md),
    [`POST_MVP.md`](POST_MVP.md), and [`CHANGELOG.md`](CHANGELOG.md) - planning,
    near-term backlog, deferred scope, and dated change history.
-6. [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md) -
-   executable acceptance ledger for promoting the synthetic `/demo` grammar into
-   the real authenticated local product.
+6. [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md) - executable
+   acceptance ledger for the AI-first product reset.
 
 ## Source-of-truth Matrix
 
@@ -34,7 +32,7 @@ recovering deleted context.
 | What is the current development workflow for agents? | [`../AGENTS.md`](../AGENTS.md) and [`../CLAUDE.md`](../CLAUDE.md) |
 | What are the safety/security boundaries? | [`../AGENTS.md`](../AGENTS.md), [`../CLAUDE.md`](../CLAUDE.md), [`../SECURITY_BASELINE.md`](../SECURITY_BASELINE.md) |
 | What should be built next? | [`../PROGRESS.md`](../PROGRESS.md), then [`TODO.md`](TODO.md) |
-| How does the `/demo` command center become the real product? | [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md) |
+| How is the AI-first product reset verified? | [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
 | How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
 | How are connector credentials saved and verified in the product? | [`integrations-control-center.md`](integrations-control-center.md) |
@@ -46,7 +44,7 @@ recovering deleted context.
   owner/admin configuration, fixed provider read probes, dry-run write
   readiness, runtime gates, and explicitly missing OAuth/write capabilities.
 - [`operations/local-runtime.md`](operations/local-runtime.md) - canonical local start, doctor, smoke, backup/restore, stop, recovery, and external-resource deletion boundary.
-- [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook; managed `/github` setup is primary and legacy env/manual preflight is compatibility-only.
+- [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook; managed `/settings/integrations/github` setup is primary and legacy env/manual preflight is compatibility-only.
 - [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after local acceptance and read-only provider proof.
 - `make local-readiness` is the sanitized repository-evidence report;
   `make release-handoff` and `scripts/private_beta_release_handoff.py` remain
@@ -63,7 +61,7 @@ as current operating instructions.
 - [`TODO.md`](TODO.md)
 - [`POST_MVP.md`](POST_MVP.md)
 - [`CHANGELOG.md`](CHANGELOG.md)
-- [`LIVING_COMMAND_CENTER_CHECKLIST.md`](LIVING_COMMAND_CENTER_CHECKLIST.md)
+- [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md)
 
 ## Audit Trail
 

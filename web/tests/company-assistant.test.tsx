@@ -73,7 +73,7 @@ function renderPanel(
   );
 }
 
-test("renders evidence, safe confirmation navigation, warnings, and deterministic boundary", () => {
+test("renders evidence, safe confirmation navigation, warnings, and read-only boundary", () => {
   const html = renderPanel();
 
   assert.ok(html.includes("Я не выполняю действия сам"));
@@ -81,7 +81,7 @@ test("renders evidence, safe confirmation navigation, warnings, and deterministi
   assert.match(html, /href="https:\/\/github\.com\/acme\/founderos\/issues\/42"/);
   assert.match(html, /href="\/actions\?status=proposed"/);
   assert.ok(html.includes("Открыть подтверждение"));
-  assert.ok(html.includes("LLM не использовался"));
+  assert.ok(html.includes("только чтение"));
   assert.ok(html.includes("действий не выполнено"));
   assert.ok(html.includes("Ограничения снимка (1)"));
   assert.ok(html.includes("Что с источниками?"));
@@ -91,7 +91,7 @@ test("renders loading, stale, and rate-limit states without a stale answer", () 
   const loading = renderPanel({ answer: null, query: "", status: "loading_snapshot" });
   const stale = renderPanel({
     answer: null,
-    error: "Штаб изменился. Повторите вопрос.",
+    error: "Картина компании изменилась. Повторите вопрос.",
     status: "stale"
   });
   const limited = renderPanel({
@@ -100,9 +100,9 @@ test("renders loading, stale, and rate-limit states without a stale answer", () 
     status: "rate_limited"
   });
 
-  assert.ok(loading.includes("Сверяю текущий снимок штаба"));
+  assert.ok(loading.includes("Сверяю текущую картину компании"));
   assert.ok(loading.includes("disabled=\"\""));
-  assert.ok(stale.includes("Штаб изменился"));
+  assert.ok(stale.includes("Картина компании изменилась"));
   assert.equal(stale.includes(ANSWER.text), false);
   assert.ok(limited.includes("Слишком много вопросов подряд"));
 });

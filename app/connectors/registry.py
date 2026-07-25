@@ -37,7 +37,7 @@ CONNECTOR_DESCRIPTORS: tuple[ConnectorDescriptor, ...] = (
         name="GitHub",
         status=CONNECTOR_STATUS_AVAILABLE,
         read_only=True,
-        manage_path="/github",
+        manage_path="/settings/integrations?provider=github",
         summary=(
             "Read-only repository/issue/PR normalization into canonical Company "
             "Brain state. Real provider reads require a human-approved GitHub App "
@@ -49,7 +49,7 @@ CONNECTOR_DESCRIPTORS: tuple[ConnectorDescriptor, ...] = (
         name="Jira",
         status=CONNECTOR_STATUS_AVAILABLE,
         read_only=True,
-        manage_path="/jira",
+        manage_path="/settings/integrations?provider=jira",
         summary=(
             "Local read-only issue import into canonical SourceRecord/Task state. "
             "The MVP path accepts pasted/exported Jira issue JSON only; no provider "
@@ -61,7 +61,7 @@ CONNECTOR_DESCRIPTORS: tuple[ConnectorDescriptor, ...] = (
         name="Gmail",
         status=CONNECTOR_STATUS_AVAILABLE,
         read_only=True,
-        manage_path="/gmail",
+        manage_path="/settings/integrations?provider=gmail",
         summary=(
             "Local read-only message import into canonical SourceRecord state. "
             "The MVP path accepts pasted/exported Gmail message JSON only (no raw "
@@ -73,7 +73,7 @@ CONNECTOR_DESCRIPTORS: tuple[ConnectorDescriptor, ...] = (
         name="Google Drive",
         status=CONNECTOR_STATUS_AVAILABLE,
         read_only=True,
-        manage_path="/drive",
+        manage_path="/settings/integrations?provider=drive",
         summary=(
             "Local read-only file metadata import into canonical SourceRecord "
             "state. The MVP path accepts pasted/exported Drive file JSON only "

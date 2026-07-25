@@ -3000,6 +3000,46 @@ persistence or external-write boundary. Technical facts and provider warnings
 remain available through progressive disclosure. A viewer may inspect already
 available facts but receives no setup or sync controls.
 
+## DEC-095 - FounderOS Is An AI Partner With Evidence-Backed Company Memory
+
+Decision (2026-07-25): FounderOS is no longer defined by the Living Command
+Center mental model. Its product contract is an AI partner that observes
+workspace-scoped sources, builds temporal company memory, gives a bounded
+evidence-backed second opinion and prepares human-approved actions. The primary
+user zones are `Сейчас`, `Компания`, `Спросить` and `Настройки`.
+
+The daily surface shows one main conclusion, at most three attention signals
+and one next step. Provider names, source diagnostics, scopes, credentials,
+manual import and operational controls belong to Settings. Users may drill down
+from conclusion to situation, domain, entity/history and exact evidence. A
+generative answer must distinguish fact, interpretation, objection and
+recommendation; unsupported claims remain absent.
+
+The personal GitHub repository containing FounderOS is product infrastructure,
+not company memory. A work GitHub organization is a workspace-scoped source
+whose exact installation and repositories must be selected explicitly. These
+planes may not share unscoped repository inventory or appear as one connection.
+
+Existing evidence, tenancy, RBAC, raw/Postgres truth, Company Brain/World,
+Headquarters projection, ActionProposal, approval, idempotency and receipt
+foundations are retained. `Штаб / Мир / Миссии / Радары`, provider-first product
+routes, synthetic Command Center demo, duplicate briefing/dashboard surfaces
+and their unused code/docs/tests are superseded and must be removed after their
+replacement path is verified. This decision does not authorize deletion of
+secrets, `.env`, raw storage, migrations, production data or unrelated
+uncommitted work.
+
+Company memory must carry evidence, event/observation time, confidence, access
+and retention. Secrets, duplicate raw text and chat history are not memory.
+Chat persistence remains disabled until a separate privacy/retention decision.
+External writes always require preview, explicit approval and an authoritative
+receipt; an LLM never mutates production data directly.
+
+DEC-081 through DEC-085 and DEC-094 remain historical implementation evidence
+but are superseded where they define Living Command Center or provider-first UX
+as the target product. Security and persistence boundaries in those decisions
+remain active unless explicitly reversed.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

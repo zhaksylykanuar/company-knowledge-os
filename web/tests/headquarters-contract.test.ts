@@ -125,7 +125,7 @@ const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
         state: "complete",
         requirement: "required",
         label: "Первые данные подтверждены",
-        benefit: "Штаб видит канонические факты.",
+        benefit: "FounderOS видит канонические факты.",
         evidence: [
           {
             key: "canonical_records",
@@ -158,12 +158,12 @@ const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
         key: "headquarters",
         state: "complete",
         requirement: "required",
-        label: "Первый снимок штаба рассчитан",
+        label: "Первая картина компании рассчитана",
         benefit: "Компания уже видна как единая система.",
         evidence: [
           {
             key: "snapshot",
-            label: "Снимок штаба",
+            label: "Картина компании",
             state: "complete",
             value: 1,
             precision: "exact"
@@ -200,7 +200,7 @@ const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
       value: 0,
       precision: "exact",
       empty_state: "Все источники в порядке",
-      target: "/connectors",
+      target: "/settings/integrations",
       action: ENABLED_ACTION
     },
     {

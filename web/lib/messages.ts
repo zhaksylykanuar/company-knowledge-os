@@ -19,50 +19,20 @@ function russianPlural(
 export const M = {
   app: {
     name: "founderOS",
-    shellMode: "Компания в движении",
+    shellMode: "AI-партнёр компании",
     metaTitle: "founderOS",
-    metaDescription: "Понятная карта компании, решений и источников"
+    metaDescription: "Второе мнение с проверяемой памятью о компании"
   },
 
   nav: {
     primaryLabel: "Основная навигация",
-    brandHomeLabel: "FounderOS — перейти в Штаб",
-    hq: "Штаб",
-    world: "Мир",
-    missions: "Миссии",
-    radars: "Радары",
-    backstage: "Системные разделы",
-    today: "Сегодня",
+    brandHomeLabel: "FounderOS — открыть текущую картину",
+    now: "Сейчас",
+    ask: "Спросить",
     company: "Компания",
-    decisions: "Решения",
-    sources: "Источники",
-    todayOverview: "Обзор дня",
-    companyMap: "Карта компании",
-    sourceOverview: "Все источники",
-    sourceProviders: "Источники данных",
-    todaySections: "Раздел Сегодня",
-    companySections: "Раздел Компания",
     primaryZones: "Основные зоны компании",
-    boundary: "Факты прежде выводов",
-    home: "Главная",
-    dashboard: "Штаб компании",
-    companyBrain: "Мир компании",
-    github: "GitHub",
-    jira: "Jira",
-    gmail: "Gmail",
-    drive: "Drive",
-    documents: "Документы",
-    connectors: "Коннекторы",
-    audit: "Аудит репо",
-    briefings: "Сводки",
-    actions: "Действия",
-    settings: "Настройки",
-    groups: {
-      command: "Командный центр",
-      management: "Управление",
-      sources: "Источники",
-      system: "Система"
-    }
+    boundary: "Память с доказательствами",
+    settings: "Настройки"
   },
 
   common: {
@@ -109,7 +79,7 @@ export const M = {
 
   companyBrainPage: {
     eyebrow: "Карта связей",
-    title: "Мир компании",
+    title: "Компания",
     description: "Нажмите на человека или компанию — справа откроется профиль.",
     dataLayerTitle: "Канонические данные",
     dataLayerIndex: "ДАННЫЕ",
@@ -117,330 +87,13 @@ export const M = {
       "Технический слой карты: работа, источники, нормализованные сущности и подтверждающие материалы без выдуманных связей."
   },
 
-  today: {
-    eyebrow: "Миссия дня",
-    title: "Сегодня",
-    description: "Один понятный шаг, который двигает компанию дальше.",
-    livePicture: "Живая картина",
-    loading: "Собираем картину компании…",
-    noWorkspace: "Компания ещё не создана",
-    cycleLabel: "Как FounderOS помогает двигать компанию",
-    cycle: {
-      signal: "Увидеть",
-      decide: "Решить",
-      change: "Изменить"
-    },
-    nextMove: "Следующий ход",
-    whyNow: "Почему сейчас",
-    sourceBoundary:
-      "FounderOS использует только сохранённые данные и ничего не отправляет без вашего подтверждения.",
-    openMove: "Открыть задачу",
-    retryMove: "Обновить картину",
-    signalsLabel: "Три сигнала компании",
-    signalsTitle: "Что держать в поле зрения",
-    signalUnavailable: "Не удалось проверить",
-    signalPartial: "Частично",
-    signalSources: "Источники",
-    signalSourcesDescription:
-      "Канонические записи, на которых строится картина компании.",
-    signalDecisions: "Решения",
-    signalDecisionsDescription: "Предложения, которые ждут решения человека.",
-    signalMap: "Карта",
-    signalMapDescription: "Новые люди и компании, требующие разбора.",
-    picturePartial:
-      "Картина неполная — отсутствующие данные не додумываются.",
-    pictureComplete: "Картина компании актуальна.",
-    moves: {
-      createCompanyTitle: "Создайте пространство компании",
-      createCompanyDescription:
-        "Сначала задайте основу: название компании и аккаунт владельца.",
-      createCompanyReason: "Без пространства нельзя безопасно привязать данные и решения.",
-      addSourceTitle: "Добавьте первые данные",
-      addSourceDescription:
-        "Выберите GitHub для чтения или загрузите экспорт Jira, Gmail либо Drive. FounderOS покажет только то, что действительно сохранилось.",
-      addSourceReason:
-        "В канонической базе рабочего пространства пока нет ни одной исходной записи.",
-      reviewDecisionsTitle: "Разберите ожидающие решения",
-      reviewDecisionsDescription:
-        "Откройте предложения, проверьте доказательства и примите решение вручную.",
-      reviewDecisionsReason: "Есть предложения, которые ждут решения человека.",
-      observeDecisionsTitle: "Посмотрите решения команды",
-      observeDecisionsDescription:
-        "На этом шаге вам доступен просмотр: откройте предложения и изучите их основания.",
-      reviewMapTitle: "Разберите новых людей и компании",
-      reviewMapDescription:
-        "Подтвердите только те роли и отношения, которые вы действительно знаете.",
-      reviewMapReason: "Карта нашла кандидатов, но ещё не считает их подтверждёнными фактами.",
-      observeMapTitle: "Посмотрите новые сигналы на карте",
-      observeMapDescription:
-        "У вас режим просмотра: откройте карту и изучите неподтверждённые сигналы.",
-      createBriefingTitle: "Соберите первую сводку",
-      createBriefingDescription:
-        "Превратите уже сохранённые сигналы в короткий обзор для основателя.",
-      createBriefingReason: "Для этой компании ещё нет сохранённой сводки.",
-      observeBriefingTitle: "Посмотрите историю сводок",
-      observeBriefingDescription:
-        "Вам доступен просмотр сохранённых сводок. Новую сводку может собрать участник, администратор или владелец.",
-      observeBriefingReason:
-        "Сохранённой сводки пока нет, а ваша роль не позволяет создавать новую.",
-      inviteTeamTitle: "Добавьте первого участника команды",
-      inviteTeamDescription:
-        "Разделите картину компании с человеком, который поможет принимать решения.",
-      inviteTeamReason: "Сейчас в пространстве только один участник.",
-      openBriefingTitle: "Проверьте свежую картину дня",
-      openBriefingDescription:
-        "Откройте последнюю сводку: если всё спокойно, следующий ход уже сделан.",
-      openBriefingReason: "Источники загружены, а срочных решений и новых кандидатов нет.",
-      refreshTitle: "Верните картину в фокус",
-      refreshDescription:
-        "Повторите чтение локального состояния. До этого FounderOS не будет угадывать следующий шаг.",
-      refreshReason: "Не все необходимые сигналы удалось прочитать.",
-      sourceReadOnlyTitle: "Посмотрите состояние данных",
-      sourceReadOnlyDescription:
-        "На экране источников вам доступен просмотр. Откройте его и узнайте, каких данных не хватает.",
-      sourceReadOnlyReason: "Сохранённых исходных записей пока нет. Добавить их может владелец или администратор."
-    }
-  },
-
-  livingHq: {
-    eyebrow: "Живой штаб",
-    fallbackCompany: "Штаб компании",
-    description:
-      "Что требует внимания, кто связан с компанией и какой ход имеет смысл сейчас.",
-    statusLabel: "Состояние штаба",
-    radars: "Радары",
-    radarConnected: (count: number) => `${count} подключено`,
-    radarAttention: "Нужна проверка",
-    radarEmpty: "Не подключены",
-    radarUnknown: "Статус неизвестен",
-    currentSnapshot: "Текущий снимок",
-    moveNow: "Ход сейчас",
-    aggregateBasis: "Основано на сводке",
-    referencedBasis: (count: number) =>
-      `${count} ${russianPlural(count, "ссылка", "ссылки", "ссылок")} на основания`,
-    readOnly: "Доступен просмотр",
-    contextEyebrow: "Контекст",
-    whyImportant: "Почему это важно",
-    whyFounderOs: "Почему FounderOS так считает?",
-    aggregateExplanation:
-      "Этот ход выбран по общим показателям компании. Конкретные факты без ссылок на исходные материалы не утверждаются.",
-    summaryBadge: "Сводка",
-    referencesBadge: "Ссылки",
-    noReferencesBadge: "Без ссылок",
-    changesEyebrow: "Сигналы",
-    changesTitle: "Что появилось в картине",
-    changesBoundary:
-      "Это текущий снимок, а не сравнение с прошлым визитом. Сигналы без подтверждённых или заявленных оснований сюда не попадают.",
-    noChanges: "В текущем снимке нет подтверждённых сигналов",
-    noChangesHint: "Подключите радар или обновите уже выбранный источник.",
-    changesUnavailable: "Не все сигналы удалось проверить",
-    changesUnavailableHint:
-      "Повторите обновление — отсутствие данных сейчас не означает, что изменений нет.",
-    moreSignals: "Ещё подтверждённых сигналов",
-    withoutEvidence: "Не показано без доказательств",
-    pulseEyebrow: "Контуры",
-    pulseTitle: "Кто уже виден",
-    pulseUnavailable:
-      "Контуры появятся после загрузки карты компании. Нули здесь не означают, что людей или связей нет.",
-    openWorld: "Открыть весь мир",
-    partial:
-      "Часть картины недоступна или ограничена окном — FounderOS не заполняет пробелы догадками.",
-    complete: "Текущий снимок собран из доступных подтверждённых данных.",
-    loading: "Собираем доказательную картину компании…",
-    timeUnknown: "Без даты",
-    viewModel: {
-      missions: {
-        createWorkspaceTitle: "Создайте штаб компании",
-        createWorkspaceDescription: "Сначала выберите рабочее пространство компании.",
-        createWorkspaceWhy:
-          "Без выбранной компании нельзя безопасно связать сигналы с её картиной.",
-        start: "Начать",
-        proposalFallbackDescription: "Предложение готово к проверке человеком.",
-        proposalWhy:
-          "У предложения есть ссылки на исходные материалы; проверка остаётся за человеком, а действие не запускается автоматически.",
-        reviewMission: "Рассмотреть миссию",
-        viewMission: "Посмотреть миссию",
-        connectSourceTitle: "Включите первый радар",
-        connectSourceDescription:
-          "Подключите один источник и безопасно загрузите первые данные.",
-        connectSourceReadOnlyDescription:
-          "Попросите владельца подключить первый источник компании.",
-        connectSourceWhy: "В этой компании пока нет загруженных исходных данных.",
-        connectGithub: "Подключить GitHub",
-        viewRadars: "Посмотреть радары",
-        reviewProposalsTitle: "Проверьте предложения решений",
-        reviewProposalsDescription: (count: number) =>
-          `На проверке: ${count}. Конкретная миссия не выбрана без ссылок на исходные материалы.`,
-        reviewProposalsWhy:
-          "Агрегат показывает очередь, но не доказывает содержание отдельного решения.",
-        reviewQueue: "Проверить очередь",
-        viewQueue: "Посмотреть очередь",
-        reviewWorldPersonTitle: (name: string) => `Кто такой ${name}?`,
-        reviewWorldOrganizationTitle: (name: string) =>
-          `Как связана компания ${name}?`,
-        reviewWorldDescription: "Подтвердите найденную связь или отклоните её.",
-        reviewWorldWhy:
-          "Связь найдена в текущей доказательной проекции Company World.",
-        reviewRelationship: "Проверить связь",
-        viewRelationship: "Посмотреть связь",
-        reviewCandidatesTitle: "Проверьте неподтверждённые связи",
-        reviewCandidatesDescription: (count: number) =>
-          `В текущей проекции ожидают проверки: ${count}.`,
-        reviewCandidatesWhy:
-          "Доступен только общий счётчик; конкретная связь без исходных материалов не утверждается.",
-        openWorld: "Открыть мир",
-        refreshTitle: "Обновите картину компании",
-        refreshDescription: "Часть обязательных фактов сейчас недоступна.",
-        refreshWhy:
-          "FounderOS не придумывает следующий ход при неполных входных данных.",
-        refreshAction: "Повторить проверку",
-        createBriefingTitle: "Соберите первую сводку",
-        createBriefingDescription: "Источники есть, но сохранённой сводки ещё нет.",
-        createBriefingWhy:
-          "Сохранённых сводок для этой компании пока нет.",
-        createBriefing: "Создать сводку",
-        viewBriefings: "Посмотреть сводки",
-        openBriefingTitle: "Откройте актуальную сводку",
-        openBriefingDescription:
-          "Критичных доказательных миссий в текущем снимке не найдено.",
-        openBriefingWhy:
-          "Источники и сводка доступны, а очередь решений и связей пуста.",
-        openBriefing: "Открыть сводку"
-      },
-      changes: {
-        proposalFallbackDescription: "Локальное предложение действия.",
-        touchpointFallbackTitle: "Письмо без темы",
-        personCandidateDescription:
-          "Новый кандидат на связь требует подтверждения.",
-        organizationCandidateDescription:
-          "Новая организация требует подтверждения связи.",
-        proposalStatus: {
-          approved: "Решение принято",
-          executed: "Миссия выполнена",
-          failed: "Ошибка выполнения",
-          proposed: "Новая миссия",
-          rejected: "Предложение отклонено",
-          fallback: "Изменилось предложение"
-        },
-        touchpointDirection: {
-          inbound: "Входящее касание",
-          mixed: "Двустороннее касание",
-          outbound: "Исходящее касание",
-          unknown: "Направление не определено"
-        },
-        touchpointDescription: (direction: string) => `${direction} по email.`
-      },
-      metrics: {
-        internalPeople: "Команда",
-        confirmedExternalPeople: "Подтверждённые контакты",
-        confirmedOrganizations: "Компании",
-        pendingConfirmations: "Нужно подтвердить",
-        touchpoints: "Касания в окне",
-        sourceRecords: "Исходные записи"
-      }
-    },
-    miniMap: {
-      emptyDetail: "Карта появится после получения первых подтверждённых данных.",
-      emptyTitle: "Карта ещё не собрана",
-      emptyDescription:
-        "Подключите радар или добавьте участников — здесь появятся реальные люди и связи.",
-      errorTitle: "Не удалось загрузить карту",
-      errorDescription:
-        "Данные не потеряны. Повторите проверку или откройте полный Мир компании.",
-      retry: "Повторить",
-      companyFallback: "Компания",
-      waitingData: "Ожидает данных",
-      companyCenter: "Центр компании",
-      employee: "Сотрудник",
-      organizationFallback: "Организация",
-      confirmedOrganization: "Подтверждённая компания",
-      unspecifiedRole: "Роль не указана",
-      confirmed: "Подтверждён",
-      externalContact: "Внешний контакт",
-      needsConfirmation: "Нужно подтвердить",
-      possibleOrganization: "Возможная компания",
-      possibleContact: "Возможный контакт",
-      companyDetail: (
-        internalPeople: number,
-        touchpoints: number,
-        touchpointsAreLowerBound: boolean
-      ) =>
-        `${internalPeople} в команде · ${touchpointsAreLowerBound ? "≥" : ""}${touchpoints} ${russianPlural(
-          touchpoints,
-          "касание",
-          "касания",
-          "касаний"
-        )}${touchpointsAreLowerBound ? " в показанном окне" : ""}`,
-      activeContour: "Активный контур",
-      eyebrow: "Живая карта",
-      title: "Мир компании",
-      description: "Только реальные участники и подтверждённые связи.",
-      legendLabel: "Обозначения карты",
-      legendConfirmed: "Подтверждено",
-      legendCandidate: "Нужно разобрать",
-      teamEmpty: "Команда появится после добавления участников.",
-      team: "Команда",
-      confirmedNetworkEmpty: "Подтверждённая сеть пока пуста.",
-      confirmedNetwork: "Подтверждённая сеть",
-      candidatesEmpty: "Новых кандидатов для разбора нет.",
-      candidatesEmptyInWindow:
-        "В показанном окне новых кандидатов для разбора нет.",
-      unknownZone: "Неизвестное",
-      noEvidence: "Доказательств пока нет",
-      moreNodes: (count: number, isLowerBound = false) =>
-        `Ещё ${isLowerBound ? "≥" : ""}${count} — в полном мире`,
-      openProfile: (label: string) => `Открыть профиль: ${label}`,
-      openFullProfile: "Открыть полный профиль",
-      roles: {
-        owner: "Владелец",
-        admin: "Администратор",
-        viewer: "Наблюдатель",
-        member: "Участник"
-      },
-      relationships: {
-        account_owner: "Владелец аккаунта",
-        advisor: "Советник",
-        contact: "Контакт",
-        decision_maker: "Принимает решение",
-        employee: "Сотрудник",
-        other: "Другая роль",
-        fallback: "Роль не указана"
-      },
-      organizationRelationships: {
-        customer: "Заказчик",
-        other: "Другая связь",
-        partner: "Партнёр",
-        prospect: "Потенциальный заказчик",
-        unknown: "Связь не указана",
-        vendor: "Поставщик",
-        fallback: "Связь не указана"
-      },
-      interactionLabel: (count: number, isLowerBound = false) =>
-        `${isLowerBound ? "≥" : ""}${count} ${russianPlural(
-          count,
-          "касание",
-          "касания",
-          "касаний"
-        )}${isLowerBound ? " в показанном окне" : ""}`,
-      peopleLabel: (count: number, isLowerBound = false) =>
-        `${isLowerBound ? "≥" : ""}${count} ${russianPlural(
-          count,
-          "человек",
-          "человека",
-          "человек"
-        )}${isLowerBound ? " в показанном окне" : ""}`,
-      evidenceWord: (count: number) =>
-        russianPlural(count, "доказательство", "доказательства", "доказательств")
-    }
-  },
-
   companyWorld: {
     eyebrow: "Операционная карта",
-    title: "Мир компании",
-    worldEyebrow: "Живой мир",
+    title: "Компания",
+    worldEyebrow: "Связи компании",
     worldDescription:
       "Команда, подтверждённые связи и новые сигналы в одной рабочей сцене.",
-    refreshWorld: "Обновить мир",
+    refreshWorld: "Обновить карту",
     badge: "Подтверждается источниками",
     intro:
       "Карта строится только из участников рабочего пространства и нормализованных источников. Внешние люди и компании остаются кандидатами до подтверждения.",
@@ -449,8 +102,8 @@ export const M = {
     boardDescription:
       "Компания находится в центре. Сплошной контур — подтверждённые люди и отношения; пунктирный контур — сигналы, которые ещё должен разобрать человек.",
     boardLegend: "Легенда стратегической карты",
-    zoneFilterLabel: "Показать область мира",
-    allContours: "Весь мир",
+    zoneFilterLabel: "Показать область компании",
+    allContours: "Вся компания",
     confirmedContour: "Подтверждённый контур",
     discoveryContour: "Требует разбора",
     operatingCenter: "Центр управления",
@@ -652,13 +305,6 @@ export const M = {
     },
     boundary:
       "Доступ только внутри рабочего пространства. Наблюдатель читает карту; роль «Участник» и выше может локально подтвердить либо отклонить кандидата. Домен письма не означает, что организация является заказчиком."
-  },
-
-  githubPage: {
-    eyebrow: "Источники",
-    title: "GitHub",
-    description:
-      "Подключение, репозиторий и текущая работа — без технической настройки."
   },
 
   githubAppSetup: {
@@ -886,7 +532,7 @@ export const M = {
     realReadReadinessTitle: "Готовность первого real read",
     realReadReadinessLabel: "Готовность GitHub App real-provider read run",
     realReadReadinessDescription:
-      "Сводка mirror’ит offline preflight: env presence, workspace-scoped installation connection и локальную repo surface. Она не запускает provider read/write.",
+      "Сводка повторяет локальную проверку настройки: наличие переменных, подключение установки к компании и доступные репозитории. Она не читает и не изменяет данные GitHub.",
     realReadStatusTitle: "Статус",
     realReadStatusDescription: "Можно ли запускать отдельный human-approved scoped read.",
     realReadReady: "Готово",
@@ -947,34 +593,6 @@ export const M = {
       "Для выбранного локального фильтра репозиториев нет."
   },
 
-  githubSync: {
-    eyebrow: "GitHub",
-    title: "Локальная синхронизация",
-    badgeNoLiveProvider: "Без живого провайдера",
-    loading: "Загрузка состояния подключения GitHub",
-    noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — синхронизировать нечего.",
-    stateUnavailableTitle: "Состояние синхронизации GitHub недоступно",
-    stateUnavailableDescription: "Панель не смогла загрузить состояние синхронизации GitHub.",
-    connectionRecordTitle: "Запись подключения",
-    connectionRecordMissing: "Отсутствует",
-    executionModeTitle: "Режим выполнения",
-    executionModeValue: "Только локально",
-    executionModeDescription: "Живой OAuth и выполнение у провайдера из этого интерфейса не включены.",
-    repoSourceTitle: "Источник репозиториев",
-    repoSourceAvailable: "Доступен",
-    repoSourceUnavailable: "Недоступен",
-    connectionRequiredTitle: "Требуется запись подключения GitHub",
-    connectionRequiredDescription:
-      "Живой OAuth ещё не включён. Этот элемент может нормализовать локальные данные GitHub после появления записи подключения GitHub в бэкенде.",
-    connectionNotReadyTitle: "Запись подключения GitHub не готова",
-    runSync: "Запустить локальную синхронизацию GitHub",
-    runningSync: "Идёт локальная синхронизация",
-    syncFailedTitle: "Локальная синхронизация GitHub не удалась",
-    syncFailedDescription: "Запрос локальной синхронизации GitHub не удался.",
-    noConnectionRecord: "В бэкенде нет записи подключения GitHub для этого рабочего пространства.",
-    connectionRecordFound: "Запись подключения GitHub найдена в бэкенде."
-  },
-
   githubWork: {
     eyebrow: "Работа",
     title: "Задачи и pull requests",
@@ -1013,44 +631,6 @@ export const M = {
     repositoryUnavailable: "Репозиторий недоступен",
     noExternalId: "Нет внешнего идентификатора",
     timestampUnknown: "Неизвестно"
-  },
-
-  selectedSync: {
-    eyebrow: "GitHub",
-    title: "Синхронизация выбранного репозитория",
-    badgeReadOnly: "Только чтение",
-    intro:
-      "Синхронизация выбранного репозитория только для чтения. Записи в GitHub не выполняются. Задачи и пулреквесты читаются из выбранных разрешённых репозиториев. Это не создаёт, не закрывает, не сливает и не комментирует элементы GitHub.",
-    noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — синхронизировать нечего.",
-    loading: "Загрузка состояния подключения GitHub",
-    unavailableTitle: "Синхронизация выбранного репозитория недоступна",
-    unavailableDescription: "Панель не смогла загрузить состояние подключения GitHub.",
-    connectionRequiredTitle: "Требуется подключение GitHub",
-    connectionRequiredDescription:
-      "Для синхронизации выбранного репозитория сначала нужно настроить подключение GitHub для этого рабочего пространства. Настройте подключение и повторите.",
-    repoLabel: "Репозиторий (владелец/репозиторий)",
-    repoPlaceholder: "владелец/репозиторий",
-    repoNote:
-      "Выбранные репозитории должны быть разрешены конфигурацией бэкенда. Этот интерфейс синхронизирует по одному явному репозиторию за раз и никогда не синхронизирует все репозитории организации.",
-    runIssues: "Запустить синхронизацию задач",
-    syncingIssues: "Синхронизация задач",
-    runPr: "Запустить синхронизацию пулреквестов",
-    syncingPr: "Синхронизация пулреквестов",
-    runBoth: "Синхронизировать задачи и пулреквесты",
-    syncingBoth: "Синхронизация задач и пулреквестов",
-    errorAllowlist: "Репозиторий не в списке разрешённых для выбранной синхронизации.",
-    errorPermission: "Ваша роль в рабочем пространстве не позволяет запускать синхронизацию выбранного репозитория. Требуется роль администратора.",
-    errorGeneric: "Запрос синхронизации выбранного репозитория не удался.",
-    errorTitleAllowlist: "Репозиторий не в списке разрешённых",
-    errorTitlePermission: "Недостаточно прав в рабочем пространстве",
-    errorTitleGeneric: "Синхронизация выбранного репозитория не удалась",
-    validationEmpty: "Укажите полное имя репозитория в виде владелец/репозиторий.",
-    validationFormat: "Репозиторий должен быть в формате владелец/репозиторий без пробелов.",
-    issueSummaryTitle: "Итог синхронизации задач",
-    noIssuesSynced: "Для выбранного репозитория записи задач не синхронизированы.",
-    prSummaryTitle: "Итог синхронизации пулреквестов",
-    noPrsSynced: "Для выбранного репозитория записи пулреквестов не синхронизированы.",
-    noWrites: "Записи в GitHub не выполнялись."
   },
 
   briefingsPage: {
@@ -1154,15 +734,15 @@ export const M = {
 
   actionsPage: {
     eyebrow: "Комната решений",
-    title: "Миссии",
+    title: "Решения",
     description: "Решите, что компания делает дальше — на основании фактов."
   },
 
   actionsPanel: {
     eyebrow: "Комната решений",
-    title: "Миссии",
+    title: "Решения",
     badgeLocalApproval: "Под контролем человека",
-    intro: "Сначала — миссии, которые ждут вашего решения.",
+    intro: "Сначала — решения, которые ждут вашего решения.",
     capabilityTitle: "Как это работает безопасно",
     loading: "Загрузка предложений действий",
     noWorkspaceDescription: "У этого аккаунта пока нет рабочего пространства — предложений нет.",
@@ -1170,17 +750,17 @@ export const M = {
     unsupportedDescription: "Бэкенд не сообщил о поддержке локальных предложений действий.",
     unavailableTitle: "Предложения действий недоступны",
     unavailableDescription: "Запрос предложений действий не удался.",
-    linkedProposalNotFoundTitle: "Миссия не найдена",
+    linkedProposalNotFoundTitle: "Предложение не найдено",
     linkedProposalNotFoundDescription:
-      "Эта миссия удалена, устарела или относится к другой компании.",
-    linkedProposalForbiddenTitle: "Нет доступа к миссии",
+      "Это предложение удалено, устарело или относится к другой компании.",
+    linkedProposalForbiddenTitle: "Нет доступа к предложению",
     linkedProposalForbiddenDescription:
-      "У вашей роли нет доступа к миссии по этой ссылке.",
+      "У вашей роли нет доступа к предложению по этой ссылке.",
     linkedProposalUnavailableDescription:
-      "Не удалось безопасно открыть миссию по ссылке. Повторите попытку.",
+      "Не удалось безопасно открыть предложение по ссылке. Повторите попытку.",
     linkedProposalOutsideFilter:
-      "Миссия из ссылки показана поверх текущего фильтра.",
-    emptyTitle: "Миссий пока нет",
+      "Предложение из ссылки показано поверх текущего фильтра.",
+    emptyTitle: "Решений пока нет",
     emptyDescription: "Добавьте первый следующий ход компании.",
     summaryLabel: "Сводка предложений",
     proposedTitle: "Ждут решения",
@@ -1194,7 +774,7 @@ export const M = {
     readinessTitle: "Техническая готовность",
     readinessLabel: "Сводка готовности предложений к локальной проверке и предпросмотру",
     readinessDescription:
-      "Сводка считается по уже загруженным локальным предложениям. Она не запускает execute, sync, provider calls или LLM.",
+      "Сводка считается только по уже загруженным предложениям. Она не запускает внешние действия, синхронизацию или ИИ.",
     readinessPendingTitle: "Ждут ответа",
     readinessPendingDescription: "Эти предложения нужно принять или отклонить.",
     readinessPreviewTitle: "Готовы к проверке",
@@ -1209,12 +789,12 @@ export const M = {
       "Эта сводка только помогает выбрать следующий локальный шаг; внешнее выполнение здесь не запускается.",
     filterTitle: "Показать",
     filterLabel: "Фильтр локальных предложений",
-    filterDescription: "Выберите, на каких миссиях сосредоточиться сейчас.",
+    filterDescription: "Выберите, на каких решениях сосредоточиться сейчас.",
     filterProposed: "Нужно решение",
     filterApproved: "Одобрено",
     filterRejected: "Отклонено",
     filterAll: "Все",
-    originFilterTitle: "Откуда появилась миссия",
+    originFilterTitle: "Откуда появилось решение",
     originFilterLabel: "Фильтр источника локальных предложений",
     originFilterDescription: "Показываем происхождение, не выдавая его за решение человека.",
     originFilterAll: "Все источники",
@@ -1240,9 +820,9 @@ export const M = {
     bulkRejectSelected: "Отклонить выбранные локально",
     bulkRejecting: "Отклонение выбранных",
     bulkSelectProposal: "Выбрать для локальной проверки",
-    listTitle: "Миссии компании",
-    noProposals: "В загруженной очереди миссий нет.",
-    noProposalsForFilter: "В выбранном фокусе миссий нет.",
+    listTitle: "Решения компании",
+    noProposals: "В загруженной очереди решений нет.",
+    noProposalsForFilter: "В выбранном фокусе решений нет.",
     metaTarget: "Цель",
     metaAction: "Действие",
     metaStatus: "Статус",
@@ -1302,7 +882,7 @@ export const M = {
   },
 
   actionCreate: {
-    typeLabel: "Тип миссии",
+    typeLabel: "Тип решения",
     typeGithubIssue: "Будущая задача GitHub",
     typeInternalTodo: "Внутренняя задача",
     titleLabel: "Заголовок",
@@ -1313,9 +893,9 @@ export const M = {
     repositoryPlaceholder: "владелец/репозиторий",
     issueBodyLabel: "Текст задачи",
     issueBodyPlaceholder: "Текст для предлагаемой будущей задачи GitHub",
-    submit: "Добавить миссию",
-    submitting: "Добавляем миссию",
-    note: "Миссия сохранится в FounderOS. Она не создаст задачу GitHub и не вызовет внешний сервис."
+    submit: "Добавить решение",
+    submitting: "Добавляем решение",
+    note: "Решение сохранится в FounderOS. Оно не создаст задачу GitHub и не вызовет внешний сервис."
   },
 
   actionExecution: {
@@ -1442,36 +1022,6 @@ export const M = {
     roleViewer: "Наблюдатель"
   },
 
-  connectors: {
-    eyebrow: "Разведка",
-    title: "Источники компании",
-    description: "Подключите место, где уже живёт работа команды.",
-    badgeReadOnly: "Безопасное чтение",
-    loading: "Загрузка коннекторов",
-    noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — коннекторы недоступны.",
-    unavailableTitle: "Коннекторы недоступны",
-    unavailableDescription: "Не удалось загрузить реестр коннекторов.",
-    summaryLabel: "Сводка коннекторов",
-    totalTitle: "Источников",
-    totalDescription: "В текущем наборе FounderOS.",
-    availableTitle: "Можно открыть",
-    availableDescription: "Источник уже доступен в приложении.",
-    plannedTitle: "Позже",
-    plannedDescription: "Источник пока готовится.",
-    connectedTitle: "Подключено",
-    connectedDescription: "Есть хотя бы одно подключение в рабочем пространстве.",
-    listLabel: "Список коннекторов",
-    statusAvailable: "Можно подключить",
-    statusPlanned: "Скоро",
-    connectionsLabel: "Подключений",
-    connectedLabel: "Активных",
-    manageLink: "Посмотреть источник",
-    plannedHint: "Этот источник появится позже.",
-    boundaryNote:
-      "Реестр вычисляется локально из уже сохранённых записей подключений. Он не вызывает провайдеров, не запускает синхронизацию, не делает external writes и не читает секреты."
-  },
-
   documents: {
     eyebrow: "Документы",
     title: "Внутренние документы",
@@ -1549,136 +1099,6 @@ export const M = {
     versionLabel: (version: number) => `Версия ${version}`
   },
 
-  drive: {
-    eyebrow: "Google Drive",
-    title: "Drive files",
-    description:
-      "Минимальный Google Drive-коннектор MVP: локальный импорт file metadata JSON в canonical SourceRecord (без raw document body) без provider calls, sync, external writes и LLM.",
-    badgeLocalOnly: "Local-only",
-    loading: "Загрузка Drive files",
-    noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — Drive-коннектор недоступен.",
-    unavailableTitle: "Drive files недоступны",
-    unavailableDescription: "Не удалось загрузить локальные Drive files.",
-    summaryLabel: "Сводка Drive",
-    totalTitle: "Всего",
-    totalDescription: "Локально импортированные Drive files.",
-    sharedTitle: "Shared",
-    sharedDescription: "Files с shared/public доступом в импортированной metadata.",
-    notSharedTitle: "Не shared",
-    notSharedDescription: "Files без shared/public признака.",
-    emptyTitle: "Drive files ещё не импортированы",
-    emptyDescription:
-      "Вставьте JSON export/payload с Drive files. FounderOS сохранит только безопасную metadata-проекцию без содержимого документов.",
-    listLabel: "Список Drive files",
-    ownerLabel: "Owner",
-    mimeTypeLabel: "MIME type",
-    modifiedLabel: "Изменено",
-    evidenceLabel: "Evidence refs",
-    sharedBadge: "Shared",
-    importTitle: "Локальный импорт Drive JSON",
-    importDescription:
-      "Поддерживается массив files или объект { files: [...] }. Импорт пишет только локальную БД и не вызывает Drive API.",
-    importTextareaLabel: "Drive JSON",
-    importPlaceholder:
-      '[{"id":"file-1","name":"Private beta checklist","mimeType":"application/vnd.google-apps.document","webViewLink":"https://drive.google.com/file/d/file-1/view"}]',
-    importSubmit: "Импортировать локально",
-    importing: "Импорт…",
-    importSuccess: (imported: number, failed: number) =>
-      `Импортировано: ${imported}. Ошибок: ${failed}.`,
-    importParseError: "JSON должен быть массивом files или объектом с полем files.",
-    boundaryNote:
-      "Drive-коннектор сейчас local-only: provider_calls=false, sync_started=false, external_writes=false, llm=false, секреты и raw document body не читаются/не сохраняются.",
-    warningsTitle: "Предупреждения"
-  },
-
-  gmail: {
-    eyebrow: "Gmail",
-    title: "Gmail messages",
-    description:
-      "Минимальный Gmail-коннектор MVP: локальный импорт message JSON в canonical SourceRecord (без raw body) без provider calls, sync, external writes и LLM.",
-    badgeLocalOnly: "Local-only",
-    loading: "Загрузка Gmail messages",
-    noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — Gmail-коннектор недоступен.",
-    unavailableTitle: "Gmail messages недоступны",
-    unavailableDescription: "Не удалось загрузить локальные Gmail messages.",
-    summaryLabel: "Сводка Gmail",
-    totalTitle: "Всего",
-    totalDescription: "Локально импортированные Gmail messages.",
-    unreadTitle: "Непрочитанные",
-    unreadDescription: "Messages с меткой UNREAD.",
-    readTitle: "Прочитанные",
-    readDescription: "Messages без метки UNREAD.",
-    emptyTitle: "Gmail messages ещё не импортированы",
-    emptyDescription:
-      "Вставьте JSON export/payload с Gmail messages. FounderOS сохранит только безопасную нормализованную проекцию без тела письма.",
-    listLabel: "Список Gmail messages",
-    fromLabel: "От",
-    labelsLabel: "Метки",
-    receivedLabel: "Получено",
-    evidenceLabel: "Evidence refs",
-    unreadBadge: "Непрочитано",
-    importTitle: "Локальный импорт Gmail JSON",
-    importDescription:
-      "Поддерживается массив messages или объект { messages: [...] }. Импорт пишет только локальную БД и не вызывает Gmail API.",
-    importTextareaLabel: "Gmail JSON",
-    importPlaceholder:
-      '[{"id":"msg-1","subject":"Investor follow-up","from":"founder@example.com","labels":["INBOX","UNREAD"]}]',
-    importSubmit: "Импортировать локально",
-    importing: "Импорт…",
-    importSuccess: (imported: number, failed: number) =>
-      `Импортировано: ${imported}. Ошибок: ${failed}.`,
-    importParseError: "JSON должен быть массивом messages или объектом с полем messages.",
-    boundaryNote:
-      "Gmail-коннектор сейчас local-only: provider_calls=false, sync_started=false, external_writes=false, llm=false, секреты и raw body не читаются/не сохраняются.",
-    warningsTitle: "Предупреждения"
-  },
-
-  jira: {
-    eyebrow: "Jira",
-    title: "Jira issues",
-    description:
-      "Минимальный Jira-коннектор MVP: локальный импорт issue JSON в canonical SourceRecord/Task без provider calls, sync, external writes и LLM.",
-    badgeLocalOnly: "Local-only",
-    loading: "Загрузка Jira issues",
-    noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — Jira-коннектор недоступен.",
-    unavailableTitle: "Jira issues недоступны",
-    unavailableDescription: "Не удалось загрузить локальные Jira issues.",
-    summaryLabel: "Сводка Jira",
-    totalTitle: "Всего",
-    totalDescription: "Локально импортированные Jira issues.",
-    notDoneTitle: "Не завершено",
-    notDoneDescription: "Issues без done/closed/resolved статуса.",
-    doneTitle: "Done",
-    doneDescription: "Issues со статусом done/closed/resolved.",
-    emptyTitle: "Jira issues ещё не импортированы",
-    emptyDescription:
-      "Вставьте JSON export/payload с Jira issues. FounderOS сохранит только безопасную нормализованную проекцию.",
-    listLabel: "Список Jira issues",
-    keyLabel: "Ключ",
-    statusLabel: "Статус",
-    priorityLabel: "Приоритет",
-    dueDateLabel: "Due date",
-    updatedLabel: "Обновлено",
-    evidenceLabel: "Evidence refs",
-    importTitle: "Локальный импорт Jira JSON",
-    importDescription:
-      "Поддерживается массив issues или объект { issues: [...] }. Импорт пишет только локальную БД и не вызывает Jira API.",
-    importTextareaLabel: "Jira JSON",
-    importPlaceholder:
-      '[{"key":"FOS-123","summary":"Review onboarding","status":"To Do","url":"https://jira.example/browse/FOS-123"}]',
-    importSubmit: "Импортировать локально",
-    importing: "Импорт…",
-    importSuccess: (imported: number, failed: number) =>
-      `Импортировано: ${imported}. Ошибок: ${failed}.`,
-    importParseError: "JSON должен быть массивом issues или объектом с полем issues.",
-    boundaryNote:
-      "Jira-коннектор сейчас local-only: provider_calls=false, sync_started=false, external_writes=false, llm=false, секреты не читаются.",
-    warningsTitle: "Предупреждения"
-  },
-
   evidence: {
     eyebrow: "Источники",
     title: "Детали источника",
@@ -1696,234 +1116,6 @@ export const M = {
       "Источник по умолчанию из первого видимого предложения. Выберите другой, чтобы закрепить его.",
     contextManual: "Источник выбран вручную. Нажмите «Закрыть», чтобы вернуться к варианту по умолчанию.",
     countLabel: "Источников у предложения"
-  },
-
-  sourceCoverage: {
-    eyebrow: "Покрытие источников",
-    title: "Что FounderOS уже знает",
-    badgeDeterministic: "Без ИИ / без provider calls",
-    loading: "Загрузка покрытия источников",
-    noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — покрытие источников недоступно.",
-    unavailableTitle: "Покрытие источников недоступно",
-    unavailableDescription: "Панель не смогла загрузить покрытие источников.",
-    emptyTitle: "Источники ещё не загружены",
-    emptyDescription:
-      "В этом рабочем пространстве пока нет канонических записей. Подготовьте локальную поверхность источников или запустите подтверждённую read-only синхронизацию позже.",
-    intro:
-      "Сводка показывает только уже сохранённые канонические данные рабочего пространства. Живые provider-запросы и LLM здесь не запускаются.",
-    summaryLabel: "Сводка покрытия источников",
-    repositoriesTitle: "Repo",
-    repositoriesDescription:
-      "Канонические GitHub-репозитории, уже сохранённые в рабочем пространстве.",
-    workTitle: "Работа",
-    workDescription: "Открытые задачи и PR из канонического GitHub-пути.",
-    evidenceTitle: "Evidence",
-    evidenceDescription: "Источник-ссылки, возвращённые для текущей выборки Company Brain.",
-    sourceRecordsTitle: "Source records",
-    sourceRecordsDescription:
-      "Все canonical SourceRecord rows по GitHub/Jira/Gmail/Drive в локальной БД.",
-    modeTitle: "Режим",
-    modeDescription: "Текущий экран читает локальную БД и не делает live provider calls.",
-    modeLive: "Live",
-    modeLocal: "Local DB",
-    detailsLabel: "Детали покрытия источников",
-    detailsTitle: "Статус источников",
-    repositoriesLabel: "GitHub репозитории",
-    repositoriesEmpty: "Канонические repo rows пока отсутствуют.",
-    liveProviderLabel: "Живой провайдер",
-    liveProviderEnabledDescription:
-      "Backend capability сообщает, что live provider sync доступен, но этот экран сам его не запускает.",
-    liveProviderDeferredDescription:
-      "Real GitHub provider read отложен и запускается только отдельным подтверждённым действием.",
-    llmLabel: "LLM / AI",
-    llmEnabledDescription:
-      "Capability включён, но этот экран не генерирует текст и не мутирует данные через LLM.",
-    llmOffDescription:
-      "LLM briefing/extraction сейчас выключены; экран полностью детерминированный.",
-    evidenceLabel: "Evidence refs",
-    evidenceEmpty:
-      "Для текущей выборки Company Brain отдельные source refs не вернулись; unsupported claims не добавляются.",
-    statusReady: "Готово",
-    statusEmpty: "Пусто",
-    statusDeferred: "Отложено",
-    statusEnabled: "Включено",
-    statusOff: "Выключено",
-    statusNeedsEvidence: "Нужно evidence",
-    breakdownLabel: "Разбивка покрытия источников",
-    breakdownTitle: "Что уже покрыто",
-    closedWorkTitle: "Закрытая работа",
-    closedWorkDescription:
-      "Закрытые задачи и слитые PR из канонического GitHub-пути.",
-    recentTitle: "Недавняя активность",
-    recentDescription:
-      "Недавно обновлённые задачи/PR в текущей выборке Company Brain.",
-    evidenceKindsTitle: "Evidence по типу",
-    evidenceKindsDescription:
-      "Локальная разбивка уже полученных source refs по типу (kind). Без provider calls и без LLM.",
-    evidenceKindsEmpty:
-      "Типы evidence пока недоступны: отдельные source refs не вернулись.",
-    sourceRecordsByProviderTitle: "Source records по провайдеру",
-    sourceRecordsByTypeTitle: "Source records по типу",
-    sourceRecordsEmpty:
-      "Локальные SourceRecord rows по коннекторам пока отсутствуют.",
-    nextStepsLabel: "Следующие шаги покрытия источников",
-    nextStepsTitle: "Что проверить дальше",
-    nextStepDataLabel: "Каноническая поверхность",
-    nextStepDataMissingDescription:
-      "Сначала нужен хотя бы один canonical repo row. Подготовьте локальную поверхность источников или запустите отдельно подтверждённый scoped read-only sync.",
-    nextStepEvidenceLabel: "Evidence gaps",
-    nextStepEvidenceReadyDescription:
-      "Evidence refs есть у текущей выборки; unsupported claims не добавляются.",
-    nextStepEvidenceMissingDescription:
-      "Company Brain вернул данные без source refs. Следующий шаг — восстановить evidence перед любыми выводами или действиями.",
-    nextStepWorkLabel: "Открытая работа",
-    nextStepNoOpenWorkDescription:
-      "Открытой работы в текущей canonical выборке нет; можно перейти к локальному readiness checklist.",
-    nextStepProviderLabel: "Live provider read",
-    nextStepProviderEnabledDescription:
-      "Capability доступен, но запуск остаётся отдельным подтверждённым scoped действием, а не автоматикой dashboard.",
-    nextStepProviderDeferredDescription:
-      "Real GitHub provider read отложен; dashboard только показывает локальную картину и не запускает sync.",
-    nextStepAiLabel: "AI boundary",
-    nextStepAiEnabledDescription:
-      "Capability включён, но coverage next steps остаются deterministic и не генерируют новые claims.",
-    nextStepAiOffDescription:
-      "LLM выключен; любые будущие AI outputs должны быть strict JSON, validated and evidence-backed.",
-    statusNeedsData: "Нужны данные",
-    statusReview: "К разбору",
-    statusBoundary: "Boundary"
-  },
-
-  repoAudit: {
-    eyebrow: "Аудит репозиториев",
-    title: "Полный аудит всех репозиториев",
-    badgeDeterministic: "Deterministic / read-only / no external writes",
-    loading: "Загрузка аудита репозиториев",
-    noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — аудит репозиториев недоступен.",
-    unavailableTitle: "Аудит репозиториев недоступен",
-    unavailableDescription: "Панель не смогла загрузить детерминированный аудит репозиториев.",
-    emptyTitle: "Аудит репозиториев пуст",
-    emptyDescription:
-      "Локальный снимок GitHub discovery не дал репозиториев для аудита. Подготовьте снимок и вернитесь сюда.",
-    intro:
-      "Детерминированный аудит всех репозиториев организации из локального снимка discovery. Он вычисляется локально: без сетевых вызовов, LLM и записей во внешние сервисы. Отдельный полный аудит другой моделью можно импортировать позже как результат.",
-    summaryLabel: "Сводка аудита репозиториев",
-    guardrailsTitle: "Границы аудита",
-    guardrailsSummary:
-      "preview-only, вычислено локально, БД не менялась, сетевых вызовов нет, внешних записей нет.",
-    snapshotTitle: "Локальный снимок",
-    snapshotUnavailable: "Локальный снимок discovery недоступен.",
-    reposTitle: "Репозитории",
-    reposDescription: "Репозитории, вычисленные из локального снимка discovery.",
-    riskTitle: "Риск-флаги",
-    riskDescription: "Суммарные детерминированные риск-флаги по всем репозиториям.",
-    listTitle: "Репозитории под аудитом",
-    listLabel: "Список репозиториев под аудитом",
-    focusLabel: "Фильтр аудита репозиториев",
-    focusTitle: "Фокус аудита",
-    focusDescription:
-      "Фильтр работает только по уже вычисленному аудиту и не запускает сетевые вызовы, provider-запросы или LLM.",
-    focusAll: "Все",
-    focusRisks: "С рисками",
-    focusStale: "Неактивные",
-    focusNeedsConfirm: "Нужно подтверждение",
-    noReposForFilter: "Для выбранного фильтра репозиториев нет.",
-    metaVisibility: "Видимость",
-    metaActivity: "Активность",
-    metaArea: "Область-кандидат",
-    metaStack: "Стек",
-    metaReadme: "README",
-    metaTests: "Тесты",
-    metaCi: "CI",
-    metaEvidence: "Источники",
-    risksLabel: "Риск-флаги",
-    unknownsLabel: "Неизвестно",
-    createAction: "Создать локальное действие из аудита",
-    creatingAction: "Создание локального действия",
-    actionAlreadyCreated: "Действие уже создано",
-    createActionSuccess:
-      "Локальное действие из аудита создано. Проверьте его в блоке «Действия» перед одобрением.",
-    createActionError: "Не удалось создать локальное действие из аудита.",
-    openActions: "Открыть действия",
-    noRisks: "Детерминированные риск-флаги не обнаружены.",
-    linkedActionsTitle: "Локальные действия из аудита",
-    linkedActionsEmpty:
-      "По репозиториям аудита ещё нет локальных предложений действий.",
-    boundaryNote:
-      "Read-only: аудит и создание локального действия не пишут во внешние сервисы, не вызывают провайдеров и не используют LLM.",
-    importTitle: "Импорт результата внешнего аудита",
-    importDescription:
-      "Вставьте JSON от другой модели, чтобы превратить findings в локальные internal_todo proposals. Поддерживается массив findings или объект { findings: [...] }.",
-    importLabel: "JSON findings",
-    importPlaceholder:
-      "[{\"repository_full_name\":\"qtwin-io/base-collector\",\"title\":\"Проверить CI\",\"summary\":\"CI не найден\",\"risks\":[\"ci_not_detected\"],\"evidence_refs\":[\"audit:base-collector:ci\"]}]",
-    importSubmit: "Импортировать локальные действия",
-    importing: "Импорт локальных действий",
-    importBoundary:
-      "Импорт пишет только локальные ActionProposal rows; внешние сервисы, provider calls и LLM не запускаются. Secret-like fragments в известных полях редактируются.",
-    importInvalidJson: "JSON импорта не распознан.",
-    importNoFindings:
-      "Импорт не содержит валидных findings с repository_full_name в формате owner/repo и evidence_refs.",
-    importFailed: "Импорт внешнего аудита не удался.",
-    importPartialFailure:
-      "Часть findings не удалось сохранить локально; успешные local proposals сохранены.",
-    importPreviewTitle: "Предпросмотр findings перед импортом",
-    importPreviewEmpty:
-      "Вставьте JSON выше, чтобы увидеть предпросмотр findings перед импортом.",
-    importPreviewValidBadge: "Готово к импорту",
-    importPreviewInvalidBadge: "Не пройдёт валидацию",
-    importSelectAllValid: "Выбрать все валидные",
-    importClearSelection: "Снять выбор",
-    importSelectFinding: "Выбрать для импорта",
-    importNoValidSelected:
-      "Не выбрано ни одного валидного finding для импорта.",
-    importBackendFailureLabel: "Бэкенд отклонил finding",
-    importIssueNotObject: "Элемент не является объектом finding.",
-    importIssueRepoFormat:
-      "repository_full_name должен быть в формате owner/repo.",
-    importIssueEvidence: "Нужен хотя бы один evidence_ref."
-  },
-
-  repoAuditOverview: {
-    eyebrow: "Аудит репозиториев",
-    title: "Обзор аудита и локальных действий",
-    badge: "Deterministic / read-only",
-    loading: "Загрузка обзора аудита репозиториев",
-    noWorkspaceDescription:
-      "У этого аккаунта пока нет рабочего пространства — обзор аудита недоступен.",
-    unavailableTitle: "Обзор аудита недоступен",
-    unavailableDescription:
-      "Панель не смогла загрузить детерминированный аудит репозиториев.",
-    intro:
-      "Сводка по детерминированному аудиту всех репозиториев и локальным действиям, созданным из аудита. Считается локально из уже загруженных данных: без сетевых вызовов, provider-запросов, external writes и LLM.",
-    summaryLabel: "Сводка обзора аудита",
-    reposTitle: "Репозитории",
-    reposDescription: "Репозитории в детерминированном аудите из локального снимка discovery.",
-    riskTitle: "Риск-флаги",
-    riskDescription: "Суммарные детерминированные риск-флаги по всем репозиториям.",
-    snapshotTitle: "Локальный снимок",
-    snapshotDescription: "Репозитории в текущем снимке GitHub discovery.",
-    actionsTitle: "Действия из аудита",
-    actionsDescription: "Локальные предложения, созданные из аудита (детерминированные + импортированные).",
-    actionsBreakdownLabel: "Действия из аудита по источнику",
-    actionsDeterministicTitle: "Детерминированные",
-    actionsDeterministicDescription:
-      "Локальные действия из детерминированного аудита репозиториев (source=repo_audit).",
-    actionsImportedTitle: "Импортированные",
-    actionsImportedDescription:
-      "Локальные действия из импортированного внешнего аудита (source=repo_audit_import).",
-    actionsProposedTitle: "Нужно решение",
-    actionsProposedDescription: "Действия из аудита в статусе «предложено», ожидающие локальной проверки.",
-    boundaryNote:
-      "Read-only: обзор не пишет во внешние сервисы, не вызывает провайдеров и не использует LLM.",
-    openAudit: "Открыть аудит репозиториев",
-    openAuditActions: "Открыть действия из аудита",
-    openDeterministicActions: "Детерминированные действия",
-    openImportedActions: "Импортированные действия",
-    emptyActionsHint:
-      "Локальных действий из аудита пока нет. Создайте их на странице аудита из per-repo фактов или импорта внешнего аудита."
   },
 
   companyBrain: {

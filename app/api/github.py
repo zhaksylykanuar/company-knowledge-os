@@ -1616,7 +1616,7 @@ def _raise_github_setup_http_error(exc: GitHubAppSetupError) -> None:
 
 def _github_setup_return_redirect() -> RedirectResponse:
     return RedirectResponse(
-        url="/github#github-setup",
+        url="/settings/integrations/github#github-setup",
         status_code=status.HTTP_303_SEE_OTHER,
         headers={
             "Cache-Control": "no-store",

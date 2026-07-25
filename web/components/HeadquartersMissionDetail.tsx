@@ -97,7 +97,7 @@ export function HeadquartersMissionDetail({
         </section>
       ) : null}
 
-      <EvidenceList evidence={mission.evidence_refs} heading="Основания миссии" />
+      <EvidenceList evidence={mission.evidence_refs} heading="Основания ситуации" />
 
       {mission.proposal_id && onOpenDecision ? (
         <button

@@ -556,7 +556,7 @@ function ConnectorConfigurationPanel({
                 <strong>GitHub App</strong>
                 <span>Безопасный способ с выбором конкретных репозиториев.</span>
               </div>
-              <Link className="button" href="/github">
+              <Link className="button" href="/settings/integrations/github">
                 {managedGitHub ? "Открыть GitHub" : "Подключить GitHub"}
               </Link>
             </div>

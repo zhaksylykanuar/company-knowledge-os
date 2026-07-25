@@ -957,7 +957,10 @@ async def test_oauth_denial_cancels_setup_without_provider_call_or_pkce_retentio
             )
 
         assert response.status_code == 303
-        assert response.headers["location"] == "/github#github-setup"
+        assert (
+            response.headers["location"]
+            == "/settings/integrations/github#github-setup"
+        )
         assert "untrusted provider text" not in response.text
         async with AsyncSessionLocal() as session:
             setup = await session.scalar(

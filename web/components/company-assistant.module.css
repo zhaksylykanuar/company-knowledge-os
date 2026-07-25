@@ -35,6 +35,84 @@
   gap: 16px;
 }
 
+.workspace {
+  display: grid;
+  gap: 28px;
+  margin: 34px auto 0;
+  max-width: 780px;
+  padding: 12px 0 80px;
+}
+
+.workspaceHeader {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.workspaceHeader > span {
+  align-items: center;
+  background: var(--ink);
+  border-radius: 18px;
+  color: var(--signal);
+  display: inline-flex;
+  font-size: 26px;
+  height: 58px;
+  justify-content: center;
+  width: 58px;
+}
+
+.workspaceHeader p,
+.workspaceHeader h1,
+.workspaceHeader div > span {
+  margin: 0;
+}
+
+.workspaceHeader p {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workspaceHeader h1 {
+  color: var(--ink);
+  font-size: clamp(30px, 5vw, 52px);
+  letter-spacing: -0.05em;
+  line-height: 1;
+  margin-top: 6px;
+}
+
+.workspaceHeader div > span {
+  color: var(--muted);
+  display: block;
+  font-size: 14px;
+  line-height: 1.55;
+  margin-top: 10px;
+  max-width: 620px;
+}
+
+.workspace .panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: var(--shadow-soft);
+  padding: clamp(18px, 4vw, 30px);
+}
+
+.workspace .form {
+  padding: 16px;
+}
+
+.workspace .form textarea {
+  min-height: 140px;
+}
+
+.workspace .answer > p {
+  font-size: 16px;
+}
+
 .intro {
   align-items: center;
   display: grid;
@@ -218,6 +296,35 @@
 .suggestions {
   display: grid;
   gap: 7px;
+}
+
+@media (max-width: 620px) {
+  .workspace {
+    gap: 20px;
+    margin-top: 16px;
+    padding-bottom: 28px;
+  }
+
+  .workspaceHeader {
+    align-items: start;
+    gap: 12px;
+  }
+
+  .workspaceHeader > span {
+    border-radius: 14px;
+    font-size: 20px;
+    height: 46px;
+    width: 46px;
+  }
+
+  .workspaceHeader h1 {
+    font-size: 34px;
+  }
+
+  .workspace .panel {
+    border-radius: 18px;
+    padding: 16px;
+  }
 }
 
 .suggestions button {

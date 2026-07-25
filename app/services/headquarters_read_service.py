@@ -782,7 +782,7 @@ async def _read_sources(
                         f"source_inventory:{workspace_id}:{provider}:{_digest(health_basis)[:16]}"
                     ),
                     label=f"{descriptor.name}: вычисленное состояние {primary_state}",
-                    target=descriptor.manage_path or "/connectors",
+                    target=descriptor.manage_path or "/settings/integrations",
                     source_key=provider,
                 )
             ]
@@ -1279,7 +1279,7 @@ def _build_mission_candidates(
                     reference_id=source["key"],
                     title=f"{source['name']} требует внимания",
                     summary=source["blocker"] or "Проверьте состояние источника.",
-                    why_now="Без исправления этого радара общий снимок может быть неполным.",
+                    why_now="Без восстановления этого источника картина компании может быть неполной.",
                     status=state,
                     severity="high" if state == "failed" else "medium",
                     confidence=1.0,
@@ -1309,7 +1309,7 @@ def _build_mission_candidates(
             _aggregate_evidence(
                 identity=f"source_inventory:{workspace_id}:empty",
                 label="В текущем снимке нет готовых канонических данных источников",
-                target="/connectors",
+                target="/settings/integrations",
             )
         ]
         candidates.append(
@@ -1320,18 +1320,18 @@ def _build_mission_candidates(
                     reference_type="setup",
                     reference_id="connect-source",
                     title="Подключите первый источник",
-                    summary="FounderOS нужен хотя бы один источник данных для полезного штаба.",
+                    summary="FounderOS нужен хотя бы один источник данных для полезной картины компании.",
                     why_now="Без данных платформа не может показать реальные решения и связи.",
                     status="setup",
                     severity="info",
                     confidence=1.0,
-                    next_step="Открыть радары и настроить первый источник.",
+                    next_step="Открыть настройки и подключить первый источник.",
                     source_keys=[],
                     evidence_refs=aggregate_evidence,
                     action=_action(
                         kind="manage_source",
-                        label="Настроить источник" if can_manage else "Открыть радары",
-                        target="/connectors",
+                        label="Настроить источник" if can_manage else "Открыть настройки",
+                        target="/settings/integrations",
                         enabled=can_manage,
                         disabled_reason=(
                             None
@@ -1525,15 +1525,15 @@ def _build_pulse(
         },
         {
             "key": "sources_attention",
-            "label": "Радары требуют внимания",
+            "label": "Источники требуют внимания",
             "value": sources_attention,
             "precision": "exact",
             "empty_state": "Настроенные источники не требуют внимания.",
-            "target": "/connectors",
+            "target": "/settings/integrations",
             "action": _action(
                 kind="manage_sources",
-                label="Открыть радары",
-                target="/connectors",
+                label="Открыть настройки",
+                target="/settings/integrations",
                 enabled=True,
             ),
         },
@@ -1672,7 +1672,7 @@ def _build_onboarding(
                 label=(
                     "Управлять источниками" if source_state == "complete" else "Подключить источник"
                 ),
-                target="/connectors",
+                target="/settings/integrations",
                 enabled=can_manage_source,
                 disabled_reason=(
                     None
@@ -1686,7 +1686,7 @@ def _build_onboarding(
             "requirement": "required",
             "label": "Первые данные приняты",
             "state": canonical_data_state,
-            "benefit": "Штаб сможет показывать реальные сигналы, людей и работу.",
+            "benefit": "FounderOS сможет показывать реальные сигналы, людей и работу.",
             "evidence": [
                 _onboarding_fact(
                     key="canonical_records",
@@ -1705,7 +1705,11 @@ def _build_onboarding(
                     if canonical_data_state == "complete"
                     else "Получить первые данные"
                 ),
-                target=("/company-brain" if canonical_data_state == "complete" else "/connectors"),
+                target=(
+                    "/company-brain"
+                    if canonical_data_state == "complete"
+                    else "/settings/integrations"
+                ),
                 enabled=(canonical_data_state == "complete" or can_import_source),
                 disabled_reason=(
                     None
@@ -1763,19 +1767,19 @@ def _build_onboarding(
         {
             "key": "headquarters",
             "requirement": "required",
-            "label": "Штаб готов",
+            "label": "FounderOS готов",
             "state": "complete",
             "benefit": "FounderOS уже собрал согласованный снимок состояния компании.",
             "evidence": [
                 _onboarding_fact(
                     key="headquarters_snapshot",
-                    label="Успешный снимок штаба",
+                    label="Актуальная картина компании",
                     value=1,
                 )
             ],
             "action": _action(
                 kind="view_headquarters",
-                label="Войти в штаб",
+                label="Открыть текущую картину",
                 target="/dashboard",
                 enabled=True,
             ),
@@ -1874,7 +1878,7 @@ def _source_action(
     return _action(
         kind=f"manage_{provider}",
         label=label_by_state[primary_state],
-        target=target or "/connectors",
+        target=target or "/settings/integrations",
         enabled=enabled,
         disabled_reason=(
             None if enabled else "Управление источником доступно администратору или владельцу."
@@ -2078,7 +2082,11 @@ def _connection_evidence(row: Any) -> dict[str, Any]:
         kind="integration_connection",
         source_key=source_key,
         label=(_clean_text(row.display_name) or f"{source_key} connection")[:255],
-        target=f"/{source_key}" if source_key in KNOWN_SOURCE_KEYS else "/connectors",
+        target=(
+            f"/settings/integrations?provider={source_key}"
+            if source_key in KNOWN_SOURCE_KEYS
+            else "/settings/integrations"
+        ),
         provenance="integration_connection",
     )
 

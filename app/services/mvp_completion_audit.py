@@ -110,7 +110,7 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
         category="mvp_requirement",
         evidence=(
             EvidenceCheck("app/api/connectors.py"),
-            EvidenceCheck("web/app/connectors/page.tsx"),
+            EvidenceCheck("web/app/settings/integrations/page.tsx"),
         ),
     ),
     AuditItem(
@@ -119,7 +119,7 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
         category="mvp_requirement",
         evidence=(
             EvidenceCheck("app/api/github.py", "/connections/app-installation"),
-            EvidenceCheck("web/app/github/page.tsx"),
+            EvidenceCheck("web/app/settings/integrations/github/page.tsx"),
         ),
     ),
     AuditItem(
@@ -128,7 +128,10 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
         category="mvp_requirement",
         evidence=(
             EvidenceCheck("app/api/jira.py", "/issues/import"),
-            EvidenceCheck("web/app/jira/page.tsx"),
+            EvidenceCheck(
+                "web/app/settings/integrations/page.tsx",
+                '"jira"',
+            ),
         ),
     ),
     AuditItem(
@@ -137,7 +140,10 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
         category="mvp_requirement",
         evidence=(
             EvidenceCheck("app/api/gmail.py", "/messages/import"),
-            EvidenceCheck("web/app/gmail/page.tsx"),
+            EvidenceCheck(
+                "web/app/settings/integrations/page.tsx",
+                '"gmail"',
+            ),
         ),
     ),
     AuditItem(
@@ -146,7 +152,10 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
         category="mvp_requirement",
         evidence=(
             EvidenceCheck("app/api/drive.py", "/files/import"),
-            EvidenceCheck("web/app/drive/page.tsx"),
+            EvidenceCheck(
+                "web/app/settings/integrations/page.tsx",
+                '"drive"',
+            ),
         ),
     ),
     AuditItem(

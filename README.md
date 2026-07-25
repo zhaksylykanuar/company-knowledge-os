@@ -35,7 +35,8 @@ Read in this order (control trio = what / where / why):
 - Founder Briefings persist deterministic briefing history and can generate
   local evidence-backed ActionProposals from Jira/Gmail/Drive/document context.
   GitHub App product-connect plus polling-only live read-sync backend/UI are in
-  place. `/github` now includes the primary owner/admin self-service wizard:
+  place. `/settings/integrations/github` includes the primary owner/admin
+  self-service wizard:
   App creation, installation, OAuth/PKCE verification, explicit repository
   selection, and per-repository read-only sync. Workspace App secrets and PKCE
   state are protected; temporary OAuth/installation tokens are not persisted.
@@ -175,8 +176,8 @@ provider calls, stores no tokens/secrets, and keeps provider writes disabled by
 default.
 
 For a local logged-in workspace, promote that same organization repo snapshot
-into canonical repository rows so `/github` uses it before falling back to
-retained source events or legacy seed data:
+into canonical repository rows so the GitHub integration can use it before
+falling back to retained source events or legacy seed data:
 
 ```bash
 uv run python scripts/ingest_local_org_repositories.py \
@@ -190,11 +191,12 @@ It is idempotent, offline-only, and never reads or prints GitHub tokens.
 ## Human-gated external operations
 
 The first real GitHub App read and the final external-action-result smoke remain
-separate human-approved gates. Normal GitHub setup now starts in `/github`; the
-managed browser-session read is still one explicit repository-scoped action and
-does not require a terminal env toggle. Local startup itself never starts a
-provider read, external write, or LLM execution. Env/manual GitHub setup remains
-a compatibility path, not the normal onboarding flow.
+separate human-approved gates. Normal GitHub setup now starts in
+`/settings/integrations/github`; the managed browser-session read is still one
+explicit repository-scoped action and does not require a terminal env toggle.
+Local startup itself never starts a provider read, external write, or LLM
+execution. Env/manual GitHub setup remains a compatibility path, not the normal
+onboarding flow.
 See
 [`docs/deploy/github-app-first-real-read-run.md`](docs/deploy/github-app-first-real-read-run.md)
 and

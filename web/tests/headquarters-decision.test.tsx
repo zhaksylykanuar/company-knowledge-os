@@ -94,7 +94,7 @@ test("decision modal starts in an exact loading state", () => {
   );
 
   assert.match(html, /role="dialog"/);
-  assert.ok(html.includes("Решение по миссии"));
+  assert.ok(html.includes("Решение по ситуации"));
   assert.match(html, /aria-busy="true"/);
   assert.ok(html.includes("Проверяем точное решение…"));
   assert.doesNotMatch(html, /Принять локально|Отклонить/);
@@ -226,10 +226,10 @@ test("saved receipt remains visible when headquarters refetch fails", () => {
     html.includes("Квитанция сохранена, но новый снимок пока не загрузился.")
   );
   assert.ok(html.includes("Повторить обновление"));
-  assert.ok(html.includes("Вернуться в Штаб"));
+  assert.ok(html.includes("Вернуться в FounderOS"));
   assert.ok(
     html.includes("Во внешние сервисы ничего не отправлялось.")
   );
   assert.match(html, /<dt>Внешняя запись<\/dt><dd>Нет<\/dd>/);
-  assert.doesNotMatch(html, /Штаб обновлён и пересчитал следующий ход/);
+  assert.doesNotMatch(html, /FounderOS обновлён и пересчитал следующий ход/);
 });

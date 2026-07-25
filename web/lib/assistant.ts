@@ -59,13 +59,9 @@ const SAFE_ASSISTANT_ACTION_PREFIXES = [
   "/actions",
   "/briefings",
   "/company-brain",
-  "/connectors",
   "/dashboard",
   "/documents",
-  "/drive",
-  "/github",
-  "/gmail",
-  "/jira"
+  "/settings"
 ] as const;
 
 const SENSITIVE_CITATION_QUERY_KEYS = new Set([

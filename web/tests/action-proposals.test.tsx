@@ -819,9 +819,9 @@ test("renders loading, missing, empty, unsupported, and error states", () => {
   assert.ok(renderPanel({ data: null, status: "loading" }).includes(M.actionsPanel.loading));
   assert.ok(renderPanel({ data: null, status: "missing" }).includes(M.common.noWorkspaceTitle));
   const emptyHtml = renderPanel({ data: emptyList, status: "empty" });
-  assert.ok(emptyHtml.includes("Добавьте первую миссию"));
+  assert.ok(emptyHtml.includes("Добавьте первое решение"));
   assert.match(emptyHtml, /id="add-mission" open=""/);
-  assert.ok(emptyHtml.includes("Создать первую миссию"));
+  assert.ok(emptyHtml.includes("Создать первое решение"));
   assert.ok(
     renderPanel({ data: null, status: "unsupported" }).includes(M.actionsPanel.unsupportedTitle)
   );
@@ -842,8 +842,8 @@ test("renders one active mission console, queue statuses, evidence, and local-on
     onReject: () => undefined,
     onSelectEvidence: () => undefined
   });
-  assert.ok(html.includes("Миссии"));
-  assert.ok(html.includes("Миссии компании"));
+  assert.ok(html.includes("Решения"));
+  assert.ok(html.includes("Решения компании"));
   assert.equal((html.match(/class="mission-console"/g) ?? []).length, 1);
   assert.equal((html.match(/aria-controls="mission-console"/g) ?? []).length, 3);
   assert.match(html, /aria-pressed="true"/);
@@ -1035,9 +1035,9 @@ test("shows empty state for origin and status intersections with no local propos
     originFilter: "briefing",
     statusFilter: "rejected"
   });
-  assert.ok(html.includes("В этом фокусе миссий нет"));
+  assert.ok(html.includes("В этом фокусе решений нет"));
   assert.ok(html.includes("Измените фильтры"));
-  assert.doesNotMatch(html, /Создать первую миссию/);
+  assert.doesNotMatch(html, /Создать первое решение/);
   assert.ok(html.includes(`${M.actionsPanel.originFilterAll} · 1`));
   assert.ok(html.includes(`${M.actionsPanel.originFilterBriefing} · 0`));
   assert.doesNotMatch(html, /Review synced GitHub work before approving actions/);
@@ -1054,7 +1054,7 @@ test("origin filtering updates the active mission evidence without provider call
   assert.match(internalHtml, />Внутри<\/span>/);
   assert.match(internalHtml, /Manual internal follow-up/);
   assert.match(internalHtml, /manual-note-1/);
-  assert.ok(internalHtml.includes("Показано первое основание выбранной миссии."));
+  assert.ok(internalHtml.includes("Показано первое основание выбранного решения."));
   assert.doesNotMatch(internalHtml, /Review synced GitHub work before approving actions/);
   assert.doesNotMatch(internalHtml, /href="https:\/\/github.com\/qtwin-io\/founderos-api/);
 });
@@ -1172,7 +1172,7 @@ test("defaults evidence drawer to first visible proposal evidence", () => {
   assert.ok(proposedHtml.includes(M.evidence.source));
   assert.match(proposedHtml, /qtwin-io\/founderos-api#issue\/42/);
   assert.ok(proposedHtml.includes(M.common.openSource));
-  assert.ok(proposedHtml.includes("Показано первое основание выбранной миссии."));
+  assert.ok(proposedHtml.includes("Показано первое основание выбранного решения."));
   // Default evidence is contextual and not an explicit selection, so no close button.
   assert.doesNotMatch(proposedHtml, new RegExp(`>${M.common.close}<`));
 
@@ -1191,7 +1191,7 @@ test("renders create form and pending local mutations", () => {
     pendingMutation: "create"
   });
   assert.ok(html.includes(M.actionCreate.typeLabel));
-  assert.ok(html.includes("Добавить миссию"));
+  assert.ok(html.includes("Добавить решение"));
   assert.ok(html.includes(M.actionCreate.typeGithubIssue));
   assert.ok(html.includes(M.actionCreate.submitting));
   assert.ok(html.includes(M.actionCreate.note));
@@ -1342,7 +1342,7 @@ test("renders briefing internal_todo payload metadata", () => {
 
 test("evidence drawer shows contextual default hint and evidence count", () => {
   const html = renderPanel({ data: groupedList, statusFilter: "proposed" });
-  assert.ok(html.includes("Показано первое основание выбранной миссии."));
+  assert.ok(html.includes("Показано первое основание выбранного решения."));
   assert.ok(html.includes(M.evidence.countLabel));
   // Briefing proposal is first in grouped order and carries two evidence refs.
   assert.match(html, /qtwin-io\/founderos-api/);
@@ -1400,7 +1400,7 @@ test("evidence drawer marks manual selection without a misleading close affordan
     selectedEvidenceTitle: "Create follow-up GitHub issue",
     statusFilter: "all"
   });
-  assert.ok(html.includes("Показано выбранное основание этой миссии."));
+  assert.ok(html.includes("Показано выбранное основание этого решения."));
   assert.doesNotMatch(html, new RegExp(`>${M.common.close}<`));
   assert.equal((html.match(/class="mission-console"/g) ?? []).length, 1);
 });
@@ -1418,7 +1418,7 @@ test("manual evidence never crosses into another active mission", () => {
   });
 
   assert.match(html, /manual-note-1/);
-  assert.doesNotMatch(html, /Показано выбранное основание этой миссии/);
+  assert.doesNotMatch(html, /Показано выбранное основание этого решения/);
   assert.doesNotMatch(
     html,
     /href="https:\/\/github.com\/qtwin-io\/founderos-api\/issues\/42"/

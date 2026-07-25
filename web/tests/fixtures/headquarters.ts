@@ -90,7 +90,7 @@ const HEADQUARTERS_TEST_SOURCE: HeadquartersSourceHealth = {
   next_action: {
     kind: "open_source",
     label: "Открыть GitHub",
-    target: "/github",
+    target: "/settings/integrations?provider=github",
     enabled: true,
     disabled_reason: null
   }
@@ -151,7 +151,7 @@ const BASE_HEADQUARTERS_FIXTURE = {
         state: "complete",
         requirement: "required",
         label: "Компания создана",
-        benefit: "У штаба есть рабочее пространство.",
+        benefit: "У FounderOS есть рабочее пространство.",
         evidence: [
           {
             key: "workspace",
@@ -187,7 +187,7 @@ const BASE_HEADQUARTERS_FIXTURE = {
         action: {
           kind: "open_sources",
           label: "Открыть источники",
-          target: "/connectors",
+          target: "/settings/integrations",
           enabled: true,
           disabled_reason: null
         }
@@ -197,7 +197,7 @@ const BASE_HEADQUARTERS_FIXTURE = {
         state: "complete",
         requirement: "required",
         label: "Первые данные подтверждены",
-        benefit: "Штаб видит подтверждённые факты.",
+        benefit: "FounderOS видит подтверждённые факты.",
         evidence: [
           {
             key: "canonical_records",
@@ -210,7 +210,7 @@ const BASE_HEADQUARTERS_FIXTURE = {
         action: {
           kind: "open_sources",
           label: "Открыть источники",
-          target: "/connectors",
+          target: "/settings/integrations",
           enabled: true,
           disabled_reason: null
         }
@@ -247,7 +247,7 @@ const BASE_HEADQUARTERS_FIXTURE = {
         evidence: [
           {
             key: "snapshot",
-            label: "Согласованный снимок штаба",
+            label: "Согласованная картина компании",
             state: "complete",
             value: 1,
             precision: "exact"
@@ -255,7 +255,7 @@ const BASE_HEADQUARTERS_FIXTURE = {
         ],
         action: {
           kind: "open_headquarters",
-          label: "Открыть штаб",
+          label: "Открыть FounderOS",
           target: "/dashboard",
           enabled: true,
           disabled_reason: null
@@ -296,11 +296,11 @@ const BASE_HEADQUARTERS_FIXTURE = {
       value: 0,
       precision: "exact",
       empty_state: "Все источники в порядке",
-      target: "/connectors",
+      target: "/settings/integrations",
       action: {
         kind: "open_sources",
         label: "Открыть источники",
-        target: "/connectors",
+        target: "/settings/integrations",
         enabled: true,
         disabled_reason: null
       }

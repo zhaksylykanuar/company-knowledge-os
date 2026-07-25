@@ -20,7 +20,6 @@ import {
   workspaceSelectionStorageKey
 } from "../lib/session";
 import {
-  ContextNavigation,
   MobilePrimaryNavigation,
   Sidebar
 } from "./Sidebar";
@@ -221,24 +220,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <Sidebar locked={externalOperationPending} />
           <main className="main">
             <div className="topbar" inert={externalOperationPending}>
-              <div className="topbar-system-links" aria-label={M.nav.backstage}>
-                <Link className="topbar-radar-link" href="/connectors">
-                  {M.nav.radars}
-                </Link>
-                <Link className="topbar-settings-link" href="/settings">
-                  {M.nav.settings}
-                </Link>
-              </div>
-              <CompanyAssistant
-                backgroundRef={shellRef}
-                disabled={externalOperationPending}
-                snapshotSource={assistantSnapshotSource}
-                workspaceId={workspaceId}
-              />
+              {pathname === "/ask" ? null : (
+                <CompanyAssistant
+                  backgroundRef={shellRef}
+                  disabled={externalOperationPending}
+                  snapshotSource={assistantSnapshotSource}
+                  workspaceId={workspaceId}
+                />
+              )}
               {workspaceControl}
               <ProfileMenu onLogout={onLogout} user={me.user} />
             </div>
-            <ContextNavigation locked={externalOperationPending} />
             <div className="content" key={workspaceId ?? "no-workspace"}>
               {children}
             </div>

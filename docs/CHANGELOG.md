@@ -1,5 +1,39 @@
 # FounderOS Changelog
 
+## 2026-07-25
+
+### Changed
+
+- Replaced the 5,000-line legacy MVP playbook with the FounderOS 2.0 product
+  contract (DEC-095): an AI partner with evidence-backed temporal company
+  memory, progressive drill-down and human-approved actions.
+- Replaced the Living Command Center acceptance ledger with one AI-first
+  acceptance ledger and reduced Roadmap/TODO to the active reset and the next
+  memory/reasoning phases.
+- Defined `Сейчас / Компания / Спросить / Настройки` as the only target product
+  zones. Provider-first navigation, synthetic command-center UX and duplicate
+  surfaces are superseded and scheduled for verified removal.
+- Explicitly separated the personal FounderOS code repository from the work
+  GitHub organization used as a workspace source.
+- Rebuilt the authenticated shell around `Сейчас / Компания / Спросить` with
+  one backstage `Настройки` entry. The dashboard now leads with one conclusion,
+  up to two following situations and one obvious question action.
+- Added `/ask` as a full evidence-backed assistant workspace. It uses the exact
+  company snapshot, keeps conversation history in memory only, and performs no
+  provider call, persistence or external write.
+- Moved GitHub product setup to `/settings/integrations/github` and removed the
+  product routes `/connectors`, `/github`, `/jira`, `/gmail`, and `/drive`.
+  GitHub callback fallback navigation now returns to the settings route.
+- Removed runtime `/demo`, synthetic Command Center components, Today/Living HQ
+  browser models, the old mini-map, provider-first pages, superseded tests and
+  their unused CSS/message blocks.
+- Removed five unreachable frontend panels for legacy local sync, selected-repo
+  sync, repository audit and source coverage together with their dead API
+  clients, browser-only types, copy, styles and tests. Backend operator/audit
+  foundations remain available outside the product navigation.
+- Updated the offline MVP audit to recognize the consolidated integration
+  settings surfaces without reintroducing provider-first pages.
+
 ## 2026-07-23
 
 ### Added

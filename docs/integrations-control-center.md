@@ -3,7 +3,7 @@
 `/settings/integrations` is the workspace-scoped control surface for GitHub,
 Jira Cloud, Gmail, and Google Drive credentials. It is a configuration and
 verification layer over the existing `IntegrationConnection` model, not a
-second connector engine or a replacement for provider-specific radars.
+second connector engine or a provider-specific product area.
 
 ## Product Flow
 
@@ -15,10 +15,9 @@ The default UI exposes only two steps:
 The read check stays disabled until a connection exists. Empty receipts are not
 rendered. Write-readiness, credential removal, and the GitHub personal-token
 fallback remain available under progressive disclosure instead of competing
-with first-time setup. An unconfigured card on `/connectors` links directly to
-`/settings/integrations?provider=<provider>`; a source with imported data links
-to its data page. Jira, Gmail, and Drive keep manual JSON import only as a
-collapsed developer fallback.
+with first-time setup. Every provider is selected directly inside
+`/settings/integrations?provider=<provider>`. Jira, Gmail, and Drive keep manual
+JSON import only as a collapsed developer fallback.
 
 ## Security Boundary
 
@@ -51,7 +50,7 @@ collapsed developer fallback.
   that exact workspace. If none exist, the inventory is empty. Global
   `SourceEvent`, discovery-snapshot, and legacy-file fallbacks are restricted to
   explicit unscoped operator/script reads and can never populate another
-  workspace's `/github` surface.
+  workspace's GitHub integration surface.
 
 Jira accepts only an HTTPS `*.atlassian.net` site without credentials, custom
 port, path, query, or fragment. GitHub, Gmail, and Drive use fixed official API

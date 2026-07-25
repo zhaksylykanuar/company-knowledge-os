@@ -1,9 +1,10 @@
 # GitHub App First Real Read Runbook
 
-Status: **human-approved, read-only runbook**. The managed `/github` wizard is
-the primary setup path. This document does not create a GitHub App, call the
-provider, or authorize a read by itself; the founder performs each external
-confirmation and the final scoped read explicitly.
+Status: **human-approved, read-only runbook**. The managed
+`/settings/integrations/github` wizard is the primary setup path. This document
+does not create a GitHub App, call the provider, or authorize a read by itself;
+the founder performs each external confirmation and the final scoped read
+explicitly.
 
 ## Boundaries
 
@@ -39,9 +40,10 @@ confirmation and the final scoped read explicitly.
 An offline `.local/repos.json` surface is optional historical/local evidence. It
 is not required for managed setup and cannot prove live GitHub access.
 
-## Step 1 - Complete managed setup in `/github`
+## Step 1 - Complete managed setup in `/settings/integrations/github`
 
-Open `http://127.0.0.1:3000/github` and use **«Настроить GitHub за 2 минуты»**.
+Open `http://127.0.0.1:3000/settings/integrations/github` and use
+**«Настроить GitHub за 2 минуты»**.
 
 The wizard performs four visible stages:
 
@@ -66,7 +68,7 @@ replayed state is rejected.
 ## Step 2 - Verify the receipt before reading
 
 The connected card must show the expected GitHub account, App name, and selected
-repository count. The command center must list only the saved managed subset.
+repository count. The integration screen must list only the saved managed subset.
 To change that subset later, first adjust access through the connected card,
 then refresh and save the replacement selection. The existing saved subset
 continues to work until the new choice is saved; closing an unfinished draft
@@ -83,8 +85,8 @@ Stop if the account, App, repository subset, or verification state is wrong.
 
 ## Step 3 - Run one scoped read
 
-Choose one repository in the command center and click the single read-only load
-button. That browser-session action is the first approved provider read.
+Choose one repository on the integration screen and click the single read-only
+load button. That browser-session action is the first approved provider read.
 
 The backend rechecks all of the following before token mint or network access:
 
@@ -103,8 +105,8 @@ remain behind that kill switch. No background read starts after setup.
 
 - Confirm the read receipt reports `external_write_performed: false` and no
   persisted installation token.
-- Confirm the selected repository's tasks and pull requests appear in the
-  `/github` work pulse.
+- Confirm the selected repository's tasks and pull requests appear on the
+  GitHub integration screen.
 - Confirm Company Brain shows the new canonical records with evidence refs.
 - Generate a deterministic Founder Briefing only if desired and confirm its
   evidence refs resolve. This is not an LLM run.

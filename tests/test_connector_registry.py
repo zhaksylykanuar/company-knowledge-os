@@ -139,17 +139,17 @@ async def test_connector_registry_lists_mvp_connectors_without_secret_values() -
         by_provider = {connector["provider"]: connector for connector in registry["connectors"]}
         assert set(by_provider) == {"github", "jira", "gmail", "drive"}
         assert by_provider["github"]["status"] == "available"
-        assert by_provider["github"]["manage_path"] == "/github"
+        assert by_provider["github"]["manage_path"] == "/settings/integrations?provider=github"
         assert by_provider["github"]["connection_count"] == 1
         assert by_provider["github"]["connected_count"] == 1
         assert by_provider["jira"]["status"] == "available"
-        assert by_provider["jira"]["manage_path"] == "/jira"
+        assert by_provider["jira"]["manage_path"] == "/settings/integrations?provider=jira"
         assert by_provider["jira"]["connection_count"] == 1
         assert by_provider["jira"]["connected_count"] == 0
         assert by_provider["gmail"]["status"] == "available"
-        assert by_provider["gmail"]["manage_path"] == "/gmail"
+        assert by_provider["gmail"]["manage_path"] == "/settings/integrations?provider=gmail"
         assert by_provider["drive"]["status"] == "available"
-        assert by_provider["drive"]["manage_path"] == "/drive"
+        assert by_provider["drive"]["manage_path"] == "/settings/integrations?provider=drive"
         assert "SHOULD_NOT_LEAK" not in str(registry)
         assert user.email not in str(registry)
 

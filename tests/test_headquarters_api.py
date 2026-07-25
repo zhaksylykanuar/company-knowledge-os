@@ -402,7 +402,7 @@ def test_source_aliases_and_correlation_are_explicit_and_deterministic() -> None
     aggregate = headquarters_service._aggregate_evidence(
         identity="source_inventory:test:ready",
         label="Test aggregate",
-        target="/connectors",
+        target="/settings/integrations",
     )
     mission = headquarters_service._mission(
         identity="setup:test",
@@ -421,7 +421,7 @@ def test_source_aliases_and_correlation_are_explicit_and_deterministic() -> None
         action=headquarters_service._action(
             kind="open",
             label="Open",
-            target="/connectors",
+            target="/settings/integrations",
             enabled=True,
         ),
         ranking_reason="source_setup_gap",
@@ -490,7 +490,7 @@ async def test_empty_headquarters_is_deterministic_and_read_only(monkeypatch) ->
         assert first["onboarding"]["completed_required"] == 2
         assert first["onboarding"]["required_total"] == 3
         assert first["onboarding"]["current_step_key"] == "canonical_data"
-        assert first["onboarding"]["next_action"]["target"] == "/connectors"
+        assert first["onboarding"]["next_action"]["target"] == "/settings/integrations"
         assert list(onboarding_steps) == [
             "company",
             "source",

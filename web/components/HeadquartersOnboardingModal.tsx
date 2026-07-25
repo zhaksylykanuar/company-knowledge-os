@@ -97,11 +97,11 @@ export function HeadquartersOnboardingModal({
           <p className="headquarters-onboarding-kicker">
             {activeStep.requirement === "required"
               ? "Обязательный шаг"
-              : "Дополнительная миссия"}
+              : "Дополнительный шаг"}
           </p>
           <h3>
             {onboarding.ready && activeStep.key === "headquarters"
-              ? "Штаб готов к работе"
+              ? "FounderOS готов к работе"
               : activeStep.label}
           </h3>
           <p className="headquarters-onboarding-benefit">{activeStep.benefit}</p>
@@ -113,7 +113,7 @@ export function HeadquartersOnboardingModal({
                 onClick={onFinish}
                 type="button"
               >
-                <span>Войти в штаб</span><span aria-hidden="true">→</span>
+                <span>Открыть текущую картину</span><span aria-hidden="true">→</span>
               </button>
             ) : activeStep.state === "unknown" ? (
               <button
@@ -150,7 +150,7 @@ export function HeadquartersOnboardingModal({
         </section>
 
         <p className="headquarters-onboarding-boundary">
-          Проверка использует тот же read-only снимок штаба. Она не запускает
+          Проверка использует ту же картину компании только для чтения. Она не запускает
           провайдеров, LLM или внешние записи.
         </p>
       </div>
@@ -208,7 +208,7 @@ function shortStepLabel(key: HeadquartersOnboardingStep["key"]): string {
     canonical_data: "Факты",
     company: "Компания",
     context: "Контекст",
-    headquarters: "Штаб",
+    headquarters: "FounderOS",
     source: "Источник"
   };
   return labels[key];

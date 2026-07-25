@@ -100,7 +100,7 @@ _WAITING_DECISION_MARKERS = (
     "очередь реш",
     "сколько реш",
 )
-_SOURCE_MARKERS = ("radar", "source", "источник", "радар")
+_SOURCE_MARKERS = ("source", "источник")
 _BRIEFING_MARKERS = ("briefing", "brief", "брифинг", "сводк")
 _PERSON_MARKERS = (
     "company",
@@ -150,13 +150,9 @@ _SAFE_NAVIGATION_PREFIXES = (
     "/actions",
     "/briefings",
     "/company-brain",
-    "/connectors",
     "/dashboard",
     "/documents",
-    "/drive",
-    "/github",
-    "/gmail",
-    "/jira",
+    "/settings",
 )
 
 
@@ -403,7 +399,7 @@ def _answer(
         if not citations:
             return _insufficient()
         return (
-            "У текущей миссии есть подтверждённое основание для владельца. Откройте миссию, чтобы проверить точную связь.",
+            "У текущей ситуации есть подтверждённое основание для владельца. Откройте решение, чтобы проверить точную связь.",
             citations,
             _mission_action(priority),
         )
@@ -415,9 +411,9 @@ def _answer(
         if total is None or healthy is None or attention is None:
             return _insufficient()
         return (
-            f"Радары: всего {total}, здоровы {healthy}, требуют внимания {attention}.",
-            [_snapshot_citation(snapshot, "sources", "/connectors")],
-            _navigation_action("Открыть радары", "/connectors"),
+            f"Источники: всего {total}, работают {healthy}, требуют внимания {attention}.",
+            [_snapshot_citation(snapshot, "sources", "/settings/integrations")],
+            _navigation_action("Открыть настройки источников", "/settings/integrations"),
         )
     if intent == "briefing":
         briefing_count = _onboarding_count(snapshot, "briefings")
@@ -488,9 +484,9 @@ def _answer(
             if not citations:
                 return _insufficient()
             return (
-                "В текущей миссии есть подтверждённая связь с человеком или заказчиком. Откройте профиль для точной проверки.",
+                "В текущей ситуации есть подтверждённая связь с человеком или заказчиком. Откройте профиль для точной проверки.",
                 citations,
-                _navigation_action("Открыть мир компании", "/company-brain"),
+                _navigation_action("Открыть компанию", "/company-brain"),
             )
         workspace = _mapping(snapshot.get("workspace")) or {}
         name = _safe_text(workspace.get("name"), 180)
@@ -541,7 +537,7 @@ def _snapshot_citation(
         "id": f"headquarters_snapshot:{snapshot_id}:{section}",
         "kind": "headquarters_snapshot",
         "source_key": "internal",
-        "label": f"Снимок штаба · {section}"[:160],
+        "label": f"Картина компании · {section}"[:160],
         "target": target if _safe_internal_target(target) else "/dashboard",
         "provenance": "headquarters_aggregate",
         "trust": "aggregate",

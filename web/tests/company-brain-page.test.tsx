@@ -5,75 +5,44 @@ import CompanyBrainPage from "../app/company-brain/page";
 import { CompanyBrainPageClient } from "../components/CompanyBrainPageClient";
 import {
   BACKSTAGE_NAV,
-  COMPANY_NAV,
-  getContextNavigation,
   isNavigationItemActive,
   NAV_LINKS,
-  PRIMARY_NAV,
-  SOURCE_NAV,
-  TODAY_NAV
+  PRIMARY_NAV
 } from "../components/Sidebar";
 import { M } from "../lib/messages";
 
-test("World zone opens the evidence-backed Company Brain route", () => {
+test("Company zone opens the evidence-backed company memory route", () => {
   const link = NAV_LINKS.find((item) => item.href === "/company-brain");
   assert.ok(link, "expected a /company-brain nav link");
-  assert.equal(link?.label, "Мир");
+  assert.equal(link?.label, "Компания");
 });
 
-test("sidebar exposes three everyday zones and keeps system controls backstage", () => {
+test("sidebar exposes the three AI-first zones and one settings entry", () => {
   assert.deepEqual(
     PRIMARY_NAV.map((item) => item.label),
-    ["Штаб", "Мир", "Миссии"]
+    ["Сейчас", "Компания", "Спросить"]
   );
   assert.deepEqual(
     PRIMARY_NAV.map((item) => item.href),
-    ["/dashboard", "/company-brain", "/actions"]
+    ["/dashboard", "/company-brain", "/ask"]
   );
   assert.deepEqual(
     BACKSTAGE_NAV.map((item) => [item.href, item.label]),
-    [
-      ["/connectors", "Радары"],
-      ["/settings", M.nav.settings]
-    ]
-  );
-  assert.deepEqual(
-    SOURCE_NAV.map((item) => item.label),
-    [M.nav.sourceOverview, M.nav.github, M.nav.jira, M.nav.gmail, M.nav.drive]
+    [["/settings", M.nav.settings]]
   );
   assert.equal(PRIMARY_NAV.some((item) => item.href === "/github"), false);
+  assert.equal(NAV_LINKS.some((item) => item.href === "/connectors"), false);
+  assert.equal(NAV_LINKS.some((item) => item.href === "/actions"), false);
   assert.equal(NAV_LINKS.some((item) => item.href === "/audit"), false);
 });
 
-test("provider routes activate Radars and compatibility routes activate their world", () => {
-  const sources = BACKSTAGE_NAV.find((item) => item.href === "/connectors");
-  const today = PRIMARY_NAV.find((item) => item.href === "/dashboard");
-  const world = PRIMARY_NAV.find((item) => item.href === "/company-brain");
-  assert.ok(sources);
-  assert.ok(today);
-  assert.ok(world);
-  assert.equal(isNavigationItemActive("/gmail", sources), true);
-  assert.equal(isNavigationItemActive("/briefings/briefing-1", today), true);
-  assert.equal(isNavigationItemActive("/documents/document-1", world), true);
-});
-
-test("only source and provider routes expose contextual navigation", () => {
-  assert.deepEqual(
-    TODAY_NAV.map((item) => item.href),
-    ["/dashboard", "/briefings"]
-  );
-  assert.deepEqual(
-    COMPANY_NAV.map((item) => item.href),
-    ["/company-brain", "/documents"]
-  );
-  assert.equal(getContextNavigation("/dashboard"), null);
-  assert.equal(getContextNavigation("/briefings"), null);
-  assert.equal(getContextNavigation("/company-brain"), null);
-  assert.equal(getContextNavigation("/documents"), null);
-  assert.equal(getContextNavigation("/connectors")?.links, SOURCE_NAV);
-  assert.equal(getContextNavigation("/gmail")?.links, SOURCE_NAV);
-  assert.ok(NAV_LINKS.some((item) => item.href === "/briefings"));
-  assert.ok(NAV_LINKS.some((item) => item.href === "/documents"));
+test("hidden company detail routes remain in Company while providers have no nav entry", () => {
+  const settings = BACKSTAGE_NAV[0];
+  const company = PRIMARY_NAV[1];
+  assert.equal(isNavigationItemActive("/settings/integrations", settings), true);
+  assert.equal(isNavigationItemActive("/github", settings), false);
+  assert.equal(isNavigationItemActive("/actions", company), true);
+  assert.equal(isNavigationItemActive("/documents", company), true);
 });
 
 test("company brain route renders the client world shell", async () => {

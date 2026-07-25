@@ -40,7 +40,7 @@ function pendingOnboardingSnapshot(
     step.action = {
       kind: "import_source_data",
       label: "Получить первые данные",
-      target: "/connectors",
+      target: "/settings/integrations",
       enabled: true,
       disabled_reason: null
     };
@@ -67,9 +67,9 @@ test("renders one real priority, fixed pulse order, and backend actions", () => 
     /<a class="headquarters-primary-action" href="\/actions\?proposal=11111111-1111-4111-8111-111111111111/
   );
 
-  const waitingDecisions = html.indexOf("Ждут решения");
-  const sourcesAttention = html.indexOf("Источники требуют внимания");
-  const pendingRelationships = html.indexOf("Связи ждут проверки");
+  const waitingDecisions = html.indexOf('data-key="waiting_decisions"');
+  const sourcesAttention = html.indexOf('data-key="sources_attention"');
+  const pendingRelationships = html.indexOf('data-key="pending_relationships"');
   assert.ok(waitingDecisions >= 0);
   assert.ok(waitingDecisions < sourcesAttention);
   assert.ok(sourcesAttention < pendingRelationships);
@@ -98,13 +98,13 @@ test("auto-opens one compact modal for the server-provided required blocker", ()
   assert.ok(html.includes("Запуск компании"));
   assert.ok(html.includes("Готово 2 из 3 обязательных"));
   assert.ok(html.includes("Первые данные подтверждены"));
-  assert.ok(html.includes("Штаб видит подтверждённые факты"));
+  assert.ok(html.includes("FounderOS видит подтверждённые факты"));
   assert.ok(html.includes("Получить первые данные"));
   assert.ok(html.includes("Галочка появляется только после серверной проверки"));
   assert.equal(
-    (html.match(/aria-label="(?:Компания|Источник|Факты|Контекст|Штаб):/g) ?? [])
+    (html.match(/aria-label="(?:Компания|Источник|Факты|Контекст):/g) ?? [])
       .length,
-    5
+    4
   );
   assert.doesNotMatch(html, /Отметить выполненным|Пропустить и завершить/);
 });
@@ -123,7 +123,7 @@ test("keeps an unknown required step unresolved and offers a read-only retry", (
   assert.ok(html.includes("Состояние пока неизвестно"));
   assert.ok(html.includes("Проверить снова"));
   assert.ok(html.includes("Не удалось подтвердить"));
-  assert.doesNotMatch(html, /Обязательные шаги завершены|Штаб готов к работе/);
+  assert.doesNotMatch(html, /Обязательные шаги завершены|FounderOS готов к работе/);
 });
 
 test("explains the administrator path when an unknown step is read-only", () => {
@@ -183,8 +183,8 @@ test("ready onboarding stays quiet unless the route explicitly requests its comp
 
   assert.doesNotMatch(ordinary, /role="dialog"/);
   assert.equal((requested.match(/role="dialog"/g) ?? []).length, 1);
-  assert.ok(requested.includes("Штаб готов к работе"));
-  assert.ok(requested.includes("Войти в штаб"));
+  assert.ok(requested.includes("FounderOS готов к работе"));
+  assert.ok(requested.includes("Открыть текущую картину"));
 });
 
 test("onboarding has overlay priority until dismissed for the exact snapshot", () => {
@@ -322,8 +322,8 @@ test("keeps verified priority visible while reporting partial and stale source t
 
   assert.ok(html.includes("Подтвердить план запуска Atlas"));
   assert.ok(html.includes("Картина собрана частично"));
-  assert.ok(html.includes("Нужно проверить: 1"));
-  assert.ok(html.includes("Что недоступно"));
+  assert.ok(html.includes("Требуют внимания: 1"));
+  assert.ok(html.includes("Что пока неизвестно"));
   assert.doesNotMatch(html, /sources-partial-1|safe_debug_id/);
   assert.doesNotMatch(html, /Все данные подтверждены|Все источники в порядке/);
 });
@@ -449,12 +449,12 @@ test("replaces a preserved snapshot only after a successful exact refresh", () =
 
 test("renders explicit loading, missing, forbidden, offline, contract, and generic states", () => {
   const cases = [
-    ["loading", "Штаб просыпается"],
+    ["loading", "FounderOS вспоминает контекст"],
     ["missing", "Нужна компания"],
     ["forbidden", "Доступ закрыт"],
     ["offline", "Нет связи с системой"],
     ["contract_error", "Картина не подтверждена"],
-    ["error", "Штаб временно недоступен"]
+    ["error", "Картина временно недоступна"]
   ] as const;
 
   for (const [status, title] of cases) {

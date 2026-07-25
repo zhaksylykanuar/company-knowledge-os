@@ -34,35 +34,16 @@ import type {
   GitHubAppSetupRestartResponse,
   GitHubAppSetupStatus,
   GitHubConnectionStatusResponse,
-  GitHubLocalSyncRequest,
-  GitHubLocalSyncResponse,
   GitHubOperationalWorkResponse,
   GitHubOperationalWorkState,
   GitHubRepositoryListResponse,
-  GitHubSelectedIssueSyncRequest,
-  GitHubSelectedIssueSyncResponse,
-  GitHubSelectedPullRequestSyncRequest,
-  GitHubSelectedPullRequestSyncResponse,
-  GitHubSelectedRepositorySyncResult,
   NormalizedEntitiesResponse,
-  DriveFileImportRequest,
-  DriveFileImportResponse,
-  DriveFileListResponse,
   DocumentCreateRequest,
   DocumentListRequest,
   DocumentListResponse,
   DocumentResponse,
   DocumentUpdateRequest,
   DocumentVersionsResponse,
-  GmailMessageImportRequest,
-  GmailMessageImportResponse,
-  GmailMessageListResponse,
-  JiraIssueImportRequest,
-  JiraIssueImportResponse,
-  JiraIssueListResponse,
-  RepoAuditImportRequest,
-  RepoAuditImportResponse,
-  RepoAuditResponse,
   ConnectorCheckReceipt,
   ConnectorConfigurationApplyRequest,
   ConnectorControl,
@@ -422,118 +403,6 @@ export async function provisionWorkspaceMember(
 }
 
 
-export function buildWorkspaceJiraIssuesPath(workspaceId: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jira/issues`;
-}
-
-export function buildWorkspaceJiraImportPath(workspaceId: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/jira/issues/import`;
-}
-
-export async function fetchJiraIssues(
-  workspaceId: string,
-  options: ApiFetchOptions = {}
-): Promise<JiraIssueListResponse> {
-  return apiFetch<JiraIssueListResponse>(
-    buildWorkspaceJiraIssuesPath(workspaceId),
-    options
-  );
-}
-
-export async function importJiraIssues(
-  workspaceId: string,
-  request: JiraIssueImportRequest,
-  options: ApiFetchOptions = {}
-): Promise<JiraIssueImportResponse> {
-  return apiFetch<JiraIssueImportResponse>(
-    buildWorkspaceJiraImportPath(workspaceId),
-    {
-      ...options,
-      body: JSON.stringify({
-        issues: request.issues,
-        connection_id: request.connectionId ?? null
-      }),
-      method: "POST"
-    }
-  );
-}
-
-export function buildWorkspaceGmailMessagesPath(workspaceId: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/gmail/messages`;
-}
-
-export function buildWorkspaceGmailImportPath(workspaceId: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/gmail/messages/import`;
-}
-
-export async function fetchGmailMessages(
-  workspaceId: string,
-  options: ApiFetchOptions = {}
-): Promise<GmailMessageListResponse> {
-  return apiFetch<GmailMessageListResponse>(
-    buildWorkspaceGmailMessagesPath(workspaceId),
-    options
-  );
-}
-
-export async function importGmailMessages(
-  workspaceId: string,
-  request: GmailMessageImportRequest,
-  options: ApiFetchOptions = {}
-): Promise<GmailMessageImportResponse> {
-  return apiFetch<GmailMessageImportResponse>(
-    buildWorkspaceGmailImportPath(workspaceId),
-    {
-      ...options,
-      body: JSON.stringify({
-        messages: request.messages,
-        connection_id: request.connectionId ?? null
-      }),
-      method: "POST"
-    }
-  );
-}
-
-export function buildWorkspaceDriveFilesPath(workspaceId: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/drive/files`;
-}
-
-export function buildWorkspaceDriveImportPath(workspaceId: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/drive/files/import`;
-}
-
-export async function fetchDriveFiles(
-  workspaceId: string,
-  options: ApiFetchOptions = {}
-): Promise<DriveFileListResponse> {
-  return apiFetch<DriveFileListResponse>(
-    buildWorkspaceDriveFilesPath(workspaceId),
-    options
-  );
-}
-
-export async function importDriveFiles(
-  workspaceId: string,
-  request: DriveFileImportRequest,
-  options: ApiFetchOptions = {}
-): Promise<DriveFileImportResponse> {
-  return apiFetch<DriveFileImportResponse>(
-    buildWorkspaceDriveImportPath(workspaceId),
-    {
-      ...options,
-      body: JSON.stringify({
-        files: request.files,
-        connection_id: request.connectionId ?? null
-      }),
-      method: "POST"
-    }
-  );
-}
-
-export function buildRepoAuditPath(): string {
-  return "/api/v1/founder/company-brain/repo-audit";
-}
-
 export function buildWorkspaceDocumentsPath(
   workspaceId: string,
   request: DocumentListRequest = {}
@@ -649,12 +518,6 @@ export async function deleteDocument(
     ...options,
     method: "DELETE"
   });
-}
-
-export async function fetchRepoAudit(
-  options: ApiFetchOptions = {}
-): Promise<RepoAuditResponse> {
-  return apiFetch<RepoAuditResponse>(buildRepoAuditPath(), options);
 }
 
 export function buildWorkspaceManualBriefingPath(workspaceId: string): string {
@@ -804,12 +667,6 @@ export function buildWorkspaceActionProposalBulkRejectPath(workspaceId: string):
   return `${buildWorkspaceActionProposalsCollectionPath(workspaceId)}/bulk-reject`;
 }
 
-export function buildWorkspaceRepoAuditImportPath(workspaceId: string): string {
-  return `${buildWorkspaceActionProposalsCollectionPath(
-    workspaceId
-  )}/import-repo-audit`;
-}
-
 export function buildWorkspaceActionProposalExecutionPreviewPath(
   workspaceId: string,
   proposalId: string
@@ -950,23 +807,6 @@ export async function bulkRejectActionProposals(
       body: JSON.stringify({
         proposal_ids: request.proposal_ids,
         reason: request.reason ?? null
-      }),
-      method: "POST"
-    }
-  );
-}
-
-export async function importRepoAuditFindings(
-  workspaceId: string,
-  request: RepoAuditImportRequest,
-  options: ApiFetchOptions = {}
-): Promise<RepoAuditImportResponse> {
-  return apiFetch<RepoAuditImportResponse>(
-    buildWorkspaceRepoAuditImportPath(workspaceId),
-    {
-      ...options,
-      body: JSON.stringify({
-        findings: request.findings
       }),
       method: "POST"
     }
@@ -1194,118 +1034,4 @@ export async function runGitHubAppLiveSync(
       method: "POST"
     }
   );
-}
-
-export function buildWorkspaceGitHubLocalSyncPath(workspaceId: string): string {
-  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/github/local-sync`;
-}
-
-export async function runGitHubLocalSync(
-  workspaceId: string,
-  request: GitHubLocalSyncRequest = {},
-  options: ApiFetchOptions = {}
-): Promise<GitHubLocalSyncResponse> {
-  return apiFetch<GitHubLocalSyncResponse>(
-    buildWorkspaceGitHubLocalSyncPath(workspaceId),
-    {
-      ...options,
-      body: JSON.stringify({
-        include_repositories: request.include_repositories ?? true,
-        include_issues: request.include_issues ?? true,
-        include_pull_requests: request.include_pull_requests ?? true
-      }),
-      method: "POST"
-    }
-  );
-}
-
-export function buildWorkspaceGitHubSelectedIssueSyncPath(
-  workspaceId: string
-): string {
-  return `/api/v1/workspaces/${encodeURIComponent(
-    workspaceId
-  )}/github/repositories/issues/sync`;
-}
-
-export function buildWorkspaceGitHubSelectedPullRequestSyncPath(
-  workspaceId: string
-): string {
-  return `/api/v1/workspaces/${encodeURIComponent(
-    workspaceId
-  )}/github/repositories/pull-requests/sync`;
-}
-
-export async function syncSelectedRepositoryIssues(
-  workspaceId: string,
-  request: GitHubSelectedIssueSyncRequest,
-  options: ApiFetchOptions = {}
-): Promise<GitHubSelectedIssueSyncResponse> {
-  const body: Record<string, unknown> = {
-    connection_id: request.connection_id,
-    repositories: request.repositories
-  };
-  if (request.states && request.states.length > 0) {
-    body.states = request.states;
-  }
-  return apiFetch<GitHubSelectedIssueSyncResponse>(
-    buildWorkspaceGitHubSelectedIssueSyncPath(workspaceId),
-    {
-      ...options,
-      body: JSON.stringify(body),
-      method: "POST"
-    }
-  );
-}
-
-export async function syncSelectedRepositoryPullRequests(
-  workspaceId: string,
-  request: GitHubSelectedPullRequestSyncRequest,
-  options: ApiFetchOptions = {}
-): Promise<GitHubSelectedPullRequestSyncResponse> {
-  const body: Record<string, unknown> = {
-    connection_id: request.connection_id,
-    repositories: request.repositories
-  };
-  if (request.states && request.states.length > 0) {
-    body.states = request.states;
-  }
-  return apiFetch<GitHubSelectedPullRequestSyncResponse>(
-    buildWorkspaceGitHubSelectedPullRequestSyncPath(workspaceId),
-    {
-      ...options,
-      body: JSON.stringify(body),
-      method: "POST"
-    }
-  );
-}
-
-export async function syncSelectedRepositoryGitHubWork(
-  workspaceId: string,
-  request: {
-    connection_id: string;
-    repositories: string[];
-    issueStates?: GitHubSelectedIssueSyncRequest["states"];
-    pullRequestStates?: GitHubSelectedPullRequestSyncRequest["states"];
-  },
-  options: ApiFetchOptions = {}
-): Promise<GitHubSelectedRepositorySyncResult> {
-  const issues = await syncSelectedRepositoryIssues(
-    workspaceId,
-    {
-      connection_id: request.connection_id,
-      repositories: request.repositories,
-      states: request.issueStates
-    },
-    options
-  );
-  const pullRequests = await syncSelectedRepositoryPullRequests(
-    workspaceId,
-    {
-      connection_id: request.connection_id,
-      repositories: request.repositories,
-      states: request.pullRequestStates
-    },
-    options
-  );
-  return { issues, pull_requests: pullRequests };
 }

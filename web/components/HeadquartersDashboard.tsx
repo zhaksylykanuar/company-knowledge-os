@@ -17,12 +17,12 @@ import {
   type HeadquartersMission,
   type HeadquartersPrecision,
   type HeadquartersPulseMetric,
-  type HeadquartersSnapshotResponse,
-  type HeadquartersSourceHealth
+  type HeadquartersSnapshotResponse
 } from "../lib/headquarters";
 import { useSession } from "../lib/session";
 import type { CompanyMapResponse } from "../lib/types";
 import { HeadquartersActionControl } from "./HeadquartersActionControl";
+import { OPEN_COMPANY_ASSISTANT_EVENT } from "./CompanyAssistant";
 import { HeadquartersDecisionModal } from "./HeadquartersDecisionModal";
 import { HeadquartersMissionDetail } from "./HeadquartersMissionDetail";
 import { HeadquartersOnboardingModal } from "./HeadquartersOnboardingModal";
@@ -71,8 +71,7 @@ export type HeadquartersOverlay =
   | { kind: "mission"; mission: HeadquartersMission; position: "priority" | "queue" }
   | { kind: "onboarding" }
   | { kind: "profile"; label: string; selector: string }
-  | { kind: "pulse"; metric: HeadquartersPulseMetric }
-  | { kind: "sources" };
+  | { kind: "pulse"; metric: HeadquartersPulseMetric };
 
 const INITIAL_LOAD_STATE: HeadquartersLoadState = {
   refreshError: false,
@@ -419,21 +418,39 @@ export function HeadquartersDashboardView({
         <div className="headquarters-command-deck">
           <header className="headquarters-intro">
             <div>
-              <span className="eyebrow">Живой штаб</span>
-              <h1 id="headquarters-title">{snapshot.workspace.name}</h1>
+              <span className="eyebrow">Сейчас</span>
+              <h1 id="headquarters-title">
+                Вот что важно в {snapshot.workspace.name}
+              </h1>
             </div>
             <div className="headquarters-intro-meta">
-              <p>Один подтверждённый ход — затем вся картина по запросу.</p>
+              <p>Коротко и только по подтверждённым данным.</p>
               <HeadquartersControls
                 onOpenCoverage={() => setRequestedOverlay({ kind: "coverage" })}
                 onOpenOnboarding={() =>
                   setRequestedOverlay({ kind: "onboarding" })
                 }
-                onOpenSources={() => setRequestedOverlay({ kind: "sources" })}
                 snapshot={snapshot}
               />
             </div>
           </header>
+
+          <button
+            className="headquarters-ask"
+            onClick={() =>
+              window.dispatchEvent(new Event(OPEN_COMPANY_ASSISTANT_EVENT))
+            }
+            type="button"
+          >
+            <span aria-hidden="true">✦</span>
+            <span>
+              <strong>Спросить FounderOS</strong>
+              <small>
+                Разобрать ситуацию, проверить риск или найти основание
+              </small>
+            </span>
+            <span aria-hidden="true">→</span>
+          </button>
 
           <PriorityStage
             onOpenDecision={(mission) =>
@@ -449,7 +466,7 @@ export function HeadquartersDashboardView({
             snapshot={snapshot}
           />
 
-          <PulseRow
+          <CompanyPicture
             metrics={snapshot.pulse}
             onOpen={(metric) => setRequestedOverlay({ kind: "pulse", metric })}
           />
@@ -500,7 +517,7 @@ export function HeadquartersDashboardView({
             onDecisionRefetch ??
             (async () => {
               onRetry?.();
-              throw new Error("Результат обновления Штаба пока не подтверждён.");
+              throw new Error("Результат обновления картины компании пока не подтверждён.");
             })
           }
           snapshot={snapshot}
@@ -522,21 +539,12 @@ export function HeadquartersDashboardView({
 function HeadquartersControls({
   onOpenCoverage,
   onOpenOnboarding,
-  onOpenSources,
   snapshot
 }: {
   onOpenCoverage: () => void;
   onOpenOnboarding: () => void;
-  onOpenSources: () => void;
   snapshot: HeadquartersSnapshotResponse;
 }) {
-  const sourcesState =
-    snapshot.sources.attention_count > 0
-      ? "attention"
-      : snapshot.sources.healthy === snapshot.sources.total
-        ? "healthy"
-        : "quiet";
-
   return (
     <div className="headquarters-command-actions">
       {!snapshot.onboarding.ready ? (
@@ -566,22 +574,6 @@ function HeadquartersControls({
           Картина частичная · что недоступно?
         </button>
       ) : null}
-      <button
-        className="headquarters-source-health"
-        data-state={sourcesState}
-        onClick={onOpenSources}
-        type="button"
-      >
-        <i aria-hidden="true" />
-        <span>
-          <strong>{snapshot.sources.healthy} из {snapshot.sources.total} радаров</strong>
-          <small>
-            {snapshot.sources.attention_count > 0
-              ? `Нужно проверить: ${snapshot.sources.attention_count}`
-              : "Состояние источников"}
-          </small>
-        </span>
-      </button>
     </div>
   );
 }
@@ -600,12 +592,12 @@ function PriorityStage({
     return (
       <article className="headquarters-priority headquarters-priority--calm">
         <div className="headquarters-priority-topline">
-          <span>Ход сейчас</span>
-          <span>Спокойный режим</span>
+          <span>Главный вывод</span>
+          <span>Внимание не требуется</span>
         </div>
         <div className="headquarters-priority-copy">
           <h2>Подтверждённых приоритетов сейчас нет</h2>
-          <p>Штаб продолжает наблюдать за доступным снимком и ничего не придумывает.</p>
+          <p>FounderOS продолжает наблюдать и не создаёт выводы без оснований.</p>
         </div>
         {snapshot.onboarding.next_action ? (
           <HeadquartersActionControl action={snapshot.onboarding.next_action} />
@@ -621,7 +613,7 @@ function PriorityStage({
       data-trust={mission.trust_class}
     >
       <div className="headquarters-priority-topline">
-        <span>Ход сейчас · №1</span>
+        <span>Главное сейчас</span>
         <span>{missionTrustLabel(mission)}</span>
       </div>
       <div className="headquarters-priority-copy">
@@ -651,7 +643,7 @@ function PriorityStage({
           onClick={() => onOpen(mission)}
           type="button"
         >
-          Почему это №1?
+          Почему это важно?
           <span aria-hidden="true">↗</span>
         </button>
         {!mission.action.enabled && mission.action.disabled_reason ? (
@@ -664,7 +656,7 @@ function PriorityStage({
   );
 }
 
-function PulseRow({
+function CompanyPicture({
   metrics,
   onOpen
 }: {
@@ -672,23 +664,35 @@ function PulseRow({
   onOpen: (metric: HeadquartersPulseMetric) => void;
 }) {
   return (
-    <section className="headquarters-pulse" aria-label="Пульс компании">
-      {metrics.map((metric, index) => (
+    <section className="headquarters-picture" aria-labelledby="company-picture-title">
+      <header>
+        <div>
+          <span className="eyebrow">Общая картина</span>
+          <h2 id="company-picture-title">Три области внимания</h2>
+        </div>
+        <span>по текущим данным</span>
+      </header>
+      <div>
+      {metrics.map((metric) => (
         <button
-          className="headquarters-pulse-card"
           data-key={metric.key}
           key={metric.key}
           onClick={() => onOpen(metric)}
           type="button"
         >
-          <span className="headquarters-pulse-index">0{index + 1}</span>
-          <span className="headquarters-pulse-value">
-            {formatMetric(metric.value, metric.precision)}
+          <span
+            className="headquarters-picture-state"
+            data-attention={metric.value && metric.value > 0 ? "true" : "false"}
+            aria-hidden="true"
+          />
+          <span>
+            <strong>{pictureLabel(metric.key)}</strong>
+            <small>{pictureSummary(metric)}</small>
           </span>
-          <span className="headquarters-pulse-label">{metric.label}</span>
           <span className="headquarters-pulse-open" aria-hidden="true">→</span>
         </button>
       ))}
+      </div>
     </section>
   );
 }
@@ -704,8 +708,8 @@ function MissionQueue({
     <section className="headquarters-queue" aria-labelledby="headquarters-queue-title">
       <header className="headquarters-section-header">
         <div>
-          <span className="eyebrow">Следом</span>
-          <h2 id="headquarters-queue-title">Очередь ходов</h2>
+          <span className="eyebrow">После главного</span>
+          <h2 id="headquarters-queue-title">Что ещё держать в поле зрения</h2>
         </div>
         <span>{missions.length}/2</span>
       </header>
@@ -734,8 +738,8 @@ function MissionQueue({
         </ol>
       ) : (
         <div className="headquarters-empty-panel">
-          <strong>Следующих ходов нет</strong>
-          <span>Штаб не создаёт очередь без подтверждённых оснований.</span>
+          <strong>Других важных ситуаций сейчас нет</strong>
+          <span>FounderOS не создаёт очередь без подтверждённых оснований.</span>
         </div>
       )}
     </section>
@@ -748,8 +752,8 @@ function CurrentSignals({ snapshot }: { snapshot: HeadquartersSnapshotResponse }
     <section className="headquarters-signals" aria-labelledby="headquarters-signals-title">
       <header className="headquarters-section-header">
         <div>
-          <span className="eyebrow">Текущий снимок</span>
-          <h2 id="headquarters-signals-title">Сигналы</h2>
+          <span className="eyebrow">Подтверждённые факты</span>
+          <h2 id="headquarters-signals-title">Что уже видно</h2>
         </div>
         <span>{items.length}/3</span>
       </header>
@@ -779,7 +783,7 @@ function CurrentSignals({ snapshot }: { snapshot: HeadquartersSnapshotResponse }
         </ol>
       ) : (
         <div className="headquarters-empty-panel">
-          <strong>Новых подтверждённых сигналов нет</strong>
+          <strong>Подтверждённых фактов для показа пока нет</strong>
           <span>Это состояние текущего снимка, а не история с прошлого визита.</span>
         </div>
       )}
@@ -808,13 +812,13 @@ function TruthStrip({
       </span>
       <span>
         <strong>
-          {snapshot.snapshot.partial ? "Картина собрана частично" : "Текущий снимок проверен"}
+          {snapshot.snapshot.partial ? "Картина собрана частично" : "Основания проверены"}
         </strong>
         <small>Собрано {formatDateTime(snapshot.snapshot.as_of)}</small>
       </span>
       <div>
         <button onClick={onOpenCoverage} type="button">
-          {snapshot.snapshot.partial ? "Что недоступно" : "Как собран снимок"}
+          {snapshot.snapshot.partial ? "Что пока неизвестно" : "Как это подтверждено"}
         </button>
         {onRetry ? (
           <button disabled={isRefreshing} onClick={onRetry} type="button">
@@ -864,7 +868,6 @@ function HeadquartersDrawer({
         />
       ) : null}
       {overlay.kind === "pulse" ? <PulseDrawer metric={overlay.metric} /> : null}
-      {overlay.kind === "sources" ? <SourcesDrawer snapshot={snapshot} /> : null}
       {overlay.kind === "coverage" ? <CoverageDrawer snapshot={snapshot} /> : null}
     </OverlayShell>
   );
@@ -935,47 +938,6 @@ function PulseDrawer({ metric }: { metric: HeadquartersPulseMetric }) {
   );
 }
 
-function SourcesDrawer({ snapshot }: { snapshot: HeadquartersSnapshotResponse }) {
-  return (
-    <div className="headquarters-drawer-content">
-      <p className="headquarters-drawer-lead">
-        Здоровы {snapshot.sources.healthy} из {snapshot.sources.total}. Здесь показано состояние локальных данных, а не обещание live-доступа к провайдеру.
-      </p>
-      <div className="headquarters-source-list">
-        {snapshot.sources.items.map((source) => (
-          <SourceHealthCard key={source.key} source={source} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SourceHealthCard({ source }: { source: HeadquartersSourceHealth }) {
-  return (
-    <article className="headquarters-source-card" data-state={source.primary_state}>
-      <header>
-        <span className="headquarters-source-dot" aria-hidden="true" />
-        <div><strong>{source.name}</strong><small>{sourceStateLabel(source.primary_state)}</small></div>
-        <span>{source.record_count}</span>
-      </header>
-      <dl>
-        <div><dt>Данные</dt><dd>{sourceDataLabel(source.data)}</dd></div>
-        <div><dt>Свежесть</dt><dd>{freshnessLabel(source.freshness)}</dd></div>
-        <div><dt>Последняя попытка</dt><dd>{formatDateTime(source.last_attempt_at)}</dd></div>
-        <div><dt>Последний успех</dt><dd>{formatDateTime(source.last_success_at)}</dd></div>
-        <div><dt>Свежи до</dt><dd>{formatDateTime(source.fresh_until)}</dd></div>
-      </dl>
-      {source.attention_reason ? (
-        <p className="headquarters-source-attention">
-          {sourceAttentionLabel(source.attention_reason)}
-        </p>
-      ) : null}
-      {source.blocker ? <p>{source.blocker}</p> : null}
-      <HeadquartersActionControl action={source.next_action} />
-    </article>
-  );
-}
-
 function CoverageDrawer({ snapshot }: { snapshot: HeadquartersSnapshotResponse }) {
   return (
     <div className="headquarters-drawer-content">
@@ -1021,8 +983,8 @@ function HeadquartersState({
     >
       <header className="headquarters-intro">
         <div>
-          <span className="eyebrow">Живой штаб</span>
-          <h1>{workspaceName ?? "Штаб компании"}</h1>
+          <span className="eyebrow">Сейчас</span>
+          <h1>{workspaceName ?? "Картина компании"}</h1>
         </div>
         <p>{content.description}</p>
       </header>
@@ -1063,13 +1025,13 @@ function isAbortError(error: unknown): boolean {
 
 function stateContent(status: Exclude<HeadquartersDashboardStatus, "ready">) {
   if (status === "loading") {
-    return { description: "Собираем один согласованный снимок компании.", icon: "", title: "Штаб просыпается" };
+    return { description: "Собираем одну согласованную картину компании.", icon: "", title: "FounderOS вспоминает контекст" };
   }
   if (status === "missing") {
     return { description: "Сначала выберите рабочее пространство компании.", icon: "+", title: "Нужна компания" };
   }
   if (status === "forbidden") {
-    return { description: "У этого аккаунта нет доступа к выбранному штабу.", icon: "×", title: "Доступ закрыт" };
+    return { description: "У этого аккаунта нет доступа к выбранной компании.", icon: "×", title: "Доступ закрыт" };
   }
   if (status === "offline") {
     return { description: "Локальный FounderOS сейчас не отвечает. Проверьте runtime и попробуйте снова.", icon: "↯", title: "Нет связи с системой" };
@@ -1077,15 +1039,14 @@ function stateContent(status: Exclude<HeadquartersDashboardStatus, "ready">) {
   if (status === "contract_error") {
     return { description: "Ответ не прошёл безопасную проверку и поэтому не показан.", icon: "!", title: "Картина не подтверждена" };
   }
-  return { description: "Не удалось собрать штаб. Старые данные не показаны как актуальные.", icon: "!", title: "Штаб временно недоступен" };
+  return { description: "Не удалось собрать картину. Старые данные не показаны как актуальные.", icon: "!", title: "Картина временно недоступна" };
 }
 
 function overlayTitle(overlay: HeadquartersOverlay): string {
-  if (overlay.kind === "coverage") return "Как собран снимок";
+  if (overlay.kind === "coverage") return "Как подтверждена картина";
   if (overlay.kind === "decision") return overlay.mission.title;
   if (overlay.kind === "onboarding") return "Запуск компании";
   if (overlay.kind === "profile") return overlay.label;
-  if (overlay.kind === "sources") return "Радары компании";
   if (overlay.kind === "pulse") return overlay.metric.label;
   return overlay.mission.title;
 }
@@ -1123,6 +1084,31 @@ function formatMetric(value: number | null, precision: HeadquartersPrecision): s
   return precision === "at_least" ? `≥${value}` : String(value);
 }
 
+function pictureLabel(key: HeadquartersPulseMetric["key"]): string {
+  if (key === "waiting_decisions") return "Решения";
+  if (key === "pending_relationships") return "Люди и связи";
+  return "Полнота памяти";
+}
+
+function pictureSummary(metric: HeadquartersPulseMetric): string {
+  if (metric.value === null || metric.precision === "unavailable") {
+    return metric.empty_state;
+  }
+  if (metric.key === "waiting_decisions") {
+    return metric.value === 0
+      ? "Ничего не ждёт вашего решения"
+      : `${formatMetric(metric.value, metric.precision)} требуют решения`;
+  }
+  if (metric.key === "pending_relationships") {
+    return metric.value === 0
+      ? "Новых неподтверждённых связей нет"
+      : `${formatMetric(metric.value, metric.precision)} связей нужно проверить`;
+  }
+  return metric.value === 0
+    ? "Доступная память не требует внимания"
+    : `Требуют внимания: ${formatMetric(metric.value, metric.precision)}`;
+}
+
 function precisionLabel(precision: HeadquartersPrecision): string {
   if (precision === "at_least") return "не меньше";
   if (precision === "unavailable") return "нет подтверждённых данных";
@@ -1156,40 +1142,6 @@ function sourceLabel(source: string): string {
     jira: "Jira"
   };
   return labels[source] ?? "Источник";
-}
-
-function sourceAttentionLabel(reason: string): string {
-  const labels: Record<string, string> = {
-    no_data: "Источник подключён, но подтверждённых данных пока нет.",
-    partial_data: "Источник передал только часть ожидаемых данных.",
-    read_failed: "Последняя попытка чтения завершилась ошибкой.",
-    stale_data: "Данные источника вышли за подтверждённое окно свежести."
-  };
-  return labels[reason] ?? "Источник требует проверки.";
-}
-
-function sourceStateLabel(state: HeadquartersSourceHealth["primary_state"]): string {
-  const labels: Record<HeadquartersSourceHealth["primary_state"], string> = {
-    failed: "Ошибка чтения",
-    healthy: "Готов",
-    no_data: "Нет данных",
-    partial: "Частично",
-    setup: "Не настроен",
-    stale: "Устарел"
-  };
-  return labels[state];
-}
-
-function sourceDataLabel(state: HeadquartersSourceHealth["data"]): string {
-  if (state === "available") return "доступны";
-  if (state === "partial") return "частично";
-  return "нет";
-}
-
-function freshnessLabel(state: HeadquartersSourceHealth["freshness"]): string {
-  if (state === "fresh") return "свежие";
-  if (state === "stale") return "устарели";
-  return "неизвестно";
 }
 
 function coverageLabel(key: HeadquartersSnapshotResponse["snapshot"]["coverage"][number]["key"]): string {

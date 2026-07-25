@@ -45,7 +45,7 @@ test("closeDisabled exposes a disabled close control while work is pending", () 
       backgroundRef={createRef<HTMLElement>()}
       closeDisabled
       closeLabel="Закрыть решение"
-      label="Решение по миссии"
+      label="Решение по ситуации"
       mode="modal"
       onClose={() => undefined}
     >

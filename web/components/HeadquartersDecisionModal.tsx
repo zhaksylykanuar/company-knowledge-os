@@ -70,7 +70,7 @@ export function HeadquartersDecisionModal({
 
   useEffect(() => {
     if (!proposalId || !mission.proposal_version) {
-      setError("У этой миссии нет точной версии решения.");
+      setError("У этой ситуации нет точной версии решения.");
       setStatus("stale");
       return;
     }
@@ -125,7 +125,7 @@ export function HeadquartersDecisionModal({
         proposal,
         reason:
           decision === "rejected"
-            ? "Отклонено в Штабе после проверки подтверждённых оснований."
+            ? "Отклонено в FounderOS после проверки подтверждённых оснований."
             : null,
         workspaceId: snapshot.workspace.id
       });
@@ -158,7 +158,7 @@ export function HeadquartersDecisionModal({
       backgroundRef={backgroundRef}
       closeDisabled={pending}
       closeLabel="Закрыть решение"
-      label="Решение по миссии"
+      label="Решение по ситуации"
       mode="modal"
       onClose={onClose}
     >
@@ -231,14 +231,14 @@ export function HeadquartersDecisionContent({
           <div><dt>Внешняя запись</dt><dd>Нет</dd></div>
         </dl>
         {refetchStatus === "pending" ? (
-          <p aria-live="polite">Обновляем приоритет Штаба…</p>
+          <p aria-live="polite">Обновляем приоритет FounderOS…</p>
         ) : refetchStatus === "failed" ? (
           <p className="headquarters-decision-warning" role="status">
             Квитанция сохранена, но новый снимок пока не загрузился.
           </p>
         ) : refetchStatus === "succeeded" ? (
           <p className="headquarters-decision-success" role="status">
-            Штаб обновлён и пересчитал следующий ход.
+            FounderOS обновлён и пересчитал следующий ход.
           </p>
         ) : null}
         <div className="headquarters-decision-actions">
@@ -246,7 +246,7 @@ export function HeadquartersDecisionContent({
             <button onClick={onRefetch} type="button">Повторить обновление</button>
           ) : null}
           <button disabled={refetchStatus === "pending"} onClick={onClose} type="button">
-            Вернуться в Штаб
+            Вернуться в FounderOS
           </button>
         </div>
       </section>
@@ -278,7 +278,7 @@ export function HeadquartersDecisionContent({
               Открыть точную историю
             </Link>
           ) : null}
-          <button onClick={onClose} type="button">Вернуться в Штаб</button>
+          <button onClick={onClose} type="button">Вернуться в FounderOS</button>
         </div>
       ) : proposal?.status !== "proposed" ? (
         <p>Текущее состояние решения: {proposal?.status ?? "неизвестно"}.</p>
@@ -313,7 +313,7 @@ function decisionLoadError(error: unknown): string {
 
 function decisionSubmitError(error: unknown): string {
   if (error instanceof ApiRequestError && error.status === 409) {
-    return "Снимок или решение изменились. Обновите Штаб и проверьте новый контекст.";
+    return "Снимок или решение изменились. Обновите FounderOS и проверьте новый контекст.";
   }
   if (error instanceof ApiRequestError && error.status === 403) {
     return "Нет доступа к сохранению этого решения.";

@@ -1005,7 +1005,7 @@ export function ActionProposalsPanelView({
       <header className="missions-hero">
         <div className="missions-hero-copy">
           <span className="eyebrow">Комната решений</span>
-          <h1 id="missions-title">Миссии</h1>
+          <h1 id="missions-title">Решения</h1>
           <p>
             Здесь вы решаете, что компания делает дальше. Сначала основание,
             потом решение, и только затем — отдельный внешний шаг.
@@ -1137,7 +1137,7 @@ export function ActionProposalsPanelView({
                 ? M.actionsPanel.linkedProposalOutsideFilter
                 : isRefreshing
                   ? "Обновляем очередь…"
-                  : "В загруженной очереди · до 100 миссий"}
+                  : "В загруженной очереди · до 100 решений"}
             </span>
           </div>
 
@@ -1158,7 +1158,7 @@ export function ActionProposalsPanelView({
           {activeProposal ? (
             <section
               aria-busy={isRefreshing || operationBusy}
-              aria-label="Рабочая зона миссий"
+              aria-label="Рабочая зона решений"
               className="missions-workspace"
             >
               <MissionDecisionConsole
@@ -1209,7 +1209,7 @@ export function ActionProposalsPanelView({
                 open={status === "empty"}
               >
                 <summary>
-                  <span>Добавить миссию</span>
+                  <span>Добавить решение</span>
                   <small>Сохранится в FounderOS и ничего не выполнит само</small>
                 </summary>
                 <div className="decision-room-disclosure-body">
@@ -1408,12 +1408,12 @@ function missionWhyNow(proposal: ActionProposal): string {
     return "Решение уже сохранено; следующий шаг ещё нужно проверить отдельно.";
   }
   if (proposal.status === "executed") {
-    return "Для этой миссии сохранён результат выполнения.";
+    return "Для этого решения сохранён результат выполнения.";
   }
   if (proposal.status === "rejected") {
-    return "Миссия закрыта решением человека и остаётся в истории.";
+    return "Решение закрыто человеком и остаётся в истории.";
   }
-  return "Миссия сохранена в очереди и ждёт решения человека.";
+  return "Решение сохранено в очереди и ждёт ответа человека.";
 }
 
 function missionQueueTitle(statusFilter: ProposalStatusFilter): string {
@@ -1421,12 +1421,12 @@ function missionQueueTitle(statusFilter: ProposalStatusFilter): string {
     return "Что ждёт вас";
   }
   if (statusFilter === "approved") {
-    return "Принятые миссии";
+    return "Принятые решения";
   }
   if (statusFilter === "rejected") {
-    return "Закрытые миссии";
+    return "Закрытые решения";
   }
-  return "Миссии компании";
+  return "Решения компании";
 }
 
 function focusMissionDestinationAfterRender() {
@@ -1797,7 +1797,7 @@ function BulkReviewControls({
       <details className="missions-bulk-confirm">
         <summary>Проверить последствия</summary>
         <p>
-          Статус изменится только внутри FounderOS для выбранных миссий. Внешние
+          Статус изменится только внутри FounderOS для выбранных решений. Внешние
           действия не запустятся.
         </p>
         <div className="actions-row decision-room-bulk-actions">
@@ -1993,7 +1993,7 @@ function MissionDecisionConsole({
     <article className="mission-console" id="mission-console" aria-labelledby="mission-console-title">
       <header className="mission-console-header">
         <div className="mission-console-heading">
-          <span className="eyebrow">Активная миссия</span>
+          <span className="eyebrow">Активное решение</span>
           <div className="mission-console-heading-actions">
             <span
               className={`badge decision-room-status decision-room-status--${proposalStatusTone(proposal.status)}`}
@@ -2020,12 +2020,12 @@ function MissionDecisionConsole({
 
       {operationBusy ? (
         <p className="mission-operation-lock" role="status">
-          Завершаем защищённую операцию. Переключение миссии, компании и раздела
+          Завершаем защищённую операцию. Переключение решения, компании и раздела
           временно приостановлено.
         </p>
       ) : null}
 
-      <ol className="mission-progress" aria-label="Этапы миссии">
+      <ol className="mission-progress" aria-label="Этапы решения">
         {missionProgressLabels(proposal).map((label, index) => (
           <li
             aria-current={index === stage ? "step" : undefined}
@@ -2044,7 +2044,7 @@ function MissionDecisionConsole({
 
       <section className="mission-why" aria-labelledby="mission-why-title">
         <span>Почему сейчас</span>
-        <h3 className="sr-only" id="mission-why-title">Причина выбора миссии</h3>
+        <h3 className="sr-only" id="mission-why-title">Причина выбора решения</h3>
         <p>{missionWhyNow(proposal)}</p>
       </section>
 
@@ -2053,7 +2053,7 @@ function MissionDecisionConsole({
         <h3 id="mission-impact-title">{actionLabel(proposal.action_type)}</h3>
         <p>
           {isLocalOnlyProposal(proposal)
-            ? "Миссия останется внутри FounderOS; во внешние сервисы ничего не уйдёт."
+            ? "Решение останется внутри FounderOS; во внешние сервисы ничего не уйдёт."
             : "Сначала сохранится только решение. Внешний шаг появится отдельно и потребует нового подтверждения."}
         </p>
       </section>
@@ -2079,16 +2079,16 @@ function MissionDecisionConsole({
           selectionMode={drawerSelectionMode}
           selectionDescription={
             drawerSelectionMode === "manual"
-              ? "Показано выбранное основание этой миссии."
+              ? "Показано выбранное основание этого решения."
               : drawerSelectionMode === "default"
-                ? "Показано первое основание выбранной миссии."
+                ? "Показано первое основание выбранного решения."
                 : null
           }
         />
       </section>
 
       {canReviewProposals ? (
-        <section className="mission-decision" aria-label="Решение по миссии">
+        <section className="mission-decision" aria-label="Решение по предложению">
           {proposalMutationError ? (
             <p className="error-text" role="alert">
               {proposalMutationError}
@@ -2188,15 +2188,15 @@ function MissionQueueEmpty({
       <div>
         <span className="eyebrow">Очередь свободна</span>
         <h2 id="mission-empty-title" tabIndex={-1}>
-          {hasAnyProposals ? "В этом фокусе миссий нет" : "Добавьте первую миссию"}
+          {hasAnyProposals ? "В этом фокусе решений нет" : "Добавьте первое решение"}
         </h2>
         <p>
           {hasAnyProposals
-            ? "Измените фильтры — другие миссии остаются в загруженной очереди."
+            ? "Измените фильтры — другие решения остаются в загруженной очереди."
             : "Зафиксируйте следующий ход. Он сохранится локально и не запустит внешнее действие."}
         </p>
         {!hasAnyProposals && canCreateProposals ? (
-          <a className="button" href="#add-mission">Создать первую миссию</a>
+          <a className="button" href="#add-mission">Создать первое решение</a>
         ) : null}
       </div>
     </section>
@@ -2210,8 +2210,8 @@ function MissionExecutionOutcome({
 }) {
   const succeeded = outcome.providerResult === "succeeded";
   return (
-    <section className="mission-outcome" aria-label="Сохранённый результат миссии">
-      <span className="eyebrow">Результат миссии</span>
+    <section className="mission-outcome" aria-label="Сохранённый результат решения">
+      <span className="eyebrow">Результат решения</span>
       <h3>{succeeded ? "Внешний результат подтверждён" : "Результат сохранён"}</h3>
       <p>
         {outcome.externalWritePerformed

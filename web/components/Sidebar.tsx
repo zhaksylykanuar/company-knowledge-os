@@ -6,12 +6,12 @@ import type { ReactNode } from "react";
 
 import { M } from "../lib/messages";
 
-type NavIcon = "building" | "decision" | "settings" | "sources" | "today";
+type NavIcon = "ask" | "building" | "settings" | "today";
 
 export type NavLink = {
   activePaths?: readonly string[];
   href: string;
-  icon?: NavIcon;
+  icon: NavIcon;
   label: string;
 };
 
@@ -23,31 +23,25 @@ type NavGroup = {
 export const PRIMARY_NAV: readonly NavLink[] = [
   {
     href: "/dashboard",
-    label: M.nav.hq,
+    label: M.nav.now,
     icon: "today",
-    activePaths: ["/dashboard", "/briefings"]
+    activePaths: ["/dashboard"]
   },
   {
     href: "/company-brain",
-    label: M.nav.world,
+    label: M.nav.company,
     icon: "building",
-    activePaths: ["/company-brain", "/documents"]
+    activePaths: ["/company-brain", "/documents", "/briefings", "/actions"]
   },
   {
-    href: "/actions",
-    label: M.nav.missions,
-    icon: "decision",
-    activePaths: ["/actions"]
+    href: "/ask",
+    label: M.nav.ask,
+    icon: "ask",
+    activePaths: ["/ask"]
   }
 ] as const;
 
 export const BACKSTAGE_NAV: readonly NavLink[] = [
-  {
-    href: "/connectors",
-    label: M.nav.radars,
-    icon: "sources",
-    activePaths: ["/connectors", "/github", "/jira", "/gmail", "/drive"]
-  },
   {
     href: "/settings",
     label: M.nav.settings,
@@ -56,39 +50,14 @@ export const BACKSTAGE_NAV: readonly NavLink[] = [
   }
 ] as const;
 
-export const SOURCE_NAV: readonly NavLink[] = [
-  { href: "/connectors", label: M.nav.sourceOverview },
-  { href: "/github", label: M.nav.github },
-  { href: "/jira", label: M.nav.jira },
-  { href: "/gmail", label: M.nav.gmail },
-  { href: "/drive", label: M.nav.drive }
-] as const;
-
-export const TODAY_NAV: readonly NavLink[] = [
-  { href: "/dashboard", label: M.nav.todayOverview },
-  { href: "/briefings", label: M.nav.briefings }
-] as const;
-
-export const COMPANY_NAV: readonly NavLink[] = [
-  { href: "/company-brain", label: M.nav.companyMap },
-  { href: "/documents", label: M.nav.documents }
-] as const;
-
-// Kept as compatibility exports for tests and consumers that need a flattened
-// navigation model. Briefings and documents remain reachable product routes,
-// but the rendered shell no longer treats them as primary sub-navigation.
 export const NAV_GROUPS: readonly NavGroup[] = [
   { label: M.nav.primaryZones, links: PRIMARY_NAV },
-  { label: M.nav.backstage, links: BACKSTAGE_NAV },
-  { label: M.nav.sourceProviders, links: SOURCE_NAV }
+  { label: M.nav.settings, links: BACKSTAGE_NAV }
 ] as const;
 
 export const NAV_LINKS: readonly NavLink[] = [
   ...PRIMARY_NAV,
-  ...BACKSTAGE_NAV,
-  TODAY_NAV[1],
-  COMPANY_NAV[1],
-  ...SOURCE_NAV.slice(1)
+  ...BACKSTAGE_NAV
 ];
 
 export function isNavigationItemActive(pathname: string, link: NavLink): boolean {
@@ -104,9 +73,7 @@ export function Sidebar({ locked = false }: { locked?: boolean } = {}) {
   return (
     <aside className="sidebar" inert={locked}>
       <Link className="brand" href="/dashboard" aria-label={M.nav.brandHomeLabel}>
-        <span className="brand-mark" aria-hidden="true">
-          F
-        </span>
+        <span className="brand-mark" aria-hidden="true">F</span>
         <span className="brand-copy">
           <span className="brand-name">{M.app.name}</span>
           <span className="brand-mode">{M.app.shellMode}</span>
@@ -114,43 +81,20 @@ export function Sidebar({ locked = false }: { locked?: boolean } = {}) {
       </Link>
 
       <nav className="nav" aria-label={M.nav.primaryLabel}>
-        {PRIMARY_NAV.map((link) => {
-          const isActive = isNavigationItemActive(pathname, link);
-          return (
-            <div className="nav-zone" key={link.href}>
-              <Link
-                aria-current={pathname === link.href ? "page" : undefined}
-                className={isActive ? "nav-link active" : "nav-link"}
-                href={link.href}
-              >
-                {link.icon ? <NavGlyph icon={link.icon} /> : null}
-                <span>{link.label}</span>
-              </Link>
-
-            </div>
-          );
-        })}
+        {PRIMARY_NAV.map((link) => (
+          <NavigationLink key={link.href} link={link} pathname={pathname} />
+        ))}
       </nav>
 
-      <nav className="backstage-nav" aria-label={M.nav.backstage}>
-        {BACKSTAGE_NAV.map((link) => {
-          const isActive = isNavigationItemActive(pathname, link);
-          return (
-            <Link
-              aria-current={pathname === link.href ? "page" : undefined}
-              className={
-                isActive
-                  ? "nav-link backstage-nav-link active"
-                  : "nav-link backstage-nav-link"
-              }
-              href={link.href}
-              key={link.href}
-            >
-              {link.icon ? <NavGlyph icon={link.icon} /> : null}
-              <span>{link.label}</span>
-            </Link>
-          );
-        })}
+      <nav className="backstage-nav" aria-label={M.nav.settings}>
+        {BACKSTAGE_NAV.map((link) => (
+          <NavigationLink
+            extraClassName="backstage-nav-link"
+            key={link.href}
+            link={link}
+            pathname={pathname}
+          />
+        ))}
       </nav>
 
       <p className="sidebar-boundary">{M.nav.boundary}</p>
@@ -167,70 +111,41 @@ export function MobilePrimaryNavigation({
 
   return (
     <nav className="mobile-nav" aria-label={M.nav.primaryLabel} inert={locked}>
-      {PRIMARY_NAV.map((link) => {
-        const isActive = isNavigationItemActive(pathname, link);
-        return (
-          <Link
-            aria-current={pathname === link.href ? "page" : undefined}
-            className={isActive ? "nav-link active" : "nav-link"}
-            href={link.href}
-            key={link.href}
-          >
-            {link.icon ? <NavGlyph icon={link.icon} /> : null}
-            <span>{link.label}</span>
-          </Link>
-        );
-      })}
+      {PRIMARY_NAV.map((link) => (
+        <NavigationLink key={link.href} link={link} pathname={pathname} />
+      ))}
     </nav>
   );
 }
 
-export function ContextNavigation({ locked = false }: { locked?: boolean } = {}) {
-  const pathname = usePathname();
-  const context = getContextNavigation(pathname);
-
-  if (context === null) {
-    return null;
-  }
-
+function NavigationLink({
+  extraClassName = "",
+  link,
+  pathname
+}: {
+  extraClassName?: string;
+  link: NavLink;
+  pathname: string;
+}) {
+  const active = isNavigationItemActive(pathname, link);
   return (
-    <nav className="context-nav" aria-label={context.label} inert={locked}>
-      <span className="context-nav-label">{context.label}</span>
-      <div className="context-nav-links">
-        {context.links.map((link) => {
-          const active = isNavigationItemActive(pathname, link);
-          return (
-            <Link
-              aria-current={pathname === link.href ? "page" : undefined}
-              className={active ? "context-nav-link active" : "context-nav-link"}
-              href={link.href}
-              key={link.href}
-            >
-              {link.label}
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <Link
+      aria-current={pathname === link.href ? "page" : undefined}
+      className={`nav-link${extraClassName ? ` ${extraClassName}` : ""}${active ? " active" : ""}`}
+      href={link.href}
+    >
+      <NavGlyph icon={link.icon} />
+      <span>{link.label}</span>
+    </Link>
   );
-}
-
-export function getContextNavigation(pathname: string): NavGroup | null {
-  const isSourceRoute = SOURCE_NAV.some((link) =>
-    isNavigationItemActive(pathname, link)
-  );
-  return isSourceRoute
-    ? { label: M.nav.sourceProviders, links: SOURCE_NAV }
-    : null;
 }
 
 function NavGlyph({ icon }: { icon: NavIcon }) {
   const paths: Record<NavIcon, ReactNode> = {
     today: (
       <>
-        <path d="M4 5.5h16M7 3v5M17 3v5" />
-        <path d="M5 8.5h14v11H5z" />
-        <path d="m9 14 2 2 4-5" />
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 8v4l3 2" />
       </>
     ),
     building: (
@@ -239,18 +154,10 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
         <path d="M8 10h1M8 14h1M15 10h1M15 14h1M10 20v-3h4v3" />
       </>
     ),
-    decision: (
+    ask: (
       <>
-        <path d="M4 6h10M4 12h7M4 18h10" />
-        <path d="m15 12 2 2 4-5" />
-      </>
-    ),
-    sources: (
-      <>
-        <circle cx="6" cy="6" r="2.5" />
-        <circle cx="18" cy="7" r="2.5" />
-        <circle cx="12" cy="18" r="2.5" />
-        <path d="m8.3 7 7.2-.2M7.3 8.2l3.5 7.6M16.8 9.1l-3.5 6.7" />
+        <path d="M12 3a8 8 0 1 0 4.8 14.4L21 19l-1.6-4.2A8 8 0 0 0 12 3Z" />
+        <path d="M9 10.2a3 3 0 0 1 5.7 1.3c0 2-2.7 2-2.7 3.5M12 18h.01" />
       </>
     ),
     settings: (
@@ -268,7 +175,12 @@ function NavGlyph({ icon }: { icon: NavIcon }) {
       fill="none"
       viewBox="0 0 24 24"
     >
-      <g stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7">
+      <g
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      >
         {paths[icon]}
       </g>
     </svg>
