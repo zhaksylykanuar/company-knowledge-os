@@ -23,7 +23,8 @@ const HEADQUARTERS_COVERAGE_KEYS = [
   "identity",
   "sources",
   "decisions",
-  "company_world"
+  "company_world",
+  "memory"
 ] as const;
 
 const HEADQUARTERS_EVIDENCE_URL_MAX_LENGTH = 1000;
@@ -229,7 +230,7 @@ export type HeadquartersOnboarding = {
 };
 
 export type HeadquartersSnapshotResponse = {
-  contract_version: "headquarters.v2";
+  contract_version: "headquarters.v3";
   ranking_version: "headquarters-ranking.v1";
   snapshot: {
     id: string;
@@ -237,7 +238,7 @@ export type HeadquartersSnapshotResponse = {
     partial: boolean;
     warnings: string[];
     coverage: Array<{
-      key: "company_world" | "decisions" | "identity" | "sources";
+      key: "company_world" | "decisions" | "identity" | "memory" | "sources";
       status: "complete" | "partial" | "unavailable";
       watermark: string;
       warning: string | null;
@@ -262,19 +263,30 @@ export type HeadquartersSnapshotResponse = {
   ];
   queue: HeadquartersMission[];
   changes: {
+    contract_version: "temporal-memory.v1";
     items: Array<{
       id: string;
       kind: "proposal" | "relationship" | "source";
+      change_type: "current" | "new_or_changed";
       title: string;
       summary: string;
-      occurred_at: string | null;
+      event_time: string | null;
+      observed_at: string;
+      confidence: number | null;
+      confidence_precision: "exact" | "unavailable";
       source_keys: string[];
       evidence_refs: HeadquartersEvidenceRef[];
       target: string;
+      access_scope: "workspace";
+      retention: "source_bound";
     }>;
-    basis: "current_snapshot";
-    cursor: null;
-    since_checkpoint: false;
+    basis: "checkpoint" | "current_snapshot";
+    cursor: string | null;
+    checkpointed_at: string | null;
+    since_checkpoint: boolean;
+    total_count: number;
+    count_precision: "at_least" | "exact";
+    has_more: boolean;
   };
   capabilities: HeadquartersCapabilitySet;
   boundary: {
@@ -283,6 +295,18 @@ export type HeadquartersSnapshotResponse = {
     llm: false;
     reads_secrets: false;
     transaction: "repeatable_read_read_only";
+  };
+};
+
+export type CompanyMemoryCheckpointResponse = {
+  contract_version: "temporal-checkpoint.v1";
+  workspace_id: string;
+  checkpoint: {
+    cursor: string;
+    checkpointed_at: string;
+    source_snapshot_id: string;
+    event_fingerprint_count: number;
+    retention: "membership_scoped";
   };
 };
 
@@ -322,7 +346,7 @@ export function parseHeadquartersSnapshotResponse(
     ],
     "headquarters"
   );
-  expectEnum(response.contract_version, ["headquarters.v2"] as const, "contract_version");
+  expectEnum(response.contract_version, ["headquarters.v3"] as const, "contract_version");
   expectEnum(
     response.ranking_version,
     ["headquarters-ranking.v1"] as const,
@@ -394,7 +418,7 @@ export function parseHeadquartersOnboardingDetailResponse(
   );
   expectEnum(
     response.contract_version,
-    ["headquarters.v2"] as const,
+    ["headquarters.v3"] as const,
     "headquarters_onboarding.contract_version"
   );
   validateSnapshot(response.snapshot, "headquarters_onboarding.snapshot");
@@ -419,6 +443,72 @@ export function parseHeadquartersOnboardingDetailResponse(
   }
 
   return value as HeadquartersOnboardingDetailResponse;
+}
+
+export function parseCompanyMemoryCheckpointResponse(
+  value: unknown
+): CompanyMemoryCheckpointResponse {
+  const response = expectRecord(value, "company_memory_checkpoint");
+  expectKeys(
+    response,
+    ["contract_version", "workspace_id", "checkpoint"],
+    "company_memory_checkpoint"
+  );
+  expectLiteral(
+    response.contract_version,
+    "temporal-checkpoint.v1",
+    "company_memory_checkpoint.contract_version"
+  );
+  expectString(response.workspace_id, "company_memory_checkpoint.workspace_id");
+  const checkpoint = expectRecord(
+    response.checkpoint,
+    "company_memory_checkpoint.checkpoint"
+  );
+  expectKeys(
+    checkpoint,
+    [
+      "cursor",
+      "checkpointed_at",
+      "source_snapshot_id",
+      "event_fingerprint_count",
+      "retention"
+    ],
+    "company_memory_checkpoint.checkpoint"
+  );
+  const cursor = expectString(
+    checkpoint.cursor,
+    "company_memory_checkpoint.checkpoint.cursor"
+  );
+  if (!/^hqc1_[0-9a-f]{64}$/u.test(cursor)) {
+    contractError(
+      "company_memory_checkpoint.checkpoint.cursor",
+      "opaque checkpoint cursor"
+    );
+  }
+  expectDateString(
+    checkpoint.checkpointed_at,
+    "company_memory_checkpoint.checkpoint.checkpointed_at"
+  );
+  const sourceSnapshotId = expectString(
+    checkpoint.source_snapshot_id,
+    "company_memory_checkpoint.checkpoint.source_snapshot_id"
+  );
+  if (!/^hqs1_[0-9a-f]{64}$/u.test(sourceSnapshotId)) {
+    contractError(
+      "company_memory_checkpoint.checkpoint.source_snapshot_id",
+      "headquarters snapshot id"
+    );
+  }
+  expectNonNegativeInteger(
+    checkpoint.event_fingerprint_count,
+    "company_memory_checkpoint.checkpoint.event_fingerprint_count"
+  );
+  expectLiteral(
+    checkpoint.retention,
+    "membership_scoped",
+    "company_memory_checkpoint.checkpoint.retention"
+  );
+  return value as CompanyMemoryCheckpointResponse;
 }
 
 function validateAction(value: unknown, path: string): void {
@@ -755,7 +845,26 @@ function validateSources(value: unknown, path: string): void {
 
 function validateChanges(value: unknown, path: string): void {
   const changes = expectRecord(value, path);
-  expectKeys(changes, ["items", "basis", "cursor", "since_checkpoint"], path);
+  expectKeys(
+    changes,
+    [
+      "contract_version",
+      "items",
+      "basis",
+      "cursor",
+      "checkpointed_at",
+      "since_checkpoint",
+      "total_count",
+      "count_precision",
+      "has_more"
+    ],
+    path
+  );
+  expectEnum(
+    changes.contract_version,
+    ["temporal-memory.v1"] as const,
+    `${path}.contract_version`
+  );
   const items = expectArray(changes.items, `${path}.items`);
   if (items.length > 3) {
     contractError(`${path}.items`, "at most three items");
@@ -765,7 +874,22 @@ function validateChanges(value: unknown, path: string): void {
     const item = expectRecord(value, itemPath);
     expectKeys(
       item,
-      ["id", "kind", "title", "summary", "occurred_at", "source_keys", "evidence_refs", "target"],
+      [
+        "id",
+        "kind",
+        "change_type",
+        "title",
+        "summary",
+        "event_time",
+        "observed_at",
+        "confidence",
+        "confidence_precision",
+        "source_keys",
+        "evidence_refs",
+        "target",
+        "access_scope",
+        "retention"
+      ],
       itemPath
     );
     for (const key of ["id", "title", "summary"]) {
@@ -776,14 +900,86 @@ function validateChanges(value: unknown, path: string): void {
       `${itemPath}.target`
     );
     expectEnum(item.kind, ["proposal", "relationship", "source"] as const, `${itemPath}.kind`);
-    expectNullableDateString(item.occurred_at, `${itemPath}.occurred_at`);
+    expectEnum(
+      item.change_type,
+      ["current", "new_or_changed"] as const,
+      `${itemPath}.change_type`
+    );
+    expectNullableDateString(item.event_time, `${itemPath}.event_time`);
+    expectDateString(item.observed_at, `${itemPath}.observed_at`);
+    const confidence = expectNullableNumber(item.confidence, `${itemPath}.confidence`);
+    if (confidence !== null && (confidence < 0 || confidence > 1)) {
+      contractError(`${itemPath}.confidence`, "number between 0 and 1");
+    }
+    const confidencePrecision = expectEnum(
+      item.confidence_precision,
+      ["exact", "unavailable"] as const,
+      `${itemPath}.confidence_precision`
+    );
+    if ((confidence === null) !== (confidencePrecision === "unavailable")) {
+      contractError(
+        `${itemPath}.confidence_precision`,
+        "must match confidence availability"
+      );
+    }
     expectStringArray(item.source_keys, `${itemPath}.source_keys`);
     const refs = expectArray(item.evidence_refs, `${itemPath}.evidence_refs`);
+    if (refs.length === 0) {
+      contractError(`${itemPath}.evidence_refs`, "at least one evidence ref");
+    }
     refs.forEach((ref, refIndex) => validateEvidence(ref, `${itemPath}.evidence_refs[${refIndex}]`));
+    expectLiteral(item.access_scope, "workspace", `${itemPath}.access_scope`);
+    expectLiteral(item.retention, "source_bound", `${itemPath}.retention`);
   });
-  expectEnum(changes.basis, ["current_snapshot"] as const, `${path}.basis`);
-  expectLiteral(changes.cursor, null, `${path}.cursor`);
-  expectLiteral(changes.since_checkpoint, false, `${path}.since_checkpoint`);
+  const basis = expectEnum(
+    changes.basis,
+    ["checkpoint", "current_snapshot"] as const,
+    `${path}.basis`
+  );
+  const cursor = expectNullableString(changes.cursor, `${path}.cursor`);
+  if (cursor !== null && !/^hqc1_[0-9a-f]{64}$/u.test(cursor)) {
+    contractError(`${path}.cursor`, "opaque checkpoint cursor");
+  }
+  const checkpointedAt = expectNullableDateString(
+    changes.checkpointed_at,
+    `${path}.checkpointed_at`
+  );
+  const sinceCheckpoint = expectBoolean(
+    changes.since_checkpoint,
+    `${path}.since_checkpoint`
+  );
+  const checkpointMode = basis === "checkpoint";
+  if (
+    sinceCheckpoint !== checkpointMode ||
+    (cursor !== null) !== checkpointMode ||
+    (checkpointedAt !== null) !== checkpointMode
+  ) {
+    contractError(path, "consistent checkpoint state");
+  }
+  const expectedChangeType = checkpointMode ? "new_or_changed" : "current";
+  if (
+    items.some(
+      (item) => (item as HeadquartersRecord).change_type !== expectedChangeType
+    )
+  ) {
+    contractError(`${path}.items.change_type`, "must match temporal basis");
+  }
+  const totalCount = expectNonNegativeInteger(
+    changes.total_count,
+    `${path}.total_count`
+  );
+  if (totalCount < items.length) {
+    contractError(`${path}.total_count`, "not lower than returned items");
+  }
+  expectEnum(
+    changes.count_precision,
+    ["at_least", "exact"] as const,
+    `${path}.count_precision`
+  );
+  const hasMore = expectBoolean(changes.has_more, `${path}.has_more`);
+  if (hasMore !== (totalCount > items.length)) {
+    contractError(`${path}.has_more`, "must match total_count");
+  }
 }
 
 function validateCapabilities(value: unknown, path: string): void {
@@ -1037,7 +1233,7 @@ function validateSnapshot(value: unknown, path: string): void {
   expectStringArray(snapshot.warnings, `${path}.warnings`);
   const coverage = expectArray(snapshot.coverage, `${path}.coverage`);
   if (coverage.length !== HEADQUARTERS_COVERAGE_KEYS.length) {
-    contractError(`${path}.coverage`, "exactly four projections");
+    contractError(`${path}.coverage`, "exactly five projections");
   }
   coverage.forEach((value, index) => {
     const coveragePath = `${path}.coverage[${index}]`;
@@ -1045,7 +1241,7 @@ function validateSnapshot(value: unknown, path: string): void {
     expectKeys(item, ["key", "status", "watermark", "warning"], coveragePath);
     expectEnum(
       item.key,
-      ["company_world", "decisions", "identity", "sources"] as const,
+      ["company_world", "decisions", "identity", "memory", "sources"] as const,
       `${coveragePath}.key`
     );
     const status = expectEnum(

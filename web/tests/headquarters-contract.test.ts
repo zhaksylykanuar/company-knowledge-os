@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  acknowledgeHeadquartersChanges,
+  buildWorkspaceHeadquartersCheckpointPath,
   buildWorkspaceHeadquartersOnboardingPath,
   buildWorkspaceHeadquartersPath,
   fetchHeadquarters,
@@ -37,7 +39,7 @@ const VALID_EVIDENCE: HeadquartersEvidenceRef = {
 };
 
 const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
-  contract_version: "headquarters.v2",
+  contract_version: "headquarters.v3",
   ranking_version: "headquarters-ranking.v1",
   snapshot: {
     id: "hqs1_test",
@@ -67,6 +69,12 @@ const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
         key: "company_world",
         status: "complete",
         watermark: "world-1",
+        warning: null
+      },
+      {
+        key: "memory",
+        status: "complete",
+        watermark: "memory-1",
         warning: null
       }
     ]
@@ -215,10 +223,15 @@ const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
   ],
   queue: [],
   changes: {
+    contract_version: "temporal-memory.v1",
     items: [],
     basis: "current_snapshot",
     cursor: null,
-    since_checkpoint: false
+    checkpointed_at: null,
+    since_checkpoint: false,
+    total_count: 0,
+    count_precision: "exact",
+    has_more: false
   },
   capabilities: {
     can_manage_team: true,
@@ -250,7 +263,7 @@ const VALID_ONBOARDING_DETAIL = {
   boundary: VALID_HEADQUARTERS_FIXTURE.boundary
 };
 
-test("exposes the fixed v2 headquarters paths and pulse order", () => {
+test("exposes the fixed v3 headquarters paths and pulse order", () => {
   assert.equal(
     buildWorkspaceHeadquartersPath("workspace/with slash"),
     "/api/v1/workspaces/workspace%2Fwith%20slash/headquarters"
@@ -259,11 +272,52 @@ test("exposes the fixed v2 headquarters paths and pulse order", () => {
     buildWorkspaceHeadquartersOnboardingPath("workspace/with slash"),
     "/api/v1/workspaces/workspace%2Fwith%20slash/headquarters/onboarding"
   );
+  assert.equal(
+    buildWorkspaceHeadquartersCheckpointPath("workspace/with slash"),
+    "/api/v1/workspaces/workspace%2Fwith%20slash/headquarters/changes/checkpoint"
+  );
   assert.deepEqual(HEADQUARTERS_PULSE_KEYS, [
     "waiting_decisions",
     "sources_attention",
     "pending_relationships"
   ]);
+});
+
+test("acknowledges only one exact headquarters snapshot", async () => {
+  const originalFetch = globalThis.fetch;
+  const expectedSnapshotId = `hqs1_${"a".repeat(64)}`;
+  const response = {
+    contract_version: "temporal-checkpoint.v1",
+    workspace_id: "workspace-123",
+    checkpoint: {
+      cursor: `hqc1_${"b".repeat(64)}`,
+      checkpointed_at: "2026-07-27T10:00:00Z",
+      source_snapshot_id: expectedSnapshotId,
+      event_fingerprint_count: 2,
+      retention: "membership_scoped"
+    }
+  } as const;
+  globalThis.fetch = mockHeadquartersResponse(response, (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/headquarters/changes/checkpoint"
+    );
+    assert.equal(init?.method, "POST");
+    assert.equal(init?.credentials, "include");
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      expected_snapshot_id: expectedSnapshotId
+    });
+  });
+
+  try {
+    const payload = await acknowledgeHeadquartersChanges(
+      "workspace-123",
+      expectedSnapshotId
+    );
+    assert.deepEqual(payload, response);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("fetches and validates the full headquarters contract", async () => {
@@ -440,7 +494,7 @@ test("rejects duplicate or omitted fixed coverage projections", () => {
   );
   assert.throws(
     () => parseHeadquartersSnapshotResponse(omitted),
-    contractFailure(/snapshot\.coverage: expected exactly four projections/)
+    contractFailure(/snapshot\.coverage: expected exactly five projections/)
   );
 });
 
@@ -493,13 +547,20 @@ test("rejects unsafe standalone pulse and change targets", () => {
   protocolRelativeChangeTarget.changes.items.push({
     id: "change-1",
     kind: "proposal",
+    change_type: "current",
     title: "Changed mission",
     summary: "One mission changed.",
-    occurred_at: "2026-07-16T10:00:00Z",
+    event_time: "2026-07-16T10:00:00Z",
+    observed_at: "2026-07-16T10:00:01Z",
+    confidence: 1,
+    confidence_precision: "exact",
     source_keys: ["github"],
     evidence_refs: [VALID_EVIDENCE],
-    target: "//example.test/actions"
+    target: "//example.test/actions",
+    access_scope: "workspace",
+    retention: "source_bound"
   });
+  protocolRelativeChangeTarget.changes.total_count = 1;
 
   assert.throws(
     () => parseHeadquartersSnapshotResponse(externalPulseTarget),
@@ -523,13 +584,20 @@ test("rejects unsafe evidence URLs, secret queries, invalid ports, and oversize 
     malformed.changes.items.push({
       id: "change-1",
       kind: "proposal",
+      change_type: "current",
       title: "Changed mission",
       summary: "One mission changed.",
-      occurred_at: "2026-07-16T10:00:00Z",
+      event_time: "2026-07-16T10:00:00Z",
+      observed_at: "2026-07-16T10:00:01Z",
+      confidence: 1,
+      confidence_precision: "exact",
       source_keys: ["github"],
       evidence_refs: [{ ...VALID_EVIDENCE, target }],
-      target: "/actions"
+      target: "/actions",
+      access_scope: "workspace",
+      retention: "source_bound"
     });
+    malformed.changes.total_count = 1;
 
     assert.throws(
       () => parseHeadquartersSnapshotResponse(malformed),

@@ -50,6 +50,7 @@ from app.db.integration_models import (
     IntegrationConnection,
     SyncJob,
 )
+from app.db.memory_models import CompanyMemoryCheckpoint
 from app.services.action_proposal_service import (
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS,
@@ -60,12 +61,15 @@ from app.services.company_map_read_service import build_workspace_company_map
 from app.services.identity_service import role_allows
 
 
-HEADQUARTERS_CONTRACT_VERSION = "headquarters.v2"
+HEADQUARTERS_CONTRACT_VERSION = "headquarters.v3"
 HEADQUARTERS_RANKING_VERSION = "headquarters-ranking.v1"
 HEADQUARTERS_ONBOARDING_CONTRACT_VERSION = "onboarding.v1"
 HEADQUARTERS_ONBOARDING_READINESS_VERSION = "onboarding-readiness.v1"
 HEADQUARTERS_SOURCE_HEALTH_VERSION = "source-health.v1"
 HEADQUARTERS_CORRELATION_VERSION = "canonical-reference.v1"
+HEADQUARTERS_TEMPORAL_MEMORY_VERSION = "temporal-memory.v1"
+HEADQUARTERS_TEMPORAL_EVENT_LIMIT = 3
+HEADQUARTERS_CHECKPOINT_FINGERPRINT_LIMIT = 512
 
 SOURCE_FRESHNESS_THRESHOLD = timedelta(hours=72)
 HEADQUARTERS_PROPOSAL_SCAN_LIMIT = 100
@@ -146,7 +150,8 @@ class HeadquartersSubprojectionUnavailable(RuntimeError):
 class MissionCandidate:
     mission: dict[str, Any]
     score: int
-    occurred_at: datetime | None
+    event_time: datetime | None
+    observed_at: datetime | None
     change_kind: str | None
 
 
@@ -204,12 +209,14 @@ async def read_workspace_headquarters(
             as_of = await session.scalar(select(func.transaction_timestamp()))
             if not isinstance(as_of, datetime):
                 raise RuntimeError("transaction timestamp is unavailable")
-            return await _build_headquarters_snapshot(
+            payload = await _build_headquarters_snapshot(
                 session=session,
                 workspace_id=workspace_id,
                 user_id=user_id,
                 as_of=as_of,
             )
+            payload.pop("_checkpoint_fingerprints", None)
+            return payload
 
 
 async def _build_headquarters_snapshot(
@@ -226,6 +233,11 @@ async def _build_headquarters_snapshot(
     )
     role = membership.role
     capabilities = _capabilities(role)
+    checkpoint = await _read_company_memory_checkpoint(
+        session=session,
+        workspace_id=workspace_id,
+        user_id=user_id,
+    )
 
     (
         sources,
@@ -281,6 +293,16 @@ async def _build_headquarters_snapshot(
         company_world_warning = "company_world_window_truncated"
         warnings.append(company_world_warning)
 
+    company_world_observed_at = (
+        await _read_company_world_observed_at(
+            session=session,
+            workspace_id=workspace_id,
+            company_world=company_world,
+        )
+        if company_world is not None
+        else {}
+    )
+
     excluded_proposals = len(decision_rows.proposals) - len(verified_proposals)
     if excluded_proposals:
         warnings.append(f"proposals_excluded_unverified_or_unrelated_evidence:{excluded_proposals}")
@@ -315,6 +337,7 @@ async def _build_headquarters_snapshot(
         sources=sources,
         source_mission_evidence=source_mission_evidence,
         company_world=company_world,
+        company_world_observed_at=company_world_observed_at,
         briefing_count=decision_rows.briefing_count,
         latest_briefing=decision_rows.latest_briefing,
         capabilities=capabilities,
@@ -331,7 +354,15 @@ async def _build_headquarters_snapshot(
         company_world_status=company_world_status,
         capabilities=capabilities,
     )
-    changes = _build_changes(ranked)
+    changes, checkpoint_fingerprints, checkpoint_valid = _build_changes(
+        ranked,
+        checkpoint=checkpoint,
+        partial=decision_partial or company_world_status != "complete",
+    )
+    memory_status = "complete" if checkpoint_valid else "partial"
+    memory_warning = None if checkpoint_valid else "memory_checkpoint_invalid"
+    if memory_warning is not None:
+        warnings.append(memory_warning)
 
     identity_material = {
         "workspace_id": workspace.id,
@@ -372,6 +403,11 @@ async def _build_headquarters_snapshot(
         "excluded": excluded_proposals,
     }
     company_world_material = _company_world_watermark_material(company_world)
+    memory_material = _company_memory_watermark_material(
+        checkpoint=checkpoint,
+        event_fingerprints=checkpoint_fingerprints,
+        checkpoint_valid=checkpoint_valid,
+    )
     coverage = [
         _coverage("identity", "complete", identity_material),
         _coverage("sources", "complete", source_material),
@@ -387,6 +423,7 @@ async def _build_headquarters_snapshot(
             company_world_material,
             company_world_warning,
         ),
+        _coverage("memory", memory_status, memory_material, memory_warning),
     ]
 
     stable_payload: dict[str, Any] = {
@@ -430,6 +467,7 @@ async def _build_headquarters_snapshot(
         "changes": changes,
         "capabilities": capabilities,
         "boundary": stable_payload["boundary"],
+        "_checkpoint_fingerprints": checkpoint_fingerprints,
     }
 
 
@@ -463,6 +501,20 @@ async def _read_identity(
         or 0
     )
     return workspace, membership, member_count
+
+
+async def _read_company_memory_checkpoint(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    user_id: UUID,
+) -> CompanyMemoryCheckpoint | None:
+    return await session.scalar(
+        select(CompanyMemoryCheckpoint).where(
+            CompanyMemoryCheckpoint.workspace_id == workspace_id,
+            CompanyMemoryCheckpoint.user_id == user_id,
+        )
+    )
 
 
 async def _read_sources(
@@ -1192,12 +1244,65 @@ async def _read_company_world_projection(
     )
 
 
+def _company_world_source_record_ids(row: Mapping[str, Any]) -> list[UUID]:
+    record_ids: set[UUID] = set()
+    for ref in _mapping_list(row.get("source_refs")):
+        record_id = _uuid_or_none(ref.get("record_id"))
+        if record_id is not None:
+            record_ids.add(record_id)
+    return sorted(record_ids, key=str)
+
+
+async def _read_company_world_observed_at(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    company_world: Mapping[str, Any],
+) -> dict[UUID, datetime]:
+    people = company_world.get("people")
+    people_projection = people if isinstance(people, Mapping) else {}
+    rows = [
+        *[
+            row
+            for row in _mapping_list(
+                people_projection.get("external_candidates")
+            )
+        ],
+        *[
+            row
+            for row in _mapping_list(company_world.get("organizations"))
+        ],
+    ]
+    record_ids = {
+        record_id
+        for row in rows
+        for record_id in _company_world_source_record_ids(row)
+    }
+    if not record_ids:
+        return {}
+    observed_rows = (
+        await session.execute(
+            select(SourceRecord.id, SourceRecord.observed_at).where(
+                SourceRecord.workspace_id == workspace_id,
+                SourceRecord.id.in_(record_ids),
+                SourceRecord.is_deleted.is_(False),
+            )
+        )
+    ).all()
+    return {
+        record_id: observed_at
+        for record_id, observed_at in observed_rows
+        if isinstance(observed_at, datetime)
+    }
+
+
 def _build_mission_candidates(
     *,
     verified_proposals: list[VerifiedProposal],
     sources: Mapping[str, Any],
     source_mission_evidence: Mapping[str, list[dict[str, Any]]],
     company_world: Mapping[str, Any] | None,
+    company_world_observed_at: Mapping[UUID, datetime],
     briefing_count: int,
     latest_briefing: Briefing | None,
     capabilities: Mapping[str, bool],
@@ -1258,7 +1363,8 @@ def _build_mission_candidates(
                     ),
                 ),
                 score=score,
-                occurred_at=proposal.updated_at,
+                event_time=proposal.updated_at,
+                observed_at=proposal.updated_at,
                 change_kind="proposal",
             )
         )
@@ -1290,7 +1396,12 @@ def _build_mission_candidates(
                     ranking_reason="configured_source_attention",
                 ),
                 score=source_score[state],
-                occurred_at=source["last_attempt_at"] or source["last_success_at"],
+                event_time=source["last_attempt_at"] or source["last_success_at"],
+                observed_at=_latest_datetime_value(
+                    source["last_data_observed_at"],
+                    source["last_attempt_at"],
+                    source["last_success_at"],
+                ),
                 change_kind="source" if evidence_refs else None,
             )
         )
@@ -1298,6 +1409,7 @@ def _build_mission_candidates(
     candidates.extend(
         _world_mission_candidates(
             company_world=company_world,
+            source_record_observed_at=company_world_observed_at,
             workspace_id=workspace_id,
             enabled=bool(capabilities["can_resolve_world"]),
         )
@@ -1342,7 +1454,8 @@ def _build_mission_candidates(
                     ranking_reason="source_setup_gap",
                 ),
                 score=250,
-                occurred_at=None,
+                event_time=None,
+                observed_at=None,
                 change_kind=None,
             )
         )
@@ -1389,7 +1502,8 @@ def _build_mission_candidates(
                     ranking_reason="briefing_setup_gap",
                 ),
                 score=200,
-                occurred_at=(latest_briefing.created_at if latest_briefing else None),
+                event_time=(latest_briefing.created_at if latest_briefing else None),
+                observed_at=(latest_briefing.created_at if latest_briefing else None),
                 change_kind=None,
             )
         )
@@ -1399,6 +1513,7 @@ def _build_mission_candidates(
 def _world_mission_candidates(
     *,
     company_world: Mapping[str, Any] | None,
+    source_record_observed_at: Mapping[UUID, datetime],
     workspace_id: UUID,
     enabled: bool,
 ) -> list[MissionCandidate]:
@@ -1469,7 +1584,14 @@ def _world_mission_candidates(
                     ),
                 ),
                 score=350,
-                occurred_at=_datetime_or_none(row.get("last_interaction_at")),
+                event_time=_datetime_or_none(row.get("last_interaction_at")),
+                observed_at=_latest_datetime_value(
+                    *[
+                        source_record_observed_at[record_id]
+                        for record_id in _company_world_source_record_ids(row)
+                        if record_id in source_record_observed_at
+                    ]
+                ),
                 change_kind="relationship",
             )
         )
@@ -1554,30 +1676,182 @@ def _build_pulse(
     ]
 
 
-def _build_changes(ranked: list[MissionCandidate]) -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    for candidate in ranked:
-        if candidate.change_kind is None or not candidate.mission["evidence_refs"]:
-            continue
-        items.append(
+def _temporal_candidate_fingerprint(candidate: MissionCandidate) -> str:
+    mission = candidate.mission
+    return _digest(
+        {
+            "id": mission["id"],
+            "kind": candidate.change_kind,
+            "title": mission["title"],
+            "summary": mission["summary"],
+            "event_time": candidate.event_time,
+            "observed_at": candidate.observed_at,
+            "confidence": mission["confidence"],
+            "source_keys": mission["source_keys"],
+            "evidence": [
+                {
+                    "id": ref["id"],
+                    "reference_id": ref["reference_id"],
+                    "reference_type": ref["reference_type"],
+                }
+                for ref in mission["evidence_refs"]
+            ],
+            "target": mission["action"]["target"],
+        }
+    )
+
+
+def _temporal_candidate_sort_key(
+    candidate: MissionCandidate,
+) -> tuple[float, float, str]:
+    observed_at = candidate.observed_at
+    event_time = candidate.event_time
+    observed_timestamp = (
+        _as_utc(observed_at).timestamp()
+        if isinstance(observed_at, datetime)
+        else float("-inf")
+    )
+    event_timestamp = (
+        _as_utc(event_time).timestamp()
+        if isinstance(event_time, datetime)
+        else float("-inf")
+    )
+    return (-observed_timestamp, -event_timestamp, candidate.mission["id"])
+
+
+def _checkpoint_fingerprint_set(
+    checkpoint: CompanyMemoryCheckpoint | None,
+) -> tuple[set[str], bool]:
+    if checkpoint is None:
+        return set(), True
+    raw = checkpoint.event_fingerprints
+    if (
+        not isinstance(raw, list)
+        or len(raw) > HEADQUARTERS_CHECKPOINT_FINGERPRINT_LIMIT
+        or any(
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+            for value in raw
+        )
+    ):
+        return set(), False
+    return set(raw), True
+
+
+def company_memory_checkpoint_cursor(
+    checkpoint: CompanyMemoryCheckpoint,
+) -> str:
+    return (
+        "hqc1_"
+        + _digest(
             {
-                "id": f"signal:{candidate.mission['id']}",
-                "kind": candidate.change_kind,
-                "title": candidate.mission["title"],
-                "summary": candidate.mission["summary"],
-                "occurred_at": candidate.occurred_at,
-                "source_keys": candidate.mission["source_keys"],
-                "evidence_refs": candidate.mission["evidence_refs"],
-                "target": candidate.mission["action"]["target"] or "/dashboard",
+                "checkpoint_version": checkpoint.checkpoint_version,
+                "event_fingerprints": sorted(checkpoint.event_fingerprints),
+                "observed_through_at": checkpoint.observed_through_at,
+                "source_snapshot_id": checkpoint.source_snapshot_id,
             }
         )
-        if len(items) == 3:
-            break
+    )
+
+
+def _build_changes(
+    ranked: list[MissionCandidate],
+    *,
+    checkpoint: CompanyMemoryCheckpoint | None,
+    partial: bool,
+) -> tuple[dict[str, Any], list[str], bool]:
+    temporal_candidates = sorted(
+        [
+            candidate
+            for candidate in ranked
+            if candidate.change_kind is not None
+            and candidate.observed_at is not None
+            and candidate.mission["evidence_refs"]
+        ],
+        key=_temporal_candidate_sort_key,
+    )
+    fingerprinted = [
+        (candidate, _temporal_candidate_fingerprint(candidate))
+        for candidate in temporal_candidates
+    ]
+    current_fingerprints = sorted({fingerprint for _candidate, fingerprint in fingerprinted})
+    if len(current_fingerprints) > HEADQUARTERS_CHECKPOINT_FINGERPRINT_LIMIT:
+        raise RuntimeError("temporal checkpoint fingerprint limit exceeded")
+
+    checkpoint_fingerprints, checkpoint_valid = _checkpoint_fingerprint_set(checkpoint)
+    use_checkpoint = checkpoint is not None and checkpoint_valid
+    selected = [
+        (candidate, fingerprint)
+        for candidate, fingerprint in fingerprinted
+        if not use_checkpoint or fingerprint not in checkpoint_fingerprints
+    ]
+    items = [
+        {
+            "id": (
+                f"event:{candidate.change_kind}:"
+                f"{_digest({'mission_id': candidate.mission['id']})[:24]}"
+            ),
+            "kind": candidate.change_kind,
+            "change_type": "new_or_changed" if use_checkpoint else "current",
+            "title": candidate.mission["title"],
+            "summary": candidate.mission["summary"],
+            "event_time": candidate.event_time,
+            "observed_at": candidate.observed_at,
+            "confidence": candidate.mission["confidence"],
+            "confidence_precision": candidate.mission["confidence_precision"],
+            "source_keys": candidate.mission["source_keys"],
+            "evidence_refs": candidate.mission["evidence_refs"],
+            "target": candidate.mission["action"]["target"] or "/dashboard",
+            "access_scope": "workspace",
+            "retention": "source_bound",
+        }
+        for candidate, _fingerprint in selected[:HEADQUARTERS_TEMPORAL_EVENT_LIMIT]
+    ]
+    return (
+        {
+            "contract_version": HEADQUARTERS_TEMPORAL_MEMORY_VERSION,
+            "items": items,
+            "basis": "checkpoint" if use_checkpoint else "current_snapshot",
+            "cursor": (
+                company_memory_checkpoint_cursor(checkpoint)
+                if use_checkpoint and checkpoint is not None
+                else None
+            ),
+            "checkpointed_at": (
+                checkpoint.observed_through_at
+                if use_checkpoint and checkpoint is not None
+                else None
+            ),
+            "since_checkpoint": use_checkpoint,
+            "total_count": len(selected),
+            "count_precision": "at_least" if partial else "exact",
+            "has_more": len(selected) > HEADQUARTERS_TEMPORAL_EVENT_LIMIT,
+        },
+        current_fingerprints,
+        checkpoint_valid,
+    )
+
+
+def _company_memory_watermark_material(
+    *,
+    checkpoint: CompanyMemoryCheckpoint | None,
+    event_fingerprints: list[str],
+    checkpoint_valid: bool,
+) -> dict[str, Any]:
     return {
-        "items": items,
-        "basis": "current_snapshot",
-        "cursor": None,
-        "since_checkpoint": False,
+        "contract_version": HEADQUARTERS_TEMPORAL_MEMORY_VERSION,
+        "checkpoint_version": (
+            checkpoint.checkpoint_version if checkpoint is not None else None
+        ),
+        "checkpoint_valid": checkpoint_valid,
+        "checkpoint_cursor": (
+            company_memory_checkpoint_cursor(checkpoint)
+            if checkpoint is not None and checkpoint_valid
+            else None
+        ),
+        "current_event_count": len(event_fingerprints),
+        "current_event_fingerprint": _digest(event_fingerprints),
     }
 
 
@@ -1855,7 +2129,8 @@ def _capabilities(role: str) -> dict[str, bool]:
             admin and settings.enable_write_actions and settings.enable_real_connectors
         ),
         "can_resolve_world": member,
-        "can_acknowledge_changes": False,
+        # A checkpoint is private membership state, not a company mutation.
+        "can_acknowledge_changes": True,
     }
 
 
@@ -2271,8 +2546,12 @@ def _evidence_source_keys(refs: list[dict[str, Any]]) -> list[str]:
 
 
 def _mission_sort_key(candidate: MissionCandidate) -> tuple[int, float, str]:
-    occurred = candidate.occurred_at
-    timestamp = _as_utc(occurred).timestamp() if isinstance(occurred, datetime) else float("-inf")
+    event_time = candidate.event_time
+    timestamp = (
+        _as_utc(event_time).timestamp()
+        if isinstance(event_time, datetime)
+        else float("-inf")
+    )
     return (-candidate.score, -timestamp, candidate.mission["id"])
 
 
@@ -2398,6 +2677,15 @@ def _uuid_or_none(value: Any) -> UUID | None:
 
 def _datetime_or_none(value: Any) -> datetime | None:
     return value if isinstance(value, datetime) else None
+
+
+def _latest_datetime_value(*values: Any) -> datetime | None:
+    timestamps = [
+        _as_utc(value)
+        for value in values
+        if isinstance(value, datetime)
+    ]
+    return max(timestamps) if timestamps else None
 
 
 def _as_utc(value: datetime) -> datetime:

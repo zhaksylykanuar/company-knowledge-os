@@ -55,8 +55,10 @@ import type {
   WorkspaceMembersResponse
 } from "./types";
 import {
+  parseCompanyMemoryCheckpointResponse,
   parseHeadquartersOnboardingDetailResponse,
   parseHeadquartersSnapshotResponse,
+  type CompanyMemoryCheckpointResponse,
   type HeadquartersOnboardingDetailResponse,
   type HeadquartersSnapshotResponse
 } from "./headquarters";
@@ -179,6 +181,12 @@ export function buildWorkspaceHeadquartersOnboardingPath(
   return `${buildWorkspaceHeadquartersPath(workspaceId)}/onboarding`;
 }
 
+export function buildWorkspaceHeadquartersCheckpointPath(
+  workspaceId: string
+): string {
+  return `${buildWorkspaceHeadquartersPath(workspaceId)}/changes/checkpoint`;
+}
+
 export async function fetchHeadquarters(
   workspaceId: string,
   options: ApiFetchOptions = {}
@@ -199,6 +207,22 @@ export async function fetchHeadquartersOnboarding(
     options
   );
   return parseHeadquartersOnboardingDetailResponse(payload);
+}
+
+export async function acknowledgeHeadquartersChanges(
+  workspaceId: string,
+  expectedSnapshotId: string,
+  options: ApiFetchOptions = {}
+): Promise<CompanyMemoryCheckpointResponse> {
+  const payload = await apiFetch<unknown>(
+    buildWorkspaceHeadquartersCheckpointPath(workspaceId),
+    {
+      ...options,
+      body: JSON.stringify({ expected_snapshot_id: expectedSnapshotId }),
+      method: "POST"
+    }
+  );
+  return parseCompanyMemoryCheckpointResponse(payload);
 }
 
 export function buildWorkspaceAssistantQueryPath(workspaceId: string): string {

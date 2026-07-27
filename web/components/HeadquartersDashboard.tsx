@@ -11,7 +11,12 @@ import {
 } from "react";
 
 import { useAssistantSnapshotRegistration } from "../lib/assistant-snapshot";
-import { ApiRequestError, fetchCompanyMap, fetchHeadquarters } from "../lib/api";
+import {
+  acknowledgeHeadquartersChanges,
+  ApiRequestError,
+  fetchCompanyMap,
+  fetchHeadquarters
+} from "../lib/api";
 import {
   HeadquartersContractError,
   type HeadquartersMission,
@@ -81,6 +86,13 @@ const INITIAL_LOAD_STATE: HeadquartersLoadState = {
   status: "loading",
   workspaceId: null
 };
+
+class HeadquartersCheckpointRefreshError extends Error {
+  constructor() {
+    super("checkpoint saved but headquarters refresh failed");
+    this.name = "HeadquartersCheckpointRefreshError";
+  }
+}
 
 export function reduceHeadquartersLoadState(
   state: HeadquartersLoadState,
@@ -256,6 +268,21 @@ export function HeadquartersDashboard() {
     }
   }, [workspaceId]);
 
+  const acknowledgeChanges = useCallback(
+    async (expectedSnapshotId: string): Promise<HeadquartersSnapshotResponse> => {
+      if (!workspaceId) {
+        throw new Error("Компания не выбрана.");
+      }
+      await acknowledgeHeadquartersChanges(workspaceId, expectedSnapshotId);
+      try {
+        return await refetchPreservingSnapshot();
+      } catch {
+        throw new HeadquartersCheckpointRefreshError();
+      }
+    },
+    [refetchPreservingSnapshot, workspaceId]
+  );
+
   useEffect(() => {
     function syncOnboardingIntent() {
       dispatchOnboardingIntent({
@@ -334,6 +361,7 @@ export function HeadquartersDashboard() {
     <HeadquartersDashboardView
       isRefreshing={state.refreshing}
       onDecisionRefetch={refetchPreservingSnapshot}
+      onAcknowledgeChanges={acknowledgeChanges}
       onRetry={() => setReloadKey((value) => value + 1)}
       onConsumeOnboardingIntent={() =>
         dispatchOnboardingIntent({ type: "dismiss" })
@@ -349,6 +377,7 @@ export function HeadquartersDashboard() {
 
 export function HeadquartersDashboardView({
   isRefreshing = false,
+  onAcknowledgeChanges,
   onDecisionRefetch,
   onboardingIntent = false,
   onConsumeOnboardingIntent,
@@ -359,6 +388,9 @@ export function HeadquartersDashboardView({
   workspaceName = null
 }: {
   isRefreshing?: boolean;
+  onAcknowledgeChanges?: (
+    expectedSnapshotId: string
+  ) => Promise<HeadquartersSnapshotResponse>;
   onDecisionRefetch?: () => Promise<HeadquartersSnapshotResponse>;
   onboardingIntent?: boolean;
   onConsumeOnboardingIntent?: () => void;
@@ -482,7 +514,10 @@ export function HeadquartersDashboardView({
                 })
               }
             />
-            <CurrentSignals snapshot={snapshot} />
+            <CurrentSignals
+              onAcknowledgeChanges={onAcknowledgeChanges}
+              snapshot={snapshot}
+            />
           </div>
 
           <TruthStrip
@@ -746,21 +781,69 @@ function MissionQueue({
   );
 }
 
-function CurrentSignals({ snapshot }: { snapshot: HeadquartersSnapshotResponse }) {
+function CurrentSignals({
+  onAcknowledgeChanges,
+  snapshot
+}: {
+  onAcknowledgeChanges?: (
+    expectedSnapshotId: string
+  ) => Promise<HeadquartersSnapshotResponse>;
+  snapshot: HeadquartersSnapshotResponse;
+}) {
   const items = snapshot.changes.items.slice(0, 3);
+  const [acknowledgementState, setAcknowledgementState] = useState<
+    "error" | "idle" | "saved_refresh_error" | "saving"
+  >("idle");
+  const checkpointMode = snapshot.changes.since_checkpoint;
+  const checkpointTime = formatSnapshotTime(snapshot.changes.checkpointed_at);
+  const canAcknowledge =
+    snapshot.capabilities.can_acknowledge_changes &&
+    onAcknowledgeChanges !== undefined &&
+    (!checkpointMode || snapshot.changes.total_count > 0);
+
+  useEffect(() => {
+    setAcknowledgementState("idle");
+  }, [snapshot.snapshot.id]);
+
+  async function acknowledgeChanges() {
+    if (!onAcknowledgeChanges || acknowledgementState === "saving") return;
+    setAcknowledgementState("saving");
+    try {
+      await onAcknowledgeChanges(snapshot.snapshot.id);
+    } catch (error) {
+      setAcknowledgementState(
+        error instanceof HeadquartersCheckpointRefreshError
+          ? "saved_refresh_error"
+          : "error"
+      );
+    }
+  }
+
   return (
     <section className="headquarters-signals" aria-labelledby="headquarters-signals-title">
       <header className="headquarters-section-header">
         <div>
-          <span className="eyebrow">Подтверждённые факты</span>
-          <h2 id="headquarters-signals-title">Что уже видно</h2>
+          <span className="eyebrow">
+            {checkpointMode
+              ? checkpointTime
+                ? `После ${checkpointTime}`
+                : "После checkpoint"
+              : "Текущая точка"}
+          </span>
+          <h2 id="headquarters-signals-title">
+            {checkpointMode ? "Что изменилось" : "Подтверждённые факты"}
+          </h2>
         </div>
-        <span>{items.length}/3</span>
+        <span>
+          {snapshot.changes.count_precision === "at_least" ? "≥" : ""}
+          {snapshot.changes.total_count}
+        </span>
       </header>
       {items.length > 0 ? (
         <ol>
           {items.map((item) => {
-            const occurredAt = formatSnapshotTime(item.occurred_at);
+            const eventTime = formatSnapshotTime(item.event_time);
+            const observedAt = formatDateTime(item.observed_at);
             return (
               <li key={item.id}>
                 <Link href={item.target}>
@@ -771,10 +854,20 @@ function CurrentSignals({ snapshot }: { snapshot: HeadquartersSnapshotResponse }
                     <strong>{item.title}</strong>
                     <small>{item.summary}</small>
                   </span>
-                  {occurredAt ? (
-                    <time dateTime={item.occurred_at ?? undefined}>{occurredAt}</time>
+                  {eventTime ? (
+                    <time
+                      dateTime={item.event_time ?? undefined}
+                      title={`FounderOS увидел: ${observedAt}`}
+                    >
+                      {eventTime}
+                    </time>
                   ) : (
-                    <span className="headquarters-signal-time">Дата не подтверждена</span>
+                    <span
+                      className="headquarters-signal-time"
+                      title={`FounderOS увидел: ${observedAt}`}
+                    >
+                      Время события неизвестно
+                    </span>
                   )}
                 </Link>
               </li>
@@ -783,10 +876,44 @@ function CurrentSignals({ snapshot }: { snapshot: HeadquartersSnapshotResponse }
         </ol>
       ) : (
         <div className="headquarters-empty-panel">
-          <strong>Подтверждённых фактов для показа пока нет</strong>
-          <span>Это состояние текущего снимка, а не история с прошлого визита.</span>
+          <strong>
+            {checkpointMode
+              ? "После последнего просмотра новых подтверждённых изменений нет"
+              : "Подтверждённых фактов для показа пока нет"}
+          </strong>
+          <span>
+            {checkpointMode
+              ? "FounderOS сравнил текущие канонические сигналы с вашей сохранённой точкой."
+              : "Сохраните текущую точку, чтобы FounderOS начал точное сравнение."}
+          </span>
         </div>
       )}
+      {canAcknowledge ? (
+        <div className="headquarters-signals-footer">
+          <button
+            disabled={acknowledgementState === "saving"}
+            onClick={() => void acknowledgeChanges()}
+            type="button"
+          >
+            {acknowledgementState === "saving"
+              ? "Сохраняю…"
+              : checkpointMode
+                ? "Отметить просмотренным"
+                : "Запомнить текущую точку"}
+          </button>
+          <small>
+            Сохраняется только техническая отметка, без копий переписок и документов.
+          </small>
+        </div>
+      ) : null}
+      {acknowledgementState === "error" ||
+      acknowledgementState === "saved_refresh_error" ? (
+        <p className="headquarters-signals-error" role="status">
+          {acknowledgementState === "saved_refresh_error"
+            ? "Точка сохранена, но обновить картину не удалось. Попробуйте ещё раз."
+            : "Картина успела измениться. Обновите её и попробуйте ещё раз."}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -1149,6 +1276,7 @@ function coverageLabel(key: HeadquartersSnapshotResponse["snapshot"]["coverage"]
     company_world: "Люди и связи",
     decisions: "Решения",
     identity: "Компания",
+    memory: "Память",
     sources: "Источники"
   } as const;
   return labels[key];

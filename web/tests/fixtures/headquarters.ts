@@ -97,7 +97,7 @@ const HEADQUARTERS_TEST_SOURCE: HeadquartersSourceHealth = {
 };
 
 const BASE_HEADQUARTERS_FIXTURE = {
-  contract_version: "headquarters.v2",
+  contract_version: "headquarters.v3",
   ranking_version: "headquarters-ranking.v1",
   snapshot: {
     id: "hqs1_workspace-1_20260716",
@@ -127,6 +127,12 @@ const BASE_HEADQUARTERS_FIXTURE = {
         key: "company_world",
         status: "complete",
         watermark: "company-world-1",
+        warning: null
+      },
+      {
+        key: "memory",
+        status: "complete",
+        watermark: "memory-1",
         warning: null
       }
     ]
@@ -350,21 +356,32 @@ const BASE_HEADQUARTERS_FIXTURE = {
     }
   ],
   changes: {
+    contract_version: "temporal-memory.v1",
     items: [
       {
         id: "change-proposal-1",
         kind: "proposal",
+        change_type: "current",
         title: "Появилось решение по запуску Atlas",
         summary: "Предложение добавлено в очередь решений.",
-        occurred_at: "2026-07-16T09:59:00Z",
+        event_time: "2026-07-16T09:59:00Z",
+        observed_at: "2026-07-16T10:00:00Z",
+        confidence: 0.91,
+        confidence_precision: "exact",
         source_keys: ["github"],
         evidence_refs: [HEADQUARTERS_TEST_EVIDENCE],
-        target: "/actions?proposal=11111111-1111-4111-8111-111111111111&status=proposed"
+        target: "/actions?proposal=11111111-1111-4111-8111-111111111111&status=proposed",
+        access_scope: "workspace",
+        retention: "source_bound"
       }
     ],
     basis: "current_snapshot",
     cursor: null,
-    since_checkpoint: false
+    checkpointed_at: null,
+    since_checkpoint: false,
+    total_count: 1,
+    count_precision: "exact",
+    has_more: false
   },
   capabilities: {
     can_manage_team: true,

@@ -3040,6 +3040,32 @@ but are superseded where they define Living Command Center or provider-first UX
 as the target product. Security and persistence boundaries in those decisions
 remain active unless explicitly reversed.
 
+## DEC-096 - Temporal Comparison Stores A Minimal Personal Checkpoint
+
+Decision (2026-07-27): the first temporal-memory slice compares deterministic
+workspace-scoped signals against an explicit per-membership checkpoint. The
+checkpoint persists only its version, exact source `hqs1_*` snapshot, observation
+time and a bounded set of opaque SHA-256 signal fingerprints. It does not copy
+signal titles, summaries, evidence bodies, documents, messages, provider
+payloads or chat.
+
+The `headquarters.v3` read model exposes `event_time` separately from
+`observed_at`, requires evidence for each temporal event, carries confidence,
+declares workspace access and source-bound retention, and distinguishes
+`current_snapshot` from an actual `checkpoint` comparison. A checkpoint write
+requires the exact visible snapshot and fails with `409` if the company picture
+changed. It is available to every active workspace role because it mutates only
+that user's membership state, not shared company facts. Removing the membership
+cascade-deletes the checkpoint.
+
+This is a minimal comparison read model, not the final canonical event ledger.
+It can prove which currently visible evidence-backed signals are new or changed
+relative to the saved fingerprints. It does not yet claim a complete history of
+resolved/disappeared signals, commitments, decisions or risks. Those require
+the later canonical memory model, contradiction handling, correction,
+forgetting and retention controls. Raw storage and PostgreSQL remain the source
+of truth; no LLM or provider call participates in checkpoint reads or writes.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

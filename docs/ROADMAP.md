@@ -22,7 +22,7 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 - unified entities/events/relationships;
 - event time и observed time;
 - решения, обязательства и риски;
-- checkpoint и «что изменилось»;
+- checkpoint и «что изменилось» — Temporal Memory v1 реализован;
 - contradiction detection;
 - исправление, забывание и retention controls.
 

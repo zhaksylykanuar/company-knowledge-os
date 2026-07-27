@@ -23,6 +23,7 @@ import app.db.company_world_models  # noqa: F401,E402
 import app.db.document_models  # noqa: F401,E402
 import app.db.identity_models  # noqa: F401,E402
 import app.db.integration_models  # noqa: F401,E402
+import app.db.memory_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402
 import app.db.event_models  # noqa: F401,E402
 

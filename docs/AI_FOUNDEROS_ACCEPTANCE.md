@@ -59,7 +59,8 @@
   commitments, decisions, risks and events.
 - [ ] У сохраняемой памяти есть event time, observed time, evidence,
   confidence, access and retention.
-- [ ] Есть temporal comparison «что изменилось».
+- [x] Есть temporal comparison «что изменилось» через явный персональный
+  checkpoint; полный lifecycle event ledger остаётся следующим этапом.
 - [ ] Есть contradiction detection между источниками.
 - [ ] Есть пользовательское исправление и забывание памяти.
 - [x] Retrieval scoped к workspace и текущим правам.

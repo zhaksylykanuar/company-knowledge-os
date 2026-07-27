@@ -9,11 +9,17 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.api.workspace_auth import WorkspaceAccess, require_workspace_access
+from app.db.memory_models import COMPANY_MEMORY_CHECKPOINT_VERSION
+from app.services.company_memory_checkpoint_service import (
+    CompanyMemoryCheckpointConflictError,
+    acknowledge_company_memory_checkpoint,
+)
 from app.services.headquarters_read_service import (
     HEADQUARTERS_CONTRACT_VERSION,
     HEADQUARTERS_ONBOARDING_CONTRACT_VERSION,
     HEADQUARTERS_ONBOARDING_READINESS_VERSION,
     HEADQUARTERS_RANKING_VERSION,
+    HEADQUARTERS_TEMPORAL_MEMORY_VERSION,
     HeadquartersAccessChangedError,
     read_workspace_headquarters,
     sanitize_headquarters_evidence_url,
@@ -215,24 +221,63 @@ class HeadquartersSourcesRead(StrictReadModel):
 class HeadquartersChangeItemRead(StrictReadModel):
     id: str
     kind: Literal["proposal", "source", "relationship"]
+    change_type: Literal["current", "new_or_changed"]
     title: str
     summary: str
-    occurred_at: datetime | None = None
+    event_time: datetime | None = None
+    observed_at: datetime
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence_precision: Literal["exact", "unavailable"]
     source_keys: list[str] = Field(default_factory=list)
     evidence_refs: list[HeadquartersEvidenceRefRead] = Field(default_factory=list)
     target: str
+    access_scope: Literal["workspace"]
+    retention: Literal["source_bound"]
 
     @field_validator("target")
     @classmethod
     def validate_safe_target(cls, value: str) -> str:
         return _validate_internal_target(value)
 
+    @model_validator(mode="after")
+    def validate_confidence_precision(self) -> HeadquartersChangeItemRead:
+        if self.confidence is None and self.confidence_precision != "unavailable":
+            raise ValueError("missing confidence must be unavailable")
+        if self.confidence is not None and self.confidence_precision != "exact":
+            raise ValueError("present confidence must be exact")
+        if not self.evidence_refs:
+            raise ValueError("temporal event requires evidence")
+        return self
+
 
 class HeadquartersChangesRead(StrictReadModel):
+    contract_version: Literal[HEADQUARTERS_TEMPORAL_MEMORY_VERSION]
     items: list[HeadquartersChangeItemRead] = Field(default_factory=list, max_length=3)
-    basis: Literal["current_snapshot"]
-    cursor: None = None
-    since_checkpoint: Literal[False]
+    basis: Literal["current_snapshot", "checkpoint"]
+    cursor: str | None = Field(default=None, pattern=r"^hqc1_[0-9a-f]{64}$")
+    checkpointed_at: datetime | None = None
+    since_checkpoint: bool
+    total_count: int = Field(ge=0)
+    count_precision: Literal["exact", "at_least"]
+    has_more: bool
+
+    @model_validator(mode="after")
+    def validate_checkpoint_state(self) -> HeadquartersChangesRead:
+        checkpoint_mode = self.basis == "checkpoint"
+        if self.since_checkpoint != checkpoint_mode:
+            raise ValueError("since_checkpoint must match basis")
+        if checkpoint_mode != (self.cursor is not None):
+            raise ValueError("cursor must match checkpoint basis")
+        if checkpoint_mode != (self.checkpointed_at is not None):
+            raise ValueError("checkpointed_at must match checkpoint basis")
+        if self.total_count < len(self.items):
+            raise ValueError("total_count cannot be lower than returned items")
+        if self.has_more != (self.total_count > len(self.items)):
+            raise ValueError("has_more must match temporal item count")
+        expected_change_type = "new_or_changed" if checkpoint_mode else "current"
+        if any(item.change_type != expected_change_type for item in self.items):
+            raise ValueError("change_type must match temporal basis")
+        return self
 
 
 class HeadquartersCapabilitySetRead(StrictReadModel):
@@ -363,7 +408,7 @@ class HeadquartersOnboardingRead(StrictReadModel):
 
 
 class HeadquartersCoverageRead(StrictReadModel):
-    key: Literal["identity", "sources", "decisions", "company_world"]
+    key: Literal["identity", "sources", "decisions", "company_world", "memory"]
     status: Literal["complete", "partial", "unavailable"]
     watermark: str
     warning: str | None = None
@@ -420,11 +465,17 @@ class HeadquartersSnapshotResponse(StrictReadModel):
             "sources_attention",
             "pending_relationships",
         ]
-        expected_coverage = ["identity", "sources", "decisions", "company_world"]
+        expected_coverage = [
+            "identity",
+            "sources",
+            "decisions",
+            "company_world",
+            "memory",
+        ]
         if [metric.key for metric in self.pulse] != expected_pulse:
             raise ValueError("pulse must contain the three v1 metrics in order")
         if [item.key for item in self.snapshot.coverage] != expected_coverage:
-            raise ValueError("coverage must contain the four v1 sections in order")
+            raise ValueError("coverage must contain the five v3 sections in order")
         if self.priority and any(item.id == self.priority.id for item in self.queue):
             raise ValueError("priority cannot be duplicated in queue")
         if self.snapshot.partial != any(
@@ -441,6 +492,24 @@ class HeadquartersOnboardingResponse(StrictReadModel):
     onboarding: HeadquartersOnboardingRead
     capabilities: HeadquartersCapabilitySetRead
     boundary: HeadquartersBoundaryRead
+
+
+class CompanyMemoryCheckpointRequest(StrictReadModel):
+    expected_snapshot_id: str = Field(pattern=r"^hqs1_[0-9a-f]{64}$")
+
+
+class CompanyMemoryCheckpointRead(StrictReadModel):
+    cursor: str = Field(pattern=r"^hqc1_[0-9a-f]{64}$")
+    checkpointed_at: datetime
+    source_snapshot_id: str = Field(pattern=r"^hqs1_[0-9a-f]{64}$")
+    event_fingerprint_count: int = Field(ge=0)
+    retention: Literal["membership_scoped"]
+
+
+class CompanyMemoryCheckpointResponse(StrictReadModel):
+    contract_version: Literal[COMPANY_MEMORY_CHECKPOINT_VERSION]
+    workspace_id: UUID
+    checkpoint: CompanyMemoryCheckpointRead
 
 
 def _validate_internal_target(value: str) -> str:
@@ -520,5 +589,39 @@ async def get_workspace_headquarters_onboarding(
         }
     )
     response.headers["ETag"] = f'"{result.snapshot.id}"'
+    response.headers["Cache-Control"] = "private, no-store"
+    return result
+
+
+@router.post(
+    "/changes/checkpoint",
+    response_model=CompanyMemoryCheckpointResponse,
+)
+async def acknowledge_workspace_headquarters_changes(
+    workspace_id: UUID,
+    payload: CompanyMemoryCheckpointRequest,
+    response: Response,
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> CompanyMemoryCheckpointResponse:
+    try:
+        checkpoint = await acknowledge_company_memory_checkpoint(
+            workspace_id=workspace_id,
+            user_id=access.workspace_membership.user.id,
+            expected_snapshot_id=payload.expected_snapshot_id,
+        )
+    except CompanyMemoryCheckpointConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="headquarters snapshot changed",
+            headers={"Cache-Control": "private, no-store"},
+        ) from exc
+    except HeadquartersAccessChangedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="workspace not found",
+            headers={"Cache-Control": "private, no-store"},
+        ) from exc
+
+    result = CompanyMemoryCheckpointResponse.model_validate(checkpoint)
     response.headers["Cache-Control"] = "private, no-store"
     return result

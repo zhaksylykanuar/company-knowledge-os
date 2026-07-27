@@ -13,7 +13,8 @@
 
 ## Следом — память и настоящее второе мнение
 
-1. Добавить temporal events и checkpoint для «что изменилось».
+1. Добавить канонический lifecycle event ledger для исчезнувших и разрешённых
+   сигналов.
 2. Добавить обязательства клиентов, решения и риски с evidence.
 3. Добавить contradiction detection между источниками.
 4. Спроектировать privacy/retention/schema для generative LLM path.

@@ -1,5 +1,30 @@
 # FounderOS Changelog
 
+## 2026-07-27
+
+### Added
+
+- Added Temporal Memory v1 (DEC-096): a membership-scoped company-memory
+  checkpoint storing only the exact source snapshot, observation time and
+  bounded opaque signal fingerprints. Membership removal deletes the
+  checkpoint; source text, evidence bodies, chats and provider payloads are not
+  duplicated.
+- Added snapshot-bound
+  `POST /api/v1/workspaces/{workspace_id}/headquarters/changes/checkpoint`.
+  Stale acknowledgements fail with `409`; the response is private/no-store and
+  reports membership-scoped retention.
+
+### Changed
+
+- Upgraded Headquarters to `headquarters.v3`. Temporal signals now separate
+  `event_time` from `observed_at`, require evidence, expose confidence, access
+  scope and source-bound retention, and distinguish current facts from changes
+  after a real checkpoint.
+- Reworked the home signal panel into two honest modes: current confirmed facts
+  before the first checkpoint and new/changed facts after it. The explicit
+  acknowledgement control stores only the technical comparison point and
+  refreshes the exact company snapshot.
+
 ## 2026-07-25
 
 ### Changed

@@ -80,6 +80,45 @@ test("renders one real priority, fixed pulse order, and backend actions", () => 
   assert.doesNotMatch(html, /Демо-данные|NovaFlow|Доброе утро, Алина|DEMO-MISSION/);
 });
 
+test("separates the current point from checkpoint-backed changes", () => {
+  const current = makeHeadquartersFixture();
+  const currentHtml = renderToStaticMarkup(
+    <HeadquartersDashboardView
+      onAcknowledgeChanges={async () => current}
+      snapshot={current}
+      status="ready"
+      workspaceName={current.workspace.name}
+    />
+  );
+  assert.ok(currentHtml.includes("Текущая точка"));
+  assert.ok(currentHtml.includes("Подтверждённые факты"));
+  assert.ok(currentHtml.includes("Запомнить текущую точку"));
+  assert.ok(
+    currentHtml.includes(
+      "Сохраняется только техническая отметка, без копий переписок и документов."
+    )
+  );
+
+  const checkpoint = makeHeadquartersFixture((fixture) => {
+    fixture.changes.basis = "checkpoint";
+    fixture.changes.cursor = `hqc1_${"a".repeat(64)}`;
+    fixture.changes.checkpointed_at = "2026-07-16T10:00:00Z";
+    fixture.changes.since_checkpoint = true;
+    fixture.changes.items[0]!.change_type = "new_or_changed";
+  });
+  const checkpointHtml = renderToStaticMarkup(
+    <HeadquartersDashboardView
+      onAcknowledgeChanges={async () => checkpoint}
+      snapshot={checkpoint}
+      status="ready"
+      workspaceName={checkpoint.workspace.name}
+    />
+  );
+  assert.ok(checkpointHtml.includes("Что изменилось"));
+  assert.ok(checkpointHtml.includes("Отметить просмотренным"));
+  assert.doesNotMatch(checkpointHtml, /Это состояние текущего снимка/);
+});
+
 test("renders a calm state without inventing a priority", () => {
   const snapshot = makeHeadquartersFixture((fixture) => {
     fixture.priority = null;
@@ -257,6 +296,7 @@ test("keeps a disabled mission non-clickable and explains the role boundary", ()
       disabled_reason: "Недостаточно прав для принятия решения"
     };
     fixture.changes.items = [];
+    fixture.changes.total_count = 0;
     for (const key of Object.keys(fixture.capabilities) as Array<
       keyof typeof fixture.capabilities
     >) {
@@ -330,11 +370,11 @@ test("keeps verified priority visible while reporting partial and stale source t
 
 test("never turns an unknown signal timestamp into current recency", () => {
   const snapshot = makeHeadquartersFixture((fixture) => {
-    fixture.changes.items[0]!.occurred_at = null;
+    fixture.changes.items[0]!.event_time = null;
   });
   const html = renderReady(snapshot);
 
-  assert.ok(html.includes("Дата не подтверждена"));
+  assert.ok(html.includes("Время события неизвестно"));
   assert.doesNotMatch(html, /<time[^>]*>сейчас<\/time>/);
 });
 

@@ -31,6 +31,7 @@ EXPECTED_ALEMBIC_TABLES = {
     "affiliations",
     "interactions",
     "company_world_resolutions",
+    "company_memory_checkpoints",
 }
 
 EXPECTED_ALEMBIC_MODEL_MODULES = {
@@ -39,6 +40,7 @@ EXPECTED_ALEMBIC_MODEL_MODULES = {
     "app.db.company_world_models",
     "app.db.identity_models",
     "app.db.integration_models",
+    "app.db.memory_models",
     "app.db.models",
     "app.db.event_models",
 }

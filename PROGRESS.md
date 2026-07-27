@@ -6,8 +6,8 @@
 
 ## Сейчас
 
-**FounderOS 2.0 product reset реализован локально в ветке
-`codex/living-hq-ux-reset`. Изменения не опубликованы.**
+**FounderOS 2.0 product reset и Temporal Memory v1 реализованы локально в
+ветке `codex/living-hq-ux-reset`. Изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -17,6 +17,10 @@ FounderOS теперь определяется как AI-партнёр и вт
 - `Компания` — люди, организации, работа и подтверждающие материалы;
 - `Спросить` — отдельная evidence-backed рабочая зона без сохраняемой истории;
 - `Настройки` — команда, подключения, API и технические проверки.
+
+Домашний экран теперь различает текущие подтверждённые факты и изменения после
+явного персонального checkpoint. Checkpoint хранит только точный snapshot,
+время и opaque fingerprints; тексты источников и evidence не копируются.
 
 ## Что изменено
 
@@ -37,31 +41,42 @@ FounderOS теперь определяется как AI-партнёр и вт
 - Исправлен GitHub App fallback redirect на новый settings route.
 - Удалены неиспользуемые старые тексты и CSS-блоки Command Center, Today,
   provider pulse и source-health drawer.
+- Добавлен `headquarters.v3` с Temporal Memory v1: `event_time`,
+  `observed_at`, evidence, confidence, workspace access и source-bound
+  retention.
+- Добавлен snapshot-bound checkpoint endpoint и минимальная таблица
+  `company_memory_checkpoints`; checkpoint персонален для membership и
+  каскадно удаляется при отзыве membership.
+- «Подтверждённые факты» после явного checkpoint превращаются в доказуемый
+  список новых или изменённых сигналов. Полный lifecycle исчезнувших/закрытых
+  событий пока не заявляется.
 
-## Проверено 2026-07-25
+## Проверено 2026-07-27
 
-- Frontend: `npm test` — **312 passed**. Superseded component-only suites were
-  deleted together with their unreachable UI.
+- Frontend: `npm test` — **314 passed**.
 - Frontend: `npm run typecheck` — успешно.
 - Frontend: `npm run build` — успешно, **16 routes**.
 - Frontend dependencies: production audit — **0 vulnerabilities**.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: `uv run pytest -q` — **745 passed**, одно внешнее
+- Backend: `uv run pytest -q` — **746 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
+- Alembic: единственная head `d6e7f8a9b0c1`, применена к локальной БД.
 - Local runtime: `make local-doctor` — все проверки зелёные; backend `8765` и
   web `3000` принадлежат текущему FounderOS.
 
-Browser QA не засчитан: локальный runtime запущен, но встроенный browser
-отклонил переход к local URL политикой безопасности. Это не заменяется
-Playwright/CDP обходом.
+Authenticated browser QA не засчитан: локальный URL теперь открывается во
+встроенном браузере и Chrome, но обе доступные сессии корректно перенаправлены
+на `/login` и не содержат авторизации. Пароли/cookies не читались. Доступный
+login-screen проверен при ширине `1201` и `390`: horizontal overflow и
+console warnings/errors не обнаружены. Это не заменяет QA экранов после входа.
 
 ## Следующий рекомендуемый шаг
 
 1. Провести разрешённый authenticated desktop/mobile browser QA.
 2. Подтвердить один read-only GitHub App read из рабочей организации и увидеть
    canonical результат внутри `Компания`.
-3. Затем переходить к temporal memory: event/observed time, commitments,
-   contradictions, checkpoints и управляемое забывание.
+3. Добавить canonical lifecycle event ledger, затем commitments,
+   decisions/risks, contradictions и управляемое забывание.
 
 ## Неподвижные границы
 

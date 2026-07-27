@@ -60,6 +60,7 @@ from app.db.integration_models import (
     IntegrationConnection,
     SyncJob,
 )
+from app.db.memory_models import CompanyMemoryCheckpoint
 from app.main import app
 from app.services.session_service import create_session
 
@@ -158,6 +159,22 @@ async def _get_headquarters_onboarding(
             f"/api/v1/workspaces/{workspace_id}/headquarters/onboarding",
             headers=_headers(),
             params={"owner_email": email},
+        )
+    return response.status_code, response.json(), dict(response.headers)
+
+
+async def _acknowledge_headquarters_changes(
+    *,
+    workspace_id: UUID,
+    email: str,
+    expected_snapshot_id: str,
+) -> tuple[int, dict, dict[str, str]]:
+    async with _client() as client:
+        response = await client.post(
+            f"/api/v1/workspaces/{workspace_id}/headquarters/changes/checkpoint",
+            headers=_headers(),
+            params={"owner_email": email},
+            json={"expected_snapshot_id": expected_snapshot_id},
         )
     return response.status_code, response.json(), dict(response.headers)
 
@@ -451,7 +468,7 @@ async def test_empty_headquarters_is_deterministic_and_read_only(monkeypatch) ->
         )
 
         assert first_status == second_status == onboarding_status == 200
-        assert first["contract_version"] == "headquarters.v2"
+        assert first["contract_version"] == "headquarters.v3"
         assert first["ranking_version"] == "headquarters-ranking.v1"
         assert first["snapshot"]["id"] == second["snapshot"]["id"]
         assert first["snapshot"]["as_of"] != second["snapshot"]["as_of"]
@@ -512,10 +529,15 @@ async def test_empty_headquarters_is_deterministic_and_read_only(monkeypatch) ->
         assert len(first["queue"]) <= 2
         assert len(first["changes"]["items"]) <= 3
         assert first["changes"] == {
+            "contract_version": "temporal-memory.v1",
             "items": [],
             "basis": "current_snapshot",
             "cursor": None,
+            "checkpointed_at": None,
             "since_checkpoint": False,
+            "total_count": 0,
+            "count_precision": "exact",
+            "has_more": False,
         }
         assert first["boundary"] == {
             "provider_calls": False,
@@ -524,6 +546,166 @@ async def test_empty_headquarters_is_deterministic_and_read_only(monkeypatch) ->
             "reads_secrets": False,
             "transaction": "repeatable_read_read_only",
         }
+    finally:
+        await _cleanup(marker)
+
+
+async def test_temporal_checkpoint_is_exact_personal_and_membership_scoped(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        owner, workspace = await _seed_workspace(marker)
+        viewer = await _add_member(
+            workspace_id=workspace.id,
+            marker=marker,
+            role=MEMBERSHIP_ROLE_VIEWER,
+        )
+
+        initial_status, initial, _headers_initial = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert initial_status == 200
+        assert initial["changes"]["basis"] == "current_snapshot"
+
+        acknowledged_status, acknowledged, acknowledged_headers = (
+            await _acknowledge_headquarters_changes(
+                workspace_id=workspace.id,
+                email=owner.email,
+                expected_snapshot_id=initial["snapshot"]["id"],
+            )
+        )
+        assert acknowledged_status == 200
+        assert acknowledged_headers["cache-control"] == "private, no-store"
+        assert acknowledged["contract_version"] == "temporal-checkpoint.v1"
+        assert acknowledged["workspace_id"] == str(workspace.id)
+        assert acknowledged["checkpoint"]["source_snapshot_id"] == initial["snapshot"]["id"]
+        assert acknowledged["checkpoint"]["event_fingerprint_count"] == 0
+        assert acknowledged["checkpoint"]["retention"] == "membership_scoped"
+        assert acknowledged["checkpoint"]["cursor"].startswith("hqc1_")
+
+        owner_status, owner_view, _owner_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        viewer_status, viewer_view, _viewer_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=viewer.email,
+        )
+        assert owner_status == viewer_status == 200
+        assert owner_view["changes"]["basis"] == "checkpoint"
+        assert owner_view["changes"]["since_checkpoint"] is True
+        assert owner_view["changes"]["items"] == []
+        assert owner_view["changes"]["checkpointed_at"] is not None
+        assert viewer_view["changes"]["basis"] == "current_snapshot"
+        assert viewer_view["changes"]["since_checkpoint"] is False
+
+        observed_at = datetime.now(timezone.utc)
+        async with AsyncSessionLocal() as session:
+            connection = IntegrationConnection(
+                workspace_id=workspace.id,
+                provider="github",
+                status=INTEGRATION_CONNECTION_STATUS_CONNECTED,
+                display_name="Temporal GitHub",
+                scopes=[f"repository:temporal/{marker}"],
+                last_sync_at=observed_at,
+            )
+            session.add(connection)
+            await session.flush()
+            session.add(
+                SourceRecord(
+                    workspace_id=workspace.id,
+                    provider="github",
+                    connection_id=connection.id,
+                    external_id=f"temporal/{marker}",
+                    record_type="repository",
+                    source_url=f"https://github.com/temporal/{marker}",
+                    payload={"full_name": f"temporal/{marker}"},
+                    payload_hash=f"temporal-{marker}",
+                    observed_at=observed_at,
+                    source_updated_at=observed_at,
+                )
+            )
+            session.add(
+                SyncJob(
+                    workspace_id=workspace.id,
+                    connection_id=connection.id,
+                    provider="github",
+                    status=SYNC_JOB_STATUS_FAILED,
+                    sync_type="manual",
+                    started_at=observed_at,
+                    finished_at=observed_at,
+                    error_message="sanitized temporal test failure",
+                )
+            )
+            await session.commit()
+
+        changed_status, changed, _changed_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert changed_status == 200
+        assert changed["changes"]["basis"] == "checkpoint"
+        assert changed["changes"]["total_count"] == 1
+        assert changed["changes"]["count_precision"] == "exact"
+        event = changed["changes"]["items"][0]
+        assert event["kind"] == "source"
+        assert event["change_type"] == "new_or_changed"
+        assert event["event_time"] is not None
+        assert event["observed_at"] is not None
+        assert event["evidence_refs"]
+        assert event["access_scope"] == "workspace"
+        assert event["retention"] == "source_bound"
+
+        stale_status, stale, _stale_headers = await _acknowledge_headquarters_changes(
+            workspace_id=workspace.id,
+            email=owner.email,
+            expected_snapshot_id=initial["snapshot"]["id"],
+        )
+        assert stale_status == 409
+        assert stale == {"detail": "headquarters snapshot changed"}
+
+        current_status, current, _current_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert current_status == 200
+        final_ack_status, _final_ack, _final_ack_headers = (
+            await _acknowledge_headquarters_changes(
+                workspace_id=workspace.id,
+                email=owner.email,
+                expected_snapshot_id=current["snapshot"]["id"],
+            )
+        )
+        assert final_ack_status == 200
+        final_status, final, _final_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert final_status == 200
+        assert final["changes"]["basis"] == "checkpoint"
+        assert final["changes"]["items"] == []
+        assert final["changes"]["total_count"] == 0
+
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                delete(Membership).where(
+                    Membership.workspace_id == workspace.id,
+                    Membership.user_id == owner.id,
+                )
+            )
+            await session.commit()
+        async with AsyncSessionLocal() as session:
+            checkpoint = await session.scalar(
+                select(CompanyMemoryCheckpoint).where(
+                    CompanyMemoryCheckpoint.workspace_id == workspace.id,
+                    CompanyMemoryCheckpoint.user_id == owner.id,
+                )
+            )
+            assert checkpoint is None
     finally:
         await _cleanup(marker)
 
@@ -1931,7 +2113,7 @@ async def test_headquarters_capabilities_follow_in_transaction_role(
         assert capabilities["can_resolve_world"] is expected["member"]
         assert capabilities["can_review_proposal"] is expected["review"]
         assert capabilities["can_execute_external"] is False
-        assert capabilities["can_acknowledge_changes"] is False
+        assert capabilities["can_acknowledge_changes"] is True
         onboarding_steps = {step["key"]: step for step in body["onboarding"]["steps"]}
         assert onboarding_steps["source"]["action"]["enabled"] is expected["manage"]
         assert onboarding_steps["canonical_data"]["action"]["enabled"] is expected["manage"]
