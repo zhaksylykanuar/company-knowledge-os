@@ -99,7 +99,8 @@ async def sync_selected_repository_pull_requests(
     repository_records: list[dict[str, Any]] = []
     repository_summaries: list[dict[str, Any]] = []
     read_state = _github_read_state(states)
-    observed_at = datetime.now(timezone.utc).isoformat()
+    snapshot_observed_at = datetime.now(timezone.utc)
+    observed_at = snapshot_observed_at.isoformat()
 
     for repository_full_name in repositories:
         try:
@@ -188,6 +189,11 @@ async def sync_selected_repository_pull_requests(
             include_issues=False,
             include_pull_requests=True,
             persist_if_supported=True,
+            snapshot_observed_at=snapshot_observed_at,
+            provider_attested=True,
+            authoritative_pull_request_repositories=(
+                tuple(repositories) if _is_complete_scope(states) else ()
+            ),
         ),
     )
     totals = _totals(repository_summaries)
@@ -265,6 +271,11 @@ def _github_read_state(states: list[str]) -> str:
     if selected <= {"closed", "merged"}:
         return "closed"
     return "open"
+
+
+def _is_complete_scope(states: list[str]) -> bool:
+    selected = set(states)
+    return "all" in selected or _PR_STATES.issubset(selected)
 
 
 def _validate_sync_allowlist(repositories: list[str]) -> None:

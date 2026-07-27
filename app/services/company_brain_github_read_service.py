@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.canonical_models import (
@@ -246,8 +246,15 @@ async def _github_issue_tasks(
     rows = (
         await session.execute(
             select(Task)
+            .outerjoin(SourceRecord, SourceRecord.id == Task.source_record_id)
             .where(Task.workspace_id == workspace_id)
             .where(Task.source_provider == TASK_PROVIDER_GITHUB)
+            .where(
+                or_(
+                    Task.source_record_id.is_(None),
+                    SourceRecord.is_deleted.is_(False),
+                )
+            )
             .order_by(Task.source_updated_at.desc().nullslast(), Task.updated_at.desc())
         )
     ).scalars()
@@ -272,8 +279,15 @@ async def _jira_issue_tasks(
     rows = (
         await session.execute(
             select(Task)
+            .outerjoin(SourceRecord, SourceRecord.id == Task.source_record_id)
             .where(Task.workspace_id == workspace_id)
             .where(Task.source_provider == TASK_PROVIDER_JIRA)
+            .where(
+                or_(
+                    Task.source_record_id.is_(None),
+                    SourceRecord.is_deleted.is_(False),
+                )
+            )
             .order_by(Task.source_updated_at.desc().nullslast(), Task.updated_at.desc())
         )
     ).scalars()
@@ -299,7 +313,17 @@ async def _pull_requests(
         (
             await session.execute(
                 select(PullRequest)
+                .outerjoin(
+                    SourceRecord,
+                    SourceRecord.id == PullRequest.source_record_id,
+                )
                 .where(PullRequest.workspace_id == workspace_id)
+                .where(
+                    or_(
+                        PullRequest.source_record_id.is_(None),
+                        SourceRecord.is_deleted.is_(False),
+                    )
+                )
                 .order_by(
                     PullRequest.updated_at_source.desc().nullslast(),
                     PullRequest.created_at.desc(),
@@ -336,6 +360,7 @@ async def _source_records_by_external_id(
                 .where(SourceRecord.provider == provider)
                 .where(SourceRecord.record_type == record_type)
                 .where(SourceRecord.external_id.in_(selected_ids))
+                .where(SourceRecord.is_deleted.is_(False))
         )
     ).scalars()
     return {row.external_id: row for row in rows}

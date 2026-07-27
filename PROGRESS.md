@@ -6,9 +6,9 @@
 
 ## Сейчас
 
-**FounderOS 2.0 product reset, Lifecycle Event Ledger v1 и Temporal Memory v2
-реализованы локально в ветке `codex/living-hq-ux-reset`. Изменения не
-опубликованы.**
+**FounderOS 2.0 product reset, Lifecycle Event Ledger v1, Temporal Memory v2 и
+GitHub Source Reconciliation v1 реализованы локально в ветке
+`codex/living-hq-ux-reset`. Изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -59,9 +59,18 @@ ledger; тексты источников и evidence не копируются.
 - Temporal Memory v2 объединяет fingerprint-сравнение текущих сигналов с
   последовательным ledger cursor. Headquarters показывает terminal action/world
   события как `resolved`; повторный checkpoint скрывает уже просмотренное.
-- Исторический backfill автоматически не выполняется. Исчезновение внешних
-  GitHub/Jira/Gmail/Drive объектов всё ещё не заявляется, пока не реализованы
-  provider reconciliation и tombstones.
+- Добавлен `source-reconciliation.v1`: только успешный полностью
+  пагинированный server-attested GitHub read со всеми состояниями может
+  tombstone-ить отсутствующие issue/PR внутри выбранного репозитория.
+- Tombstone хранит время начала provider snapshot, время записи, SyncJob и
+  контролируемую причину. Более старый снимок не перезаписывает более новый;
+  ручной `normalize-local` не может восстановить исчезнувший объект.
+- Повторное появление в trusted GitHub read очищает tombstone и создаёт
+  content-free lifecycle event. Company Brain и operational work скрывают
+  tombstoned Task/PullRequest, сохраняя историю и evidence в PostgreSQL.
+- Jira/Gmail/Drive остаются без disappearance detection: их текущие локальные
+  импорты не являются полными provider snapshots. Исторический backfill
+  автоматически не выполняется.
 
 ## Проверено 2026-07-27
 
@@ -70,11 +79,14 @@ ledger; тексты источников и evidence не копируются.
 - Frontend: `npm run build` — успешно, **16 routes**.
 - Frontend dependencies: production audit — **0 vulnerabilities**.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: `uv run pytest -q` — **747 passed**, одно внешнее
+- Backend: `uv run pytest -q` — **750 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
-- Alembic: единственная head `d9a0b1c2d3e4`, применена к локальной БД.
-- Local runtime: `make local-doctor` — все проверки зелёные; backend `8765` и
-  web `3000` принадлежат текущему FounderOS.
+- Alembic: единственная head `f0b1c2d3e4a6`, применена к локальной БД;
+  `alembic check` не обнаружил расхождений metadata/schema.
+- Local runtime перезапущен штатным supervisor: `make local-doctor` полностью
+  зелёный, backend `8765` и web `3000` принадлежат текущему FounderOS;
+  `make local-smoke` проверил login `200`, health `200` и ожидаемый
+  unauthenticated session probe `401`.
 
 Authenticated browser QA не засчитан: локальный URL теперь открывается во
 встроенном браузере и Chrome, но обе доступные сессии корректно перенаправлены
@@ -87,7 +99,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 1. Провести разрешённый authenticated desktop/mobile browser QA.
 2. Подтвердить один read-only GitHub App read из рабочей организации и увидеть
    canonical результат внутри `Компания`.
-3. Добавить provider reconciliation/tombstones для исчезнувших source records.
+3. Добавить полные paginated live-read контракты и reconciliation для
+   Jira/Gmail/Drive.
 4. Добавить commitments, decisions/risks, contradictions и управляемое
    забывание.
 

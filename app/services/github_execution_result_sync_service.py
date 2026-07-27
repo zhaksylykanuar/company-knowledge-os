@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -156,6 +157,7 @@ async def sync_github_issue_execution_result(
             GITHUB_EXECUTION_RESULT_SYNC_TOKEN_UNAVAILABLE
         ) from exc
 
+    snapshot_observed_at = datetime.now(timezone.utc)
     try:
         raw_issue = await get_issue(
             access_token=access_token,
@@ -198,6 +200,8 @@ async def sync_github_issue_execution_result(
             include_issues=True,
             include_pull_requests=False,
             persist_if_supported=True,
+            snapshot_observed_at=snapshot_observed_at,
+            provider_attested=True,
         ),
     )
     normalized_issue = _first_normalized_issue(normalization)

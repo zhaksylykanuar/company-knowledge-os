@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added GitHub Source Reconciliation v1 (DEC-098). Successful, fully paginated
+  server-attested repository reads can tombstone issues and pull requests
+  absent from a complete all-state snapshot. Partial, filtered, failed,
+  truncated and manual local imports cannot infer deletion.
+- Added reversible SourceRecord tombstone provenance: provider snapshot time,
+  persistence time, SyncJob and controlled reason. Pull requests now retain
+  their canonical SourceRecord link, and disappearance/restoration append
+  content-free lifecycle memory events.
 - Added Lifecycle Event Ledger v1 (DEC-097): append-only
   `company_memory_events` with a transactional per-workspace sequence,
   controlled lifecycle types, canonical UUID evidence identifiers,
@@ -23,6 +31,11 @@
 
 ### Changed
 
+- Current GitHub operational and Company Brain reads now exclude derived
+  Task/PullRequest projections whose SourceRecord is tombstoned. A newer
+  trusted provider read restores the object; stale snapshots and untrusted
+  manual normalization cannot. PostgreSQL history/evidence is retained and no
+  LLM or external write participates.
 - Upgraded the checkpoint contract to `temporal-checkpoint.v2` and the
   Headquarters comparison to `temporal-memory.v2`. A checkpoint now combines
   current-signal fingerprints with `last_event_sequence`; supported terminal

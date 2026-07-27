@@ -996,6 +996,9 @@ async def test_ranking_uses_workspace_verified_evidence_and_trusted_severity(
                 observed_at=now,
                 source_updated_at=now,
                 is_deleted=True,
+                tombstoned_at=now,
+                tombstone_observed_at=now,
+                tombstone_reason="legacy_without_provenance",
             )
             session.add(deleted_source)
             await session.flush()

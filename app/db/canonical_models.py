@@ -90,8 +90,29 @@ class SourceRecord(Base):
             name="uq_source_records_workspace_id_id",
         ),
         Index("ix_source_records_workspace_record_type", "workspace_id", "record_type"),
+        Index(
+            "ix_source_records_workspace_provider_deleted",
+            "workspace_id",
+            "provider",
+            "is_deleted",
+        ),
         Index("ix_source_records_payload_hash", "payload_hash"),
         Index("ix_source_records_source_updated_at", "source_updated_at"),
+        CheckConstraint(
+            "("
+            "is_deleted = false "
+            "and tombstoned_at is null "
+            "and tombstone_observed_at is null "
+            "and tombstone_sync_job_id is null "
+            "and tombstone_reason is null"
+            ") or ("
+            "is_deleted = true "
+            "and tombstoned_at is not null "
+            "and tombstone_observed_at is not null "
+            "and tombstone_reason is not null"
+            ")",
+            name="ck_source_records_tombstone_provenance",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -125,6 +146,24 @@ class SourceRecord(Base):
         index=True,
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    tombstoned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    tombstone_observed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    tombstone_sync_job_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "sync_jobs.id",
+            name="fk_source_records_tombstone_sync_job_id",
+        ),
+        nullable=True,
+        index=True,
+    )
+    tombstone_reason: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -252,6 +291,12 @@ class PullRequest(Base):
         ForeignKey("repositories.id", name="fk_pull_requests_repository_id"),
     )
     external_id: Mapped[str] = mapped_column(String(255))
+    source_record_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("source_records.id", name="fk_pull_requests_source_record_id"),
+        nullable=True,
+        index=True,
+    )
     number: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(500))
     state: Mapped[str] = mapped_column(String(20), index=True)

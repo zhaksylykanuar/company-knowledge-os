@@ -17,7 +17,7 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, literal_column, select
+from sqlalchemy import func, literal_column, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -123,8 +123,15 @@ async def list_workspace_jira_issues(
         (
             await session.execute(
                 select(Task)
+                .outerjoin(SourceRecord, SourceRecord.id == Task.source_record_id)
                 .where(Task.workspace_id == workspace_id)
                 .where(Task.source_provider == TASK_PROVIDER_JIRA)
+                .where(
+                    or_(
+                        Task.source_record_id.is_(None),
+                        SourceRecord.is_deleted.is_(False),
+                    )
+                )
                 .order_by(Task.source_updated_at.desc().nullslast(), Task.updated_at.desc())
                 .limit(bounded_limit)
             )
@@ -329,6 +336,10 @@ async def _upsert_jira_source_record(
         SourceRecord.source_updated_at: source_updated_at,
         SourceRecord.sync_job_id: None,
         SourceRecord.is_deleted: False,
+        SourceRecord.tombstoned_at: None,
+        SourceRecord.tombstone_observed_at: None,
+        SourceRecord.tombstone_sync_job_id: None,
+        SourceRecord.tombstone_reason: None,
     }
     statement = (
         pg_insert(SourceRecord)

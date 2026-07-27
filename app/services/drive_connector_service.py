@@ -305,6 +305,10 @@ async def _upsert_drive_source_record(
         SourceRecord.source_updated_at: source_updated_at,
         SourceRecord.sync_job_id: None,
         SourceRecord.is_deleted: False,
+        SourceRecord.tombstoned_at: None,
+        SourceRecord.tombstone_observed_at: None,
+        SourceRecord.tombstone_sync_job_id: None,
+        SourceRecord.tombstone_reason: None,
     }
     statement = (
         pg_insert(SourceRecord)

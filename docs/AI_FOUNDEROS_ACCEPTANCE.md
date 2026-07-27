@@ -64,8 +64,10 @@
 - [x] Append-only ledger транзакционно фиксирует creation/terminal lifecycle
   Action Proposal и terminal resolutions Company World без копирования
   source/UI text.
-- [ ] Исчезнувшие GitHub/Jira/Gmail/Drive записи фиксируются через
-  reconciliation/tombstones, а не выводятся из отсутствия в текущем snapshot.
+- [x] Исчезнувшие GitHub issue/PR фиксируются через reconciliation/tombstones
+  только после полного server-attested repository snapshot.
+- [ ] Jira/Gmail/Drive получают полные live provider snapshots и подключаются к
+  reconciliation; локальные/частичные импорты не объявляют исчезновение.
 - [ ] Есть contradiction detection между источниками.
 - [ ] Есть пользовательское исправление и забывание памяти.
 - [x] Retrieval scoped к workspace и текущим правам.

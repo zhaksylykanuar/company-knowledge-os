@@ -24,7 +24,9 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 - решения, обязательства и риски;
 - checkpoint и «что изменилось» — Temporal Memory v2 реализован;
 - append-only lifecycle ledger для Action Proposal и Company World реализован;
-- reconciliation/tombstones исчезнувших provider records — следующий слой;
+- GitHub issue/PR reconciliation/tombstones реализованы для полных
+  server-attested repository snapshots; Jira/Gmail/Drive ждут полных live
+  provider reads;
 - contradiction detection;
 - исправление, забывание и retention controls.
 

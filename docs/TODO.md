@@ -13,8 +13,9 @@
 
 ## Следом — память и настоящее второе мнение
 
-1. Добавить provider reconciliation и tombstones, чтобы lifecycle ledger
-   достоверно фиксировал исчезнувшие GitHub/Jira/Gmail/Drive объекты.
+1. Добавить полные paginated live provider reads для Jira/Gmail/Drive, после
+   чего подключить их к `source-reconciliation.v1`. Текущие локальные импорты
+   не имеют права объявлять исчезновение.
 2. Добавить обязательства клиентов, решения и риски с evidence.
 3. Добавить contradiction detection между источниками.
 4. Спроектировать privacy/retention/schema для generative LLM path.

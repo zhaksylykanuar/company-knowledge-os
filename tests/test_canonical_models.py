@@ -118,6 +118,7 @@ async def test_spine_create_and_roundtrip() -> None:
             pull_request = PullRequest(
                 workspace_id=workspace.id,
                 repository_id=repository.id,
+                source_record_id=source_record.id,
                 external_id=f"pr-{marker}",
                 number=7,
                 title="Add feature",
@@ -175,10 +176,15 @@ async def test_spine_create_and_roundtrip() -> None:
         assert stored_sr.payload == {"full_name": "acme/repo", "private": True}
         assert stored_sr.payload_hash == "hash-" + marker
         assert stored_sr.is_deleted is False
+        assert stored_sr.tombstoned_at is None
+        assert stored_sr.tombstone_observed_at is None
+        assert stored_sr.tombstone_sync_job_id is None
+        assert stored_sr.tombstone_reason is None
         assert stored_repo.full_name == "acme/repo"
         assert stored_repo.visibility == REPOSITORY_VISIBILITY_PRIVATE
         assert stored_repo.repo_metadata == {"stars": 3}
         assert stored_pr.repository_id == repo_id
+        assert stored_pr.source_record_id == sr_id
         assert stored_pr.state == PULL_REQUEST_STATE_OPEN
         assert stored_task.source_record_id == sr_id
         assert stored_task.due_date == date(2026, 7, 1)

@@ -41,6 +41,8 @@ COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_APPROVED = "action_proposal_approved"
 COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_REJECTED = "action_proposal_rejected"
 COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED = "company_world_confirmed"
 COMPANY_MEMORY_EVENT_COMPANY_WORLD_DISMISSED = "company_world_dismissed"
+COMPANY_MEMORY_EVENT_SOURCE_RECORD_DISAPPEARED = "source_record_disappeared"
+COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED = "source_record_restored"
 
 COMPANY_MEMORY_LIFECYCLE_CREATED = "created"
 COMPANY_MEMORY_LIFECYCLE_RESOLVED = "resolved"
@@ -65,7 +67,9 @@ class CompanyMemoryEvent(Base):
             "'action_proposal_approved', "
             "'action_proposal_rejected', "
             "'company_world_confirmed', "
-            "'company_world_dismissed'"
+            "'company_world_dismissed', "
+            "'source_record_disappeared', "
+            "'source_record_restored'"
             ")",
             name="ck_company_memory_events_type",
         ),
@@ -77,7 +81,8 @@ class CompanyMemoryEvent(Base):
             "subject_type in ("
             "'action_proposal', "
             "'external_person_candidate', "
-            "'organization_candidate'"
+            "'organization_candidate', "
+            "'source_record'"
             ")",
             name="ck_company_memory_events_subject_type",
         ),

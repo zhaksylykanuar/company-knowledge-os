@@ -19,12 +19,15 @@ from app.db.action_models import (
     ActionProposal,
 )
 from app.db.company_world_models import CompanyWorldResolution
+from app.db.canonical_models import SourceRecord
 from app.db.memory_models import (
     COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_APPROVED,
     COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_CREATED,
     COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_REJECTED,
     COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED,
     COMPANY_MEMORY_EVENT_COMPANY_WORLD_DISMISSED,
+    COMPANY_MEMORY_EVENT_SOURCE_RECORD_DISAPPEARED,
+    COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED,
     COMPANY_MEMORY_EVENT_VERSION,
     COMPANY_MEMORY_LIFECYCLE_CREATED,
     COMPANY_MEMORY_LIFECYCLE_RESOLVED,
@@ -43,6 +46,7 @@ COMPANY_MEMORY_EVENT_REFERENCE_TYPES = frozenset(
         "action_proposal",
         "company_world_resolution",
         "source_record",
+        "sync_job",
     }
 )
 
@@ -66,6 +70,14 @@ _EVENT_RULES = {
     COMPANY_MEMORY_EVENT_COMPANY_WORLD_DISMISSED: (
         COMPANY_MEMORY_LIFECYCLE_RESOLVED,
         frozenset({"external_person_candidate", "organization_candidate"}),
+    ),
+    COMPANY_MEMORY_EVENT_SOURCE_RECORD_DISAPPEARED: (
+        COMPANY_MEMORY_LIFECYCLE_RESOLVED,
+        frozenset({"source_record"}),
+    ),
+    COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED: (
+        COMPANY_MEMORY_LIFECYCLE_CREATED,
+        frozenset({"source_record"}),
     ),
 }
 
@@ -177,6 +189,45 @@ async def append_company_world_resolution_memory_event(
             "event_type": event_type,
             "resolution_id": resolution.id,
             "workspace_id": resolution.workspace_id,
+        },
+    )
+
+
+async def append_source_record_lifecycle_memory_event(
+    session: AsyncSession,
+    *,
+    source_record: SourceRecord,
+    sync_job_id: UUID,
+    event_type: str,
+    occurred_at: datetime,
+) -> CompanyMemoryEvent:
+    """Record one provider-attested disappearance or restoration."""
+
+    if event_type not in {
+        COMPANY_MEMORY_EVENT_SOURCE_RECORD_DISAPPEARED,
+        COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED,
+    }:
+        raise ValueError("unsupported source record lifecycle event")
+    return await append_company_memory_event(
+        session,
+        workspace_id=source_record.workspace_id,
+        event_type=event_type,
+        subject_type="source_record",
+        subject_key=str(source_record.id),
+        subject_id=source_record.id,
+        source_key=source_record.provider,
+        actor_user_id=None,
+        primary_source_record_id=source_record.id,
+        evidence_refs=[
+            _evidence_ref("source_record", source_record.id),
+            _evidence_ref("sync_job", sync_job_id),
+        ],
+        occurred_at=occurred_at,
+        idempotency_material={
+            "event_type": event_type,
+            "source_record_id": source_record.id,
+            "sync_job_id": sync_job_id,
+            "workspace_id": source_record.workspace_id,
         },
     )
 
@@ -357,9 +408,9 @@ def _validated_evidence_refs(
 
 def _subject_key(subject_type: str, subject_key: str, subject_id: UUID) -> str:
     normalized = subject_key.strip().lower()
-    if subject_type == "action_proposal":
+    if subject_type in {"action_proposal", "source_record"}:
         if normalized != str(subject_id):
-            raise ValueError("action proposal memory subject identity is inconsistent")
+            raise ValueError("company memory subject identity is inconsistent")
         return normalized
     if len(normalized) != 64 or any(
         character not in "0123456789abcdef" for character in normalized

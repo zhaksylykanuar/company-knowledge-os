@@ -82,7 +82,7 @@ async def _cleanup(user_id: UUID, workspace_id: UUID) -> None:
 
 async def _upsert_source_record_once(workspace_id: UUID, external_id: str, payload_marker: str) -> bool:
     async with AsyncSessionLocal() as session:
-        _, created = await _upsert_source_record(
+        _, created, _restored, _accepted = await _upsert_source_record(
             session,
             sync_job=SimpleNamespace(workspace_id=workspace_id, connection_id=None, id=None),
             external_id=external_id,
@@ -91,6 +91,7 @@ async def _upsert_source_record_once(workspace_id: UUID, external_id: str, paylo
             source_url="https://github.com/qtwin-io/repo/issues/1",
             source_updated_at=None,
             observed_at=datetime.now(timezone.utc),
+            allow_restore=False,
         )
         await session.commit()
         return created
@@ -167,6 +168,7 @@ async def _upsert_pull_request_once(
             sync_job=SimpleNamespace(workspace_id=workspace_id),
             pull_request=_pr(external_id, title=title),
             repository=SimpleNamespace(id=repository_id),
+            source_record=SimpleNamespace(id=None),
         )
         await session.commit()
         return created

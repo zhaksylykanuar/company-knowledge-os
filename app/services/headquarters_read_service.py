@@ -56,6 +56,8 @@ from app.db.memory_models import (
     COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_REJECTED,
     COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED,
     COMPANY_MEMORY_EVENT_COMPANY_WORLD_DISMISSED,
+    COMPANY_MEMORY_EVENT_SOURCE_RECORD_DISAPPEARED,
+    COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED,
     COMPANY_MEMORY_LIFECYCLE_RESOLVED,
     CompanyMemoryCheckpoint,
     CompanyMemoryEvent,
@@ -581,7 +583,11 @@ async def _read_company_memory_event_window(
     resolved_filter = (
         CompanyMemoryEvent.workspace_id == workspace_id,
         CompanyMemoryEvent.workspace_sequence > checkpoint.last_event_sequence,
-        CompanyMemoryEvent.lifecycle_state == COMPANY_MEMORY_LIFECYCLE_RESOLVED,
+        or_(
+            CompanyMemoryEvent.lifecycle_state == COMPANY_MEMORY_LIFECYCLE_RESOLVED,
+            CompanyMemoryEvent.event_type
+            == COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED,
+        ),
     )
     resolved_total = int(
         await session.scalar(
@@ -1833,11 +1839,28 @@ async def _build_resolved_memory_event_items(
             )
         ).scalars()
         proposals = {proposal.id: proposal for proposal in rows}
+    source_record_ids = {
+        event.subject_id
+        for event in events
+        if event.subject_type == "source_record"
+    }
+    source_records: dict[UUID, SourceRecord] = {}
+    if source_record_ids:
+        rows = (
+            await session.execute(
+                select(SourceRecord).where(
+                    SourceRecord.workspace_id == workspace_id,
+                    SourceRecord.id.in_(source_record_ids),
+                )
+            )
+        ).scalars()
+        source_records = {source_record.id: source_record for source_record in rows}
 
     items: list[dict[str, Any]] = []
     for event in events:
         target = "/company-brain"
         kind = "relationship"
+        change_type = "resolved"
         if event.event_type in {
             COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_APPROVED,
             COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_REJECTED,
@@ -1882,13 +1905,41 @@ async def _build_resolved_memory_event_items(
                 summary = (
                     "Кандидат закрыт и больше не требует проверки."
                 )
+        elif event.event_type in {
+            COMPANY_MEMORY_EVENT_SOURCE_RECORD_DISAPPEARED,
+            COMPANY_MEMORY_EVENT_SOURCE_RECORD_RESTORED,
+        }:
+            source_record = source_records.get(event.subject_id)
+            label = _source_record_memory_label(source_record)
+            target = (
+                _safe_url(source_record.source_url)
+                if source_record is not None
+                else None
+            ) or "/company-brain"
+            kind = "source"
+            if (
+                event.event_type
+                == COMPANY_MEMORY_EVENT_SOURCE_RECORD_DISAPPEARED
+            ):
+                title = f"Источник исчез: {label}"
+                summary = (
+                    "GitHub больше не возвращает объект в полном снимке "
+                    "репозитория. Он скрыт из актуальной картины."
+                )
+            else:
+                title = f"Источник вернулся: {label}"
+                summary = (
+                    "GitHub снова вернул объект; актуальная проекция "
+                    "восстановлена."
+                )
+                change_type = "new_or_changed"
         else:
             continue
         items.append(
             {
                 "id": f"memory-event:{event.id}",
                 "kind": kind,
-                "change_type": "resolved",
+                "change_type": change_type,
                 "title": title,
                 "summary": summary,
                 "event_time": event.occurred_at,
@@ -1905,6 +1956,18 @@ async def _build_resolved_memory_event_items(
             }
         )
     return items
+
+
+def _source_record_memory_label(source_record: SourceRecord | None) -> str:
+    if source_record is None:
+        return "объект GitHub"
+    record_type = {
+        "issue": "issue",
+        "pull_request": "pull request",
+        "repository": "репозиторий",
+    }.get(source_record.record_type, "объект")
+    external_id = _clean_text(source_record.external_id)
+    return f"{record_type} {external_id}" if external_id else record_type
 
 
 def _change_item_sort_key(item: Mapping[str, Any]) -> tuple[float, float, str]:

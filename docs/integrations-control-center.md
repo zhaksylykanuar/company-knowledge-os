@@ -68,6 +68,23 @@ hosts. The control center does not accept arbitrary API base URLs.
 Manual Google access tokens can expire. The UI states this explicitly and does
 not claim automatic refresh.
 
+## Reconciliation Boundary
+
+The read check above proves credential access; it is not a complete data
+snapshot and never tombstones records. `source-reconciliation.v1` runs only
+after a server-performed GitHub repository sync has read every requested page
+and every issue/PR state. Missing objects then receive a reversible
+SourceRecord tombstone with snapshot time, persistence time, SyncJob and
+controlled reason. Current Company Brain/operational projections hide them;
+trusted reappearance restores them and both transitions enter the content-free
+lifecycle ledger.
+
+Filtered, failed, truncated, manual JSON and `normalize-local` inputs cannot
+declare disappearance. Jira, Gmail and Drive therefore have no reconciliation
+yet because their current product paths do not provide complete paginated live
+object snapshots. Removing a credential also does not tombstone or delete
+imported canonical history.
+
 ## API Contract
 
 All routes are under

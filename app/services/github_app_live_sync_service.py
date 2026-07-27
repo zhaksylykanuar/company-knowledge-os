@@ -188,7 +188,8 @@ async def sync_github_app_installation_repositories(
             GITHUB_APP_LIVE_SYNC_REPOSITORY_NOT_INSTALLED
         )
 
-    observed_at = datetime.now(timezone.utc).isoformat()
+    snapshot_observed_at = datetime.now(timezone.utc)
+    observed_at = snapshot_observed_at.isoformat()
     repository_records: list[dict[str, Any]] = []
     issue_records: list[dict[str, Any]] = []
     pull_request_records: list[dict[str, Any]] = []
@@ -311,6 +312,20 @@ async def sync_github_app_installation_repositories(
             include_issues=input_payload.include_issues,
             include_pull_requests=input_payload.include_pull_requests,
             persist_if_supported=True,
+            snapshot_observed_at=snapshot_observed_at,
+            provider_attested=True,
+            authoritative_issue_repositories=(
+                tuple(repositories)
+                if input_payload.include_issues
+                and _is_complete_issue_scope(issue_states)
+                else ()
+            ),
+            authoritative_pull_request_repositories=(
+                tuple(repositories)
+                if input_payload.include_pull_requests
+                and _is_complete_pull_request_scope(pull_request_states)
+                else ()
+            ),
         ),
     )
 
@@ -567,6 +582,16 @@ def _github_pull_request_read_state(states: list[str]) -> str:
     if selected <= {"closed", "merged"}:
         return "closed"
     return "open"
+
+
+def _is_complete_issue_scope(states: list[str]) -> bool:
+    selected = set(states)
+    return "all" in selected or _ISSUE_STATES.issubset(selected)
+
+
+def _is_complete_pull_request_scope(states: list[str]) -> bool:
+    selected = set(states)
+    return "all" in selected or _PR_STATES.issubset(selected)
 
 
 def _repository_record(

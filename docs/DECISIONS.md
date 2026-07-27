@@ -3103,13 +3103,47 @@ maximum and never be observed. The stream counter is incremented in the same
 savepoint as the event and serializes cursor allocation per workspace; rollback
 does not publish an event or cursor advance.
 
-This decision does not claim disappearance detection for provider objects.
-Current GitHub, Jira, Gmail and Drive upserts do not yet write tombstones, so
-absence from a later snapshot is not a lifecycle fact. Provider reconciliation,
-source deletion semantics, correction/forgetting controls and broader
-commitment/decision/risk event types remain separate explicit work. PostgreSQL
-and raw storage remain authoritative, and no LLM or provider call participates
-in lifecycle ledger writes.
+At adoption this decision did not claim disappearance detection for provider
+objects. DEC-098 now adds that bounded capability for complete GitHub issue/PR
+repository snapshots only. Jira/Gmail/Drive reconciliation, user correction
+and forgetting controls, and broader commitment/decision/risk event types
+remain separate explicit work. PostgreSQL and raw storage remain authoritative,
+and no LLM participates in lifecycle ledger writes.
+
+## DEC-098 - Provider Absence Is A Fact Only After An Authoritative Snapshot
+
+Decision (2026-07-27): FounderOS may mark an external object disappeared only
+after a successful, server-attested and complete provider snapshot of one
+explicit scope. `source-reconciliation.v1` initially supports GitHub issues and
+pull requests inside selected repositories. The provider read must cover every
+state and every page. GitHub pagination fails the entire read when its bounded
+page limit is reached, so truncated data never reaches reconciliation as a
+successful snapshot.
+
+Client-authored SyncJob metadata, `normalize-local`, local JSON imports,
+single-result compatibility normalization, filtered state reads, failed calls
+and partial responses cannot infer deletion. A server-performed partial or
+single-object GitHub read may restore that exact object when it is observed,
+but it cannot tombstone anything absent from its result. Jira, Gmail and Drive
+remain ineligible until they have complete paginated live provider reads;
+their current local imports are untrusted partial inputs.
+
+`SourceRecord` is the lifecycle authority. A tombstone is reversible and stores
+the provider snapshot time, persistence time, observing SyncJob and a controlled
+reason. Provider snapshot time, not database write time, orders concurrent
+reads: an older snapshot cannot overwrite, tombstone or falsely restore state
+already established by a newer one. Restoration clears current tombstone
+provenance only after a trusted provider observation. Historical disappearance
+and restoration remain in the append-only memory ledger.
+
+Tombstoning does not hard-delete provider payloads, evidence or derived
+history. Current-state GitHub reads exclude Task/PullRequest projections linked
+to a tombstoned SourceRecord; `PullRequest.source_record_id` makes that lineage
+explicit. Disappearance and restoration append content-free lifecycle events
+in the same database transaction, containing canonical identifiers rather than
+source text. This is lifecycle reconciliation, not a retention/erasure
+mechanism. Raw storage and PostgreSQL remain authoritative; no LLM or external
+write participates.
 
 ## ASK - Open Questions For The Human (not decided)
 
