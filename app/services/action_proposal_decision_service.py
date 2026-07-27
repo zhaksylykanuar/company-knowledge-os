@@ -33,6 +33,9 @@ from app.services.action_execution_audit_service import (
     stable_digest,
 )
 from app.services.action_proposal_service import action_proposal_version
+from app.services.company_memory_event_service import (
+    append_action_proposal_decision_memory_event,
+)
 from app.services.headquarters_read_service import (
     HeadquartersAccessChangedError,
     read_workspace_headquarters,
@@ -121,12 +124,28 @@ async def decide_action_proposal(
         idempotency_key=audit_idempotency_key,
     )
     if existing_event is not None:
-        return _replayed_result(
+        result = _replayed_result(
             proposal=proposal,
             event=existing_event,
             command=command,
             request_fingerprint=request_fingerprint,
         )
+        decision_actor_user_id = (
+            proposal.approved_by_user_id
+            if command.decision == ACTION_PROPOSAL_STATUS_APPROVED
+            else proposal.rejected_by_user_id
+        )
+        if decision_actor_user_id is None:
+            raise ActionProposalDecisionConflictError(
+                "persisted proposal decision has no actor"
+            )
+        await append_action_proposal_decision_memory_event(
+            session,
+            proposal=proposal,
+            actor_user_id=decision_actor_user_id,
+            action_execution_event_id=existing_event.id,
+        )
+        return result
 
     if proposal.status != ACTION_PROPOSAL_STATUS_PROPOSED:
         raise ActionProposalDecisionConflictError(
@@ -186,6 +205,12 @@ async def decide_action_proposal(
             "proposal_version": current_version,
             "request_fingerprint": request_fingerprint,
         },
+    )
+    await append_action_proposal_decision_memory_event(
+        session,
+        proposal=proposal,
+        actor_user_id=actor_user_id,
+        action_execution_event_id=event.id,
     )
     return ActionProposalDecisionResult(
         proposal=proposal,

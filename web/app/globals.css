@@ -2800,6 +2800,11 @@ textarea {
   color: var(--warning);
 }
 
+.headquarters-signal-mark[data-change-type="resolved"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
 .headquarters-empty-panel {
   background: var(--panel-muted);
   border-radius: 12px;

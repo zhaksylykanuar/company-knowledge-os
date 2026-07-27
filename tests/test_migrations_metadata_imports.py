@@ -31,6 +31,8 @@ EXPECTED_ALEMBIC_TABLES = {
     "affiliations",
     "interactions",
     "company_world_resolutions",
+    "company_memory_events",
+    "company_memory_event_streams",
     "company_memory_checkpoints",
 }
 

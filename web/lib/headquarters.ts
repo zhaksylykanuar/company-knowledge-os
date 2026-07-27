@@ -74,11 +74,13 @@ export type HeadquartersEvidenceRef = {
     | "canonical_repository"
     | "integration_connection"
     | "company_world_projection"
+    | "company_memory_event"
     | "headquarters_aggregate";
   trust: "aggregate" | "verified";
   reference_type:
     | "briefing_item"
     | "company_world_candidate"
+    | "company_memory_event"
     | "evidence_ref"
     | "headquarters_snapshot"
     | "integration_connection"
@@ -263,11 +265,11 @@ export type HeadquartersSnapshotResponse = {
   ];
   queue: HeadquartersMission[];
   changes: {
-    contract_version: "temporal-memory.v1";
+    contract_version: "temporal-memory.v2";
     items: Array<{
       id: string;
       kind: "proposal" | "relationship" | "source";
-      change_type: "current" | "new_or_changed";
+      change_type: "current" | "new_or_changed" | "resolved";
       title: string;
       summary: string;
       event_time: string | null;
@@ -278,7 +280,7 @@ export type HeadquartersSnapshotResponse = {
       evidence_refs: HeadquartersEvidenceRef[];
       target: string;
       access_scope: "workspace";
-      retention: "source_bound";
+      retention: "source_bound" | "workspace_canonical";
     }>;
     basis: "checkpoint" | "current_snapshot";
     cursor: string | null;
@@ -299,7 +301,7 @@ export type HeadquartersSnapshotResponse = {
 };
 
 export type CompanyMemoryCheckpointResponse = {
-  contract_version: "temporal-checkpoint.v1";
+  contract_version: "temporal-checkpoint.v2";
   workspace_id: string;
   checkpoint: {
     cursor: string;
@@ -456,7 +458,7 @@ export function parseCompanyMemoryCheckpointResponse(
   );
   expectLiteral(
     response.contract_version,
-    "temporal-checkpoint.v1",
+    "temporal-checkpoint.v2",
     "company_memory_checkpoint.contract_version"
   );
   expectString(response.workspace_id, "company_memory_checkpoint.workspace_id");
@@ -479,7 +481,7 @@ export function parseCompanyMemoryCheckpointResponse(
     checkpoint.cursor,
     "company_memory_checkpoint.checkpoint.cursor"
   );
-  if (!/^hqc1_[0-9a-f]{64}$/u.test(cursor)) {
+  if (!/^hqc2_[0-9a-f]{64}$/u.test(cursor)) {
     contractError(
       "company_memory_checkpoint.checkpoint.cursor",
       "opaque checkpoint cursor"
@@ -572,6 +574,7 @@ function validateEvidence(value: unknown, path: string): void {
       "canonical_repository",
       "integration_connection",
       "company_world_projection",
+      "company_memory_event",
       "headquarters_aggregate"
     ] as const,
     `${path}.provenance`
@@ -582,6 +585,7 @@ function validateEvidence(value: unknown, path: string): void {
     [
       "briefing_item",
       "company_world_candidate",
+      "company_memory_event",
       "evidence_ref",
       "headquarters_snapshot",
       "integration_connection",
@@ -862,7 +866,7 @@ function validateChanges(value: unknown, path: string): void {
   );
   expectEnum(
     changes.contract_version,
-    ["temporal-memory.v1"] as const,
+    ["temporal-memory.v2"] as const,
     `${path}.contract_version`
   );
   const items = expectArray(changes.items, `${path}.items`);
@@ -902,7 +906,7 @@ function validateChanges(value: unknown, path: string): void {
     expectEnum(item.kind, ["proposal", "relationship", "source"] as const, `${itemPath}.kind`);
     expectEnum(
       item.change_type,
-      ["current", "new_or_changed"] as const,
+      ["current", "new_or_changed", "resolved"] as const,
       `${itemPath}.change_type`
     );
     expectNullableDateString(item.event_time, `${itemPath}.event_time`);
@@ -929,7 +933,11 @@ function validateChanges(value: unknown, path: string): void {
     }
     refs.forEach((ref, refIndex) => validateEvidence(ref, `${itemPath}.evidence_refs[${refIndex}]`));
     expectLiteral(item.access_scope, "workspace", `${itemPath}.access_scope`);
-    expectLiteral(item.retention, "source_bound", `${itemPath}.retention`);
+    expectEnum(
+      item.retention,
+      ["source_bound", "workspace_canonical"] as const,
+      `${itemPath}.retention`
+    );
   });
   const basis = expectEnum(
     changes.basis,
@@ -937,7 +945,7 @@ function validateChanges(value: unknown, path: string): void {
     `${path}.basis`
   );
   const cursor = expectNullableString(changes.cursor, `${path}.cursor`);
-  if (cursor !== null && !/^hqc1_[0-9a-f]{64}$/u.test(cursor)) {
+  if (cursor !== null && !/^hqc2_[0-9a-f]{64}$/u.test(cursor)) {
     contractError(`${path}.cursor`, "opaque checkpoint cursor");
   }
   const checkpointedAt = expectNullableDateString(
@@ -956,12 +964,10 @@ function validateChanges(value: unknown, path: string): void {
   ) {
     contractError(path, "consistent checkpoint state");
   }
-  const expectedChangeType = checkpointMode ? "new_or_changed" : "current";
-  if (
-    items.some(
-      (item) => (item as HeadquartersRecord).change_type !== expectedChangeType
-    )
-  ) {
+  const allowedChangeTypes = checkpointMode
+    ? new Set(["new_or_changed", "resolved"])
+    : new Set(["current"]);
+  if (items.some((item) => !allowedChangeTypes.has(String((item as HeadquartersRecord).change_type)))) {
     contractError(`${path}.items.change_type`, "must match temporal basis");
   }
   const totalCount = expectNonNegativeInteger(

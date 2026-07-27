@@ -101,7 +101,7 @@ test("separates the current point from checkpoint-backed changes", () => {
 
   const checkpoint = makeHeadquartersFixture((fixture) => {
     fixture.changes.basis = "checkpoint";
-    fixture.changes.cursor = `hqc1_${"a".repeat(64)}`;
+    fixture.changes.cursor = `hqc2_${"a".repeat(64)}`;
     fixture.changes.checkpointed_at = "2026-07-16T10:00:00Z";
     fixture.changes.since_checkpoint = true;
     fixture.changes.items[0]!.change_type = "new_or_changed";
@@ -117,6 +117,21 @@ test("separates the current point from checkpoint-backed changes", () => {
   assert.ok(checkpointHtml.includes("Что изменилось"));
   assert.ok(checkpointHtml.includes("Отметить просмотренным"));
   assert.doesNotMatch(checkpointHtml, /Это состояние текущего снимка/);
+
+  const resolved = makeHeadquartersFixture((fixture) => {
+    fixture.changes.basis = "checkpoint";
+    fixture.changes.cursor = `hqc2_${"b".repeat(64)}`;
+    fixture.changes.checkpointed_at = "2026-07-16T10:00:00Z";
+    fixture.changes.since_checkpoint = true;
+    fixture.changes.items[0]!.change_type = "resolved";
+    fixture.changes.items[0]!.title = "Одобрено: план запуска Atlas";
+  });
+  const resolvedHtml = renderReady(resolved);
+  assert.ok(resolvedHtml.includes("Одобрено: план запуска Atlas"));
+  assert.match(
+    resolvedHtml,
+    /data-change-type="resolved"[^>]*data-kind="proposal"[^>]*>✓<\/span>/
+  );
 });
 
 test("renders a calm state without inventing a priority", () => {

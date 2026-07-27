@@ -206,8 +206,17 @@ FounderOS строит temporal company memory, а не каталог файл�
 - Сравнение отделяет время события от времени, когда FounderOS его получил.
 - Персональная точка сравнения не дублирует исходные тексты и удаляется вместе
   с membership.
-- История исчезнувших или разрешённых сигналов заявляется только после появления
-  канонического event ledger, а не выводится из отсутствия в текущем снимке.
+- Checkpoint сочетает fingerprints текущих сигналов с монотонным cursor
+  append-only lifecycle ledger, чтобы одинаковые timestamps не приводили к
+  пропуску событий.
+- Lifecycle event хранит только канонические идентификаторы, event/observed
+  time, evidence identifiers, fingerprint, confidence, access, sensitivity и
+  retention. Заголовки, source bodies и provider payloads разрешаются из
+  источника истины при чтении и не копируются в ledger.
+- История разрешённых сигналов заявляется только для типов, транзакционно
+  подключённых к ledger. История исчезнувших provider records заявляется только
+  после reconciliation/tombstones, а не выводится из отсутствия в текущем
+  снимке.
 
 ## 7. Техническая архитектура
 

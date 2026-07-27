@@ -59,8 +59,13 @@
   commitments, decisions, risks and events.
 - [ ] У сохраняемой памяти есть event time, observed time, evidence,
   confidence, access and retention.
-- [x] Есть temporal comparison «что изменилось» через явный персональный
-  checkpoint; полный lifecycle event ledger остаётся следующим этапом.
+- [x] Есть Temporal Memory v2: явный персональный checkpoint объединяет
+  fingerprint comparison с монотонным lifecycle cursor.
+- [x] Append-only ledger транзакционно фиксирует creation/terminal lifecycle
+  Action Proposal и terminal resolutions Company World без копирования
+  source/UI text.
+- [ ] Исчезнувшие GitHub/Jira/Gmail/Drive записи фиксируются через
+  reconciliation/tombstones, а не выводятся из отсутствия в текущем snapshot.
 - [ ] Есть contradiction detection между источниками.
 - [ ] Есть пользовательское исправление и забывание памяти.
 - [x] Retrieval scoped к workspace и текущим правам.

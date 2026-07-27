@@ -3066,6 +3066,51 @@ the later canonical memory model, contradiction handling, correction,
 forgetting and retention controls. Raw storage and PostgreSQL remain the source
 of truth; no LLM or provider call participates in checkpoint reads or writes.
 
+## DEC-097 - Lifecycle Memory Is A Content-Free Append-Only Projection
+
+Decision (2026-07-27): FounderOS persists lifecycle memory in the append-only
+`company_memory_events` projection. Each event has a transactional monotonic
+sequence inside its exact workspace, controlled event/subject type, event and
+observation time,
+canonical evidence identifiers, SHA-256 material fingerprint, confidence,
+workspace access, internal sensitivity and `workspace_canonical` retention.
+It never stores proposal titles/descriptions/payloads, rendered UI summaries,
+message/document bodies, provider payloads, chat history or secret material.
+Read-time UI copy is resolved from the canonical subject or generated from the
+controlled event type.
+
+The first producer set is deliberately bounded: Action Proposal creation,
+approval and rejection, plus Company World confirmation and dismissal. Each
+producer appends in the same database transaction as the canonical mutation
+and uses deterministic idempotency material. Existing proposal audit events and
+Company World resolutions remain their domain authorities; the lifecycle
+ledger is a temporal memory index over those facts, not a competing raw or
+audit store. Replaying supported exact commands may materialize a missing
+ledger row idempotently, but no automatic historical backfill scans old data.
+
+Temporal Checkpoint v2 combines the existing bounded fingerprints of current
+signals with `last_event_sequence`. Headquarters Temporal Memory v2 therefore
+shows current facts before the first checkpoint, new/changed current signals
+after it, and supported terminal events as `resolved`. A later acknowledgement
+advances both parts of the checkpoint without copying source text. The
+membership checkpoint remains personal and cascade-deletes with membership;
+shared lifecycle events cascade only with the workspace.
+
+The checkpoint cursor uses a transactional per-workspace stream counter rather
+than a PostgreSQL identity value. Identity numbers are allocated before commit,
+so a slow transaction could otherwise commit below an already acknowledged
+maximum and never be observed. The stream counter is incremented in the same
+savepoint as the event and serializes cursor allocation per workspace; rollback
+does not publish an event or cursor advance.
+
+This decision does not claim disappearance detection for provider objects.
+Current GitHub, Jira, Gmail and Drive upserts do not yet write tombstones, so
+absence from a later snapshot is not a lifecycle fact. Provider reconciliation,
+source deletion semantics, correction/forgetting controls and broader
+commitment/decision/risk event types remain separate explicit work. PostgreSQL
+and raw storage remain authoritative, and no LLM or provider call participates
+in lifecycle ledger writes.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

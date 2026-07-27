@@ -71,6 +71,7 @@ class HeadquartersEvidenceRefRead(StrictReadModel):
         "canonical_repository",
         "integration_connection",
         "company_world_projection",
+        "company_memory_event",
         "headquarters_aggregate",
     ]
     trust: Literal["verified", "aggregate"]
@@ -82,6 +83,7 @@ class HeadquartersEvidenceRefRead(StrictReadModel):
         "integration_connection",
         "sync_job",
         "company_world_candidate",
+        "company_memory_event",
         "headquarters_snapshot",
     ]
     reference_id: str
@@ -221,7 +223,7 @@ class HeadquartersSourcesRead(StrictReadModel):
 class HeadquartersChangeItemRead(StrictReadModel):
     id: str
     kind: Literal["proposal", "source", "relationship"]
-    change_type: Literal["current", "new_or_changed"]
+    change_type: Literal["current", "new_or_changed", "resolved"]
     title: str
     summary: str
     event_time: datetime | None = None
@@ -232,7 +234,7 @@ class HeadquartersChangeItemRead(StrictReadModel):
     evidence_refs: list[HeadquartersEvidenceRefRead] = Field(default_factory=list)
     target: str
     access_scope: Literal["workspace"]
-    retention: Literal["source_bound"]
+    retention: Literal["source_bound", "workspace_canonical"]
 
     @field_validator("target")
     @classmethod
@@ -254,7 +256,7 @@ class HeadquartersChangesRead(StrictReadModel):
     contract_version: Literal[HEADQUARTERS_TEMPORAL_MEMORY_VERSION]
     items: list[HeadquartersChangeItemRead] = Field(default_factory=list, max_length=3)
     basis: Literal["current_snapshot", "checkpoint"]
-    cursor: str | None = Field(default=None, pattern=r"^hqc1_[0-9a-f]{64}$")
+    cursor: str | None = Field(default=None, pattern=r"^hqc2_[0-9a-f]{64}$")
     checkpointed_at: datetime | None = None
     since_checkpoint: bool
     total_count: int = Field(ge=0)
@@ -274,8 +276,12 @@ class HeadquartersChangesRead(StrictReadModel):
             raise ValueError("total_count cannot be lower than returned items")
         if self.has_more != (self.total_count > len(self.items)):
             raise ValueError("has_more must match temporal item count")
-        expected_change_type = "new_or_changed" if checkpoint_mode else "current"
-        if any(item.change_type != expected_change_type for item in self.items):
+        allowed_change_types = (
+            {"new_or_changed", "resolved"} if checkpoint_mode else {"current"}
+        )
+        if any(
+            item.change_type not in allowed_change_types for item in self.items
+        ):
             raise ValueError("change_type must match temporal basis")
         return self
 
@@ -499,7 +505,7 @@ class CompanyMemoryCheckpointRequest(StrictReadModel):
 
 
 class CompanyMemoryCheckpointRead(StrictReadModel):
-    cursor: str = Field(pattern=r"^hqc1_[0-9a-f]{64}$")
+    cursor: str = Field(pattern=r"^hqc2_[0-9a-f]{64}$")
     checkpointed_at: datetime
     source_snapshot_id: str = Field(pattern=r"^hqs1_[0-9a-f]{64}$")
     event_fingerprint_count: int = Field(ge=0)

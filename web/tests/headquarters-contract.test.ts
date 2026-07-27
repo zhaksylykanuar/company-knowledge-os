@@ -223,7 +223,7 @@ const VALID_HEADQUARTERS_FIXTURE: HeadquartersSnapshotResponse = {
   ],
   queue: [],
   changes: {
-    contract_version: "temporal-memory.v1",
+    contract_version: "temporal-memory.v2",
     items: [],
     basis: "current_snapshot",
     cursor: null,
@@ -287,10 +287,10 @@ test("acknowledges only one exact headquarters snapshot", async () => {
   const originalFetch = globalThis.fetch;
   const expectedSnapshotId = `hqs1_${"a".repeat(64)}`;
   const response = {
-    contract_version: "temporal-checkpoint.v1",
+    contract_version: "temporal-checkpoint.v2",
     workspace_id: "workspace-123",
     checkpoint: {
-      cursor: `hqc1_${"b".repeat(64)}`,
+      cursor: `hqc2_${"b".repeat(64)}`,
       checkpointed_at: "2026-07-27T10:00:00Z",
       source_snapshot_id: expectedSnapshotId,
       event_fingerprint_count: 2,

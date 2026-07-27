@@ -50,7 +50,17 @@ from app.db.integration_models import (
     IntegrationConnection,
     SyncJob,
 )
-from app.db.memory_models import CompanyMemoryCheckpoint
+from app.db.memory_models import (
+    COMPANY_MEMORY_CHECKPOINT_VERSION,
+    COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_APPROVED,
+    COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_REJECTED,
+    COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED,
+    COMPANY_MEMORY_EVENT_COMPANY_WORLD_DISMISSED,
+    COMPANY_MEMORY_LIFECYCLE_RESOLVED,
+    CompanyMemoryCheckpoint,
+    CompanyMemoryEvent,
+    CompanyMemoryEventStream,
+)
 from app.services.action_proposal_service import (
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS,
@@ -67,7 +77,7 @@ HEADQUARTERS_ONBOARDING_CONTRACT_VERSION = "onboarding.v1"
 HEADQUARTERS_ONBOARDING_READINESS_VERSION = "onboarding-readiness.v1"
 HEADQUARTERS_SOURCE_HEALTH_VERSION = "source-health.v1"
 HEADQUARTERS_CORRELATION_VERSION = "canonical-reference.v1"
-HEADQUARTERS_TEMPORAL_MEMORY_VERSION = "temporal-memory.v1"
+HEADQUARTERS_TEMPORAL_MEMORY_VERSION = "temporal-memory.v2"
 HEADQUARTERS_TEMPORAL_EVENT_LIMIT = 3
 HEADQUARTERS_CHECKPOINT_FINGERPRINT_LIMIT = 512
 
@@ -189,6 +199,14 @@ class DecisionRows:
     latest_briefing: Briefing | None
 
 
+@dataclass(frozen=True)
+class CompanyMemoryEventWindow:
+    current_sequence: int
+    resolved_rows: list[CompanyMemoryEvent]
+    resolved_total: int
+    cursor_valid: bool
+
+
 async def read_workspace_headquarters(
     *,
     workspace_id: UUID,
@@ -216,6 +234,7 @@ async def read_workspace_headquarters(
                 as_of=as_of,
             )
             payload.pop("_checkpoint_fingerprints", None)
+            payload.pop("_memory_event_sequence", None)
             return payload
 
 
@@ -237,6 +256,11 @@ async def _build_headquarters_snapshot(
         session=session,
         workspace_id=workspace_id,
         user_id=user_id,
+    )
+    memory_event_window = await _read_company_memory_event_window(
+        session=session,
+        workspace_id=workspace_id,
+        checkpoint=checkpoint,
     )
 
     (
@@ -354,10 +378,18 @@ async def _build_headquarters_snapshot(
         company_world_status=company_world_status,
         capabilities=capabilities,
     )
+    resolved_memory_items = await _build_resolved_memory_event_items(
+        session=session,
+        workspace_id=workspace_id,
+        events=memory_event_window.resolved_rows,
+    )
     changes, checkpoint_fingerprints, checkpoint_valid = _build_changes(
         ranked,
         checkpoint=checkpoint,
         partial=decision_partial or company_world_status != "complete",
+        resolved_items=resolved_memory_items,
+        resolved_total=memory_event_window.resolved_total,
+        event_cursor_valid=memory_event_window.cursor_valid,
     )
     memory_status = "complete" if checkpoint_valid else "partial"
     memory_warning = None if checkpoint_valid else "memory_checkpoint_invalid"
@@ -407,6 +439,8 @@ async def _build_headquarters_snapshot(
         checkpoint=checkpoint,
         event_fingerprints=checkpoint_fingerprints,
         checkpoint_valid=checkpoint_valid,
+        current_event_sequence=memory_event_window.current_sequence,
+        resolved_event_count=memory_event_window.resolved_total,
     )
     coverage = [
         _coverage("identity", "complete", identity_material),
@@ -468,6 +502,7 @@ async def _build_headquarters_snapshot(
         "capabilities": capabilities,
         "boundary": stable_payload["boundary"],
         "_checkpoint_fingerprints": checkpoint_fingerprints,
+        "_memory_event_sequence": memory_event_window.current_sequence,
     }
 
 
@@ -514,6 +549,63 @@ async def _read_company_memory_checkpoint(
             CompanyMemoryCheckpoint.workspace_id == workspace_id,
             CompanyMemoryCheckpoint.user_id == user_id,
         )
+    )
+
+
+async def _read_company_memory_event_window(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    checkpoint: CompanyMemoryCheckpoint | None,
+) -> CompanyMemoryEventWindow:
+    current_sequence = int(
+        await session.scalar(
+            select(CompanyMemoryEventStream.last_sequence).where(
+                CompanyMemoryEventStream.workspace_id == workspace_id
+            )
+        )
+        or 0
+    )
+    cursor_valid = _checkpoint_event_cursor_valid(
+        checkpoint,
+        current_sequence=current_sequence,
+    )
+    if checkpoint is None or not cursor_valid:
+        return CompanyMemoryEventWindow(
+            current_sequence=current_sequence,
+            resolved_rows=[],
+            resolved_total=0,
+            cursor_valid=cursor_valid,
+        )
+
+    resolved_filter = (
+        CompanyMemoryEvent.workspace_id == workspace_id,
+        CompanyMemoryEvent.workspace_sequence > checkpoint.last_event_sequence,
+        CompanyMemoryEvent.lifecycle_state == COMPANY_MEMORY_LIFECYCLE_RESOLVED,
+    )
+    resolved_total = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(CompanyMemoryEvent)
+            .where(*resolved_filter)
+        )
+        or 0
+    )
+    resolved_rows = list(
+        (
+            await session.execute(
+                select(CompanyMemoryEvent)
+                .where(*resolved_filter)
+                .order_by(CompanyMemoryEvent.workspace_sequence.desc())
+                .limit(HEADQUARTERS_TEMPORAL_EVENT_LIMIT)
+            )
+        ).scalars()
+    )
+    return CompanyMemoryEventWindow(
+        current_sequence=current_sequence,
+        resolved_rows=resolved_rows,
+        resolved_total=resolved_total,
+        cursor_valid=True,
     )
 
 
@@ -1719,6 +1811,133 @@ def _temporal_candidate_sort_key(
     return (-observed_timestamp, -event_timestamp, candidate.mission["id"])
 
 
+async def _build_resolved_memory_event_items(
+    *,
+    session: AsyncSession,
+    workspace_id: UUID,
+    events: list[CompanyMemoryEvent],
+) -> list[dict[str, Any]]:
+    proposal_ids = {
+        event.subject_id
+        for event in events
+        if event.subject_type == "action_proposal"
+    }
+    proposals: dict[UUID, ActionProposal] = {}
+    if proposal_ids:
+        rows = (
+            await session.execute(
+                select(ActionProposal).where(
+                    ActionProposal.workspace_id == workspace_id,
+                    ActionProposal.id.in_(proposal_ids),
+                )
+            )
+        ).scalars()
+        proposals = {proposal.id: proposal for proposal in rows}
+
+    items: list[dict[str, Any]] = []
+    for event in events:
+        target = "/company-brain"
+        kind = "relationship"
+        if event.event_type in {
+            COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_APPROVED,
+            COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_REJECTED,
+        }:
+            proposal = proposals.get(event.subject_id)
+            proposal_title = (
+                _clean_text(proposal.title) if proposal is not None else None
+            ) or "Предложение действия"
+            target = f"/actions?proposal={event.subject_id}"
+            kind = "proposal"
+            if event.event_type == COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_APPROVED:
+                title = f"Одобрено: {proposal_title}"
+                summary = (
+                    "Предложение одобрено локально. "
+                    "Внешнее действие не запускалось."
+                )
+            else:
+                title = f"Отклонено: {proposal_title}"
+                summary = (
+                    "Предложение отклонено и больше не ожидает решения."
+            )
+        elif event.event_type in {
+            COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED,
+            COMPANY_MEMORY_EVENT_COMPANY_WORLD_DISMISSED,
+        }:
+            is_person = event.subject_type == "external_person_candidate"
+            if event.event_type == COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED:
+                title = (
+                    "Контакт подтверждён"
+                    if is_person
+                    else "Организация подтверждена"
+                )
+                summary = (
+                    "Решение сохранено в канонической карте компании."
+                )
+            else:
+                title = (
+                    "Контакт отклонён"
+                    if is_person
+                    else "Организация отклонена"
+                )
+                summary = (
+                    "Кандидат закрыт и больше не требует проверки."
+                )
+        else:
+            continue
+        items.append(
+            {
+                "id": f"memory-event:{event.id}",
+                "kind": kind,
+                "change_type": "resolved",
+                "title": title,
+                "summary": summary,
+                "event_time": event.occurred_at,
+                "observed_at": event.observed_at,
+                "confidence": event.confidence,
+                "confidence_precision": "exact",
+                "source_keys": [event.source_key],
+                "evidence_refs": [
+                    _memory_event_evidence(event=event, target=target)
+                ],
+                "target": target,
+                "access_scope": event.access_scope,
+                "retention": event.retention_policy,
+            }
+        )
+    return items
+
+
+def _change_item_sort_key(item: Mapping[str, Any]) -> tuple[float, float, str]:
+    observed_at = item.get("observed_at")
+    event_time = item.get("event_time")
+    observed_timestamp = (
+        _as_utc(observed_at).timestamp()
+        if isinstance(observed_at, datetime)
+        else float("-inf")
+    )
+    event_timestamp = (
+        _as_utc(event_time).timestamp()
+        if isinstance(event_time, datetime)
+        else float("-inf")
+    )
+    return (-observed_timestamp, -event_timestamp, str(item.get("id") or ""))
+
+
+def _checkpoint_event_cursor_valid(
+    checkpoint: CompanyMemoryCheckpoint | None,
+    *,
+    current_sequence: int,
+) -> bool:
+    if checkpoint is None:
+        return True
+    return (
+        checkpoint.checkpoint_version == COMPANY_MEMORY_CHECKPOINT_VERSION
+        and isinstance(checkpoint.last_event_sequence, int)
+        and not isinstance(checkpoint.last_event_sequence, bool)
+        and 0 <= checkpoint.last_event_sequence <= current_sequence
+    )
+
+
 def _checkpoint_fingerprint_set(
     checkpoint: CompanyMemoryCheckpoint | None,
 ) -> tuple[set[str], bool]:
@@ -1743,11 +1962,12 @@ def company_memory_checkpoint_cursor(
     checkpoint: CompanyMemoryCheckpoint,
 ) -> str:
     return (
-        "hqc1_"
+        "hqc2_"
         + _digest(
             {
                 "checkpoint_version": checkpoint.checkpoint_version,
                 "event_fingerprints": sorted(checkpoint.event_fingerprints),
+                "last_event_sequence": checkpoint.last_event_sequence,
                 "observed_through_at": checkpoint.observed_through_at,
                 "source_snapshot_id": checkpoint.source_snapshot_id,
             }
@@ -1760,6 +1980,9 @@ def _build_changes(
     *,
     checkpoint: CompanyMemoryCheckpoint | None,
     partial: bool,
+    resolved_items: list[dict[str, Any]],
+    resolved_total: int,
+    event_cursor_valid: bool,
 ) -> tuple[dict[str, Any], list[str], bool]:
     temporal_candidates = sorted(
         [
@@ -1779,14 +2002,17 @@ def _build_changes(
     if len(current_fingerprints) > HEADQUARTERS_CHECKPOINT_FINGERPRINT_LIMIT:
         raise RuntimeError("temporal checkpoint fingerprint limit exceeded")
 
-    checkpoint_fingerprints, checkpoint_valid = _checkpoint_fingerprint_set(checkpoint)
+    checkpoint_fingerprints, fingerprint_checkpoint_valid = (
+        _checkpoint_fingerprint_set(checkpoint)
+    )
+    checkpoint_valid = fingerprint_checkpoint_valid and event_cursor_valid
     use_checkpoint = checkpoint is not None and checkpoint_valid
     selected = [
         (candidate, fingerprint)
         for candidate, fingerprint in fingerprinted
         if not use_checkpoint or fingerprint not in checkpoint_fingerprints
     ]
-    items = [
+    current_items = [
         {
             "id": (
                 f"event:{candidate.change_kind}:"
@@ -1806,8 +2032,17 @@ def _build_changes(
             "access_scope": "workspace",
             "retention": "source_bound",
         }
-        for candidate, _fingerprint in selected[:HEADQUARTERS_TEMPORAL_EVENT_LIMIT]
+        for candidate, _fingerprint in selected
     ]
+    combined_items = sorted(
+        [
+            *current_items,
+            *(resolved_items if use_checkpoint else []),
+        ],
+        key=_change_item_sort_key,
+    )
+    items = combined_items[:HEADQUARTERS_TEMPORAL_EVENT_LIMIT]
+    total_count = len(selected) + (resolved_total if use_checkpoint else 0)
     return (
         {
             "contract_version": HEADQUARTERS_TEMPORAL_MEMORY_VERSION,
@@ -1824,9 +2059,9 @@ def _build_changes(
                 else None
             ),
             "since_checkpoint": use_checkpoint,
-            "total_count": len(selected),
+            "total_count": total_count,
             "count_precision": "at_least" if partial else "exact",
-            "has_more": len(selected) > HEADQUARTERS_TEMPORAL_EVENT_LIMIT,
+            "has_more": total_count > len(items),
         },
         current_fingerprints,
         checkpoint_valid,
@@ -1838,6 +2073,8 @@ def _company_memory_watermark_material(
     checkpoint: CompanyMemoryCheckpoint | None,
     event_fingerprints: list[str],
     checkpoint_valid: bool,
+    current_event_sequence: int,
+    resolved_event_count: int,
 ) -> dict[str, Any]:
     return {
         "contract_version": HEADQUARTERS_TEMPORAL_MEMORY_VERSION,
@@ -1852,6 +2089,8 @@ def _company_memory_watermark_material(
         ),
         "current_event_count": len(event_fingerprints),
         "current_event_fingerprint": _digest(event_fingerprints),
+        "current_lifecycle_event_sequence": current_event_sequence,
+        "resolved_events_since_checkpoint": resolved_event_count,
     }
 
 
@@ -2366,6 +2605,21 @@ def _connection_evidence(row: Any) -> dict[str, Any]:
     )
 
 
+def _memory_event_evidence(
+    *,
+    event: CompanyMemoryEvent,
+    target: str,
+) -> dict[str, Any]:
+    return _evidence(
+        identity=f"company_memory_event:{event.id}",
+        kind=event.event_type,
+        source_key=event.source_key,
+        label="Каноническое событие памяти FounderOS",
+        target=target,
+        provenance="company_memory_event",
+    )
+
+
 def _company_world_evidence(value: Any, candidate_type: str) -> list[dict[str, Any]]:
     evidence: list[dict[str, Any]] = []
     for ref in _mapping_list(value):
@@ -2424,6 +2678,7 @@ def _evidence(
         "integration_connection": "integration_connection",
         "sync_job": "sync_job",
         "company_world": "company_world_candidate",
+        "company_memory_event": "company_memory_event",
         "source_inventory": "headquarters_snapshot",
     }
     identity_prefix, _, reference_id = identity.partition(":")

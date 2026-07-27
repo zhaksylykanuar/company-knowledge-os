@@ -4,11 +4,18 @@
 
 ### Added
 
-- Added Temporal Memory v1 (DEC-096): a membership-scoped company-memory
-  checkpoint storing only the exact source snapshot, observation time and
-  bounded opaque signal fingerprints. Membership removal deletes the
-  checkpoint; source text, evidence bodies, chats and provider payloads are not
-  duplicated.
+- Added Lifecycle Event Ledger v1 (DEC-097): append-only
+  `company_memory_events` with a transactional per-workspace sequence,
+  controlled lifecycle types, canonical UUID evidence identifiers,
+  event/observation time, fingerprint, confidence, access, sensitivity and
+  retention. The ledger duplicates no proposal text, source body, provider
+  payload or rendered UI copy.
+- Added same-transaction, idempotent lifecycle producers for Action Proposal
+  creation/approval/rejection and Company World confirmation/dismissal.
+- Added the membership-scoped temporal checkpoint foundation (DEC-096),
+  storing only the exact source snapshot, observation time and bounded opaque
+  signal fingerprints. Membership removal deletes the checkpoint; source text,
+  evidence bodies, chats and provider payloads are not duplicated.
 - Added snapshot-bound
   `POST /api/v1/workspaces/{workspace_id}/headquarters/changes/checkpoint`.
   Stale acknowledgements fail with `409`; the response is private/no-store and
@@ -16,6 +23,10 @@
 
 ### Changed
 
+- Upgraded the checkpoint contract to `temporal-checkpoint.v2` and the
+  Headquarters comparison to `temporal-memory.v2`. A checkpoint now combines
+  current-signal fingerprints with `last_event_sequence`; supported terminal
+  events render as resolved and disappear after the next acknowledgement.
 - Upgraded Headquarters to `headquarters.v3`. Temporal signals now separate
   `event_time` from `observed_at`, require evidence, expose confidence, access
   scope and source-bound retention, and distinguish current facts from changes

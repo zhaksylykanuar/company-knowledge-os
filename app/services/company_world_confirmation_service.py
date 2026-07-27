@@ -36,6 +36,9 @@ from app.services.company_map_read_service import (
     _subject_or_fallback,
     build_workspace_company_map,
 )
+from app.services.company_memory_event_service import (
+    append_company_world_resolution_memory_event,
+)
 from app.services.identity_service import list_workspace_members
 
 
@@ -114,6 +117,10 @@ async def resolve_company_world_candidate(
             raise CompanyWorldResolutionConflictError(
                 "idempotency key was already used with a different request"
             )
+        await append_company_world_resolution_memory_event(
+            session,
+            resolution=by_idempotency,
+        )
         return await _receipt_for_resolution(
             session=session,
             resolution=by_idempotency,
@@ -132,6 +139,10 @@ async def resolve_company_world_candidate(
             raise CompanyWorldResolutionConflictError(
                 "candidate already has a different terminal resolution"
             )
+        await append_company_world_resolution_memory_event(
+            session,
+            resolution=existing,
+        )
         return await _receipt_for_resolution(
             session=session,
             resolution=existing,
@@ -251,6 +262,10 @@ async def resolve_company_world_candidate(
     )
     session.add(resolution)
     await session.flush()
+    await append_company_world_resolution_memory_event(
+        session,
+        resolution=resolution,
+    )
     return CompanyWorldResolutionReceipt(
         resolution=resolution,
         person_id=person.id if person else None,

@@ -60,8 +60,22 @@ from app.db.integration_models import (
     IntegrationConnection,
     SyncJob,
 )
-from app.db.memory_models import CompanyMemoryCheckpoint
+from app.db.memory_models import (
+    COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_APPROVED,
+    COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_CREATED,
+    CompanyMemoryCheckpoint,
+    CompanyMemoryEvent,
+)
 from app.main import app
+from app.services.action_proposal_decision_service import (
+    ActionProposalDecisionCommand,
+    decide_action_proposal,
+)
+from app.services.action_proposal_service import (
+    ActionProposalCreateInput,
+    action_proposal_version,
+    create_action_proposal,
+)
 from app.services.session_service import create_session
 
 
@@ -529,7 +543,7 @@ async def test_empty_headquarters_is_deterministic_and_read_only(monkeypatch) ->
         assert len(first["queue"]) <= 2
         assert len(first["changes"]["items"]) <= 3
         assert first["changes"] == {
-            "contract_version": "temporal-memory.v1",
+            "contract_version": "temporal-memory.v2",
             "items": [],
             "basis": "current_snapshot",
             "cursor": None,
@@ -580,12 +594,12 @@ async def test_temporal_checkpoint_is_exact_personal_and_membership_scoped(
         )
         assert acknowledged_status == 200
         assert acknowledged_headers["cache-control"] == "private, no-store"
-        assert acknowledged["contract_version"] == "temporal-checkpoint.v1"
+        assert acknowledged["contract_version"] == "temporal-checkpoint.v2"
         assert acknowledged["workspace_id"] == str(workspace.id)
         assert acknowledged["checkpoint"]["source_snapshot_id"] == initial["snapshot"]["id"]
         assert acknowledged["checkpoint"]["event_fingerprint_count"] == 0
         assert acknowledged["checkpoint"]["retention"] == "membership_scoped"
-        assert acknowledged["checkpoint"]["cursor"].startswith("hqc1_")
+        assert acknowledged["checkpoint"]["cursor"].startswith("hqc2_")
 
         owner_status, owner_view, _owner_headers = await _get_headquarters(
             workspace_id=workspace.id,
@@ -706,6 +720,136 @@ async def test_temporal_checkpoint_is_exact_personal_and_membership_scoped(
                 )
             )
             assert checkpoint is None
+    finally:
+        await _cleanup(marker)
+
+
+async def test_temporal_checkpoint_reports_terminal_lifecycle_event(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        owner, workspace = await _seed_workspace(marker)
+        initial_status, initial, _initial_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert initial_status == 200
+        checkpoint_status, _checkpoint, _checkpoint_headers = (
+            await _acknowledge_headquarters_changes(
+                workspace_id=workspace.id,
+                email=owner.email,
+                expected_snapshot_id=initial["snapshot"]["id"],
+            )
+        )
+        assert checkpoint_status == 200
+
+        sensitive_title = f"Do not copy this title {marker}"
+        async with AsyncSessionLocal() as session:
+            proposal = await create_action_proposal(
+                session,
+                workspace_id=workspace.id,
+                created_by_user_id=owner.id,
+                payload=ActionProposalCreateInput(
+                    target_provider=ACTION_TARGET_PROVIDER_INTERNAL,
+                    action_type=ACTION_TYPE_INTERNAL_TODO,
+                    title=sensitive_title,
+                    description=f"Do not copy this description {marker}",
+                    payload={"note": f"Do not copy this payload {marker}"},
+                    evidence_refs=[],
+                    created_by=ACTION_CREATED_BY_USER,
+                ),
+            )
+            proposal_version = action_proposal_version(proposal)
+            result = await decide_action_proposal(
+                session,
+                workspace_id=workspace.id,
+                proposal_id=proposal.id,
+                actor_user_id=owner.id,
+                command=ActionProposalDecisionCommand(
+                    decision="approved",
+                    idempotency_key=f"lifecycle-{marker}",
+                    proposal_version=proposal_version,
+                ),
+            )
+            assert result.proposal.status == ACTION_PROPOSAL_STATUS_APPROVED
+            await session.commit()
+
+        status_code, changed, _changed_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert status_code == 200
+        assert changed["changes"]["basis"] == "checkpoint"
+        assert changed["changes"]["total_count"] == 1
+        assert changed["changes"]["has_more"] is False
+        lifecycle_item = changed["changes"]["items"][0]
+        assert lifecycle_item["change_type"] == "resolved"
+        assert lifecycle_item["kind"] == "proposal"
+        assert lifecycle_item["title"] == f"Одобрено: {sensitive_title}"
+        assert lifecycle_item["confidence"] == 1.0
+        assert lifecycle_item["access_scope"] == "workspace"
+        assert lifecycle_item["retention"] == "workspace_canonical"
+        assert lifecycle_item["evidence_refs"][0]["provenance"] == (
+            "company_memory_event"
+        )
+        assert lifecycle_item["evidence_refs"][0]["reference_type"] == (
+            "company_memory_event"
+        )
+
+        async with AsyncSessionLocal() as session:
+            events = list(
+                (
+                    await session.execute(
+                        select(CompanyMemoryEvent)
+                        .where(CompanyMemoryEvent.workspace_id == workspace.id)
+                        .order_by(CompanyMemoryEvent.workspace_sequence.asc())
+                    )
+                ).scalars()
+            )
+        assert [event.event_type for event in events] == [
+            COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_CREATED,
+            COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_APPROVED,
+        ]
+        assert [event.workspace_sequence for event in events] == [1, 2]
+        ledger_material = json.dumps(
+            [
+                {
+                    "evidence_refs": event.evidence_refs,
+                    "subject_key": event.subject_key,
+                }
+                for event in events
+            ],
+            sort_keys=True,
+        )
+        assert marker not in ledger_material
+
+        acknowledged_status, _acknowledged, _acknowledged_headers = (
+            await _acknowledge_headquarters_changes(
+                workspace_id=workspace.id,
+                email=owner.email,
+                expected_snapshot_id=changed["snapshot"]["id"],
+            )
+        )
+        assert acknowledged_status == 200
+        async with AsyncSessionLocal() as session:
+            checkpoint_row = await session.scalar(
+                select(CompanyMemoryCheckpoint).where(
+                    CompanyMemoryCheckpoint.workspace_id == workspace.id,
+                    CompanyMemoryCheckpoint.user_id == owner.id,
+                )
+            )
+            assert checkpoint_row is not None
+            assert checkpoint_row.last_event_sequence == 2
+        final_status, final, _final_headers = await _get_headquarters(
+            workspace_id=workspace.id,
+            email=owner.email,
+        )
+        assert final_status == 200
+        assert final["changes"]["items"] == []
+        assert final["changes"]["total_count"] == 0
     finally:
         await _cleanup(marker)
 

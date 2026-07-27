@@ -24,6 +24,10 @@ from app.db.action_models import (
     ACTION_TYPE_INTERNAL_TODO,
     ActionProposal,
 )
+from app.services.company_memory_event_service import (
+    append_action_proposal_created_memory_event,
+    append_action_proposal_decision_memory_event,
+)
 
 ACTION_PROPOSAL_APPROVAL_WARNING = (
     "Action approved locally. Execution is deferred to a later step."
@@ -166,6 +170,10 @@ async def create_action_proposal(
     session.add(proposal)
     await session.flush()
     await session.refresh(proposal)
+    await append_action_proposal_created_memory_event(
+        session,
+        proposal=proposal,
+    )
     return proposal
 
 
@@ -223,6 +231,11 @@ async def approve_action_proposal(
     proposal.approved_at = datetime.now(timezone.utc)
     await session.flush()
     await session.refresh(proposal)
+    await append_action_proposal_decision_memory_event(
+        session,
+        proposal=proposal,
+        actor_user_id=approved_by_user_id,
+    )
     return proposal
 
 
@@ -246,6 +259,11 @@ async def reject_action_proposal(
     proposal.rejection_reason = _optional_text(reason)
     await session.flush()
     await session.refresh(proposal)
+    await append_action_proposal_decision_memory_event(
+        session,
+        proposal=proposal,
+        actor_user_id=rejected_by_user_id,
+    )
     return proposal
 
 

@@ -59,12 +59,19 @@ async def acknowledge_company_memory_checkpoint(
                     "headquarters snapshot changed"
                 )
             fingerprints = snapshot.pop("_checkpoint_fingerprints", None)
+            last_event_sequence = snapshot.pop("_memory_event_sequence", None)
             if (
                 not isinstance(fingerprints, list)
                 or len(fingerprints) > HEADQUARTERS_CHECKPOINT_FINGERPRINT_LIMIT
                 or any(not isinstance(value, str) for value in fingerprints)
             ):
                 raise RuntimeError("temporal checkpoint material is unavailable")
+            if (
+                not isinstance(last_event_sequence, int)
+                or isinstance(last_event_sequence, bool)
+                or last_event_sequence < 0
+            ):
+                raise RuntimeError("lifecycle event cursor is unavailable")
 
             statement = (
                 insert(CompanyMemoryCheckpoint)
@@ -75,6 +82,7 @@ async def acknowledge_company_memory_checkpoint(
                     source_snapshot_id=expected_snapshot_id,
                     observed_through_at=as_of,
                     event_fingerprints=fingerprints,
+                    last_event_sequence=last_event_sequence,
                     updated_at=as_of,
                 )
                 .on_conflict_do_update(
@@ -87,6 +95,7 @@ async def acknowledge_company_memory_checkpoint(
                         "source_snapshot_id": expected_snapshot_id,
                         "observed_through_at": as_of,
                         "event_fingerprints": fingerprints,
+                        "last_event_sequence": last_event_sequence,
                         "updated_at": as_of,
                     },
                 )

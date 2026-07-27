@@ -20,6 +20,11 @@ from app.db.company_world_models import (
     Person,
 )
 from app.db.identity_models import Membership, User, UserSession, Workspace
+from app.db.memory_models import (
+    COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED,
+    CompanyMemoryEvent,
+    CompanyMemoryEventStream,
+)
 from app.main import app
 from app.services import company_world_confirmation_service
 from app.services.session_service import create_session
@@ -357,6 +362,23 @@ async def test_member_confirmation_reuses_confirmed_organization_and_is_idempote
                 [{"subject": row.subject, "source_url": row.source_url} for row in interactions],
                 sort_keys=True,
             )
+            memory_events = list(
+                (
+                    await session.execute(
+                        select(CompanyMemoryEvent)
+                        .where(CompanyMemoryEvent.workspace_id == workspace_id)
+                        .order_by(CompanyMemoryEvent.workspace_sequence.asc())
+                    )
+                ).scalars()
+            )
+            assert [event.event_type for event in memory_events] == [
+                COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED,
+                COMPANY_MEMORY_EVENT_COMPANY_WORLD_CONFIRMED,
+            ]
+            assert "PRIVATE_CONFIRMATION_BODY_MUST_NOT_PERSIST" not in json.dumps(
+                [event.evidence_refs for event in memory_events],
+                sort_keys=True,
+            )
     finally:
         await _cleanup(marker)
 
@@ -468,6 +490,25 @@ async def test_concurrent_identical_confirm_reuses_one_durable_result(
                     .where(Affiliation.workspace_id == workspace_id)
                 )
                 == 0
+            )
+            memory_events = list(
+                (
+                    await session.execute(
+                        select(CompanyMemoryEvent).where(
+                            CompanyMemoryEvent.workspace_id == workspace_id
+                        )
+                    )
+                ).scalars()
+            )
+            assert len(memory_events) == 1
+            assert memory_events[0].workspace_sequence == 1
+            assert (
+                await session.scalar(
+                    select(CompanyMemoryEventStream.last_sequence).where(
+                        CompanyMemoryEventStream.workspace_id == workspace_id
+                    )
+                )
+                == 1
             )
     finally:
         await _cleanup(marker)

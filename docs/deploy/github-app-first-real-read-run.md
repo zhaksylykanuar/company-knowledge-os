@@ -31,7 +31,7 @@ explicitly.
    UV_NO_SYNC=1 uv run alembic check
    ```
 
-   The expected single head for this flow is `c5d6e7f8a9b0`.
+   The expected single head for this flow is `d9a0b1c2d3e4`.
 3. Sign in to FounderOS as the workspace owner or admin. The existing local
    application encryption key must remain available; do not print it.
 4. Be ready to choose either a personal GitHub account or the exact GitHub

@@ -847,8 +847,13 @@ function CurrentSignals({
             return (
               <li key={item.id}>
                 <Link href={item.target}>
-                  <span className="headquarters-signal-mark" data-kind={item.kind} aria-hidden="true">
-                    {changeIcon(item.kind)}
+                  <span
+                    className="headquarters-signal-mark"
+                    data-change-type={item.change_type}
+                    data-kind={item.kind}
+                    aria-hidden="true"
+                  >
+                    {changeIcon(item.kind, item.change_type)}
                   </span>
                   <span>
                     <strong>{item.title}</strong>
@@ -878,7 +883,7 @@ function CurrentSignals({
         <div className="headquarters-empty-panel">
           <strong>
             {checkpointMode
-              ? "После последнего просмотра новых подтверждённых изменений нет"
+              ? "После последнего просмотра новых или завершённых изменений нет"
               : "Подтверждённых фактов для показа пока нет"}
           </strong>
           <span>
@@ -1307,7 +1312,11 @@ function formatSnapshotTime(value: string | null): string | null {
   return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "short" }).format(parsed);
 }
 
-function changeIcon(kind: HeadquartersSnapshotResponse["changes"]["items"][number]["kind"]): string {
+function changeIcon(
+  kind: HeadquartersSnapshotResponse["changes"]["items"][number]["kind"],
+  changeType: HeadquartersSnapshotResponse["changes"]["items"][number]["change_type"]
+): string {
+  if (changeType === "resolved") return "✓";
   if (kind === "proposal") return "!";
   if (kind === "relationship") return "↔";
   return "●";

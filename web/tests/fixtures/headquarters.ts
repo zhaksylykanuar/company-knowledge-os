@@ -356,7 +356,7 @@ const BASE_HEADQUARTERS_FIXTURE = {
     }
   ],
   changes: {
-    contract_version: "temporal-memory.v1",
+    contract_version: "temporal-memory.v2",
     items: [
       {
         id: "change-proposal-1",
