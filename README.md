@@ -88,7 +88,10 @@ names and never print their values. Before risky data/schema work, run
 verifies the raw-storage archive. `make local-stop` never deletes the database
 volume, raw storage, or `.local/`. See
 [`docs/operations/local-runtime.md`](docs/operations/local-runtime.md) for the
-complete runbook and manual troubleshooting fallback.
+complete runbook and manual troubleshooting fallback. A local bundle remains on
+the same failure domain; use
+[`docs/operations/disaster-recovery.md`](docs/operations/disaster-recovery.md)
+for encrypted independent copies and full restore drills.
 
 ### Founder enrollment fallback
 

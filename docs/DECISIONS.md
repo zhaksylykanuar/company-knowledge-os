@@ -3417,6 +3417,44 @@ renders cumulative progress and offers an explicit cancel action. Process
 restart does not lose queued work because claim, retry and resume state remains
 in PostgreSQL.
 
+## DEC-108 - Disaster Recovery Requires An Independent Encrypted Copy
+
+Decision (2026-07-29): a restore-proven bundle under `.local/backups/` is a
+same-machine rollback boundary, not disaster recovery. FounderOS disaster
+recovery requires an exact verified local bundle encrypted with AES-256-GCM on
+founder-controlled storage that is physically independent from the application
+machine. The encryption key must stay outside both the repository and backup
+target, with a separately recoverable founder-owned copy.
+
+The exporter validates exact bundle membership, checksums, raw-storage
+inventory and the existing full-restore receipt, then decrypts and validates
+its new artifact before promotion. A restore drill must decrypt the artifact,
+repeat the isolated matching-major PostgreSQL restore, compare sanitized schema
+and counts, verify connector-credential decryptability and remove the temporary
+cluster. Decryption without this proof is not a successful drill.
+
+The operating target is a 24-hour RPO, four-hour RTO, daily exports, weekly
+restore drills and 7 daily / 4 weekly / 12 monthly recovery points. Retention is
+dry-run by default and destructive pruning is always explicit. The repository
+does not select or create real independent storage, escrow a key, replace
+production state or delete old resources. Until the founder configures the
+external target and records the first real drill, disaster-recovery
+implementation is complete but operational readiness remains an external gate.
+
+## DEC-109 - Repository Governance Is Private And Owner Controlled
+
+Decision (2026-07-29): FounderOS remains private proprietary source with no
+implicit right to use or redistribute it. The repository carries an explicit
+private-source license notice, private vulnerability-reporting policy,
+contribution workflow and CODEOWNERS rule for the repository owner.
+
+The repository-owned pre-commit hook checks staged secrets and whitespace,
+Ruff, application mypy, frontend typecheck and frontend lint. Hook installation
+is explicit through `make hooks-install`; CI and guarded test commands remain
+the authoritative shared gates. Hosted branch protection, private reporting
+channel configuration and repository visibility are owner-controlled GitHub
+settings and must be verified separately rather than inferred from files.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

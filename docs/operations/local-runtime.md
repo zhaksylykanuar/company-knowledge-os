@@ -220,6 +220,10 @@ boundary. If any step fails, the source database/raw storage remain untouched
 and no partial bundle is promoted; do not use Alembic downgrade as a substitute
 for a restorable backup.
 
+This bundle is a same-machine rollback boundary, not disaster recovery. Follow
+[`disaster-recovery.md`](disaster-recovery.md) to create and restore-drill an
+encrypted copy on independent storage.
+
 ## 6. Stop the local processes safely
 
 ```bash

@@ -12,7 +12,8 @@ External Execution v1, Strict Action Evidence v1 и Database Workspace
 Isolation v1, Python Static Typing Gate и Frontend Biome Gate реализованы
 локально в ветке `codex/living-hq-ux-reset`. Runtime Readiness,
 Browser Security Baseline, Shared Public Auth Admission, Reproducible
-Dependency Gate и Durable GitHub Provider Jobs также реализованы локально;
+Dependency Gate, Durable GitHub Provider Jobs, Encrypted Off-device Recovery
+Controls и Private Repository Governance также реализованы локально;
 изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
@@ -181,6 +182,17 @@ ledger; тексты источников и evidence не копируются.
   показывает накопленный результат, блокирует повторный запуск и позволяет
   owner/admin отменить задачу. Отмена отзывает lease, а поздний provider result
   отбрасывается.
+- Local restore-proven bundle теперь можно экспортировать только целиком в
+  AES-256-GCM artifact на явно инициализированное независимое хранилище.
+  Экспорт повторно decrypt-верифицируется; full drill восстанавливает PostgreSQL
+  в private isolated cluster и пишет только sanitized receipt (DEC-108).
+- Retention 7 daily / 4 weekly / 12 monthly имеет безопасный dry-run по
+  умолчанию; destructive apply всегда отдельный. Реальный off-device target и
+  отдельно восстановленный key ещё не предоставлены, поэтому operational DR
+  не объявлен готовым.
+- Добавлены private-source LICENSE, SECURITY, CONTRIBUTING, owner CODEOWNERS и
+  repository-owned pre-commit secret/type/lint gates (DEC-109). Hosted branch
+  protection и private reporting channel остаются настройками владельца.
 
 ## Проверено 2026-07-29
 
@@ -193,8 +205,11 @@ ledger; тексты источников и evidence не копируются.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
 - Backend: `uv run mypy app` — успешно, **100 source files**.
-- Backend: guarded full pytest — **788 passed**, одно внешнее
+- Backend: guarded full pytest — **795 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
+- Disaster recovery/governance: focused Ruff + **7 tests passed**; encrypted
+  round-trip, tamper/path rejection, sanitized drill proof, retention и
+  repository contracts подтверждены без product data.
 - Alembic: единственная head `c4d5e6f7a8b9`, применена к отдельной test БД;
   `alembic check` не обнаружил расхождений metadata/schema.
 - Небезопасный bare pytest без explicit test environment остановлен до
@@ -212,9 +227,11 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
+1. Настроить физически независимое storage и отдельное хранение recovery key,
+   затем выполнить первый настоящий encrypted export и full restore drill.
+2. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
    gate; process counters не являются distributed telemetry.
-2. Провести новые authenticated session/workspace/browser gates и один
+3. Провести новые authenticated session/workspace/browser gates и один
    founder-approved read-only GitHub App read.
 
 ## Неподвижные границы

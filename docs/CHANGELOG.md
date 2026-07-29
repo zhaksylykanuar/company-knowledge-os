@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added encrypted off-device disaster recovery controls (DEC-108): exact local
+  bundle validation, AES-256-GCM export, decrypt-after-write verification,
+  isolated full restore drills, safe materialization and explicit 7/4/12
+  retention with dry-run by default.
+- Added the disaster-recovery runbook with a 24-hour RPO, four-hour RTO, daily
+  export and weekly drill contract. The first real independent copy and drill
+  remain an owner-operated external gate.
+- Added private-source licensing, private vulnerability reporting,
+  contribution rules, owner CODEOWNERS and a repository-owned pre-commit
+  quality/secret hook (DEC-109).
 - Added Durable GitHub Provider Jobs (DEC-107): the API now enqueues a
   PostgreSQL-backed job and returns `202`, while bounded workers claim with
   leases, resume repository progress after crashes, retry transient reads and

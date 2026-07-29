@@ -1,4 +1,4 @@
-.PHONY: backend-check check frontend-check local local-backend local-backup local-browser-smoke local-doctor local-liveness-smoke local-readiness local-session-smoke local-smoke local-stop local-workspace-smoke release-handoff smoke secret-scan
+.PHONY: backend-check check frontend-check hooks-install local local-backend local-backup local-browser-smoke local-doctor local-liveness-smoke local-readiness local-session-smoke local-smoke local-stop local-workspace-smoke offsite-backup offsite-recovery-key-init offsite-restore-drill offsite-retention-apply offsite-retention-dry-run offsite-target-init release-handoff smoke secret-scan
 
 local:
 	uv run python scripts/start_local.py run
@@ -11,6 +11,24 @@ local-doctor:
 
 local-backup:
 	uv run python scripts/start_local.py backup
+
+offsite-recovery-key-init:
+	uv run python scripts/disaster_recovery.py init-key
+
+offsite-target-init:
+	uv run python scripts/disaster_recovery.py init-target --acknowledge-independent-storage
+
+offsite-backup:
+	uv run python scripts/disaster_recovery.py export
+
+offsite-restore-drill:
+	uv run python scripts/disaster_recovery.py drill
+
+offsite-retention-dry-run:
+	uv run python scripts/disaster_recovery.py prune
+
+offsite-retention-apply:
+	uv run python scripts/disaster_recovery.py prune --apply
 
 local-stop:
 	uv run python scripts/start_local.py stop
@@ -38,6 +56,9 @@ release-handoff: local-readiness
 
 secret-scan:
 	bash scripts/check_no_secrets.sh --tracked
+
+hooks-install:
+	git config --local core.hooksPath .githooks
 
 backend-check:
 	python3 scripts/backend_check.py

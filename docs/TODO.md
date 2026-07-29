@@ -14,6 +14,12 @@
    overflow, console и основные состояния.
 3. Подтвердить один read-only GitHub App read из рабочей организации с видимым
    canonical результатом.
+4. Настроить реальное независимое backup-хранилище и отдельное хранение ключа,
+   выполнить первый encrypted export и полный restore drill. Механизм и
+   runbook реализованы, но same-machine тест не является внешним proof.
+5. В приватном GitHub проверить visibility, branch protection и private
+   security-reporting channel; файлы LICENSE/SECURITY/CONTRIBUTING/CODEOWNERS
+   уже добавлены локально.
 
 ## Следом — память и настоящее второе мнение
 
@@ -33,3 +39,7 @@
 
 Публичный multi-tenant hosting дополнительно заблокирован до полного RLS gate
 из DEC-102. Составные tenant FK уже обязательны, но не заменяют RLS.
+
+Disaster recovery operational readiness дополнительно заблокирован до первого
+успешного restore drill с физически независимого хранилища и отдельно
+восстановленного ключа (DEC-108).

@@ -33,14 +33,20 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 - GitHub provider reads выполняются через durable PostgreSQL jobs с
   lease/retry/resume/progress/cancel, bounded workers, shared HTTP pool и
   короткими repository-scoped транзакциями;
+- локальный rollback дополнен AES-256-GCM off-device export, проверкой после
+  шифрования, full restore drill и explicit 7/4/12 retention; первый реальный
+  независимый export/drill остаётся owner-operated gate;
+- private-source license, security/contribution policies, owner CODEOWNERS и
+  repository pre-commit quality/secret hook реализованы;
 - внешние записи остаются выключенными до завершения остальных high-priority
   remediation;
 - публичный multi-tenant hosting заблокирован до полного RLS gate из DEC-102.
 
-Все четыре high-priority замечания аудита и medium findings M2–M14 и M17
-закрыты либо сведены к явно записанному внешнему hosted gate. Distributed
-tracing/error reporting, disaster recovery и полный RLS ещё не объявлены
-готовыми.
+Все четыре high-priority замечания аудита и medium findings M2–M15, M17 и M18
+получили локально проверяемые controls либо сведены к явно записанному внешнему
+gate. Distributed tracing/error reporting, первый реальный off-device
+restore proof и полный RLS ещё не объявлены готовыми; M16 остаётся отдельной
+задачей maintainability.
 
 ## Фаза 1 — Product reset
 

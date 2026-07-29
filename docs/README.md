@@ -35,6 +35,7 @@ Command Center documentation is not part of the active set.
 | How is the AI-first product reset verified? | [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
 | How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
+| How do we recover after loss of the FounderOS machine? | [`operations/disaster-recovery.md`](operations/disaster-recovery.md) |
 | How are connector credentials saved and verified in the product? | [`integrations-control-center.md`](integrations-control-center.md) |
 | How do we prove a bounded provider read or external action? | [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) and [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) |
 
@@ -44,6 +45,9 @@ Command Center documentation is not part of the active set.
   owner/admin configuration, fixed provider read probes, dry-run write
   readiness, runtime gates, and explicitly missing OAuth/write capabilities.
 - [`operations/local-runtime.md`](operations/local-runtime.md) - canonical local start, doctor, smoke, backup/restore, stop, recovery, and external-resource deletion boundary.
+- [`operations/disaster-recovery.md`](operations/disaster-recovery.md) -
+  encrypted independent copy, restore drills, recovery objectives, retention,
+  and explicit human-operated boundaries.
 - [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook; managed `/settings/integrations/github` setup is primary and legacy env/manual preflight is compatibility-only.
 - [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after local acceptance and read-only provider proof.
 - `make local-readiness` is the sanitized repository-evidence report;

@@ -144,6 +144,13 @@
   bounded workers, PostgreSQL lease, retry, resume, progress и cancel.
 - [x] Workspace-owned canonical/document relations use composite PostgreSQL
   foreign keys; negative tests reject every covered cross-workspace commit.
+- [x] Exact local backup bundle can be encrypted for independent storage,
+  decrypt-verified, fully restore-drilled and managed by explicit 7/4/12
+  retention without persisting the key beside it.
+- [x] Private license notice, SECURITY/CONTRIBUTING policy, owner CODEOWNERS and
+  repository pre-commit gates are present and contract-tested.
+- [ ] First real encrypted copy and full restore drill from physically
+  independent storage with separately recovered key.
 - [ ] Public multi-tenant mode enforces the full RLS gate from DEC-102.
 - [ ] Desktop browser QA.
 - [ ] Mobile browser QA.
