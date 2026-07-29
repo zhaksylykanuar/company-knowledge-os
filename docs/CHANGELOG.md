@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added Strict Action Evidence v1 (DEC-101): a bounded `evidence_ref.v1`
+  JSON shape, canonical same-workspace resolution, active-record and exact
+  GitHub target checks at approval and execution, plus a second validation
+  immediately before provider I/O.
+- Added acceptance coverage proving fabricated, deleted, unrelated and
+  cross-workspace evidence cannot approve a proposal, and evidence invalidated
+  after a durable execution claim still prevents the provider call.
+- Added exact Headquarters snapshot enforcement for AI/system approval.
 - Added Atomic External Execution v1 (DEC-100): a committed execution claim,
   proposal row lock, workspace-scoped client idempotency, request hash, actual
   requesting user, explicit claim/running/uncertain states and database
@@ -21,6 +29,12 @@
 
 ### Changed
 
+- Routed bulk approve/reject through the same role-rechecked, row-locked,
+  proposal-versioned and client-idempotent decision service as individual
+  decisions. Every successful item now returns its own durable receipt.
+- Repo-audit import no longer persists arbitrary external evidence strings;
+  it stores a canonical repository selector that must resolve in the current
+  workspace before approval.
 - External provider exceptions no longer become false definitive failures.
   FounderOS keeps the approved proposal blocked behind an `uncertain` receipt
   until read-back reconciliation resolves the outcome.

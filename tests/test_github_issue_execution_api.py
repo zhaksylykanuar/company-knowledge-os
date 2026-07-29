@@ -32,7 +32,7 @@ from app.db.action_models import (
     ActionProposal,
 )
 from app.db.base import AsyncSessionLocal
-from app.db.canonical_models import SourceRecord, Task
+from app.db.canonical_models import Repository, SourceRecord, Task
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_ADMIN,
     MEMBERSHIP_ROLE_MEMBER,
@@ -182,6 +182,9 @@ async def _cleanup_issue_action_fixture(marker: str) -> None:
                 delete(SourceRecord).where(SourceRecord.workspace_id.in_(workspace_ids))
             )
             await session.execute(
+                delete(Repository).where(Repository.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
                 delete(SyncJob).where(SyncJob.workspace_id.in_(workspace_ids))
             )
             await session.execute(
@@ -214,7 +217,23 @@ async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
             json=_bootstrap_payload(marker, suffix=suffix),
         )
     assert response.status_code == 201, response.text
-    return response.json()
+    created = response.json()
+    async with AsyncSessionLocal() as session:
+        session.add(
+            Repository(
+                workspace_id=UUID(created["workspace"]["id"]),
+                provider="github",
+                external_id=f"repository-{marker}{suffix}",
+                name="founderos-api",
+                full_name="qtwin-io/founderos-api",
+                visibility="private",
+                archived=False,
+                source_url="https://github.com/qtwin-io/founderos-api",
+                repo_metadata={"fixture": "github_issue_execution"},
+            )
+        )
+        await session.commit()
+    return created
 
 
 async def _add_workspace_user(
@@ -922,6 +941,80 @@ async def test_execute_allows_github_issue_repo_in_write_allowlist(
             "execution_started",
             "execution_succeeded",
         ]
+    finally:
+        await _cleanup_issue_action_fixture(marker)
+
+
+async def test_execute_revalidates_canonical_evidence_immediately_before_provider_call(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    provider_calls: list[dict] = []
+    _mock_successful_github_issue(monkeypatch, provider_calls)
+    original_validator = (
+        github_issue_execution_service.validate_action_proposal_evidence
+    )
+    validation_count = 0
+
+    async def invalidate_after_initial_validation(*args, **kwargs):
+        nonlocal validation_count
+        validation_count += 1
+        resolved = await original_validator(*args, **kwargs)
+        if validation_count == 1:
+            async with AsyncSessionLocal() as mutation_session:
+                repository = await mutation_session.scalar(
+                    select(Repository).where(
+                        Repository.workspace_id == kwargs["workspace_id"],
+                        Repository.full_name == "qtwin-io/founderos-api",
+                    )
+                )
+                assert repository is not None
+                repository.archived = True
+                await mutation_session.commit()
+        return resolved
+
+    monkeypatch.setattr(
+        github_issue_execution_service,
+        "validate_action_proposal_evidence",
+        invalidate_after_initial_validation,
+    )
+    await _cleanup_issue_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        proposal = await _create_approved_proposal(
+            created["workspace"]["id"],
+            owner_email,
+        )
+        connection_id = await _create_connection(created["workspace"]["id"])
+
+        response = await _execute_proposal(
+            created["workspace"]["id"],
+            proposal["id"],
+            owner_email,
+            connection_id=connection_id,
+        )
+
+        assert response.status_code == 409, response.text
+        assert "missing, inactive, unsupported" in response.json()["detail"]
+        assert validation_count == 2
+        assert provider_calls == []
+        executions = await _stored_executions(proposal["id"])
+        assert len(executions) == 1
+        assert executions[0].status == ACTION_EXECUTION_STATUS_FAILED
+        assert (await _stored_proposal(proposal["id"])).status == (
+            ACTION_PROPOSAL_STATUS_APPROVED
+        )
+        events = await _stored_execution_events(proposal["id"])
+        assert [event.event_type for event in events] == [
+            "execution_confirmation_received",
+            "execution_claimed",
+            "execution_started",
+            "execution_failed",
+        ]
+        assert events[-1].error_code == "proposal_evidence_invalid"
     finally:
         await _cleanup_issue_action_fixture(marker)
 

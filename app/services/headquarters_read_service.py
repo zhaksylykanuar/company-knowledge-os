@@ -67,6 +67,7 @@ from app.services.action_proposal_service import (
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
     ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS,
     ACTION_PROPOSAL_PAYLOAD_MAX_BYTES,
+    action_evidence_ref_matches_schema,
     action_proposal_version,
 )
 from app.services.company_map_read_service import build_workspace_company_map
@@ -156,6 +157,14 @@ class HeadquartersSubprojectionUnavailable(RuntimeError):
         super().__init__(safe_code or "unavailable")
         self.key = key
         self.code = safe_code or "unavailable"
+
+
+class ActionProposalEvidenceValidationError(ValueError):
+    """A proposal does not have fully canonical, relevant workspace evidence."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
 
 
 @dataclass(frozen=True)
@@ -1148,6 +1157,44 @@ async def _verify_proposals(
     return verified
 
 
+async def validate_action_proposal_evidence(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    proposal: ActionProposal,
+) -> list[ResolvedEvidence]:
+    """Require every proposal reference to resolve to relevant workspace data."""
+
+    if proposal.workspace_id != workspace_id:
+        raise ActionProposalEvidenceValidationError(
+            "proposal evidence belongs to another workspace"
+        )
+    refs = _strict_evidence_refs(proposal.evidence_refs)
+    if refs is None:
+        raise ActionProposalEvidenceValidationError(
+            "proposal evidence_refs do not match the strict evidence schema"
+        )
+    resolver = await _build_direct_evidence_resolver(
+        session=session,
+        workspace_id=workspace_id,
+        refs=refs,
+    )
+    resolved_refs = [
+        resolved
+        for ref in refs
+        if (resolved := _resolve_direct_evidence(ref, resolver)) is not None
+    ]
+    if len(resolved_refs) != len(refs):
+        raise ActionProposalEvidenceValidationError(
+            "proposal evidence is missing, inactive, unsupported, or outside the workspace"
+        )
+    if not _proposal_evidence_is_relevant(proposal, resolved_refs):
+        raise ActionProposalEvidenceValidationError(
+            "proposal evidence is unrelated to the requested action"
+        )
+    return resolved_refs
+
+
 async def _build_direct_evidence_resolver(
     *,
     session: AsyncSession,
@@ -1194,6 +1241,7 @@ async def _build_direct_evidence_resolver(
                     Repository.updated_at,
                 ).where(
                     Repository.workspace_id == workspace_id,
+                    Repository.archived.is_(False),
                     or_(Repository.id.in_(uuid_tokens), Repository.full_name.in_(tokens)),
                 )
             )
@@ -2900,7 +2948,16 @@ def _strict_evidence_refs(value: Any) -> list[Mapping[str, Any]] | None:
         or any(not isinstance(item, Mapping) for item in value)
     ):
         return None
-    return list(value)
+    refs = list(value)
+    if any(not _evidence_ref_matches_schema(item) for item in refs):
+        return None
+    return refs
+
+
+def _evidence_ref_matches_schema(ref: Mapping[str, Any]) -> bool:
+    return action_evidence_ref_matches_schema(ref) and _source_alias_is_supported(
+        ref.get("source")
+    )
 
 
 def _source_key(value: Any) -> str | None:

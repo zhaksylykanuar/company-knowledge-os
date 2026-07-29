@@ -748,6 +748,21 @@ async def test_temporal_checkpoint_reports_terminal_lifecycle_event(
 
         sensitive_title = f"Do not copy this title {marker}"
         async with AsyncSessionLocal() as session:
+            repository_name = f"founderos/lifecycle-{marker}"
+            session.add(
+                Repository(
+                    workspace_id=workspace.id,
+                    provider="github",
+                    external_id=f"lifecycle-{marker}",
+                    name=f"lifecycle-{marker}",
+                    full_name=repository_name,
+                    visibility="private",
+                    archived=False,
+                    source_url=f"https://github.com/{repository_name}",
+                    repo_metadata={"fixture": "temporal_checkpoint"},
+                )
+            )
+            await session.flush()
             proposal = await create_action_proposal(
                 session,
                 workspace_id=workspace.id,
@@ -758,7 +773,14 @@ async def test_temporal_checkpoint_reports_terminal_lifecycle_event(
                     title=sensitive_title,
                     description=f"Do not copy this description {marker}",
                     payload={"note": f"Do not copy this payload {marker}"},
-                    evidence_refs=[],
+                    evidence_refs=[
+                        {
+                            "kind": "repository",
+                            "source": "github",
+                            "ref": repository_name,
+                            "url": f"https://github.com/{repository_name}",
+                        }
+                    ],
                     created_by=ACTION_CREATED_BY_USER,
                 ),
             )

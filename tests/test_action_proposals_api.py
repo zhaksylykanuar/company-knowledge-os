@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -26,6 +27,7 @@ from app.db.action_models import (
     ActionProposal,
 )
 from app.db.base import AsyncSessionLocal
+from app.db.canonical_models import Repository, SourceRecord
 from app.db.identity_models import (
     MEMBERSHIP_ROLE_ADMIN,
     MEMBERSHIP_ROLE_MEMBER,
@@ -43,6 +45,7 @@ from app.services.action_proposal_service import (
     ACTION_PROPOSAL_PAYLOAD_MAX_BYTES,
     ActionProposalCreateInput,
     ActionProposalError,
+    action_proposal_version,
     validate_action_proposal_input,
 )
 from app.services.action_proposal_decision_service import (
@@ -119,6 +122,18 @@ def _decision_payload(
     return payload
 
 
+def _bulk_decision_item(
+    proposal: dict,
+    *,
+    idempotency_key: str | None = None,
+) -> dict[str, str]:
+    return {
+        "proposal_id": proposal["id"],
+        "idempotency_key": idempotency_key or f"bulk-decision-{uuid4()}",
+        "proposal_version": proposal["proposal_version"],
+    }
+
+
 async def _cleanup_action_fixture(marker: str) -> None:
     async with AsyncSessionLocal() as session:
         workspace_ids = list(
@@ -163,6 +178,12 @@ async def _cleanup_action_fixture(marker: str) -> None:
                 )
             )
             await session.execute(
+                delete(SourceRecord).where(SourceRecord.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
+                delete(Repository).where(Repository.workspace_id.in_(workspace_ids))
+            )
+            await session.execute(
                 delete(Membership).where(Membership.workspace_id.in_(workspace_ids))
             )
         if user_ids:
@@ -182,7 +203,23 @@ async def _bootstrap_workspace(marker: str, *, suffix: str = "") -> dict:
             json=_bootstrap_payload(marker, suffix=suffix),
         )
     assert response.status_code == 201, response.text
-    return response.json()
+    created = response.json()
+    async with AsyncSessionLocal() as session:
+        session.add(
+            Repository(
+                workspace_id=UUID(created["workspace"]["id"]),
+                provider="github",
+                external_id=f"repository-{marker}{suffix}",
+                name="founderos-api",
+                full_name="qtwin-io/founderos-api",
+                visibility="private",
+                archived=False,
+                source_url="https://github.com/qtwin-io/founderos-api",
+                repo_metadata={"fixture": "action_proposals"},
+            )
+        )
+        await session.commit()
+    return created
 
 
 async def _add_workspace_user(
@@ -527,7 +564,15 @@ async def test_repo_audit_import_creates_local_internal_todos_with_evidence(
         assert proposal["action_type"] == ACTION_TYPE_INTERNAL_TODO
         assert proposal["payload"]["source"] == "repo_audit_import"
         assert proposal["payload"]["repository_full_name"] == "qtwin-io/base-collector"
-        assert proposal["evidence_refs"][0]["source"] == "external_repo_audit_import"
+        assert proposal["evidence_refs"] == [
+            {
+                "kind": "repository",
+                "source": "github",
+                "ref": "qtwin-io/base-collector",
+                "url": None,
+            }
+        ]
+        assert "external-audit:base-collector:ci" not in str(proposal)
         assert "token=[redacted]" in proposal["title"]
         assert "password=[redacted]" in proposal["description"]
         assert "placeholder" not in proposal["title"]
@@ -604,6 +649,20 @@ async def test_repo_audit_import_requires_member_role(monkeypatch) -> None:
             _proposal_payload(payload={"nested": {"access_token": "placeholder"}}),
             400,
             "payload contains secret-like key: access_token",
+        ),
+        (
+            _proposal_payload(
+                evidence_refs=[
+                    {
+                        "kind": "repository",
+                        "source": "github",
+                        "ref": "qtwin-io/founderos-api",
+                        "unexpected": "arbitrary-json",
+                    }
+                ]
+            ),
+            400,
+            "evidence_refs items must match the evidence_ref.v1 schema",
         ),
     ],
 )
@@ -860,6 +919,204 @@ async def test_owner_admin_can_approve_without_execution(
         assert audit["events"][0]["id"] == body["decision_receipt"]["receipt_id"]
         assert audit["receipt"]["external_write_performed"] is False
         assert audit["receipt"]["provider_result"] == "none"
+    finally:
+        await _cleanup_action_fixture(marker)
+
+
+async def test_approval_rejects_fabricated_deleted_unrelated_and_foreign_evidence(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex
+    foreign_marker = f"{marker}-foreign"
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+    await _cleanup_action_fixture(foreign_marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        foreign = await _bootstrap_workspace(foreign_marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        now = datetime.now(timezone.utc)
+        async with AsyncSessionLocal() as session:
+            foreign_repository_id = await session.scalar(
+                select(Repository.id).where(
+                    Repository.workspace_id == UUID(foreign["workspace"]["id"]),
+                    Repository.full_name == "qtwin-io/founderos-api",
+                )
+            )
+            assert foreign_repository_id is not None
+            deleted_source = SourceRecord(
+                workspace_id=workspace_id,
+                provider="github",
+                external_id="qtwin-io/deleted-evidence",
+                record_type="repository",
+                source_url="https://github.com/qtwin-io/deleted-evidence",
+                payload={},
+                payload_hash=f"deleted-{marker}",
+                observed_at=now,
+                source_updated_at=now,
+                is_deleted=True,
+                tombstoned_at=now,
+                tombstone_observed_at=now,
+                tombstone_reason="test_deleted_evidence",
+            )
+            session.add(deleted_source)
+            await session.commit()
+            deleted_source_id = deleted_source.id
+
+        cases = {
+            "fabricated": _proposal_payload(
+                title="Fabricated evidence",
+                payload={
+                    "repository_full_name": "qtwin-io/fabricated",
+                    "title": "Do not approve",
+                },
+                evidence_refs=[
+                    {
+                        "kind": "repository",
+                        "source": "github",
+                        "ref": "qtwin-io/fabricated",
+                        "url": None,
+                    }
+                ],
+            ),
+            "deleted": _proposal_payload(
+                title="Deleted evidence",
+                payload={
+                    "repository_full_name": "qtwin-io/deleted-evidence",
+                    "title": "Do not approve",
+                },
+                evidence_refs=[
+                    {
+                        "kind": "repository",
+                        "source": "github",
+                        "source_record_id": str(deleted_source_id),
+                        "url": None,
+                    }
+                ],
+            ),
+            "unrelated": _proposal_payload(
+                title="Unrelated evidence",
+                payload={
+                    "repository_full_name": "qtwin-io/another-target",
+                    "title": "Do not approve",
+                },
+            ),
+            "cross_workspace": _proposal_payload(
+                title="Foreign evidence",
+                evidence_refs=[
+                    {
+                        "kind": "repository",
+                        "source": "github",
+                        "ref": str(foreign_repository_id),
+                        "url": None,
+                    }
+                ],
+            ),
+        }
+        proposals = {
+            name: await _post_proposal(
+                created["workspace"]["id"],
+                owner_email,
+                payload=payload,
+            )
+            for name, payload in cases.items()
+        }
+
+        async with _async_client() as client:
+            responses = {
+                name: await client.post(
+                    f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{proposal['id']}/approve",
+                    headers=_headers(),
+                    params={"owner_email": owner_email},
+                    json=_decision_payload(proposal),
+                )
+                for name, proposal in proposals.items()
+            }
+
+        assert all(response.status_code == 409 for response in responses.values())
+        assert "missing, inactive, unsupported" in responses["fabricated"].json()["detail"]
+        assert "missing, inactive, unsupported" in responses["deleted"].json()["detail"]
+        assert "unrelated" in responses["unrelated"].json()["detail"]
+        assert "outside the workspace" in responses["cross_workspace"].json()["detail"]
+        async with AsyncSessionLocal() as session:
+            stored = list(
+                (
+                    await session.scalars(
+                        select(ActionProposal).where(
+                            ActionProposal.id.in_(
+                                [UUID(proposal["id"]) for proposal in proposals.values()]
+                            )
+                        )
+                    )
+                ).all()
+            )
+            event_count = await session.scalar(
+                select(func.count())
+                .select_from(ActionExecutionEvent)
+                .where(
+                    ActionExecutionEvent.action_proposal_id.in_(
+                        [UUID(proposal["id"]) for proposal in proposals.values()]
+                    )
+                )
+            )
+        assert {proposal.status for proposal in stored} == {
+            ACTION_PROPOSAL_STATUS_PROPOSED
+        }
+        assert event_count == 0
+    finally:
+        await _cleanup_action_fixture(marker)
+        await _cleanup_action_fixture(foreign_marker)
+
+
+async def test_system_approval_requires_exact_headquarters_snapshot(monkeypatch) -> None:
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup_action_fixture(marker)
+
+    try:
+        created = await _bootstrap_workspace(marker)
+        workspace_id = UUID(created["workspace"]["id"])
+        owner_email = _bootstrap_payload(marker)["owner_email"]
+        async with AsyncSessionLocal() as session:
+            owner_id = await session.scalar(select(User.id).where(User.email == owner_email))
+            assert owner_id is not None
+            proposal = ActionProposal(
+                workspace_id=workspace_id,
+                target_provider=ACTION_TARGET_PROVIDER_INTERNAL,
+                action_type=ACTION_TYPE_INTERNAL_TODO,
+                title="System proposal requires snapshot",
+                payload={"source": "test"},
+                evidence_refs=[
+                    {
+                        "kind": "repository",
+                        "source": "github",
+                        "ref": "qtwin-io/founderos-api",
+                        "url": None,
+                    }
+                ],
+                created_by="system",
+            )
+            session.add(proposal)
+            await session.flush()
+            proposal_version = action_proposal_version(proposal)
+            with pytest.raises(
+                ActionProposalDecisionConflictError,
+                match="require an exact headquarters snapshot",
+            ):
+                await decide_action_proposal(
+                    session,
+                    workspace_id=workspace_id,
+                    proposal_id=proposal.id,
+                    actor_user_id=owner_id,
+                    command=ActionProposalDecisionCommand(
+                        decision="approved",
+                        idempotency_key=f"system-without-snapshot-{marker}",
+                        proposal_version=proposal_version,
+                    ),
+                )
+            assert proposal.status == ACTION_PROPOSAL_STATUS_PROPOSED
     finally:
         await _cleanup_action_fixture(marker)
 
@@ -1315,19 +1572,30 @@ async def test_bulk_approve_partially_succeeds_without_execution(monkeypatch) ->
             )
         assert approved_once.status_code == 200
         executions_before = await _count(ActionExecution)
+        bulk_payload = {
+            "decisions": [
+                _bulk_decision_item(approve_me),
+                _bulk_decision_item(already_approved),
+                {
+                    "proposal_id": str(missing_id),
+                    "idempotency_key": f"bulk-missing-{uuid4()}",
+                    "proposal_version": f"ap1_{'0' * 64}",
+                },
+            ]
+        }
 
         async with _async_client() as client:
             response = await client.post(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-approve",
                 headers=_headers(),
                 params={"owner_email": owner_email},
-                json={
-                    "proposal_ids": [
-                        approve_me["id"],
-                        already_approved["id"],
-                        str(missing_id),
-                    ]
-                },
+                json=bulk_payload,
+            )
+            replay = await client.post(
+                f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-approve",
+                headers=_headers(),
+                params={"owner_email": owner_email},
+                json=bulk_payload,
             )
             approve_me_audit = await client.get(
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/{approve_me['id']}/audit",
@@ -1343,6 +1611,20 @@ async def test_bulk_approve_partially_succeeds_without_execution(monkeypatch) ->
         assert body["execution_started"] is False
         assert body["proposals"][0]["id"] == approve_me["id"]
         assert body["proposals"][0]["status"] == ACTION_PROPOSAL_STATUS_APPROVED
+        assert len(body["decision_receipts"]) == 1
+        assert body["decision_receipts"][0]["proposal_id"] == approve_me["id"]
+        assert body["decision_receipts"][0]["proposal_version"] == (
+            approve_me["proposal_version"]
+        )
+        assert replay.status_code == 200, replay.text
+        replay_body = replay.json()
+        assert replay_body["succeeded_count"] == 1
+        assert replay_body["failed_count"] == 2
+        assert replay_body["decision_receipts"][0]["proposal_id"] == approve_me["id"]
+        assert replay_body["decision_receipts"][0]["receipt_id"] == (
+            body["decision_receipts"][0]["receipt_id"]
+        )
+        assert replay_body["decision_receipts"][0]["replayed"] is True
         assert [failure["status_code"] for failure in body["failures"]] == [409, 404]
         assert body["failures"][0]["proposal_id"] == already_approved["id"]
         assert body["failures"][1]["proposal_id"] == str(missing_id)
@@ -1385,7 +1667,10 @@ async def test_bulk_reject_succeeds_without_execution(monkeypatch) -> None:
                 headers=_headers(),
                 params={"owner_email": owner_email},
                 json={
-                    "proposal_ids": [first["id"], second["id"], first["id"]],
+                    "decisions": [
+                        _bulk_decision_item(first),
+                        _bulk_decision_item(second),
+                    ],
                     "reason": "Not now",
                 },
             )
@@ -1400,6 +1685,7 @@ async def test_bulk_reject_succeeds_without_execution(monkeypatch) -> None:
         assert body["succeeded_count"] == 2
         assert body["failed_count"] == 0
         assert body["failures"] == []
+        assert len(body["decision_receipts"]) == 2
         assert body["execution_started"] is False
         assert {proposal["id"] for proposal in body["proposals"]} == {
             first["id"],
@@ -1449,7 +1735,7 @@ async def test_member_cannot_bulk_approve(monkeypatch) -> None:
                 f"/api/v1/workspaces/{created['workspace']['id']}/actions/proposals/bulk-approve",
                 headers=_headers(),
                 params={"owner_email": member_email},
-                json={"proposal_ids": [proposal["id"]]},
+                json={"decisions": [_bulk_decision_item(proposal)]},
             )
 
         assert response.status_code == 403

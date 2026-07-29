@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 import re
-from typing import Any, Literal
+from typing import Any, Literal, Self
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.config import settings
 from app.api.workspace_auth import (
@@ -20,8 +20,6 @@ from app.db.action_models import (
     ACTION_EXECUTION_EVENT_OUTCOME_UNCERTAIN,
     ACTION_EXECUTION_EVENT_PREVIEW_BLOCKED,
     ACTION_EXECUTION_EVENT_PREVIEW_GENERATED,
-    ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
-    ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
     ACTION_EXECUTION_EVENT_STATUS_BLOCKED,
     ACTION_EXECUTION_EVENT_STATUS_RECORDED,
     ACTION_EXECUTION_EVENT_STATUS_UNSUPPORTED,
@@ -42,13 +40,9 @@ from app.services.action_proposal_service import (
     ActionProposalCreateInput,
     ActionProposalError,
     ActionProposalFilters,
-    ActionProposalNotFoundError,
-    ActionProposalTransitionError,
-    approve_action_proposal,
     create_action_proposal,
     get_action_proposal,
     list_action_proposals,
-    reject_action_proposal,
     serialize_action_proposal,
 )
 from app.services.action_execution_audit_service import (
@@ -146,10 +140,24 @@ class ActionProposalRejectRequest(ActionProposalDecisionRequest):
     reason: str | None = Field(default=None, max_length=1000)
 
 
+class ActionProposalBulkDecisionItem(ActionProposalDecisionRequest):
+    proposal_id: UUID
+
+
 class ActionProposalBulkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    proposal_ids: list[UUID] = Field(min_length=1, max_length=100)
+    decisions: list[ActionProposalBulkDecisionItem] = Field(
+        min_length=1,
+        max_length=100,
+    )
+
+    @model_validator(mode="after")
+    def reject_duplicate_proposals(self) -> Self:
+        proposal_ids = [item.proposal_id for item in self.decisions]
+        if len(set(proposal_ids)) != len(proposal_ids):
+            raise ValueError("bulk decisions must contain unique proposal_ids")
+        return self
 
 
 class ActionProposalBulkRejectRequest(ActionProposalBulkRequest):
@@ -255,6 +263,7 @@ class ActionProposalBulkFailureRead(BaseModel):
 
 class ActionProposalBulkResponse(BaseModel):
     proposals: list[ActionProposalRead]
+    decision_receipts: list[ActionProposalDecisionReceiptRead]
     failures: list[ActionProposalBulkFailureRead]
     succeeded_count: int
     failed_count: int
@@ -555,39 +564,49 @@ async def bulk_approve_action_proposals_endpoint(
 ) -> ActionProposalBulkResponse:
     async with AsyncSessionLocal() as session:
         proposals: list[ActionProposalRead] = []
+        receipts: list[ActionProposalDecisionReceiptRead] = []
         failures: list[ActionProposalBulkFailureRead] = []
-        for proposal_id in _unique_proposal_ids(payload.proposal_ids):
+        for item in payload.decisions:
             try:
-                proposal = await approve_action_proposal(
+                result = await decide_action_proposal(
                     session,
                     workspace_id=workspace_id,
-                    proposal_id=proposal_id,
-                    approved_by_user_id=access.workspace_membership.user.id,
-                )
-                await _record_local_review_event(
-                    session,
-                    proposal=proposal,
-                    event_type=ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
-                    decision="approved",
-                    bulk=True,
+                    proposal_id=item.proposal_id,
+                    actor_user_id=access.workspace_membership.user.id,
+                    command=ActionProposalDecisionCommand(
+                        decision="approved",
+                        idempotency_key=item.idempotency_key,
+                        proposal_version=item.proposal_version,
+                        expected_snapshot_id=item.expected_snapshot_id,
+                        bulk=True,
+                    ),
                 )
                 proposals.append(
                     ActionProposalRead.model_validate(
-                        serialize_action_proposal(proposal)
+                        serialize_action_proposal(result.proposal)
                     )
                 )
-            except ActionProposalNotFoundError as exc:
+                receipts.append(_decision_receipt(result))
+            except ActionProposalDecisionNotFoundError as exc:
                 failures.append(
                     ActionProposalBulkFailureRead(
-                        proposal_id=proposal_id,
+                        proposal_id=item.proposal_id,
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail=exc.detail,
                     )
                 )
-            except ActionProposalTransitionError as exc:
+            except ActionProposalDecisionForbiddenError as exc:
                 failures.append(
                     ActionProposalBulkFailureRead(
-                        proposal_id=proposal_id,
+                        proposal_id=item.proposal_id,
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=exc.detail,
+                    )
+                )
+            except ActionProposalDecisionConflictError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=item.proposal_id,
                         status_code=status.HTTP_409_CONFLICT,
                         detail=exc.detail,
                     )
@@ -597,7 +616,12 @@ async def bulk_approve_action_proposals_endpoint(
     warnings = [ACTION_PROPOSAL_NO_EXECUTION_WARNING]
     if proposals:
         warnings.insert(0, ACTION_PROPOSAL_APPROVAL_WARNING)
-    return _bulk_response(proposals=proposals, failures=failures, warnings=warnings)
+    return _bulk_response(
+        proposals=proposals,
+        receipts=receipts,
+        failures=failures,
+        warnings=warnings,
+    )
 
 
 @router.post(
@@ -611,40 +635,50 @@ async def bulk_reject_action_proposals_endpoint(
 ) -> ActionProposalBulkResponse:
     async with AsyncSessionLocal() as session:
         proposals: list[ActionProposalRead] = []
+        receipts: list[ActionProposalDecisionReceiptRead] = []
         failures: list[ActionProposalBulkFailureRead] = []
-        for proposal_id in _unique_proposal_ids(payload.proposal_ids):
+        for item in payload.decisions:
             try:
-                proposal = await reject_action_proposal(
+                result = await decide_action_proposal(
                     session,
                     workspace_id=workspace_id,
-                    proposal_id=proposal_id,
-                    rejected_by_user_id=access.workspace_membership.user.id,
-                    reason=payload.reason,
-                )
-                await _record_local_review_event(
-                    session,
-                    proposal=proposal,
-                    event_type=ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
-                    decision="rejected",
-                    bulk=True,
+                    proposal_id=item.proposal_id,
+                    actor_user_id=access.workspace_membership.user.id,
+                    command=ActionProposalDecisionCommand(
+                        decision="rejected",
+                        idempotency_key=item.idempotency_key,
+                        proposal_version=item.proposal_version,
+                        expected_snapshot_id=item.expected_snapshot_id,
+                        reason=payload.reason,
+                        bulk=True,
+                    ),
                 )
                 proposals.append(
                     ActionProposalRead.model_validate(
-                        serialize_action_proposal(proposal)
+                        serialize_action_proposal(result.proposal)
                     )
                 )
-            except ActionProposalNotFoundError as exc:
+                receipts.append(_decision_receipt(result))
+            except ActionProposalDecisionNotFoundError as exc:
                 failures.append(
                     ActionProposalBulkFailureRead(
-                        proposal_id=proposal_id,
+                        proposal_id=item.proposal_id,
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail=exc.detail,
                     )
                 )
-            except ActionProposalTransitionError as exc:
+            except ActionProposalDecisionForbiddenError as exc:
                 failures.append(
                     ActionProposalBulkFailureRead(
-                        proposal_id=proposal_id,
+                        proposal_id=item.proposal_id,
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=exc.detail,
+                    )
+                )
+            except ActionProposalDecisionConflictError as exc:
+                failures.append(
+                    ActionProposalBulkFailureRead(
+                        proposal_id=item.proposal_id,
                         status_code=status.HTTP_409_CONFLICT,
                         detail=exc.detail,
                     )
@@ -653,6 +687,7 @@ async def bulk_reject_action_proposals_endpoint(
 
     return _bulk_response(
         proposals=proposals,
+        receipts=receipts,
         failures=failures,
         warnings=[ACTION_PROPOSAL_NO_EXECUTION_WARNING],
     )
@@ -1120,51 +1155,6 @@ async def _record_execute_block_event(
     )
 
 
-async def _record_local_review_event(
-    session: Any,
-    *,
-    proposal: Any,
-    event_type: str,
-    decision: str,
-    bulk: bool,
-) -> None:
-    decided_at = (
-        proposal.approved_at
-        if decision == "approved"
-        else proposal.rejected_at
-    ) or proposal.updated_at
-    await append_execution_event(
-        session,
-        workspace_id=proposal.workspace_id,
-        action_proposal_id=proposal.id,
-        event_type=event_type,
-        actor="workspace_admin",
-        status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
-        message=(
-            f"Action proposal {decision} locally. "
-            "No external write occurred."
-        ),
-        idempotency_key=execution_event_idempotency_key(
-            workspace_id=proposal.workspace_id,
-            action_proposal_id=proposal.id,
-            event_type=event_type,
-            external_execution_enabled=False,
-            confirmation_received=False,
-            reason=f"{decision}:{decided_at}:{'bulk' if bulk else 'single'}",
-        ),
-        provider=proposal.target_provider,
-        action=proposal.action_type,
-        external_execution_enabled=False,
-        confirmation_received=False,
-        event_metadata={
-            "bulk": bulk,
-            "decision": decision,
-            "external_execution_enabled": False,
-            "proposal_status": proposal.status,
-        },
-    )
-
-
 def _execution_preview_response(proposal: Any) -> ActionExecutionPreviewResponse:
     is_external_enabled = _live_github_execution_enabled()
     warnings = [ACTION_EXECUTION_PREVIEW_WARNING]
@@ -1404,29 +1394,37 @@ def _decision_response(
         proposal=ActionProposalRead.model_validate(
             serialize_action_proposal(result.proposal)
         ),
-        decision_receipt=ActionProposalDecisionReceiptRead(
-            receipt_id=result.event.id,
-            proposal_id=result.proposal.id,
-            decision=result.decision,
-            recorded_at=result.event.created_at,
-            replayed=result.replayed,
-            external_write_performed=False,
-            proposal_version=result.proposal_version,
-        ),
+        decision_receipt=_decision_receipt(result),
         is_live=False,
         execution_started=False,
         warnings=warnings,
     )
 
 
+def _decision_receipt(
+    result: ActionProposalDecisionResult,
+) -> ActionProposalDecisionReceiptRead:
+    return ActionProposalDecisionReceiptRead(
+        receipt_id=result.event.id,
+        proposal_id=result.proposal.id,
+        decision=result.decision,
+        recorded_at=result.event.created_at,
+        replayed=result.replayed,
+        external_write_performed=False,
+        proposal_version=result.proposal_version,
+    )
+
+
 def _bulk_response(
     *,
     proposals: list[ActionProposalRead],
+    receipts: list[ActionProposalDecisionReceiptRead],
     failures: list[ActionProposalBulkFailureRead],
     warnings: list[str],
 ) -> ActionProposalBulkResponse:
     return ActionProposalBulkResponse(
         proposals=proposals,
+        decision_receipts=receipts,
         failures=failures,
         succeeded_count=len(proposals),
         failed_count=len(failures),
@@ -1476,12 +1474,11 @@ def _repo_audit_import_action_input(
         },
         evidence_refs=[
             {
-                "kind": "repo_audit_external",
-                "source": "external_repo_audit_import",
-                "ref": ref,
+                "kind": "repository",
+                "source": "github",
+                "ref": repository_full_name,
                 "url": None,
             }
-            for ref in evidence_refs
         ],
         created_by="user",
     )
@@ -1528,14 +1525,3 @@ def _optional_redacted_text(value: str | None, *, limit: int) -> str | None:
 
 def _redact_import_text(value: str, *, limit: int) -> str:
     return SECRET_TEXT_RE.sub(r"\1=[redacted]", value).strip()[:limit]
-
-
-def _unique_proposal_ids(proposal_ids: list[UUID]) -> list[UUID]:
-    seen: set[UUID] = set()
-    unique_ids: list[UUID] = []
-    for proposal_id in proposal_ids:
-        if proposal_id in seen:
-            continue
-        seen.add(proposal_id)
-        unique_ids.append(proposal_id)
-    return unique_ids

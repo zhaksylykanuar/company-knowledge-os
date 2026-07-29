@@ -536,6 +536,14 @@ export function ActionProposalsPanel({
       });
       return;
     }
+    if (proposal.created_by === "ai" || proposal.created_by === "system") {
+      setMutationError({
+        message:
+          "Решения ИИ и системы принимаются из Штаба, где зафиксирован точный снимок компании.",
+        scope: `proposal:${proposalId}`
+      });
+      return;
+    }
     const mutationToken = beginMutation(`approve:${proposalId}`);
     if (mutationToken === null) {
       return;
@@ -690,6 +698,19 @@ export function ActionProposalsPanel({
     if (proposalsToMutate.length === 0) {
       return;
     }
+    if (
+      mutation === "bulk-approve" &&
+      proposalsToMutate.some(
+        (proposal) => proposal.created_by === "ai" || proposal.created_by === "system"
+      )
+    ) {
+      setMutationError({
+        message:
+          "Выберите в Штабе решения ИИ и системы: там каждое принятие связано с точным снимком компании.",
+        scope: "bulk"
+      });
+      return;
+    }
 
     const mutationToken = beginMutation(mutation);
     if (mutationToken === null) {
@@ -698,21 +719,40 @@ export function ActionProposalsPanel({
     setMutationError(null);
     setSuccessMessage(null);
     const requestWorkspaceId = workspaceId;
+    const decision = mutation === "bulk-approve" ? "approved" : "rejected";
+    const decisions = proposalsToMutate.map((proposal) => {
+      const attemptKey = `bulk-${decision}:${proposal.id}`;
+      const idempotencyKey = decisionAttemptKeysRef.current.get(attemptKey) ??
+        createLocalActionDecisionIdempotencyKey(proposal.id, decision);
+      decisionAttemptKeysRef.current.set(attemptKey, idempotencyKey);
+      return {
+        expected_snapshot_id: null,
+        idempotency_key: idempotencyKey,
+        proposal_id: proposal.id,
+        proposal_version: proposal.proposal_version
+      };
+    });
     try {
-      const proposalIds = proposalsToMutate.map((proposal) => proposal.id);
       const response =
         mutation === "bulk-approve"
           ? await bulkApproveActionProposals(requestWorkspaceId, {
-              proposal_ids: proposalIds
+              decisions
             })
           : await bulkRejectActionProposals(requestWorkspaceId, {
-              proposal_ids: proposalIds,
+              decisions,
               reason: M.actionsPanel.rejectReason
             });
       if (!isCurrentMutationContext(requestWorkspaceId)) {
         return;
       }
-      const outcome = summarizeBulkResponse(response);
+      const outcome = summarizeBulkResponse(
+        response,
+        proposalsToMutate,
+        decision
+      );
+      for (const proposal of proposalsToMutate) {
+        decisionAttemptKeysRef.current.delete(`bulk-${decision}:${proposal.id}`);
+      }
       if (outcome.succeeded.length > 0) {
         setData((current) =>
           mergeUpdatedProposals(
@@ -2766,7 +2806,35 @@ type BulkOutcome = {
   firstFailureMessage: string | null;
 };
 
-function summarizeBulkResponse(response: ActionProposalBulkResponse): BulkOutcome {
+function summarizeBulkResponse(
+  response: ActionProposalBulkResponse,
+  requestedProposals: ActionProposal[],
+  decision: "approved" | "rejected"
+): BulkOutcome {
+  const requestedById = new Map(
+    requestedProposals.map((proposal) => [proposal.id, proposal])
+  );
+  const receiptsByProposalId = new Map(
+    response.decision_receipts.map((receipt) => [receipt.proposal_id, receipt])
+  );
+  const receiptContractIsValid =
+    response.succeeded_count === response.proposals.length &&
+    response.failed_count === response.failures.length &&
+    response.decision_receipts.length === response.proposals.length &&
+    response.proposals.every((proposal) => {
+      const requested = requestedById.get(proposal.id);
+      const receipt = receiptsByProposalId.get(proposal.id);
+      return (
+        requested !== undefined &&
+        receipt !== undefined &&
+        receipt.decision === decision &&
+        receipt.external_write_performed === false &&
+        receipt.proposal_version === requested.proposal_version
+      );
+    });
+  if (!receiptContractIsValid) {
+    throw new Error("Сервер не подтвердил точные квитанции массового решения.");
+  }
   const failed = response.failures.map((failure) => ({
     id: failure.proposal_id,
     message: failure.detail

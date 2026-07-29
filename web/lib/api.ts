@@ -824,7 +824,12 @@ export async function bulkApproveActionProposals(
     {
       ...options,
       body: JSON.stringify({
-        proposal_ids: request.proposal_ids
+        decisions: request.decisions.map((decision) => ({
+          expected_snapshot_id: decision.expected_snapshot_id ?? null,
+          idempotency_key: decision.idempotency_key,
+          proposal_id: decision.proposal_id,
+          proposal_version: decision.proposal_version
+        }))
       }),
       method: "POST"
     }
@@ -841,7 +846,12 @@ export async function bulkRejectActionProposals(
     {
       ...options,
       body: JSON.stringify({
-        proposal_ids: request.proposal_ids,
+        decisions: request.decisions.map((decision) => ({
+          expected_snapshot_id: decision.expected_snapshot_id ?? null,
+          idempotency_key: decision.idempotency_key,
+          proposal_id: decision.proposal_id,
+          proposal_version: decision.proposal_version
+        })),
         reason: request.reason ?? null
       }),
       method: "POST"

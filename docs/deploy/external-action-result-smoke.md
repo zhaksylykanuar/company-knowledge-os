@@ -50,7 +50,9 @@ Before starting, verify all of these are true:
    - `ENABLE_WRITE_ACTIONS=true` only during the approved window.
    - `REQUIRE_APPROVAL_FOR_WRITES=true`.
    - `FOS_GITHUB_WRITE_ALLOWED_REPOS=<approved-owner/repo>`.
-6. The ActionProposal has non-empty `evidence_refs`.
+6. Every ActionProposal `evidence_refs` item resolves to an active canonical
+   record in the exact workspace, and at least one ref identifies the exact
+   target repository. A non-empty arbitrary list is not sufficient.
 7. The human has approved the exact title/body/target repository before execute.
 
 If any precondition is false, stop and return to read-only mode.
@@ -97,13 +99,15 @@ Use the product UI when possible:
 3. Create or select exactly one GitHub issue proposal for the approved smoke
    repository.
 4. Open its evidence refs and verify the claim is supported.
-5. Approve the proposal locally.
+5. Approve the proposal locally. AI/system proposals must be opened from
+   Headquarters so the decision carries the exact visible snapshot.
 6. Open execution preview and verify:
    - provider is GitHub;
    - action is create issue;
    - repository matches the allowlist;
    - title/body are safe;
-   - evidence refs are present;
+   - evidence refs are canonical, active, same-workspace and relevant to the
+     exact repository;
    - backend capabilities say a live write is allowed.
 7. Confirm external execution once.
 8. Verify the UI shows `claimed` before provider execution and then an

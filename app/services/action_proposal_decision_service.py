@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.action_models import (
+    ACTION_CREATED_BY_AI,
+    ACTION_CREATED_BY_SYSTEM,
     ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
     ACTION_EXECUTION_EVENT_PROPOSAL_REJECTED,
     ACTION_EXECUTION_EVENT_STATUS_RECORDED,
@@ -37,8 +39,10 @@ from app.services.company_memory_event_service import (
     append_action_proposal_decision_memory_event,
 )
 from app.services.headquarters_read_service import (
+    ActionProposalEvidenceValidationError,
     HeadquartersAccessChangedError,
     read_workspace_headquarters,
+    validate_action_proposal_evidence,
 )
 from app.services.identity_service import role_allows
 
@@ -71,6 +75,7 @@ class ActionProposalDecisionCommand:
     proposal_version: str
     expected_snapshot_id: str | None = None
     reason: str | None = None
+    bulk: bool = False
 
 
 @dataclass(frozen=True)
@@ -155,6 +160,23 @@ async def decide_action_proposal(
     if current_version != command.proposal_version:
         raise ActionProposalDecisionConflictError("action proposal version changed")
 
+    if command.decision == ACTION_PROPOSAL_STATUS_APPROVED:
+        try:
+            await validate_action_proposal_evidence(
+                session,
+                workspace_id=workspace_id,
+                proposal=proposal,
+            )
+        except ActionProposalEvidenceValidationError as exc:
+            raise ActionProposalDecisionConflictError(exc.detail) from exc
+        if (
+            proposal.created_by in {ACTION_CREATED_BY_AI, ACTION_CREATED_BY_SYSTEM}
+            and command.expected_snapshot_id is None
+        ):
+            raise ActionProposalDecisionConflictError(
+                "AI and system proposals require an exact headquarters snapshot"
+            )
+
     await _validate_expected_headquarters_context(
         workspace_id=workspace_id,
         proposal_id=proposal_id,
@@ -183,7 +205,7 @@ async def decide_action_proposal(
         workspace_id=workspace_id,
         action_proposal_id=proposal_id,
         event_type=event_type,
-        actor="workspace_admin",
+        actor=f"user:{actor_user_id}",
         status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
         message=(
             f"Action proposal {command.decision} locally. "
@@ -195,7 +217,7 @@ async def decide_action_proposal(
         external_execution_enabled=False,
         confirmation_received=False,
         event_metadata={
-            "bulk": False,
+            "bulk": command.bulk,
             "decision": command.decision,
             "decision_contract": "local-decision.v1",
             "expected_snapshot_id": command.expected_snapshot_id,

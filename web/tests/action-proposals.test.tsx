@@ -719,7 +719,14 @@ test("bulk approves and rejects locally through backend bulk endpoints", async (
       assert.equal(
         init?.body,
         JSON.stringify({
-          proposal_ids: ["proposal-4"],
+          decisions: [
+            {
+              expected_snapshot_id: null,
+              idempotency_key: "bulk-reject-4",
+              proposal_id: "proposal-4",
+              proposal_version: briefingProposal.proposal_version
+            }
+          ],
           reason: "Not now"
         })
       );
@@ -729,7 +736,18 @@ test("bulk approves and rejects locally through backend bulk endpoints", async (
           failed_count: 0,
           failures: [],
           is_live: false,
-          proposals: [rejectedProposal],
+          proposals: [{ ...rejectedProposal, id: "proposal-4" }],
+          decision_receipts: [
+            {
+              decision: "rejected",
+              external_write_performed: false,
+              proposal_id: "proposal-4",
+              proposal_version: briefingProposal.proposal_version,
+              receipt_id: "receipt-bulk-reject-4",
+              recorded_at: "2026-06-25T01:06:00+06:00",
+              replayed: false
+            }
+          ],
           succeeded_count: 1,
           warnings: ["Action proposal API is local-only and does not execute provider actions."]
         }),
@@ -742,7 +760,20 @@ test("bulk approves and rejects locally through backend bulk endpoints", async (
     assert.equal(
       init?.body,
       JSON.stringify({
-        proposal_ids: ["proposal-1", "proposal-4"]
+        decisions: [
+          {
+            expected_snapshot_id: null,
+            idempotency_key: "bulk-approve-1",
+            proposal_id: "proposal-1",
+            proposal_version: proposedProposal.proposal_version
+          },
+          {
+            expected_snapshot_id: null,
+            idempotency_key: "bulk-approve-4",
+            proposal_id: "proposal-4",
+            proposal_version: briefingProposal.proposal_version
+          }
+        ]
       })
     );
     return new Response(
@@ -757,7 +788,18 @@ test("bulk approves and rejects locally through backend bulk endpoints", async (
           }
         ],
         is_live: false,
-        proposals: [approvedProposal],
+        proposals: [{ ...approvedProposal, id: "proposal-1" }],
+        decision_receipts: [
+          {
+            decision: "approved",
+            external_write_performed: false,
+            proposal_id: "proposal-1",
+            proposal_version: proposedProposal.proposal_version,
+            receipt_id: "receipt-bulk-approve-1",
+            recorded_at: "2026-06-25T01:05:00+06:00",
+            replayed: false
+          }
+        ],
         succeeded_count: 1,
         warnings: ["Action proposal API is local-only and does not execute provider actions."]
       }),
@@ -771,12 +813,34 @@ test("bulk approves and rejects locally through backend bulk endpoints", async (
   try {
     const approved = await bulkApproveActionProposals(
       "workspace-123",
-      { proposal_ids: ["proposal-1", "proposal-4"] },
+      {
+        decisions: [
+          {
+            idempotency_key: "bulk-approve-1",
+            proposal_id: "proposal-1",
+            proposal_version: proposedProposal.proposal_version
+          },
+          {
+            idempotency_key: "bulk-approve-4",
+            proposal_id: "proposal-4",
+            proposal_version: briefingProposal.proposal_version
+          }
+        ]
+      },
       {}
     );
     const rejected = await bulkRejectActionProposals(
       "workspace-123",
-      { proposal_ids: ["proposal-4"], reason: "Not now" },
+      {
+        decisions: [
+          {
+            idempotency_key: "bulk-reject-4",
+            proposal_id: "proposal-4",
+            proposal_version: briefingProposal.proposal_version
+          }
+        ],
+        reason: "Not now"
+      },
       {}
     );
 
@@ -1124,9 +1188,29 @@ test("summarizeBulkResponse partitions backend bulk results and keeps first fail
       { ...approvedProposal, id: "proposal-1" },
       { ...approvedProposal, id: "proposal-4" }
     ],
+    decision_receipts: [
+      {
+        decision: "approved",
+        external_write_performed: false,
+        proposal_id: "proposal-1",
+        proposal_version: proposedProposal.proposal_version,
+        receipt_id: "receipt-1",
+        recorded_at: "2026-06-25T01:05:00+06:00",
+        replayed: false
+      },
+      {
+        decision: "approved",
+        external_write_performed: false,
+        proposal_id: "proposal-4",
+        proposal_version: briefingProposal.proposal_version,
+        receipt_id: "receipt-4",
+        recorded_at: "2026-06-25T01:05:00+06:00",
+        replayed: false
+      }
+    ],
     succeeded_count: 2,
     warnings: []
-  });
+  }, [proposedProposal, briefingProposal], "approved");
 
   assert.deepEqual(outcome.succeededIds, ["proposal-1", "proposal-4"]);
   assert.equal(outcome.succeeded.length, 2);
@@ -1142,9 +1226,20 @@ test("summarizeBulkResponse reports no failure message when all succeed", () => 
     failures: [],
     is_live: false,
     proposals: [{ ...approvedProposal, id: "proposal-1" }],
+    decision_receipts: [
+      {
+        decision: "approved",
+        external_write_performed: false,
+        proposal_id: "proposal-1",
+        proposal_version: proposedProposal.proposal_version,
+        receipt_id: "receipt-1",
+        recorded_at: "2026-06-25T01:05:00+06:00",
+        replayed: false
+      }
+    ],
     succeeded_count: 1,
     warnings: []
-  });
+  }, [proposedProposal], "approved");
   assert.equal(outcome.failed.length, 0);
   assert.equal(outcome.firstFailureMessage, null);
   assert.deepEqual(outcome.succeededIds, ["proposal-1"]);

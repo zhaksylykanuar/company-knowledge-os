@@ -8,7 +8,7 @@
 
 **FounderOS 2.0 product reset, Lifecycle Event Ledger v1, Temporal Memory v2,
 GitHub Source Reconciliation v1, universal pytest database guard и Atomic
-External Execution v1 реализованы локально в ветке
+External Execution v1, Strict Action Evidence v1 реализованы локально в ветке
 `codex/living-hq-ux-reset`. Изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
@@ -90,6 +90,19 @@ ledger; тексты источников и evidence не копируются.
   только последующая полная проверка может разрешить retry с новым ключом.
 - Acceptance-тест запускает два одновременных execute request и доказывает
   ровно один provider call, один `ActionExecution` и одну внешнюю задачу.
+- User-created evidence теперь проходит строгую JSON-схему до сохранения.
+  Approval и execution используют один canonical resolver: каждая ссылка
+  обязана существовать, быть активной, относиться к тому же workspace и
+  совпадать с exact GitHub target. Проверка повторяется после committed
+  execution start непосредственно перед provider call (DEC-101).
+- AI/system proposal нельзя принять без exact `headquarters.v3` snapshot.
+  Bulk approve/reject больше не использует legacy transition: каждый элемент
+  несёт proposal version, client idempotency key и optional exact snapshot,
+  проходит тот же row lock/role/evidence service и возвращает отдельную
+  decision receipt.
+- Repo-audit import больше не сохраняет произвольные внешние evidence-строки:
+  proposal хранит только канонический repository selector, который обязан
+  разрешиться внутри workspace перед approval.
 
 ## Проверено 2026-07-29
 
@@ -99,7 +112,7 @@ ledger; тексты источников и evidence не копируются.
 - Frontend dependencies: production audit — **0 vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: guarded full pytest — **761 passed**, одно внешнее
+- Backend: guarded full pytest — **765 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Alembic: единственная head `a1c2d3e4f5b6`, применена к отдельной test БД;
   `alembic check` не обнаружил расхождений metadata/schema.
@@ -118,10 +131,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Ввести строгий same-workspace evidence gate для approval/execution и
-   унифицировать bulk decisions.
-2. Закрепить workspace isolation составными PostgreSQL FK.
-3. После high-priority remediation провести authenticated browser QA и один
+1. Закрепить workspace isolation составными PostgreSQL FK.
+2. После high-priority remediation провести authenticated browser QA и один
    founder-approved read-only GitHub App read.
 
 ## Неподвижные границы

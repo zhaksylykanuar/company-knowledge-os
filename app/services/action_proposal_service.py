@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from sqlalchemy import select
@@ -40,6 +41,21 @@ ACTION_PROPOSAL_INVALID_TRANSITION = "action proposal is not in proposed status"
 ACTION_PROPOSAL_PAYLOAD_MAX_BYTES = 64 * 1024
 ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES = 64 * 1024
 ACTION_PROPOSAL_EVIDENCE_REFS_MAX_ITEMS = 50
+ACTION_EVIDENCE_ALLOWED_KEYS = frozenset(
+    {
+        "evidence_ref_id",
+        "id",
+        "kind",
+        "record_id",
+        "ref",
+        "source",
+        "source_record_id",
+        "url",
+    }
+)
+ACTION_EVIDENCE_KIND_MAX_LENGTH = 80
+ACTION_EVIDENCE_SELECTOR_MAX_LENGTH = 500
+ACTION_EVIDENCE_SOURCE_MAX_LENGTH = 80
 
 VALID_TARGET_PROVIDERS = {
     ACTION_TARGET_PROVIDER_GITHUB,
@@ -137,6 +153,10 @@ def validate_action_proposal_input(payload: ActionProposalCreateInput) -> None:
         field_name="evidence_refs",
         max_bytes=ACTION_PROPOSAL_EVIDENCE_REFS_MAX_BYTES,
     )
+    if any(not action_evidence_ref_matches_schema(ref) for ref in payload.evidence_refs):
+        raise ActionProposalError(
+            "evidence_refs items must match the evidence_ref.v1 schema"
+        )
     if created_by not in VALID_CREATED_BY:
         raise ActionProposalError("unknown created_by")
     secret_key = _first_secret_like_key(payload.payload)
@@ -334,6 +354,77 @@ def action_proposal_version(proposal: ActionProposal) -> str:
         default=_proposal_version_json_default,
     )
     return f"ap1_{sha256(serialized.encode('utf-8')).hexdigest()}"
+
+
+def action_evidence_ref_matches_schema(ref: Mapping[str, Any]) -> bool:
+    """Validate the durable evidence_ref.v1 JSON shape without database reads."""
+
+    if any(not isinstance(key, str) for key in ref):
+        return False
+    if not set(ref).issubset(ACTION_EVIDENCE_ALLOWED_KEYS):
+        return False
+    kind = _strict_text(ref.get("kind"))
+    source = _strict_text(ref.get("source"))
+    if (
+        kind is None
+        or len(kind) > ACTION_EVIDENCE_KIND_MAX_LENGTH
+        or source is None
+        or len(source) > ACTION_EVIDENCE_SOURCE_MAX_LENGTH
+    ):
+        return False
+    selector_keys = (
+        "evidence_ref_id",
+        "source_record_id",
+        "record_id",
+        "ref",
+        "id",
+    )
+    selectors = {
+        key: _strict_text(ref.get(key))
+        for key in selector_keys
+        if ref.get(key) is not None
+    }
+    if not selectors or any(value is None for value in selectors.values()):
+        return False
+    if any(
+        len(value) > ACTION_EVIDENCE_SELECTOR_MAX_LENGTH
+        for value in selectors.values()
+        if value is not None
+    ):
+        return False
+    for key in ("evidence_ref_id", "source_record_id", "record_id"):
+        value = selectors.get(key)
+        if value is not None:
+            try:
+                UUID(value)
+            except ValueError:
+                return False
+    url = ref.get("url")
+    return url is None or _action_evidence_url_is_safe(url)
+
+
+def _strict_text(value: Any) -> str | None:
+    if not isinstance(value, str) or not value or value != value.strip():
+        return None
+    if any(character.isspace() and character != " " for character in value):
+        return None
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        return None
+    return value
+
+
+def _action_evidence_url_is_safe(value: Any) -> bool:
+    text = _strict_text(value)
+    if text is None or len(text) > 1000 or "\\" in text or any(
+        character.isspace() for character in text
+    ):
+        return False
+    try:
+        parsed = urlsplit(text)
+        parsed.port
+    except ValueError:
+        return False
+    return parsed.scheme.casefold() in {"http", "https"} and bool(parsed.netloc)
 
 
 def _proposal_version_json_default(value: object) -> str:

@@ -6,9 +6,7 @@
 
 ## Сейчас — high-priority audit remediation
 
-1. Ввести строгую same-workspace evidence validation для approval/execution и
-   унифицировать bulk decisions.
-2. Закрепить workspace-owned связи составными PostgreSQL FK и отрицательными
+1. Закрепить workspace-owned связи составными PostgreSQL FK и отрицательными
    tenancy-тестами.
 
 ## Сейчас — завершение FounderOS 2.0 reset

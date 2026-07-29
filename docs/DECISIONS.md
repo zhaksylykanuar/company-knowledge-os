@@ -3205,6 +3205,46 @@ cannot execute actions. Acceptance requires two simultaneous execute requests
 to produce exactly one provider call, one `ActionExecution` and one external
 issue.
 
+## DEC-101 - Approval And Execution Share One Canonical Evidence Gate
+
+Decision (2026-07-29): an ActionProposal may be created only with bounded
+`evidence_ref.v1` objects. Every object has a controlled set of fields, a
+non-empty kind/source, one supported selector and an optional safe HTTP(S)
+source URL. Arbitrary nested JSON and unknown evidence fields are rejected
+before persistence. Empty evidence may remain on an unapproved draft so the
+user can correct it, but it can never pass approval or external execution.
+
+Approval resolves every reference against active canonical rows in the exact
+workspace. Missing, deleted/tombstoned, archived, unsupported or foreign rows
+fail the entire decision; partial evidence is never accepted. A GitHub issue
+proposal must cite the exact canonical repository named by its payload, so a
+real but unrelated repository is also insufficient. The same resolver powers
+Headquarters visibility, approval and execution. External execution validates
+once before creating its durable claim and again after the committed
+`running` transition immediately before provider I/O. If evidence becomes
+invalid between those points, the attempt becomes a definitive pre-provider
+failure, the proposal returns to approved and no provider call occurs.
+
+AI/system approval additionally requires the exact visible
+`headquarters.v3` snapshot and exact proposal version. Such proposals are
+reviewed from Headquarters; the generic Actions screen does not fabricate a
+snapshot. User rejection remains possible without valid evidence because
+discarding an unsafe proposal is not an assertion that its evidence is true.
+
+Bulk approval and rejection use the same `decide_action_proposal` service as a
+single decision. Each item supplies its proposal UUID, exact `ap1_*` version,
+client idempotency key and optional `hqs1_*` snapshot. Duplicate proposal IDs
+are invalid input. Each successful item gets its own durable decision receipt
+and audit event with the authenticated user; partial failures do not weaken
+the successful items' contracts. Repo-audit import retains its bounded finding
+summary but discards arbitrary external evidence strings and stores only a
+canonical repository selector.
+
+This gate proves referential existence, workspace scope, lifecycle state and
+machine-checkable target relevance. It does not claim semantic truth for
+free-form prose or replace the future generative AI critic. PostgreSQL/raw
+storage remain authoritative, and no LLM may approve or execute a proposal.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

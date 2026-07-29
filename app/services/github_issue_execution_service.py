@@ -49,6 +49,10 @@ from app.services.action_execution_audit_service import (
     execution_event_idempotency_key,
 )
 from app.services.github_issue_client import create_issue
+from app.services.headquarters_read_service import (
+    ActionProposalEvidenceValidationError,
+    validate_action_proposal_evidence,
+)
 from app.services.real_connector_guard import require_real_connectors_enabled
 from app.services.secret_encryption import SecretEncryptionError, decrypt_secret
 
@@ -185,7 +189,11 @@ async def execute_approved_github_issue_action(
         _validate_proposal_for_execution(proposal)
         issue_payload = validate_github_issue_payload(proposal.payload or {})
         _validate_body_marker_capacity(issue_payload.body)
-        _validate_evidence_for_live_execution(proposal)
+        await _validate_evidence_for_live_execution(
+            session,
+            workspace_id=workspace_id,
+            proposal=proposal,
+        )
         _validate_repository_allowlist(issue_payload)
         connection = await _get_connection_or_raise(
             session,
@@ -309,6 +317,30 @@ async def execute_approved_github_issue_action(
         },
     )
     await session.commit()
+
+    try:
+        await _validate_evidence_for_live_execution(
+            session,
+            workspace_id=workspace_id,
+            proposal=proposal,
+        )
+    except GitHubIssueExecutionConflictError as exc:
+        await _mark_pre_provider_failed(
+            session,
+            proposal=proposal,
+            execution=execution,
+            message=exc.detail,
+        )
+        await _append_failed_execution_event(
+            session,
+            proposal=proposal,
+            execution=execution,
+            message=exc.detail,
+            error_code="proposal_evidence_invalid",
+            actor_user_id=input_payload.requested_by_user_id,
+        )
+        await session.commit()
+        raise
 
     try:
         raw_response = await create_issue(
@@ -481,9 +513,22 @@ def _validate_proposal_for_execution(proposal: ActionProposal) -> None:
         raise GitHubIssueExecutionError(GITHUB_ISSUE_EXECUTION_UNSUPPORTED_ACTION)
 
 
-def _validate_evidence_for_live_execution(proposal: ActionProposal) -> None:
+async def _validate_evidence_for_live_execution(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    proposal: ActionProposal,
+) -> None:
     if not proposal.evidence_refs:
         raise GitHubIssueExecutionConflictError(GITHUB_ISSUE_EXECUTION_EVIDENCE_REQUIRED)
+    try:
+        await validate_action_proposal_evidence(
+            session,
+            workspace_id=workspace_id,
+            proposal=proposal,
+        )
+    except ActionProposalEvidenceValidationError as exc:
+        raise GitHubIssueExecutionConflictError(exc.detail) from exc
 
 
 def _validate_repository_allowlist(issue_payload: GitHubIssuePayload) -> None:

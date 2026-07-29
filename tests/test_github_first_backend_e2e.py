@@ -188,7 +188,7 @@ def _fake_repository() -> dict:
         "evidence_refs": [
             {
                 "kind": "repository_inventory_snapshot",
-                "source": "backend_e2e_test",
+                "source": "repository_inventory",
                 "ref": FAKE_REPOSITORY_FULL_NAME,
                 "url": None,
             }
@@ -461,7 +461,7 @@ async def test_github_first_backend_e2e_smoke_flow(monkeypatch) -> None:
                     "evidence_refs": [
                         {
                             "kind": "repository",
-                            "source": "backend_e2e_test",
+                            "source": "repository_inventory",
                             "ref": FAKE_REPOSITORY_FULL_NAME,
                             "url": None,
                         }

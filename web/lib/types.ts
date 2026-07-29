@@ -812,8 +812,12 @@ export type ActionProposalDecisionResponse = ActionProposalMutationResponse & {
   execution_started: false;
 };
 
+export type ActionProposalBulkDecisionItem = ActionProposalDecisionRequest & {
+  proposal_id: string;
+};
+
 export type ActionProposalBulkRequest = {
-  proposal_ids: string[];
+  decisions: ActionProposalBulkDecisionItem[];
 };
 
 export type ActionProposalBulkRejectRequest = ActionProposalBulkRequest & {
@@ -828,6 +832,7 @@ export type ActionProposalBulkFailure = {
 
 export type ActionProposalBulkResponse = {
   proposals: ActionProposal[];
+  decision_receipts: LocalActionDecisionReceipt[];
   failures: ActionProposalBulkFailure[];
   succeeded_count: number;
   failed_count: number;

@@ -85,6 +85,15 @@
 - [x] Потерянный provider response сохраняется как `uncertain`, а read-only
   reconciliation разрешает его только по точному execution marker или после
   полного повторного доказательства отсутствия.
+- [x] Approval и execution используют одну strict `evidence_ref.v1` schema и
+  canonical same-workspace resolver; fabricated, deleted, unrelated,
+  unsupported и foreign evidence fail closed.
+- [x] Evidence повторно проверяется после committed execution start
+  непосредственно перед provider call.
+- [x] Bulk decisions проходят тот же versioned/idempotent row-locked service,
+  что одиночные решения, и возвращают receipt для каждого успешного элемента.
+- [x] AI/system proposal нельзя принять без exact Headquarters snapshot и
+  exact proposal version.
 - [ ] Draft из AI связывается с evidence и exact snapshot.
 - [x] Preview показывает последствия и provider target.
 - [x] Ни один LLM path не вызывает external write напрямую.

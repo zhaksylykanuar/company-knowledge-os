@@ -12,8 +12,11 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 - migration metadata drift проверяется через `alembic check`;
 - atomic execution claim, DB-idempotency, actual actor, uncertain state и
   provider reconciliation реализованы;
-- внешние записи остаются выключенными до строгого same-workspace evidence
-  gate и завершения остальных high-priority remediation;
+- строгая evidence_ref.v1 schema, canonical same-workspace resolution,
+  relevance check, pre-provider revalidation, exact AI/system snapshot и
+  versioned/idempotent bulk decisions реализованы;
+- внешние записи остаются выключенными до завершения остальных high-priority
+  remediation;
 - workspace isolation закрепляется не только сервисами, но и PostgreSQL.
 
 Готово, когда все четыре high-priority замечания аудита закрыты тестами.
