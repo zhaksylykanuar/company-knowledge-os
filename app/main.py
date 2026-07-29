@@ -6,6 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.actions import router as actions_router
+from app.api.ai_settings import router as ai_settings_router
 from app.api.assistant import router as assistant_router
 from app.api.auth import enforce_fail_closed_auth, get_current_actor, require_api_key
 from app.api.auth_routes import router as auth_router
@@ -118,6 +119,7 @@ app.include_router(jira_router, dependencies=protected_api_dependencies)
 app.include_router(gmail_router, dependencies=protected_api_dependencies)
 app.include_router(drive_router, dependencies=protected_api_dependencies)
 app.include_router(documents_router, dependencies=protected_api_dependencies)
+app.include_router(ai_settings_router, dependencies=protected_api_dependencies)
 app.include_router(assistant_router, dependencies=protected_api_dependencies)
 app.include_router(headquarters_router, dependencies=protected_api_dependencies)
 app.include_router(company_map_router, dependencies=protected_api_dependencies)

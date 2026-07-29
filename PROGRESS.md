@@ -15,8 +15,9 @@ Browser Security Baseline, Shared Public Auth Admission, Reproducible
 Dependency Gate, Durable GitHub Provider Jobs, Encrypted Off-device Recovery
 Controls, Private Repository Governance и Maintainability Ratchets также
 реализованы локально. Generative Second Opinion v1 реализован поверх exact
-Headquarters snapshot со strict schema и evidence critic; изменения не
-опубликованы.**
+Headquarters snapshot со strict schema и evidence critic. Workspace AI/privacy
+control реализован с encrypted key lifecycle, explicit synthetic check и
+server kill switch; изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -45,8 +46,12 @@ ledger; тексты источников и evidence не копируются.
   FounderOS; техническое состояние источников убрано из основного экрана.
 - `Спросить` сделан самостоятельным экраном поверх exact workspace snapshot.
   История диалога не сохраняется, внешние записи не выполняются. По умолчанию
-  работает локальный детерминированный ответ; optional AI path требует feature
-  gate, server-only key и отдельное подтверждение provider data policy.
+  работает локальный детерминированный ответ; optional AI path требует server
+  kill switch и проверенную workspace-настройку.
+- Добавлен `/settings/ai`: owner/admin может сохранить зашифрованный OpenAI
+  key, выбрать allowlisted model/reasoning/output budget, подтвердить текущую
+  provider policy, включить AI, отдельно проверить соединение и удалить ключ.
+  Viewer видит только безопасный статус.
 - Сохранены raw storage/Postgres truth, evidence, tenancy, RBAC, human approval,
   idempotency и receipts.
 - Исправлен GitHub App fallback redirect на новый settings route.
@@ -218,26 +223,37 @@ ledger; тексты источников и evidence не копируются.
   refusal, timeout, invalid schema или critic rejection возвращают
   детерминированный fallback без provider detail. `store=false` не объявлен
   Zero Data Retention: отдельное data-policy acknowledgement обязательно.
+- «Применить» в AI settings не вызывает провайдера. Проверка закрывает SQL
+  session до сети и отправляет только synthetic fact без данных компании;
+  сохраняется только status/code/model. Configuration version отклоняет
+  устаревшую квитанцию, если во время проверки изменились key/model/policy.
+- Workspace AI row является authoritative: при его наличии нет скрытого
+  fallback на environment credential. Удаление ключа выключает AI и очищает
+  policy/check state, не удаляя canonical memory или evidence.
 
 ## Проверено 2026-07-29
 
-- Frontend: `npm test` — **320 passed**.
+- Frontend: `npm test` — **323 passed**.
 - Frontend: `npm run typecheck` — успешно.
-- Frontend: `npm run lint` — успешно, **95 files**, 0 warnings.
-- Frontend: `npm run build` — успешно, **16 routes**.
+- Frontend: `npm run lint` — успешно, **97 files**, 0 warnings.
+- Frontend: `npm run build` — успешно, **17 routes**, включая
+  `/settings/ai`.
 - Frontend dependencies: full и production audit — **0 vulnerabilities**.
 - Python dependencies: `pip-audit --local` — **0 known vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: `uv run mypy app` — успешно, **100 source files**.
-- Backend: guarded full pytest — **799 passed**, одно внешнее
+- Backend: `uv run mypy app` — успешно, **102 source files**.
+- Backend: guarded full pytest — **808 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Assistant v2: strict provider/evidence, fallback, privacy-gate и UI contract
   входят в полный backend/frontend gate; настоящий OpenAI call не выполнялся.
+- AI settings: encrypted-at-rest secret, no-secret response, RBAC/isolation,
+  DB readiness constraint, no-company-data check, stale-result rejection и
+  no-env-fallback покрыты тестами; настоящий OpenAI call не выполнялся.
 - Disaster recovery/governance: focused Ruff + **7 tests passed**; encrypted
   round-trip, tamper/path rejection, sanitized drill proof, retention и
   repository contracts подтверждены без product data.
-- Alembic: единственная head `c4d5e6f7a8b9`, применена к отдельной test БД;
+- Alembic: единственная head `c6f41d8e29ab`, применена к отдельной test БД;
   `alembic check` не обнаружил расхождений metadata/schema.
 - Небезопасный bare pytest без explicit test environment остановлен до
   application import; локальная `ckdos_test` создана отдельно от рабочей БД.
@@ -256,9 +272,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 1. Настроить физически независимое storage и отдельное хранение recovery key,
    затем выполнить первый настоящий encrypted export и full restore drill.
-2. Провести один явно разрешённый credentialed AI smoke после проверки
-   provider retention policy, оценить latency/cost и добавить продуктовый
-   Settings-контроль AI/privacy вместо server-only env управления.
+2. Провести один явно разрешённый credentialed AI smoke из `/settings/ai`
+   после проверки provider retention policy и оценить latency/cost.
 3. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
    gate; process counters не являются distributed telemetry.
 4. Провести новые authenticated session/workspace/browser gates и один

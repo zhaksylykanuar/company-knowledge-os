@@ -91,7 +91,7 @@ restore proof и полный RLS ещё не объявлены готовым�
 - fact / interpretation / objection / recommendation — реализовано;
 - evidence critic и unsupported-claim rejection — реализовано для bounded
   snapshot facts;
-- model/privacy/budget controls в настройках;
+- model/privacy/budget controls в `/settings/ai` — реализованы;
 - chat memory только после явного opt-in.
 
 Готово, когда AI даёт полезное второе мнение и каждый значимый вывод ведёт к

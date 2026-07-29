@@ -21,6 +21,9 @@ from typing import Any, Final
 from uuid import UUID
 
 from app.core.config import settings
+from app.services.ai_settings_service import (
+    resolve_assistant_runtime_configuration,
+)
 from app.services.assistant_llm_service import (
     AssistantEvidenceFact,
     AssistantLLMError,
@@ -300,25 +303,27 @@ async def query_workspace_assistant(
             deterministic = build_assistant_response(snapshot, normalized_query)
             if not settings.enable_llm or not _safe_for_llm(normalized_query):
                 return deterministic
-            if not settings.assistant_llm_data_policy_acknowledged:
-                return _with_warning(
-                    deterministic,
-                    "ai_data_policy_not_acknowledged",
+            resolution = await resolve_assistant_runtime_configuration(
+                workspace_id=workspace_id
+            )
+            runtime = resolution.configuration
+            if runtime is None:
+                return (
+                    _with_warning(deterministic, resolution.warning)
+                    if resolution.warning
+                    else deterministic
                 )
-            api_key = _resolved_openai_api_key()
-            if api_key is None:
-                return _with_warning(deterministic, "ai_not_configured")
 
             facts, available_citations = _assistant_retrieval(snapshot)
             if not facts:
                 return _with_warning(deterministic, "insufficient_ai_evidence")
             try:
                 reasoning = await generate_assistant_reasoning(
-                    api_key=api_key,
-                    model=settings.assistant_llm_model,
-                    reasoning_effort=settings.assistant_llm_reasoning_effort,
-                    max_output_tokens=settings.assistant_llm_max_output_tokens,
-                    timeout_seconds=settings.assistant_llm_timeout_seconds,
+                    api_key=runtime.api_key,
+                    model=runtime.model,
+                    reasoning_effort=runtime.reasoning_effort,
+                    max_output_tokens=runtime.max_output_tokens,
+                    timeout_seconds=runtime.timeout_seconds,
                     safety_identifier=_safety_identifier(workspace_id, user_id),
                     query=normalized_query,
                     facts=facts,
@@ -556,15 +561,6 @@ def _safe_for_llm(normalized_query: str) -> bool:
         normalized_query,
         (*_UNSAFE_INSTRUCTION_MARKERS, *_ACTION_REQUEST_MARKERS),
     )
-
-
-def _resolved_openai_api_key() -> str | None:
-    configured = settings.openai_api_key
-    if configured is None:
-        return None
-    get_secret_value = getattr(configured, "get_secret_value", None)
-    raw = get_secret_value() if callable(get_secret_value) else configured
-    return raw if isinstance(raw, str) and raw else None
 
 
 def _safety_identifier(workspace_id: UUID, user_id: UUID) -> str:

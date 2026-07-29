@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -23,6 +24,12 @@ INTEGRATION_PROVIDER_GITHUB = "github"
 INTEGRATION_PROVIDER_JIRA = "jira"
 INTEGRATION_PROVIDER_GMAIL = "gmail"
 INTEGRATION_PROVIDER_DRIVE = "drive"
+AI_PROVIDER_OPENAI = "openai"
+AI_REASONING_EFFORT_LOW = "low"
+AI_REASONING_EFFORT_MEDIUM = "medium"
+AI_REASONING_EFFORT_HIGH = "high"
+AI_CHECK_STATUS_PASSED = "passed"
+AI_CHECK_STATUS_FAILED = "failed"
 
 INTEGRATION_CONNECTION_STATUS_CONNECTED = "connected"
 INTEGRATION_CONNECTION_STATUS_ERROR = "error"
@@ -117,6 +124,128 @@ class IntegrationConnection(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class WorkspaceAIConfiguration(Base):
+    """Encrypted, workspace-owned configuration for the optional AI path."""
+
+    __tablename__ = "workspace_ai_configurations"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            name="uq_workspace_ai_configurations_workspace_id",
+        ),
+        CheckConstraint(
+            "provider = 'openai'",
+            name="ck_workspace_ai_configurations_provider",
+        ),
+        CheckConstraint(
+            "reasoning_effort in ('low', 'medium', 'high')",
+            name="ck_workspace_ai_configurations_reasoning_effort",
+        ),
+        CheckConstraint(
+            "max_output_tokens >= 400 and max_output_tokens <= 4000",
+            name="ck_workspace_ai_configurations_output_budget",
+        ),
+        CheckConstraint(
+            "configuration_version >= 1",
+            name="ck_workspace_ai_configurations_version",
+        ),
+        CheckConstraint(
+            "last_check_status is null or last_check_status in ('passed', 'failed')",
+            name="ck_workspace_ai_configurations_check_status",
+        ),
+        CheckConstraint(
+            "not enabled or "
+            "(encrypted_api_key is not null and "
+            "data_policy_acknowledged_at is not null)",
+            name="ck_workspace_ai_configurations_enabled_ready",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "workspaces.id",
+            name="fk_workspace_ai_configurations_workspace_id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
+    provider: Mapped[str] = mapped_column(
+        String(40),
+        default=AI_PROVIDER_OPENAI,
+        server_default=AI_PROVIDER_OPENAI,
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+    )
+    model: Mapped[str] = mapped_column(String(80))
+    reasoning_effort: Mapped[str] = mapped_column(
+        String(20),
+        default=AI_REASONING_EFFORT_MEDIUM,
+        server_default=AI_REASONING_EFFORT_MEDIUM,
+    )
+    max_output_tokens: Mapped[int] = mapped_column(
+        Integer,
+        default=1_200,
+        server_default="1200",
+    )
+    configuration_version: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default="1",
+    )
+    encrypted_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    data_policy_version: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+    )
+    data_policy_acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    data_policy_acknowledged_by_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            name="fk_workspace_ai_configurations_ack_user_id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
+    last_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_check_status: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+    last_check_code: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+    )
+    last_check_model: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 

@@ -14,8 +14,11 @@ LINE_BUDGETS = {
     "app/api/actions.py": 1250,
     "app/api/action_schemas.py": 350,
     "app/api/assistant.py": 200,
+    "app/api/ai_settings.py": 210,
     "app/services/assistant_query_service.py": 1000,
     "app/services/assistant_llm_service.py": 350,
+    "app/services/ai_settings_service.py": 525,
+    "web/app/settings/ai/page.tsx": 450,
     "scripts/disaster_recovery.py": 1250,
 }
 

@@ -16,6 +16,9 @@ import type {
   ActionProposalListResponse,
   ActionProposalMutationResponse,
   ActionProposalRejectRequest,
+  AISettings,
+  AISettingsApplyRequest,
+  AISettingsCheckReceipt,
   ApiErrorPayload,
   ApiFetchOptions,
   BriefingActionProposalGenerationResponse,
@@ -396,6 +399,52 @@ export async function checkConnectorWriteReadiness(
 ): Promise<ConnectorCheckReceipt> {
   return apiFetch<ConnectorCheckReceipt>(
     buildWorkspaceConnectorCheckPath(workspaceId, provider, "write"),
+    { ...options, method: "POST" }
+  );
+}
+
+export function buildWorkspaceAISettingsPath(workspaceId: string): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/ai-settings`;
+}
+
+export async function fetchWorkspaceAISettings(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<AISettings> {
+  return apiFetch<AISettings>(buildWorkspaceAISettingsPath(workspaceId), options);
+}
+
+export async function applyWorkspaceAISettings(
+  workspaceId: string,
+  request: AISettingsApplyRequest,
+  options: ApiFetchOptions = {}
+): Promise<AISettings> {
+  return apiFetch<AISettings>(
+    `${buildWorkspaceAISettingsPath(workspaceId)}/configuration`,
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+}
+
+export async function removeWorkspaceAICredential(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<AISettings> {
+  return apiFetch<AISettings>(
+    `${buildWorkspaceAISettingsPath(workspaceId)}/configuration`,
+    { ...options, method: "DELETE" }
+  );
+}
+
+export async function checkWorkspaceAIConnection(
+  workspaceId: string,
+  options: ApiFetchOptions = {}
+): Promise<AISettingsCheckReceipt> {
+  return apiFetch<AISettingsCheckReceipt>(
+    `${buildWorkspaceAISettingsPath(workspaceId)}/check`,
     { ...options, method: "POST" }
   );
 }

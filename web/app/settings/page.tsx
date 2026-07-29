@@ -199,6 +199,18 @@ export default function SettingsPage() {
         </span>
         <span className="settings-integrations-entry-action">Открыть центр</span>
       </Link>
+      <Link className="settings-integrations-entry" href="/settings/ai">
+        <span className="settings-integrations-entry-icon" aria-hidden="true">
+          ✦
+        </span>
+        <span>
+          <strong>AI и приватность</strong>
+          <small>
+            Модель, зашифрованный ключ, лимиты и проверка без данных компании
+          </small>
+        </span>
+        <span className="settings-integrations-entry-action">Настроить AI</span>
+      </Link>
       <div className="settings-hub">
         <SettingsTeamPanelView
           canProvision={workspaceRole === "owner" || workspaceRole === "admin"}

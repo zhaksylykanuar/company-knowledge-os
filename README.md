@@ -56,8 +56,11 @@ Read in this order (control trio = what / where / why):
   entities, teammate provisioning/setup links, and sanitized request logging are
   in place. The active product now runs locally through `make local`. Remaining
   product gaps are the first human-approved GitHub App real read run, one
-  approved generative-AI smoke plus product AI/privacy settings, email delivery
-  for team/founder invites, password reset, and broader multi-user hardening.
+  approved generative-AI smoke, email delivery for team/founder invites,
+  password reset, and broader multi-user hardening. Workspace AI/privacy
+  settings already provide encrypted key lifecycle, model/reasoning/budget
+  controls, explicit provider-policy acknowledgement and a synthetic
+  no-company-data connection check.
 
 ## Local full-stack run path
 

@@ -154,6 +154,69 @@ export type ConnectorConfigurationApplyRequest = {
   scopes?: string[];
 };
 
+export type AIModel =
+  | "gpt-5.6"
+  | "gpt-5.6-sol"
+  | "gpt-5.6-terra"
+  | "gpt-5.6-luna";
+
+export type AIReasoningEffort = "low" | "medium" | "high";
+
+export type AISettingsCheckReceipt = {
+  status: "passed" | "failed";
+  code: string;
+  message: string;
+  checked_at: string;
+  model: AIModel | null;
+  provider_call_performed: boolean;
+  company_data_sent: false;
+  external_write_performed: false;
+};
+
+export type AISettings = {
+  contract: "ai-settings.v1";
+  workspace_id: string;
+  provider: "openai";
+  configured: boolean;
+  enabled: boolean;
+  server_permitted: boolean;
+  model: AIModel;
+  supported_models: AIModel[];
+  reasoning_effort: AIReasoningEffort;
+  max_output_tokens: number;
+  configuration_version: number;
+  key_present: boolean;
+  data_policy: {
+    version: string;
+    acknowledged: boolean;
+    acknowledged_at: string | null;
+    notice_code: "provider_retention_may_apply";
+  };
+  last_check: {
+    status: "passed" | "failed";
+    code: string;
+    checked_at: string;
+    model: AIModel | null;
+    provider_call_performed: true;
+  } | null;
+  boundary: {
+    provider_call_on_apply: false;
+    company_data_sent_during_check: false;
+    stored_secret_returned: false;
+    chat_persisted: false;
+    external_writes: false;
+  };
+};
+
+export type AISettingsApplyRequest = {
+  enabled: boolean;
+  data_policy_acknowledged: boolean;
+  model: AIModel;
+  reasoning_effort: AIReasoningEffort;
+  max_output_tokens: number;
+  api_key?: string | null;
+};
+
 
 export type GitHubOperationalWorkState = "open" | "closed" | "merged" | "all";
 

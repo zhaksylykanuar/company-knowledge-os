@@ -47,6 +47,9 @@
 - [x] Все подключения доступны только через настройки.
 - [ ] Настройки разделены на компанию, источники, доступ, AI, память,
   автоматизацию, безопасность и advanced.
+- [x] AI имеет отдельный workspace-scoped экран: encrypted key lifecycle,
+  model/reasoning/budget controls, provider-policy acknowledgement, synthetic
+  read-only check и server kill switch.
 - [x] У подключения есть save, read check, write readiness и disconnect.
 - [x] Отключение объясняет, какие canonical данные сохраняются или удаляются.
 - [x] Секреты никогда не возвращаются в браузер.

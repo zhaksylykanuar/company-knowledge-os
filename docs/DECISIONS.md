@@ -3534,6 +3534,40 @@ Provider contract references:
 [current model guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6)
 and [data controls](https://developers.openai.com/api/docs/guides/your-data).
 
+## DEC-112 - Workspace AI Control Is Encrypted, Explicit And Fail-Closed
+
+Decision (2026-07-29): the primary product control for generative AI lives at
+`/settings/ai` and is owned by one workspace. Owner/admin users may save an
+OpenAI API key, choose an allowlisted model, reasoning effort and output budget,
+acknowledge the current provider data policy, enable the optional path, run a
+read-only connection check and remove the credential. Workspace members may
+read only safe status. The API never returns the stored credential or encrypted
+value, and every response is private/no-store.
+
+The key is encrypted with the existing server-managed secret-encryption
+boundary before PostgreSQL persistence. Applying settings performs no provider
+call. The explicit check closes its SQL session before provider I/O and sends
+only one synthetic statement that contains no company fact, workspace name,
+email, raw source body or database identifier. Only a safe status/code/model
+receipt is persisted. A configuration version prevents a result from an older
+key or model being accepted after settings change.
+
+The generative assistant may use workspace settings only when the server
+`ENABLE_LLM` emergency kill switch is open, the workspace explicitly enables
+AI, the current provider policy was acknowledged, an encrypted key exists and
+the latest check passed. A saved workspace row is authoritative and never
+silently falls back to an environment credential. Environment model/key/policy
+settings remain a compatibility fallback only for workspaces with no product
+configuration row. Removing the credential clears the encrypted value, policy
+acknowledgement and check receipt and disables AI; it does not remove canonical
+company memory or evidence.
+
+The check validates network authorization plus the same strict response and
+evidence contract used by `assistant.v2`; it does not prove commercial quota,
+future provider availability, strategic answer quality or Zero Data Retention.
+A real founder-approved credentialed smoke and provider retention verification
+remain external operational gates.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

@@ -14,6 +14,7 @@ from app.core.config import resolved_cors_allowed_origins, settings
 PRIVATE_NO_STORE = "private, no-store"
 _WORKSPACE_API_PREFIX = "/api/v1/workspaces/"
 _CONNECTORS_PATH_SEGMENT = "/connectors"
+_AI_SETTINGS_PATH_SEGMENT = "/ai-settings"
 _LOCAL_LIKE_ENVS = frozenset({"local", "dev", "development", "test", "testing"})
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _PUBLIC_AUTH_COOKIE_PATHS = frozenset(
@@ -153,7 +154,7 @@ class HttpSecurityMiddleware:
 
 
 class ConnectorResponseNoStoreMiddleware:
-    """Prevent caching for every workspace connector response.
+    """Prevent caching for workspace connector and AI-settings responses.
 
     Applying the policy at the ASGI boundary also covers responses created
     before endpoint execution, including authentication, authorization and
@@ -173,7 +174,10 @@ class ConnectorResponseNoStoreMiddleware:
         protect_response = bool(
             scope.get("type") == "http"
             and path.startswith(_WORKSPACE_API_PREFIX)
-            and _CONNECTORS_PATH_SEGMENT in path
+            and (
+                _CONNECTORS_PATH_SEGMENT in path
+                or _AI_SETTINGS_PATH_SEGMENT in path
+            )
         )
         if not protect_response:
             await self._app(scope, receive, send)

@@ -31,11 +31,11 @@
    не имеют права объявлять исчезновение.
 2. Добавить обязательства клиентов, решения и риски с evidence.
 3. Добавить contradiction detection между источниками.
-4. Добавить продуктовый AI/privacy control: encrypted key lifecycle, явное
-   acknowledgement provider retention, model/budget controls и read-only
-   connection test. `assistant.v2` strict schema/evidence critic уже
-   реализованы; настоящий credentialed smoke ещё не выполнен.
-5. Добавить управляемое исправление, забывание и удаление памяти.
+4. Добавить управляемое исправление, забывание и удаление памяти.
+
+Workspace AI/privacy control, encrypted key lifecycle, provider-retention
+acknowledgement, model/budget controls и synthetic read-only connection check
+реализованы. Настоящий credentialed smoke ещё не выполнен.
 
 ## Внешний gate
 

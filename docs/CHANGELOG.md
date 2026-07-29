@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added workspace AI/privacy controls at `/settings/ai` (DEC-112): encrypted
+  OpenAI key lifecycle, allowlisted model/reasoning/budget settings, explicit
+  current-policy acknowledgement, enable/disable, read-only safe status and
+  two-step credential removal.
+- Added a strict connection check that sends one synthetic non-company fact,
+  performs provider I/O outside the SQL session, persists only a safe receipt
+  and rejects a stale result if configuration changes during the call.
+- Added database and API constraints for one workspace-owned AI configuration;
+  viewers remain read-only, cross-workspace access fails closed and a workspace
+  row never silently falls back to an environment credential.
 - Added the optional `assistant.v2` generative second-opinion path (DEC-111):
   bounded exact-snapshot retrieval, strict Responses JSON schema, explicit
   fact/interpretation/objection/recommendation sections, local evidence critic,
