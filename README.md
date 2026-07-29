@@ -227,6 +227,10 @@ FOUNDEROS_TEST_DATABASE_URL='<loopback-postgresql-test-url>' make backend-check
 `make backend-check` validates the target before running frozen dependency
 sync, Ruff, Alembic upgrade/schema check, the full pytest suite, and the tracked
 secret scan with `APP_ENV=test` and all external execution gates disabled.
+The same guard runs from `tests/conftest.py` before the application engine is
+imported. Bare pytest therefore refuses to collect tests unless `APP_ENV=test`
+and `FOUNDEROS_TEST_DATABASE_URL` identify a dedicated target different from
+the product targets in `.env`, `.env.local`, or the ambient environment.
 `make check` has the same dedicated-test-target requirement because it includes
 the backend target:
 
@@ -247,8 +251,9 @@ npm run lint
 ### CI parity before opening a PR
 
 `.github/workflows/ci.yml` runs backend gates (`uv sync --frozen`,
-`uv run alembic upgrade head`, ruff, pytest, docs/smoke contract tests, and the
-tracked-secret scan) against a pinned Postgres image. It also runs frontend
+`uv run alembic upgrade head`, `uv run alembic check`, ruff, pytest,
+docs/smoke contract tests, and the tracked-secret scan) against a pinned
+Postgres image and the dedicated `ckdos_test` database. It also runs frontend
 quality gates from `web/`: `npm test`, `npm run build`,
 `npm run typecheck`, and `npm run lint`. All GitHub Actions are pinned by full
 commit SHA. Running the backend and frontend commands above reproduces CI

@@ -1,5 +1,22 @@
 # FounderOS Changelog
 
+## 2026-07-29
+
+### Added
+
+- Added a universal pytest database guard that runs before the application
+  engine import. It requires explicit test mode and a dedicated test-marked
+  PostgreSQL target, compares it with product dotenv/ambient endpoints, and
+  disables LLM, connector and external-write capabilities.
+- Added CI migration metadata drift detection with `uv run alembic check`.
+
+### Changed
+
+- Renamed the CI PostgreSQL database from `ckdos` to `ckdos_test` and made the
+  test target explicit through `FOUNDEROS_TEST_DATABASE_URL`.
+- Replaced active bare-pytest guidance with the guarded `make backend-check`
+  workflow (DEC-099).
+
 ## 2026-07-27
 
 ### Added

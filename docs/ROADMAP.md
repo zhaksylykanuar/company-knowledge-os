@@ -3,6 +3,19 @@
 Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое состояние находится в
 `../PROGRESS.md`, проверяемый ledger — в `AI_FOUNDEROS_ACCEPTANCE.md`.
 
+## Фаза 0 — Safety gates
+
+Цель: разработка и проверки не могут повредить рабочие данные.
+
+- pytest fail-closed до импорта приложения;
+- отдельная test-marked PostgreSQL БД локально и в CI;
+- migration metadata drift проверяется через `alembic check`;
+- внешние записи остаются выключенными до atomic execution и строгого evidence
+  gate;
+- workspace isolation закрепляется не только сервисами, но и PostgreSQL.
+
+Готово, когда все четыре high-priority замечания аудита закрыты тестами.
+
 ## Фаза 1 — Product reset
 
 Цель: заменить Command Center на простой AI-first продукт.

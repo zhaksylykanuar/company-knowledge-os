@@ -154,6 +154,12 @@ bash scripts/check_no_secrets.sh --tracked
 git diff --check
 ```
 
+The same database guard runs before pytest imports `app.db.base`. Direct pytest
+collection is rejected unless the process explicitly has `APP_ENV=test` and a
+dedicated test-marked `FOUNDEROS_TEST_DATABASE_URL`. Use `make backend-check`
+as the normal path; never point either variable at the ordinary FounderOS
+database.
+
 ## 5. Back up local state
 
 Before a schema migration, risky data operation, or Docker-volume change:

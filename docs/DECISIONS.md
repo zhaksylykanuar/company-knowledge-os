@@ -3145,6 +3145,27 @@ source text. This is lifecycle reconciliation, not a retention/erasure
 mechanism. Raw storage and PostgreSQL remain authoritative; no LLM or external
 write participates.
 
+## DEC-099 - Pytest Must Prove A Dedicated Database Before App Import
+
+Decision (2026-07-29): every pytest process fails closed before importing the
+application database engine unless `APP_ENV=test` and
+`FOUNDEROS_TEST_DATABASE_URL` explicitly identify a loopback PostgreSQL
+database whose name contains a standalone test marker. The target is compared
+with product endpoints found in `.env`, `.env.local`, and the ambient
+environment without printing URLs or credentials.
+
+The guard then makes that validated target the runtime `DATABASE_URL`, disables
+dotenv loading, LLM execution, real connectors and external writes. The
+existing `make backend-check` wrapper remains the canonical local entrypoint
+and passes the same validated target into pytest. CI uses the dedicated
+`ckdos_test` database, applies migrations, and runs `alembic check` before its
+test gates.
+
+A test-like database name is necessary but not sufficient proof that data is
+disposable; provisioning and lifecycle remain operator responsibilities. There
+is no bypass for ordinary product database names. This decision supersedes
+active guidance that treated bare `uv run pytest` as an acceptable default.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

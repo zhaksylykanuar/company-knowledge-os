@@ -6,9 +6,9 @@
 
 ## Сейчас
 
-**FounderOS 2.0 product reset, Lifecycle Event Ledger v1, Temporal Memory v2 и
-GitHub Source Reconciliation v1 реализованы локально в ветке
-`codex/living-hq-ux-reset`. Изменения не опубликованы.**
+**FounderOS 2.0 product reset, Lifecycle Event Ledger v1, Temporal Memory v2,
+GitHub Source Reconciliation v1 и universal pytest database guard реализованы
+локально в ветке `codex/living-hq-ux-reset`. Изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -71,18 +71,27 @@ ledger; тексты источников и evidence не копируются.
 - Jira/Gmail/Drive остаются без disappearance detection: их текущие локальные
   импорты не являются полными provider snapshots. Исторический backfill
   автоматически не выполняется.
+- Добавлен fail-closed pytest guard до импорта `app.db.base`: обязательны
+  `APP_ENV=test` и отдельный test-marked `FOUNDEROS_TEST_DATABASE_URL`, который
+  не совпадает с product endpoint из `.env`/`.env.local`.
+- Backend checker передаёт тот же проверенный target в pytest и принудительно
+  отключает dotenv, LLM, real connectors и external writes. CI использует
+  `ckdos_test` и после upgrade выполняет `alembic check` (DEC-099).
 
-## Проверено 2026-07-27
+## Проверено 2026-07-29
 
 - Frontend: `npm test` — **314 passed**.
 - Frontend: `npm run typecheck` — успешно.
 - Frontend: `npm run build` — успешно, **16 routes**.
 - Frontend dependencies: production audit — **0 vulnerabilities**.
+- Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: `uv run pytest -q` — **750 passed**, одно внешнее
+- Backend: guarded full pytest — **754 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Alembic: единственная head `f0b1c2d3e4a6`, применена к локальной БД;
   `alembic check` не обнаружил расхождений metadata/schema.
+- Небезопасный bare pytest без explicit test environment остановлен до
+  application import; локальная `ckdos_test` создана отдельно от рабочей БД.
 - Local runtime перезапущен штатным supervisor: `make local-doctor` полностью
   зелёный, backend `8765` и web `3000` принадлежат текущему FounderOS;
   `make local-smoke` проверил login `200`, health `200` и ожидаемый
@@ -96,13 +105,13 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Провести разрешённый authenticated desktop/mobile browser QA.
-2. Подтвердить один read-only GitHub App read из рабочей организации и увидеть
-   canonical результат внутри `Компания`.
-3. Добавить полные paginated live-read контракты и reconciliation для
-   Jira/Gmail/Drive.
-4. Добавить commitments, decisions/risks, contradictions и управляемое
-   забывание.
+1. Реализовать atomic external execution claim, DB-idempotency, `uncertain`
+   state, executing actor и provider reconciliation.
+2. Ввести строгий same-workspace evidence gate для approval/execution и
+   унифицировать bulk decisions.
+3. Закрепить workspace isolation составными PostgreSQL FK.
+4. После high-priority remediation провести authenticated browser QA и один
+   founder-approved read-only GitHub App read.
 
 ## Неподвижные границы
 

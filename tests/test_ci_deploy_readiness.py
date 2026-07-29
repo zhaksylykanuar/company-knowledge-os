@@ -45,9 +45,25 @@ def test_ci_preserves_backend_migration_lint_secret_and_pytest_gates() -> None:
         "uv sync --frozen",
         "uv run ruff check .",
         "uv run alembic upgrade head",
+        "uv run alembic check",
         "uv run pytest -q",
     ):
         assert command in workflow
+
+
+def test_ci_uses_a_guarded_test_marked_database() -> None:
+    workflow = _ci_text()
+
+    assert "POSTGRES_DB: ckdos_test" in workflow
+    assert "pg_isready -U ckdos -d ckdos_test" in workflow
+    assert "APP_ENV: test" in workflow
+    assert "FOUNDEROS_TEST_DATABASE_URL:" in workflow
+    assert "/ckdos_test" in workflow
+    assert 'FOUNDEROS_DISABLE_DOTENV: "true"' in workflow
+    assert 'ENABLE_LLM: "false"' in workflow
+    assert 'ENABLE_WRITE_ACTIONS: "false"' in workflow
+    assert 'FOUNDEROS_ENABLE_REAL_CONNECTORS: "false"' in workflow
+    assert "POSTGRES_DB: ckdos\n" not in workflow
 
 
 def test_ci_runs_docs_smoke_and_cors_contract_tests_explicitly() -> None:

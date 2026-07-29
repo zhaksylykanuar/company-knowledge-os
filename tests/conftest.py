@@ -1,7 +1,14 @@
 import pytest
 
-from app.db.base import engine
+from scripts.backend_check import BackendCheckError, apply_pytest_database_guard
+
+try:
+    apply_pytest_database_guard()
+except BackendCheckError as exc:
+    raise pytest.UsageError(f"Unsafe pytest database configuration: {exc}") from exc
+
 from app.core.config import settings
+from app.db.base import engine
 
 
 @pytest.fixture(autouse=True)

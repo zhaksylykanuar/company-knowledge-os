@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -69,6 +70,100 @@ def _run_settings_probe(root: Path, environment: dict[str, str]) -> dict[str, bo
 def test_backend_check_requires_explicit_test_database_url(tmp_path: Path) -> None:
     with pytest.raises(backend_check.BackendCheckError, match="is required"):
         backend_check.validated_test_database_url(root=tmp_path, environ={})
+
+
+def test_pytest_guard_requires_explicit_test_environment(tmp_path: Path) -> None:
+    environment = {
+        backend_check.TEST_DATABASE_ENV: TEST_URL,
+    }
+
+    with pytest.raises(backend_check.BackendCheckError, match=r"APP_ENV=test"):
+        backend_check.apply_pytest_database_guard(
+            root=tmp_path,
+            environ=environment,
+        )
+
+    assert "DATABASE_URL" not in environment
+
+
+def test_pytest_guard_installs_only_the_validated_test_target(tmp_path: Path) -> None:
+    environment = {
+        "APP_ENV": "test",
+        "DATABASE_URL": TEST_URL,
+        backend_check.TEST_DATABASE_ENV: TEST_URL,
+        "ENABLE_LLM": "true",
+        "ENABLE_WRITE_ACTIONS": "true",
+        "FOUNDEROS_DISABLE_DOTENV": "false",
+        "FOUNDEROS_ENABLE_REAL_CONNECTORS": "true",
+    }
+
+    result = backend_check.apply_pytest_database_guard(
+        root=tmp_path,
+        environ=environment,
+    )
+
+    assert result == TEST_URL
+    assert environment["DATABASE_URL"] == TEST_URL
+    assert environment["APP_ENV"] == "test"
+    assert environment["ENABLE_LLM"] == "false"
+    assert environment["ENABLE_WRITE_ACTIONS"] == "false"
+    assert environment["FOUNDEROS_DISABLE_DOTENV"] == "true"
+    assert environment["FOUNDEROS_ENABLE_REAL_CONNECTORS"] == "false"
+
+
+def test_pytest_guard_rejects_product_dotenv_even_with_ambient_test_alias(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".env.local").write_text(
+        f"DATABASE_URL={TEST_URL}\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        backend_check.BackendCheckError,
+        match="product database endpoint",
+    ):
+        backend_check.apply_pytest_database_guard(
+            root=tmp_path,
+            environ={
+                "APP_ENV": "test",
+                "DATABASE_URL": TEST_URL,
+                backend_check.TEST_DATABASE_ENV: TEST_URL,
+            },
+        )
+
+
+def test_bare_pytest_process_fails_before_application_import() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    environment = dict(os.environ)
+    for key in (
+        "APP_ENV",
+        "DATABASE_URL",
+        backend_check.TEST_DATABASE_ENV,
+    ):
+        environment.pop(key, None)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
+            "tests/test_backend_check.py",
+        ],
+        cwd=repo_root,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    output = completed.stdout + completed.stderr
+    assert completed.returncode != 0
+    assert "Unsafe pytest database configuration" in output
+    assert "pytest requires APP_ENV=test before application import" in output
+    assert "app/db/base.py" not in output
 
 
 @pytest.mark.parametrize(
@@ -235,7 +330,7 @@ def test_backend_check_runs_exact_gates_in_sanitized_test_environment(
         assert child_environment["FOUNDEROS_DISABLE_DOTENV"] == "true"
         assert "CORS_ORIGINS" not in child_environment
         assert child_environment["UV_NO_SYNC"] == "1"
-        assert backend_check.TEST_DATABASE_ENV not in child_environment
+        assert child_environment[backend_check.TEST_DATABASE_ENV] == TEST_URL
         assert child_environment["PATH"] == "/safe/bin"
         assert child_environment["HOME"] == "/safe/home"
         assert child_environment["TMPDIR"] == "/safe/tmp"

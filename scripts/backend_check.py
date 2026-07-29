@@ -13,7 +13,7 @@ import re
 import shlex
 import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, unquote_plus, urlsplit
@@ -21,6 +21,7 @@ from urllib.parse import parse_qsl, unquote, unquote_plus, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_DATABASE_ENV = "FOUNDEROS_TEST_DATABASE_URL"
+PYTEST_APP_ENV = "test"
 DEFAULT_POSTGRES_PORT = 5432
 TEST_CORS_ALLOWED_ORIGINS = "http://127.0.0.1:3000"
 TEST_DATABASE_MARKER = re.compile(
@@ -281,7 +282,12 @@ def _product_database_urls(*, root: Path, environ: Mapping[str, str]) -> list[tu
     return configured
 
 
-def validated_test_database_url(*, root: Path, environ: Mapping[str, str]) -> str:
+def validated_test_database_url(
+    *,
+    root: Path,
+    environ: Mapping[str, str],
+    allow_ambient_test_target: bool = False,
+) -> str:
     test_url = environ.get(TEST_DATABASE_ENV, "").strip()
     if not test_url:
         raise BackendCheckError(
@@ -297,11 +303,55 @@ def validated_test_database_url(*, root: Path, environ: Mapping[str, str]) -> st
             product_url,
             source=f"product DATABASE_URL from {source}",
         )
+        if (
+            allow_ambient_test_target
+            and source == "ambient environment"
+            and set(test_endpoints) == set(product_endpoints)
+        ):
+            continue
         if set(test_endpoints) & set(product_endpoints):
             raise BackendCheckError(
                 f"{TEST_DATABASE_ENV} matches the product database endpoint from "
                 f"{source}; use a separate dedicated test database."
             )
+    return test_url
+
+
+def apply_pytest_database_guard(
+    *,
+    root: Path = ROOT,
+    environ: MutableMapping[str, str] | None = None,
+) -> str:
+    """Fail closed before pytest imports the application database engine.
+
+    ``tests/conftest.py`` calls this function before importing anything from
+    ``app``. The explicit test target is compared with product dotenv targets,
+    then installed as the only runtime database target while provider, LLM, and
+    write capabilities remain disabled.
+    """
+
+    target_environment = os.environ if environ is None else environ
+    app_env = target_environment.get("APP_ENV", "").strip().casefold()
+    if app_env != PYTEST_APP_ENV:
+        raise BackendCheckError(
+            f"pytest requires APP_ENV={PYTEST_APP_ENV} before application import."
+        )
+
+    test_url = validated_test_database_url(
+        root=root,
+        environ=target_environment,
+        allow_ambient_test_target=True,
+    )
+    target_environment.update(
+        {
+            "APP_ENV": PYTEST_APP_ENV,
+            "DATABASE_URL": test_url,
+            "ENABLE_LLM": "false",
+            "ENABLE_WRITE_ACTIONS": "false",
+            "FOUNDEROS_DISABLE_DOTENV": "true",
+            "FOUNDEROS_ENABLE_REAL_CONNECTORS": "false",
+        }
+    )
     return test_url
 
 
@@ -394,6 +444,7 @@ def _child_environment(*, environ: Mapping[str, str], test_url: str) -> dict[str
             "FOUNDEROS_CORS_ALLOWED_ORIGINS": TEST_CORS_ALLOWED_ORIGINS,
             "FOUNDEROS_DISABLE_DOTENV": "true",
             "FOUNDEROS_ENABLE_REAL_CONNECTORS": "false",
+            TEST_DATABASE_ENV: test_url,
             "UV_NO_SYNC": "1",
         }
     )

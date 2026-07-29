@@ -4,6 +4,15 @@
 `../founderOS_MASTER_PLAYBOOK.md`. Проверяемый переход:
 `AI_FOUNDEROS_ACCEPTANCE.md`.
 
+## Сейчас — high-priority audit remediation
+
+1. Добавить atomic execution claim, DB-idempotency, `uncertain` state,
+   executing user и provider read-back reconciliation.
+2. Ввести строгую same-workspace evidence validation для approval/execution и
+   унифицировать bulk decisions.
+3. Закрепить workspace-owned связи составными PostgreSQL FK и отрицательными
+   tenancy-тестами.
+
 ## Сейчас — завершение FounderOS 2.0 reset
 
 1. Провести разрешённый authenticated desktop/mobile browser QA и проверить

@@ -96,7 +96,10 @@
 ## I. Проверка
 
 - [x] `uv run ruff check .`
-- [x] `uv run pytest -q`
+- [x] Guarded `make backend-check` runs the full pytest suite only against an
+  explicit dedicated test database.
+- [x] Bare pytest fails closed before application import without explicit test
+  mode and a test-marked database.
 - [x] `npm test`
 - [x] `npm run typecheck`
 - [x] `npm run build`
