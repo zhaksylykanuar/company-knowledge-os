@@ -4,11 +4,6 @@
 `../founderOS_MASTER_PLAYBOOK.md`. Проверяемый переход:
 `AI_FOUNDEROS_ACCEPTANCE.md`.
 
-## Сейчас — high-priority audit remediation
-
-1. Закрепить workspace-owned связи составными PostgreSQL FK и отрицательными
-   tenancy-тестами.
-
 ## Сейчас — завершение FounderOS 2.0 reset
 
 1. Провести разрешённый authenticated desktop/mobile browser QA и проверить
@@ -31,3 +26,6 @@
 Один founder-approved repository-scoped read из рабочей GitHub-организации с
 видимым canonical результатом и безопасной квитанцией. До него не подключать
 новые provider-first продуктовые экраны.
+
+Публичный multi-tenant hosting дополнительно заблокирован до полного RLS gate
+из DEC-102. Составные tenant FK уже обязательны, но не заменяют RLS.

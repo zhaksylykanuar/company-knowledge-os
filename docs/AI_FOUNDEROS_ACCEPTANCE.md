@@ -122,6 +122,9 @@
 - [x] `npm run typecheck`
 - [x] `npm run build`
 - [x] `npm audit --omit=dev --audit-level=moderate`
+- [x] Workspace-owned canonical/document relations use composite PostgreSQL
+  foreign keys; negative tests reject every covered cross-workspace commit.
+- [ ] Public multi-tenant mode enforces the full RLS gate from DEC-102.
 - [ ] Desktop browser QA.
 - [ ] Mobile browser QA.
 - [ ] Нет horizontal overflow.

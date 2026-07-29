@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.canonical_models import (
@@ -72,7 +72,13 @@ async def _github_issues(
     rows = (
         await session.execute(
             select(Task)
-            .outerjoin(SourceRecord, SourceRecord.id == Task.source_record_id)
+            .outerjoin(
+                SourceRecord,
+                and_(
+                    SourceRecord.workspace_id == Task.workspace_id,
+                    SourceRecord.id == Task.source_record_id,
+                ),
+            )
             .where(Task.workspace_id == workspace_id)
             .where(Task.source_provider == TASK_PROVIDER_GITHUB)
             .where(
@@ -117,7 +123,10 @@ async def _github_pull_requests(
         select(PullRequest)
         .outerjoin(
             SourceRecord,
-            SourceRecord.id == PullRequest.source_record_id,
+            and_(
+                SourceRecord.workspace_id == PullRequest.workspace_id,
+                SourceRecord.id == PullRequest.source_record_id,
+            ),
         )
         .where(PullRequest.workspace_id == workspace_id)
         .where(
@@ -139,7 +148,9 @@ async def _github_pull_requests(
             repository.id: repository
             for repository in (
                 await session.execute(
-                    select(Repository).where(Repository.id.in_(repository_ids))
+                    select(Repository)
+                    .where(Repository.workspace_id == workspace_id)
+                    .where(Repository.id.in_(repository_ids))
                 )
             ).scalars()
         }

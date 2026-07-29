@@ -3245,6 +3245,36 @@ machine-checkable target relevance. It does not claim semantic truth for
 free-form prose or replace the future generative AI critic. PostgreSQL/raw
 storage remain authoritative, and no LLM may approve or execute a proposal.
 
+## DEC-102 - Workspace-Owned References Use Composite Database Keys
+
+Decision (2026-07-29): PostgreSQL, not only application services, must reject a
+child row whose workspace differs from its workspace-owned parent.
+`EvidenceRef→SourceRecord`, `PullRequest→Repository`,
+`PullRequest→SourceRecord`, `Task→SourceRecord` and
+`DocumentVersion→Document` therefore use composite
+`(workspace_id, referenced_id) → (workspace_id, id)` foreign keys. Referenced
+Repository and Document rows gain the required `(workspace_id, id)` uniqueness;
+SourceRecord already has it.
+
+The migration performs a read-only preflight and fails closed if any existing
+cross-workspace relationship is present. It does not silently rewrite, delete
+or reassign evidence or product records. Every relationship has a negative
+database test that attempts the invalid commit. GitHub operational reads also
+join SourceRecord and hydrate Repository with an explicit workspace predicate,
+so query scoping remains visible even though corrupt relationships are now
+unrepresentable through these keys.
+
+PostgreSQL row-level security was evaluated but is not enabled piecemeal in the
+current local/operator deployment. Correct hosted RLS requires a dedicated
+least-privileged application role without owner or `BYPASSRLS`, transaction-
+local workspace/user context on every request and background job, `FORCE ROW
+LEVEL SECURITY` policies across all workspace-owned and join tables, verified
+pool context reset, a separate migration/administration role and cross-tenant
+integration tests. A partial policy set would create a misleading security
+claim and can break maintenance paths while leaving uncovered tables readable.
+Public multi-tenant hosting is therefore blocked until that complete gate is
+implemented and startup fails closed when the hosted mode requires it.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

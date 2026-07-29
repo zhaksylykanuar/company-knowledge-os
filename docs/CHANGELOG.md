@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added Database Workspace Isolation v1 (DEC-102): composite workspace foreign
+  keys for canonical evidence, pull-request repository/source lineage, task
+  source lineage and document versions, with fail-closed migration preflight.
+- Added negative database tests proving every covered cross-workspace
+  relationship fails at commit.
 - Added Strict Action Evidence v1 (DEC-101): a bounded `evidence_ref.v1`
   JSON shape, canonical same-workspace resolution, active-record and exact
   GitHub target checks at approval and execution, plus a second validation
@@ -29,6 +34,8 @@
 
 ### Changed
 
+- Scoped GitHub operational SourceRecord joins and repository hydration by
+  workspace in addition to the new PostgreSQL constraints.
 - Routed bulk approve/reject through the same role-rechecked, row-locked,
   proposal-versioned and client-idempotent decision service as individual
   decisions. Every successful item now returns its own durable receipt.

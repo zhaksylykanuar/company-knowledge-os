@@ -15,11 +15,13 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 - строгая evidence_ref.v1 schema, canonical same-workspace resolution,
   relevance check, pre-provider revalidation, exact AI/system snapshot и
   versioned/idempotent bulk decisions реализованы;
+- пять workspace-owned отношений защищены составными PostgreSQL foreign keys,
+  а operational GitHub reads явно scoped по workspace;
 - внешние записи остаются выключенными до завершения остальных high-priority
   remediation;
-- workspace isolation закрепляется не только сервисами, но и PostgreSQL.
+- публичный multi-tenant hosting заблокирован до полного RLS gate из DEC-102.
 
-Готово, когда все четыре high-priority замечания аудита закрыты тестами.
+Все четыре high-priority замечания аудита закрыты локальными тестами.
 
 ## Фаза 1 — Product reset
 

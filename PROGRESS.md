@@ -8,8 +8,9 @@
 
 **FounderOS 2.0 product reset, Lifecycle Event Ledger v1, Temporal Memory v2,
 GitHub Source Reconciliation v1, universal pytest database guard и Atomic
-External Execution v1, Strict Action Evidence v1 реализованы локально в ветке
-`codex/living-hq-ux-reset`. Изменения не опубликованы.**
+External Execution v1, Strict Action Evidence v1 и Database Workspace
+Isolation v1 реализованы локально в ветке `codex/living-hq-ux-reset`.
+Изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -103,6 +104,18 @@ ledger; тексты источников и evidence не копируются.
 - Repo-audit import больше не сохраняет произвольные внешние evidence-строки:
   proposal хранит только канонический repository selector, который обязан
   разрешиться внутри workspace перед approval.
+- PostgreSQL теперь сам запрещает cross-workspace ссылки для
+  `EvidenceRef→SourceRecord`, `PullRequest→Repository`,
+  `PullRequest→SourceRecord`, `Task→SourceRecord` и
+  `DocumentVersion→Document`. Ссылки используют составные
+  `(workspace_id, id)` foreign keys; миграция fail-closed останавливается, если
+  до её применения уже существует нарушение (DEC-102).
+- GitHub operational read дополнительно ограничивает SourceRecord joins и
+  загрузку Repository текущим workspace, даже несмотря на новую защиту БД.
+- RLS оценена, но не включена частично: публичный multi-tenant hosting
+  запрещён до отдельного полного RLS gate с least-privileged app role,
+  transaction-local tenant context, `FORCE ROW LEVEL SECURITY`, pool reset и
+  cross-tenant integration tests.
 
 ## Проверено 2026-07-29
 
@@ -112,9 +125,9 @@ ledger; тексты источников и evidence не копируются.
 - Frontend dependencies: production audit — **0 vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: guarded full pytest — **765 passed**, одно внешнее
+- Backend: guarded full pytest — **770 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
-- Alembic: единственная head `a1c2d3e4f5b6`, применена к отдельной test БД;
+- Alembic: единственная head `b2c3d4e5f6a7`, применена к отдельной test БД;
   `alembic check` не обнаружил расхождений metadata/schema.
 - Небезопасный bare pytest без explicit test environment остановлен до
   application import; локальная `ckdos_test` создана отдельно от рабочей БД.
@@ -131,8 +144,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Закрепить workspace isolation составными PostgreSQL FK.
-2. После high-priority remediation провести authenticated browser QA и один
+1. Закрыть medium-priority quality/operations findings аудита.
+2. Провести authenticated browser QA и один
    founder-approved read-only GitHub App read.
 
 ## Неподвижные границы

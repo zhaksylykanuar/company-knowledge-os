@@ -19,6 +19,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     JSON,
@@ -57,6 +58,11 @@ class Document(Base):
 
     __tablename__ = "documents"
     __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_documents_workspace_id_id",
+        ),
         CheckConstraint(
             "status in ('draft', 'published', 'archived')",
             name="ck_documents_status",
@@ -123,6 +129,12 @@ class DocumentVersion(Base):
 
     __tablename__ = "document_versions"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "document_id"],
+            ["documents.workspace_id", "documents.id"],
+            name="fk_document_versions_workspace_document",
+            ondelete="CASCADE",
+        ),
         UniqueConstraint(
             "document_id",
             "version_number",
@@ -150,11 +162,6 @@ class DocumentVersion(Base):
     )
     document_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey(
-            "documents.id",
-            name="fk_document_versions_document_id",
-            ondelete="CASCADE",
-        ),
         index=True,
     )
     version_number: Mapped[int] = mapped_column(Integer)

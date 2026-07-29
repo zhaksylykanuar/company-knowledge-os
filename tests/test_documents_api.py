@@ -2,7 +2,9 @@ from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
-from sqlalchemy import delete, select
+import pytest
+from sqlalchemy import delete, select, text
+from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import settings
 from app.db.base import AsyncSessionLocal
@@ -485,6 +487,68 @@ async def test_document_workspace_isolation(monkeypatch) -> None:
             )
             assert b_list.status_code == 200
             assert b_list.json()["count"] == 0
+    finally:
+        await _cleanup(marker)
+
+
+async def test_cross_workspace_document_version_fails_at_commit() -> None:
+    marker = uuid4().hex[:10]
+    await _cleanup(marker)
+    try:
+        _user_a, workspace_a = await _seed_workspace(marker, suffix="-a")
+        _user_b, workspace_b = await _seed_workspace(marker, suffix="-b")
+        async with AsyncSessionLocal() as session:
+            document = Document(
+                workspace_id=workspace_a.id,
+                title="Workspace A document",
+                body_markdown="private",
+                body_text="private",
+                status="draft",
+            )
+            session.add(document)
+            await session.commit()
+            document_id = document.id
+
+        async with AsyncSessionLocal() as session:
+            session.add(
+                DocumentVersion(
+                    workspace_id=workspace_b.id,
+                    document_id=document_id,
+                    version_number=1,
+                    title="Invalid cross-workspace version",
+                    body_markdown="private",
+                    body_text="private",
+                    status="draft",
+                )
+            )
+            with pytest.raises(
+                IntegrityError,
+                match="fk_document_versions_workspace_document",
+            ):
+                await session.commit()
+            await session.rollback()
+
+        async with AsyncSessionLocal() as session:
+            constraint_names = set(
+                (
+                    await session.execute(
+                        text(
+                            """
+                            select conname
+                            from pg_constraint
+                            where conname in (
+                              'uq_documents_workspace_id_id',
+                              'fk_document_versions_workspace_document'
+                            )
+                            """
+                        )
+                    )
+                ).scalars()
+            )
+        assert constraint_names == {
+            "uq_documents_workspace_id_id",
+            "fk_document_versions_workspace_document",
+        }
     finally:
         await _cleanup(marker)
 

@@ -23,6 +23,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     JSON,
@@ -178,6 +179,11 @@ class EvidenceRef(Base):
 
     __tablename__ = "evidence_refs"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_record_id"],
+            ["source_records.workspace_id", "source_records.id"],
+            name="fk_evidence_refs_workspace_source_record",
+        ),
         Index("ix_evidence_refs_workspace_id", "workspace_id"),
         Index("ix_evidence_refs_source_record_id", "source_record_id"),
         Index("ix_evidence_refs_entity_id", "entity_id"),
@@ -192,7 +198,6 @@ class EvidenceRef(Base):
     )
     source_record_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("source_records.id", name="fk_evidence_refs_source_record_id"),
     )
     entity_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     quote: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -227,6 +232,11 @@ class Repository(Base):
             "provider",
             "full_name",
             name="uq_repositories_workspace_provider_full_name",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_repositories_workspace_id_id",
         ),
     )
 
@@ -266,6 +276,16 @@ class PullRequest(Base):
 
     __tablename__ = "pull_requests"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "repository_id"],
+            ["repositories.workspace_id", "repositories.id"],
+            name="fk_pull_requests_workspace_repository",
+        ),
+        ForeignKeyConstraint(
+            ["workspace_id", "source_record_id"],
+            ["source_records.workspace_id", "source_records.id"],
+            name="fk_pull_requests_workspace_source_record",
+        ),
         CheckConstraint(
             "state in ('open', 'closed', 'merged')",
             name="ck_pull_requests_state",
@@ -288,12 +308,10 @@ class PullRequest(Base):
     )
     repository_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("repositories.id", name="fk_pull_requests_repository_id"),
     )
     external_id: Mapped[str] = mapped_column(String(255))
     source_record_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("source_records.id", name="fk_pull_requests_source_record_id"),
         nullable=True,
         index=True,
     )
@@ -328,6 +346,11 @@ class Task(Base):
 
     __tablename__ = "tasks"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["workspace_id", "source_record_id"],
+            ["source_records.workspace_id", "source_records.id"],
+            name="fk_tasks_workspace_source_record",
+        ),
         CheckConstraint(
             "source_provider in ('github', 'jira', 'internal')",
             name="ck_tasks_source_provider",
@@ -360,7 +383,6 @@ class Task(Base):
     source_provider: Mapped[str] = mapped_column(String(40))
     source_record_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("source_records.id", name="fk_tasks_source_record_id"),
         nullable=True,
         index=True,
     )
