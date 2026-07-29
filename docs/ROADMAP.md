@@ -10,8 +10,10 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 - pytest fail-closed до импорта приложения;
 - отдельная test-marked PostgreSQL БД локально и в CI;
 - migration metadata drift проверяется через `alembic check`;
-- внешние записи остаются выключенными до atomic execution и строгого evidence
-  gate;
+- atomic execution claim, DB-idempotency, actual actor, uncertain state и
+  provider reconciliation реализованы;
+- внешние записи остаются выключенными до строгого same-workspace evidence
+  gate и завершения остальных high-priority remediation;
 - workspace isolation закрепляется не только сервисами, но и PostgreSQL.
 
 Готово, когда все четыре high-priority замечания аудита закрыты тестами.

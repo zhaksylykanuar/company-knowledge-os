@@ -6,11 +6,9 @@
 
 ## Сейчас — high-priority audit remediation
 
-1. Добавить atomic execution claim, DB-idempotency, `uncertain` state,
-   executing user и provider read-back reconciliation.
-2. Ввести строгую same-workspace evidence validation для approval/execution и
+1. Ввести строгую same-workspace evidence validation для approval/execution и
    унифицировать bulk decisions.
-3. Закрепить workspace-owned связи составными PostgreSQL FK и отрицательными
+2. Закрепить workspace-owned связи составными PostgreSQL FK и отрицательными
    tenancy-тестами.
 
 ## Сейчас — завершение FounderOS 2.0 reset

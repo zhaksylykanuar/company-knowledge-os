@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -10,12 +10,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.action_models import (
+    ACTION_EXECUTION_EVENT_OUTCOME_RECONCILED,
+    ACTION_EXECUTION_EVENT_RECONCILIATION_PENDING,
     ACTION_EXECUTION_EVENT_RESULT_SYNC_FAILED,
     ACTION_EXECUTION_EVENT_RESULT_SYNC_STARTED,
     ACTION_EXECUTION_EVENT_RESULT_SYNCED,
     ACTION_EXECUTION_EVENT_STATUS_BLOCKED,
     ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+    ACTION_EXECUTION_EVENT_WRITE_NOT_OBSERVED,
+    ACTION_EXECUTION_STATUS_CLAIMED,
+    ACTION_EXECUTION_STATUS_FAILED,
+    ACTION_EXECUTION_STATUS_RUNNING,
     ACTION_EXECUTION_STATUS_SUCCEEDED,
+    ACTION_EXECUTION_STATUS_UNCERTAIN,
+    ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_PROPOSAL_STATUS_EXECUTED,
     ACTION_TARGET_PROVIDER_GITHUB,
     ACTION_TYPE_CREATE_GITHUB_ISSUE,
@@ -37,10 +45,12 @@ from app.services.action_execution_audit_service import (
     list_execution_events,
     serialize_execution_event,
 )
-from app.services.github_issue_client import GitHubIssueClientError, get_issue
+from app.services.github_issue_client import GitHubIssueClientError, get_issue, list_issues
 from app.services.github_issue_execution_service import (
     GitHubIssueExecutionError,
     GitHubIssuePayload,
+    execution_request_marker,
+    sanitize_github_issue_response,
     validate_github_issue_payload,
 )
 from app.services.github_normalization_service import (
@@ -71,6 +81,13 @@ GITHUB_EXECUTION_RESULT_SYNC_TOKEN_MISSING = (
 )
 GITHUB_EXECUTION_RESULT_SYNC_TOKEN_UNAVAILABLE = "github token could not be decrypted"
 GITHUB_EXECUTION_RESULT_SYNC_PROVIDER_READ_FAILED = "github issue read failed"
+GITHUB_EXECUTION_RESULT_SYNC_MARKER_AMBIGUOUS = (
+    "multiple GitHub issues matched the execution marker"
+)
+GITHUB_EXECUTION_RESULT_SYNC_WRITE_NOT_OBSERVED = (
+    "no GitHub issue matched the execution marker in a complete snapshot"
+)
+GITHUB_EXECUTION_RESULT_SYNC_ABSENCE_GRACE_PERIOD = timedelta(seconds=60)
 
 
 class GitHubExecutionResultSyncError(ValueError):
@@ -93,6 +110,7 @@ class GitHubExecutionResultSyncProviderReadError(GitHubExecutionResultSyncError)
 
 @dataclass(frozen=True)
 class GitHubExecutionResultSyncInput:
+    requested_by_user_id: UUID
     connection_id: UUID | None = None
 
 
@@ -109,20 +127,22 @@ async def sync_github_issue_execution_result(
         workspace_id=workspace_id,
         proposal_id=proposal_id,
     )
-    issue_payload = _validate_executed_github_issue_proposal(proposal)
-    execution = await _get_successful_execution_or_raise(
+    issue_payload = _validate_github_issue_proposal(proposal)
+    execution = await _get_reconcilable_execution_or_raise(
         session,
+        proposal=proposal,
         proposal_id=proposal.id,
     )
-    issue_number = _issue_number_from_receipt(execution.provider_response or {})
-    if issue_number is None:
-        raise GitHubExecutionResultSyncConflictError(
-            GITHUB_EXECUTION_RESULT_SYNC_ISSUE_NUMBER_REQUIRED
-        )
+    requested_connection_id = input_payload.connection_id or execution.connection_id
     connection = await _get_connection_or_raise(
         session,
         workspace_id=workspace_id,
-        connection_id=input_payload.connection_id,
+        connection_id=requested_connection_id,
+    )
+    issue_number = (
+        _issue_number_from_receipt(execution.provider_response or {})
+        if execution.status == ACTION_EXECUTION_STATUS_SUCCEEDED
+        else None
     )
 
     await _append_sync_event(
@@ -132,8 +152,9 @@ async def sync_github_issue_execution_result(
         event_type=ACTION_EXECUTION_EVENT_RESULT_SYNC_STARTED,
         status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
         message="Post-execution GitHub issue result sync started. No external write occurred.",
-        reason=f"{execution.id}:{issue_number}:started",
+        reason=f"{execution.id}:{issue_number or 'marker'}:started",
         issue_number=issue_number,
+        actor_user_id=input_payload.requested_by_user_id,
         event_metadata={
             "execution_id": str(execution.id),
             "repository_full_name": issue_payload.repository_full_name,
@@ -152,6 +173,7 @@ async def sync_github_issue_execution_result(
             issue_payload=issue_payload,
             detail=GITHUB_EXECUTION_RESULT_SYNC_TOKEN_UNAVAILABLE,
             error_code="token_unavailable",
+            actor_user_id=input_payload.requested_by_user_id,
         )
         raise GitHubExecutionResultSyncConflictError(
             GITHUB_EXECUTION_RESULT_SYNC_TOKEN_UNAVAILABLE
@@ -159,11 +181,95 @@ async def sync_github_issue_execution_result(
 
     snapshot_observed_at = datetime.now(timezone.utc)
     try:
-        raw_issue = await get_issue(
-            access_token=access_token,
-            repository_full_name=issue_payload.repository_full_name,
-            issue_number=issue_number,
-        )
+        if execution.status == ACTION_EXECUTION_STATUS_SUCCEEDED:
+            if issue_number is None:
+                raise GitHubExecutionResultSyncConflictError(
+                    GITHUB_EXECUTION_RESULT_SYNC_ISSUE_NUMBER_REQUIRED
+                )
+            raw_issue = await get_issue(
+                access_token=access_token,
+                repository_full_name=issue_payload.repository_full_name,
+                issue_number=issue_number,
+            )
+        elif execution.status == ACTION_EXECUTION_STATUS_CLAIMED:
+            return await _record_write_not_observed(
+                session,
+                workspace_id=workspace_id,
+                proposal=proposal,
+                execution=execution,
+                issue_payload=issue_payload,
+                actor_user_id=input_payload.requested_by_user_id,
+                reason="provider_request_not_started",
+            )
+        else:
+            candidates = await list_issues(
+                access_token=access_token,
+                repository_full_name=issue_payload.repository_full_name,
+                state="all",
+            )
+            matches = _issues_matching_execution_marker(
+                candidates,
+                execution=execution,
+            )
+            if len(matches) > 1:
+                raise GitHubExecutionResultSyncConflictError(
+                    GITHUB_EXECUTION_RESULT_SYNC_MARKER_AMBIGUOUS
+                )
+            if not matches:
+                retry_after = _absence_reconciliation_eligible_at(execution)
+                if snapshot_observed_at < retry_after:
+                    return await _record_reconciliation_pending(
+                        session,
+                        workspace_id=workspace_id,
+                        proposal=proposal,
+                        execution=execution,
+                        issue_payload=issue_payload,
+                        actor_user_id=input_payload.requested_by_user_id,
+                        retry_after=retry_after,
+                    )
+                return await _record_write_not_observed(
+                    session,
+                    workspace_id=workspace_id,
+                    proposal=proposal,
+                    execution=execution,
+                    issue_payload=issue_payload,
+                    actor_user_id=input_payload.requested_by_user_id,
+                    reason="complete_provider_snapshot",
+                )
+            raw_issue = matches[0]
+            issue_number = _positive_int(raw_issue.get("number"))
+            if issue_number is None:
+                raise GitHubExecutionResultSyncProviderReadError(
+                    GITHUB_EXECUTION_RESULT_SYNC_PROVIDER_READ_FAILED
+                )
+            _record_reconciled_success(
+                proposal=proposal,
+                execution=execution,
+                raw_issue=raw_issue,
+                reconciled_at=snapshot_observed_at,
+            )
+            await _append_sync_event(
+                session,
+                proposal=proposal,
+                execution=execution,
+                event_type=ACTION_EXECUTION_EVENT_OUTCOME_RECONCILED,
+                status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+                message=(
+                    "The uncertain GitHub write was matched by its exact "
+                    "execution marker and recorded as succeeded."
+                ),
+                reason=f"{execution.id}:{issue_number}:reconciled",
+                issue_number=issue_number,
+                actor_user_id=input_payload.requested_by_user_id,
+                external_result_id=str(issue_number),
+                external_result_url=_safe_url(raw_issue.get("html_url")),
+                event_metadata={
+                    "execution_id": str(execution.id),
+                    "repository_full_name": issue_payload.repository_full_name,
+                    "issue_number": issue_number,
+                    "request_hash": execution.request_hash,
+                },
+            )
     except GitHubIssueClientError as exc:
         await _append_sync_failure_event(
             session,
@@ -173,6 +279,7 @@ async def sync_github_issue_execution_result(
             issue_payload=issue_payload,
             detail=GITHUB_EXECUTION_RESULT_SYNC_PROVIDER_READ_FAILED,
             error_code="provider_read_failed",
+            actor_user_id=input_payload.requested_by_user_id,
         )
         raise GitHubExecutionResultSyncProviderReadError(
             GITHUB_EXECUTION_RESULT_SYNC_PROVIDER_READ_FAILED
@@ -220,6 +327,7 @@ async def sync_github_issue_execution_result(
         message="Post-execution GitHub issue result synced into canonical records. No external write occurred.",
         reason=f"{execution.id}:{issue_number}:{source_updated_at}:synced",
         issue_number=issue_number,
+        actor_user_id=input_payload.requested_by_user_id,
         event_metadata={
             "execution_id": str(execution.id),
             "sync_job_id": str(sync_job.id),
@@ -288,13 +396,9 @@ async def _get_proposal_or_raise(
     return proposal
 
 
-def _validate_executed_github_issue_proposal(
+def _validate_github_issue_proposal(
     proposal: ActionProposal,
 ) -> GitHubIssuePayload:
-    if proposal.status != ACTION_PROPOSAL_STATUS_EXECUTED:
-        raise GitHubExecutionResultSyncConflictError(
-            GITHUB_EXECUTION_RESULT_SYNC_NOT_EXECUTED
-        )
     if (
         proposal.target_provider != ACTION_TARGET_PROVIDER_GITHUB
         or proposal.action_type != ACTION_TYPE_CREATE_GITHUB_ISSUE
@@ -308,18 +412,32 @@ def _validate_executed_github_issue_proposal(
         raise GitHubExecutionResultSyncError(exc.detail) from exc
 
 
-async def _get_successful_execution_or_raise(
+async def _get_reconcilable_execution_or_raise(
     session: AsyncSession,
     *,
+    proposal: ActionProposal,
     proposal_id: UUID,
 ) -> ActionExecution:
     execution = await session.scalar(
         select(ActionExecution)
         .where(ActionExecution.action_proposal_id == proposal_id)
-        .where(ActionExecution.status == ACTION_EXECUTION_STATUS_SUCCEEDED)
+        .where(
+            ActionExecution.status.in_(
+                (
+                    ACTION_EXECUTION_STATUS_CLAIMED,
+                    ACTION_EXECUTION_STATUS_RUNNING,
+                    ACTION_EXECUTION_STATUS_SUCCEEDED,
+                    ACTION_EXECUTION_STATUS_UNCERTAIN,
+                )
+            )
+        )
         .order_by(ActionExecution.created_at.asc(), ActionExecution.id.asc())
     )
     if execution is None:
+        if proposal.status != ACTION_PROPOSAL_STATUS_EXECUTED:
+            raise GitHubExecutionResultSyncConflictError(
+                GITHUB_EXECUTION_RESULT_SYNC_NOT_EXECUTED
+            )
         raise GitHubExecutionResultSyncConflictError(
             GITHUB_EXECUTION_RESULT_SYNC_RECEIPT_REQUIRED
         )
@@ -401,6 +519,216 @@ def _issue_number_from_url(value: Any) -> int | None:
         return None
     tail = text.rsplit(marker, 1)[-1].split("?", 1)[0].split("#", 1)[0]
     return int(tail) if tail.isdigit() else None
+
+
+def _positive_int(value: Any) -> int | None:
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        parsed = int(value.strip())
+        return parsed if parsed > 0 else None
+    return None
+
+
+def _issues_matching_execution_marker(
+    candidates: list[dict[str, Any]],
+    *,
+    execution: ActionExecution,
+) -> list[dict[str, Any]]:
+    marker = execution_request_marker(execution)
+    return [
+        candidate
+        for candidate in candidates
+        if candidate.get("pull_request") is None
+        and isinstance(candidate.get("body"), str)
+        and marker in candidate["body"]
+    ]
+
+
+def _record_reconciled_success(
+    *,
+    proposal: ActionProposal,
+    execution: ActionExecution,
+    raw_issue: Mapping[str, Any],
+    reconciled_at: datetime,
+) -> None:
+    sanitized = sanitize_github_issue_response(raw_issue)
+    sanitized["idempotency_key"] = execution.client_idempotency_key
+    execution.status = ACTION_EXECUTION_STATUS_SUCCEEDED
+    execution.provider_response = sanitized
+    execution.external_id = _execution_external_id(sanitized)
+    execution.error_message = None
+    execution.finished_at = reconciled_at
+    execution.reconciled_at = reconciled_at
+    proposal.status = ACTION_PROPOSAL_STATUS_EXECUTED
+
+
+def _absence_reconciliation_eligible_at(execution: ActionExecution) -> datetime:
+    provider_start_boundary = execution.started_at or execution.claimed_at
+    return provider_start_boundary + GITHUB_EXECUTION_RESULT_SYNC_ABSENCE_GRACE_PERIOD
+
+
+async def _record_reconciliation_pending(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    proposal: ActionProposal,
+    execution: ActionExecution,
+    issue_payload: GitHubIssuePayload,
+    actor_user_id: UUID,
+    retry_after: datetime,
+) -> dict[str, Any]:
+    await _append_sync_event(
+        session,
+        proposal=proposal,
+        execution=execution,
+        event_type=ACTION_EXECUTION_EVENT_RECONCILIATION_PENDING,
+        status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+        message=(
+            "No exact execution marker is visible yet, but the provider "
+            "consistency grace period has not elapsed. The write remains uncertain."
+        ),
+        reason=f"{execution.id}:absence_grace_period",
+        issue_number=None,
+        actor_user_id=actor_user_id,
+        event_metadata={
+            "execution_id": str(execution.id),
+            "repository_full_name": issue_payload.repository_full_name,
+            "request_hash": execution.request_hash,
+            "retry_after": retry_after.isoformat(),
+        },
+    )
+    events = await list_execution_events(
+        session,
+        workspace_id=workspace_id,
+        action_proposal_id=proposal.id,
+    )
+    return {
+        "workspace_id": workspace_id,
+        "proposal_id": proposal.id,
+        "synced": False,
+        "status": "reconciliation_pending",
+        "provider": ACTION_TARGET_PROVIDER_GITHUB,
+        "action": ACTION_TYPE_CREATE_GITHUB_ISSUE,
+        "repository": issue_payload.repository_full_name,
+        "issue": {
+            "number": None,
+            "state": None,
+            "title": None,
+        },
+        "sync_job": None,
+        "canonical": {
+            "task_id": None,
+            "source_record_id": None,
+            "external_id": None,
+            "evidence_refs_count": 0,
+        },
+        "counts": {},
+        "audit": [serialize_execution_event(event) for event in events],
+        "retry_after": retry_after,
+        "warnings": [
+            "The provider may still be converging after the write attempt.",
+            f"Retry read-only reconciliation after {retry_after.isoformat()}.",
+            "Do not retry the external write while reconciliation is pending.",
+        ],
+    }
+
+
+async def _record_write_not_observed(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    proposal: ActionProposal,
+    execution: ActionExecution,
+    issue_payload: GitHubIssuePayload,
+    actor_user_id: UUID,
+    reason: str,
+) -> dict[str, Any]:
+    reconciled_at = datetime.now(timezone.utc)
+    provider_request_not_started = reason == "provider_request_not_started"
+    execution.status = ACTION_EXECUTION_STATUS_FAILED
+    execution.error_message = (
+        "provider request did not start after the durable execution claim"
+        if provider_request_not_started
+        else GITHUB_EXECUTION_RESULT_SYNC_WRITE_NOT_OBSERVED
+    )
+    execution.finished_at = reconciled_at
+    execution.reconciled_at = reconciled_at
+    proposal.status = ACTION_PROPOSAL_STATUS_APPROVED
+    await _append_sync_event(
+        session,
+        proposal=proposal,
+        execution=execution,
+        event_type=ACTION_EXECUTION_EVENT_WRITE_NOT_OBSERVED,
+        status=ACTION_EXECUTION_EVENT_STATUS_RECORDED,
+        message=(
+            "The durable claim was recorded, but the provider request did not "
+            "start. A retry must use a new idempotency key."
+            if provider_request_not_started
+            else (
+                "A complete provider check found no GitHub issue with the exact "
+                "execution marker. A later retry must use a new idempotency key."
+            )
+        ),
+        reason=f"{execution.id}:{reason}:not_observed",
+        issue_number=None,
+        actor_user_id=actor_user_id,
+        event_metadata={
+            "execution_id": str(execution.id),
+            "repository_full_name": issue_payload.repository_full_name,
+            "request_hash": execution.request_hash,
+            "reconciliation_basis": reason,
+        },
+        error_code="provider_write_not_observed",
+        error_message=execution.error_message,
+    )
+    events = await list_execution_events(
+        session,
+        workspace_id=workspace_id,
+        action_proposal_id=proposal.id,
+    )
+    return {
+        "workspace_id": workspace_id,
+        "proposal_id": proposal.id,
+        "synced": False,
+        "status": "write_not_observed",
+        "provider": ACTION_TARGET_PROVIDER_GITHUB,
+        "action": ACTION_TYPE_CREATE_GITHUB_ISSUE,
+        "repository": issue_payload.repository_full_name,
+        "issue": {
+            "number": None,
+            "state": None,
+            "title": None,
+        },
+        "sync_job": None,
+        "canonical": {
+            "task_id": None,
+            "source_record_id": None,
+            "external_id": None,
+            "evidence_refs_count": 0,
+        },
+        "counts": {},
+        "audit": [serialize_execution_event(event) for event in events],
+        "warnings": [
+            (
+                "The durable claim shows that the provider request did not start."
+                if provider_request_not_started
+                else "The complete provider read found no matching execution marker."
+            ),
+            "No external write occurred during reconciliation.",
+            "A retry requires a new idempotency key.",
+        ],
+    }
+
+
+def _execution_external_id(response: Mapping[str, Any]) -> str | None:
+    for key in ("html_url", "id", "number", "url"):
+        value = response.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:255]
+        if isinstance(value, int):
+            return str(value)
+    return None
 
 
 async def _create_execution_result_sync_job(
@@ -520,10 +848,11 @@ async def _append_sync_failure_event(
     *,
     proposal: ActionProposal,
     execution: ActionExecution,
-    issue_number: int,
+    issue_number: int | None,
     issue_payload: GitHubIssuePayload,
     detail: str,
     error_code: str,
+    actor_user_id: UUID,
 ) -> None:
     await _append_sync_event(
         session,
@@ -534,6 +863,7 @@ async def _append_sync_failure_event(
         message=f"Post-execution GitHub issue result sync failed: {detail}. No external write occurred.",
         reason=f"{execution.id}:{issue_number}:{error_code}",
         issue_number=issue_number,
+        actor_user_id=actor_user_id,
         event_metadata={
             "execution_id": str(execution.id),
             "repository_full_name": issue_payload.repository_full_name,
@@ -553,8 +883,11 @@ async def _append_sync_event(
     status: str,
     message: str,
     reason: str,
-    issue_number: int,
+    issue_number: int | None,
+    actor_user_id: UUID,
     event_metadata: Mapping[str, Any] | None = None,
+    external_result_id: str | None = None,
+    external_result_url: str | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
 ) -> None:
@@ -563,7 +896,7 @@ async def _append_sync_event(
         workspace_id=proposal.workspace_id,
         action_proposal_id=proposal.id,
         event_type=event_type,
-        actor="system",
+        actor=f"user:{actor_user_id}",
         status=status,
         message=message,
         idempotency_key=execution_event_idempotency_key(
@@ -579,8 +912,8 @@ async def _append_sync_event(
         external_execution_enabled=False,
         confirmation_received=True,
         event_metadata=event_metadata or {},
-        external_result_id=None,
-        external_result_url=None,
+        external_result_id=external_result_id,
+        external_result_url=external_result_url,
         error_code=error_code,
         error_message=error_message,
     )

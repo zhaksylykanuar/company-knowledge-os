@@ -943,7 +943,7 @@ export type ActionExecutionPreviewResponse = {
 export type ActionProposalExecuteRequest = {
   connection_id: string;
   confirm_external_write: boolean;
-  idempotency_key?: string | null;
+  idempotency_key: string;
 };
 
 export type ActionExecutionResponse = {
@@ -954,16 +954,59 @@ export type ActionExecutionResponse = {
   execution: {
     id: string;
     status: string;
+    workspace_id: string;
+    requested_by_user_id: string | null;
+    connection_id: string | null;
+    client_idempotency_key: string;
+    request_hash: string;
     external_id: string | null;
     provider_response: Record<string, unknown>;
     error_message: string | null;
-    started_at: string;
+    claimed_at: string;
+    started_at: string | null;
     finished_at: string | null;
+    reconciled_at: string | null;
   };
   receipt: ActionExecutionReceipt;
   is_live: boolean;
   external_write_performed: boolean;
   provider: string;
+  warnings: string[];
+};
+
+export type ActionExecutionResultSyncRequest = {
+  connection_id?: string | null;
+};
+
+export type ActionExecutionResultSyncResponse = {
+  workspace_id: string;
+  proposal_id: string;
+  synced: boolean;
+  status: "synced" | "reconciliation_pending" | "write_not_observed" | string;
+  provider: string;
+  action: string;
+  repository: string;
+  issue: {
+    number: number | null;
+    state: string | null;
+    title: string | null;
+  };
+  sync_job: {
+    id: string;
+    status: string;
+    records_seen: number;
+    records_created: number;
+    records_updated: number;
+  } | null;
+  canonical: {
+    task_id: string | null;
+    source_record_id: string | null;
+    external_id: string | null;
+    evidence_refs_count: number;
+  };
+  counts: Record<string, number>;
+  audit: ActionExecutionAuditEvent[];
+  retry_after: string | null;
   warnings: string[];
 };
 

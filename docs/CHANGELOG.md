@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added Atomic External Execution v1 (DEC-100): a committed execution claim,
+  proposal row lock, workspace-scoped client idempotency, request hash, actual
+  requesting user, explicit claim/running/uncertain states and database
+  uniqueness for one active or successful execution per proposal.
+- Added GitHub uncertain-outcome reconciliation through an exact hidden
+  execution marker, a provider-consistency grace period and a read-only proof
+  of either a matching issue or a safe new-key retry boundary.
+- Added concurrent execution acceptance coverage proving two simultaneous
+  requests make one provider call and persist one execution.
 - Added a universal pytest database guard that runs before the application
   engine import. It requires explicit test mode and a dedicated test-marked
   PostgreSQL target, compares it with product dotenv/ambient endpoints, and
@@ -12,6 +21,11 @@
 
 ### Changed
 
+- External provider exceptions no longer become false definitive failures.
+  FounderOS keeps the approved proposal blocked behind an `uncertain` receipt
+  until read-back reconciliation resolves the outcome.
+- Action execution, reconciliation, preview and blocked-execution audit events
+  now record the authenticated user instead of a generic operator label.
 - Renamed the CI PostgreSQL database from `ckdos` to `ckdos_test` and made the
   test target explicit through `FOUNDEROS_TEST_DATABASE_URL`.
 - Replaced active bare-pytest guidance with the guarded `make backend-check`

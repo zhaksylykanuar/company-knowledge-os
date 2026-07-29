@@ -7,8 +7,9 @@
 ## Сейчас
 
 **FounderOS 2.0 product reset, Lifecycle Event Ledger v1, Temporal Memory v2,
-GitHub Source Reconciliation v1 и universal pytest database guard реализованы
-локально в ветке `codex/living-hq-ux-reset`. Изменения не опубликованы.**
+GitHub Source Reconciliation v1, universal pytest database guard и Atomic
+External Execution v1 реализованы локально в ветке
+`codex/living-hq-ux-reset`. Изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -77,18 +78,30 @@ ledger; тексты источников и evidence не копируются.
 - Backend checker передаёт тот же проверенный target в pytest и принудительно
   отключает dotenv, LLM, real connectors и external writes. CI использует
   `ckdos_test` и после upgrade выполняет `alembic check` (DEC-099).
+- GitHub write execution теперь сначала блокирует proposal, создаёт и коммитит
+  durable claim с workspace, реальным user, connection, обязательным
+  client-idempotency key, request hash и claim timestamp. Уникальные индексы
+  запрещают повтор ключа в workspace и несколько active/successful execution
+  для одного proposal (DEC-100).
+- Перед provider call execution переводится в `running` отдельным коммитом.
+  Потерянный ответ больше не записывается как ложный failure: execution
+  остаётся `uncertain`, а read-only reconciliation ищет точный скрытый marker.
+  Пустой ранний read сохраняет неопределённость на consistency grace period;
+  только последующая полная проверка может разрешить retry с новым ключом.
+- Acceptance-тест запускает два одновременных execute request и доказывает
+  ровно один provider call, один `ActionExecution` и одну внешнюю задачу.
 
 ## Проверено 2026-07-29
 
-- Frontend: `npm test` — **314 passed**.
+- Frontend: `npm test` — **316 passed**.
 - Frontend: `npm run typecheck` — успешно.
 - Frontend: `npm run build` — успешно, **16 routes**.
 - Frontend dependencies: production audit — **0 vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: guarded full pytest — **754 passed**, одно внешнее
+- Backend: guarded full pytest — **761 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
-- Alembic: единственная head `f0b1c2d3e4a6`, применена к локальной БД;
+- Alembic: единственная head `a1c2d3e4f5b6`, применена к отдельной test БД;
   `alembic check` не обнаружил расхождений metadata/schema.
 - Небезопасный bare pytest без explicit test environment остановлен до
   application import; локальная `ckdos_test` создана отдельно от рабочей БД.
@@ -105,12 +118,10 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Реализовать atomic external execution claim, DB-idempotency, `uncertain`
-   state, executing actor и provider reconciliation.
-2. Ввести строгий same-workspace evidence gate для approval/execution и
+1. Ввести строгий same-workspace evidence gate для approval/execution и
    унифицировать bulk decisions.
-3. Закрепить workspace isolation составными PostgreSQL FK.
-4. После high-priority remediation провести authenticated browser QA и один
+2. Закрепить workspace isolation составными PostgreSQL FK.
+3. После high-priority remediation провести authenticated browser QA и один
    founder-approved read-only GitHub App read.
 
 ## Неподвижные границы

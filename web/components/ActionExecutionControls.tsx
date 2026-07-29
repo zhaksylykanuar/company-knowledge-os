@@ -3,9 +3,11 @@
 import { useState } from "react";
 
 import {
+  ApiRequestError,
   executeActionProposal,
   fetchActionProposalAudit,
-  fetchActionExecutionPreview
+  fetchActionExecutionPreview,
+  syncActionProposalExecutionResult
 } from "../lib/api";
 import { M, T } from "../lib/messages";
 import { useWorkspaceId } from "../lib/session";
@@ -13,6 +15,7 @@ import type {
   ActionExecutionAuditEvent,
   ActionExecutionPreviewResponse,
   ActionExecutionReceipt,
+  ActionExecutionResultSyncResponse,
   ActionExecutionResponse,
   ActionProposal
 } from "../lib/types";
@@ -45,13 +48,17 @@ type ActionExecutionControlsViewProps = {
   isExecutePending: boolean;
   isHistoryPending: boolean;
   isPreviewPending: boolean;
+  isReconcilePending: boolean;
   onConfirmationChange?: (checked: boolean) => void;
   onConnectionIdChange?: (value: string) => void;
   onExecute?: () => void;
   onLoadHistory?: () => void;
   onPreview?: () => void;
+  onReconcile?: () => void;
   preview: ActionExecutionPreviewResponse | null;
   proposal: ActionProposal;
+  reconciliationNeeded: boolean;
+  reconciliationResult: ActionExecutionResultSyncResponse | null;
   receipt: ActionExecutionReceipt | null;
   successMessage?: string | null;
 };
@@ -70,10 +77,15 @@ export function ActionExecutionControls({
   const [confirmationChecked, setConfirmationChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [executeResult, setExecuteResult] = useState<ActionExecutionResponse | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [isExecutePending, setIsExecutePending] = useState(false);
   const [isPreviewPending, setIsPreviewPending] = useState(false);
   const [isHistoryPending, setIsHistoryPending] = useState(false);
+  const [isReconcilePending, setIsReconcilePending] = useState(false);
   const [preview, setPreview] = useState<ActionExecutionPreviewResponse | null>(null);
+  const [reconciliationNeeded, setReconciliationNeeded] = useState(false);
+  const [reconciliationResult, setReconciliationResult] =
+    useState<ActionExecutionResultSyncResponse | null>(null);
   const [receipt, setReceipt] = useState<ActionExecutionReceipt | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -81,6 +93,8 @@ export function ActionExecutionControls({
     const response = await fetchActionProposalAudit(workspaceId, proposal.id);
     setAuditEvents(response.events);
     setReceipt(response.receipt);
+    setReconciliationNeeded(auditRequiresReconciliation(response));
+    return response;
   }
 
   async function loadHistory() {
@@ -163,14 +177,20 @@ export function ActionExecutionControls({
     setError(null);
     setAuditWarning(null);
     setSuccessMessage(null);
+    setReconciliationResult(null);
     setIsExecutePending(true);
+    const requestIdempotencyKey =
+      idempotencyKey ?? createExecutionIdempotencyKey(proposal.id);
+    setIdempotencyKey(requestIdempotencyKey);
     try {
       const response = await executeActionProposal(workspaceId, proposal.id, {
         connection_id: connectionId.trim(),
-        confirm_external_write: true
+        confirm_external_write: true,
+        idempotency_key: requestIdempotencyKey
       });
       setExecuteResult(response);
       setReceipt(response.receipt);
+      setReconciliationNeeded(false);
       setSuccessMessage(
         response.warnings.some((warning) => warning.includes("existing successful"))
           ? M.actionExecution.successExisting
@@ -196,14 +216,81 @@ export function ActionExecutionControls({
         onComplete?.({ ...outcome, auditRefreshFailed: true });
       }
     } catch (caught: unknown) {
+      const message =
+        caught instanceof Error ? caught.message : M.common.requestFailed;
+      let requiresReconciliation = executionErrorRequiresReconciliation(caught);
+      try {
+        const audit = await refreshAudit(workspaceId);
+        requiresReconciliation = auditRequiresReconciliation(audit);
+      } catch {
+        // Keep the primary execution error visible if audit refresh also fails.
+      }
+      if (requiresReconciliation) {
+        setReconciliationNeeded(true);
+        setError(null);
+        setSuccessMessage(M.actionExecution.reconciliationRequired);
+      } else {
+        setIdempotencyKey(null);
+        setError(message);
+      }
+    } finally {
+      setIsExecutePending(false);
+      onBusyChange?.(false);
+    }
+  }
+
+  async function reconcileExecution() {
+    if (disabled || onBusyChange?.(true) === false) {
+      return;
+    }
+    if (!workspaceId) {
+      setError(M.actionExecution.noWorkspaceExecute);
+      onBusyChange?.(false);
+      return;
+    }
+
+    setError(null);
+    setAuditWarning(null);
+    setSuccessMessage(null);
+    setIsReconcilePending(true);
+    try {
+      const response = await syncActionProposalExecutionResult(
+        workspaceId,
+        proposal.id,
+        {
+          connection_id: connectionId.trim() || null
+        }
+      );
+      setReconciliationResult(response);
+      setAuditEvents(response.audit);
+      if (response.status === "synced") {
+        setReconciliationNeeded(false);
+        setSuccessMessage(M.actionExecution.reconciliationSucceeded);
+      } else if (response.status === "write_not_observed") {
+        setReconciliationNeeded(false);
+        setIdempotencyKey(null);
+        setConfirmationChecked(false);
+        setSuccessMessage(M.actionExecution.reconciliationNoWrite);
+      } else {
+        setReconciliationNeeded(true);
+        setSuccessMessage(M.actionExecution.reconciliationPending);
+      }
+      try {
+        await refreshAudit(workspaceId);
+      } catch {
+        setAuditWarning(M.actionExecution.auditRefreshFailed);
+      }
+      onRefresh?.();
+    } catch (caught: unknown) {
+      setReconciliationNeeded(true);
       setError(caught instanceof Error ? caught.message : M.common.requestFailed);
       try {
         await refreshAudit(workspaceId);
       } catch {
-        // Keep the primary execution error visible if audit refresh also fails.
+        // Keep the primary reconciliation error visible.
       }
     } finally {
-      setIsExecutePending(false);
+      setIsReconcilePending(false);
       onBusyChange?.(false);
     }
   }
@@ -220,13 +307,17 @@ export function ActionExecutionControls({
       isExecutePending={isExecutePending}
       isHistoryPending={isHistoryPending}
       isPreviewPending={isPreviewPending}
+      isReconcilePending={isReconcilePending}
       onConfirmationChange={setConfirmationChecked}
       onConnectionIdChange={setConnectionId}
       onExecute={executeWithConfirmation}
       onLoadHistory={loadHistory}
       onPreview={previewExecution}
+      onReconcile={reconcileExecution}
       preview={preview}
       proposal={proposal}
+      reconciliationNeeded={reconciliationNeeded}
+      reconciliationResult={reconciliationResult}
       receipt={receipt}
       successMessage={successMessage}
     />
@@ -244,13 +335,17 @@ export function ActionExecutionControlsView({
   isExecutePending,
   isHistoryPending,
   isPreviewPending,
+  isReconcilePending,
   onConfirmationChange,
   onConnectionIdChange,
   onExecute,
   onLoadHistory,
   onPreview,
+  onReconcile,
   preview,
   proposal,
+  reconciliationNeeded,
+  reconciliationResult,
   receipt,
   successMessage = null
 }: ActionExecutionControlsViewProps) {
@@ -262,12 +357,18 @@ export function ActionExecutionControlsView({
   const externalExecutionEnabled = Boolean(
     preview?.capabilities.external_execution && preview.capabilities.live_provider_write
   );
-  const isBusy = disabled || isExecutePending || isHistoryPending || isPreviewPending;
+  const isBusy =
+    disabled ||
+    isExecutePending ||
+    isHistoryPending ||
+    isPreviewPending ||
+    isReconcilePending;
   const canExecute =
     externalExecutionEnabled &&
     preview?.status === "preview_ready" &&
     confirmationChecked &&
     Boolean(connectionId.trim()) &&
+    !reconciliationNeeded &&
     !isBusy;
   const displayedAuditEvents =
     auditEvents.length > 0
@@ -420,6 +521,24 @@ export function ActionExecutionControlsView({
               >
                 {isExecutePending ? M.actionExecution.executing : M.actionExecution.execute}
               </button>
+              {reconciliationNeeded ? (
+                <div className="callout">
+                  <strong>{M.actionExecution.reconciliationTitle}</strong>
+                  <p className="muted">
+                    {M.actionExecution.reconciliationDescription}
+                  </p>
+                  <button
+                    className="button secondary"
+                    disabled={isBusy}
+                    onClick={onReconcile}
+                    type="button"
+                  >
+                    {isReconcilePending
+                      ? M.actionExecution.reconciling
+                      : M.actionExecution.reconcile}
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="muted">{M.actionExecution.externalDisabled}</p>
@@ -503,6 +622,12 @@ export function ActionExecutionControlsView({
       {createdGitHubIssue ? (
         <p className="success-text">{M.actionExecution.createdIssue}</p>
       ) : null}
+      {reconciliationResult?.retry_after ? (
+        <p className="muted">
+          {M.actionExecution.reconciliationRetryAfter}{" "}
+          {reconciliationResult.retry_after}
+        </p>
+      ) : null}
 
       {displayedAuditEvents.length > 0 ? (
         <AuditEventList events={displayedAuditEvents} proposalTitle={proposal.title} />
@@ -516,6 +641,51 @@ export function ActionExecutionControlsView({
         </ul>
       ) : null}
     </section>
+  );
+}
+
+function createExecutionIdempotencyKey(proposalId: string): string {
+  const randomPart =
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `web-execution-${proposalId}-${randomPart}`.slice(0, 255);
+}
+
+function executionErrorRequiresReconciliation(caught: unknown): boolean {
+  if (!(caught instanceof ApiRequestError)) {
+    return true;
+  }
+  const message = caught.message.toLocaleLowerCase();
+  return (
+    caught.status >= 500 ||
+    message.includes("outcome is uncertain") ||
+    message.includes("execution claim already exists") ||
+    message.includes("reconcile")
+  );
+}
+
+function auditRequiresReconciliation(audit: {
+  events: ActionExecutionAuditEvent[];
+  receipt: ActionExecutionReceipt;
+}): boolean {
+  if (audit.receipt.provider_result === "uncertain") {
+    return true;
+  }
+  if (audit.receipt.provider_result === "succeeded") {
+    return false;
+  }
+  const latestExecutionEvent = [...audit.events]
+    .reverse()
+    .find((event) => event.event_type.startsWith("execution_"));
+  return Boolean(
+    latestExecutionEvent &&
+      [
+        "execution_claimed",
+        "execution_started",
+        "execution_outcome_uncertain",
+        "execution_reconciliation_pending",
+        "execution_result_sync_failed"
+      ].includes(latestExecutionEvent.event_type)
   );
 }
 
@@ -590,7 +760,9 @@ function fallbackAuditEvents(proposal: ActionProposal): ActionExecutionAuditEven
   if (proposal.approved_at) {
     events.push(
       fallbackAuditEvent({
-        actor: "workspace_admin",
+        actor: proposal.approved_by_user_id
+          ? `user:${proposal.approved_by_user_id}`
+          : "system",
         createdAt: proposal.approved_at,
         eventType: "proposal_approved",
         id: `${proposal.id}:approved`,
@@ -601,7 +773,9 @@ function fallbackAuditEvents(proposal: ActionProposal): ActionExecutionAuditEven
   if (proposal.rejected_at) {
     events.push(
       fallbackAuditEvent({
-        actor: "workspace_admin",
+        actor: proposal.rejected_by_user_id
+          ? `user:${proposal.rejected_by_user_id}`
+          : "system",
         createdAt: proposal.rejected_at,
         eventType: "proposal_rejected",
         id: `${proposal.id}:rejected`,

@@ -256,6 +256,87 @@ async def test_action_migration_tables_exist() -> None:
     assert action_execution_events == "action_execution_events"
 
 
+async def test_atomic_action_execution_schema_is_enforced() -> None:
+    async with AsyncSessionLocal() as session:
+        columns = dict(
+            (
+                await session.execute(
+                    text(
+                        """
+                        select column_name, is_nullable
+                        from information_schema.columns
+                        where table_schema = 'public'
+                          and table_name = 'action_executions'
+                        """
+                    )
+                )
+            ).all()
+        )
+        indexes = set(
+            (
+                await session.execute(
+                    text(
+                        """
+                        select indexname
+                        from pg_indexes
+                        where schemaname = 'public'
+                          and tablename = 'action_executions'
+                        """
+                    )
+                )
+            ).scalars()
+        )
+        constraints = set(
+            (
+                await session.execute(
+                    text(
+                        """
+                        select conname
+                        from pg_constraint
+                        where conrelid = 'public.action_executions'::regclass
+                        """
+                    )
+                )
+            ).scalars()
+        )
+        status_constraint = await session.scalar(
+            text(
+                """
+                select pg_get_constraintdef(oid)
+                from pg_constraint
+                where conrelid = 'public.action_executions'::regclass
+                  and conname = 'ck_action_executions_status'
+                """
+            )
+        )
+
+    assert {
+        "workspace_id": "NO",
+        "client_idempotency_key": "NO",
+        "request_hash": "NO",
+        "claimed_at": "NO",
+        "requested_by_user_id": "YES",
+        "connection_id": "YES",
+        "reconciled_at": "YES",
+    }.items() <= columns.items()
+    assert {
+        "uq_action_executions_workspace_client_idempotency_key",
+        "uq_action_executions_one_active_or_success_per_proposal",
+    } <= indexes
+    assert {
+        "fk_action_executions_workspace_id",
+        "fk_action_executions_requested_by_user_id",
+        "fk_action_executions_connection_id",
+        "ck_action_executions_status",
+    } <= constraints
+    assert status_constraint is not None
+    assert {"claimed", "running", "succeeded", "failed", "uncertain"} <= {
+        status
+        for status in ("claimed", "running", "succeeded", "failed", "uncertain")
+        if status in status_constraint.casefold()
+    }
+
+
 async def test_create_proposal_requires_api_key(monkeypatch) -> None:
     marker = uuid4().hex
     _set_auth(monkeypatch)

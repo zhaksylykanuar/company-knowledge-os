@@ -17,6 +17,7 @@ from app.api.workspace_auth import (
 from app.db.action_models import (
     ACTION_EXECUTION_EVENT_CONFIRMATION_MISSING,
     ACTION_EXECUTION_EVENT_CONFIRMATION_RECEIVED_BUT_DISABLED,
+    ACTION_EXECUTION_EVENT_OUTCOME_UNCERTAIN,
     ACTION_EXECUTION_EVENT_PREVIEW_BLOCKED,
     ACTION_EXECUTION_EVENT_PREVIEW_GENERATED,
     ACTION_EXECUTION_EVENT_PROPOSAL_APPROVED,
@@ -25,6 +26,7 @@ from app.db.action_models import (
     ACTION_EXECUTION_EVENT_STATUS_RECORDED,
     ACTION_EXECUTION_EVENT_STATUS_UNSUPPORTED,
     ACTION_EXECUTION_EVENT_UNSUPPORTED,
+    ACTION_EXECUTION_STATUS_UNCERTAIN,
     ACTION_PROPOSAL_STATUS_APPROVED,
     ACTION_TARGET_PROVIDER_GITHUB,
     ACTION_TARGET_PROVIDER_INTERNAL,
@@ -178,7 +180,7 @@ class ActionProposalExecuteRequest(BaseModel):
 
     connection_id: UUID
     confirm_external_write: bool = False
-    idempotency_key: str | None = Field(default=None, max_length=255)
+    idempotency_key: str = Field(min_length=8, max_length=255)
 
 
 class ActionProposalExecutionResultSyncRequest(BaseModel):
@@ -286,11 +288,18 @@ class ExecutedActionProposalRead(BaseModel):
 class ActionExecutionRead(BaseModel):
     id: UUID
     status: str
+    workspace_id: UUID
+    requested_by_user_id: UUID | None = None
+    connection_id: UUID | None = None
+    client_idempotency_key: str
+    request_hash: str
     external_id: str | None = None
     provider_response: dict[str, Any]
     error_message: str | None = None
-    started_at: datetime
+    claimed_at: datetime
+    started_at: datetime | None = None
     finished_at: datetime | None = None
+    reconciled_at: datetime | None = None
 
 
 class ActionExecutionReceiptRead(BaseModel):
@@ -378,7 +387,7 @@ class ActionExecutionAuditResponse(BaseModel):
 
 
 class ActionExecutionResultSyncIssueRead(BaseModel):
-    number: int
+    number: int | None = None
     state: str | None = None
     title: str | None = None
 
@@ -407,10 +416,11 @@ class ActionExecutionResultSyncResponse(BaseModel):
     action: str
     repository: str
     issue: ActionExecutionResultSyncIssueRead
-    sync_job: ActionExecutionResultSyncJobRead
+    sync_job: ActionExecutionResultSyncJobRead | None = None
     canonical: ActionExecutionResultCanonicalRead
     counts: dict[str, int] = Field(default_factory=dict)
     audit: list[ActionExecutionAuditEventRead] = Field(default_factory=list)
+    retry_after: datetime | None = None
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -780,7 +790,7 @@ async def preview_action_proposal_execution_endpoint(
     proposal_id: UUID,
     access: WorkspaceAccess = Depends(require_workspace_access),
 ) -> ActionExecutionPreviewResponse:
-    _ = access
+    previewing_user_id = access.workspace_membership.user.id
     async with AsyncSessionLocal() as session:
         proposal = await get_action_proposal(
             session,
@@ -798,6 +808,7 @@ async def preview_action_proposal_execution_endpoint(
             proposal=proposal,
             response=response,
             external_execution_enabled=_live_github_execution_enabled(),
+            actor_user_id=previewing_user_id,
         )
         events = await list_execution_events(
             session,
@@ -853,7 +864,7 @@ async def sync_action_proposal_execution_result_endpoint(
     payload: ActionProposalExecutionResultSyncRequest,
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
 ) -> ActionExecutionResultSyncResponse:
-    _ = access
+    requesting_user_id = access.workspace_membership.user.id
     async with AsyncSessionLocal() as session:
         try:
             result = await sync_github_issue_execution_result(
@@ -861,6 +872,7 @@ async def sync_action_proposal_execution_result_endpoint(
                 workspace_id=workspace_id,
                 proposal_id=proposal_id,
                 input_payload=GitHubExecutionResultSyncInput(
+                    requested_by_user_id=requesting_user_id,
                     connection_id=payload.connection_id,
                 ),
             )
@@ -908,7 +920,7 @@ async def execute_action_proposal_endpoint(
     payload: ActionProposalExecuteRequest,
     access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
 ) -> ActionExecutionResponse:
-    _ = access
+    executing_user_id = access.workspace_membership.user.id
     async with AsyncSessionLocal() as session:
         proposal = await get_action_proposal(
             session,
@@ -930,6 +942,7 @@ async def execute_action_proposal_endpoint(
                 external_execution_enabled=_live_github_execution_enabled(),
                 error_code="confirmation_missing",
                 error_message="confirm_external_write must be true",
+                actor_user_id=executing_user_id,
             )
             await session.commit()
             raise HTTPException(
@@ -949,6 +962,7 @@ async def execute_action_proposal_endpoint(
                 external_execution_enabled=False,
                 error_code="external_execution_disabled",
                 error_message=ACTION_EXECUTION_DISABLED_DETAIL,
+                actor_user_id=executing_user_id,
             )
             await session.commit()
             raise HTTPException(
@@ -968,6 +982,7 @@ async def execute_action_proposal_endpoint(
                 external_execution_enabled=False,
                 error_code="real_connectors_disabled",
                 error_message=REAL_CONNECTORS_DISABLED_DETAIL,
+                actor_user_id=executing_user_id,
             )
             await session.commit()
             raise HTTPException(
@@ -984,6 +999,7 @@ async def execute_action_proposal_endpoint(
                 input_payload=GitHubIssueExecutionInput(
                     connection_id=payload.connection_id,
                     confirm_external_write=payload.confirm_external_write,
+                    requested_by_user_id=executing_user_id,
                     idempotency_key=payload.idempotency_key,
                 ),
             )
@@ -1029,6 +1045,7 @@ async def _record_preview_event(
     proposal: Any,
     response: ActionExecutionPreviewResponse,
     external_execution_enabled: bool,
+    actor_user_id: UUID,
 ) -> None:
     preview_hash = _preview_hash(proposal=proposal, response=response)
     await append_execution_event(
@@ -1036,7 +1053,7 @@ async def _record_preview_event(
         workspace_id=proposal.workspace_id,
         action_proposal_id=proposal.id,
         event_type=_preview_event_type(response.status),
-        actor="system",
+        actor=f"user:{actor_user_id}",
         status=_preview_event_status(response.status),
         message=f"{response.message} No external write occurred.",
         idempotency_key=execution_event_idempotency_key(
@@ -1071,13 +1088,14 @@ async def _record_execute_block_event(
     external_execution_enabled: bool,
     error_code: str,
     error_message: str,
+    actor_user_id: UUID,
 ) -> None:
     await append_execution_event(
         session,
         workspace_id=proposal.workspace_id,
         action_proposal_id=proposal.id,
         event_type=event_type,
-        actor="workspace_admin",
+        actor=f"user:{actor_user_id}",
         status=ACTION_EXECUTION_EVENT_STATUS_BLOCKED,
         message=f"{message} No external write occurred.",
         idempotency_key=execution_event_idempotency_key(
@@ -1269,7 +1287,10 @@ def _receipt_from_events(events: list[Any]) -> ActionExecutionReceiptRead:
     )
     provider_result = "none"
     status_value: str | None = None
-    if has_external_result:
+    if receipt_event.event_type == ACTION_EXECUTION_EVENT_OUTCOME_UNCERTAIN:
+        provider_result = "uncertain"
+        status_value = ACTION_EXECUTION_STATUS_UNCERTAIN
+    elif has_external_result:
         provider_result = "succeeded"
         status_value = "succeeded"
     elif receipt_event.error_code or receipt_event.error_message:

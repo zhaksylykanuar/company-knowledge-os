@@ -77,10 +77,19 @@
 
 - [x] Существует ActionProposal foundation.
 - [x] Существуют approval, idempotency и persisted receipt foundations.
+- [x] Durable execution claim коммитится до provider call и содержит workspace,
+  реального пользователя, connection, обязательный client key, request hash и
+  claim timestamp.
+- [x] Proposal lock и PostgreSQL uniqueness не допускают несколько
+  active/successful execution; concurrent test доказывает один provider call.
+- [x] Потерянный provider response сохраняется как `uncertain`, а read-only
+  reconciliation разрешает его только по точному execution marker или после
+  полного повторного доказательства отсутствия.
 - [ ] Draft из AI связывается с evidence и exact snapshot.
 - [x] Preview показывает последствия и provider target.
 - [x] Ни один LLM path не вызывает external write напрямую.
-- [ ] После выполнения результат read-back обновляет память.
+- [x] После выполнения read-back нормализует результат в canonical
+  `SourceRecord` + `Task`, доступные Company Brain и текущей картине.
 
 ## H. Удаление старого продукта
 

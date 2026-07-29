@@ -3166,6 +3166,45 @@ disposable; provisioning and lifecycle remain operator responsibilities. There
 is no bypass for ordinary product database names. This decision supersedes
 active guidance that treated bare `uv run pytest` as an acceptable default.
 
+## DEC-100 - External Writes Require A Committed Claim And Reconciled Outcome
+
+Decision (2026-07-29): every GitHub issue execution must acquire the proposal
+row lock, persist an `ActionExecution` claim and commit it before any provider
+request. The claim contains the proposal and workspace identity, authenticated
+requesting user, exact connection, mandatory workspace-scoped client
+idempotency key, SHA-256 request hash and claim timestamp. A second commit marks
+the provider request `running` before network I/O begins.
+
+PostgreSQL enforces one use of a client key per workspace and at most one
+`claimed`, `running`, `succeeded` or `uncertain` execution per proposal. Legacy
+running rows become `uncertain` during migration because their external outcome
+cannot be inferred safely. Legacy actor and connection fields remain nullable;
+new execution paths always populate them. User deletion may remove the actor
+reference with `SET NULL` without removing the durable receipt.
+
+Every GitHub issue body receives a hidden, non-secret marker derived from the
+execution UUID and request hash. A provider exception after the request begins
+does not become a definitive failure: the execution remains `uncertain`, the
+proposal cannot execute again, and read-only reconciliation lists a complete
+all-state provider snapshot and searches for that exact marker. One match
+records the execution as succeeded and continues canonical normalization;
+multiple matches fail closed. A missing marker during the first 60 seconds
+keeps reconciliation pending to avoid an eventual-consistency duplicate. Only
+a later complete snapshot with no marker records `write_not_observed`, returns
+the proposal to approved and permits a human-approved retry with a new
+idempotency key. A claimed row may be failed immediately because the provider
+request's `running` transition was never committed and therefore network I/O
+did not begin.
+
+Pre-provider failures such as an undecryptable credential are definitive for
+that attempt but leave the proposal approved for an explicitly new-key retry.
+Successful, uncertain, reconciled, blocked and preview audit events record the
+authenticated user rather than a generic workspace role. Provider responses
+remain sanitized, reconciliation performs no external write, and an LLM still
+cannot execute actions. Acceptance requires two simultaneous execute requests
+to produce exactly one provider call, one `ActionExecution` and one external
+issue.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

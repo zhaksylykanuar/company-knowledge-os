@@ -106,8 +106,12 @@ Use the product UI when possible:
    - evidence refs are present;
    - backend capabilities say a live write is allowed.
 7. Confirm external execution once.
-8. Verify the UI shows a receipt/audit event for the external action result.
-9. Do not repeat execute if a successful receipt already exists.
+8. Verify the UI shows `claimed` before provider execution and then an
+   authoritative successful receipt/audit event.
+9. If the result is `uncertain`, do not repeat execute. Run read-only
+   reconciliation until it finds the exact provider marker or reports
+   `write_not_observed` after the consistency grace period.
+10. Do not repeat execute if a successful, active, or uncertain receipt exists.
 
 ## API fallback path
 
@@ -137,8 +141,22 @@ and never commit or paste real values.
    ```bash
    curl -fsS -X POST \
      -H '<api-key-header>: <api-key>' \
+     -H 'Content-Type: application/json' \
+     -d '{}' \
      '<api-base>/api/v1/workspaces/<workspace-id>/actions/proposals/<proposal-id>/sync-execution-result'
    ```
+
+   Interpret the response conservatively:
+
+   - `synced` means the exact provider issue was read and normalized;
+   - `reconciliation_pending` means the provider consistency window has not
+     elapsed: wait until the returned `retry_after` time and call only this
+     read-only endpoint again;
+   - `write_not_observed` means a complete read after the grace period found no
+     exact execution marker; only then may a separately approved retry use a
+     new idempotency key;
+   - `409` or `502` means stop the write flow and diagnose without another
+     execute request.
 
 4. Record only sanitized facts in the private operator log:
    - smoke executed: yes/no;
@@ -159,10 +177,12 @@ disabled values, run `make local-doctor`, and restart canonical `make local`.
 The smoke is successful only when all checks pass:
 
 - A single approved ActionProposal has exactly one successful `ActionExecution`.
-- A durable audit timeline includes preview, confirmation, started, and succeeded
-  events.
+- A durable audit timeline includes preview, confirmation, claimed, started,
+  and succeeded events with the authenticated user.
 - Duplicate execute does not create a second provider issue; it returns/uses the
   existing receipt.
+- Two simultaneous execute requests produce one provider call and one external
+  issue; this remains an automated acceptance check, not a live-smoke action.
 - `sync-execution-result` reads back the created provider issue and normalizes it
   into canonical `SourceRecord` + `Task` data.
 - Dashboard, Company Brain, operational work, and deterministic briefing can see
@@ -187,8 +207,11 @@ If any step fails:
    temporary shell, and restore any private env entries to disabled values.
 3. Preserve local audit rows and server logs for private diagnosis.
 4. Report only sanitized status and blocker category.
-5. Do not retry until the human approves a new idempotency key or confirms the
-   previous receipt was not created.
+5. Do not infer that the provider write failed from a timeout, `502`, missing
+   response, or early empty provider read.
+6. Run read-only reconciliation. Retry the external write only after FounderOS
+   reports `write_not_observed` following the grace period and the human
+   separately approves a new idempotency key.
 
 ## Relationship to other runbooks
 

@@ -1,6 +1,8 @@
 import type {
   ActionProposal,
   ActionExecutionPreviewResponse,
+  ActionExecutionResultSyncRequest,
+  ActionExecutionResultSyncResponse,
   ActionExecutionResponse,
   ActionProposalAuditResponse,
   ActionProposalExecuteRequest,
@@ -715,6 +717,16 @@ export function buildWorkspaceActionProposalExecutePath(
   return `${buildWorkspaceActionProposalPath(workspaceId, proposalId)}/execute`;
 }
 
+export function buildWorkspaceActionProposalExecutionResultSyncPath(
+  workspaceId: string,
+  proposalId: string
+): string {
+  return `${buildWorkspaceActionProposalPath(
+    workspaceId,
+    proposalId
+  )}/sync-execution-result`;
+}
+
 export async function fetchActionProposals(
   workspaceId: string,
   request: ActionProposalListRequest = {},
@@ -872,7 +884,25 @@ export async function executeActionProposal(
       body: JSON.stringify({
         connection_id: request.connection_id,
         confirm_external_write: request.confirm_external_write,
-        idempotency_key: request.idempotency_key ?? null
+        idempotency_key: request.idempotency_key
+      }),
+      method: "POST"
+    }
+  );
+}
+
+export async function syncActionProposalExecutionResult(
+  workspaceId: string,
+  proposalId: string,
+  request: ActionExecutionResultSyncRequest = {},
+  options: ApiFetchOptions = {}
+): Promise<ActionExecutionResultSyncResponse> {
+  return apiFetch<ActionExecutionResultSyncResponse>(
+    buildWorkspaceActionProposalExecutionResultSyncPath(workspaceId, proposalId),
+    {
+      ...options,
+      body: JSON.stringify({
+        connection_id: request.connection_id ?? null
       }),
       method: "POST"
     }

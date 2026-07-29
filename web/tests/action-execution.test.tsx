@@ -7,9 +7,11 @@ import {
   buildWorkspaceActionProposalAuditPath,
   buildWorkspaceActionProposalExecutePath,
   buildWorkspaceActionProposalExecutionPreviewPath,
+  buildWorkspaceActionProposalExecutionResultSyncPath,
   executeActionProposal,
   fetchActionProposalAudit,
-  fetchActionExecutionPreview
+  fetchActionExecutionPreview,
+  syncActionProposalExecutionResult
 } from "../lib/api";
 import { M, T } from "../lib/messages";
 import type {
@@ -208,13 +210,17 @@ function renderControls(
       isExecutePending={props.isExecutePending ?? false}
       isHistoryPending={props.isHistoryPending ?? false}
       isPreviewPending={props.isPreviewPending ?? false}
+      isReconcilePending={props.isReconcilePending ?? false}
       onConfirmationChange={props.onConfirmationChange}
       onConnectionIdChange={props.onConnectionIdChange}
       onExecute={props.onExecute}
       onLoadHistory={props.onLoadHistory}
       onPreview={props.onPreview}
+      onReconcile={props.onReconcile}
       preview={props.preview ?? null}
       proposal={props.proposal ?? approvedProposal}
+      reconciliationNeeded={props.reconciliationNeeded ?? false}
+      reconciliationResult={props.reconciliationResult ?? null}
       receipt={props.receipt ?? null}
       successMessage={props.successMessage ?? null}
     />
@@ -233,6 +239,13 @@ test("builds action execution preview, audit, and execute URLs", () => {
   assert.equal(
     buildWorkspaceActionProposalExecutePath("workspace-123", "proposal-2"),
     "/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/execute"
+  );
+  assert.equal(
+    buildWorkspaceActionProposalExecutionResultSyncPath(
+      "workspace-123",
+      "proposal-2"
+    ),
+    "/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/sync-execution-result"
   );
 });
 
@@ -308,13 +321,20 @@ test("fetches persisted action proposal audit trail", async () => {
 test("posts execute request only through explicit execute client", async () => {
   const responseBody: ActionExecutionResponse = {
     execution: {
+      claimed_at: "2026-06-25T01:05:59+06:00",
+      client_idempotency_key: "ui-execution-key",
+      connection_id: "connection-1",
       error_message: null,
       external_id: "https://github.com/qtwin-io/founderos-api/issues/42",
       finished_at: "2026-06-25T01:06:00+06:00",
       id: "execution-1",
       provider_response: { number: 42 },
+      reconciled_at: null,
+      request_hash: "a".repeat(64),
+      requested_by_user_id: "user-2",
       started_at: "2026-06-25T01:06:00+06:00",
-      status: "succeeded"
+      status: "succeeded",
+      workspace_id: "workspace-123"
     },
     external_write_performed: true,
     is_live: true,
@@ -338,7 +358,7 @@ test("posts execute request only through explicit execute client", async () => {
       JSON.stringify({
         connection_id: "connection-1",
         confirm_external_write: true,
-        idempotency_key: null
+        idempotency_key: "ui-execution-key"
       })
     );
     return new Response(JSON.stringify(responseBody), {
@@ -353,12 +373,69 @@ test("posts execute request only through explicit execute client", async () => {
       "proposal-2",
       {
         connection_id: "connection-1",
-        confirm_external_write: true
+        confirm_external_write: true,
+        idempotency_key: "ui-execution-key"
       },
       {}
     );
     assert.equal(payload.external_write_performed, true);
     assert.equal(payload.execution.status, "succeeded");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("posts read-only execution reconciliation through its dedicated client", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/actions/proposals/proposal-2/sync-execution-result"
+    );
+    assert.equal(init?.method, "POST");
+    assert.equal(
+      init?.body,
+      JSON.stringify({
+        connection_id: "connection-1"
+      })
+    );
+    return new Response(
+      JSON.stringify({
+        action: "create_github_issue",
+        audit: [],
+        canonical: {
+          evidence_refs_count: 0,
+          external_id: null,
+          source_record_id: null,
+          task_id: null
+        },
+        counts: {},
+        issue: { number: null, state: null, title: null },
+        proposal_id: "proposal-2",
+        provider: "github",
+        repository: "qtwin-io/founderos-api",
+        retry_after: "2026-06-25T01:07:00+06:00",
+        status: "reconciliation_pending",
+        sync_job: null,
+        synced: false,
+        warnings: [],
+        workspace_id: "workspace-123"
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200
+      }
+    );
+  }) as typeof fetch;
+
+  try {
+    const payload = await syncActionProposalExecutionResult(
+      "workspace-123",
+      "proposal-2",
+      { connection_id: "connection-1" }
+    );
+    assert.equal(payload.status, "reconciliation_pending");
+    assert.equal(payload.synced, false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -514,6 +591,27 @@ test("requires explicit confirmation before enabled live execution button", () =
   assert.ok(enabledHtml.includes(M.actionExecution.execute));
 });
 
+test("replaces a repeated write with read-only reconciliation when outcome is uncertain", () => {
+  const html = renderControls({
+    confirmationChecked: true,
+    connectionId: "connection-1",
+    onExecute: () => undefined,
+    onReconcile: () => undefined,
+    preview: enabledPreview,
+    reconciliationNeeded: true
+  });
+
+  assert.ok(html.includes(M.actionExecution.reconciliationTitle));
+  assert.ok(html.includes(M.actionExecution.reconciliationDescription));
+  assert.ok(html.includes(M.actionExecution.reconcile));
+  assert.match(
+    html,
+    new RegExp(
+      `<button class="button" disabled=""[^>]*>${M.actionExecution.execute}`
+    )
+  );
+});
+
 test("disables preview, history, and live controls while another operation owns the session", () => {
   const html = renderControls({
     confirmationChecked: true,
@@ -530,13 +628,20 @@ test("renders execute result without raw provider response dump", () => {
   const html = renderControls({
     executeResult: {
       execution: {
+        claimed_at: "2026-06-25T01:05:59+06:00",
+        client_idempotency_key: "issue-action-test",
+        connection_id: "connection-1",
         error_message: null,
         external_id: "https://github.com/qtwin-io/founderos-api/issues/42",
         finished_at: "2026-06-25T01:06:00+06:00",
         id: "execution-1",
         provider_response: { body: "raw body is not rendered", number: 42 },
+        reconciled_at: null,
+        request_hash: "a".repeat(64),
+        requested_by_user_id: "user-2",
         started_at: "2026-06-25T01:06:00+06:00",
-        status: "succeeded"
+        status: "succeeded",
+        workspace_id: "workspace-123"
       },
       external_write_performed: true,
       is_live: true,
@@ -565,13 +670,20 @@ test("keeps audit refresh failure separate from a successful external result", (
     auditWarning: M.actionExecution.auditRefreshAfterExecuteFailed,
     executeResult: {
       execution: {
+        claimed_at: "2026-06-25T01:05:59+06:00",
+        client_idempotency_key: "issue-action-test",
+        connection_id: "connection-1",
         error_message: null,
         external_id: "https://github.com/qtwin-io/founderos-api/issues/42",
         finished_at: "2026-06-25T01:06:00+06:00",
         id: "execution-1",
         provider_response: {},
+        reconciled_at: null,
+        request_hash: "a".repeat(64),
+        requested_by_user_id: "user-2",
         started_at: "2026-06-25T01:06:00+06:00",
-        status: "succeeded"
+        status: "succeeded",
+        workspace_id: "workspace-123"
       },
       external_write_performed: true,
       is_live: true,
