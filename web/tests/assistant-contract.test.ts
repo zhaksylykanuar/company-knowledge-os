@@ -16,7 +16,7 @@ import {
 const SNAPSHOT_ID = `hqs1_${"a".repeat(64)}`;
 
 const VALID_RESPONSE: AssistantQueryResponse = {
-  contract_version: "assistant.v1",
+  contract_version: "assistant.v2",
   intent: "current_priority",
   text: "Главный ход подтверждён текущим снимком.",
   citations: [
@@ -33,6 +33,15 @@ const VALID_RESPONSE: AssistantQueryResponse = {
       workspace_scoped: true
     }
   ],
+  perspectives: {
+    fact: {
+      text: "Главный ход подтверждён текущим снимком.",
+      citation_ids: ["evidence_ref:priority"]
+    },
+    interpretation: { text: null, citation_ids: [] },
+    objection: { text: null, citation_ids: [] },
+    recommendation: { text: null, citation_ids: [] }
+  },
   suggestions: [
     {
       id: "why",
@@ -52,10 +61,11 @@ const VALID_RESPONSE: AssistantQueryResponse = {
   partial: false,
   warnings: [],
   is_live: true,
-  llm_used: false
+  llm_used: false,
+  validation_status: "deterministic"
 };
 
-test("validates the fixed deterministic assistant contract", () => {
+test("validates the evidence-bound assistant contract", () => {
   assert.deepEqual(
     parseAssistantQueryResponse(structuredClone(VALID_RESPONSE)),
     VALID_RESPONSE
@@ -67,7 +77,7 @@ test("validates the fixed deterministic assistant contract", () => {
   assert.equal(isSafeInternalTarget("//attacker.test/path"), false);
 });
 
-test("fails closed on unknown fields, unsafe links, LLM output, and malformed snapshots", () => {
+test("fails closed on unknown fields, unresolved evidence, status mismatch, and unsafe links", () => {
   const cases: unknown[] = [
     { ...structuredClone(VALID_RESPONSE), private_payload: "must not pass" },
     {
@@ -92,6 +102,16 @@ test("fails closed on unknown fields, unsafe links, LLM output, and malformed sn
       action: { ...VALID_RESPONSE.action, target: "/api/v1/logout" }
     },
     { ...structuredClone(VALID_RESPONSE), llm_used: true },
+    {
+      ...structuredClone(VALID_RESPONSE),
+      perspectives: {
+        ...VALID_RESPONSE.perspectives,
+        fact: {
+          text: "Неподтверждённый факт",
+          citation_ids: ["evidence_ref:missing"]
+        }
+      }
+    },
     { ...structuredClone(VALID_RESPONSE), snapshot_id: "hqs1_not-content-addressed" }
   ];
 

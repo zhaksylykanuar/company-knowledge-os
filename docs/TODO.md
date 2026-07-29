@@ -31,7 +31,10 @@
    не имеют права объявлять исчезновение.
 2. Добавить обязательства клиентов, решения и риски с evidence.
 3. Добавить contradiction detection между источниками.
-4. Спроектировать privacy/retention/schema для generative LLM path.
+4. Добавить продуктовый AI/privacy control: encrypted key lifecycle, явное
+   acknowledgement provider retention, model/budget controls и read-only
+   connection test. `assistant.v2` strict schema/evidence critic уже
+   реализованы; настоящий credentialed smoke ещё не выполнен.
 5. Добавить управляемое исправление, забывание и удаление памяти.
 
 ## Внешний gate

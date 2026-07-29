@@ -386,7 +386,10 @@ export function CompanyAssistantPanel({
         <span className={styles.symbol} aria-hidden="true">✦</span>
         <div>
           <strong>Ответ по памяти текущей компании</strong>
-          <p>FounderOS не додумывает отсутствующие факты и показывает проверяемые основания.</p>
+          <p>
+            FounderOS не додумывает отсутствующие факты и показывает проверяемые
+            основания. Не вставляйте пароли, ключи и другие секреты.
+          </p>
         </div>
       </div>
 
@@ -414,8 +417,25 @@ export function CompanyAssistantPanel({
         {error ? <p className={styles.error}>{error}</p> : null}
         {answer ? (
           <article className={styles.answer}>
-            <span>{intentLabel(answer.intent)}</span>
-            <p>{answer.text}</p>
+            <span>
+              {intentLabel(answer.intent)}
+              {answer.llm_used ? " · AI-разбор проверен" : ""}
+            </span>
+            {Object.values(answer.perspectives).some((perspective) => perspective.text) ? (
+              <div className={styles.perspectives}>
+                {perspectiveOrder().map(({ key, label }) => {
+                  const perspective = answer.perspectives[key];
+                  return (
+                    <section className={styles.perspective} key={key}>
+                      <strong>{label}</strong>
+                      <p>{perspective.text ?? "Недостаточно подтверждённых оснований."}</p>
+                    </section>
+                  );
+                })}
+              </div>
+            ) : (
+              <p>{answer.text}</p>
+            )}
             {answer.citations.length > 0 ? (
               <div className={styles.citations}>
                 <strong>Основания</strong>
@@ -442,7 +462,11 @@ export function CompanyAssistantPanel({
               </details>
             ) : null}
             <small className={styles.boundary}>
-              Картина {shortSnapshotId(answer.snapshot_id)} · только чтение · действий не выполнено
+              Картина {shortSnapshotId(answer.snapshot_id)} ·{" "}
+              {answer.validation_status === "evidence_validated"
+                ? "основания проверены"
+                : "без генерации"}{" "}
+              · только чтение · действий не выполнено
             </small>
           </article>
         ) : null}
@@ -518,12 +542,22 @@ function intentLabel(intent: AssistantQueryResponse["intent"]): string {
     decision_status: "Статус решения",
     evidence: "Основания",
     owners: "Ответственные",
+    second_opinion: "Второе мнение",
     sources: "Источники",
     unsupported: "Безопасная граница",
     waiting_decisions: "Решения",
     why_now: "Почему сейчас"
   };
   return labels[intent];
+}
+
+function perspectiveOrder() {
+  return [
+    { key: "fact", label: "Факт" },
+    { key: "interpretation", label: "Интерпретация" },
+    { key: "objection", label: "Возражение" },
+    { key: "recommendation", label: "Рекомендация" }
+  ] as const;
 }
 
 function shortSnapshotId(value: string): string {

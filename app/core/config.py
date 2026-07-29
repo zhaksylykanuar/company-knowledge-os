@@ -109,7 +109,10 @@ class Settings(BaseSettings):
 
     raw_storage_dir: str = "./raw_storage"
 
-    enable_llm: bool = False
+    enable_llm: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("ENABLE_LLM", "FOUNDEROS_ENABLE_LLM"),
+    )
     enable_write_actions: bool = False
     github_write_allowed_repos: str | None = Field(
         default=None,
@@ -354,9 +357,9 @@ class Settings(BaseSettings):
             "FOUNDEROS_REVOKED_SESSION_RETENTION_HOURS"
         ),
     )
-    # Deterministic read-only assistant admission. The current runtime is one
-    # Uvicorn process; any future multi-worker/public topology must replace this
-    # process-local availability guard with a shared limiter.
+    # Read-only assistant admission. The current runtime is one Uvicorn process;
+    # any future multi-worker/public topology must replace this process-local
+    # availability guard with a shared limiter.
     assistant_query_rate_limit_window_seconds: int = Field(
         default=60,
         ge=1,
@@ -372,10 +375,42 @@ class Settings(BaseSettings):
         ),
     )
     assistant_query_timeout_seconds: float = Field(
-        default=6.0,
+        default=20.0,
         gt=0,
-        le=30,
+        le=60,
         validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_QUERY_TIMEOUT_SECONDS"),
+    )
+    assistant_llm_model: str = Field(
+        default="gpt-5.6",
+        min_length=1,
+        max_length=80,
+        validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_LLM_MODEL"),
+    )
+    assistant_llm_reasoning_effort: Literal["low", "medium", "high"] = Field(
+        default="medium",
+        validation_alias=AliasChoices(
+            "FOUNDEROS_ASSISTANT_LLM_REASONING_EFFORT"
+        ),
+    )
+    assistant_llm_timeout_seconds: float = Field(
+        default=15.0,
+        gt=0,
+        le=45,
+        validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_LLM_TIMEOUT_SECONDS"),
+    )
+    assistant_llm_max_output_tokens: int = Field(
+        default=1_200,
+        ge=400,
+        le=4_000,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_ASSISTANT_LLM_MAX_OUTPUT_TOKENS"
+        ),
+    )
+    assistant_llm_data_policy_acknowledged: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_ASSISTANT_LLM_DATA_POLICY_ACKNOWLEDGED"
+        ),
     )
 
     cors_allowed_origins: str | None = Field(
@@ -393,7 +428,7 @@ class Settings(BaseSettings):
         ),
     )
 
-    openai_api_key: str | None = Field(
+    openai_api_key: SecretStr | None = Field(
         default=None,
         validation_alias=AliasChoices("OPENAI_API_KEY", "FOS_OPENAI_API_KEY"),
     )

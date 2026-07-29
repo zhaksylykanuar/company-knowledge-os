@@ -55,9 +55,9 @@ Read in this order (control trio = what / where / why):
   Local Jira/Gmail/Drive import/list connectors, internal Documents, normalized
   entities, teammate provisioning/setup links, and sanitized request logging are
   in place. The active product now runs locally through `make local`. Remaining
-  product gaps are the first human-approved GitHub App real read run, LLM
-  briefing narrative over real connected data, email delivery for team/founder
-  invites, password reset, and broader multi-user hardening.
+  product gaps are the first human-approved GitHub App real read run, one
+  approved generative-AI smoke plus product AI/privacy settings, email delivery
+  for team/founder invites, password reset, and broader multi-user hardening.
 
 ## Local full-stack run path
 
@@ -204,8 +204,12 @@ separate human-approved gates. Normal GitHub setup now starts in
 `/settings/integrations/github`; the managed browser-session read is still one
 explicit repository-scoped action and does not require a terminal env toggle.
 Local startup itself never starts a provider read, external write, or LLM
-execution. Env/manual GitHub setup remains a compatibility path, not the normal
-onboarding flow.
+execution. Asking FounderOS uses the deterministic exact-snapshot path unless
+the LLM feature gate, server-only key and provider-data-policy acknowledgement
+are all configured. Even then the path is read-only, sends only bounded
+normalized facts, requests `store=false` and falls back locally on any provider
+or evidence-validation failure. Env/manual GitHub setup remains a compatibility
+path, not the normal onboarding flow.
 See
 [`docs/deploy/github-app-first-real-read-run.md`](docs/deploy/github-app-first-real-read-run.md)
 and

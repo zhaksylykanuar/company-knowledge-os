@@ -14,7 +14,9 @@ Isolation v1, Python Static Typing Gate и Frontend Biome Gate реализов�
 Browser Security Baseline, Shared Public Auth Admission, Reproducible
 Dependency Gate, Durable GitHub Provider Jobs, Encrypted Off-device Recovery
 Controls, Private Repository Governance и Maintainability Ratchets также
-реализованы локально; изменения не опубликованы.**
+реализованы локально. Generative Second Opinion v1 реализован поверх exact
+Headquarters snapshot со strict schema и evidence critic; изменения не
+опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -42,8 +44,9 @@ ledger; тексты источников и evidence не копируются.
 - Домашняя страница перестроена вокруг текущей картины и прямого вопроса к
   FounderOS; техническое состояние источников убрано из основного экрана.
 - `Спросить` сделан самостоятельным экраном поверх exact workspace snapshot.
-  История диалога не сохраняется, provider calls и внешние записи не
-  выполняются.
+  История диалога не сохраняется, внешние записи не выполняются. По умолчанию
+  работает локальный детерминированный ответ; optional AI path требует feature
+  gate, server-only key и отдельное подтверждение provider data policy.
 - Сохранены raw storage/Postgres truth, evidence, tenancy, RBAC, human approval,
   idempotency и receipts.
 - Исправлен GitHub App fallback redirect на новый settings route.
@@ -160,8 +163,9 @@ ledger; тексты источников и evidence не копируются.
 - Удалены неиспользуемые OpenAI/Google SDK, Tenacity, obsolete
   Google/email/triage/Jira/Telegram settings, legacy provider placeholders и
   старый operator launcher. `cryptography`, `starlette` и `python-dotenv`
-  объявлены напрямую; LLM env-контракт остаётся выключенным reservation без
-  SDK/runtime path (DEC-106).
+  объявлены напрямую. OpenAI SDK не возвращался: `assistant.v2` использует
+  существующий audited HTTP client только после трёх явных gates (DEC-111
+  supersedes reservation-часть DEC-106).
 - Backend checker и CI запускают актуальный `pip-audit`; frontend CI проверяет
   также dev dependencies. Найденные advisory устранены обновлением
   `pydantic-settings` и Starlette, без ignore-исключений.
@@ -205,6 +209,15 @@ ledger; тексты источников и evidence не копируются.
   per-row N+1 SQL growth. Дальнейшее уменьшение Headquarters, большого
   ActionProposalsPanel и global CSS остаётся incremental work с
   characterization каждого slice, а не broad rewrite.
+- Добавлен `assistant.v2`: UI явно разделяет факт, интерпретацию, возражение и
+  рекомендацию. Optional OpenAI Responses path получает максимум 16 bounded
+  normalized фактов exact snapshot, использует `store=false`, current-turn
+  reasoning, strict JSON schema и fixed HTTPS endpoint. Локальный critic
+  отклоняет неизвестные fact/evidence IDs и факт, не совпадающий с retrieval.
+- LLM вопрос, prompt, response, response ID и история не сохраняются. Ошибка,
+  refusal, timeout, invalid schema или critic rejection возвращают
+  детерминированный fallback без provider detail. `store=false` не объявлен
+  Zero Data Retention: отдельное data-policy acknowledgement обязательно.
 
 ## Проверено 2026-07-29
 
@@ -216,9 +229,11 @@ ledger; тексты источников и evidence не копируются.
 - Python dependencies: `pip-audit --local` — **0 known vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: `uv run mypy app` — успешно, **99 source files**.
-- Backend: guarded full pytest — **790 passed**, одно внешнее
+- Backend: `uv run mypy app` — успешно, **100 source files**.
+- Backend: guarded full pytest — **799 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
+- Assistant v2: strict provider/evidence, fallback, privacy-gate и UI contract
+  входят в полный backend/frontend gate; настоящий OpenAI call не выполнялся.
 - Disaster recovery/governance: focused Ruff + **7 tests passed**; encrypted
   round-trip, tamper/path rejection, sanitized drill proof, retention и
   repository contracts подтверждены без product data.
@@ -241,9 +256,9 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 1. Настроить физически независимое storage и отдельное хранение recovery key,
    затем выполнить первый настоящий encrypted export и full restore drill.
-2. Завершить AI second-opinion path: strict structured output, evidence-bound
-   retrieval, critic и разделение fact / interpretation / objection /
-   recommendation.
+2. Провести один явно разрешённый credentialed AI smoke после проверки
+   provider retention policy, оценить latency/cost и добавить продуктовый
+   Settings-контроль AI/privacy вместо server-only env управления.
 3. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
    gate; process counters не являются distributed telemetry.
 4. Провести новые authenticated session/workspace/browser gates и один

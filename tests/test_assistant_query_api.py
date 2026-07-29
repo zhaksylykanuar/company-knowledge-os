@@ -26,6 +26,12 @@ from app.services.assistant_query_service import (
     AssistantQueryController,
     AssistantRateLimitedError,
     build_assistant_response,
+    query_workspace_assistant,
+)
+from app.services.assistant_llm_service import (
+    AssistantLLMUnavailableError,
+    ValidatedAssistantReasoning,
+    ValidatedAssistantSection,
 )
 from app.services.session_service import create_session
 
@@ -253,7 +259,15 @@ def test_deterministic_allowlisted_intents(query: str, intent: str) -> None:
     response = build_assistant_response(_synthetic_snapshot(), query.casefold())
 
     assert response["intent"] == intent
+    assert response["contract_version"] == "assistant.v2"
     assert response["llm_used"] is False
+    assert response["validation_status"] == "deterministic"
+    assert set(response["perspectives"]) == {
+        "fact",
+        "interpretation",
+        "objection",
+        "recommendation",
+    }
     assert response["is_live"] is True
     assert response["snapshot_id"].startswith("hqs1_")
     assert len(response["citations"]) <= 8
@@ -307,6 +321,130 @@ def test_unsafe_evidence_and_action_targets_are_removed() -> None:
 
     assert response["citations"][0]["target"] is None
     assert response["action"] is None
+
+
+async def test_enabled_llm_uses_only_exact_snapshot_facts_and_validated_citations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot = _synthetic_snapshot()
+    workspace_id = UUID(snapshot["workspace"]["id"])
+    user_id = uuid4()
+    captured: dict = {}
+
+    async def read_snapshot(**_kwargs):
+        return snapshot
+
+    async def generate(**kwargs):
+        captured.update(kwargs)
+        priority_fact = next(
+            fact for fact in kwargs["facts"] if fact.id == "priority.summary"
+        )
+        return ValidatedAssistantReasoning(
+            fact=ValidatedAssistantSection(
+                text=priority_fact.text,
+                citation_ids=priority_fact.citation_ids,
+            ),
+            interpretation=ValidatedAssistantSection(
+                text="Приоритет требует решения перед релизом.",
+                citation_ids=priority_fact.citation_ids,
+            ),
+            objection=ValidatedAssistantSection(
+                text="Снимок не доказывает отсутствие других рисков.",
+                citation_ids=priority_fact.citation_ids,
+            ),
+            recommendation=ValidatedAssistantSection(
+                text="Проверить основания решения.",
+                citation_ids=priority_fact.citation_ids,
+            ),
+        )
+
+    monkeypatch.setattr(assistant_service, "read_workspace_headquarters", read_snapshot)
+    monkeypatch.setattr(assistant_service, "generate_assistant_reasoning", generate)
+    monkeypatch.setattr(settings, "enable_llm", True)
+    monkeypatch.setattr(settings, "assistant_llm_data_policy_acknowledged", True)
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai-key")
+
+    result = await query_workspace_assistant(
+        workspace_id=workspace_id,
+        user_id=user_id,
+        query="Что ты думаешь о ситуации?",
+        expected_snapshot_id=snapshot["snapshot"]["id"],
+    )
+
+    assert result["intent"] == "second_opinion"
+    assert result["llm_used"] is True
+    assert result["validation_status"] == "evidence_validated"
+    assert result["snapshot_id"] == snapshot["snapshot"]["id"]
+    assert result["perspectives"]["fact"]["text"].startswith("Проверить безопасный")
+    assert result["perspectives"]["recommendation"]["text"] == (
+        "Проверить основания решения."
+    )
+    assert result["citations"] == [snapshot["priority"]["evidence_refs"][0]]
+    assert len(captured["facts"]) <= 16
+    assert captured["query"] == "что ты думаешь о ситуации?"
+    assert captured["safety_identifier"] not in {str(workspace_id), str(user_id)}
+
+
+async def test_llm_failure_falls_back_without_leaking_provider_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot = _synthetic_snapshot()
+
+    async def read_snapshot(**_kwargs):
+        return snapshot
+
+    async def unavailable(**_kwargs):
+        raise AssistantLLMUnavailableError("private provider detail")
+
+    monkeypatch.setattr(assistant_service, "read_workspace_headquarters", read_snapshot)
+    monkeypatch.setattr(assistant_service, "generate_assistant_reasoning", unavailable)
+    monkeypatch.setattr(settings, "enable_llm", True)
+    monkeypatch.setattr(settings, "assistant_llm_data_policy_acknowledged", True)
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai-key")
+
+    result = await query_workspace_assistant(
+        workspace_id=UUID(snapshot["workspace"]["id"]),
+        user_id=uuid4(),
+        query="Какой сейчас главный приоритет?",
+        expected_snapshot_id=snapshot["snapshot"]["id"],
+    )
+
+    assert result["llm_used"] is False
+    assert result["validation_status"] == "deterministic"
+    assert "ai_response_unavailable" in result["warnings"]
+    assert "private provider detail" not in str(result)
+
+
+async def test_llm_requires_explicit_provider_data_policy_acknowledgement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    snapshot = _synthetic_snapshot()
+
+    async def read_snapshot(**_kwargs):
+        return snapshot
+
+    async def forbidden_provider(**_kwargs):
+        raise AssertionError("provider must not run before data policy acknowledgement")
+
+    monkeypatch.setattr(assistant_service, "read_workspace_headquarters", read_snapshot)
+    monkeypatch.setattr(
+        assistant_service,
+        "generate_assistant_reasoning",
+        forbidden_provider,
+    )
+    monkeypatch.setattr(settings, "enable_llm", True)
+    monkeypatch.setattr(settings, "assistant_llm_data_policy_acknowledged", False)
+    monkeypatch.setattr(settings, "openai_api_key", "test-openai-key")
+
+    result = await query_workspace_assistant(
+        workspace_id=UUID(snapshot["workspace"]["id"]),
+        user_id=uuid4(),
+        query="Какой сейчас главный приоритет?",
+        expected_snapshot_id=snapshot["snapshot"]["id"],
+    )
+
+    assert result["llm_used"] is False
+    assert result["warnings"] == ["ai_data_policy_not_acknowledged"]
 
 
 async def test_identical_query_is_single_flight_and_does_not_spend_two_rate_slots(

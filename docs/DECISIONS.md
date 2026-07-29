@@ -3482,6 +3482,58 @@ Further work must lower budgets through characterized slices. Large
 Headquarters, ActionProposalsPanel and global CSS refactors remain inappropriate
 without focused behavior/performance coverage for the exact slice being moved.
 
+## DEC-111 - Generative Second Opinion Is Snapshot-Bound And Evidence-Criticized
+
+Decision (2026-07-29): `assistant.v2` retains the deterministic `assistant.v1`
+fallback and adds an optional read-only generative path over the exact visible
+`hqs1_*` Headquarters snapshot. Generative execution requires all three
+server-side gates: `ENABLE_LLM=true`, a secret OpenAI API key and explicit
+acknowledgement of the provider data policy. A missing gate, provider error,
+refusal, timeout, incomplete result, invalid schema or failed evidence check
+returns the deterministic answer with a controlled warning; provider details
+and response bodies are not exposed.
+
+The runtime uses the fixed HTTPS OpenAI Responses endpoint directly through the
+already-audited HTTP client. It sends no raw provider payload, source body,
+credential, chat history or database identifier. The request contains only the
+current question, at most sixteen bounded normalized facts derived from the
+workspace-scoped Headquarters projection, an opaque SHA-256 safety identifier
+and a strict JSON schema. `store=false`, `reasoning.context=current_turn`, a
+bounded output budget, no tools and no continuation response ID prevent
+FounderOS application state or cross-turn reasoning from being created through
+this path. The API key is a `SecretStr`, remains server-only and is never
+returned to the browser.
+
+Every response has explicit fact, interpretation, objection and recommendation
+sections. The model may select only retrieval fact IDs. The local critic rejects
+unknown IDs, duplicate or absent support, unresolved citations, extra schema
+fields and any factual sentence that is not an exact retrieved fact. Derived
+sections must resolve through their cited facts to canonical evidence in the
+same response. This validation proves evidence linkage and strict shape; it does
+not prove that every interpretation is strategically correct, so the UI labels
+the result as a second opinion and keeps exact evidence and snapshot boundaries
+visible.
+
+The LLM cannot create, approve, reject or execute an ActionProposal. Explicit
+action requests continue through the deterministic human-confirmation boundary
+without a model call. Neither the question, prompt, provider response, response
+ID nor generated answer is persisted or logged by FounderOS.
+
+`store=false` disables Responses application-state persistence but is not, by
+itself, a Zero Data Retention agreement. Under the provider's documented
+default, abuse-monitoring logs may retain customer content for a limited period;
+eligible organizations require separately approved Modified Abuse Monitoring
+or Zero Data Retention controls. The dedicated acknowledgement gate makes that
+external policy an explicit operator decision. A real credentialed call,
+cost/latency evaluation, organization retention verification and product
+settings control remain operational acceptance gates rather than simulated
+evidence.
+
+Provider contract references:
+[Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs),
+[current model guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6)
+and [data controls](https://developers.openai.com/api/docs/guides/your-data).
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

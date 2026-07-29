@@ -74,7 +74,9 @@ def test_settings_accepts_fos_openai_api_key_alias(monkeypatch: pytest.MonkeyPat
 
     config = Settings(_env_file=None)
 
-    assert config.openai_api_key == "test-fos-openai-key"
+    assert isinstance(config.openai_api_key, SecretStr)
+    assert config.openai_api_key.get_secret_value() == "test-fos-openai-key"
+    assert "test-fos-openai-key" not in repr(config)
 
 
 def test_settings_prefers_standard_openai_api_key_alias(
@@ -85,7 +87,8 @@ def test_settings_prefers_standard_openai_api_key_alias(
 
     config = Settings(_env_file=None)
 
-    assert config.openai_api_key == "test-openai-key"
+    assert isinstance(config.openai_api_key, SecretStr)
+    assert config.openai_api_key.get_secret_value() == "test-openai-key"
 
 
 def test_dependency_allows_when_auth_disabled() -> None:

@@ -35,12 +35,12 @@
 ## D. Спросить
 
 - [x] «Спросить» является самостоятельной основной зоной.
-- [ ] Ответ разделяет факт, интерпретацию, возражение и рекомендацию.
+- [x] Ответ разделяет факт, интерпретацию, возражение и рекомендацию.
 - [x] Ответ связан с точным workspace snapshot.
 - [x] Evidence и ограничения доступны из ответа.
 - [x] История разговора не сохраняется по умолчанию.
 - [x] Action request создаёт только draft/переход к подтверждению.
-- [ ] Generative LLM path использует strict schema и evidence validation.
+- [x] Generative LLM path использует strict schema и evidence validation.
 
 ## E. Настройки
 
@@ -73,7 +73,7 @@
 - [ ] Есть contradiction detection между источниками.
 - [ ] Есть пользовательское исправление и забывание памяти.
 - [x] Retrieval scoped к workspace и текущим правам.
-- [ ] AI critic не принимает unsupported claim.
+- [x] AI critic не принимает unsupported claim.
 
 ## G. Действия
 

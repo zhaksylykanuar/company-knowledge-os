@@ -1,13 +1,15 @@
-"""Bounded deterministic assistant over the exact Headquarters snapshot.
+"""Bounded read-only assistant over the exact Headquarters snapshot.
 
-The service classifies an allowlisted intent and formats only already-sanitized
-Headquarters facts. It never logs the question, calls a provider/LLM, persists
-chat, or invokes a mutation service.
+The default path is deterministic. When the explicit LLM gate and server-side
+key are present, a strict provider path reasons only over sanitized evidence
+facts and is rejected unless every section resolves to the current snapshot.
+Neither path persists chat or invokes a mutation service.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable, Mapping
@@ -19,13 +21,19 @@ from typing import Any, Final
 from uuid import UUID
 
 from app.core.config import settings
+from app.services.assistant_llm_service import (
+    AssistantEvidenceFact,
+    AssistantLLMError,
+    ValidatedAssistantReasoning,
+    generate_assistant_reasoning,
+)
 from app.services.headquarters_read_service import (
     read_workspace_headquarters,
     sanitize_headquarters_evidence_url,
 )
 
 
-ASSISTANT_CONTRACT_VERSION: Final = "assistant.v1"
+ASSISTANT_CONTRACT_VERSION: Final = "assistant.v2"
 ASSISTANT_QUERY_MAX_CHARS = 500
 ASSISTANT_RESPONSE_TEXT_MAX_CHARS = 600
 ASSISTANT_CITATION_LIMIT = 8
@@ -42,6 +50,7 @@ ASSISTANT_INTENTS = frozenset(
         "decision_status",
         "evidence",
         "owners",
+        "second_opinion",
         "sources",
         "unsupported",
         "waiting_decisions",
@@ -288,7 +297,39 @@ async def query_workspace_assistant(
             )
             if snapshot["snapshot"]["id"] != expected_snapshot_id:
                 raise AssistantSnapshotChangedError("headquarters snapshot changed")
-            return build_assistant_response(snapshot, normalized_query)
+            deterministic = build_assistant_response(snapshot, normalized_query)
+            if not settings.enable_llm or not _safe_for_llm(normalized_query):
+                return deterministic
+            if not settings.assistant_llm_data_policy_acknowledged:
+                return _with_warning(
+                    deterministic,
+                    "ai_data_policy_not_acknowledged",
+                )
+            api_key = _resolved_openai_api_key()
+            if api_key is None:
+                return _with_warning(deterministic, "ai_not_configured")
+
+            facts, available_citations = _assistant_retrieval(snapshot)
+            if not facts:
+                return _with_warning(deterministic, "insufficient_ai_evidence")
+            try:
+                reasoning = await generate_assistant_reasoning(
+                    api_key=api_key,
+                    model=settings.assistant_llm_model,
+                    reasoning_effort=settings.assistant_llm_reasoning_effort,
+                    max_output_tokens=settings.assistant_llm_max_output_tokens,
+                    timeout_seconds=settings.assistant_llm_timeout_seconds,
+                    safety_identifier=_safety_identifier(workspace_id, user_id),
+                    query=normalized_query,
+                    facts=facts,
+                )
+            except AssistantLLMError:
+                return _with_warning(deterministic, "ai_response_unavailable")
+            return _build_generative_response(
+                deterministic=deterministic,
+                reasoning=reasoning,
+                available_citations=available_citations,
+            )
 
     return await assistant_query_controller.run(key=key, operation=operation)
 
@@ -304,6 +345,7 @@ def build_assistant_response(
         "contract_version": ASSISTANT_CONTRACT_VERSION,
         "intent": intent,
         "text": text[:ASSISTANT_RESPONSE_TEXT_MAX_CHARS],
+        "perspectives": _deterministic_perspectives(text, citations),
         "citations": citations[:ASSISTANT_CITATION_LIMIT],
         "suggestions": _suggestions(intent)[:ASSISTANT_SUGGESTION_LIMIT],
         "action": action,
@@ -313,7 +355,234 @@ def build_assistant_response(
         "warnings": warnings[:ASSISTANT_WARNING_LIMIT],
         "is_live": True,
         "llm_used": False,
+        "validation_status": "deterministic",
     }
+    _validate_response_size(result)
+    return result
+
+
+def _deterministic_perspectives(
+    text: str,
+    citations: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    supported_text = text if citations else None
+    citation_ids = [citation["id"] for citation in citations] if citations else []
+    return {
+        "fact": {"text": supported_text, "citation_ids": citation_ids},
+        "interpretation": {"text": None, "citation_ids": []},
+        "objection": {"text": None, "citation_ids": []},
+        "recommendation": {"text": None, "citation_ids": []},
+    }
+
+
+def _build_generative_response(
+    *,
+    deterministic: Mapping[str, Any],
+    reasoning: ValidatedAssistantReasoning,
+    available_citations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    sections = {
+        "fact": reasoning.fact,
+        "interpretation": reasoning.interpretation,
+        "objection": reasoning.objection,
+        "recommendation": reasoning.recommendation,
+    }
+    referenced_ids = {
+        citation_id
+        for section in sections.values()
+        for citation_id in section.citation_ids
+    }
+    citations = [
+        citation
+        for citation in available_citations
+        if citation["id"] in referenced_ids
+    ][:ASSISTANT_CITATION_LIMIT]
+    resolved_ids = {citation["id"] for citation in citations}
+    if referenced_ids != resolved_ids:
+        raise AssistantResponseTooLargeError(
+            "assistant evidence resolution changed during response build"
+        )
+
+    result = dict(deterministic)
+    if result["intent"] == "unsupported":
+        result["intent"] = "second_opinion"
+    result["text"] = (
+        reasoning.recommendation.text
+        or reasoning.interpretation.text
+        or reasoning.fact.text
+        or "Недостаточно подтверждённых данных."
+    )[:ASSISTANT_RESPONSE_TEXT_MAX_CHARS]
+    result["perspectives"] = {
+        name: {
+            "text": section.text,
+            "citation_ids": list(section.citation_ids),
+        }
+        for name, section in sections.items()
+    }
+    result["citations"] = citations
+    result["llm_used"] = True
+    result["validation_status"] = "evidence_validated"
+    result["warnings"] = [
+        warning
+        for warning in result["warnings"]
+        if warning != "unsupported_intent"
+    ]
+    _validate_response_size(result)
+    return result
+
+
+def _assistant_retrieval(
+    snapshot: Mapping[str, Any],
+) -> tuple[list[AssistantEvidenceFact], list[dict[str, Any]]]:
+    facts: list[AssistantEvidenceFact] = []
+    citations: dict[str, dict[str, Any]] = {}
+
+    def add_fact(
+        fact_id: str,
+        text: str,
+        raw_citations: list[dict[str, Any]],
+    ) -> None:
+        normalized_text = _safe_text(text, 420)
+        if not normalized_text or len(facts) >= 16:
+            return
+        retained_ids: list[str] = []
+        for citation in raw_citations:
+            citation_id = _safe_text(citation.get("id"), 180)
+            if not citation_id:
+                continue
+            if citation_id not in citations:
+                if len(citations) >= ASSISTANT_CITATION_LIMIT:
+                    continue
+                citations[citation_id] = citation
+            retained_ids.append(citation_id)
+        if not retained_ids:
+            return
+        facts.append(
+            AssistantEvidenceFact(
+                id=fact_id,
+                text=normalized_text,
+                citation_ids=tuple(dict.fromkeys(retained_ids)),
+            )
+        )
+
+    priority = _mapping(snapshot.get("priority"))
+    if priority is not None:
+        evidence = _evidence(priority.get("evidence_refs"))
+        add_fact(
+            "priority.summary",
+            " ".join(
+                part
+                for part in (
+                    _safe_text(priority.get("title"), 180),
+                    _safe_text(priority.get("summary"), 220),
+                )
+                if part
+            ),
+            evidence,
+        )
+        add_fact(
+            "priority.why_now",
+            _safe_text(priority.get("why_now"), 420),
+            evidence,
+        )
+
+    for index, mission in enumerate(_mapping_list(snapshot.get("queue"))[:3]):
+        add_fact(
+            f"queue.{index}",
+            " ".join(
+                part
+                for part in (
+                    _safe_text(mission.get("title"), 180),
+                    _safe_text(mission.get("summary"), 180),
+                    (
+                        f"Статус: {_safe_text(mission.get('status'), 60)}."
+                        if _safe_text(mission.get("status"), 60)
+                        else ""
+                    ),
+                )
+                if part
+            ),
+            _evidence(mission.get("evidence_refs")),
+        )
+
+    sources = _mapping(snapshot.get("sources")) or {}
+    source_values = (
+        _safe_count(sources.get("total")),
+        _safe_count(sources.get("healthy")),
+        _safe_count(sources.get("attention_count")),
+    )
+    if all(value is not None for value in source_values):
+        total, healthy, attention = source_values
+        add_fact(
+            "sources.status",
+            (
+                f"Источники: всего {total}, работают {healthy}, "
+                f"требуют внимания {attention}."
+            ),
+            [_snapshot_citation(snapshot, "sources", "/settings/integrations")],
+        )
+
+    waiting = _pulse_metric(snapshot, "waiting_decisions")
+    waiting_count = _safe_count(waiting.get("value")) if waiting else None
+    if waiting_count is not None:
+        add_fact(
+            "decisions.waiting",
+            f"Решений с проверяемыми основаниями ждёт: {waiting_count}.",
+            [_snapshot_citation(snapshot, "decisions", "/actions?status=proposed")],
+        )
+
+    briefing_count = _onboarding_count(snapshot, "briefings")
+    if briefing_count is not None:
+        add_fact(
+            "briefings.count",
+            f"В текущем снимке подтверждено брифингов: {briefing_count}.",
+            [_snapshot_citation(snapshot, "briefing", "/briefings")],
+        )
+
+    workspace = _mapping(snapshot.get("workspace")) or {}
+    workspace_name = _safe_text(workspace.get("name"), 180)
+    if workspace_name:
+        add_fact(
+            "workspace.name",
+            f"Текущая компания: {workspace_name}.",
+            [_snapshot_citation(snapshot, "identity", "/dashboard")],
+        )
+
+    return facts, list(citations.values())
+
+
+def _safe_for_llm(normalized_query: str) -> bool:
+    return not _contains_any(
+        normalized_query,
+        (*_UNSAFE_INSTRUCTION_MARKERS, *_ACTION_REQUEST_MARKERS),
+    )
+
+
+def _resolved_openai_api_key() -> str | None:
+    configured = settings.openai_api_key
+    if configured is None:
+        return None
+    get_secret_value = getattr(configured, "get_secret_value", None)
+    raw = get_secret_value() if callable(get_secret_value) else configured
+    return raw if isinstance(raw, str) and raw else None
+
+
+def _safety_identifier(workspace_id: UUID, user_id: UUID) -> str:
+    return hashlib.sha256(
+        f"founderos:{workspace_id}:{user_id}".encode("utf-8")
+    ).hexdigest()
+
+
+def _with_warning(result: Mapping[str, Any], warning: str) -> dict[str, Any]:
+    fallback = dict(result)
+    fallback["warnings"] = list(
+        dict.fromkeys([*fallback.get("warnings", []), warning])
+    )[:ASSISTANT_WARNING_LIMIT]
+    _validate_response_size(fallback)
+    return fallback
+
+
+def _validate_response_size(result: Mapping[str, Any]) -> None:
     encoded = json.dumps(
         result,
         default=str,
@@ -322,7 +591,6 @@ def build_assistant_response(
     ).encode("utf-8")
     if len(encoded) > ASSISTANT_RESPONSE_MAX_BYTES:
         raise AssistantResponseTooLargeError("assistant response exceeded bounded size")
-    return result
 
 
 def _normalize_query(query: str) -> str:

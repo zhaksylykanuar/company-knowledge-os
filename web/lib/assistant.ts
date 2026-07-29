@@ -14,6 +14,7 @@ export const ASSISTANT_INTENTS = [
   "decision_status",
   "evidence",
   "owners",
+  "second_opinion",
   "sources",
   "unsupported",
   "waiting_decisions",
@@ -33,10 +34,23 @@ export type AssistantSuggestion = {
   query: string;
 };
 
+export type AssistantPerspective = {
+  text: string | null;
+  citation_ids: string[];
+};
+
+export type AssistantPerspectives = {
+  fact: AssistantPerspective;
+  interpretation: AssistantPerspective;
+  objection: AssistantPerspective;
+  recommendation: AssistantPerspective;
+};
+
 export type AssistantQueryResponse = {
-  contract_version: "assistant.v1";
+  contract_version: "assistant.v2";
   intent: AssistantIntent;
   text: string;
+  perspectives: AssistantPerspectives;
   citations: HeadquartersEvidenceRef[];
   suggestions: AssistantSuggestion[];
   action: HeadquartersAction | null;
@@ -45,7 +59,8 @@ export type AssistantQueryResponse = {
   partial: boolean;
   warnings: string[];
   is_live: true;
-  llm_used: false;
+  llm_used: boolean;
+  validation_status: "deterministic" | "evidence_validated";
 };
 
 export class AssistantContractError extends Error {
@@ -88,6 +103,7 @@ export function parseAssistantQueryResponse(value: unknown): AssistantQueryRespo
       "contract_version",
       "intent",
       "text",
+      "perspectives",
       "citations",
       "suggestions",
       "action",
@@ -96,14 +112,16 @@ export function parseAssistantQueryResponse(value: unknown): AssistantQueryRespo
       "partial",
       "warnings",
       "is_live",
-      "llm_used"
+      "llm_used",
+      "validation_status"
     ],
     "assistant"
   );
-  expectLiteral(response.contract_version, "assistant.v1", "contract_version");
+  expectLiteral(response.contract_version, "assistant.v2", "contract_version");
   expectEnum(response.intent, ASSISTANT_INTENTS, "intent");
   expectBoundedString(response.text, "text", 1, 600);
   validateCitations(response.citations);
+  validatePerspectives(response.perspectives, response.citations);
   validateSuggestions(response.suggestions);
   if (response.action !== null) validateAction(response.action);
   const snapshotId = expectBoundedString(response.snapshot_id, "snapshot_id", 69, 69);
@@ -117,8 +135,66 @@ export function parseAssistantQueryResponse(value: unknown): AssistantQueryRespo
   expectBoolean(response.partial, "partial");
   validateWarnings(response.warnings);
   expectLiteral(response.is_live, true, "is_live");
-  expectLiteral(response.llm_used, false, "llm_used");
+  const llmUsed = expectBoolean(response.llm_used, "llm_used");
+  const validationStatus = expectEnum(
+    response.validation_status,
+    ["deterministic", "evidence_validated"] as const,
+    "validation_status"
+  );
+  if (llmUsed !== (validationStatus === "evidence_validated")) {
+    contractError("validation_status", "must match llm_used");
+  }
   return value as AssistantQueryResponse;
+}
+
+function validatePerspectives(value: unknown, rawCitations: unknown): void {
+  const perspectives = expectRecord(value, "perspectives");
+  const names = [
+    "fact",
+    "interpretation",
+    "objection",
+    "recommendation"
+  ] as const;
+  expectKeys(perspectives, names, "perspectives");
+  const availableIds = new Set(
+    Array.isArray(rawCitations)
+      ? rawCitations.map((rawCitation, index) =>
+          expectBoundedString(
+            expectRecord(rawCitation, `citations[${index}]`).id,
+            `citations[${index}].id`,
+            1,
+            180
+          )
+        )
+      : []
+  );
+
+  names.forEach((name) => {
+    const path = `perspectives.${name}`;
+    const perspective = expectRecord(perspectives[name], path);
+    expectKeys(perspective, ["text", "citation_ids"], path);
+    if (perspective.text !== null) {
+      expectBoundedString(perspective.text, `${path}.text`, 1, 600);
+    }
+    if (!Array.isArray(perspective.citation_ids) || perspective.citation_ids.length > 8) {
+      contractError(`${path}.citation_ids`, "must be an array with at most 8 items");
+    }
+    const ids = perspective.citation_ids.map((citationId, index) =>
+      expectBoundedString(citationId, `${path}.citation_ids[${index}]`, 1, 180)
+    );
+    if (ids.length !== new Set(ids).size) {
+      contractError(`${path}.citation_ids`, "must contain unique ids");
+    }
+    if (perspective.text === null && ids.length > 0) {
+      contractError(path, "empty perspective cannot cite evidence");
+    }
+    if (perspective.text !== null && ids.length === 0) {
+      contractError(path, "non-empty perspective requires evidence");
+    }
+    if (ids.some((citationId) => !availableIds.has(citationId))) {
+      contractError(`${path}.citation_ids`, "must resolve to response citations");
+    }
+  });
 }
 
 function validateCitations(value: unknown): void {

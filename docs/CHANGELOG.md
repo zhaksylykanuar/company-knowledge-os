@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added the optional `assistant.v2` generative second-opinion path (DEC-111):
+  bounded exact-snapshot retrieval, strict Responses JSON schema, explicit
+  fact/interpretation/objection/recommendation sections, local evidence critic,
+  non-persistent provider requests and deterministic fallback.
+- Added an independent provider-data-policy acknowledgement gate. An LLM key
+  and feature flag alone cannot send company facts outside FounderOS.
+- Added a minimal structured second-opinion UI with visible evidence-validation,
+  snapshot and no-action boundaries.
 - Added maintainability ratchets and a deterministic Headquarters query-budget
   test that rejects SourceRecord-driven N+1 growth (DEC-110).
 - Added a dedicated action API schema module, reducing the action route module
@@ -94,8 +102,8 @@
   and regenerated the Python lockfile with no known dependency vulnerabilities.
 - Removed unused OpenAI and Google API/OAuth SDKs, Tenacity, obsolete
   Google/email/triage/Jira/Telegram settings, legacy provider placeholders and
-  the superseded Codex operator launcher. The disabled LLM configuration
-  contract remains reserved for the future evidence-validated AI path.
+  the superseded Codex operator launcher. The later evidence-validated AI path
+  uses the existing audited HTTP client and does not reintroduce an SDK.
 - Session validation now writes `last_seen_at` only after a configured minimum
   interval instead of on every authenticated request.
 - Non-local startup now rejects `SameSite=None`; the product keeps its

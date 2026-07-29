@@ -246,6 +246,42 @@
   margin: 0;
 }
 
+.perspectives {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.perspective {
+  background: var(--panel-muted);
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+}
+
+.perspective:first-child {
+  border-radius: 10px 10px 0 0;
+}
+
+.perspective:last-child {
+  border-radius: 0 0 10px 10px;
+}
+
+.perspective strong {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.perspective p {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+}
+
 .citations {
   display: grid;
   gap: 7px;

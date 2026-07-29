@@ -16,7 +16,7 @@ import { ApiRequestError } from "../lib/api";
 import { makeHeadquartersFixture } from "./fixtures/headquarters";
 
 const ANSWER: AssistantQueryResponse = {
-  contract_version: "assistant.v1",
+  contract_version: "assistant.v2",
   intent: "action_request",
   text: "Я не выполняю действия сам. Подтвердите решение лично.",
   citations: [
@@ -33,6 +33,15 @@ const ANSWER: AssistantQueryResponse = {
       workspace_scoped: true
     }
   ],
+  perspectives: {
+    fact: {
+      text: "Я не выполняю действия сам. Подтвердите решение лично.",
+      citation_ids: ["evidence_ref:decision"]
+    },
+    interpretation: { text: null, citation_ids: [] },
+    objection: { text: null, citation_ids: [] },
+    recommendation: { text: null, citation_ids: [] }
+  },
   suggestions: [
     {
       id: "sources",
@@ -52,7 +61,8 @@ const ANSWER: AssistantQueryResponse = {
   partial: true,
   warnings: ["company_world_temporarily_unavailable"],
   is_live: true,
-  llm_used: false
+  llm_used: false,
+  validation_status: "deterministic"
 };
 
 function renderPanel(
@@ -83,6 +93,11 @@ test("renders evidence, safe confirmation navigation, warnings, and read-only bo
   assert.ok(html.includes("Открыть подтверждение"));
   assert.ok(html.includes("только чтение"));
   assert.ok(html.includes("действий не выполнено"));
+  assert.ok(html.includes("Факт"));
+  assert.ok(html.includes("Интерпретация"));
+  assert.ok(html.includes("Возражение"));
+  assert.ok(html.includes("Рекомендация"));
+  assert.ok(html.includes("без генерации"));
   assert.ok(html.includes("Ограничения снимка (1)"));
   assert.ok(html.includes("Что с источниками?"));
 });

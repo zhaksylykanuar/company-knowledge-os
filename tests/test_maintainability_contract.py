@@ -13,6 +13,9 @@ LINE_BUDGETS = {
     "app/api/github.py": 1500,
     "app/api/actions.py": 1250,
     "app/api/action_schemas.py": 350,
+    "app/api/assistant.py": 200,
+    "app/services/assistant_query_service.py": 1000,
+    "app/services/assistant_llm_service.py": 350,
     "scripts/disaster_recovery.py": 1250,
 }
 

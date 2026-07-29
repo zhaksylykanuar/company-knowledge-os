@@ -87,9 +87,10 @@ restore proof и полный RLS ещё не объявлены готовым�
 Цель: generative reasoning поверх проверяемой памяти.
 
 - workspace/permission-scoped retrieval;
-- strict schemas;
-- fact / interpretation / objection / recommendation;
-- critic и unsupported-claim rejection;
+- strict schemas — `assistant.v2` реализован;
+- fact / interpretation / objection / recommendation — реализовано;
+- evidence critic и unsupported-claim rejection — реализовано для bounded
+  snapshot facts;
 - model/privacy/budget controls в настройках;
 - chat memory только после явного opt-in.
 
