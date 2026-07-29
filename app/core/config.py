@@ -122,6 +122,40 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("FOS_GITHUB_SYNC_ALLOWED_REPOS"),
     )
+    github_sync_worker_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_WORKER_ENABLED"),
+    )
+    github_sync_worker_concurrency: int = Field(
+        default=2,
+        ge=1,
+        le=4,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_WORKER_CONCURRENCY"),
+    )
+    github_sync_worker_poll_seconds: float = Field(
+        default=1.0,
+        gt=0,
+        le=30,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_WORKER_POLL_SECONDS"),
+    )
+    github_sync_job_lease_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_JOB_LEASE_SECONDS"),
+    )
+    github_sync_job_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_JOB_MAX_ATTEMPTS"),
+    )
+    github_sync_job_retry_base_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=300,
+        validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_JOB_RETRY_BASE_SECONDS"),
+    )
     # --- GitHub App product-connect foundation ---
     # Values below describe the app installation path. Secret values are never
     # returned to the browser; status payloads expose only configured/missing

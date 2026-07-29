@@ -45,6 +45,7 @@ async def mint_installation_access_token(
     installation_id: str,
     credential: GitHubAppSigningCredential | None = None,
     config: Settings = settings,
+    client: httpx.AsyncClient | None = None,
 ) -> GitHubInstallationAccessToken:
     """Mint a short-lived GitHub App installation access token just-in-time.
 
@@ -64,11 +65,15 @@ async def mint_installation_access_token(
         "X-GitHub-Api-Version": GITHUB_API_VERSION,
         "User-Agent": "founderOS",
     }
+    owns_client = client is None
+    http_client = client or httpx.AsyncClient(timeout=30.0)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, headers=headers)
+        response = await http_client.post(url, headers=headers)
     except httpx.HTTPError as exc:
         raise GitHubAppTokenError("github app token request failed") from exc
+    finally:
+        if owns_client:
+            await http_client.aclose()
 
     if response.status_code < 200 or response.status_code >= 300:
         raise GitHubAppTokenError(_safe_response_detail(response))

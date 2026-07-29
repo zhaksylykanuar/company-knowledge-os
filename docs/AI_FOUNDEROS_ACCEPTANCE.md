@@ -51,6 +51,8 @@
 - [x] Отключение объясняет, какие canonical данные сохраняются или удаляются.
 - [x] Секреты никогда не возвращаются в браузер.
 - [x] Рабочая GitHub-организация и repositories выбираются явно.
+- [x] GitHub live read создаёт durable job; UI автоматически показывает
+  queued/running progress, terminal receipt и owner/admin cancel.
 - [ ] Пользователь может управлять memory retention и удалением.
 
 ## F. Память и reasoning
@@ -138,6 +140,8 @@
   interval-bounded.
 - [x] Smoke commands are separated into liveness, session, workspace and
   desktop/mobile browser E2E contracts.
+- [x] Provider network I/O не удерживает SQL transaction; GitHub jobs имеют
+  bounded workers, PostgreSQL lease, retry, resume, progress и cancel.
 - [x] Workspace-owned canonical/document relations use composite PostgreSQL
   foreign keys; negative tests reject every covered cross-workspace commit.
 - [ ] Public multi-tenant mode enforces the full RLS gate from DEC-102.

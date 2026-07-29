@@ -34,6 +34,7 @@ SYNC_JOB_STATUS_RUNNING = "running"
 SYNC_JOB_STATUS_SUCCEEDED = "succeeded"
 SYNC_JOB_STATUS_FAILED = "failed"
 SYNC_JOB_STATUS_PARTIAL = "partial"
+SYNC_JOB_STATUS_CANCELLED = "cancelled"
 
 SYNC_JOB_TYPE_INITIAL = "initial"
 SYNC_JOB_TYPE_INCREMENTAL = "incremental"
@@ -122,8 +123,8 @@ class IntegrationConnection(Base):
 class SyncJob(Base):
     """Canonical sync job state for a provider connection.
 
-    This row records sync lifecycle and counters only; it does not enqueue or run
-    provider work.
+    PostgreSQL is the durable queue and lifecycle source of truth. Provider
+    credentials and payload bodies are never stored in lease fields or logs.
     """
 
     __tablename__ = "sync_jobs"
@@ -133,7 +134,8 @@ class SyncJob(Base):
             name="ck_sync_jobs_provider",
         ),
         CheckConstraint(
-            "status in ('queued', 'running', 'succeeded', 'failed', 'partial')",
+            "status in "
+            "('queued', 'running', 'succeeded', 'failed', 'partial', 'cancelled')",
             name="ck_sync_jobs_status",
         ),
         CheckConstraint(
@@ -142,6 +144,13 @@ class SyncJob(Base):
         ),
         Index("ix_sync_jobs_workspace_status", "workspace_id", "status"),
         Index("ix_sync_jobs_connection_started_at", "connection_id", "started_at"),
+        Index(
+            "ix_sync_jobs_claim",
+            "provider",
+            "status",
+            "next_attempt_at",
+            "lease_expires_at",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -177,6 +186,31 @@ class SyncJob(Base):
     records_updated: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     logs: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+    )
+    max_attempts: Mapped[int] = mapped_column(
+        Integer,
+        default=3,
+        server_default="3",
+    )
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        index=True,
+    )
+    lease_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )

@@ -39,6 +39,7 @@ import type {
   GitHubOperationalWorkResponse,
   GitHubOperationalWorkState,
   GitHubRepositoryListResponse,
+  GitHubSyncJobRead,
   NormalizedEntitiesResponse,
   DocumentCreateRequest,
   DocumentListRequest,
@@ -1098,4 +1099,97 @@ export async function runGitHubAppLiveSync(
       method: "POST"
     }
   );
+}
+
+export function buildWorkspaceGitHubSyncJobPath(
+  workspaceId: string,
+  syncJobId: string
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(
+    workspaceId
+  )}/github/sync-jobs/${encodeURIComponent(syncJobId)}`;
+}
+
+export async function fetchGitHubSyncJob(
+  workspaceId: string,
+  syncJobId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubSyncJobRead> {
+  return apiFetch<GitHubSyncJobRead>(
+    buildWorkspaceGitHubSyncJobPath(workspaceId, syncJobId),
+    options
+  );
+}
+
+export async function cancelGitHubSyncJob(
+  workspaceId: string,
+  syncJobId: string,
+  options: ApiFetchOptions = {}
+): Promise<GitHubSyncJobRead> {
+  return apiFetch<GitHubSyncJobRead>(
+    `${buildWorkspaceGitHubSyncJobPath(workspaceId, syncJobId)}/cancel`,
+    { ...options, method: "POST" }
+  );
+}
+
+export function isGitHubSyncJobTerminal(status: string): boolean {
+  return ["cancelled", "failed", "partial", "succeeded"].includes(
+    status.trim().toLowerCase()
+  );
+}
+
+type WaitForGitHubSyncJobOptions = ApiFetchOptions & {
+  intervalMs?: number;
+  maxPolls?: number;
+  onUpdate?: (syncJob: GitHubSyncJobRead) => void;
+};
+
+export async function waitForGitHubSyncJob(
+  workspaceId: string,
+  syncJobId: string,
+  options: WaitForGitHubSyncJobOptions = {}
+): Promise<GitHubSyncJobRead> {
+  const {
+    intervalMs = 1000,
+    maxPolls = 600,
+    onUpdate,
+    ...fetchOptions
+  } = options;
+  const boundedPolls = Math.max(1, maxPolls);
+  for (let poll = 0; poll < boundedPolls; poll += 1) {
+    const syncJob = await fetchGitHubSyncJob(
+      workspaceId,
+      syncJobId,
+      fetchOptions
+    );
+    onUpdate?.(syncJob);
+    if (isGitHubSyncJobTerminal(syncJob.status)) {
+      return syncJob;
+    }
+    if (poll + 1 < boundedPolls) {
+      await waitForGitHubSyncPoll(intervalMs, fetchOptions.signal);
+    }
+  }
+  throw new Error("github sync job did not finish in time");
+}
+
+async function waitForGitHubSyncPoll(
+  intervalMs: number,
+  signal?: AbortSignal | null
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    const onElapsed = () => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    };
+    const timeout = setTimeout(onElapsed, Math.max(0, intervalMs));
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+    }
+  });
 }

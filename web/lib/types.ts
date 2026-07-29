@@ -1164,6 +1164,53 @@ export type GitHubAppLiveSyncRequest = {
   pull_request_states?: ("open" | "closed" | "merged" | "all")[];
 };
 
+export type GitHubSyncRepositoryProgress = {
+  full_name: string;
+  synced_issues: number;
+  synced_pull_requests: number;
+  skipped_pull_requests: number;
+};
+
+export type GitHubSyncJobProgress = {
+  phase?: string;
+  completed_repositories?: string[];
+  total_repositories?: number;
+  repositories?: GitHubSyncRepositoryProgress[];
+  counts?: {
+    repositories?: number;
+    issues?: number;
+    pull_requests?: number;
+    skipped_pull_requests?: number;
+  };
+  partial?: boolean;
+  updated_at?: string;
+};
+
+export type GitHubSyncJobRead = {
+  id: string;
+  workspace_id: string;
+  connection_id: string;
+  provider: string;
+  status: string;
+  sync_type: string;
+  started_at: string | null;
+  finished_at: string | null;
+  records_seen: number;
+  records_created: number;
+  records_updated: number;
+  error_message: string | null;
+  attempt_count: number;
+  max_attempts: number;
+  next_attempt_at: string;
+  cancel_requested_at: string | null;
+  progress: GitHubSyncJobProgress | null;
+  created_at: string;
+  updated_at: string;
+  is_live: boolean;
+  execution_started: boolean;
+  warnings: string[];
+};
+
 export type GitHubAppLiveSyncResponse = {
   workspace_id: string;
   connection_id: string;
@@ -1188,6 +1235,11 @@ export type GitHubAppLiveSyncResponse = {
     records_updated: number;
     started_at: string | null;
     finished_at: string | null;
+    attempt_count: number;
+    max_attempts: number;
+    next_attempt_at: string | null;
+    cancel_requested_at: string | null;
+    progress: GitHubSyncJobProgress | null;
   };
   counts: {
     repositories: number;

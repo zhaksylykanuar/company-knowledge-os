@@ -39,6 +39,7 @@ from app.services.github_app_token_service import (
     build_github_app_jwt,
 )
 from app.services.github_repository_client import GitHubRepositoryClientError
+from app.services.github_sync_worker_service import process_one_github_sync_job
 from app.services.session_service import create_session
 
 
@@ -56,6 +57,14 @@ def _set_auth(monkeypatch) -> None:
 
 def _async_client() -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+
+async def _run_worker_once() -> bool:
+    async with AsyncClient() as client:
+        return await process_one_github_sync_job(
+            client=client,
+            worker_id="test-worker",
+        )
 
 
 def _bootstrap_payload(marker: str, *, suffix: str = "") -> dict[str, str]:
@@ -290,7 +299,9 @@ def _install_mock_provider(
         *,
         installation_id: str,
         credential: GitHubAppSigningCredential | None = None,
+        client: AsyncClient | None = None,
     ) -> GitHubInstallationAccessToken:
+        assert client is not None
         assert installation_id == "98765"
         if expect_managed_credential:
             assert credential is not None
@@ -305,8 +316,13 @@ def _install_mock_provider(
         )
 
     async def fake_list_installation_repositories(
-        *, access_token: str, per_page: int = 100, max_pages: int = 10
+        *,
+        access_token: str,
+        per_page: int = 100,
+        max_pages: int = 10,
+        client: AsyncClient | None = None,
     ) -> list[dict]:
+        assert client is not None
         assert access_token == "jit-installation-token"
         calls["repositories"] += 1
         if not installed:
@@ -332,7 +348,9 @@ def _install_mock_provider(
         state: str = "all",
         per_page: int = 100,
         max_pages: int = 10,
+        client: AsyncClient | None = None,
     ) -> list[dict]:
+        assert client is not None
         assert access_token == "jit-installation-token"
         assert repository_full_name == "qtwin-io/company-knowledge-os"
         assert state == "all"
@@ -363,7 +381,9 @@ def _install_mock_provider(
         state: str = "all",
         per_page: int = 100,
         max_pages: int = 10,
+        client: AsyncClient | None = None,
     ) -> list[dict]:
+        assert client is not None
         assert access_token == "jit-installation-token"
         assert repository_full_name == "qtwin-io/company-knowledge-os"
         assert state == "all"
@@ -632,12 +652,20 @@ async def test_verified_managed_app_can_read_with_global_connector_gate_disabled
                 },
             )
 
-        assert response.status_code == 200, response.text
+        assert response.status_code == 202, response.text
         assert response.json()["capabilities"] == {
             "read_only_sync": True,
             "external_writes": False,
             "installation_access_token_persisted": False,
         }
+        assert response.json()["sync_job"]["status"] == "queued"
+        assert calls == {
+            "token": 0,
+            "repositories": 0,
+            "issues": 0,
+            "pull_requests": 0,
+        }
+        assert await _run_worker_once() is True
         assert calls == {
             "token": 1,
             "repositories": 1,
@@ -788,23 +816,35 @@ async def test_github_app_live_sync_reads_and_persists_without_token_storage_or_
                 },
             )
 
-        assert response.status_code == 200, response.text
-        body = response.json()
-        assert body["is_live"] is True
-        assert body["provider_sync_started"] is True
-        assert body["external_write_performed"] is False
-        assert body["capabilities"] == {
+        assert response.status_code == 202, response.text
+        queued = response.json()
+        assert queued["is_live"] is False
+        assert queued["provider_sync_started"] is False
+        assert queued["external_write_performed"] is False
+        assert queued["capabilities"] == {
             "read_only_sync": True,
             "external_writes": False,
             "installation_access_token_persisted": False,
         }
-        assert body["totals"] == {
+        assert calls == {"token": 0, "repositories": 0, "issues": 0, "pull_requests": 0}
+        assert await _run_worker_once() is True
+        async with _async_client() as client:
+            job_response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/"
+                f"{queued['sync_job']['id']}",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+        assert job_response.status_code == 200, job_response.text
+        job = job_response.json()
+        assert job["status"] == "succeeded"
+        assert job["execution_started"] is True
+        assert job["progress"]["counts"] == {
             "repositories": 1,
             "issues": 1,
             "pull_requests": 1,
             "skipped_pull_requests": 1,
         }
-        assert body["counts"] == {"repositories": 1, "issues": 1, "pull_requests": 1}
         assert calls == {"token": 1, "repositories": 1, "issues": 1, "pull_requests": 1}
         assert await _count_for_workspace(Repository, workspace_id) == 1
         assert await _count_for_workspace(Task, workspace_id) == 1
@@ -855,6 +895,8 @@ async def test_github_app_synced_data_feeds_brain_and_briefing_with_workspace_is
                     "repositories": ["qtwin-io/company-knowledge-os"],
                 },
             )
+            assert sync_response.status_code == 202, sync_response.text
+            assert await _run_worker_once() is True
             brain_a = await client.get(
                 f"/api/v1/workspaces/{workspace_a}/company-brain",
                 headers=_headers(),
@@ -883,7 +925,6 @@ async def test_github_app_synced_data_feeds_brain_and_briefing_with_workspace_is
                 params={"owner_email": owner_b},
             )
 
-        assert sync_response.status_code == 200, sync_response.text
         assert brain_a.status_code == 200, brain_a.text
         brain_a_body = brain_a.json()
         assert brain_a_body["summary"]["repositories"] == 1
@@ -1045,10 +1086,18 @@ async def test_github_app_live_sync_rejects_repository_outside_installation(
                 },
             )
 
-        assert response.status_code == 409
-        assert response.json() == {
-            "detail": "github repository is not part of the app installation"
-        }
+        assert response.status_code == 202
+        assert calls == {"token": 0, "repositories": 0, "issues": 0, "pull_requests": 0}
+        assert await _run_worker_once() is True
+        async with _async_client() as client:
+            job_response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/"
+                f"{response.json()['sync_job']['id']}",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
+            )
+        assert job_response.status_code == 200
+        assert job_response.json()["status"] == "failed"
         assert calls == {"token": 1, "repositories": 1, "issues": 0, "pull_requests": 0}
         assert await _count_for_workspace(Repository, workspace_id) == 0
     finally:
@@ -1063,9 +1112,10 @@ async def test_github_app_live_sync_surfaces_sanitized_rate_limit_detail(
     await _cleanup_fixture(marker)
 
     async def fake_mint_installation_access_token(
-        *, installation_id: str
+        *, installation_id: str, client: AsyncClient | None = None
     ) -> GitHubInstallationAccessToken:
         assert installation_id == "98765"
+        assert client is not None
         return GitHubInstallationAccessToken(token="jit-installation-token")
 
     async def fake_list_installation_repositories(**_kwargs) -> list[dict]:
@@ -1110,15 +1160,22 @@ async def test_github_app_live_sync_surfaces_sanitized_rate_limit_detail(
                 },
             )
 
-        assert response.status_code == 502
-        assert response.json() == {
-            "detail": (
-                "github app live read failed: github repository read request "
-                "failed; http_403; message=API rate limit exceeded.; "
-                "rate_limited=true; retry_after_seconds=60; rate_limit_remaining=0"
+        assert response.status_code == 202
+        assert await _run_worker_once() is True
+        async with _async_client() as client:
+            job_response = await client.get(
+                f"/api/v1/workspaces/{workspace_id}/github/sync-jobs/"
+                f"{response.json()['sync_job']['id']}",
+                headers=_headers(),
+                params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
             )
-        }
-        assert "jit-installation-token" not in response.text
+        assert job_response.status_code == 200
+        job = job_response.json()
+        assert job["status"] == "queued"
+        assert job["progress"]["phase"] == "retry_scheduled"
+        assert job["error_message"] == "github sync will retry"
+        assert "API rate limit exceeded" not in job_response.text
+        assert "jit-installation-token" not in job_response.text
         assert await _count_for_workspace(Repository, workspace_id) == 0
     finally:
         await _cleanup_fixture(marker)

@@ -4,21 +4,26 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  buildWorkspaceGitHubSyncJobPath,
   buildWorkspaceGitHubAppLiveSyncPath,
   buildWorkspaceGitHubRepositoriesPath,
+  cancelGitHubSyncJob,
   fetchGitHubRepositories,
-  runGitHubAppLiveSync
+  runGitHubAppLiveSync,
+  waitForGitHubSyncJob
 } from "../lib/api";
 import { M, T } from "../lib/messages";
 import type {
   GitHubAppConfigStatus,
   GitHubAppLiveSyncResponse,
   GitHubConnectionStatusResponse,
-  GitHubRepositoryListResponse
+  GitHubRepositoryListResponse,
+  GitHubSyncJobRead
 } from "../lib/types";
 import {
   classifyGitHubSyncState,
   GitHubProductConnectPanelView,
+  mergeGitHubSyncJobResult,
   shouldRefreshGitHubDataAfterSync,
   summarizeGitHubRealReadReadiness
 } from "../components/GitHubProductConnectPanel";
@@ -165,7 +170,30 @@ const liveSyncResult: GitHubAppLiveSyncResponse = {
     records_created: 3,
     records_updated: 0,
     started_at: "2026-07-01T10:00:00Z",
-    finished_at: "2026-07-01T10:00:01Z"
+    finished_at: "2026-07-01T10:00:01Z",
+    attempt_count: 1,
+    max_attempts: 3,
+    next_attempt_at: "2026-07-01T10:00:00Z",
+    cancel_requested_at: null,
+    progress: {
+      phase: "succeeded",
+      completed_repositories: ["qtwin-io/company-knowledge-os"],
+      total_repositories: 1,
+      repositories: [
+        {
+          full_name: "qtwin-io/company-knowledge-os",
+          synced_issues: 1,
+          synced_pull_requests: 1,
+          skipped_pull_requests: 0
+        }
+      ],
+      counts: {
+        repositories: 1,
+        issues: 1,
+        pull_requests: 1,
+        skipped_pull_requests: 0
+      }
+    }
   },
   counts: {
     repositories: 1,
@@ -187,6 +215,42 @@ const liveSyncResult: GitHubAppLiveSyncResponse = {
   ]
 };
 
+const queuedSyncJob: GitHubSyncJobRead = {
+  id: "sync-job-1",
+  workspace_id: "workspace-123",
+  connection_id: "connection-1",
+  provider: "github",
+  status: "queued",
+  sync_type: "manual",
+  started_at: null,
+  finished_at: null,
+  records_seen: 0,
+  records_created: 0,
+  records_updated: 0,
+  error_message: null,
+  attempt_count: 0,
+  max_attempts: 3,
+  next_attempt_at: "2026-07-01T10:00:00Z",
+  cancel_requested_at: null,
+  progress: {
+    phase: "queued",
+    completed_repositories: [],
+    total_repositories: 1,
+    repositories: [],
+    counts: {
+      repositories: 0,
+      issues: 0,
+      pull_requests: 0,
+      skipped_pull_requests: 0
+    }
+  },
+  created_at: "2026-07-01T10:00:00Z",
+  updated_at: "2026-07-01T10:00:00Z",
+  is_live: false,
+  execution_started: false,
+  warnings: []
+};
+
 function renderPanel(
   props: Partial<Parameters<typeof GitHubProductConnectPanelView>[0]> = {}
 ): string {
@@ -195,6 +259,7 @@ function renderPanel(
       canAdminister={props.canAdminister}
       connectionStatus={props.connectionStatus ?? connectedAppStatus}
       error={props.error ?? null}
+      onCancelRepositorySync={props.onCancelRepositorySync}
       onCloseSetup={props.onCloseSetup}
       onOpenSetup={props.onOpenSetup}
       onRepositorySelect={props.onRepositorySelect ?? (() => undefined)}
@@ -220,6 +285,10 @@ test("builds GitHub repository list URL", () => {
     buildWorkspaceGitHubAppLiveSyncPath("workspace-123"),
     "/api/v1/workspaces/workspace-123/github/connections/app-installation/sync"
   );
+  assert.equal(
+    buildWorkspaceGitHubSyncJobPath("workspace-123", "sync-job-1"),
+    "/api/v1/workspaces/workspace-123/github/sync-jobs/sync-job-1"
+  );
 });
 
 test("fetches GitHub repository list", async () => {
@@ -239,6 +308,78 @@ test("fetches GitHub repository list", async () => {
     const payload = await fetchGitHubRepositories("workspace-123", {});
     assert.equal(payload.count, 25);
     assert.equal(payload.is_live, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("polls a queued GitHub sync job until it reaches a terminal state", async () => {
+  const originalFetch = globalThis.fetch;
+  const statuses = ["running", "succeeded"];
+  const updates: string[] = [];
+  globalThis.fetch = (async (input) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/github/sync-jobs/sync-job-1"
+    );
+    const status = statuses.shift();
+    assert.ok(status);
+    return new Response(
+      JSON.stringify({
+        ...queuedSyncJob,
+        status,
+        attempt_count: 1,
+        execution_started: true,
+        is_live: true,
+        finished_at:
+          status === "succeeded" ? "2026-07-01T10:00:01Z" : null
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 200 }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await waitForGitHubSyncJob(
+      "workspace-123",
+      "sync-job-1",
+      {
+        intervalMs: 0,
+        maxPolls: 2,
+        onUpdate: (syncJob) => updates.push(syncJob.status)
+      }
+    );
+    assert.equal(result.status, "succeeded");
+    assert.deepEqual(updates, ["running", "succeeded"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("cancels a GitHub sync job through its workspace-scoped endpoint", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input, init) => {
+    assert.equal(
+      String(input),
+      "http://localhost/api/v1/workspaces/workspace-123/github/sync-jobs/sync-job-1/cancel"
+    );
+    assert.equal(init?.method, "POST");
+    return new Response(
+      JSON.stringify({
+        ...queuedSyncJob,
+        status: "cancelled",
+        cancel_requested_at: "2026-07-01T10:00:01Z",
+        finished_at: "2026-07-01T10:00:01Z"
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 200 }
+    );
+  }) as typeof fetch;
+
+  try {
+    const result = await cancelGitHubSyncJob(
+      "workspace-123",
+      "sync-job-1"
+    );
+    assert.equal(result.status, "cancelled");
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -500,6 +641,7 @@ test("classifies resolved sync jobs without treating HTTP success as job success
   assert.equal(classifyGitHubSyncState("running"), "pending");
   assert.equal(classifyGitHubSyncState("queued"), "pending");
   assert.equal(classifyGitHubSyncState("failed"), "error");
+  assert.equal(classifyGitHubSyncState("cancelled"), "error");
   assert.equal(classifyGitHubSyncState("partial"), "partial");
   assert.equal(shouldRefreshGitHubDataAfterSync("succeeded"), true);
   assert.equal(shouldRefreshGitHubDataAfterSync("partial"), true);
@@ -520,12 +662,28 @@ test("classifies resolved sync jobs without treating HTTP success as job success
   });
   assert.ok(running.includes(M.githubProductConnect.liveSyncPendingTitle));
   assert.ok(running.includes(M.githubProductConnect.liveSyncPendingDescription));
-  assert.ok(running.includes(M.githubProductConnect.updateData));
+  assert.ok(running.includes(M.githubProductConnect.updatingData));
+  assert.match(running, /<select disabled=""/);
   assert.match(running, /github-sync-receipt--pending/);
   assert.doesNotMatch(
     running,
     new RegExp(`class="eyebrow">${M.githubProductConnect.receiptEyebrow}<`)
   );
+
+  const cancellable = renderPanel({
+    onCancelRepositorySync: () => undefined,
+    repositorySync: {
+      "qtwin-io/company-knowledge-os": {
+        error: null,
+        result: {
+          ...liveSyncResult,
+          sync_job: { ...liveSyncResult.sync_job, status: "queued" }
+        },
+        state: "pending"
+      }
+    }
+  });
+  assert.ok(cancellable.includes(M.githubProductConnect.liveSyncCancel));
 
   const partial = renderPanel({
     repositorySync: {
@@ -566,6 +724,47 @@ test("classifies resolved sync jobs without treating HTTP success as job success
     failed,
     new RegExp(`class="eyebrow">${M.githubProductConnect.receiptEyebrow}<`)
   );
+});
+
+test("merges durable worker progress into the live sync receipt", () => {
+  const result = mergeGitHubSyncJobResult(liveSyncResult, {
+    ...queuedSyncJob,
+    status: "running",
+    attempt_count: 2,
+    execution_started: true,
+    is_live: true,
+    records_seen: 5,
+    records_created: 2,
+    records_updated: 3,
+    progress: {
+      phase: "running",
+      completed_repositories: ["qtwin-io/company-knowledge-os"],
+      total_repositories: 2,
+      repositories: [
+        {
+          full_name: "qtwin-io/company-knowledge-os",
+          synced_issues: 2,
+          synced_pull_requests: 2,
+          skipped_pull_requests: 1
+        }
+      ],
+      counts: {
+        repositories: 1,
+        issues: 2,
+        pull_requests: 2,
+        skipped_pull_requests: 1
+      }
+    }
+  });
+
+  assert.equal(result.sync_job.status, "running");
+  assert.equal(result.sync_job.attempt_count, 2);
+  assert.equal(result.totals.repositories, 1);
+  assert.equal(result.totals.issues, 2);
+  assert.equal(result.totals.pull_requests, 2);
+  assert.equal(result.totals.skipped_pull_requests, 1);
+  assert.equal(result.provider_sync_started, true);
+  assert.equal(result.persistence_mode, "running");
 });
 
 test("renders no-workspace and error states", () => {

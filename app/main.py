@@ -30,6 +30,7 @@ from app.core.http_security import (
 )
 from app.core.logging import RequestLoggingMiddleware, configure_logging
 from app.services.auth_artifact_cleanup_service import run_auth_artifact_cleanup
+from app.services.github_sync_worker_service import run_github_sync_workers
 
 # Configure basic application logging as early as possible (MVP §1.5 "basic
 # logging"): a single sanitized handler at the configured level.
@@ -45,19 +46,32 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level)
     cleanup_stop = asyncio.Event()
     cleanup_task: asyncio.Task[None] | None = None
-    if settings.app_env.strip().casefold() not in {"test", "testing"}:
+    sync_worker_stop = asyncio.Event()
+    sync_worker_task: asyncio.Task[None] | None = None
+    is_test = settings.app_env.strip().casefold() in {"test", "testing"}
+    if not is_test:
         cleanup_task = asyncio.create_task(
             run_auth_artifact_cleanup(cleanup_stop),
             name="founderos-auth-artifact-cleanup",
         )
+        if settings.github_sync_worker_enabled:
+            sync_worker_task = asyncio.create_task(
+                run_github_sync_workers(sync_worker_stop),
+                name="founderos-github-sync-workers",
+            )
     try:
         yield
     finally:
         cleanup_stop.set()
+        sync_worker_stop.set()
         if cleanup_task is not None:
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await cleanup_task
+        if sync_worker_task is not None:
+            sync_worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await sync_worker_task
 
 
 app = FastAPI(

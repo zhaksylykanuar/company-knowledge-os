@@ -11,8 +11,9 @@ GitHub Source Reconciliation v1, universal pytest database guard и Atomic
 External Execution v1, Strict Action Evidence v1 и Database Workspace
 Isolation v1, Python Static Typing Gate и Frontend Biome Gate реализованы
 локально в ветке `codex/living-hq-ux-reset`. Runtime Readiness,
-Browser Security Baseline, Shared Public Auth Admission и Reproducible
-Dependency Gate также реализованы локально; изменения не опубликованы.**
+Browser Security Baseline, Shared Public Auth Admission, Reproducible
+Dependency Gate и Durable GitHub Provider Jobs также реализованы локально;
+изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -165,10 +166,25 @@ ledger; тексты источников и evidence не копируются.
   `pydantic-settings` и Starlette, без ignore-исключений.
 - PostgreSQL и Redis в local Compose закреплены exact manifest digest, а
   Renovate обновляет Docker Compose tag+digest вместе после release-age delay.
+- GitHub App live read больше не выполняет provider network I/O внутри API
+  request или открытой SQL-транзакции. API только проверяет доступ и создаёт
+  durable `SyncJob`, после чего возвращает `202`; bounded worker pool забирает
+  задания через PostgreSQL lease и `SKIP LOCKED` (DEC-107).
+- Каждый репозиторий читается через общий HTTP connection pool и сохраняется
+  отдельной короткой транзакцией. Прогресс, завершённые репозитории и агрегаты
+  позволяют продолжить работу после истёкшего lease без повторной обработки.
+- Transient provider failures получают ограниченные exponential retries;
+  наружу и в БД записываются только контролируемые коды/сообщения. Токен
+  GitHub App остаётся только в памяти, а durable cursor не содержит raw
+  provider payload.
+- Экран GitHub автоматически следит за queued/running job до terminal state,
+  показывает накопленный результат, блокирует повторный запуск и позволяет
+  owner/admin отменить задачу. Отмена отзывает lease, а поздний provider result
+  отбрасывается.
 
 ## Проверено 2026-07-29
 
-- Frontend: `npm test` — **317 passed**.
+- Frontend: `npm test` — **320 passed**.
 - Frontend: `npm run typecheck` — успешно.
 - Frontend: `npm run lint` — успешно, **95 files**, 0 warnings.
 - Frontend: `npm run build` — успешно, **16 routes**.
@@ -176,10 +192,10 @@ ledger; тексты источников и evidence не копируются.
 - Python dependencies: `pip-audit --local` — **0 known vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: `uv run mypy app` — успешно, **99 source files**.
-- Backend: guarded full pytest — **779 passed**, одно внешнее
+- Backend: `uv run mypy app` — успешно, **100 source files**.
+- Backend: guarded full pytest — **788 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
-- Alembic: единственная head `b2c3d4e5f6a7`, применена к отдельной test БД;
+- Alembic: единственная head `c4d5e6f7a8b9`, применена к отдельной test БД;
   `alembic check` не обнаружил расхождений metadata/schema.
 - Небезопасный bare pytest без explicit test environment остановлен до
   application import; локальная `ckdos_test` создана отдельно от рабочей БД.

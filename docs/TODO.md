@@ -6,15 +6,13 @@
 
 ## Сейчас — завершение FounderOS 2.0 reset
 
-1. Перенести live provider sync из длинного API request в durable jobs с
-   lease/retry/resume/progress/cancel и короткими транзакциями.
-2. Подключить approved external error-reporting/tracing sink без payloads и
+1. Подключить approved external error-reporting/tracing sink без payloads и
    завершить fail-closed hosted topology/RLS gate. Локальные structured logs,
    request IDs, counters и database readiness уже реализованы.
-3. Провести разрешённые authenticated session/workspace и desktop/mobile
+2. Провести разрешённые authenticated session/workspace и desktop/mobile
    browser gates и проверить
    overflow, console и основные состояния.
-4. Подтвердить один read-only GitHub App read из рабочей организации с видимым
+3. Подтвердить один read-only GitHub App read из рабочей организации с видимым
    canonical результатом.
 
 ## Следом — память и настоящее второе мнение

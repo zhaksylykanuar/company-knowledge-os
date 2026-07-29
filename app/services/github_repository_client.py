@@ -21,6 +21,7 @@ async def list_installation_repositories(
     access_token: str,
     per_page: int = 100,
     max_pages: int = 10,
+    client: httpx.AsyncClient | None = None,
 ) -> list[dict[str, Any]]:
     """Read repositories visible to a GitHub App installation.
 
@@ -44,41 +45,45 @@ async def list_installation_repositories(
         "User-Agent": "founderOS",
     }
     repositories: list[dict[str, Any]] = []
+    owns_client = client is None
+    http_client = client or httpx.AsyncClient(timeout=30.0)
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            for page in range(1, max_pages + 1):
-                response = await client.get(
-                    url,
-                    headers=headers,
-                    params={
-                        "per_page": per_page,
-                        "page": page,
-                    },
+        for page in range(1, max_pages + 1):
+            response = await http_client.get(
+                url,
+                headers=headers,
+                params={
+                    "per_page": per_page,
+                    "page": page,
+                },
+            )
+            if response.status_code < 200 or response.status_code >= 300:
+                raise GitHubRepositoryClientError(_safe_response_detail(response))
+            data = response.json()
+            if not isinstance(data, Mapping):
+                raise GitHubRepositoryClientError(
+                    "github repository read response was not an object"
                 )
-                if response.status_code < 200 or response.status_code >= 300:
-                    raise GitHubRepositoryClientError(_safe_response_detail(response))
-                data = response.json()
-                if not isinstance(data, Mapping):
-                    raise GitHubRepositoryClientError(
-                        "github repository read response was not an object"
-                    )
-                raw_repositories = data.get("repositories")
-                if not isinstance(raw_repositories, list):
-                    raise GitHubRepositoryClientError(
-                        "github repository read response did not include repositories"
-                    )
-                page_items = [
-                    item for item in raw_repositories if isinstance(item, Mapping)
-                ]
-                repositories.extend(dict(item) for item in page_items)
-                if len(raw_repositories) < per_page:
-                    return repositories
+            raw_repositories = data.get("repositories")
+            if not isinstance(raw_repositories, list):
+                raise GitHubRepositoryClientError(
+                    "github repository read response did not include repositories"
+                )
+            page_items = [
+                item for item in raw_repositories if isinstance(item, Mapping)
+            ]
+            repositories.extend(dict(item) for item in page_items)
+            if len(raw_repositories) < per_page:
+                return repositories
     except GitHubRepositoryClientError:
         raise
     except httpx.HTTPError as exc:
         raise GitHubRepositoryClientError(
             "github repository read request failed"
         ) from exc
+    finally:
+        if owns_client:
+            await http_client.aclose()
 
     raise GitHubRepositoryClientError(
         "github repository read request failed: pagination limit reached"

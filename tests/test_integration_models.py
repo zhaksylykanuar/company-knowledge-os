@@ -171,6 +171,12 @@ async def test_create_identity_connection_and_sync_job() -> None:
         assert stored_job.records_seen == 0
         assert stored_job.records_created == 0
         assert stored_job.records_updated == 0
+        assert stored_job.attempt_count == 0
+        assert stored_job.max_attempts == 3
+        assert stored_job.next_attempt_at is not None
+        assert stored_job.lease_owner is None
+        assert stored_job.lease_expires_at is None
+        assert stored_job.cancel_requested_at is None
 
     finally:
         await _cleanup_integration_fixture(marker)
@@ -212,7 +218,7 @@ async def test_integration_connection_rejects_unknown_values(
     ("field", "value", "message"),
     [
         ("provider", "slack", "ck_sync_jobs_provider"),
-        ("status", "cancelled", "ck_sync_jobs_status"),
+        ("status", "paused", "ck_sync_jobs_status"),
         ("sync_type", "scheduled", "ck_sync_jobs_sync_type"),
     ],
 )
@@ -333,7 +339,10 @@ async def test_connection_sync_migration_tables_indexes_constraints_exist() -> N
                         'ix_integration_connections_workspace_provider',
                         'ix_integration_connections_provider_external_account_id',
                         'ix_sync_jobs_workspace_status',
-                        'ix_sync_jobs_connection_started_at'
+                        'ix_sync_jobs_connection_started_at',
+                        'ix_sync_jobs_next_attempt_at',
+                        'ix_sync_jobs_lease_expires_at',
+                        'ix_sync_jobs_claim'
                     )
                     """
                 )
@@ -356,4 +365,7 @@ async def test_connection_sync_migration_tables_indexes_constraints_exist() -> N
         "ix_integration_connections_provider_external_account_id",
         "ix_sync_jobs_workspace_status",
         "ix_sync_jobs_connection_started_at",
+        "ix_sync_jobs_next_attempt_at",
+        "ix_sync_jobs_lease_expires_at",
+        "ix_sync_jobs_claim",
     }

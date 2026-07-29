@@ -34,8 +34,7 @@ from app.services.github_app_live_sync_service import (
     GitHubAppLiveSyncError,
     GitHubAppLiveSyncInput,
     GitHubAppLiveSyncNotFoundError,
-    GitHubAppLiveSyncProviderReadError,
-    sync_github_app_installation_repositories,
+    enqueue_github_app_installation_sync,
 )
 from app.services.github_app_setup_service import (
     GitHubAppManifestStartInput,
@@ -87,12 +86,15 @@ from app.services.github_selected_pr_sync_service import (
 from app.services.github_sync_job_service import (
     GITHUB_SYNC_JOB_CONNECTION_NOT_CONNECTED,
     GITHUB_SYNC_JOB_CONNECTION_NOT_FOUND,
+    GITHUB_SYNC_JOB_ALREADY_FINISHED,
+    GITHUB_SYNC_JOB_NOT_FOUND,
     GITHUB_SYNC_JOB_NO_EXECUTION_WARNING,
     GitHubManualSyncJobInput,
     GitHubSyncJobError,
     create_manual_github_sync_job,
     get_github_sync_job,
     list_github_sync_jobs,
+    request_github_sync_job_cancellation,
 )
 from app.services.real_connector_guard import RealConnectorsDisabledError
 from app.services.secret_encryption import SecretEncryptionError
@@ -347,6 +349,11 @@ class GitHubSyncJobRead(BaseModel):
     records_updated: int
     error_message: str | None = None
     logs: dict[str, Any] | None = None
+    attempt_count: int
+    max_attempts: int
+    next_attempt_at: datetime
+    cancel_requested_at: datetime | None = None
+    progress: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
     is_live: bool
@@ -445,6 +452,11 @@ class GitHubNormalizationSyncJobRead(BaseModel):
     records_updated: int
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    attempt_count: int = 0
+    max_attempts: int = 3
+    next_attempt_at: datetime | None = None
+    cancel_requested_at: datetime | None = None
+    progress: dict[str, Any] | None = None
 
 
 class GitHubNormalizationResponse(BaseModel):
@@ -1079,6 +1091,7 @@ async def create_github_app_installation_connection(
 @router.post(
     "/connections/app-installation/sync",
     response_model=GitHubAppLiveSyncResponse,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def run_github_app_installation_live_sync(
     workspace_id: UUID,
@@ -1087,7 +1100,7 @@ async def run_github_app_installation_live_sync(
 ) -> GitHubAppLiveSyncResponse:
     async with AsyncSessionLocal() as session:
         try:
-            result = await sync_github_app_installation_repositories(
+            result = await enqueue_github_app_installation_sync(
                 session,
                 workspace_id=workspace_id,
                 input_payload=GitHubAppLiveSyncInput(
@@ -1119,12 +1132,6 @@ async def run_github_app_installation_live_sync(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=exc.detail,
             ) from exc
-        except GitHubAppLiveSyncProviderReadError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=exc.detail,
-            ) from exc
         except GitHubAppLiveSyncError as exc:
             await session.rollback()
             raise HTTPException(
@@ -1132,6 +1139,45 @@ async def run_github_app_installation_live_sync(
                 detail=exc.detail,
             ) from exc
     return GitHubAppLiveSyncResponse.model_validate(result)
+
+
+@router.post(
+    "/sync-jobs/{sync_job_id}/cancel",
+    response_model=GitHubSyncJobRead,
+)
+async def cancel_github_sync_job_record(
+    workspace_id: UUID,
+    sync_job_id: UUID,
+    access: WorkspaceAccess = Depends(
+        require_workspace_role(MEMBERSHIP_ROLE_ADMIN)
+    ),
+) -> GitHubSyncJobRead:
+    async with AsyncSessionLocal() as session:
+        try:
+            sync_job = await request_github_sync_job_cancellation(
+                session,
+                workspace_id=workspace_id,
+                sync_job_id=sync_job_id,
+                requested_by=access.actor.auth_mode,
+            )
+            await session.commit()
+        except GitHubSyncJobError as exc:
+            await session.rollback()
+            if exc.detail == GITHUB_SYNC_JOB_NOT_FOUND:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=exc.detail,
+                ) from exc
+            if exc.detail == GITHUB_SYNC_JOB_ALREADY_FINISHED:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=exc.detail,
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return GitHubSyncJobRead.model_validate(sync_job)
 
 
 @router.post(

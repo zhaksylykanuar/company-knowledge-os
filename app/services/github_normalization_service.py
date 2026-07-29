@@ -290,7 +290,7 @@ async def normalize_github_sync_job_local(
     sync_job.records_updated = persistence_counts.records_updated
     sync_job.cursor_after = {
         "local_normalization_performed": True,
-        "provider_sync_started": False,
+        "provider_sync_started": options.provider_attested,
         "persistence_mode": persistence_mode,
         "counts": counts,
         "canonical_persistence": _persistence_counts_payload(persistence_counts),
@@ -328,8 +328,8 @@ async def normalize_github_sync_job_local(
             "pull_requests": pull_requests,
         },
         "counts": counts,
-        "is_live": False,
-        "provider_sync_started": False,
+        "is_live": options.provider_attested,
+        "provider_sync_started": options.provider_attested,
         "local_normalization_performed": True,
         "persistence_mode": persistence_mode,
         "reconciliation": [
@@ -473,7 +473,7 @@ def _append_normalization_log(
         {
             "local_normalization": {
                 "performed": True,
-                "provider_sync_started": False,
+                "provider_sync_started": options.provider_attested,
                 "persistence_mode": persistence_mode,
                 "counts": counts,
                 **_persistence_counts_payload(persistence_counts),

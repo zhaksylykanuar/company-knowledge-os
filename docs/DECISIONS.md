@@ -3382,6 +3382,41 @@ also pinned to exact multi-platform manifest digests. Renovate's
 delay. CI container images remain digest-pinned. A human still reviews and
 tests image and dependency updates before they are merged.
 
+## DEC-107 - GitHub Provider Reads Use Durable Leased Jobs
+
+Decision (2026-07-29): a GitHub App live-read API request may validate the
+workspace, role, connection and requested repository scope, then persist one
+queued `SyncJob` and return `202`. It must not mint a provider token, call
+GitHub or normalize provider data while the request transaction is open.
+
+PostgreSQL is the queue source of truth. Workers claim eligible jobs with
+`FOR UPDATE SKIP LOCKED`, a unique lease owner, expiry and bounded attempt
+count. Concurrency is explicitly limited to one through four workers and all
+workers in a process share one bounded HTTP connection pool. A stale lease is
+recoverable; already completed repository names and cumulative counts are
+durable progress, so a resumed job does not re-read or re-normalize completed
+repositories.
+
+Provider I/O happens without an open SQL transaction. Each successfully read
+repository is normalized and committed in its own short transaction. Complete
+all-state reads retain the authoritative reconciliation rules from DEC-098.
+Transient provider failures use bounded exponential retry; invalid
+configuration fails terminally. Durable errors and logs use controlled generic
+messages/codes and never persist provider exception detail.
+
+Installation access tokens exist only in worker memory. Durable request and
+progress cursors contain selected repository names, safe scope flags, counts
+and repository summaries, but no token or raw provider response. Cancellation
+is owner/admin-only, immediately marks the job terminal and revokes its lease;
+a worker holding an in-flight response then loses the lease and discards that
+result instead of committing it.
+
+The product polls the workspace-scoped job endpoint until `succeeded`,
+`partial`, `failed` or `cancelled`, keeps duplicate launch controls locked,
+renders cumulative progress and offers an explicit cancel action. Process
+restart does not lose queued work because claim, retry and resume state remains
+in PostgreSQL.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

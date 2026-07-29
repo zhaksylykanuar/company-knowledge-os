@@ -6,9 +6,11 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.integration_models import (
     GITHUB_APP_CREDENTIAL_STATUS_ACTIVE,
     GITHUB_APP_INSTALLATION_STATUS_ACTIVE,
@@ -17,6 +19,7 @@ from app.db.integration_models import (
     GitHubAppCredential,
     GitHubAppInstallation,
     IntegrationConnection,
+    SyncJob,
 )
 from app.services import (
     github_app_token_service,
@@ -34,18 +37,11 @@ from app.services.github_connection_service import (
     GITHUB_APP_MANAGED_CONNECTION_SOURCE,
 )
 from app.services.github_issue_client import GitHubIssueClientError
-from app.services.github_normalization_service import (
-    GitHubNormalizationOptions,
-    normalize_github_sync_job_local,
-)
 from app.services.github_pull_request_client import GitHubPullRequestClientError
 from app.services.github_repository_client import GitHubRepositoryClientError
 from app.services.real_connector_guard import require_real_connectors_enabled
 from app.services.secret_encryption import SecretEncryptionError
-from app.services.github_sync_job_service import (
-    GitHubManualSyncJobInput,
-    create_manual_github_sync_job,
-)
+from app.services.github_sync_job_service import serialize_github_sync_job
 
 GITHUB_APP_LIVE_SYNC_CONNECTION_NOT_FOUND = "github connection not found"
 GITHUB_APP_LIVE_SYNC_CONNECTION_NOT_CONNECTED = "github connection is not connected"
@@ -111,13 +107,52 @@ class _GitHubAppLiveReadAuthorization:
     selected_repositories: frozenset[str] | None
 
 
-async def sync_github_app_installation_repositories(
+@dataclass(frozen=True)
+class GitHubAppLiveSyncPrepared:
+    workspace_id: UUID
+    connection_id: UUID
+    installation_id: str
+    repositories: tuple[str, ...]
+    include_issues: bool
+    include_pull_requests: bool
+    issue_states: tuple[str, ...]
+    pull_request_states: tuple[str, ...]
+    credential: GitHubAppSigningCredential | None = field(repr=False)
+
+
+@dataclass(frozen=True, repr=False)
+class GitHubAppProviderContext:
+    access_token: str
+    installation_token_expires_at: str | None
+    installed_repositories: dict[str, Mapping[str, Any]]
+
+
+@dataclass(frozen=True)
+class GitHubRepositoryBatch:
+    full_name: str
+    observed_at: datetime
+    repository: dict[str, Any]
+    issues: list[dict[str, Any]]
+    pull_requests: list[dict[str, Any]]
+    skipped_pull_requests: int
+
+    @property
+    def summary(self) -> dict[str, Any]:
+        return {
+            "full_name": self.full_name,
+            "synced_issues": len(self.issues),
+            "synced_pull_requests": len(self.pull_requests),
+            "skipped_pull_requests": self.skipped_pull_requests,
+        }
+
+
+async def prepare_github_app_live_sync(
     session: AsyncSession,
     *,
     workspace_id: UUID,
     input_payload: GitHubAppLiveSyncInput,
-    requested_by: str = "operator_api_key",
-) -> dict[str, Any]:
+    requested_by: str,
+) -> GitHubAppLiveSyncPrepared:
     repositories = _normalize_repositories(input_payload.repositories)
     issue_states = _normalize_issue_states(input_payload.issue_states)
     pull_request_states = _normalize_pull_request_states(
@@ -130,9 +165,6 @@ async def sync_github_app_installation_repositories(
             connection_id=input_payload.connection_id,
         )
     except GitHubAppLiveSyncNotFoundError:
-        # Preserve the legacy fail-closed ordering when the global provider gate
-        # is disabled. A managed self-service connection can only be identified
-        # after its workspace-scoped row has been loaded.
         require_real_connectors_enabled()
         raise
     authorization = await _resolve_live_read_authorization(
@@ -151,11 +183,138 @@ async def sync_github_app_installation_repositories(
         raise GitHubAppLiveSyncConflictError(
             GITHUB_APP_LIVE_SYNC_REPOSITORY_NOT_INSTALLED
         )
-    installation_id = authorization.installation_id
+    return GitHubAppLiveSyncPrepared(
+        workspace_id=workspace_id,
+        connection_id=connection.id,
+        installation_id=authorization.installation_id,
+        repositories=tuple(repositories),
+        include_issues=input_payload.include_issues,
+        include_pull_requests=input_payload.include_pull_requests,
+        issue_states=tuple(issue_states),
+        pull_request_states=tuple(pull_request_states),
+        credential=authorization.credential,
+    )
+
+
+async def enqueue_github_app_installation_sync(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    input_payload: GitHubAppLiveSyncInput,
+    requested_by: str,
+) -> dict[str, Any]:
+    prepared = await prepare_github_app_live_sync(
+        session,
+        workspace_id=workspace_id,
+        input_payload=input_payload,
+        requested_by=requested_by,
+    )
+    request = {
+        "connection_id": str(prepared.connection_id),
+        "installation_id": prepared.installation_id,
+        "repositories": list(prepared.repositories),
+        "include_issues": prepared.include_issues,
+        "include_pull_requests": prepared.include_pull_requests,
+        "issue_states": list(prepared.issue_states),
+        "pull_request_states": list(prepared.pull_request_states),
+        "requested_by": requested_by,
+        "external_writes": False,
+        "installation_access_token_persisted": False,
+    }
+    queued_at = datetime.now(timezone.utc)
+    sync_job = SyncJob(
+        workspace_id=workspace_id,
+        connection_id=prepared.connection_id,
+        provider=INTEGRATION_PROVIDER_GITHUB,
+        status="queued",
+        sync_type="manual",
+        cursor_before={"github_app_live_sync": request},
+        cursor_after={
+            "github_app_live_sync_progress": {
+                "phase": "queued",
+                "completed_repositories": [],
+                "total_repositories": len(prepared.repositories),
+                "repositories": [],
+                "counts": {
+                    "repositories": 0,
+                    "issues": 0,
+                    "pull_requests": 0,
+                    "skipped_pull_requests": 0,
+                },
+                "updated_at": queued_at.isoformat(),
+            }
+        },
+        records_seen=0,
+        records_created=0,
+        records_updated=0,
+        max_attempts=settings.github_sync_job_max_attempts,
+        next_attempt_at=queued_at,
+        logs=[
+            {
+                "event": "queued",
+                "requested_by": requested_by,
+                "repository_count": len(prepared.repositories),
+                "external_writes": False,
+                "at": queued_at.isoformat(),
+            }
+        ],
+    )
+    session.add(sync_job)
+    await session.flush()
+    await session.refresh(sync_job)
+    return {
+        "workspace_id": workspace_id,
+        "connection_id": prepared.connection_id,
+        "installation_id": prepared.installation_id,
+        "repositories": [
+            {
+                "full_name": repository,
+                "synced_issues": 0,
+                "synced_pull_requests": 0,
+                "skipped_pull_requests": 0,
+            }
+            for repository in prepared.repositories
+        ],
+        "totals": {
+            "repositories": 0,
+            "issues": 0,
+            "pull_requests": 0,
+            "skipped_pull_requests": 0,
+        },
+        "sync_job": serialize_github_sync_job(sync_job),
+        "counts": {
+            "repositories": 0,
+            "issues": 0,
+            "pull_requests": 0,
+        },
+        "capabilities": {
+            "read_only_sync": True,
+            "external_writes": False,
+            "installation_access_token_persisted": False,
+        },
+        "is_live": False,
+        "provider_sync_started": False,
+        "local_normalization_performed": False,
+        "external_write_performed": False,
+        "persistence_mode": "queued",
+        "warnings": [
+            "GitHub read was queued; no provider request ran in the API transaction."
+        ],
+    }
+
+
+async def open_github_app_provider_context(
+    prepared: GitHubAppLiveSyncPrepared,
+    *,
+    client: httpx.AsyncClient,
+) -> GitHubAppProviderContext:
     try:
-        token_kwargs: dict[str, Any] = {"installation_id": installation_id}
-        if authorization.credential is not None:
-            token_kwargs["credential"] = authorization.credential
+        token_kwargs: dict[str, Any] = {
+            "installation_id": prepared.installation_id,
+            "client": client,
+        }
+        if prepared.credential is not None:
+            token_kwargs["credential"] = prepared.credential
         installation_token = (
             await github_app_token_service.mint_installation_access_token(
                 **token_kwargs
@@ -165,186 +324,118 @@ async def sync_github_app_installation_repositories(
         raise GitHubAppLiveSyncConflictError(
             GITHUB_APP_LIVE_SYNC_TOKEN_UNAVAILABLE
         ) from exc
-
     try:
         installation_repositories = (
             await github_repository_client.list_installation_repositories(
                 access_token=installation_token.token,
+                client=client,
             )
         )
     except GitHubRepositoryClientError as exc:
         raise GitHubAppLiveSyncProviderReadError(
             _provider_read_error_detail(exc.detail)
         ) from exc
-
-    installed_by_full_name = _installation_repository_map(installation_repositories)
-    missing_repositories = [
-        repository
-        for repository in repositories
-        if repository.casefold() not in installed_by_full_name
-    ]
-    if missing_repositories:
+    installed_by_full_name = _installation_repository_map(
+        installation_repositories
+    )
+    if any(
+        repository.casefold() not in installed_by_full_name
+        for repository in prepared.repositories
+    ):
         raise GitHubAppLiveSyncConflictError(
             GITHUB_APP_LIVE_SYNC_REPOSITORY_NOT_INSTALLED
         )
+    return GitHubAppProviderContext(
+        access_token=installation_token.token,
+        installation_token_expires_at=installation_token.expires_at,
+        installed_repositories=installed_by_full_name,
+    )
 
-    snapshot_observed_at = datetime.now(timezone.utc)
-    observed_at = snapshot_observed_at.isoformat()
-    repository_records: list[dict[str, Any]] = []
-    issue_records: list[dict[str, Any]] = []
-    pull_request_records: list[dict[str, Any]] = []
-    repository_summaries: list[dict[str, Any]] = []
-    issue_read_state = _github_issue_read_state(issue_states)
-    pull_request_read_state = _github_pull_request_read_state(pull_request_states)
 
-    for repository_full_name in repositories:
-        raw_repository = installed_by_full_name[repository_full_name.casefold()]
-        repo_issues: list[dict[str, Any]] = []
-        repo_pull_requests: list[dict[str, Any]] = []
-        skipped_pull_requests = 0
-
-        if input_payload.include_issues:
-            try:
-                raw_issues = await github_issue_client.list_issues(
-                    access_token=installation_token.token,
-                    repository_full_name=repository_full_name,
-                    state=issue_read_state,
-                )
-            except GitHubIssueClientError as exc:
-                raise GitHubAppLiveSyncProviderReadError(
-                    _provider_read_error_detail(exc.detail)
-                ) from exc
-            for raw_issue in raw_issues:
-                if raw_issue.get("pull_request") is not None:
-                    skipped_pull_requests += 1
-                    continue
-                issue = _issue_record_from_github_response(
-                    raw_issue,
-                    repository_full_name=repository_full_name,
-                )
-                state = issue.get("state")
-                if state not in _ISSUE_STATES:
-                    continue
-                if "all" not in issue_states and state not in issue_states:
-                    continue
-                repo_issues.append(issue)
-
-        if input_payload.include_pull_requests:
-            try:
-                raw_pull_requests = await github_pull_request_client.list_pull_requests(
-                    access_token=installation_token.token,
-                    repository_full_name=repository_full_name,
-                    state=pull_request_read_state,
-                )
-            except GitHubPullRequestClientError as exc:
-                raise GitHubAppLiveSyncProviderReadError(
-                    _provider_read_error_detail(exc.detail)
-                ) from exc
-            for raw_pull_request in raw_pull_requests:
-                pull_request = _pull_request_record_from_github_response(
-                    raw_pull_request,
-                    repository_full_name=repository_full_name,
-                )
-                state = pull_request.get("state")
-                if state not in _PR_STATES:
-                    continue
-                if "all" not in pull_request_states and state not in pull_request_states:
-                    continue
-                repo_pull_requests.append(pull_request)
-
-        issue_records.extend(repo_issues)
-        pull_request_records.extend(repo_pull_requests)
-        repository_records.append(
-            _repository_record(
-                raw_repository,
+async def read_github_app_repository_batch(
+    prepared: GitHubAppLiveSyncPrepared,
+    provider: GitHubAppProviderContext,
+    *,
+    repository_full_name: str,
+    client: httpx.AsyncClient,
+) -> GitHubRepositoryBatch:
+    raw_repository = provider.installed_repositories[
+        repository_full_name.casefold()
+    ]
+    repo_issues: list[dict[str, Any]] = []
+    repo_pull_requests: list[dict[str, Any]] = []
+    skipped_pull_requests = 0
+    if prepared.include_issues:
+        try:
+            raw_issues = await github_issue_client.list_issues(
+                access_token=provider.access_token,
                 repository_full_name=repository_full_name,
-                observed_at=observed_at,
-                issues=repo_issues,
-                pull_requests=repo_pull_requests,
-                installation_id=installation_id,
+                state=_github_issue_read_state(list(prepared.issue_states)),
+                client=client,
             )
-        )
-        repository_summaries.append(
-            {
-                "full_name": repository_full_name,
-                "synced_issues": len(repo_issues),
-                "synced_pull_requests": len(repo_pull_requests),
-                "skipped_pull_requests": skipped_pull_requests,
-            }
-        )
-
-    sync_job = await create_manual_github_sync_job(
-        session,
-        workspace_id=workspace_id,
-        connection_id=connection.id,
-        payload=GitHubManualSyncJobInput(
-            cursor_before={
-                "local_github": {
-                    "repositories": repository_records,
-                    "issues": issue_records,
-                    "pull_requests": pull_request_records,
-                },
-                "github_app_live_sync": {
-                    "installation_id": installation_id,
-                    "repositories": repositories,
-                    "issue_states": issue_states,
-                    "pull_request_states": pull_request_states,
-                    "provider_sync_started": True,
-                    "external_writes": False,
-                    "installation_access_token_persisted": False,
-                    "installation_token_expires_at": installation_token.expires_at,
-                },
-            },
-            notes="GitHub App installation read sync",
-            requested_by=requested_by,
-        ),
+        except GitHubIssueClientError as exc:
+            raise GitHubAppLiveSyncProviderReadError(
+                _provider_read_error_detail(exc.detail)
+            ) from exc
+        for raw_issue in raw_issues:
+            if raw_issue.get("pull_request") is not None:
+                skipped_pull_requests += 1
+                continue
+            issue = _issue_record_from_github_response(
+                raw_issue,
+                repository_full_name=repository_full_name,
+            )
+            state = issue.get("state")
+            if state not in _ISSUE_STATES:
+                continue
+            if "all" not in prepared.issue_states and state not in prepared.issue_states:
+                continue
+            repo_issues.append(issue)
+    if prepared.include_pull_requests:
+        try:
+            raw_pull_requests = await github_pull_request_client.list_pull_requests(
+                access_token=provider.access_token,
+                repository_full_name=repository_full_name,
+                state=_github_pull_request_read_state(
+                    list(prepared.pull_request_states)
+                ),
+                client=client,
+            )
+        except GitHubPullRequestClientError as exc:
+            raise GitHubAppLiveSyncProviderReadError(
+                _provider_read_error_detail(exc.detail)
+            ) from exc
+        for raw_pull_request in raw_pull_requests:
+            pull_request = _pull_request_record_from_github_response(
+                raw_pull_request,
+                repository_full_name=repository_full_name,
+            )
+            state = pull_request.get("state")
+            if state not in _PR_STATES:
+                continue
+            if (
+                "all" not in prepared.pull_request_states
+                and state not in prepared.pull_request_states
+            ):
+                continue
+            repo_pull_requests.append(pull_request)
+    observed_at = datetime.now(timezone.utc)
+    repository = _repository_record(
+        raw_repository,
+        repository_full_name=repository_full_name,
+        observed_at=observed_at.isoformat(),
+        issues=repo_issues,
+        pull_requests=repo_pull_requests,
+        installation_id=prepared.installation_id,
     )
-    normalization = await normalize_github_sync_job_local(
-        session,
-        workspace_id=workspace_id,
-        sync_job_id=sync_job["id"],
-        options=GitHubNormalizationOptions(
-            include_repositories=True,
-            include_issues=input_payload.include_issues,
-            include_pull_requests=input_payload.include_pull_requests,
-            persist_if_supported=True,
-            snapshot_observed_at=snapshot_observed_at,
-            provider_attested=True,
-            authoritative_issue_repositories=(
-                tuple(repositories)
-                if input_payload.include_issues
-                and _is_complete_issue_scope(issue_states)
-                else ()
-            ),
-            authoritative_pull_request_repositories=(
-                tuple(repositories)
-                if input_payload.include_pull_requests
-                and _is_complete_pull_request_scope(pull_request_states)
-                else ()
-            ),
-        ),
+    return GitHubRepositoryBatch(
+        full_name=repository_full_name,
+        observed_at=observed_at,
+        repository=repository,
+        issues=repo_issues,
+        pull_requests=repo_pull_requests,
+        skipped_pull_requests=skipped_pull_requests,
     )
-
-    return {
-        "workspace_id": workspace_id,
-        "connection_id": connection.id,
-        "installation_id": installation_id,
-        "repositories": repository_summaries,
-        "totals": _totals(repository_summaries),
-        "sync_job": normalization["sync_job"],
-        "counts": normalization["counts"],
-        "capabilities": {
-            "read_only_sync": True,
-            "external_writes": False,
-            "installation_access_token_persisted": False,
-        },
-        "is_live": True,
-        "provider_sync_started": True,
-        "local_normalization_performed": True,
-        "external_write_performed": False,
-        "persistence_mode": normalization["persistence_mode"],
-        "warnings": _warnings(normalization["warnings"]),
-    }
 
 
 async def _get_app_installation_connection_or_raise(
@@ -580,16 +671,6 @@ def _github_pull_request_read_state(states: list[str]) -> str:
     return "open"
 
 
-def _is_complete_issue_scope(states: list[str]) -> bool:
-    selected = set(states)
-    return "all" in selected or _ISSUE_STATES.issubset(selected)
-
-
-def _is_complete_pull_request_scope(states: list[str]) -> bool:
-    selected = set(states)
-    return "all" in selected or _PR_STATES.issubset(selected)
-
-
 def _repository_record(
     raw_repository: Mapping[str, Any],
     *,
@@ -738,29 +819,6 @@ def _latest_repository_timestamp(
     return max(values) if values else None
 
 
-def _totals(repository_summaries: list[dict[str, Any]]) -> dict[str, int]:
-    return {
-        "repositories": len(repository_summaries),
-        "issues": sum(item["synced_issues"] for item in repository_summaries),
-        "pull_requests": sum(
-            item["synced_pull_requests"] for item in repository_summaries
-        ),
-        "skipped_pull_requests": sum(
-            item["skipped_pull_requests"] for item in repository_summaries
-        ),
-    }
-
-
-def _warnings(normalization_warnings: list[str]) -> list[str]:
-    return _dedupe_warnings(
-        [
-            "GitHub App live sync is read-only; no external writes were performed.",
-            "GitHub App installation access token was minted just-in-time and was not persisted.",
-            *normalization_warnings,
-        ]
-    )
-
-
 def _provider_read_error_detail(detail: str) -> str:
     if not isinstance(detail, str) or not detail.strip():
         return GITHUB_APP_LIVE_SYNC_PROVIDER_READ_FAILED
@@ -819,11 +877,3 @@ def _safe_text(value: Any, *, limit: int = 1000) -> str | None:
         return None
     stripped = str(value).strip()
     return stripped[:limit] if stripped else None
-
-
-def _dedupe_warnings(warnings: list[str]) -> list[str]:
-    deduped: list[str] = []
-    for warning in warnings:
-        if warning not in deduped:
-            deduped.append(warning)
-    return deduped

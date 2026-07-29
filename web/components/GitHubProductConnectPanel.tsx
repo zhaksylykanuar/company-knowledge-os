@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import {
+  cancelGitHubSyncJob,
   fetchGitHubConnectionStatus,
   fetchGitHubRepositories,
-  runGitHubAppLiveSync
+  runGitHubAppLiveSync,
+  waitForGitHubSyncJob
 } from "../lib/api";
 import { M, T } from "../lib/messages";
 import {
@@ -17,7 +19,8 @@ import type {
   GitHubAppLiveSyncResponse,
   GitHubConnectionStatusResponse,
   GitHubRepositoryListResponse,
-  GitHubRepositoryRead
+  GitHubRepositoryRead,
+  GitHubSyncJobRead
 } from "../lib/types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
@@ -60,6 +63,7 @@ type GitHubProductConnectPanelViewProps = {
   connectionStatus: GitHubConnectionStatusResponse | null;
   error: string | null;
   onCloseSetup?: () => void;
+  onCancelRepositorySync?: (repositoryFullName: string) => void;
   onOpenSetup?: () => void;
   onRepositorySelect?: (repositoryFullName: string) => void;
   onRetry?: () => void;
@@ -98,7 +102,9 @@ export function GitHubProductConnectPanel({
   );
   const [setupOpen, setSetupOpen] = useState(false);
   const [state, setState] = useState<ProductConnectState>("loading");
+  const cancelInFlightRef = useRef(false);
   const syncInFlightRef = useRef(false);
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     void reloadKey;
@@ -146,6 +152,7 @@ export function GitHubProductConnectPanel({
 
     return () => {
       cancelled = true;
+      syncAbortRef.current?.abort();
     };
   }, [workspaceId, reloadKey]);
 
@@ -174,6 +181,8 @@ export function GitHubProductConnectPanel({
     }
 
     syncInFlightRef.current = true;
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
     let completed = false;
     setRepositorySync((current) => ({
       ...current,
@@ -186,16 +195,48 @@ export function GitHubProductConnectPanel({
         include_issues: true,
         include_pull_requests: true
       });
-      const resultState = classifyGitHubSyncState(payload.sync_job.status);
+      let currentResult = payload;
+      const resultState = classifyGitHubSyncState(currentResult.sync_job.status);
       setRepositorySync((current) => ({
         ...current,
-        [repository]: { error: null, result: payload, state: resultState }
+        [repository]: {
+          error: null,
+          result: currentResult,
+          state: resultState
+        }
       }));
-      if (shouldRefreshGitHubDataAfterSync(payload.sync_job.status)) {
+      if (!isGitHubSyncTerminalStatus(currentResult.sync_job.status)) {
+        const syncJob = await waitForGitHubSyncJob(
+          workspaceId,
+          currentResult.sync_job.id,
+          {
+            onUpdate: (updatedJob) => {
+              currentResult = mergeGitHubSyncJobResult(
+                currentResult,
+                updatedJob
+              );
+              setRepositorySync((current) => ({
+                ...current,
+                [repository]: {
+                  error: null,
+                  result: currentResult,
+                  state: classifyGitHubSyncState(updatedJob.status)
+                }
+              }));
+            },
+            signal: controller.signal
+          }
+        );
+        currentResult = mergeGitHubSyncJobResult(currentResult, syncJob);
+      }
+      if (shouldRefreshGitHubDataAfterSync(currentResult.sync_job.status)) {
         setReloadKey((current) => current + 1);
         completed = true;
       }
     } catch (caught: unknown) {
+      if (controller.signal.aborted) {
+        return;
+      }
       setRepositorySync((current) => ({
         ...current,
         [repository]: {
@@ -205,6 +246,9 @@ export function GitHubProductConnectPanel({
         }
       }));
     } finally {
+      if (syncAbortRef.current === controller) {
+        syncAbortRef.current = null;
+      }
       syncInFlightRef.current = false;
     }
 
@@ -213,11 +257,63 @@ export function GitHubProductConnectPanel({
     }
   }
 
+  async function cancelRepositorySync(repositoryFullName: string) {
+    if (!workspaceId || !canAdminister || cancelInFlightRef.current) {
+      return;
+    }
+    const currentResult = repositorySync[repositoryFullName]?.result;
+    if (
+      !currentResult ||
+      isGitHubSyncTerminalStatus(currentResult.sync_job.status)
+    ) {
+      return;
+    }
+    cancelInFlightRef.current = true;
+    setRepositorySync((current) => ({
+      ...current,
+      [repositoryFullName]: {
+        error: null,
+        result: currentResult,
+        state: "syncing"
+      }
+    }));
+    try {
+      const syncJob = await cancelGitHubSyncJob(
+        workspaceId,
+        currentResult.sync_job.id
+      );
+      syncAbortRef.current?.abort();
+      const result = mergeGitHubSyncJobResult(currentResult, syncJob);
+      setRepositorySync((current) => ({
+        ...current,
+        [repositoryFullName]: {
+          error: null,
+          result,
+          state: classifyGitHubSyncState(syncJob.status)
+        }
+      }));
+    } catch (caught: unknown) {
+      setRepositorySync((current) => ({
+        ...current,
+        [repositoryFullName]: {
+          error: caught instanceof Error ? caught.message : M.common.requestFailed,
+          result: currentResult,
+          state: "pending"
+        }
+      }));
+    } finally {
+      cancelInFlightRef.current = false;
+    }
+  }
+
   return (
     <GitHubProductConnectPanelView
       canAdminister={canAdminister}
       connectionStatus={connectionStatus}
       error={error}
+      onCancelRepositorySync={
+        canAdminister ? cancelRepositorySync : undefined
+      }
       onCloseSetup={() => setSetupOpen(false)}
       onOpenSetup={() => setSetupOpen(true)}
       onRepositorySelect={setSelectedRepository}
@@ -246,6 +342,7 @@ export function GitHubProductConnectPanelView({
   canAdminister = true,
   connectionStatus,
   error,
+  onCancelRepositorySync,
   onCloseSetup,
   onOpenSetup,
   onRepositorySelect,
@@ -323,7 +420,7 @@ export function GitHubProductConnectPanelView({
     ? repositorySync[selectedRepositoryItem.full_name] ?? idleSyncStatus()
     : idleSyncStatus();
   const globalSyncInProgress = Object.values(repositorySync).some(
-    (sync) => sync.state === "syncing"
+    (sync) => sync.state === "syncing" || sync.state === "pending"
   );
   const canRunSelectedSync = Boolean(
     canAdminister &&
@@ -589,6 +686,14 @@ export function GitHubProductConnectPanelView({
 
       {selectedSync.result ? (
         <GitHubSyncReceipt
+          onCancel={
+            selectedSync.state === "pending" &&
+            selectedRepositoryItem &&
+            onCancelRepositorySync
+              ? () =>
+                  onCancelRepositorySync?.(selectedRepositoryItem.full_name)
+              : undefined
+          }
           result={selectedSync.result}
           state={classifyGitHubSyncState(selectedSync.result.sync_job.status)}
         />
@@ -683,9 +788,11 @@ function GitHubSafetyDetails({
 }
 
 function GitHubSyncReceipt({
+  onCancel,
   result,
   state
 }: {
+  onCancel?: () => void;
   result: GitHubAppLiveSyncResponse;
   state: Extract<LiveSyncState, "error" | "partial" | "pending" | "success">;
 }) {
@@ -733,6 +840,11 @@ function GitHubSyncReceipt({
         <p className={state === "success" ? "success-text" : "muted"}>
           {M.githubProductConnect.liveSyncNoWrites}
         </p>
+        {state === "pending" && onCancel ? (
+          <button className="button secondary" onClick={onCancel} type="button">
+            {M.githubProductConnect.liveSyncCancel}
+          </button>
+        ) : null}
       </div>
       {result.warnings.length > 0 ? (
         <details>
@@ -884,6 +996,67 @@ function classifyGitHubSyncState(
   return "error";
 }
 
+function isGitHubSyncTerminalStatus(status: string): boolean {
+  return ["cancelled", "failed", "partial", "succeeded"].includes(
+    status.trim().toLowerCase()
+  );
+}
+
+function mergeGitHubSyncJobResult(
+  result: GitHubAppLiveSyncResponse,
+  syncJob: GitHubSyncJobRead
+): GitHubAppLiveSyncResponse {
+  const progressCounts = syncJob.progress?.counts;
+  const repositories = syncJob.progress?.repositories ?? result.repositories;
+  const warnings = [
+    ...result.warnings,
+    ...syncJob.warnings,
+    ...(syncJob.error_message ? [syncJob.error_message] : [])
+  ].filter((warning, index, all) => all.indexOf(warning) === index);
+  const status = syncJob.status.trim().toLowerCase();
+  const normalizationCompleted = ["partial", "succeeded"].includes(status);
+  return {
+    ...result,
+    repositories,
+    totals: {
+      repositories:
+        progressCounts?.repositories ?? result.totals.repositories,
+      issues: progressCounts?.issues ?? result.totals.issues,
+      pull_requests:
+        progressCounts?.pull_requests ?? result.totals.pull_requests,
+      skipped_pull_requests:
+        progressCounts?.skipped_pull_requests ??
+        result.totals.skipped_pull_requests
+    },
+    sync_job: {
+      id: syncJob.id,
+      status: syncJob.status,
+      records_seen: syncJob.records_seen,
+      records_created: syncJob.records_created,
+      records_updated: syncJob.records_updated,
+      started_at: syncJob.started_at,
+      finished_at: syncJob.finished_at,
+      attempt_count: syncJob.attempt_count,
+      max_attempts: syncJob.max_attempts,
+      next_attempt_at: syncJob.next_attempt_at,
+      cancel_requested_at: syncJob.cancel_requested_at,
+      progress: syncJob.progress
+    },
+    counts: {
+      repositories:
+        progressCounts?.repositories ?? result.counts.repositories,
+      issues: progressCounts?.issues ?? result.counts.issues,
+      pull_requests:
+        progressCounts?.pull_requests ?? result.counts.pull_requests
+    },
+    is_live: syncJob.is_live,
+    provider_sync_started: syncJob.execution_started,
+    local_normalization_performed: normalizationCompleted,
+    persistence_mode: normalizationCompleted ? "canonical" : status,
+    warnings
+  };
+}
+
 function shouldRefreshGitHubDataAfterSync(status: string): boolean {
   const state = classifyGitHubSyncState(status);
   return state === "success" || state === "partial";
@@ -911,6 +1084,7 @@ function isRepositoryFullName(value: string): boolean {
 
 export {
   classifyGitHubSyncState,
+  mergeGitHubSyncJobResult,
   shouldRefreshGitHubDataAfterSync,
   summarizeGitHubRealReadReadiness
 };

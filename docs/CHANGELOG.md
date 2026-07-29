@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added Durable GitHub Provider Jobs (DEC-107): the API now enqueues a
+  PostgreSQL-backed job and returns `202`, while bounded workers claim with
+  leases, resume repository progress after crashes, retry transient reads and
+  expose cancellation without persisting installation tokens or raw provider
+  payloads.
+- Added automatic GitHub sync polling and progress receipts to the product UI.
+  Owner/admin users can cancel a queued or running read; duplicate launch
+  controls remain locked until the job reaches a terminal state.
 - Added a current-state Python vulnerability gate with `pip-audit` to the
   guarded backend checker and CI; frontend CI now audits development as well as
   runtime dependencies (DEC-106).
@@ -59,6 +67,10 @@
 
 ### Changed
 
+- Removed the legacy synchronous GitHub App sync path that could perform
+  sequential provider reads while its caller held a database session. Provider
+  I/O now runs outside SQL transactions and each repository is normalized in a
+  separate short transaction through a shared HTTP connection pool.
 - Declared directly imported `cryptography`, `starlette` and `python-dotenv`,
   raised vulnerable `pydantic-settings`/Starlette floors to fixed releases,
   and regenerated the Python lockfile with no known dependency vulnerabilities.

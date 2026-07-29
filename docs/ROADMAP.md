@@ -30,14 +30,17 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 - прямые runtime dependencies объявлены, неиспользуемые provider SDK и legacy
   config удалены, Python/frontend vulnerability audits обязательны, а local
   datastore images закреплены digest и обслуживаются Renovate;
+- GitHub provider reads выполняются через durable PostgreSQL jobs с
+  lease/retry/resume/progress/cancel, bounded workers, shared HTTP pool и
+  короткими repository-scoped транзакциями;
 - внешние записи остаются выключенными до завершения остальных high-priority
   remediation;
 - публичный multi-tenant hosting заблокирован до полного RLS gate из DEC-102.
 
-Все четыре high-priority замечания аудита и medium findings M2–M12, M14 и M17
-закрыты либо сведены к явно записанному внешнему hosted gate. Durable provider
-jobs (M13), distributed tracing/error reporting, disaster recovery и полный
-RLS ещё не объявлены готовыми.
+Все четыре high-priority замечания аудита и medium findings M2–M14 и M17
+закрыты либо сведены к явно записанному внешнему hosted gate. Distributed
+tracing/error reporting, disaster recovery и полный RLS ещё не объявлены
+готовыми.
 
 ## Фаза 1 — Product reset
 
