@@ -140,8 +140,6 @@ async def build_workspace_company_map(
     touchpoints: list[dict[str, Any]] = []
 
     for raw_message in messages:
-        if not isinstance(raw_message, Mapping):
-            continue
         sender = _parse_mailbox(raw_message.get("from_address"))
         recipients = _mailboxes(raw_message.get("to_addresses"))
         participants = [mailbox for mailbox in [sender, *recipients] if mailbox]

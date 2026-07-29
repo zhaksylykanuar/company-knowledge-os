@@ -9,7 +9,8 @@
 **FounderOS 2.0 product reset, Lifecycle Event Ledger v1, Temporal Memory v2,
 GitHub Source Reconciliation v1, universal pytest database guard и Atomic
 External Execution v1, Strict Action Evidence v1 и Database Workspace
-Isolation v1 реализованы локально в ветке `codex/living-hq-ux-reset`.
+Isolation v1, Python Static Typing Gate и Frontend Biome Gate реализованы
+локально в ветке `codex/living-hq-ux-reset`.
 Изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
@@ -116,15 +117,25 @@ ledger; тексты источников и evidence не копируются.
   запрещён до отдельного полного RLS gate с least-privileged app role,
   transaction-local tenant context, `FORCE ROW LEVEL SECURITY`, pool reset и
   cross-tenant integration tests.
+- Backend checker и CI теперь запускают `mypy app`; устранены все найденные
+  ошибки типов, а включённая конфигурация дополнительно проверяет untyped
+  functions, implicit Optional, unreachable code, лишние casts и stale ignores
+  (DEC-103).
+- Frontend `lint` больше не дублирует TypeScript typecheck. Закреплённый Biome
+  проверяет React/Next, accessibility, correctness и security по 91
+  implementation/test файлу; найденные нарушения hook dependencies, ARIA,
+  list keys и unsafe text parsing исправлены (DEC-103).
 
 ## Проверено 2026-07-29
 
 - Frontend: `npm test` — **316 passed**.
 - Frontend: `npm run typecheck` — успешно.
+- Frontend: `npm run lint` — успешно, **91 files**, 0 warnings.
 - Frontend: `npm run build` — успешно, **16 routes**.
-- Frontend dependencies: production audit — **0 vulnerabilities**.
+- Frontend dependencies: full и production audit — **0 vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
+- Backend: `uv run mypy app` — успешно, **98 source files**.
 - Backend: guarded full pytest — **770 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Alembic: единственная head `b2c3d4e5f6a7`, применена к отдельной test БД;
@@ -144,7 +155,7 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Закрыть medium-priority quality/operations findings аудита.
+1. Закрыть medium-priority runtime/operations и public-auth findings аудита.
 2. Провести authenticated browser QA и один
    founder-approved read-only GitHub App read.
 

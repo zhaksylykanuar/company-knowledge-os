@@ -95,7 +95,7 @@ async def exchange_manifest_code(code: str) -> GitHubManifestConversion:
     _validate_private_key(private_key)
     html_url = _safe_github_url(data.get("html_url"))
     app_slug = _app_slug(data.get("slug"), html_url=html_url)
-    owner = data.get("owner") if isinstance(data.get("owner"), Mapping) else {}
+    owner = _mapping(data.get("owner"))
     permissions = _permissions(data.get("permissions"))
     ensure_read_only_permissions(permissions)
     return GitHubManifestConversion(
@@ -304,7 +304,7 @@ def _verified_installation(
 
 
 def _verified_installation_data(data: Mapping[str, Any]) -> GitHubVerifiedInstallation:
-    account = data.get("account") if isinstance(data.get("account"), Mapping) else {}
+    account = _mapping(data.get("account"))
     return GitHubVerifiedInstallation(
         installation_id=_required_identifier(
             data.get("id"), "installation_response_invalid"
@@ -332,6 +332,10 @@ def _json_headers(token: str | None = None) -> dict[str, str]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
 
 
 def _safe_code(value: Any, *, error_code: str) -> str:

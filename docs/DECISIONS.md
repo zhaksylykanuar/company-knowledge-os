@@ -3275,6 +3275,28 @@ claim and can break maintenance paths while leaving uncovered tables readable.
 Public multi-tenant hosting is therefore blocked until that complete gate is
 implemented and startup fails closed when the hosted mode requires it.
 
+## DEC-103 - Static Typing And Frontend Lint Are Executable Quality Gates
+
+Decision (2026-07-29): `mypy app` is a required backend check locally and in
+CI. The repository configuration checks function bodies even when their
+signatures are not yet fully annotated, rejects implicit Optional ambiguity
+and reports unreachable code, redundant casts and stale ignores. The initial
+gate is clean across all application modules; future changes may not suppress
+errors broadly or replace runtime validation with type assertions.
+
+Frontend lint must be independent from TypeScript compilation. Next.js no
+longer supplies `next lint`, so FounderOS uses a pinned Biome CLI and runs it
+with warnings treated as failures over application, component, library and
+test sources. Next/React, correctness, accessibility and security rules are
+enabled. Narrow rule exceptions require an adjacent reason tied to the exact
+line; project-wide weakening for a single legacy pattern is not accepted.
+Formatting remains outside this gate to avoid unrelated mechanical rewrites.
+
+Dependency selection is part of the gate. The committed lockfile must resolve
+with `npm ci`, and both full and production package audits must be clean at the
+time of verification. Typecheck, lint, tests and production build remain
+separate commands so one passing tool cannot masquerade as another.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

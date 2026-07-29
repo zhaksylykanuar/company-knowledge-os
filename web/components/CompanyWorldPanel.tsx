@@ -310,6 +310,8 @@ export function CompanyWorldPanel({
   }, [workspaceId]);
 
   useEffect(() => {
+    void refreshSignal;
+    void reloadKey;
     if (!workspaceId) {
       setData(null);
       setError(null);
@@ -487,6 +489,7 @@ export function CompanyWorldPanelView({
   }, [data, initialSelectedKey, localSelection.key, profileUnavailable]);
 
   useEffect(() => {
+    void effectiveSelectedKey;
     if (selectionRevision === 0) {
       return;
     }
@@ -1748,17 +1751,14 @@ function ResolutionNotice({
   }
   return (
     <div
-      aria-label={M.companyWorld.resolutionStatusLabel}
       aria-live={announce ? "polite" : undefined}
       className={`world-resolution-notice world-resolution-notice--${state.status}${
         visuallyHidden ? " world-resolution-announcer" : ""
       }`}
       role={
-        announce
-          ? state.status === "pending" || state.status === "success"
-            ? "status"
-            : "alert"
-          : undefined
+        announce && state.status !== "pending" && state.status !== "success"
+          ? "alert"
+          : "status"
       }
     >
       {state.message}
@@ -1928,7 +1928,11 @@ function CompanyWorldTechnicalBoundary({ data }: { data: CompanyMapResponse }) {
             </ul>
           </aside>
         ) : null}
-        <div className="world-capabilities" aria-label={M.companyWorld.capabilities}>
+        <div
+          aria-label={M.companyWorld.capabilities}
+          className="world-capabilities"
+          role="region"
+        >
           <span>
             {data.capabilities.can_resolve
               ? M.companyWorld.resolutionEnabled

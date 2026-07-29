@@ -37,6 +37,8 @@ export function NormalizedEntitiesPanel({ refreshSignal = 0 }: NormalizedEntitie
   const [status, setStatus] = useState<PanelStatus>("loading");
 
   useEffect(() => {
+    void refreshSignal;
+    void reloadKey;
     if (!workspaceId) {
       setData(null);
       setError(null);

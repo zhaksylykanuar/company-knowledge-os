@@ -49,7 +49,9 @@ export function buildCompanyWorldBoardModel(
         person.organization_key === organization.key &&
         person.relationship_type !== null
     );
-    people.forEach((person) => groupedPersonKeys.add(person.key));
+    people.forEach((person) => {
+      groupedPersonKeys.add(person.key);
+    });
     return { organization, people };
   });
 
@@ -191,6 +193,7 @@ export function CompanyWorldBoard({
                     <div
                       className="world-affiliated-people"
                       aria-label={M.companyWorld.confirmedPeopleInOrganization}
+                      role="group"
                     >
                       {people.map((person) => (
                         <button
@@ -338,7 +341,10 @@ function BoardZone({
           <h3>{title}</h3>
           <p>{description}</p>
         </div>
-        <span aria-label={`${title}: ${lowerBoundCount(count, countIsLowerBound)}`}>
+        <span
+          aria-label={`${title}: ${lowerBoundCount(count, countIsLowerBound)}`}
+          role="status"
+        >
           {lowerBoundCount(count, countIsLowerBound)}
         </span>
       </header>

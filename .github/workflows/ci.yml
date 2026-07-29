@@ -66,6 +66,9 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      - name: Static typing
+        run: uv run mypy app
+
       - name: Apply migrations
         env:
           DATABASE_URL: postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos_test

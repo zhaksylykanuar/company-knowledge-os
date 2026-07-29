@@ -121,8 +121,6 @@ async def sync_selected_repository_issues(
         repo_issues: list[dict[str, Any]] = []
         skipped_pull_requests = 0
         for raw_issue in raw_issues:
-            if not isinstance(raw_issue, Mapping):
-                continue
             if raw_issue.get("pull_request") is not None:
                 skipped_pull_requests += 1
                 continue

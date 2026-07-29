@@ -233,7 +233,7 @@ export function isSafeInternalTarget(value: unknown): value is string {
     !value.startsWith("/") ||
     value.startsWith("//") ||
     value.includes("\\") ||
-    /\s|[\u0000-\u001f\u007f]/u.test(value)
+    hasWhitespaceOrControlCharacter(value)
   ) {
     return false;
   }
@@ -259,7 +259,7 @@ function isSafeExternalCitationTarget(value: string): boolean {
   if (
     value.length > 1_000 ||
     value.includes("\\") ||
-    /\s|[\u0000-\u001f\u007f]/u.test(value) ||
+    hasWhitespaceOrControlCharacter(value) ||
     safeHref(value) !== value
   ) {
     return false;
@@ -271,6 +271,13 @@ function isSafeExternalCitationTarget(value: string): boolean {
       key.toLocaleLowerCase("en-US").replaceAll("-", "_")
     )
   );
+}
+
+function hasWhitespaceOrControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return character.trim() === "" || code <= 31 || code === 127;
+  });
 }
 
 function validateWarnings(value: unknown): void {

@@ -120,7 +120,7 @@ def _repository_entities(brain: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _work_entities(brain: Mapping[str, Any]) -> list[dict[str, Any]]:
-    work = brain.get("work") if isinstance(brain.get("work"), Mapping) else {}
+    work = _mapping(brain.get("work"))
     entities: list[dict[str, Any]] = []
     seen_keys: set[str] = set()
     for section in ("issues", "pull_requests", "recent"):
@@ -154,11 +154,7 @@ def _work_entities(brain: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _communication_entities(brain: Mapping[str, Any]) -> list[dict[str, Any]]:
-    communications = (
-        brain.get("communications")
-        if isinstance(brain.get("communications"), Mapping)
-        else {}
-    )
+    communications = _mapping(brain.get("communications"))
     entities: list[dict[str, Any]] = []
     for row in _rows(communications.get("messages")):
         external_id = _text(row.get("message_id")) or _text(
@@ -181,9 +177,7 @@ def _communication_entities(brain: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _document_entities(brain: Mapping[str, Any]) -> list[dict[str, Any]]:
-    documents = (
-        brain.get("documents") if isinstance(brain.get("documents"), Mapping) else {}
-    )
+    documents = _mapping(brain.get("documents"))
     entities: list[dict[str, Any]] = []
     for row in _rows(documents.get("files")):
         external_id = _text(row.get("file_id")) or _text(row.get("source_record_id"))
@@ -287,6 +281,10 @@ def _rows(value: Any) -> list[Mapping[str, Any]]:
     if not isinstance(value, list):
         return []
     return [row for row in value if isinstance(row, Mapping)]
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
 
 
 def _text(value: Any) -> str | None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -309,9 +309,15 @@ async def resolve_workspace_company_map_candidate(
     return CompanyWorldResolutionResponse(
         resolution=CompanyWorldResolutionRead(
             id=receipt.resolution.id,
-            candidate_type=receipt.resolution.candidate_type,
+            candidate_type=cast(
+                Literal["external_person", "organization"],
+                receipt.resolution.candidate_type,
+            ),
             candidate_key=receipt.resolution.candidate_key,
-            decision=receipt.resolution.decision,
+            decision=cast(
+                Literal["confirmed", "dismissed"],
+                receipt.resolution.decision,
+            ),
             created_at=receipt.resolution.created_at,
         ),
         person_id=receipt.person_id,

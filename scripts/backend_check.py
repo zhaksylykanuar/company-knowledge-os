@@ -90,6 +90,7 @@ PROXY_URL_ENVIRONMENT_KEYS = frozenset(
 CHECK_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("dependency sync", ("uv", "sync", "--frozen")),
     ("Ruff", ("uv", "run", "ruff", "check", ".")),
+    ("mypy", ("uv", "run", "mypy", "app")),
     ("Alembic upgrade", ("uv", "run", "alembic", "upgrade", "head")),
     ("Alembic schema check", ("uv", "run", "alembic", "check")),
     ("pytest", ("uv", "run", "pytest", "-q")),

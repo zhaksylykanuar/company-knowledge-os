@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -45,7 +45,7 @@ async def generate_manual_founder_briefing(
     generated_at = datetime.now(timezone.utc)
     items: list[dict[str, Any]] = []
     warnings = [NO_LLM_WARNING]
-    github_signals = {
+    github_signals: dict[str, Any] = {
         "connection_status": "not_requested",
         "repository_count": 0,
         "queued_sync_jobs": 0,
@@ -256,12 +256,10 @@ async def _github_repository_item(
 def _source_coverage_item(
     brain: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    summary = brain.get("summary") if isinstance(brain.get("summary"), Mapping) else {}
-    capabilities = (
-        brain.get("capabilities") if isinstance(brain.get("capabilities"), Mapping) else {}
-    )
-    repositories = brain.get("repositories") if isinstance(brain.get("repositories"), list) else []
-    evidence = brain.get("evidence") if isinstance(brain.get("evidence"), list) else []
+    summary = _mapping(brain.get("summary"))
+    capabilities = _mapping(brain.get("capabilities"))
+    repositories = _mapping_rows(brain.get("repositories"))
+    evidence = _list(brain.get("evidence"))
 
     repository_count = int(summary.get("repositories") or 0)
     open_issues = int(summary.get("open_issues") or 0)
@@ -344,27 +342,15 @@ def _connector_source_coverage_item(brain: Mapping[str, Any]) -> dict[str, Any]:
     external writes, or LLM, and without exposing raw payloads.
     """
 
-    source_records = (
-        brain.get("source_records")
-        if isinstance(brain.get("source_records"), Mapping)
-        else {}
-    )
+    source_records = _mapping(brain.get("source_records"))
     total = int(source_records.get("total") or 0)
-    by_provider = [
-        entry
-        for entry in (source_records.get("by_provider") or [])
-        if isinstance(entry, Mapping)
-    ]
-    by_record_type = [
-        entry
-        for entry in (source_records.get("by_record_type") or [])
-        if isinstance(entry, Mapping)
-    ]
+    by_provider = _mapping_rows(source_records.get("by_provider"))
+    by_record_type = _mapping_rows(source_records.get("by_record_type"))
     non_github_providers = [
-        _safe_text(entry.get("provider"))
+        provider
         for entry in by_provider
-        if _safe_text(entry.get("provider"))
-        and _safe_text(entry.get("provider")) != INTEGRATION_PROVIDER_GITHUB
+        if (provider := _safe_text(entry.get("provider")))
+        and provider != INTEGRATION_PROVIDER_GITHUB
     ]
 
     if total <= 0:
@@ -427,9 +413,9 @@ def _connector_source_coverage_item(brain: Mapping[str, Any]) -> dict[str, Any]:
         confidence=1.0,
         evidence_refs=evidence_refs,
         related_entities=[
-            _safe_text(entry.get("provider"))
+            provider
             for entry in by_provider
-            if _safe_text(entry.get("provider"))
+            if (provider := _safe_text(entry.get("provider")))
         ],
         recommended_next_step=next_step,
         warnings=[],
@@ -473,11 +459,7 @@ def _connector_provider_totals(brain: Mapping[str, Any]) -> dict[str, int]:
     shown.
     """
 
-    source_records = (
-        brain.get("source_records")
-        if isinstance(brain.get("source_records"), Mapping)
-        else {}
-    )
+    source_records = _mapping(brain.get("source_records"))
     totals: dict[str, int] = {}
     for entry in source_records.get("by_provider") or []:
         if not isinstance(entry, Mapping):
@@ -493,7 +475,7 @@ def _jira_work_item(
     brain: Mapping[str, Any],
     imported_total: int,
 ) -> dict[str, Any] | None:
-    work = brain.get("work") if isinstance(brain.get("work"), Mapping) else {}
+    work = _mapping(brain.get("work"))
     issues = [row for row in work.get("issues") or [] if isinstance(row, Mapping)]
     jira_issues = [
         issue
@@ -546,11 +528,7 @@ def _gmail_messages_item(
     brain: Mapping[str, Any],
     imported_total: int,
 ) -> dict[str, Any] | None:
-    communications = (
-        brain.get("communications")
-        if isinstance(brain.get("communications"), Mapping)
-        else {}
-    )
+    communications = _mapping(brain.get("communications"))
     messages = [
         row for row in communications.get("messages") or [] if isinstance(row, Mapping)
     ]
@@ -604,9 +582,7 @@ def _drive_files_item(
     brain: Mapping[str, Any],
     imported_total: int,
 ) -> dict[str, Any] | None:
-    documents = (
-        brain.get("documents") if isinstance(brain.get("documents"), Mapping) else {}
-    )
+    documents = _mapping(brain.get("documents"))
     files = [row for row in documents.get("files") or [] if isinstance(row, Mapping)]
     if not files:
         return None
@@ -647,9 +623,7 @@ def _drive_files_item(
 
 
 def _internal_documents_item(brain: Mapping[str, Any]) -> dict[str, Any] | None:
-    documents = (
-        brain.get("documents") if isinstance(brain.get("documents"), Mapping) else {}
-    )
+    documents = _mapping(brain.get("documents"))
     notes = [row for row in documents.get("notes") or [] if isinstance(row, Mapping)]
     if not notes:
         return None
@@ -761,6 +735,7 @@ async def _github_sync_items(
 
 
 def _sync_job_item(sync_job: SyncJob, *, queued_count: int) -> dict[str, Any]:
+    next_step: str | None
     if sync_job.status == SYNC_JOB_STATUS_FAILED:
         category = "risk"
         severity = "high"
@@ -789,11 +764,9 @@ def _sync_job_item(sync_job: SyncJob, *, queued_count: int) -> dict[str, Any]:
     )
 
 
-def _normalization_item_from_jobs(jobs: list[SyncJob]) -> dict[str, Any] | None:
+def _normalization_item_from_jobs(jobs: Sequence[SyncJob]) -> dict[str, Any] | None:
     for job in jobs:
         for log in reversed(list(job.logs or [])):
-            if not isinstance(log, Mapping):
-                continue
             normalization = log.get("local_normalization")
             if not isinstance(normalization, Mapping) or not normalization.get("performed"):
                 continue
@@ -874,7 +847,9 @@ def _sync_job_ref(sync_job: SyncJob) -> dict[str, Any]:
     }
 
 
-def _collect_repo_evidence_refs(repositories: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _collect_repo_evidence_refs(
+    repositories: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
     for repo in repositories:
         raw_refs = repo.get("evidence_refs")
@@ -908,8 +883,8 @@ def _empty_coverage_signals() -> dict[str, Any]:
 
 
 def _coverage_evidence_refs(
-    evidence: list[Any],
-    repositories: list[Any],
+    evidence: Sequence[Any],
+    repositories: Sequence[Any],
 ) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
     for raw_ref in evidence:
@@ -1036,6 +1011,20 @@ def _summary(
 
 def _safe_text(value: Any) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _mapping_rows(value: Any) -> list[Mapping[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [row for row in value if isinstance(row, Mapping)]
+
+
+def _list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
 
 
 def _safe_url(value: Any) -> str | None:

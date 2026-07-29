@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -228,7 +229,7 @@ class Settings(BaseSettings):
         default="founderos_session",
         validation_alias=AliasChoices("FOUNDEROS_SESSION_COOKIE_NAME"),
     )
-    session_cookie_samesite: str = Field(
+    session_cookie_samesite: Literal["lax", "strict", "none"] = Field(
         default="lax",
         validation_alias=AliasChoices("FOUNDEROS_SESSION_COOKIE_SAMESITE"),
     )

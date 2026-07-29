@@ -675,7 +675,7 @@ async def _upsert_source_record(
         .with_for_update()
     )
     was_deleted = bool(existing is not None and existing.is_deleted)
-    if was_deleted and not allow_restore:
+    if existing is not None and existing.is_deleted and not allow_restore:
         return existing, False, False, False
 
     # Idempotent, concurrency-safe upsert on the canonical SourceRecord identity
@@ -699,7 +699,7 @@ async def _upsert_source_record(
         SourceRecord.tombstone_sync_job_id: None,
         SourceRecord.tombstone_reason: None,
     }
-    statement = (
+    statement: Any = (
         pg_insert(SourceRecord)
         .values(
             {
@@ -788,7 +788,7 @@ async def _upsert_repository(
     # unique guard can catch a concurrent insert. If a conflict happened, read
     # the canonical row by either identity and update in place. This avoids an
     # IntegrityError when live polling/webhook paths race across identities.
-    statement = (
+    statement: Any = (
         pg_insert(Repository)
         .values({Repository.workspace_id: sync_job.workspace_id, **mutable})
         .on_conflict_do_nothing()
@@ -799,6 +799,10 @@ async def _upsert_repository(
         repository = await session.get(
             Repository, inserted[0], populate_existing=True
         )
+        if repository is None:
+            raise GitHubNormalizationError(
+                "repository insert did not return a canonical row"
+            )
         return repository, True
 
     existing = await session.scalar(
@@ -838,6 +842,10 @@ async def _upsert_repository(
         update(Repository).where(Repository.id == existing.id).values(update_values)
     )
     repository = await session.get(Repository, existing.id, populate_existing=True)
+    if repository is None:
+        raise GitHubNormalizationError(
+            "repository update did not return a canonical row"
+        )
     return repository, False
 
 
@@ -900,7 +908,7 @@ async def _upsert_github_issue_task(
         Task.source_updated_at: source_updated_at,
         Task.task_metadata: _task_metadata(issue),
     }
-    statement = (
+    statement: Any = (
         pg_insert(Task)
         .values(
             {
@@ -957,7 +965,7 @@ async def _upsert_pull_request(
         ),
         PullRequest.pr_metadata: _pull_request_metadata(pull_request),
     }
-    statement = (
+    statement: Any = (
         pg_insert(PullRequest)
         .values(
             {
@@ -992,9 +1000,9 @@ def _source_record_payload(
 
 
 def _local_github_records(sync_job: SyncJob) -> dict[str, list[Mapping[str, Any]]]:
-    cursor = sync_job.cursor_before if isinstance(sync_job.cursor_before, Mapping) else {}
-    local = cursor.get("local_github") if isinstance(cursor.get("local_github"), Mapping) else {}
-    github = cursor.get("github") if isinstance(cursor.get("github"), Mapping) else {}
+    cursor = _mapping(sync_job.cursor_before)
+    local = _mapping(cursor.get("local_github"))
+    github = _mapping(cursor.get("github"))
     candidates = (local, github, cursor)
     return {
         "repositories": _first_record_list(
@@ -1010,6 +1018,10 @@ def _local_github_records(sync_job: SyncJob) -> dict[str, list[Mapping[str, Any]
             "github_pull_requests",
         ),
     }
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
 
 
 def _first_record_list(

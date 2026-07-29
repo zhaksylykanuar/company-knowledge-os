@@ -14,7 +14,6 @@ from app.api.headquarters import (
 )
 from app.api.workspace_auth import WorkspaceAccess, require_workspace_access
 from app.services.assistant_query_service import (
-    ASSISTANT_CONTRACT_VERSION,
     ASSISTANT_INTENTS,
     ASSISTANT_QUERY_MAX_CHARS,
     ASSISTANT_RESPONSE_TEXT_MAX_CHARS,
@@ -69,7 +68,7 @@ class AssistantSuggestionRead(StrictReadModel):
 
 
 class AssistantQueryResponse(StrictReadModel):
-    contract_version: Literal[ASSISTANT_CONTRACT_VERSION]
+    contract_version: Literal["assistant.v1"]
     intent: AssistantIntent
     text: str = Field(min_length=1, max_length=ASSISTANT_RESPONSE_TEXT_MAX_CHARS)
     citations: list[HeadquartersEvidenceRefRead] = Field(default_factory=list, max_length=8)

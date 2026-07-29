@@ -9,17 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.api.workspace_auth import WorkspaceAccess, require_workspace_access
-from app.db.memory_models import COMPANY_MEMORY_CHECKPOINT_VERSION
 from app.services.company_memory_checkpoint_service import (
     CompanyMemoryCheckpointConflictError,
     acknowledge_company_memory_checkpoint,
 )
 from app.services.headquarters_read_service import (
-    HEADQUARTERS_CONTRACT_VERSION,
-    HEADQUARTERS_ONBOARDING_CONTRACT_VERSION,
-    HEADQUARTERS_ONBOARDING_READINESS_VERSION,
-    HEADQUARTERS_RANKING_VERSION,
-    HEADQUARTERS_TEMPORAL_MEMORY_VERSION,
     HeadquartersAccessChangedError,
     read_workspace_headquarters,
     sanitize_headquarters_evidence_url,
@@ -253,7 +247,7 @@ class HeadquartersChangeItemRead(StrictReadModel):
 
 
 class HeadquartersChangesRead(StrictReadModel):
-    contract_version: Literal[HEADQUARTERS_TEMPORAL_MEMORY_VERSION]
+    contract_version: Literal["temporal-memory.v2"]
     items: list[HeadquartersChangeItemRead] = Field(default_factory=list, max_length=3)
     basis: Literal["current_snapshot", "checkpoint"]
     cursor: str | None = Field(default=None, pattern=r"^hqc2_[0-9a-f]{64}$")
@@ -347,8 +341,8 @@ class HeadquartersOnboardingStepRead(StrictReadModel):
 
 
 class HeadquartersOnboardingRead(StrictReadModel):
-    contract_version: Literal[HEADQUARTERS_ONBOARDING_CONTRACT_VERSION]
-    readiness_version: Literal[HEADQUARTERS_ONBOARDING_READINESS_VERSION]
+    contract_version: Literal["onboarding.v1"]
+    readiness_version: Literal["onboarding-readiness.v1"]
     ready: bool
     completed_count: int = Field(ge=0)
     total_count: Literal[5]
@@ -451,8 +445,8 @@ class HeadquartersBoundaryRead(StrictReadModel):
 
 
 class HeadquartersSnapshotResponse(StrictReadModel):
-    contract_version: Literal[HEADQUARTERS_CONTRACT_VERSION]
-    ranking_version: Literal[HEADQUARTERS_RANKING_VERSION]
+    contract_version: Literal["headquarters.v3"]
+    ranking_version: Literal["headquarters-ranking.v1"]
     snapshot: HeadquartersSnapshotMetaRead
     workspace: HeadquartersWorkspaceRead
     onboarding: HeadquartersOnboardingRead
@@ -492,7 +486,7 @@ class HeadquartersSnapshotResponse(StrictReadModel):
 
 
 class HeadquartersOnboardingResponse(StrictReadModel):
-    contract_version: Literal[HEADQUARTERS_CONTRACT_VERSION]
+    contract_version: Literal["headquarters.v3"]
     snapshot: HeadquartersSnapshotMetaRead
     workspace: HeadquartersWorkspaceRead
     onboarding: HeadquartersOnboardingRead
@@ -513,7 +507,7 @@ class CompanyMemoryCheckpointRead(StrictReadModel):
 
 
 class CompanyMemoryCheckpointResponse(StrictReadModel):
-    contract_version: Literal[COMPANY_MEMORY_CHECKPOINT_VERSION]
+    contract_version: Literal["temporal-checkpoint.v2"]
     workspace_id: UUID
     checkpoint: CompanyMemoryCheckpointRead
 

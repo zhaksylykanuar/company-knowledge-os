@@ -23,7 +23,7 @@ import { SourceLink } from "./SourceLink";
 
 type ActionExecutionControlsProps = {
   disabled?: boolean;
-  onBusyChange?: (isBusy: boolean) => boolean | void;
+  onBusyChange?: (isBusy: boolean) => boolean | undefined;
   onComplete?: (outcome: ActionExecutionOutcome) => void;
   onRefresh?: () => void;
   proposal: ActionProposal;
@@ -491,7 +491,11 @@ export function ActionExecutionControlsView({
           )}
 
           {externalExecutionEnabled ? (
-            <div className="form" aria-label={M.actionExecution.liveLabel}>
+            <div
+              aria-label={M.actionExecution.liveLabel}
+              className="form"
+              role="group"
+            >
               <p className="muted">{M.actionExecution.liveWarning}</p>
               <div className="field">
                 <label htmlFor={`execution-connection-${proposal.id}`}>{M.actionExecution.connectionIdLabel}</label>

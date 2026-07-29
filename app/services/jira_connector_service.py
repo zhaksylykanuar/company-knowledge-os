@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from hashlib import sha256
@@ -156,7 +156,7 @@ async def import_jira_issues_local(
     session: AsyncSession,
     *,
     workspace_id: UUID,
-    raw_issues: list[Mapping[str, Any]],
+    raw_issues: Sequence[Mapping[str, Any]],
     connection_id: UUID | None = None,
 ) -> JiraIssueImportResult:
     """Import user-supplied Jira issue snapshots into canonical local rows.
@@ -217,7 +217,7 @@ async def import_jira_issues_local(
 
 
 def build_normalized_jira_issue(record: Mapping[str, Any]) -> dict[str, Any]:
-    fields = record.get("fields") if isinstance(record.get("fields"), Mapping) else {}
+    fields = _mapping(record.get("fields"))
     key = _jira_key(
         record.get("key")
         or record.get("issue_key")
@@ -341,7 +341,7 @@ async def _upsert_jira_source_record(
         SourceRecord.tombstone_sync_job_id: None,
         SourceRecord.tombstone_reason: None,
     }
-    statement = (
+    statement: Any = (
         pg_insert(SourceRecord)
         .values(
             {
@@ -361,6 +361,8 @@ async def _upsert_jira_source_record(
     )
     row = (await session.execute(statement)).one()
     source_record = await session.get(SourceRecord, row[0], populate_existing=True)
+    if source_record is None:
+        raise JiraConnectorError("jira source record persistence failed")
     return source_record, bool(row[1])
 
 
@@ -385,7 +387,7 @@ async def _upsert_jira_task(
         Task.task_metadata: _task_metadata(issue),
         Task.source_updated_at: source_updated_at,
     }
-    statement = (
+    statement: Any = (
         pg_insert(Task)
         .values(
             {
@@ -404,6 +406,8 @@ async def _upsert_jira_task(
     )
     row = (await session.execute(statement)).one()
     task = await session.get(Task, row[0], populate_existing=True)
+    if task is None:
+        raise JiraConnectorError("jira task persistence failed")
     return task, bool(row[1])
 
 
@@ -419,7 +423,7 @@ def _source_record_payload(issue: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _task_metadata(issue: Mapping[str, Any]) -> dict[str, Any]:
-    metadata = issue.get("metadata") if isinstance(issue.get("metadata"), Mapping) else {}
+    metadata = _mapping(issue.get("metadata"))
     merged = {
         **dict(metadata),
         "jira_object_type": "issue",
@@ -430,6 +434,10 @@ def _task_metadata(issue: Mapping[str, Any]) -> dict[str, Any]:
         "evidence_refs": issue.get("evidence_refs") or [],
     }
     return _sanitize_payload(merged)
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
 
 
 def _jira_issue_payload(task: Task) -> dict[str, Any]:

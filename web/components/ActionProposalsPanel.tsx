@@ -133,7 +133,7 @@ type ActionProposalsPanelViewProps = {
   onExecutionBusyChange?: (
     proposalId: string,
     isBusy: boolean
-  ) => boolean | void;
+  ) => boolean | undefined;
   onExecutionComplete?: (proposalId: string) => void;
   onSelectVisibleProposed?: () => void;
   onStatusFilterChange?: (filter: ProposalStatusFilter) => void;
@@ -279,6 +279,7 @@ export function ActionProposalsPanel({
     useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [mutationError, setMutationError] = useState<MutationError | null>(null);
+  const dataRef = useRef<ActionProposalListResponse | null>(data);
   const loadedInitialProposalIdRef = useRef<string | null>(null);
   const loadedWorkspaceIdRef = useRef<string | null>(null);
   const focusAfterReloadRef = useRef(false);
@@ -290,6 +291,10 @@ export function ActionProposalsPanel({
   const executionBusyProposalIdRef = useRef<string | null>(null);
   const operationWorkspaceIdRef = useRef<string | null>(workspaceId);
   currentWorkspaceIdRef.current = workspaceId;
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   function clearSelectedEvidenceContext() {
     setSelectedEvidence(null);
@@ -394,6 +399,7 @@ export function ActionProposalsPanel({
   }, [executionBusyProposalId, pendingMutation, setExternalOperationPending]);
 
   useEffect(() => {
+    void reloadKey;
     if (!workspaceId) {
       setData(null);
       setError(null);
@@ -405,7 +411,7 @@ export function ActionProposalsPanel({
     let cancelled = false;
     const canRefreshInPlace =
       initialProposalId === null &&
-      data !== null &&
+      dataRef.current !== null &&
       loadedInitialProposalIdRef.current === initialProposalId &&
       loadedWorkspaceIdRef.current === workspaceId;
     if (canRefreshInPlace) {
@@ -1992,7 +1998,7 @@ function MissionDecisionConsole({
   onExecutionBusyChange?: (
     proposalId: string,
     isBusy: boolean
-  ) => boolean | void;
+  ) => boolean | undefined;
   onExecutionComplete?: (proposalId: string) => void;
   onRefreshProposals?: () => void;
   onReject?: (proposalId: string) => void;
@@ -2011,7 +2017,7 @@ function MissionDecisionConsole({
   const [executionOutcome, setExecutionOutcome] =
     useState<ActionExecutionOutcome | null>(null);
 
-  function handleExecutionBusyChange(isBusy: boolean): boolean | void {
+  function handleExecutionBusyChange(isBusy: boolean): boolean | undefined {
     const accepted = onExecutionBusyChange?.(proposal.id, isBusy);
     if (isBusy && accepted === false) {
       return false;
@@ -2288,7 +2294,10 @@ function ProposalNextStep({
   proposal
 }: {
   disabled?: boolean;
-  onExecutionBusyChange?: (proposalId: string, isBusy: boolean) => void;
+  onExecutionBusyChange?: (
+    proposalId: string,
+    isBusy: boolean
+  ) => boolean | undefined;
   onExecutionComplete?: (outcome: ActionExecutionOutcome) => void;
   onRefreshProposals?: () => void;
   proposal: ActionProposal;
@@ -2509,11 +2518,15 @@ function ActionEvidenceButtons({
 
   return (
     <div className="decision-room-evidence">
-      <div className="actions-row" aria-label={T.evidenceFor(proposalTitle)}>
-        {evidenceRefs.map((evidence, index) => (
+      <div
+        aria-label={T.evidenceFor(proposalTitle)}
+        className="actions-row"
+        role="group"
+      >
+        {evidenceRefs.map((evidence) => (
           <button
             className="button secondary"
-            key={`${evidence.kind}-${evidence.source}-${evidence.ref}-${index}`}
+            key={`${evidence.kind}-${evidence.source}-${evidence.ref}`}
             onClick={() =>
               onSelectEvidence?.(
                 evidence,
@@ -2947,14 +2960,6 @@ function auditSourceLabel(source: ProposalAuditSource): string {
   return source === "imported"
     ? M.actionsPanel.auditSourceImported
     : M.actionsPanel.auditSourceDeterministic;
-}
-
-function auditSourceBadge(proposal: ActionProposal): string {
-  const source = proposalAuditSource(proposal);
-  if (source === "imported") {
-    return M.actionsPanel.originAuditImportedBadge;
-  }
-  return M.actionsPanel.originAuditDeterministicBadge;
 }
 
 function firstEvidenceSelection(

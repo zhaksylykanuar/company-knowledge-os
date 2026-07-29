@@ -68,7 +68,6 @@ export default function LoginPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                autoFocus
               />
             </label>
             <label>

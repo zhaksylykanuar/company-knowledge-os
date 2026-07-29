@@ -378,7 +378,9 @@ export function parseHeadquartersSnapshotResponse(
   if (queue.length > 2) {
     contractError("queue", "at most two missions");
   }
-  queue.forEach((mission, index) => validateMission(mission, `queue[${index}]`));
+  queue.forEach((mission, index) => {
+    validateMission(mission, `queue[${index}]`);
+  });
   if (response.priority !== null) {
     const priorityId = (response.priority as HeadquartersRecord).id;
     if (queue.some((mission) => (mission as HeadquartersRecord).id === priorityId)) {
@@ -608,7 +610,9 @@ function validateFactProvenance(value: unknown, path: string): void {
   );
   for (const key of ["owner", "customer", "due", "impact", "severity", "confidence"]) {
     const refs = expectArray(provenance[key], `${path}.${key}`);
-    refs.forEach((ref, index) => validateEvidence(ref, `${path}.${key}[${index}]`));
+    refs.forEach((ref, index) => {
+      validateEvidence(ref, `${path}.${key}[${index}]`);
+    });
   }
 }
 
@@ -692,7 +696,9 @@ function validateMission(value: unknown, path: string): void {
   expectNullableString(mission.primary_person_id, `${path}.primary_person_id`);
   expectStringArray(mission.source_keys, `${path}.source_keys`);
   const evidence = expectArray(mission.evidence_refs, `${path}.evidence_refs`);
-  evidence.forEach((ref, index) => validateEvidence(ref, `${path}.evidence_refs[${index}]`));
+  evidence.forEach((ref, index) => {
+    validateEvidence(ref, `${path}.evidence_refs[${index}]`);
+  });
   expectNullableString(mission.proposal_id, `${path}.proposal_id`);
   expectNullableString(mission.proposal_version, `${path}.proposal_version`);
   expectEnum(
@@ -844,7 +850,9 @@ function validateSources(value: unknown, path: string): void {
   }
   expectEnum(sources.count_precision, ["exact"] as const, `${path}.count_precision`);
   const items = expectArray(sources.items, `${path}.items`);
-  items.forEach((source, index) => validateSource(source, `${path}.items[${index}]`));
+  items.forEach((source, index) => {
+    validateSource(source, `${path}.items[${index}]`);
+  });
 }
 
 function validateChanges(value: unknown, path: string): void {
@@ -931,7 +939,9 @@ function validateChanges(value: unknown, path: string): void {
     if (refs.length === 0) {
       contractError(`${itemPath}.evidence_refs`, "at least one evidence ref");
     }
-    refs.forEach((ref, refIndex) => validateEvidence(ref, `${itemPath}.evidence_refs[${refIndex}]`));
+    refs.forEach((ref, refIndex) => {
+      validateEvidence(ref, `${itemPath}.evidence_refs[${refIndex}]`);
+    });
     expectLiteral(item.access_scope, "workspace", `${itemPath}.access_scope`);
     expectEnum(
       item.retention,
@@ -1003,7 +1013,9 @@ function validateCapabilities(value: unknown, path: string): void {
     "can_acknowledge_changes"
   ];
   expectKeys(capabilities, keys, path);
-  keys.forEach((key) => expectBoolean(capabilities[key], `${path}.${key}`));
+  keys.forEach((key) => {
+    expectBoolean(capabilities[key], `${path}.${key}`);
+  });
 }
 
 function validateOnboarding(value: unknown, path: string): void {
@@ -1462,7 +1474,13 @@ function validateEvidenceTarget(value: string, path: string): void {
 }
 
 function hasUnsafeTargetCharacter(value: string): boolean {
-  return value.includes("\\") || /[\s\u0000-\u001f\u007f]/u.test(value);
+  return (
+    value.includes("\\") ||
+    Array.from(value).some((character) => {
+      const code = character.charCodeAt(0);
+      return character.trim() === "" || code <= 31 || code === 127;
+    })
+  );
 }
 
 function contractError(path: string, expected: string): never {

@@ -9,11 +9,11 @@ write service.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
-from typing import Any
+from typing import Any, Final
 from urllib.parse import parse_qsl, urlencode, urlsplit
 from uuid import UUID
 
@@ -74,13 +74,13 @@ from app.services.company_map_read_service import build_workspace_company_map
 from app.services.identity_service import role_allows
 
 
-HEADQUARTERS_CONTRACT_VERSION = "headquarters.v3"
-HEADQUARTERS_RANKING_VERSION = "headquarters-ranking.v1"
-HEADQUARTERS_ONBOARDING_CONTRACT_VERSION = "onboarding.v1"
-HEADQUARTERS_ONBOARDING_READINESS_VERSION = "onboarding-readiness.v1"
+HEADQUARTERS_CONTRACT_VERSION: Final = "headquarters.v3"
+HEADQUARTERS_RANKING_VERSION: Final = "headquarters-ranking.v1"
+HEADQUARTERS_ONBOARDING_CONTRACT_VERSION: Final = "onboarding.v1"
+HEADQUARTERS_ONBOARDING_READINESS_VERSION: Final = "onboarding-readiness.v1"
 HEADQUARTERS_SOURCE_HEALTH_VERSION = "source-health.v1"
 HEADQUARTERS_CORRELATION_VERSION = "canonical-reference.v1"
-HEADQUARTERS_TEMPORAL_MEMORY_VERSION = "temporal-memory.v2"
+HEADQUARTERS_TEMPORAL_MEMORY_VERSION: Final = "temporal-memory.v2"
 HEADQUARTERS_TEMPORAL_EVENT_LIMIT = 3
 HEADQUARTERS_CHECKPOINT_FINGERPRINT_LIMIT = 512
 
@@ -835,7 +835,7 @@ async def _read_sources(
         )
         if record_count == 0 or last_data_observed_at is None:
             freshness = "unknown"
-        elif as_of > fresh_until:
+        elif fresh_until is not None and as_of > fresh_until:
             freshness = "stale"
         else:
             freshness = "fresh"
@@ -1123,7 +1123,11 @@ async def _verify_proposals(
         raw_refs = proposal_refs.get(proposal.id)
         if raw_refs is None:
             continue
-        linked_item = briefing_items.get(proposal.briefing_item_id)
+        linked_item = (
+            briefing_items.get(proposal.briefing_item_id)
+            if proposal.briefing_item_id is not None
+            else None
+        )
         resolved_refs = [
             resolved
             for ref in raw_refs
@@ -1205,10 +1209,10 @@ async def _build_direct_evidence_resolver(
     uuid_tokens = {_uuid_or_none(token) for token in tokens}
     uuid_tokens.discard(None)
 
-    source_records: list[Any] = []
-    repositories: list[Any] = []
-    connections: list[Any] = []
-    evidence_rows: list[Any] = []
+    source_records: Sequence[Any] = ()
+    repositories: Sequence[Any] = ()
+    connections: Sequence[Any] = ()
+    evidence_rows: Sequence[Any] = ()
     if tokens or uuid_tokens:
         source_records = (
             await session.execute(
@@ -1878,7 +1882,7 @@ async def _build_resolved_memory_event_items(
     }
     proposals: dict[UUID, ActionProposal] = {}
     if proposal_ids:
-        rows = (
+        proposal_rows = (
             await session.execute(
                 select(ActionProposal).where(
                     ActionProposal.workspace_id == workspace_id,
@@ -1886,7 +1890,7 @@ async def _build_resolved_memory_event_items(
                 )
             )
         ).scalars()
-        proposals = {proposal.id: proposal for proposal in rows}
+        proposals = {proposal.id: proposal for proposal in proposal_rows}
     source_record_ids = {
         event.subject_id
         for event in events
@@ -1894,7 +1898,7 @@ async def _build_resolved_memory_event_items(
     }
     source_records: dict[UUID, SourceRecord] = {}
     if source_record_ids:
-        rows = (
+        source_record_rows = (
             await session.execute(
                 select(SourceRecord).where(
                     SourceRecord.workspace_id == workspace_id,
@@ -1902,7 +1906,9 @@ async def _build_resolved_memory_event_items(
                 )
             )
         ).scalars()
-        source_records = {source_record.id: source_record for source_record in rows}
+        source_records = {
+            source_record.id: source_record for source_record in source_record_rows
+        }
 
     items: list[dict[str, Any]] = []
     for event in events:
@@ -2439,7 +2445,11 @@ def _onboarding_summary_count(
         isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in values
     ):
         return None
-    return sum(values)
+    return sum(
+        value
+        for value in values
+        if isinstance(value, int) and not isinstance(value, bool)
+    )
 
 
 def _onboarding_count_state(value: int | None, *, complete_at: int = 1) -> str:

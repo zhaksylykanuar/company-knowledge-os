@@ -66,6 +66,7 @@ export default function SettingsPage() {
   const [setupLinkExpiresAt, setSetupLinkExpiresAt] = useState<string | null>(null);
 
   useEffect(() => {
+    void membersReloadKey;
     if (!workspaceId) {
       setMembers([]);
       setMembersError(null);
@@ -368,7 +369,7 @@ export function SettingsTeamPanelView({
       {status === "ready" ? (
         <>
           {members.length === 0 ? <p className="muted">{M.settings.teamEmpty}</p> : null}
-          <div className="team-roster" aria-label="Состав команды">
+          <div aria-label="Состав команды" className="team-roster" role="list">
             {members.map((member) => (
               <article className="team-member-card" key={member.membership.id}>
                 <span className="team-member-avatar" aria-hidden="true">
@@ -445,7 +446,11 @@ export function SettingsTeamPanelView({
             </p>
             {provisionMessage ? <p className="success-text">{provisionMessage}</p> : null}
             {setupLinkUrl ? (
-              <div className="callout setup-link-card" aria-label={M.settings.teamProvisionSetupLinkLabel}>
+              <div
+                aria-label={M.settings.teamProvisionSetupLinkLabel}
+                className="callout setup-link-card"
+                role="region"
+              >
                 <strong>{M.settings.teamProvisionSetupLinkLabel}</strong>
                 <p className="setup-link-value">{setupLinkUrl}</p>
                 {setupLinkExpiresAt ? (

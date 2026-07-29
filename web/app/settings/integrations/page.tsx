@@ -72,6 +72,7 @@ export default function IntegrationsSettingsPage() {
   const [status, setStatus] = useState<PanelStatus>("loading");
 
   useEffect(() => {
+    void reloadKey;
     if (!workspaceId) {
       setData(null);
       setError(null);
@@ -383,6 +384,7 @@ function ConnectorConfigurationPanel({
   const [disconnectConfirmed, setDisconnectConfirmed] = useState(false);
 
   useEffect(() => {
+    void connector.provider;
     setAccessToken("");
     setAccountEmail("");
     setBaseUrl(connector.base_url ?? "");

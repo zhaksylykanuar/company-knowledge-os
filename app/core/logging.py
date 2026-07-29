@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import time
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 REQUEST_LOGGER_NAME = "founderos.request"
 _APP_LOGGER_NAME = "founderos"
@@ -48,12 +48,12 @@ def configure_logging(level_name: str | None = "INFO") -> None:
     logger.setLevel(level)
     logger.propagate = False
     if not logger.handlers:
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter(_LOG_FORMAT))
-        logger.addHandler(handler)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+        logger.addHandler(stream_handler)
     else:
-        for handler in logger.handlers:
-            handler.setLevel(logging.NOTSET)
+        for existing_handler in logger.handlers:
+            existing_handler.setLevel(logging.NOTSET)
 
 
 class RequestLoggingMiddleware:
@@ -68,7 +68,12 @@ class RequestLoggingMiddleware:
         self._app = app
         self._logger = logging.getLogger(REQUEST_LOGGER_NAME)
 
-    async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
         if scope.get("type") != "http":
             await self._app(scope, receive, send)
             return
@@ -78,7 +83,7 @@ class RequestLoggingMiddleware:
         started_at = time.perf_counter()
         status_code = 500
 
-        async def send_wrapper(message):  # type: ignore[no-untyped-def]
+        async def send_wrapper(message: Message) -> None:
             nonlocal status_code
             if message.get("type") == "http.response.start":
                 status_code = int(message.get("status", status_code))

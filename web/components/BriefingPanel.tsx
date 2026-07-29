@@ -899,7 +899,6 @@ function summarizeBriefingActions(
       case "rejected":
         summary.rejected += 1;
         break;
-      case "proposed":
       default:
         summary.proposed += 1;
         break;
@@ -941,7 +940,11 @@ function EvidenceButtons({
     return <p className="muted">{M.briefingPanel.noEvidenceRef}</p>;
   }
   return (
-    <div className="actions-row" aria-label={T.evidenceFor(itemTitle)}>
+    <div
+      aria-label={T.evidenceFor(itemTitle)}
+      className="actions-row"
+      role="group"
+    >
       {evidenceRefs.map((evidence) => (
         <button
           className="button secondary"

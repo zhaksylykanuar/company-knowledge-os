@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added enforceable Python static typing to the guarded backend checker and CI.
+  The configured `mypy app` gate now passes all 98 application source files.
+- Added pinned Biome frontend linting for Next/React correctness,
+  accessibility and security across application, component, library and test
+  sources.
 - Added Database Workspace Isolation v1 (DEC-102): composite workspace foreign
   keys for canonical evidence, pull-request repository/source lineage, task
   source lineage and document versions, with fail-closed migration preflight.
@@ -34,6 +39,13 @@
 
 ### Changed
 
+- Replaced the frontend's fake lint alias to TypeScript typecheck with a
+  separate zero-warning Biome gate (DEC-103). React hook dependencies, dialog
+  accessibility, unstable list keys and unsafe control-character parsing found
+  by the first real run were corrected.
+- Tightened backend type boundaries for authentication, ASGI middleware,
+  provider services, canonical projections and optional database results
+  without weakening runtime validation.
 - Scoped GitHub operational SourceRecord joins and repository hydration by
   workspace in addition to the new PostgreSQL constraints.
 - Routed bulk approve/reject through the same role-rechecked, row-locked,

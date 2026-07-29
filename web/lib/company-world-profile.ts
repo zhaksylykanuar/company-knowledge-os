@@ -52,11 +52,18 @@ export function normalizeCompanyWorldProfileSelector(
   if (
     !selector ||
     selector.length > MAX_PROFILE_SELECTOR_LENGTH ||
-    /[\u0000-\u001f\u007f]/.test(selector)
+    hasControlCharacter(selector)
   ) {
     return null;
   }
   return selector;
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127;
+  });
 }
 
 export function resolveCompanyWorldProfileSelector(

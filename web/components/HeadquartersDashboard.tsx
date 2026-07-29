@@ -296,10 +296,12 @@ export function HeadquartersDashboard() {
   }, []);
 
   useEffect(() => {
+    void workspaceId;
     dispatchOnboardingIntent({ type: "workspace_changed" });
   }, [workspaceId]);
 
   useEffect(() => {
+    void reloadKey;
     const requestId = ++requestIdRef.current;
     if (!workspaceId) {
       dispatch({ requestId, type: "clear" });
@@ -415,6 +417,7 @@ export function HeadquartersDashboardView({
     : null;
 
   useEffect(() => {
+    void snapshot?.workspace.id;
     setRequestedOverlay(null);
     setDismissedOnboardingSnapshotId(null);
   }, [snapshot?.workspace.id]);
@@ -802,6 +805,7 @@ function CurrentSignals({
     (!checkpointMode || snapshot.changes.total_count > 0);
 
   useEffect(() => {
+    void snapshot.snapshot.id;
     setAcknowledgementState("idle");
   }, [snapshot.snapshot.id]);
 
@@ -1015,6 +1019,7 @@ function HeadquartersProfileLoader({
   const [data, setData] = useState<CompanyMapResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    void selector;
     const controller = new AbortController();
     setData(null);
     setError(null);

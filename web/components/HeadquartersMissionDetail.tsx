@@ -192,7 +192,7 @@ export function missionProfileTargets(mission: HeadquartersMission): Array<{
 }
 
 export function profileSelectorFromTarget(target: string | null): string | null {
-  if (!target || !target.startsWith("/company-brain?")) return null;
+  if (!target?.startsWith("/company-brain?")) return null;
   try {
     const url = new URL(target, "http://founderos.local");
     const selector = url.searchParams.get("profile");

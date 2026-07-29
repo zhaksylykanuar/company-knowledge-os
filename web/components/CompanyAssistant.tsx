@@ -84,6 +84,7 @@ function useCompanyAssistantConversation({
   }, []);
 
   useEffect(() => {
+    void workspaceId;
     reset();
   }, [reset, workspaceId]);
 
@@ -230,8 +231,14 @@ export function CompanyAssistant({
     snapshotSource,
     workspaceId
   });
+  const openAssistant = useCallback(async () => {
+    if (disabled || !workspaceId || open) return;
+    setOpen(true);
+    await conversation.prepare();
+  }, [conversation.prepare, disabled, open, workspaceId]);
 
   useEffect(() => {
+    void workspaceId;
     setOpen(false);
   }, [workspaceId]);
 
@@ -260,13 +267,7 @@ export function CompanyAssistant({
       window.removeEventListener("keydown", onShortcut);
       window.removeEventListener(OPEN_COMPANY_ASSISTANT_EVENT, onOpenRequest);
     };
-  }, [conversation.prepare, disabled, open, workspaceId]);
-
-  async function openAssistant() {
-    if (disabled || !workspaceId || open) return;
-    setOpen(true);
-    await conversation.prepare();
-  }
+  }, [disabled, open, openAssistant, workspaceId]);
 
   function closeAssistant() {
     setOpen(false);
@@ -447,7 +448,11 @@ export function CompanyAssistantPanel({
         ) : null}
       </div>
 
-      <div className={styles.suggestions} aria-label="Безопасные вопросы">
+      <div
+        aria-label="Безопасные вопросы"
+        className={styles.suggestions}
+        role="group"
+      >
         {(answer?.suggestions ?? defaultSuggestions()).map((suggestion) => (
           <button
             disabled={pending}

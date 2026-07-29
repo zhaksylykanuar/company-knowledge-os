@@ -210,7 +210,10 @@ def _nodes_by_type(nodes: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
     grouped: dict[str, list[dict[str, Any]]] = {}
     for node in nodes:
         if isinstance(node, dict):
-            grouped.setdefault(node.get("type", ""), []).append(node)
+            node_type = node.get("type")
+            grouped.setdefault(node_type if isinstance(node_type, str) else "", []).append(
+                node
+            )
     return grouped
 
 
@@ -219,19 +222,24 @@ def _build_people(
     edges: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     hints = {
-        node.get("person_id"): node
+        person_id: node
         for node in grouped.get("IdentityHint", [])
         if isinstance(node, dict)
+        and isinstance((person_id := node.get("person_id")), str)
     }
     areas_by_person: dict[str, list[str]] = {}
     for edge in edges:
         if isinstance(edge, dict) and edge.get("type") == "person_related_to_area":
-            areas_by_person.setdefault(edge.get("from"), []).append(edge.get("area"))
+            person_id = edge.get("from")
+            area = edge.get("area")
+            if isinstance(person_id, str) and isinstance(area, str):
+                areas_by_person.setdefault(person_id, []).append(area)
 
     people: list[dict[str, Any]] = []
     for node in grouped.get("Person", []):
         pid = node.get("id")
-        excluded = bool(node.get("excluded_for_now")) or pid in EXCLUDED_PERSON_IDS
+        pid_key = pid if isinstance(pid, str) else ""
+        excluded = bool(node.get("excluded_for_now")) or pid_key in EXCLUDED_PERSON_IDS
         person: dict[str, Any] = {
             "person_id": pid,
             "name_ru": node.get("name_ru"),
@@ -250,7 +258,7 @@ def _build_people(
             )
             people.append(person)
             continue
-        hint = hints.get(pid, {})
+        hint = hints.get(pid_key, {})
         person["identity"] = {
             "github": list(hint.get("github", []) or []),
             "github_status": hint.get("github_status", "unknown"),
@@ -261,7 +269,7 @@ def _build_people(
             "jira_is_verified_account_id": False,
             "email_status": hint.get("email_status", "unknown"),
         }
-        person["areas"] = [area for area in areas_by_person.get(pid, []) if area]
+        person["areas"] = [area for area in areas_by_person.get(pid_key, []) if area]
         people.append(person)
     return people
 
@@ -291,8 +299,6 @@ def _build_second_opinion(feed_doc: Any) -> list[dict[str, Any]]:
 def _build_unresolved(grouped: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
     questions: list[dict[str, Any]] = []
     for node in grouped.get("ApprovalGate", []):
-        if not isinstance(node, dict):
-            continue
         questions.append(
             {
                 "question_id": node.get("question_id"),
@@ -308,8 +314,6 @@ def _build_unresolved(grouped: dict[str, list[dict[str, Any]]]) -> list[dict[str
 def _build_ownership_gaps(grouped: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
     gaps: list[dict[str, Any]] = []
     for node in grouped.get("UnconfirmedOwnershipGap", []):
-        if not isinstance(node, dict):
-            continue
         gaps.append(
             {
                 "area": node.get("area"),

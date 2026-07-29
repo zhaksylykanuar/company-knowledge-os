@@ -17,11 +17,14 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
   versioned/idempotent bulk decisions реализованы;
 - пять workspace-owned отношений защищены составными PostgreSQL foreign keys,
   а operational GitHub reads явно scoped по workspace;
+- backend static typing (`mypy app`) и настоящий frontend Biome lint являются
+  локальными и CI quality gates;
 - внешние записи остаются выключенными до завершения остальных high-priority
   remediation;
 - публичный multi-tenant hosting заблокирован до полного RLS gate из DEC-102.
 
-Все четыре high-priority замечания аудита закрыты локальными тестами.
+Все четыре high-priority замечания аудита и medium findings по static typing и
+фиктивному frontend lint закрыты локальными тестами.
 
 ## Фаза 1 — Product reset
 

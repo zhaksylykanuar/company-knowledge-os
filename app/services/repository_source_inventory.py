@@ -319,8 +319,6 @@ def _discovery_items(
 def _legacy_seed_items() -> list[dict[str, Any]]:
     items = []
     for entry in repository_portfolio_catalog():
-        if not isinstance(entry, Mapping):
-            continue
         repo_key = _safe_repo_part(entry.get("repo_key"))
         if repo_key is None:
             continue

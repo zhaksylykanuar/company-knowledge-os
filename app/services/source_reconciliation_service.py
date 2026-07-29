@@ -168,7 +168,9 @@ def _observed_external_ids(
     *,
     repositories: Mapping[str, str],
 ) -> dict[str, set[str]]:
-    observed = {repository: set() for repository in repositories}
+    observed: dict[str, set[str]] = {
+        repository: set() for repository in repositories
+    }
     for record in observed_records:
         repository_full_name = record.get("repository_full_name")
         external_id = record.get("external_id")

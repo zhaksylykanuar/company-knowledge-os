@@ -104,6 +104,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [me]);
 
   useEffect(() => {
+    void workspaceId;
     setAssistantSnapshotSource(null);
   }, [workspaceId]);
 

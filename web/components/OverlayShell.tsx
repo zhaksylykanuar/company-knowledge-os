@@ -188,6 +188,7 @@ export function OverlayShell({
   }
 
   const overlay = (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Mouse backdrop dismissal is redundant with the close button and Escape handling.
     <div
       className="overlay-shell-backdrop"
       data-mode={mode}

@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
+from pydantic import SecretStr
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1150,8 +1151,6 @@ def _normalize_provider_repositories(value: list[dict[str, Any]]) -> list[dict[s
     normalized: list[dict[str, Any]] = []
     seen: set[str] = set()
     for raw in value[:GITHUB_APP_MAX_REPOSITORIES]:
-        if not isinstance(raw, Mapping):
-            continue
         full_name = _safe_repository_full_name(raw.get("full_name"))
         identifier = _safe_identifier(raw.get("id"))
         if full_name is None or identifier is None or full_name.casefold() in seen:
@@ -1391,7 +1390,7 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 def _legacy_env_app_configured() -> bool:
     private_key = settings.github_app_private_key
-    if hasattr(private_key, "get_secret_value"):
+    if isinstance(private_key, SecretStr):
         private_key = private_key.get_secret_value()
     return bool(
         _safe_text(settings.github_app_id, 100)

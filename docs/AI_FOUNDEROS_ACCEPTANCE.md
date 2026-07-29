@@ -114,12 +114,15 @@
 ## I. Проверка
 
 - [x] `uv run ruff check .`
+- [x] `uv run mypy app` проверяет все application modules локально и в CI.
 - [x] Guarded `make backend-check` runs the full pytest suite only against an
   explicit dedicated test database.
 - [x] Bare pytest fails closed before application import without explicit test
   mode and a test-marked database.
 - [x] `npm test`
 - [x] `npm run typecheck`
+- [x] `npm run lint` является отдельным zero-warning Biome gate, а не alias на
+  typecheck.
 - [x] `npm run build`
 - [x] `npm audit --omit=dev --audit-level=moderate`
 - [x] Workspace-owned canonical/document relations use composite PostgreSQL

@@ -59,6 +59,8 @@ export function GitHubOperationalWorkPanel({
   const [status, setStatus] = useState<PanelStatus>("loading");
 
   useEffect(() => {
+    void refreshSignal;
+    void reloadKey;
     if (!workspaceId) {
       setStatus("missing");
       setData(null);
@@ -270,8 +272,8 @@ export function GitHubOperationalWorkPanelView({
                 {M.common.warnings} ({data.warnings.length})
               </summary>
               <ul>
-                {data.warnings.map((warning, index) => (
-                  <li key={`${index}-${warning}`}>{warning}</li>
+                {data.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
                 ))}
               </ul>
             </details>

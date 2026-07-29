@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from math import ceil
 from threading import Lock
 from time import monotonic
-from typing import Any
+from typing import Any, Final
 from uuid import UUID
 
 from app.core.config import settings
@@ -25,7 +25,7 @@ from app.services.headquarters_read_service import (
 )
 
 
-ASSISTANT_CONTRACT_VERSION = "assistant.v1"
+ASSISTANT_CONTRACT_VERSION: Final = "assistant.v1"
 ASSISTANT_QUERY_MAX_CHARS = 500
 ASSISTANT_RESPONSE_TEXT_MAX_CHARS = 600
 ASSISTANT_CITATION_LIMIT = 8
@@ -178,6 +178,12 @@ class AssistantFlightKey:
     normalized_query: str
 
 
+async def _await_operation(
+    operation: Callable[[], Awaitable[dict[str, Any]]],
+) -> dict[str, Any]:
+    return await operation()
+
+
 class AssistantQueryController:
     """Process-local rate limit plus identical-query single-flight."""
 
@@ -201,11 +207,11 @@ class AssistantQueryController:
                 task = existing
             else:
                 self._admit(key.user_id, key.workspace_id)
-                task = asyncio.create_task(operation())
+                task = asyncio.create_task(_await_operation(operation))
                 self._in_flight[key] = task
                 task.add_done_callback(
-                    lambda completed, flight_key=key: self._complete(
-                        flight_key,
+                    lambda completed: self._complete(
+                        key,
                         completed,
                     )
                 )

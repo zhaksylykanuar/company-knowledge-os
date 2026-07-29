@@ -117,6 +117,7 @@ export function GitHubAppSetupWizard({
   const [status, setStatus] = useState<GitHubAppSetupStatus | null>(null);
 
   useEffect(() => {
+    void reloadKey;
     let cancelled = false;
     setLoadState("loading");
     setActionError(null);
@@ -403,6 +404,7 @@ export function GitHubAppSetupWizardView({
             aria-label={phaseAnnouncement}
             className="github-app-setup__phase-focus"
             ref={phaseFocusRef}
+            role="region"
             tabIndex={-1}
           >
             <GitHubSetupPhaseContent

@@ -79,7 +79,6 @@ export default function SetupPasswordPage() {
               <span className={styles.passwordField}>
                 <input
                   autoComplete="new-password"
-                  autoFocus
                   maxLength={256}
                   minLength={8}
                   onChange={(event) => setPassword(event.target.value)}

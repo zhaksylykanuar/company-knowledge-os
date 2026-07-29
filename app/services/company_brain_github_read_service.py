@@ -451,13 +451,18 @@ async def _source_records_for_tasks(
         by_external_id.update(
             {(provider, external_id): record for external_id, record in provider_records.items()}
         )
-    return {
-        task.id: by_id.get(task.source_record_id)
-        or by_external_id.get((task.source_provider, task.external_id))
-        for task in tasks
-        if by_id.get(task.source_record_id)
-        or by_external_id.get((task.source_provider, task.external_id))
-    }
+    resolved: dict[UUID, SourceRecord] = {}
+    for task in tasks:
+        record = (
+            by_id.get(task.source_record_id)
+            if task.source_record_id is not None
+            else None
+        )
+        if record is None:
+            record = by_external_id.get((task.source_provider, task.external_id))
+        if record is not None:
+            resolved[task.id] = record
+    return resolved
 
 
 def _open_issues(tasks: list[Task]) -> list[Task]:

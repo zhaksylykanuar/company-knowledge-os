@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
@@ -50,6 +50,7 @@ export default function DocumentsPage() {
   const [detailPending, setDetailPending] = useState(false);
 
   useEffect(() => {
+    void reloadKey;
     if (!workspaceId) {
       setData(null);
       setError(null);
@@ -393,7 +394,11 @@ export function DocumentsPanelView({
               </p>
             </section>
           ) : (
-            <div className="work-list" aria-label={M.documents.listLabel}>
+            <div
+              aria-label={M.documents.listLabel}
+              className="work-list"
+              role="list"
+            >
               {documents.map((document) => (
                 <DocumentCard
                   document={document}

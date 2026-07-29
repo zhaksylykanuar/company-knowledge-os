@@ -611,8 +611,6 @@ def _safe_scopes(scopes: list[str]) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for raw_scope in scopes[:50]:
-        if not isinstance(raw_scope, str):
-            continue
         scope = raw_scope.strip()
         if not scope or scope in seen:
             continue
@@ -903,8 +901,6 @@ def _github_app_installation_metadata(
 def _safe_selected_repositories(value: list[dict[str, Any]]) -> list[dict[str, Any]]:
     safe: list[dict[str, Any]] = []
     for raw_item in value[:100]:
-        if not isinstance(raw_item, Mapping):
-            continue
         item: dict[str, Any] = {}
         for key in ("id", "name", "full_name", "private"):
             if key not in raw_item:

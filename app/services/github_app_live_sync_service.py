@@ -215,8 +215,6 @@ async def sync_github_app_installation_repositories(
                     _provider_read_error_detail(exc.detail)
                 ) from exc
             for raw_issue in raw_issues:
-                if not isinstance(raw_issue, Mapping):
-                    continue
                 if raw_issue.get("pull_request") is not None:
                     skipped_pull_requests += 1
                     continue
@@ -243,8 +241,6 @@ async def sync_github_app_installation_repositories(
                     _provider_read_error_detail(exc.detail)
                 ) from exc
             for raw_pull_request in raw_pull_requests:
-                if not isinstance(raw_pull_request, Mapping):
-                    continue
                 pull_request = _pull_request_record_from_github_response(
                     raw_pull_request,
                     repository_full_name=repository_full_name,

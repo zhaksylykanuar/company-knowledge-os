@@ -33,8 +33,11 @@ class GitHubInstallationAccessToken:
 
 
 class GitHubAppSigningCredential(Protocol):
-    app_id: str
-    private_key_pem: str
+    @property
+    def app_id(self) -> str: ...
+
+    @property
+    def private_key_pem(self) -> str: ...
 
 
 async def mint_installation_access_token(

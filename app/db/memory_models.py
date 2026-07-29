@@ -7,6 +7,7 @@ text stay in their existing source-of-truth tables.
 """
 
 from datetime import datetime
+from typing import Final
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -33,7 +34,7 @@ import app.db.canonical_models  # noqa: E402,F401
 import app.db.identity_models  # noqa: E402,F401
 
 
-COMPANY_MEMORY_CHECKPOINT_VERSION = "temporal-checkpoint.v2"
+COMPANY_MEMORY_CHECKPOINT_VERSION: Final = "temporal-checkpoint.v2"
 COMPANY_MEMORY_EVENT_VERSION = "company-memory-event.v1"
 
 COMPANY_MEMORY_EVENT_ACTION_PROPOSAL_CREATED = "action_proposal_created"

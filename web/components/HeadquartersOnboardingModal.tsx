@@ -28,6 +28,7 @@ export function HeadquartersOnboardingModal({
     defaultStepKey
   );
   useEffect(() => {
+    void snapshot.snapshot.id;
     setActiveKey(defaultStepKey);
   }, [defaultStepKey, snapshot.snapshot.id]);
   const activeStep = onboarding.steps.find((step) => step.key === activeKey);

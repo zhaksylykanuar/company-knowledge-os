@@ -116,8 +116,6 @@ async def sync_selected_repository_pull_requests(
 
         repo_pull_requests: list[dict[str, Any]] = []
         for raw_pull_request in raw_pull_requests:
-            if not isinstance(raw_pull_request, Mapping):
-                continue
             pull_request = _pull_request_record_from_github_response(
                 raw_pull_request,
                 repository_full_name=repository_full_name,

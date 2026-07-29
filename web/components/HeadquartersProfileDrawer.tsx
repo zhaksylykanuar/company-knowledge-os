@@ -253,7 +253,11 @@ function ConfirmedOrganizationProfile({
   const [activeTab, setActiveTab] = useState<OrganizationTab>("overview");
   const tabId = useId().replaceAll(":", "");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  useEffect(() => setActiveTab("overview"), [data.workspace_id, selector]);
+  useEffect(() => {
+    void data.workspace_id;
+    void selector;
+    setActiveTab("overview");
+  }, [data.workspace_id, selector]);
 
   function handleTabKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,

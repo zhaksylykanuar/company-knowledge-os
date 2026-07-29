@@ -1021,8 +1021,6 @@ def _error_code_from_detail(detail: str) -> str:
 
 
 def _repository_metadata(proposal: ActionProposal) -> dict[str, str]:
-    if not isinstance(proposal.payload, Mapping):
-        return {}
     repository_full_name = proposal.payload.get("repository_full_name")
     if not isinstance(repository_full_name, str) or not repository_full_name.strip():
         return {}

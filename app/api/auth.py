@@ -47,8 +47,8 @@ def _reject_api_auth() -> NoReturn:
     )
 
 
-def _configured_key(config: ApiAuthConfig) -> str | None:
-    key = config.api_auth_key
+def _configured_key(config: object) -> str | None:
+    key = getattr(config, "api_auth_key", None)
     if isinstance(key, SecretStr):
         key = key.get_secret_value()
 
@@ -61,9 +61,6 @@ def _configured_key(config: ApiAuthConfig) -> str | None:
 
 def _configured_header_name(config: ApiAuthConfig) -> str | None:
     header_name = config.api_auth_header_name
-    if not isinstance(header_name, str):
-        return None
-
     stripped = header_name.strip()
     return stripped or None
 

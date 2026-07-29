@@ -13,7 +13,7 @@ metadata projection is stored.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -146,7 +146,7 @@ async def import_drive_files_local(
     session: AsyncSession,
     *,
     workspace_id: UUID,
-    raw_files: list[Mapping[str, Any]],
+    raw_files: Sequence[Mapping[str, Any]],
     connection_id: UUID | None = None,
 ) -> DriveFileImportResult:
     """Import user-supplied Drive file snapshots into canonical local rows.
@@ -310,7 +310,7 @@ async def _upsert_drive_source_record(
         SourceRecord.tombstone_sync_job_id: None,
         SourceRecord.tombstone_reason: None,
     }
-    statement = (
+    statement: Any = (
         pg_insert(SourceRecord)
         .values(
             {
@@ -328,6 +328,8 @@ async def _upsert_drive_source_record(
     )
     row = (await session.execute(statement)).one()
     source_record = await session.get(SourceRecord, row[0], populate_existing=True)
+    if source_record is None:
+        raise DriveConnectorError("drive source record persistence failed")
     return source_record, bool(row[1])
 
 

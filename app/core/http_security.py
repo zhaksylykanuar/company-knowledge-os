@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from starlette.datastructures import MutableHeaders
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 PRIVATE_NO_STORE = "private, no-store"
 _WORKSPACE_API_PREFIX = "/api/v1/workspaces/"
@@ -21,7 +21,12 @@ class ConnectorResponseNoStoreMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self._app = app
 
-    async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
         path = str(scope.get("path", ""))
         protect_response = bool(
             scope.get("type") == "http"
@@ -32,7 +37,7 @@ class ConnectorResponseNoStoreMiddleware:
             await self._app(scope, receive, send)
             return
 
-        async def send_wrapper(message):  # type: ignore[no-untyped-def]
+        async def send_wrapper(message: Message) -> None:
             if message.get("type") == "http.response.start":
                 MutableHeaders(scope=message)["Cache-Control"] = PRIVATE_NO_STORE
             await send(message)
