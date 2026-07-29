@@ -91,6 +91,10 @@ CHECK_COMMANDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("dependency sync", ("uv", "sync", "--frozen")),
     ("Ruff", ("uv", "run", "ruff", "check", ".")),
     ("mypy", ("uv", "run", "mypy", "app")),
+    (
+        "Python dependency audit",
+        ("uv", "run", "pip-audit", "--local", "--progress-spinner", "off"),
+    ),
     ("Alembic upgrade", ("uv", "run", "alembic", "upgrade", "head")),
     ("Alembic schema check", ("uv", "run", "alembic", "check")),
     ("pytest", ("uv", "run", "pytest", "-q")),

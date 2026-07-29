@@ -27,13 +27,17 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
   реализованы;
 - smoke gates явно разделены на liveness, session, workspace и desktop/mobile
   browser E2E;
+- прямые runtime dependencies объявлены, неиспользуемые provider SDK и legacy
+  config удалены, Python/frontend vulnerability audits обязательны, а local
+  datastore images закреплены digest и обслуживаются Renovate;
 - внешние записи остаются выключенными до завершения остальных high-priority
   remediation;
 - публичный multi-tenant hosting заблокирован до полного RLS gate из DEC-102.
 
-Все четыре high-priority замечания аудита и medium findings M2–M9, M14 и M17
-закрыты либо сведены к явно записанному внешнему hosted gate. Distributed
-tracing/error reporting и полный RLS ещё не объявлены готовыми.
+Все четыре high-priority замечания аудита и medium findings M2–M12, M14 и M17
+закрыты либо сведены к явно записанному внешнему hosted gate. Durable provider
+jobs (M13), distributed tracing/error reporting, disaster recovery и полный
+RLS ещё не объявлены готовыми.
 
 ## Фаза 1 — Product reset
 

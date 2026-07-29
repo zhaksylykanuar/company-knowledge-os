@@ -20,7 +20,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16@sha256:081f1bc7bd5e143dbb6e487b710bbc27712cdcfaced4c071b8e47349aa1b4171
+        image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
         env:
           POSTGRES_USER: ckdos
           POSTGRES_PASSWORD: ckdos_dev_password
@@ -69,6 +69,9 @@ jobs:
       - name: Static typing
         run: uv run mypy app
 
+      - name: Audit Python dependencies
+        run: uv run pip-audit --local --progress-spinner off
+
       - name: Apply migrations
         env:
           DATABASE_URL: postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos_test
@@ -116,9 +119,9 @@ jobs:
         working-directory: web
         run: npm ci
 
-      - name: Audit frontend runtime dependencies
+      - name: Audit all frontend dependencies
         working-directory: web
-        run: npm audit --omit=dev --audit-level=moderate
+        run: npm audit --audit-level=moderate
 
       - name: Frontend tests
         working-directory: web

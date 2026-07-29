@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added a current-state Python vulnerability gate with `pip-audit` to the
+  guarded backend checker and CI; frontend CI now audits development as well as
+  runtime dependencies (DEC-106).
+- Added immutable PostgreSQL and Redis manifest digests to local Compose and
+  Renovate `docker-compose` tracking so tag and digest updates arrive together.
 - Added database-backed `/health/ready`, operator-only low-cardinality runtime
   counters, structured JSON request events and server-generated correlation
   IDs (DEC-104).
@@ -54,6 +59,13 @@
 
 ### Changed
 
+- Declared directly imported `cryptography`, `starlette` and `python-dotenv`,
+  raised vulnerable `pydantic-settings`/Starlette floors to fixed releases,
+  and regenerated the Python lockfile with no known dependency vulnerabilities.
+- Removed unused OpenAI and Google API/OAuth SDKs, Tenacity, obsolete
+  Google/email/triage/Jira/Telegram settings, legacy provider placeholders and
+  the superseded Codex operator launcher. The disabled LLM configuration
+  contract remains reserved for the future evidence-validated AI path.
 - Session validation now writes `last_seen_at` only after a configured minimum
   interval instead of on every authenticated request.
 - Non-local startup now rejects `SameSite=None`; the product keeps its

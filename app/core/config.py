@@ -364,55 +364,6 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENAI_API_KEY", "FOS_OPENAI_API_KEY"),
     )
 
-    google_client_secrets_file: str = "./secrets/google_oauth_client.json"
-    google_token_file: str = "./secrets/google_token.json"
-    google_gmail_backfill_enabled: bool = False
-    google_gmail_backfill_query: str | None = None
-    google_drive_backfill_enabled: bool = False
-    google_drive_ai_inbox_folder_id: str | None = None
-    google_pubsub_topic: str | None = None
-    google_pubsub_subscription: str | None = None
-    google_gmail_token_file: str = "./secrets/google_gmail_token.json"
-
-    email_me_addresses: str | None = None
-    email_digest_show_low_priority: bool = False
-    email_digest_show_marketing: bool = False
-    email_digest_show_automated: bool = False
-    email_digest_debug_triage: bool = False
-    email_digest_debug_evidence: bool = False
-    email_important_senders: str | None = None
-    email_important_domains: str | None = None
-    email_marketing_sender_blocklist: str | None = None
-    email_important_project_keywords: str | None = None
-
-    attention_triage_enabled: bool = False
-    attention_triage_provider: str = "openai"
-    attention_triage_model: str | None = None
-    attention_triage_min_confidence_to_hide: float = 0.80
-    attention_triage_review_threshold: float = 0.55
-    attention_triage_max_text_chars: int = 6000
-    digest_show_hidden: bool = False
-    digest_debug_triage: bool = False
-    digest_debug_evidence: bool = False
-
-    jira_base_url: str | None = None
-    jira_email: str | None = None
-    jira_api_token: str | None = None
-
-    github_webhook_secret: str | None = None
-    gitlab_webhook_secret: str | None = None
-    bitbucket_webhook_secret: str | None = None
-
-    telegram_bot_token: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("TELEGRAM_BOT_TOKEN", "FOS_TELEGRAM_BOT_TOKEN"),
-    )
-    telegram_chat_id: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("TELEGRAM_CHAT_ID", "FOS_TELEGRAM_CHAT_ID"),
-    )
-    telegram_webhook_secret_token: str | None = None
-
     obsidian_vault_path: str = "./obsidian_vault"
 
     model_config = SettingsConfigDict(

@@ -11,9 +11,8 @@ GitHub Source Reconciliation v1, universal pytest database guard и Atomic
 External Execution v1, Strict Action Evidence v1 и Database Workspace
 Isolation v1, Python Static Typing Gate и Frontend Biome Gate реализованы
 локально в ветке `codex/living-hq-ux-reset`. Runtime Readiness,
-Browser Security Baseline и Shared Public Auth Admission также реализованы
-локально; изменения не опубликованы.
-Изменения не опубликованы.**
+Browser Security Baseline, Shared Public Auth Admission и Reproducible
+Dependency Gate также реализованы локально; изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -156,6 +155,16 @@ ledger; тексты источников и evidence не копируются.
 - Активные README/runbook приведены к навигации
   «Сейчас / Компания / Спросить / Настройки»; историческая five-zone проверка
   больше не считается текущим acceptance.
+- Удалены неиспользуемые OpenAI/Google SDK, Tenacity, obsolete
+  Google/email/triage/Jira/Telegram settings, legacy provider placeholders и
+  старый operator launcher. `cryptography`, `starlette` и `python-dotenv`
+  объявлены напрямую; LLM env-контракт остаётся выключенным reservation без
+  SDK/runtime path (DEC-106).
+- Backend checker и CI запускают актуальный `pip-audit`; frontend CI проверяет
+  также dev dependencies. Найденные advisory устранены обновлением
+  `pydantic-settings` и Starlette, без ignore-исключений.
+- PostgreSQL и Redis в local Compose закреплены exact manifest digest, а
+  Renovate обновляет Docker Compose tag+digest вместе после release-age delay.
 
 ## Проверено 2026-07-29
 
@@ -164,10 +173,11 @@ ledger; тексты источников и evidence не копируются.
 - Frontend: `npm run lint` — успешно, **95 files**, 0 warnings.
 - Frontend: `npm run build` — успешно, **16 routes**.
 - Frontend dependencies: full и production audit — **0 vulnerabilities**.
+- Python dependencies: `pip-audit --local` — **0 known vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
 - Backend: `uv run mypy app` — успешно, **99 source files**.
-- Backend: guarded full pytest — **781 passed**, одно внешнее
+- Backend: guarded full pytest — **779 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Alembic: единственная head `b2c3d4e5f6a7`, применена к отдельной test БД;
   `alembic check` не обнаружил расхождений metadata/schema.

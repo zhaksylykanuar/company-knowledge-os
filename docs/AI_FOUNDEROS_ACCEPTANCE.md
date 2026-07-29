@@ -124,7 +124,10 @@
 - [x] `npm run lint` является отдельным zero-warning Biome gate, а не alias на
   typecheck.
 - [x] `npm run build`
-- [x] `npm audit --omit=dev --audit-level=moderate`
+- [x] `npm audit --audit-level=moderate`
+- [x] `uv run pip-audit --local --progress-spinner off`
+- [x] Local PostgreSQL/Redis Compose images and CI service images are pinned by
+  immutable digest and automated updates preserve tag+digest.
 - [x] Public liveness and database readiness are separate probes; readiness
   fails with 503 when PostgreSQL is unavailable.
 - [x] Browser mutations enforce exact Origin/Referer, hosted security headers

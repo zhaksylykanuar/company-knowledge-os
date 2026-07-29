@@ -19,19 +19,19 @@ from app.services.browser_config import (
 # values (deliberately NOT key-shaped, so the staged-secret scan stays quiet).
 _SECRET_FIELDS = {
     "openai_api_key": "LEAKED-OPENAI-VALUE-must-not-surface",
-    "jira_api_token": "LEAKED-JIRA-API-TOKEN-value",
-    "telegram_bot_token": "LEAKED-TELEGRAM-BOT-value",
-    "github_webhook_secret": "LEAKED-GITHUB-SECRET-value",
+    "api_auth_key": "LEAKED-API-AUTH-VALUE-must-not-surface",
+    "secret_encryption_key": "LEAKED-ENCRYPTION-VALUE-must-not-surface",
+    "github_app_webhook_secret": "LEAKED-GITHUB-SECRET-value",
 }
 _FORBIDDEN = (
     "leaked-openai",
-    "leaked-jira",
-    "leaked-telegram",
+    "leaked-api-auth",
+    "leaked-encryption",
     "leaked-github",
     "openai_api_key",
-    "github_token",
-    "jira_api_token",
-    "gmail_client_secret",
+    "api_auth_key",
+    "secret_encryption_key",
+    "github_app_webhook_secret",
     "client_secret",
 )
 
@@ -126,14 +126,19 @@ def test_sanitize_browser_config_is_allowlist_only() -> None:
         enable_browser_dev_config = True
         # secrets hanging off the same config object must never surface
         openai_api_key = "LEAKED-OPENAI-VALUE"
-        jira_api_token = "LEAKED-JIRA-VALUE"
-        github_token = "LEAKED-GH-VALUE"
-        gmail_client_secret = "LEAKED-GMAIL-VALUE"
+        api_auth_key = "LEAKED-API-AUTH-VALUE"
+        secret_encryption_key = "LEAKED-ENCRYPTION-VALUE"
+        github_app_webhook_secret = "LEAKED-GITHUB-VALUE"
 
     out = sanitize_browser_config(Cfg())
     assert set(out) == set(ALLOWED_KEYS)
     blob = json.dumps(out)
-    for bad in ("LEAKED-OPENAI", "LEAKED-JIRA", "LEAKED-GH", "LEAKED-GMAIL"):
+    for bad in (
+        "LEAKED-OPENAI",
+        "LEAKED-API-AUTH",
+        "LEAKED-ENCRYPTION",
+        "LEAKED-GITHUB",
+    ):
         assert bad not in blob
 
 
@@ -141,13 +146,13 @@ def test_dev_api_key_is_redacted_from_log_safe_config() -> None:
     payload = sanitize_for_logs(
         {
             "dev_api_key": "local-dev-key",
-            "nested": {"jira_api_token": "LEAKED-JIRA-VALUE"},
+            "nested": {"github_app_webhook_secret": "LEAKED-GITHUB-VALUE"},
             "app_env": "local",
         }
     )
     blob = json.dumps(payload)
     assert "local-dev-key" not in blob
-    assert "LEAKED-JIRA-VALUE" not in blob
+    assert "LEAKED-GITHUB-VALUE" not in blob
     assert "***redacted***" in blob
 
 

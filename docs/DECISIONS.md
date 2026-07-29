@@ -3356,6 +3356,32 @@ configured retention before removal. Session validation updates
 previous write on every authenticated request. Cleanup and admission never
 read or log bearer values.
 
+## DEC-106 - Runtime Dependencies Must Be Used, Audited And Reproducible
+
+Decision (2026-07-29): every imported third-party Python package is declared
+directly. `cryptography`, `starlette` and `python-dotenv` are therefore
+explicit runtime dependencies instead of accidental transitive dependencies.
+SDKs with no runtime path are not retained as speculative capability: the unused OpenAI,
+Google API/OAuth and retry packages, their lock graph, obsolete provider
+settings, placeholder operator variables and the legacy Google/Telegram
+launcher were removed. The reserved LLM feature gate and key names remain
+configuration contract only; they do not imply that a provider SDK or
+generative execution path exists.
+
+The guarded backend checker and CI audit the installed Python environment with
+`pip-audit`; CI audits both runtime and development frontend dependencies.
+Known vulnerabilities are fixed by dependency upgrades, not ignored. The
+minimum supported `pydantic-settings` and direct `starlette` versions exclude
+the advisories found when this gate was introduced. Lockfiles remain required
+and vulnerability results are current-state evidence, not a permanent
+security claim.
+
+Local PostgreSQL and Redis images retain readable major-version tags but are
+also pinned to exact multi-platform manifest digests. Renovate's
+`docker-compose` manager updates tag and digest together with a release-age
+delay. CI container images remain digest-pinned. A human still reviews and
+tests image and dependency updates before they are merged.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

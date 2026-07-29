@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "enabledManagers": ["npm", "pep621"],
+  "enabledManagers": ["npm", "pep621", "docker-compose"],
   "dependencyDashboard": true,
   "timezone": "Asia/Almaty",
   "labels": ["dependencies"],
@@ -27,6 +27,15 @@
       "minimumReleaseAge": "3 days",
       "groupName": "frontend dependencies",
       "addLabels": ["javascript", "npm"]
+    },
+    {
+      "description": "Keep local datastore images immutable and update their tags and digests together.",
+      "matchManagers": ["docker-compose"],
+      "matchDatasources": ["docker"],
+      "minimumReleaseAge": "3 days",
+      "pinDigests": true,
+      "groupName": "local datastore images",
+      "addLabels": ["docker", "runtime"]
     }
   ]
 }

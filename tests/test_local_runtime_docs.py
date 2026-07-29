@@ -113,6 +113,14 @@ def test_no_github_actions_workflow_starts_runtime_or_provider_actions() -> None
 def test_compose_datastores_bind_to_loopback_only() -> None:
     compose = COMPOSE.read_text(encoding="utf-8")
 
+    assert (
+        "postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20"
+        in compose
+    )
+    assert (
+        "redis:7@sha256:595cc6f2bb3af6e03347b90deb6123c6aa2c81dea05ce08128de8a174b6ac67b"
+        in compose
+    )
     assert '"127.0.0.1:5432:5432"' in compose
     assert '"127.0.0.1:6379:6379"' in compose
     assert '- "5432:5432"' not in compose
