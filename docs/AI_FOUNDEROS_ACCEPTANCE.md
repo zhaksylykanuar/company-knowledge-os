@@ -149,6 +149,11 @@
   retention without persisting the key beside it.
 - [x] Private license notice, SECURITY/CONTRIBUTING policy, owner CODEOWNERS and
   repository pre-commit gates are present and contract-tested.
+- [x] Audited large modules have line-budget ratchets; Headquarters query count
+  does not scale per SourceRecord, durable job claiming has a two-worker
+  concurrency test, and the first bounded API extraction is complete.
+- [x] Superseded synchronous selected-issue/PR provider routes are removed; one
+  durable `202` GitHub App job remains the live repository-read path.
 - [ ] First real encrypted copy and full restore drill from physically
   independent storage with separately recovered key.
 - [ ] Public multi-tenant mode enforces the full RLS gate from DEC-102.

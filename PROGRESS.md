@@ -13,8 +13,8 @@ Isolation v1, Python Static Typing Gate и Frontend Biome Gate реализов�
 локально в ветке `codex/living-hq-ux-reset`. Runtime Readiness,
 Browser Security Baseline, Shared Public Auth Admission, Reproducible
 Dependency Gate, Durable GitHub Provider Jobs, Encrypted Off-device Recovery
-Controls и Private Repository Governance также реализованы локально;
-изменения не опубликованы.**
+Controls, Private Repository Governance и Maintainability Ratchets также
+реализованы локально; изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -193,6 +193,18 @@ ledger; тексты источников и evidence не копируются.
 - Добавлены private-source LICENSE, SECURITY, CONTRIBUTING, owner CODEOWNERS и
   repository-owned pre-commit secret/type/lint gates (DEC-109). Hosted branch
   protection и private reporting channel остаются настройками владельца.
+- Удалены два superseded synchronous GitHub issue/PR sync endpoint и их
+  дублирующие services: продукт их не использовал, а provider I/O всё ещё шёл
+  внутри API SQL session. Unified GitHub App durable `202` job теперь
+  единственный live repository-read route; historical normalized records
+  остаются читаемыми (DEC-110).
+- Action request/response contracts вынесены в отдельный schema module;
+  `app/api/actions.py` уменьшен с 1 527 до 1 225 строк. Для audited больших
+  модулей установлен line-budget ratchet.
+- Headquarters query-budget сравнивает 1 и 100 SourceRecord и запрещает
+  per-row N+1 SQL growth. Дальнейшее уменьшение Headquarters, большого
+  ActionProposalsPanel и global CSS остаётся incremental work с
+  characterization каждого slice, а не broad rewrite.
 
 ## Проверено 2026-07-29
 
@@ -204,8 +216,8 @@ ledger; тексты источников и evidence не копируются.
 - Python dependencies: `pip-audit --local` — **0 known vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: `uv run mypy app` — успешно, **100 source files**.
-- Backend: guarded full pytest — **795 passed**, одно внешнее
+- Backend: `uv run mypy app` — успешно, **99 source files**.
+- Backend: guarded full pytest — **790 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Disaster recovery/governance: focused Ruff + **7 tests passed**; encrypted
   round-trip, tamper/path rejection, sanitized drill proof, retention и
@@ -229,9 +241,12 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 1. Настроить физически независимое storage и отдельное хранение recovery key,
    затем выполнить первый настоящий encrypted export и full restore drill.
-2. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
+2. Завершить AI second-opinion path: strict structured output, evidence-bound
+   retrieval, critic и разделение fact / interpretation / objection /
+   recommendation.
+3. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
    gate; process counters не являются distributed telemetry.
-3. Провести новые authenticated session/workspace/browser gates и один
+4. Провести новые authenticated session/workspace/browser gates и один
    founder-approved read-only GitHub App read.
 
 ## Неподвижные границы

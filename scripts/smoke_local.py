@@ -31,8 +31,6 @@ API_KEY_HEADER_NAME = "X-FounderOS-API-Key"
 
 FORBIDDEN_PATH_MARKERS = (
     "/execute",
-    "/repositories/issues/sync",
-    "/repositories/pull-requests/sync",
     "/sync-execution-result",
     "/connections/provider-token",
     "/normalize-local",

@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added maintainability ratchets and a deterministic Headquarters query-budget
+  test that rejects SourceRecord-driven N+1 growth (DEC-110).
+- Added a dedicated action API schema module, reducing the action route module
+  while preserving the exact validated HTTP contracts.
 - Added encrypted off-device disaster recovery controls (DEC-108): exact local
   bundle validation, AES-256-GCM export, decrypt-after-write verification,
   isolated full restore drills, safe materialization and explicit 7/4/12
@@ -77,6 +81,10 @@
 
 ### Changed
 
+- Removed the superseded selected-issue and selected-pull-request synchronous
+  GitHub endpoints and services. The unified `202` durable GitHub App job is
+  now the only live repository-read route; historical normalized records stay
+  readable.
 - Removed the legacy synchronous GitHub App sync path that could perform
   sequential provider reads while its caller held a database session. Provider
   I/O now runs outside SQL transactions and each repository is normalized in a

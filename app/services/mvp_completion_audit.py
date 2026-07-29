@@ -342,7 +342,7 @@ _MAIN_FLOW_ITEMS: tuple[AuditItem, ...] = (
         requirement="Sync GitHub",
         category="main_flow",
         evidence=(
-            EvidenceCheck("app/api/github.py", "/repositories/issues/sync"),
+            EvidenceCheck("app/api/github.py", "/connections/app-installation/sync"),
         ),
         human_gated=True,
         human_note=(

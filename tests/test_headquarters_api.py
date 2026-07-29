@@ -7,14 +7,12 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr, ValidationError
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import delete, event, select, text, update
 from sqlalchemy.exc import DBAPIError
 
 import app.services.company_map_read_service as company_map_service
 import app.services.headquarters_read_service as headquarters_service
 import app.services.github_app_token_service as github_app_token_service
-import app.services.github_selected_issue_sync_service as github_issue_sync_service
-import app.services.github_selected_pr_sync_service as github_pr_sync_service
 import app.services.secret_encryption as secret_encryption
 from app.api.auth import settings
 from app.api.headquarters import (
@@ -32,7 +30,7 @@ from app.db.action_models import (
     ActionExecutionEvent,
     ActionProposal,
 )
-from app.db.base import AsyncSessionLocal
+from app.db.base import AsyncSessionLocal, engine
 from app.db.briefing_models import Briefing, BriefingItem
 from app.db.canonical_models import EvidenceRef, Repository, SourceRecord
 from app.db.company_world_models import (
@@ -370,6 +368,91 @@ def test_onboarding_contract_preserves_unknown_and_required_readiness() -> None:
     inconsistent["steps"][2]["state"] = "complete"
     with pytest.raises(ValidationError, match="step state must match its evidence"):
         HeadquartersOnboardingRead.model_validate(inconsistent)
+
+
+async def test_headquarters_query_budget_does_not_scale_with_source_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Characterize the read model against accidental per-source N+1 queries."""
+
+    marker = uuid4().hex
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+
+    def count_queries() -> tuple[list[str], object]:
+        statements: list[str] = []
+
+        def record_statement(
+            _connection,
+            _cursor,
+            statement,
+            _parameters,
+            _context,
+            _executemany,
+        ) -> None:
+            statements.append(str(statement))
+
+        return statements, record_statement
+
+    try:
+        owner, workspace = await _seed_workspace(marker)
+        async with AsyncSessionLocal() as session:
+            session.add(
+                SourceRecord(
+                    workspace_id=workspace.id,
+                    provider="github",
+                    external_id=f"query-budget-{marker}-0",
+                    record_type="repository",
+                    payload={"full_name": f"query-budget/{marker}-0"},
+                    payload_hash=f"query-budget-{marker}-0",
+                    observed_at=datetime.now(timezone.utc),
+                )
+            )
+            await session.commit()
+
+        small_statements, small_listener = count_queries()
+        event.listen(engine.sync_engine, "before_cursor_execute", small_listener)
+        try:
+            small_status, _small_body, _small_headers = await _get_headquarters(
+                workspace_id=workspace.id,
+                email=owner.email,
+            )
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", small_listener)
+        assert small_status == 200
+
+        async with AsyncSessionLocal() as session:
+            observed_at = datetime.now(timezone.utc)
+            session.add_all(
+                [
+                    SourceRecord(
+                        workspace_id=workspace.id,
+                        provider="github",
+                        external_id=f"query-budget-{marker}-{index}",
+                        record_type="repository",
+                        payload={"full_name": f"query-budget/{marker}-{index}"},
+                        payload_hash=f"query-budget-{marker}-{index}",
+                        observed_at=observed_at,
+                    )
+                    for index in range(1, 100)
+                ]
+            )
+            await session.commit()
+
+        large_statements, large_listener = count_queries()
+        event.listen(engine.sync_engine, "before_cursor_execute", large_listener)
+        try:
+            large_status, _large_body, _large_headers = await _get_headquarters(
+                workspace_id=workspace.id,
+                email=owner.email,
+            )
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", large_listener)
+        assert large_status == 200
+        assert len(large_statements) <= len(small_statements) + 2
+        assert len(large_statements) <= 40
+    finally:
+        await _cleanup(marker)
 
 
 @pytest.mark.parametrize(
@@ -2482,17 +2565,6 @@ async def test_session_auth_path_does_not_read_secrets_or_call_provider_clients(
         "mint_installation_access_token",
         forbidden_client,
     )
-    monkeypatch.setattr(
-        github_issue_sync_service,
-        "sync_selected_repository_issues",
-        forbidden_client,
-    )
-    monkeypatch.setattr(
-        github_pr_sync_service,
-        "sync_selected_repository_pull_requests",
-        forbidden_client,
-    )
-
     await _cleanup(marker)
     try:
         owner, workspace = await _seed_workspace(marker)

@@ -20,6 +20,9 @@
 5. В приватном GitHub проверить visibility, branch protection и private
    security-reporting channel; файлы LICENSE/SECURITY/CONTRIBUTING/CODEOWNERS
    уже добавлены локально.
+6. Продолжать снижать ratchet для Headquarters, ActionProposalsPanel и global
+   CSS только bounded slices с characterization конкретного поведения; broad
+   refactor запрещён DEC-110.
 
 ## Следом — память и настоящее второе мнение
 

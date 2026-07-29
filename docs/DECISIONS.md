@@ -3455,6 +3455,33 @@ the authoritative shared gates. Hosted branch protection, private reporting
 channel configuration and repository visibility are owner-controlled GitHub
 settings and must be verified separately rather than inferred from files.
 
+## DEC-110 - Large Modules Use Tested Ratchets And Bounded Extraction
+
+Decision (2026-07-29): M16 is handled as a continuous maintainability control,
+not a one-shot broad rewrite. The audited Headquarters, action, GitHub, CSS and
+large frontend modules have explicit line-count ceilings. Crossing a ceiling
+requires a reviewed budget decision or a smaller module; the budget is a
+ratchet against further decline, not evidence that every current file is
+already ideally sized.
+
+Characterization remains the full backend/frontend suite. Concurrency is
+explicitly proven for durable GitHub job claims and canonical upserts. A
+Headquarters query-budget test compares one versus one hundred SourceRecords
+and rejects per-row SQL growth without relying on flaky wall-clock timing.
+
+The first bounded extraction moves action API request/response contracts into a
+dedicated schema module. The superseded selected-issue and selected-PR live
+sync endpoints, services and endpoint tests are deleted: they were unused by
+the product, duplicated about a thousand implementation lines and still
+performed provider I/O inside an API-owned SQL session. The unified GitHub App
+`202` durable job is the only live repository-read route. Historical normalized
+source labels remain readable so removing the execution path does not erase
+canonical company memory.
+
+Further work must lower budgets through characterized slices. Large
+Headquarters, ActionProposalsPanel and global CSS refactors remain inappropriate
+without focused behavior/performance coverage for the exact slice being moved.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

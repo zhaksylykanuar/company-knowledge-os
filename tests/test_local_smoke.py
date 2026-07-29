@@ -157,7 +157,7 @@ def test_local_smoke_briefing_is_an_explicit_local_mutation_opt_in() -> None:
     assert briefing.method == "POST"
     assert briefing.path.endswith("/briefings/manual")
     blob = json.dumps(briefing.body, sort_keys=True)
-    for forbidden in ("execute", "sync-execution-result", "repositories/issues/sync"):
+    for forbidden in ("execute", "sync-execution-result"):
         assert forbidden not in blob
 
     default_config = smoke_local.config_from_env_and_args(["--skip-workspace-checks"])

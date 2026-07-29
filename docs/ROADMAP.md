@@ -38,6 +38,9 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
   независимый export/drill остаётся owner-operated gate;
 - private-source license, security/contribution policies, owner CODEOWNERS и
   repository pre-commit quality/secret hook реализованы;
+- для крупнейших модулей действует line-budget ratchet, Headquarters имеет
+  deterministic query-scaling test, action API schemas вынесены bounded slice,
+  а два obsolete synchronous GitHub sync path удалены (DEC-110);
 - внешние записи остаются выключенными до завершения остальных high-priority
   remediation;
 - публичный multi-tenant hosting заблокирован до полного RLS gate из DEC-102.
@@ -45,8 +48,9 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
 Все четыре high-priority замечания аудита и medium findings M2–M15, M17 и M18
 получили локально проверяемые controls либо сведены к явно записанному внешнему
 gate. Distributed tracing/error reporting, первый реальный off-device
-restore proof и полный RLS ещё не объявлены готовыми; M16 остаётся отдельной
-задачей maintainability.
+restore proof и полный RLS ещё не объявлены готовыми. M16 переведён в
+проверяемую incremental policy: дальнейшее уменьшение больших UI/CSS/read-model
+модулей выполняется только bounded slices с отдельными тестами.
 
 ## Фаза 1 — Product reset
 
