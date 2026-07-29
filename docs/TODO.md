@@ -31,11 +31,18 @@
    не имеют права объявлять исчезновение.
 2. Добавить обязательства клиентов, решения и риски с evidence.
 3. Добавить contradiction detection между источниками.
-4. Добавить управляемое исправление, забывание и удаление памяти.
+4. Расширить Memory Control v1 с внутренних документов на provider-backed
+   canonical records: exact dependency preview, evidence-safe cascade,
+   reconciliation/reimport behavior и честная provider-side deletion boundary.
 
 Workspace AI/privacy control, encrypted key lifecycle, provider-retention
 acknowledgement, model/budget controls и synthetic read-only connection check
 реализованы. Настоящий credentialed smoke ещё не выполнен.
+
+Memory Control v1 реализован для FounderOS-authored документов: correction
+purges prior versions, forget удаляет active row и все версии, stale preview
+fail closed. Backups остаются до retention rotation; внешний provider cascade
+ещё не реализован.
 
 ## Внешний gate
 

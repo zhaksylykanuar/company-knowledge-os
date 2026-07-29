@@ -47,6 +47,11 @@ import type {
   DocumentCreateRequest,
   DocumentListRequest,
   DocumentListResponse,
+  DocumentMemoryCorrectionRequest,
+  DocumentMemoryCorrectionResponse,
+  DocumentMemoryForgetRequest,
+  DocumentMemoryForgetResponse,
+  DocumentMemoryPreview,
   DocumentResponse,
   DocumentUpdateRequest,
   DocumentVersionsResponse,
@@ -585,15 +590,54 @@ export async function updateDocument(
   );
 }
 
-export async function deleteDocument(
+export function buildWorkspaceDocumentMemoryPath(
+  workspaceId: string,
+  documentId: string
+): string {
+  return `${buildWorkspaceDocumentPath(workspaceId, documentId)}/memory`;
+}
+
+export async function fetchDocumentMemoryPreview(
   workspaceId: string,
   documentId: string,
   options: ApiFetchOptions = {}
-): Promise<void> {
-  await apiFetch<void>(buildWorkspaceDocumentPath(workspaceId, documentId), {
-    ...options,
-    method: "DELETE"
-  });
+): Promise<DocumentMemoryPreview> {
+  return apiFetch<DocumentMemoryPreview>(
+    buildWorkspaceDocumentMemoryPath(workspaceId, documentId),
+    options
+  );
+}
+
+export async function correctDocumentMemory(
+  workspaceId: string,
+  documentId: string,
+  request: DocumentMemoryCorrectionRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentMemoryCorrectionResponse> {
+  return apiFetch<DocumentMemoryCorrectionResponse>(
+    `${buildWorkspaceDocumentMemoryPath(workspaceId, documentId)}/correct`,
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
+}
+
+export async function forgetDocumentMemory(
+  workspaceId: string,
+  documentId: string,
+  request: DocumentMemoryForgetRequest,
+  options: ApiFetchOptions = {}
+): Promise<DocumentMemoryForgetResponse> {
+  return apiFetch<DocumentMemoryForgetResponse>(
+    `${buildWorkspaceDocumentMemoryPath(workspaceId, documentId)}/forget`,
+    {
+      ...options,
+      body: JSON.stringify(request),
+      method: "POST"
+    }
+  );
 }
 
 export function buildWorkspaceManualBriefingPath(workspaceId: string): string {

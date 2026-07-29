@@ -17,7 +17,8 @@ Controls, Private Repository Governance и Maintainability Ratchets также
 реализованы локально. Generative Second Opinion v1 реализован поверх exact
 Headquarters snapshot со strict schema и evidence critic. Workspace AI/privacy
 control реализован с encrypted key lifecycle, explicit synthetic check и
-server kill switch; изменения не опубликованы.**
+server kill switch. Memory Control v1 реализован для FounderOS-authored
+документов с destructive correction/forgetting; изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -52,6 +53,10 @@ ledger; тексты источников и evidence не копируются.
   key, выбрать allowlisted model/reasoning/output budget, подтвердить текущую
   provider policy, включить AI, отдельно проверить соединение и удалить ключ.
   Viewer видит только безопасный статус.
+- Добавлен `/settings/memory`: content-free preview показывает exact
+  `updated_at` и число версий. Owner/admin может исправить внутренний документ
+  с удалением всех прежних версий или забыть документ вместе со всей историей.
+  Старый direct DELETE route удалён.
 - Сохранены raw storage/Postgres truth, evidence, tenancy, RBAC, human approval,
   idempotency и receipts.
 - Исправлен GitHub App fallback redirect на новый settings route.
@@ -230,26 +235,35 @@ ledger; тексты источников и evidence не копируются.
 - Workspace AI row является authoritative: при его наличии нет скрытого
   fallback на environment credential. Удаление ключа выключает AI и очищает
   policy/check state, не удаляя canonical memory или evidence.
+- Memory correction/forgetting блокирует строку и сверяет exact preview:
+  конкурентное изменение возвращает conflict, cross-workspace доступ закрыт.
+  Операция не хранит reason/old body/receipt и не вызывает provider/LLM.
+- Удаление доказано только для active PostgreSQL rows. Dead tuples/WAL и
+  encrypted backups остаются до штатной retention rotation. Provider-backed
+  records не имеют ложной кнопки удаления: evidence-safe cascade ещё предстоит.
 
 ## Проверено 2026-07-29
 
-- Frontend: `npm test` — **323 passed**.
+- Frontend: `npm test` — **325 passed**.
 - Frontend: `npm run typecheck` — успешно.
-- Frontend: `npm run lint` — успешно, **97 files**, 0 warnings.
-- Frontend: `npm run build` — успешно, **17 routes**, включая
-  `/settings/ai`.
+- Frontend: `npm run lint` — успешно, **99 files**, 0 warnings.
+- Frontend: `npm run build` — успешно, **18 routes**, включая
+  `/settings/ai` и `/settings/memory`.
 - Frontend dependencies: full и production audit — **0 vulnerabilities**.
 - Python dependencies: `pip-audit --local` — **0 known vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
 - Backend: `uv run mypy app` — успешно, **102 source files**.
-- Backend: guarded full pytest — **808 passed**, одно внешнее
+- Backend: guarded full pytest — **811 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Assistant v2: strict provider/evidence, fallback, privacy-gate и UI contract
   входят в полный backend/frontend gate; настоящий OpenAI call не выполнялся.
 - AI settings: encrypted-at-rest secret, no-secret response, RBAC/isolation,
   DB readiness constraint, no-company-data check, stale-result rejection и
   no-env-fallback покрыты тестами; настоящий OpenAI call не выполнялся.
+- Memory Control: exact preview, correction purge, full active document/version
+  deletion, concurrency conflict, RBAC, workspace isolation и private/no-store
+  response покрыты тестами; product data не использовались.
 - Disaster recovery/governance: focused Ruff + **7 tests passed**; encrypted
   round-trip, tamper/path rejection, sanitized drill proof, retention и
   repository contracts подтверждены без product data.
@@ -278,6 +292,8 @@ console warnings/errors не обнаружены. Это не заменяет 
    gate; process counters не являются distributed telemetry.
 4. Провести новые authenticated session/workspace/browser gates и один
    founder-approved read-only GitHub App read.
+5. Расширить Memory Control на provider-backed records только после exact
+   dependency preview, evidence-safe cascade и provider-side deletion contract.
 
 ## Неподвижные границы
 

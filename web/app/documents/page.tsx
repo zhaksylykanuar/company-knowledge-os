@@ -6,8 +6,8 @@ import { PageHeader } from "../../components/PageHeader";
 import { StatusCard } from "../../components/StatusCard";
 import {
   createDocument,
-  deleteDocument,
   fetchDocument,
+  forgetDocumentMemory,
   fetchDocumentVersions,
   fetchDocuments,
   updateDocument
@@ -27,9 +27,13 @@ type PanelStatus = "error" | "loading" | "missing" | "ready";
 export default function DocumentsPage() {
   const session = useSession();
   const workspaceId = session?.workspaceId ?? null;
-  const canWrite = canWriteDocuments(
-    selectedWorkspaceRole(session?.workspaces ?? [], workspaceId)
+  const workspaceRole = selectedWorkspaceRole(
+    session?.workspaces ?? [],
+    workspaceId
   );
+  const canWrite = canWriteDocuments(workspaceRole);
+  const canManageMemory =
+    workspaceRole === "owner" || workspaceRole === "admin";
   const [data, setData] = useState<DocumentListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<PanelStatus>("loading");
@@ -132,14 +136,25 @@ export default function DocumentsPage() {
 
   const handleDeleteDocument = useCallback(
     async (documentId: string) => {
-      if (!workspaceId || detailPending) {
+      if (
+        !workspaceId ||
+        detailPending ||
+        !selected ||
+        selected.id !== documentId
+      ) {
         return;
       }
+      const expectedUpdatedAt = selected.updated_at;
+      const expectedVersionCount = selectedVersions.length;
       setDetailError(null);
       setDetailMessage(null);
       setDetailPending(true);
       try {
-        await deleteDocument(workspaceId, documentId);
+        await forgetDocumentMemory(workspaceId, documentId, {
+          expected_updated_at: expectedUpdatedAt,
+          expected_version_count: expectedVersionCount,
+          confirmation: "forget_document"
+        });
         setSelected(null);
         setSelectedVersions([]);
         setReloadKey((current) => current + 1);
@@ -151,7 +166,7 @@ export default function DocumentsPage() {
         setDetailPending(false);
       }
     },
-    [workspaceId, detailPending]
+    [workspaceId, detailPending, selected, selectedVersions.length]
   );
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -212,7 +227,7 @@ export default function DocumentsPage() {
         onCreateStatusChange={setCreateStatusValue}
         onCreateTagsChange={setCreateTags}
         onCreateTitleChange={setCreateTitle}
-        onDeleteDocument={canWrite ? handleDeleteDocument : undefined}
+        onDeleteDocument={canManageMemory ? handleDeleteDocument : undefined}
         onUpdateDocument={canWrite ? handleUpdateDocument : undefined}
         onOpenDocument={openDocument}
         onSearchChange={setSearch}

@@ -842,6 +842,62 @@ export type DocumentUpdateRequest = {
   status?: DocumentStatus | string;
 };
 
+export type DocumentMemoryPreview = {
+  document_id: string;
+  workspace_id: string;
+  title: string;
+  status: DocumentStatus | string;
+  updated_at: string;
+  version_count: number;
+  correction: {
+    active_document_replaced: boolean;
+    prior_versions_deleted: number;
+    versions_after: number;
+  };
+  forgetting: {
+    active_document_deleted: boolean;
+    versions_deleted: number;
+    provider_source_deleted: boolean;
+    backup_retention_may_apply: boolean;
+  };
+};
+
+export type DocumentMemoryCorrectionRequest = {
+  title: string;
+  body_markdown: string;
+  tags: string[];
+  status: DocumentStatus | string;
+  expected_updated_at: string;
+  expected_version_count: number;
+  confirmation: "purge_document_history";
+};
+
+export type DocumentMemoryCorrectionResponse = {
+  document: DocumentDetail;
+  prior_versions_deleted: number;
+  versions_after: 1;
+  active_database_replaced: true;
+  backup_retention_may_apply: true;
+  provider_calls: false;
+  external_writes: false;
+  llm: false;
+};
+
+export type DocumentMemoryForgetRequest = {
+  expected_updated_at: string;
+  expected_version_count: number;
+  confirmation: "forget_document";
+};
+
+export type DocumentMemoryForgetResponse = {
+  document_id: string;
+  workspace_id: string;
+  active_document_deleted: true;
+  versions_deleted: number;
+  provider_source_deleted: false;
+  backup_retention_may_apply: true;
+};
+
 export type DocumentListRequest = {
   status?: DocumentStatus | string;
   search?: string;

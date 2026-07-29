@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.document_models import (
@@ -29,6 +30,8 @@ DOCUMENT_TITLE_MAX = 500
 DOCUMENT_BODY_MAX = 100_000
 DOCUMENT_TAG_MAX = 40
 DOCUMENT_TAGS_MAX = 25
+DOCUMENT_MEMORY_CORRECTION_CONFIRMATION = "purge_document_history"
+DOCUMENT_MEMORY_FORGET_CONFIRMATION = "forget_document"
 DOCUMENT_BOUNDARY_NOTE = (
     "Internal documents are local founderOS content; authoring and search perform "
     "no provider call, no external write, and no LLM."
@@ -49,6 +52,10 @@ class DocumentError(ValueError):
 
 
 class DocumentNotFoundError(DocumentError):
+    pass
+
+
+class DocumentConflictError(DocumentError):
     pass
 
 
@@ -75,6 +82,17 @@ class DocumentListFilters:
     status: str | None = None
     search: str | None = None
     limit: int = 50
+
+
+@dataclass(frozen=True)
+class DocumentMemoryCorrectionInput:
+    title: str
+    body_markdown: str
+    tags: list[str]
+    status: str
+    expected_updated_at: datetime
+    expected_version_count: int
+    confirmation: str
 
 
 def markdown_to_text(body_markdown: str) -> str:
@@ -252,19 +270,133 @@ async def list_documents(
     return list((await session.execute(statement)).scalars())
 
 
-async def delete_document(
+async def preview_document_memory(
     session: AsyncSession,
     *,
     workspace_id: UUID,
     document_id: UUID,
-) -> None:
+) -> dict[str, Any]:
     document = await _get_document_or_raise(
         session,
         workspace_id=workspace_id,
         document_id=document_id,
     )
+    version_count = await _document_version_count(
+        session,
+        workspace_id=workspace_id,
+        document_id=document_id,
+    )
+    return {
+        "document_id": document.id,
+        "workspace_id": document.workspace_id,
+        "title": document.title,
+        "status": document.status,
+        "updated_at": document.updated_at,
+        "version_count": version_count,
+        "correction": {
+            "active_document_replaced": True,
+            "prior_versions_deleted": version_count,
+            "versions_after": 1,
+        },
+        "forgetting": {
+            "active_document_deleted": True,
+            "versions_deleted": version_count,
+            "provider_source_deleted": False,
+            "backup_retention_may_apply": True,
+        },
+    }
+
+
+async def correct_document_and_forget_history(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    document_id: UUID,
+    corrected_by_user_id: UUID,
+    payload: DocumentMemoryCorrectionInput,
+) -> tuple[Document, int]:
+    if payload.confirmation != DOCUMENT_MEMORY_CORRECTION_CONFIRMATION:
+        raise DocumentError("explicit correction confirmation is required")
+    document = await _get_document_or_raise(
+        session,
+        workspace_id=workspace_id,
+        document_id=document_id,
+        for_update=True,
+    )
+    version_count = await _document_version_count(
+        session,
+        workspace_id=workspace_id,
+        document_id=document_id,
+    )
+    _assert_memory_expectation(
+        document,
+        version_count=version_count,
+        expected_updated_at=payload.expected_updated_at,
+        expected_version_count=payload.expected_version_count,
+    )
+
+    await session.execute(
+        delete(DocumentVersion)
+        .where(DocumentVersion.workspace_id == workspace_id)
+        .where(DocumentVersion.document_id == document_id)
+    )
+    await session.flush()
+    body_markdown = _normalized_body(payload.body_markdown)
+    document.title = _normalized_title(payload.title)
+    document.body_markdown = body_markdown
+    document.body_text = markdown_to_text(body_markdown)
+    document.tags = _normalized_tags(payload.tags)
+    document.status = _normalized_status(payload.status)
+    document.updated_by_user_id = corrected_by_user_id
+    document.updated_at = datetime.now(timezone.utc)
+    await session.flush()
+    await _append_document_version(
+        session,
+        document=document,
+        created_by_user_id=corrected_by_user_id,
+    )
+    await session.refresh(document)
+    return document, version_count
+
+
+async def forget_document_memory(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    document_id: UUID,
+    expected_updated_at: datetime,
+    expected_version_count: int,
+    confirmation: str,
+) -> dict[str, Any]:
+    if confirmation != DOCUMENT_MEMORY_FORGET_CONFIRMATION:
+        raise DocumentError("explicit forgetting confirmation is required")
+    document = await _get_document_or_raise(
+        session,
+        workspace_id=workspace_id,
+        document_id=document_id,
+        for_update=True,
+    )
+    version_count = await _document_version_count(
+        session,
+        workspace_id=workspace_id,
+        document_id=document_id,
+    )
+    _assert_memory_expectation(
+        document,
+        version_count=version_count,
+        expected_updated_at=expected_updated_at,
+        expected_version_count=expected_version_count,
+    )
     await session.delete(document)
     await session.flush()
+    return {
+        "document_id": document_id,
+        "workspace_id": workspace_id,
+        "active_document_deleted": True,
+        "versions_deleted": version_count,
+        "provider_source_deleted": False,
+        "backup_retention_may_apply": True,
+    }
 
 
 async def list_document_versions(
@@ -372,12 +504,52 @@ async def _get_document_or_raise(
     *,
     workspace_id: UUID,
     document_id: UUID,
+    for_update: bool = False,
 ) -> Document:
-    document = await get_document(
-        session,
-        workspace_id=workspace_id,
-        document_id=document_id,
+    statement = (
+        select(Document)
+        .where(Document.workspace_id == workspace_id)
+        .where(Document.id == document_id)
     )
+    if for_update:
+        statement = statement.with_for_update()
+    document = await session.scalar(statement)
     if document is None:
         raise DocumentNotFoundError(DOCUMENT_NOT_FOUND)
     return document
+
+
+async def _document_version_count(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    document_id: UUID,
+) -> int:
+    return int(
+        await session.scalar(
+            select(func.count(DocumentVersion.id))
+            .where(DocumentVersion.workspace_id == workspace_id)
+            .where(DocumentVersion.document_id == document_id)
+        )
+        or 0
+    )
+
+
+def _assert_memory_expectation(
+    document: Document,
+    *,
+    version_count: int,
+    expected_updated_at: datetime,
+    expected_version_count: int,
+) -> None:
+    if (
+        expected_updated_at.tzinfo is None
+        or expected_updated_at.utcoffset() is None
+    ):
+        raise DocumentError("expected_updated_at must include a timezone")
+    actual = document.updated_at.astimezone(timezone.utc)
+    expected = expected_updated_at.astimezone(timezone.utc)
+    if actual != expected or version_count != expected_version_count:
+        raise DocumentConflictError(
+            "document changed after preview; review the current version and try again"
+        )

@@ -77,7 +77,8 @@ restore proof и полный RLS ещё не объявлены готовым�
   server-attested repository snapshots; Jira/Gmail/Drive ждут полных live
   provider reads;
 - contradiction detection;
-- исправление, забывание и retention controls.
+- исправление, забывание и retention controls — реализованы для внутренних
+  документов; provider-backed cascade остаётся отдельным gate.
 
 Готово, когда FounderOS может доказательно ответить «что изменилось, почему и
 что мы обещали».

@@ -211,6 +211,20 @@ export default function SettingsPage() {
         </span>
         <span className="settings-integrations-entry-action">Настроить AI</span>
       </Link>
+      <Link className="settings-integrations-entry" href="/settings/memory">
+        <span className="settings-integrations-entry-icon" aria-hidden="true">
+          ◌
+        </span>
+        <span>
+          <strong>Память и удаление</strong>
+          <small>
+            Исправление, очистка старых версий и честные границы забывания
+          </small>
+        </span>
+        <span className="settings-integrations-entry-action">
+          Управлять памятью
+        </span>
+      </Link>
       <div className="settings-hub">
         <SettingsTeamPanelView
           canProvision={workspaceRole === "owner" || workspaceRole === "admin"}

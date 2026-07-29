@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added Memory Control v1 at `/settings/memory` (DEC-113): an exact content-free
+  preview, owner/admin correction with prior-version purge, and complete active
+  deletion of a FounderOS-authored document plus all versions.
+- Added optimistic `updated_at` + version-count concurrency checks, document
+  row locks, strict confirmation codes, cross-workspace/RBAC denial and
+  private/no-store responses for destructive memory operations.
+- Added explicit product boundaries for backup rotation and external provider
+  data; FounderOS does not claim that a local active-row deletion immediately
+  erases PostgreSQL dead tuples, WAL, backups or the provider source.
 - Added workspace AI/privacy controls at `/settings/ai` (DEC-112): encrypted
   OpenAI key lifecycle, allowlisted model/reasoning/budget settings, explicit
   current-policy acknowledgement, enable/disable, read-only safe status and
@@ -99,6 +108,9 @@
 
 ### Changed
 
+- Removed the legacy direct internal-document DELETE route. Document forgetting
+  now uses the exact preview-bound POST contract and is limited to workspace
+  owners/admins; ordinary member edits still preserve append-only versions.
 - Removed the superseded selected-issue and selected-pull-request synchronous
   GitHub endpoints and services. The unified `202` durable GitHub App job is
   now the only live repository-read route; historical normalized records stay

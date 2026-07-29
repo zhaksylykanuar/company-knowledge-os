@@ -1,9 +1,9 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 import pytest
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import settings
@@ -258,6 +258,249 @@ async def test_document_versions_capture_create_and_update_history(monkeypatch) 
         await _cleanup(marker)
 
 
+async def test_memory_correction_replaces_active_document_and_purges_history(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex[:10]
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        user, workspace = await _seed_workspace(marker)
+        async with _client() as client:
+            created = await client.post(
+                f"/api/v1/workspaces/{workspace.id}/documents",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={
+                    "title": "Incorrect customer note",
+                    "body_markdown": "old-sensitive-value",
+                    "status": "published",
+                },
+            )
+            document_id = created.json()["document"]["id"]
+            await client.patch(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={"body_markdown": "another-old-sensitive-value"},
+            )
+            preview = await client.get(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}/memory",
+                headers=_headers(),
+                params={"owner_email": user.email},
+            )
+            corrected = await client.post(
+                (
+                    f"/api/v1/workspaces/{workspace.id}/documents/"
+                    f"{document_id}/memory/correct"
+                ),
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={
+                    "title": "Corrected customer note",
+                    "body_markdown": "verified-current-value",
+                    "tags": ["corrected"],
+                    "status": "published",
+                    "expected_updated_at": preview.json()["updated_at"],
+                    "expected_version_count": preview.json()["version_count"],
+                    "confirmation": "purge_document_history",
+                },
+            )
+
+        assert preview.status_code == 200, preview.text
+        assert preview.headers["cache-control"] == "private, no-store"
+        assert preview.json()["version_count"] == 2
+        assert "body_markdown" not in preview.text
+        assert corrected.status_code == 200, corrected.text
+        assert corrected.headers["cache-control"] == "private, no-store"
+        assert corrected.json()["prior_versions_deleted"] == 2
+        assert corrected.json()["versions_after"] == 1
+        assert corrected.json()["active_database_replaced"] is True
+        assert corrected.json()["backup_retention_may_apply"] is True
+        assert "old-sensitive-value" not in corrected.text
+
+        async with AsyncSessionLocal() as session:
+            stored = await session.scalar(
+                select(Document).where(Document.id == UUID(document_id))
+            )
+            versions = list(
+                (
+                    await session.scalars(
+                        select(DocumentVersion).where(
+                            DocumentVersion.document_id == UUID(document_id)
+                        )
+                    )
+                ).all()
+            )
+        assert stored is not None
+        assert stored.title == "Corrected customer note"
+        assert stored.body_markdown == "verified-current-value"
+        assert len(versions) == 1
+        assert versions[0].version_number == 1
+        assert versions[0].body_markdown == "verified-current-value"
+    finally:
+        await _cleanup(marker)
+
+
+async def test_memory_correction_rejects_a_stale_preview_without_deleting_history(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex[:10]
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        user, workspace = await _seed_workspace(marker)
+        async with _client() as client:
+            created = await client.post(
+                f"/api/v1/workspaces/{workspace.id}/documents",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={"title": "Concurrent note", "body_markdown": "version one"},
+            )
+            document_id = created.json()["document"]["id"]
+            preview = await client.get(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}/memory",
+                headers=_headers(),
+                params={"owner_email": user.email},
+            )
+            updated = await client.patch(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={"body_markdown": "version two"},
+            )
+            stale = await client.post(
+                (
+                    f"/api/v1/workspaces/{workspace.id}/documents/"
+                    f"{document_id}/memory/correct"
+                ),
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={
+                    "title": "Stale replacement",
+                    "body_markdown": "must not win",
+                    "tags": [],
+                    "status": "draft",
+                    "expected_updated_at": preview.json()["updated_at"],
+                    "expected_version_count": preview.json()["version_count"],
+                    "confirmation": "purge_document_history",
+                },
+            )
+
+        assert updated.status_code == 200
+        assert stale.status_code == 409
+        assert stale.json()["detail"].startswith("document changed after preview")
+        async with AsyncSessionLocal() as session:
+            stored = await session.scalar(
+                select(Document).where(Document.id == UUID(document_id))
+            )
+            version_count = await session.scalar(
+                select(func.count(DocumentVersion.id)).where(
+                    DocumentVersion.document_id == UUID(document_id)
+                )
+            )
+        assert stored is not None
+        assert stored.body_markdown == "version two"
+        assert version_count == 2
+    finally:
+        await _cleanup(marker)
+
+
+async def test_memory_forgetting_physically_removes_active_document_and_versions(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex[:10]
+    _set_auth(monkeypatch)
+    await _cleanup(marker)
+    try:
+        user, workspace = await _seed_workspace(marker)
+        viewer = await _seed_viewer(workspace, marker)
+        async with _client() as client:
+            created = await client.post(
+                f"/api/v1/workspaces/{workspace.id}/documents",
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={"title": "Forget me", "body_markdown": "private-memory-body"},
+            )
+            document_id = created.json()["document"]["id"]
+            preview = await client.get(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}/memory",
+                headers=_headers(),
+                params={"owner_email": viewer.email},
+            )
+            viewer_forget = await client.post(
+                (
+                    f"/api/v1/workspaces/{workspace.id}/documents/"
+                    f"{document_id}/memory/forget"
+                ),
+                headers=_headers(),
+                params={"owner_email": viewer.email},
+                json={
+                    "expected_updated_at": preview.json()["updated_at"],
+                    "expected_version_count": preview.json()["version_count"],
+                    "confirmation": "forget_document",
+                },
+            )
+            forgotten = await client.post(
+                (
+                    f"/api/v1/workspaces/{workspace.id}/documents/"
+                    f"{document_id}/memory/forget"
+                ),
+                headers=_headers(),
+                params={"owner_email": user.email},
+                json={
+                    "expected_updated_at": preview.json()["updated_at"],
+                    "expected_version_count": preview.json()["version_count"],
+                    "confirmation": "forget_document",
+                },
+            )
+            missing = await client.get(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
+                headers=_headers(),
+                params={"owner_email": user.email},
+            )
+            legacy_delete = await client.delete(
+                f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
+                headers=_headers(),
+                params={"owner_email": user.email},
+            )
+
+        assert preview.status_code == 200
+        assert viewer_forget.status_code == 403
+        assert viewer_forget.headers["cache-control"] == "private, no-store"
+        assert forgotten.status_code == 200, forgotten.text
+        assert forgotten.headers["cache-control"] == "private, no-store"
+        assert forgotten.json() == {
+            "document_id": document_id,
+            "workspace_id": str(workspace.id),
+            "active_document_deleted": True,
+            "versions_deleted": 1,
+            "provider_source_deleted": False,
+            "backup_retention_may_apply": True,
+        }
+        assert "private-memory-body" not in forgotten.text
+        assert "Forget me" not in forgotten.text
+        assert missing.status_code == 404
+        assert legacy_delete.status_code == 405
+        async with AsyncSessionLocal() as session:
+            assert (
+                await session.scalar(
+                    select(Document).where(Document.id == UUID(document_id))
+                )
+                is None
+            )
+            assert (
+                await session.scalar(
+                    select(func.count(DocumentVersion.id)).where(
+                        DocumentVersion.document_id == UUID(document_id)
+                    )
+                )
+                == 0
+            )
+    finally:
+        await _cleanup(marker)
+
+
 async def test_empty_or_idempotent_patch_does_not_append_document_version(
     monkeypatch,
 ) -> None:
@@ -412,12 +655,12 @@ async def test_viewer_cannot_write_but_can_read(monkeypatch) -> None:
             )
             assert viewer_write.status_code == 403
 
-            viewer_delete = await client.delete(
+            direct_delete = await client.delete(
                 f"/api/v1/workspaces/{workspace.id}/documents/{document_id}",
                 headers=_headers(),
                 params={"owner_email": viewer.email},
             )
-            assert viewer_delete.status_code == 403
+            assert direct_delete.status_code == 405
     finally:
         await _cleanup(marker)
 
@@ -479,6 +722,31 @@ async def test_document_workspace_isolation(monkeypatch) -> None:
                 params={"owner_email": user_b.email},
             )
             assert cross.status_code == 404
+            cross_preview = await client.get(
+                (
+                    f"/api/v1/workspaces/{workspace_b.id}/documents/"
+                    f"{document_id}/memory"
+                ),
+                headers=_headers(),
+                params={"owner_email": user_b.email},
+            )
+            cross_forget = await client.post(
+                (
+                    f"/api/v1/workspaces/{workspace_b.id}/documents/"
+                    f"{document_id}/memory/forget"
+                ),
+                headers=_headers(),
+                params={"owner_email": user_b.email},
+                json={
+                    "expected_updated_at": created.json()["document"]["updated_at"],
+                    "expected_version_count": 1,
+                    "confirmation": "forget_document",
+                },
+            )
+            assert cross_preview.status_code == 404
+            assert cross_forget.status_code == 404
+            assert "A-only" not in cross_preview.text
+            assert "secret to A" not in cross_forget.text
 
             b_list = await client.get(
                 f"/api/v1/workspaces/{workspace_b.id}/documents",

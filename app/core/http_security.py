@@ -15,6 +15,8 @@ PRIVATE_NO_STORE = "private, no-store"
 _WORKSPACE_API_PREFIX = "/api/v1/workspaces/"
 _CONNECTORS_PATH_SEGMENT = "/connectors"
 _AI_SETTINGS_PATH_SEGMENT = "/ai-settings"
+_DOCUMENTS_PATH_SEGMENT = "/documents/"
+_MEMORY_PATH_SEGMENT = "/memory"
 _LOCAL_LIKE_ENVS = frozenset({"local", "dev", "development", "test", "testing"})
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _PUBLIC_AUTH_COOKIE_PATHS = frozenset(
@@ -154,7 +156,7 @@ class HttpSecurityMiddleware:
 
 
 class ConnectorResponseNoStoreMiddleware:
-    """Prevent caching for workspace connector and AI-settings responses.
+    """Prevent caching for workspace connector, AI and memory-control responses.
 
     Applying the policy at the ASGI boundary also covers responses created
     before endpoint execution, including authentication, authorization and
@@ -177,6 +179,10 @@ class ConnectorResponseNoStoreMiddleware:
             and (
                 _CONNECTORS_PATH_SEGMENT in path
                 or _AI_SETTINGS_PATH_SEGMENT in path
+                or (
+                    _DOCUMENTS_PATH_SEGMENT in path
+                    and _MEMORY_PATH_SEGMENT in path
+                )
             )
         )
         if not protect_response:

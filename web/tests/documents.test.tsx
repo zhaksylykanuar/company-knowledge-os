@@ -14,8 +14,8 @@ import {
   buildWorkspaceDocumentsCollectionPath,
   buildWorkspaceDocumentsPath,
   createDocument,
-  deleteDocument,
   fetchDocumentVersions,
+  forgetDocumentMemory,
   updateDocument
 } from "../lib/api";
 import { M } from "../lib/messages";
@@ -219,16 +219,43 @@ test("fetches document version history through the GET client", async () => {
   }
 });
 
-test("deletes a document through the DELETE client (204)", async () => {
+test("forgets a document only through the preview-bound POST contract", async () => {
   const originalFetch = globalThis.fetch;
   let calledMethod: string | undefined;
-  globalThis.fetch = (async (_input, init) => {
+  let calledPath = "";
+  let calledBody: unknown;
+  globalThis.fetch = (async (input, init) => {
     calledMethod = init?.method;
-    return new Response(null, { status: 204 });
+    calledPath = new URL(String(input)).pathname;
+    calledBody = init?.body ? JSON.parse(String(init.body)) : null;
+    return new Response(
+      JSON.stringify({
+        active_document_deleted: true,
+        backup_retention_may_apply: true,
+        document_id: "doc-1",
+        provider_source_deleted: false,
+        versions_deleted: 2,
+        workspace_id: "workspace-1"
+      }),
+      { headers: { "Content-Type": "application/json" }, status: 200 }
+    );
   }) as typeof fetch;
   try {
-    await deleteDocument("workspace-1", "doc-1");
-    assert.equal(calledMethod, "DELETE");
+    await forgetDocumentMemory("workspace-1", "doc-1", {
+      confirmation: "forget_document",
+      expected_updated_at: "2026-07-06T10:00:00Z",
+      expected_version_count: 2
+    });
+    assert.equal(calledMethod, "POST");
+    assert.equal(
+      calledPath,
+      "/api/v1/workspaces/workspace-1/documents/doc-1/memory/forget"
+    );
+    assert.deepEqual(calledBody, {
+      confirmation: "forget_document",
+      expected_updated_at: "2026-07-06T10:00:00Z",
+      expected_version_count: 2
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

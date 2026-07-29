@@ -60,7 +60,9 @@ Read in this order (control trio = what / where / why):
   password reset, and broader multi-user hardening. Workspace AI/privacy
   settings already provide encrypted key lifecycle, model/reasoning/budget
   controls, explicit provider-policy acknowledgement and a synthetic
-  no-company-data connection check.
+  no-company-data connection check. `/settings/memory` provides exact,
+  preview-bound correction and forgetting for FounderOS-authored documents;
+  provider-backed evidence-safe deletion remains a separate gap.
 
 ## Local full-stack run path
 

@@ -50,6 +50,8 @@
 - [x] AI имеет отдельный workspace-scoped экран: encrypted key lifecycle,
   model/reasoning/budget controls, provider-policy acknowledgement, synthetic
   read-only check и server kill switch.
+- [x] Memory имеет отдельный экран с exact preview, correction + purge и
+  complete active deletion для FounderOS-authored документов.
 - [x] У подключения есть save, read check, write readiness и disconnect.
 - [x] Отключение объясняет, какие canonical данные сохраняются или удаляются.
 - [x] Секреты никогда не возвращаются в браузер.
@@ -75,6 +77,11 @@
   reconciliation; локальные/частичные импорты не объявляют исчезновение.
 - [ ] Есть contradiction detection между источниками.
 - [ ] Есть пользовательское исправление и забывание памяти.
+- [x] Для внутренних документов correction удаляет прежние версии, а forget
+  удаляет активный документ и все версии; stale preview и cross-workspace
+  операции fail closed.
+- [ ] Provider-backed memory имеет evidence-safe cascade и проверяемую границу
+  provider-side удаления.
 - [x] Retrieval scoped к workspace и текущим правам.
 - [x] AI critic не принимает unsupported claim.
 

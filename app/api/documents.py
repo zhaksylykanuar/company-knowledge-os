@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,19 +13,23 @@ from app.api.workspace_auth import (
     require_workspace_role,
 )
 from app.db.base import AsyncSessionLocal
-from app.db.identity_models import MEMBERSHIP_ROLE_MEMBER
+from app.db.identity_models import MEMBERSHIP_ROLE_ADMIN, MEMBERSHIP_ROLE_MEMBER
 from app.services.document_service import (
     DOCUMENT_NOT_FOUND,
+    DocumentConflictError,
     DocumentCreateInput,
     DocumentError,
     DocumentListFilters,
+    DocumentMemoryCorrectionInput,
     DocumentNotFoundError,
     DocumentUpdateInput,
+    correct_document_and_forget_history,
     create_document,
-    delete_document,
+    forget_document_memory,
     get_document,
     list_document_versions,
     list_documents,
+    preview_document_memory,
     serialize_document,
     serialize_document_version,
     update_document,
@@ -112,6 +117,80 @@ class DocumentUpdateRequest(BaseModel):
     body_markdown: str | None = Field(default=None, max_length=100_000)
     tags: list[str] | None = Field(default=None, max_length=25)
     status: str | None = Field(default=None, max_length=20)
+
+
+class DocumentMemoryCorrectionEffectRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active_document_replaced: Literal[True]
+    prior_versions_deleted: int = Field(ge=1)
+    versions_after: Literal[1]
+
+
+class DocumentMemoryForgettingEffectRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active_document_deleted: Literal[True]
+    versions_deleted: int = Field(ge=1)
+    provider_source_deleted: Literal[False]
+    backup_retention_may_apply: Literal[True]
+
+
+class DocumentMemoryPreviewRead(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: UUID
+    workspace_id: UUID
+    title: str
+    status: str
+    updated_at: datetime
+    version_count: int = Field(ge=1)
+    correction: DocumentMemoryCorrectionEffectRead
+    forgetting: DocumentMemoryForgettingEffectRead
+
+
+class DocumentMemoryCorrectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=500)
+    body_markdown: str = Field(default="", max_length=100_000)
+    tags: list[str] = Field(default_factory=list, max_length=25)
+    status: str = Field(max_length=20)
+    expected_updated_at: datetime
+    expected_version_count: int = Field(ge=1, le=10_000)
+    confirmation: Literal["purge_document_history"]
+
+
+class DocumentMemoryCorrectionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document: DocumentRead
+    prior_versions_deleted: int = Field(ge=1)
+    versions_after: Literal[1]
+    active_database_replaced: Literal[True]
+    backup_retention_may_apply: Literal[True]
+    provider_calls: Literal[False]
+    external_writes: Literal[False]
+    llm: Literal[False]
+
+
+class DocumentMemoryForgetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_updated_at: datetime
+    expected_version_count: int = Field(ge=1, le=10_000)
+    confirmation: Literal["forget_document"]
+
+
+class DocumentMemoryForgetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document_id: UUID
+    workspace_id: UUID
+    active_document_deleted: Literal[True]
+    versions_deleted: int = Field(ge=1)
+    provider_source_deleted: Literal[False]
+    backup_retention_may_apply: Literal[True]
 
 
 @router.get("", response_model=DocumentListResponse)
@@ -278,18 +357,110 @@ async def update_document_route(
     )
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_document_route(
+@router.get(
+    "/{document_id}/memory",
+    response_model=DocumentMemoryPreviewRead,
+)
+async def preview_document_memory_route(
     document_id: UUID,
-    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_MEMBER)),
-) -> None:
+    access: WorkspaceAccess = Depends(require_workspace_access),
+) -> DocumentMemoryPreviewRead:
     workspace_id = access.workspace_membership.workspace.id
     async with AsyncSessionLocal() as session:
         try:
-            await delete_document(
+            result = await preview_document_memory(
                 session,
                 workspace_id=workspace_id,
                 document_id=document_id,
+            )
+        except DocumentNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.detail,
+            ) from exc
+    return DocumentMemoryPreviewRead.model_validate(result)
+
+
+@router.post(
+    "/{document_id}/memory/correct",
+    response_model=DocumentMemoryCorrectionResponse,
+)
+async def correct_document_memory_route(
+    document_id: UUID,
+    payload: DocumentMemoryCorrectionRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> DocumentMemoryCorrectionResponse:
+    workspace_id = access.workspace_membership.workspace.id
+    async with AsyncSessionLocal() as session:
+        try:
+            document, prior_versions = await correct_document_and_forget_history(
+                session,
+                workspace_id=workspace_id,
+                document_id=document_id,
+                corrected_by_user_id=access.workspace_membership.user.id,
+                payload=DocumentMemoryCorrectionInput(
+                    title=payload.title,
+                    body_markdown=payload.body_markdown,
+                    tags=payload.tags,
+                    status=payload.status,
+                    expected_updated_at=payload.expected_updated_at,
+                    expected_version_count=payload.expected_version_count,
+                    confirmation=payload.confirmation,
+                ),
+            )
+            data = serialize_document(document)
+            await session.commit()
+        except DocumentNotFoundError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=exc.detail,
+            ) from exc
+        except DocumentConflictError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except DocumentError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return DocumentMemoryCorrectionResponse.model_validate(
+        {
+            "document": data,
+            "prior_versions_deleted": prior_versions,
+            "versions_after": 1,
+            "active_database_replaced": True,
+            "backup_retention_may_apply": True,
+            "provider_calls": False,
+            "external_writes": False,
+            "llm": False,
+        }
+    )
+
+
+@router.post(
+    "/{document_id}/memory/forget",
+    response_model=DocumentMemoryForgetResponse,
+)
+async def forget_document_memory_route(
+    document_id: UUID,
+    payload: DocumentMemoryForgetRequest,
+    access: WorkspaceAccess = Depends(require_workspace_role(MEMBERSHIP_ROLE_ADMIN)),
+) -> DocumentMemoryForgetResponse:
+    workspace_id = access.workspace_membership.workspace.id
+    async with AsyncSessionLocal() as session:
+        try:
+            result = await forget_document_memory(
+                session,
+                workspace_id=workspace_id,
+                document_id=document_id,
+                expected_updated_at=payload.expected_updated_at,
+                expected_version_count=payload.expected_version_count,
+                confirmation=payload.confirmation,
             )
             await session.commit()
         except DocumentNotFoundError as exc:
@@ -298,3 +469,16 @@ async def delete_document_route(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=exc.detail,
             ) from exc
+        except DocumentConflictError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.detail,
+            ) from exc
+        except DocumentError as exc:
+            await session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.detail,
+            ) from exc
+    return DocumentMemoryForgetResponse.model_validate(result)

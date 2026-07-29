@@ -3568,6 +3568,32 @@ future provider availability, strategic answer quality or Zero Data Retention.
 A real founder-approved credentialed smoke and provider retention verification
 remain external operational gates.
 
+## DEC-113 - Memory Correction Deletes Superseded Local Versions
+
+Decision (2026-07-29): Memory Control v1 begins with content authored inside
+FounderOS because its complete storage boundary is known. `/settings/memory`
+lists internal documents without loading every body, then opens one exact
+document plus a content-free memory preview. Owners/admins may either replace
+the document and purge every prior `DocumentVersion`, leaving one new canonical
+version, or forget the document and all versions. Ordinary edits continue to
+append history; only the explicitly destructive memory paths purge it.
+
+Both operations bind to the previewed `updated_at` and exact version count,
+lock the document row and fail with a conflict if anything changed. They use a
+second explicit UI confirmation and fixed request confirmation code, make no
+provider call, external write or LLM call, and persist no deletion request,
+reason, old body or receipt. The legacy direct DELETE route is removed so an
+unguarded API call cannot bypass the preview. Workspace viewers may inspect the
+safe preview; only owner/admin may correct-and-purge or forget.
+
+The response states only what can be proved. Active PostgreSQL rows are removed,
+but dead tuples, WAL and encrypted backups are not claimed to disappear
+immediately; backup retention applies until the configured rotation removes
+them. Provider-backed GitHub/Jira/Gmail/Drive records are not supported by this
+operation. Their canonical evidence and provider source cannot be called
+forgotten until a separate dependency-aware cascade, reconciliation behavior
+and provider-side deletion boundary are designed and tested.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
