@@ -112,32 +112,63 @@ return through `/login`.
 
 ## 4. Verify the local stack
 
-Run the bounded local smoke:
+Run the public liveness gate:
 
 ```bash
-make local-smoke
+make local-liveness-smoke
 ```
+
+This checks `/login`, public liveness and the expected unauthenticated session
+response only. It must not be described as authenticated acceptance.
+
+For a dedicated local test account, keep the credentials only in the process
+environment and run the remaining gates:
+
+```bash
+FOUNDEROS_SMOKE_LOGIN_EMAIL='<test-account-email>' \
+FOUNDEROS_SMOKE_LOGIN_PASSWORD='<test-account-password>' \
+make local-session-smoke
+
+FOUNDEROS_SMOKE_LOGIN_EMAIL='<test-account-email>' \
+FOUNDEROS_SMOKE_LOGIN_PASSWORD='<test-account-password>' \
+FOUNDEROS_SMOKE_WORKSPACE_ID='<workspace-uuid>' \
+make local-workspace-smoke
+
+cd web
+npm run e2e:install
+cd ..
+FOUNDEROS_E2E_LOGIN_EMAIL='<test-account-email>' \
+FOUNDEROS_E2E_LOGIN_PASSWORD='<test-account-password>' \
+make local-browser-smoke
+```
+
+The session gate performs a real login, checks the same cookie twice, and logs
+out. The workspace gate additionally reads the selected workspace,
+Headquarters, Company Brain and GitHub connection state. The Playwright gate
+runs Chromium at desktop and mobile sizes, reloads the session, opens all four
+primary zones, and fails on console warnings/errors or horizontal overflow.
+Passwords are never command arguments, response output, or persisted test
+artifacts; screenshots, video and traces are disabled.
 
 The local stack is accepted only when all of the following are true:
 
-- the doctor and smoke finish successfully;
+- the doctor and all applicable gates finish successfully;
 - PostgreSQL is healthy and Alembic `heads` equals `current`;
-- `/health` succeeds through the local frontend proxy;
+- `/health` and database-backed `/health/ready` succeed through the local
+  frontend proxy;
 - `/login` loads and a founder session survives reload;
 - the founder sees the intended company, resumes onboarding, and can open
-  «Сегодня», «Компания», «Решения», «Источники» and «Настройки»;
+  «Сейчас», «Компания», «Спросить» and «Настройки»;
 - Company World renders only durable confirmed relationships and keeps
   unresolved candidates separate;
 - no operator key is stored in the browser; and
 - no provider call, external write, selected-repository sync, or LLM run occurs
   during smoke.
 
-Latest verified acceptance (2026-07-14): doctor/start/same-origin smoke passed;
-a returning founder session opened onboarding and all five zones without
-horizontal overflow or console errors; ephemeral QA data was removed. Backup
-restore, signal shutdown and simulated supervisor-crash recovery also passed as
-recorded in `PROGRESS.md`. This evidence does not authorize a provider call or
-hosted-resource change.
+The historical 2026-07-14 five-zone browser run predates the FounderOS 2.0
+navigation reset and is not current acceptance. Current authenticated
+desktop/mobile and provider-read status is recorded only in `PROGRESS.md`.
+No smoke gate authorizes a provider write or hosted-resource change.
 
 For an exact release candidate, also run the repository gates. Backend checks
 must use an explicit dedicated loopback PostgreSQL test target whose name has a

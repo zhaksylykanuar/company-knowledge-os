@@ -7,9 +7,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsc -p tsconfig.test.json && node tests/prepare-test-output.mjs && node --test .tmp-test/tests/*.test.js",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium",
+    "test": "tsc -p tsconfig.test.json && node tests/prepare-test-output.mjs && node --test .tmp-test/tests/*.test.js tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "biome lint --error-on-warnings app components lib tests *.mjs"
+    "lint": "biome lint --error-on-warnings app components e2e lib tests *.mjs *.ts"
   },
   "dependencies": {
     "next": "16.2.11",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
+    "@playwright/test": "1.62.0",
     "@types/node": "26.0.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",

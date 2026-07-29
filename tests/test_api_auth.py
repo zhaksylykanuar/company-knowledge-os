@@ -261,6 +261,19 @@ def test_fail_closed_allows_non_local_when_enabled_with_api_keys_list() -> None:
     enforce_fail_closed_auth(config)
 
 
+def test_fail_closed_rejects_cross_site_session_cookie_mode() -> None:
+    config = Settings(
+        app_env="production",
+        api_auth_enabled=True,
+        api_auth_key=SecretStr("configured-operator-key"),
+        session_cookie_samesite="none",
+        _env_file=None,
+    )
+
+    with pytest.raises(FailClosedAuthError, match="COOKIE_SAMESITE"):
+        enforce_fail_closed_auth(config)
+
+
 def test_fail_closed_error_names_env_vars_and_hides_values() -> None:
     config = Settings(app_env="production", api_auth_enabled=False, _env_file=None)
 

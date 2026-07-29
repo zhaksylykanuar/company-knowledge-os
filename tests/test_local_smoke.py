@@ -7,6 +7,10 @@ from urllib.request import Request
 import pytest
 
 from scripts import smoke_local
+from scripts.smoke_authenticated import (
+    AuthenticatedSmokeConfig,
+    run_authenticated_smoke,
+)
 from scripts.smoke_local import SmokeConfig, SmokeConfigError, run_smoke
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +25,16 @@ class FakeResponse:
 
     def __exit__(self, *_args: object) -> None:
         return None
+
+
+class FakeAuthenticatedOpener:
+    def __init__(self) -> None:
+        self.requests: list[Request] = []
+
+    def open(self, request: Request, *, timeout: float) -> FakeResponse:
+        assert timeout == 3
+        self.requests.append(request)
+        return FakeResponse(200)
 
 
 def test_local_smoke_calls_only_safe_endpoints_and_never_prints_key() -> None:
@@ -62,6 +76,45 @@ def test_local_smoke_calls_only_safe_endpoints_and_never_prints_key() -> None:
         assert not any(marker in lowered for marker in smoke_local.FORBIDDEN_PATH_MARKERS)
     assert secret_key not in "\n".join(emitted)
     assert all("PASS" in line for line in emitted)
+
+
+def test_authenticated_smoke_splits_session_and_workspace_reads_without_leaks() -> None:
+    opener = FakeAuthenticatedOpener()
+    emitted: list[str] = []
+    secret_password = "never-print-this-password"
+    workspace_id = "00000000-0000-0000-0000-000000000001"
+    config = AuthenticatedSmokeConfig(
+        api_base_url="http://127.0.0.1:3000",
+        email="founder@example.test",
+        password=secret_password,
+        workspace_id=workspace_id,
+        timeout_seconds=3,
+        include_workspace_reads=True,
+    )
+
+    run_authenticated_smoke(config, opener=opener, emit=emitted.append)
+
+    called = [
+        (request.get_method(), request.selector)
+        for request in opener.requests
+    ]
+    assert called == [
+        ("POST", "/api/v1/auth/login"),
+        ("GET", "/api/v1/auth/me"),
+        ("GET", "/api/v1/auth/me"),
+        ("GET", f"/api/v1/workspaces/{workspace_id}"),
+        ("GET", f"/api/v1/workspaces/{workspace_id}/headquarters"),
+        ("GET", f"/api/v1/workspaces/{workspace_id}/company-brain"),
+        (
+            "GET",
+            f"/api/v1/workspaces/{workspace_id}/github/connection-status",
+        ),
+        ("POST", "/api/v1/auth/logout"),
+    ]
+    output = "\n".join(emitted)
+    assert secret_password not in output
+    assert "founder@example.test" not in output
+    assert all(line.startswith("PASS ") for line in emitted)
 
 
 def test_local_smoke_rejects_forbidden_paths_before_request() -> None:
@@ -174,11 +227,23 @@ def test_local_smoke_env_names_are_documented() -> None:
         "FOUNDEROS_SMOKE_API_BASE_URL",
         "FOUNDEROS_SMOKE_API_KEY",
         "FOUNDEROS_SMOKE_API_KEY_HEADER_NAME",
+        "FOUNDEROS_SMOKE_LOGIN_EMAIL",
+        "FOUNDEROS_SMOKE_LOGIN_PASSWORD",
         "FOUNDEROS_SMOKE_OWNER_EMAIL",
         "FOUNDEROS_SMOKE_WORKSPACE_ID",
+        "FOUNDEROS_E2E_LOGIN_EMAIL",
+        "FOUNDEROS_E2E_LOGIN_PASSWORD",
         "NEXT_PUBLIC_API_BASE_URL",
     ):
         assert name in combined
+
+    for target in (
+        "local-liveness-smoke",
+        "local-session-smoke",
+        "local-workspace-smoke",
+        "local-browser-smoke",
+    ):
+        assert target in makefile
 
 
 def test_env_example_values_remain_placeholders() -> None:

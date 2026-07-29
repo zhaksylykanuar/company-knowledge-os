@@ -6,14 +6,13 @@
 
 ## Сейчас — завершение FounderOS 2.0 reset
 
-1. Разделить smoke-gates на публичную живость, authenticated session,
-   workspace read и browser E2E; добавить database-backed readiness и
-   наблюдаемость без утечки данных.
-2. Закрыть hosted auth/security gates: admission policy, trusted proxy,
-   shared rate limiting, cleanup, CSRF, security headers и production OpenAPI.
-3. Провести разрешённый authenticated desktop/mobile browser QA и проверить
+1. Подключить approved external error-reporting/tracing sink без payloads и
+   завершить fail-closed hosted topology/RLS gate. Локальные structured logs,
+   request IDs, counters и database readiness уже реализованы.
+2. Провести разрешённые authenticated session/workspace и desktop/mobile
+   browser gates и проверить
    overflow, console и основные состояния.
-4. Подтвердить один read-only GitHub App read из рабочей организации с видимым
+3. Подтвердить один read-only GitHub App read из рабочей организации с видимым
    canonical результатом.
 
 ## Следом — память и настоящее второе мнение

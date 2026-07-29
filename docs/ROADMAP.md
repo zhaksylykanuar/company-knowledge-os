@@ -19,12 +19,21 @@ Roadmap подчинён `../founderOS_MASTER_PLAYBOOK.md`. Живое сост�
   а operational GitHub reads явно scoped по workspace;
 - backend static typing (`mypy app`) и настоящий frontend Biome lint являются
   локальными и CI quality gates;
+- liveness отделена от database readiness; structured request events,
+  correlation IDs, bounded process metrics, Origin enforcement, hosted browser
+  headers и local-only OpenAPI реализованы;
+- public Argon2 endpoints разделяют admission policy; Redis backend, trusted
+  proxy resolution, auth-artifact cleanup и throttled session activity
+  реализованы;
+- smoke gates явно разделены на liveness, session, workspace и desktop/mobile
+  browser E2E;
 - внешние записи остаются выключенными до завершения остальных high-priority
   remediation;
 - публичный multi-tenant hosting заблокирован до полного RLS gate из DEC-102.
 
-Все четыре high-priority замечания аудита и medium findings по static typing и
-фиктивному frontend lint закрыты локальными тестами.
+Все четыре high-priority замечания аудита и medium findings M2–M9, M14 и M17
+закрыты либо сведены к явно записанному внешнему hosted gate. Distributed
+tracing/error reporting и полный RLS ещё не объявлены готовыми.
 
 ## Фаза 1 — Product reset
 

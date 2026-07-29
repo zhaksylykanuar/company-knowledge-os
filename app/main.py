@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,8 +24,12 @@ from app.api.jira import router as jira_router
 from app.api.workspace_company_brain import router as workspace_company_brain_router
 from app.api.workspaces import router as workspaces_router
 from app.core.config import resolved_cors_allowed_origins, settings
-from app.core.http_security import ConnectorResponseNoStoreMiddleware
+from app.core.http_security import (
+    ConnectorResponseNoStoreMiddleware,
+    HttpSecurityMiddleware,
+)
 from app.core.logging import RequestLoggingMiddleware, configure_logging
+from app.services.auth_artifact_cleanup_service import run_auth_artifact_cleanup
 
 # Configure basic application logging as early as possible (MVP §1.5 "basic
 # logging"): a single sanitized handler at the configured level.
@@ -38,7 +43,21 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Re-apply logging config on startup so the level reflects the current
     # environment even if settings changed after import (e.g. in tests).
     configure_logging(settings.log_level)
-    yield
+    cleanup_stop = asyncio.Event()
+    cleanup_task: asyncio.Task[None] | None = None
+    if settings.app_env.strip().casefold() not in {"test", "testing"}:
+        cleanup_task = asyncio.create_task(
+            run_auth_artifact_cleanup(cleanup_stop),
+            name="founderos-auth-artifact-cleanup",
+        )
+    try:
+        yield
+    finally:
+        cleanup_stop.set()
+        if cleanup_task is not None:
+            cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleanup_task
 
 
 app = FastAPI(
@@ -52,6 +71,9 @@ app.add_middleware(RequestLoggingMiddleware)
 # Connector configuration and verification responses are never cacheable,
 # including auth/validation failures created before endpoint execution.
 app.add_middleware(ConnectorResponseNoStoreMiddleware)
+# Global browser boundary: security headers, local-only API documentation and
+# Origin/Referer validation for cookie-authenticated mutations.
+app.add_middleware(HttpSecurityMiddleware)
 
 cors_allowed_origins = resolved_cors_allowed_origins(settings)
 if cors_allowed_origins:

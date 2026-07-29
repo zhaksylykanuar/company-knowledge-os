@@ -68,6 +68,14 @@ class Settings(BaseSettings):
         default="INFO",
         validation_alias=AliasChoices("FOUNDEROS_LOG_LEVEL", "LOG_LEVEL"),
     )
+    readiness_database_timeout_seconds: float = Field(
+        default=2.0,
+        gt=0,
+        le=10,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_READINESS_DATABASE_TIMEOUT_SECONDS"
+        ),
+    )
 
     # --- Local dev bootstrap (safe to surface to the browser in local) ---
     # The base URL the browser should call, the dev API key handed to the
@@ -233,6 +241,13 @@ class Settings(BaseSettings):
         default="lax",
         validation_alias=AliasChoices("FOUNDEROS_SESSION_COOKIE_SAMESITE"),
     )
+    session_last_seen_interval_seconds: int = Field(
+        default=300,
+        ge=1,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_SESSION_LAST_SEEN_INTERVAL_SECONDS"
+        ),
+    )
     # Login brute-force throttle: lock an email after N consecutive failures
     # for a cooldown window. DB-backed (login_attempts).
     login_max_failed_attempts: int = Field(
@@ -266,10 +281,44 @@ class Settings(BaseSettings):
         ge=1,
         validation_alias=AliasChoices("FOUNDEROS_LOGIN_MAX_CONCURRENT_ATTEMPTS"),
     )
+    login_rate_limit_backend: Literal["process", "redis"] = Field(
+        default="process",
+        validation_alias=AliasChoices("FOUNDEROS_LOGIN_RATE_LIMIT_BACKEND"),
+    )
+    login_rate_limit_redis_timeout_seconds: float = Field(
+        default=1.0,
+        gt=0,
+        le=5,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_LOGIN_RATE_LIMIT_REDIS_TIMEOUT_SECONDS"
+        ),
+    )
+    trust_proxy_headers: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("FOUNDEROS_TRUST_PROXY_HEADERS"),
+    )
+    trusted_proxy_cidrs: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("FOUNDEROS_TRUSTED_PROXY_CIDRS"),
+    )
     login_attempt_retention_hours: int = Field(
         default=24,
         ge=1,
         validation_alias=AliasChoices("FOUNDEROS_LOGIN_ATTEMPT_RETENTION_HOURS"),
+    )
+    auth_artifact_cleanup_interval_seconds: int = Field(
+        default=3600,
+        ge=60,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_AUTH_ARTIFACT_CLEANUP_INTERVAL_SECONDS"
+        ),
+    )
+    revoked_session_retention_hours: int = Field(
+        default=24,
+        ge=1,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REVOKED_SESSION_RETENTION_HOURS"
+        ),
     )
     # Deterministic read-only assistant admission. The current runtime is one
     # Uvicorn process; any future multi-worker/public topology must replace this

@@ -1,4 +1,4 @@
-.PHONY: backend-check check frontend-check local local-backend local-backup local-doctor local-readiness local-smoke local-stop release-handoff smoke secret-scan
+.PHONY: backend-check check frontend-check local local-backend local-backup local-browser-smoke local-doctor local-liveness-smoke local-readiness local-session-smoke local-smoke local-stop local-workspace-smoke release-handoff smoke secret-scan
 
 local:
 	uv run python scripts/start_local.py run
@@ -15,8 +15,19 @@ local-backup:
 local-stop:
 	uv run python scripts/start_local.py stop
 
-local-smoke:
+local-liveness-smoke:
 	UV_NO_SYNC=1 uv run python scripts/smoke_local.py --skip-workspace-checks
+
+local-session-smoke:
+	UV_NO_SYNC=1 uv run python scripts/smoke_authenticated.py
+
+local-workspace-smoke:
+	UV_NO_SYNC=1 uv run python scripts/smoke_authenticated.py --workspace
+
+local-browser-smoke:
+	cd web && npm run e2e
+
+local-smoke: local-liveness-smoke
 
 smoke: local-smoke
 

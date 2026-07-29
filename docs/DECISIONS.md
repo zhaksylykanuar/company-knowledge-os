@@ -3297,6 +3297,65 @@ with `npm ci`, and both full and production package audits must be clean at the
 time of verification. Typecheck, lint, tests and production build remain
 separate commands so one passing tool cannot masquerade as another.
 
+## DEC-104 - Runtime Health And Browser Smoke Are Separate Evidence Layers
+
+Decision (2026-07-29): `/health` remains an unauthenticated, dependency-free
+liveness probe. `/health/ready` is a separate minimal public readiness probe
+that executes a timeout-bounded PostgreSQL `SELECT 1` and returns 503 without
+database detail on failure. Operator-only `/health/metrics` exposes only
+process uptime, in-flight, total, 4xx and 5xx counters; it has no route, user,
+workspace or provider labels.
+
+Request completion is an active structlog JSON event with a server-generated
+opaque request ID, method, path-only, status and duration. The same ID is
+returned in `X-Request-ID`. Queries, headers, cookies, bodies, credentials,
+identities, source text and provider payloads remain outside logs and metrics.
+These counters and IDs improve local/private operation but are not a claim of
+distributed tracing or external error reporting; a hosted release still
+requires an approved privacy-bounded telemetry sink.
+
+Backend API responses and Next.js pages apply CSP, frame, referrer,
+permissions, nosniff and opener policies; non-local responses add HSTS.
+FastAPI OpenAPI, Swagger and ReDoc are reachable only in local-like
+environments. Cookie-authenticated mutations and the three public
+cookie-issuing auth endpoints require an exact allowed Origin or Referer outside
+local-like environments.
+
+Smoke evidence is split instead of overstated. Public liveness performs no
+login. Session smoke performs a real login, checks the same cookie twice and
+logs out. Workspace smoke additionally reads exact Workspace, Headquarters,
+Company Brain and provider connection state. Playwright runs the real product
+on desktop and mobile Chromium, reloads the session, opens the four primary
+zones and rejects console warnings/errors or horizontal overflow. It disables
+screenshots, video and traces so private company UI is not retained as a test
+artifact.
+
+## DEC-105 - Public Argon2 Work Uses One Shared Admission Boundary
+
+Decision (2026-07-29): login, founder invite consumption and teammate password
+setup must acquire admission before Argon2. The existing per-email PostgreSQL
+lockout remains credential protection; admission separately bounds per-client,
+global and concurrent expensive work. The process backend is valid only for
+the documented single-process runtime. An approved multi-worker topology must
+select the Redis backend, which atomically checks and increments all three
+budgets in one Lua script. Raw client addresses are SHA-256 bucket keys, not
+Redis keys or logs. Redis unavailability returns a generic 503 and performs no
+Argon2 work; abandoned in-flight leases expire automatically.
+
+`X-Forwarded-For` is ignored by default. When proxy forwarding is enabled, the
+direct peer must be an IP inside an explicit trusted CIDR before the first
+forwarded IP can become the limiter/session metadata address; malformed or
+untrusted forwarding falls back to the direct peer. SameSite is constrained to
+a typed set, and non-local startup rejects `none` because FounderOS is a
+first-party same-origin product.
+
+A bounded background task removes expired sessions, expired teammate setup
+token hashes and expired founder invite hashes. Revoked sessions have a short
+configured retention before removal. Session validation updates
+`last_seen_at` only after a configured minimum interval, eliminating the
+previous write on every authenticated request. Cleanup and admission never
+read or log bearer values.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

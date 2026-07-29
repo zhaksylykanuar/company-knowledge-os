@@ -10,7 +10,9 @@
 GitHub Source Reconciliation v1, universal pytest database guard и Atomic
 External Execution v1, Strict Action Evidence v1 и Database Workspace
 Isolation v1, Python Static Typing Gate и Frontend Biome Gate реализованы
-локально в ветке `codex/living-hq-ux-reset`.
+локально в ветке `codex/living-hq-ux-reset`. Runtime Readiness,
+Browser Security Baseline и Shared Public Auth Admission также реализованы
+локально; изменения не опубликованы.
 Изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
@@ -125,18 +127,47 @@ ledger; тексты источников и evidence не копируются.
   проверяет React/Next, accessibility, correctness и security по 91
   implementation/test файлу; найденные нарушения hook dependencies, ARIA,
   list keys и unsafe text parsing исправлены (DEC-103).
+- Публичный `/health` сохранён как минимальная liveness-проверка, а новый
+  `/health/ready` выполняет ограниченный по времени `SELECT 1`. Operator-only
+  `/health/metrics` возвращает только низкокардинальные process counters
+  (DEC-104).
+- Request logging переведён на structlog JSON events с server-generated
+  correlation ID. Query, headers, cookies, bodies, identities и provider data
+  не логируются; тот же request ID возвращается в response header.
+- Backend и Next.js применяют CSP/frame/referrer/permissions/nosniff policy;
+  HSTS включается вне local-like среды. Swagger, ReDoc и OpenAPI закрыты вне
+  local-like среды.
+- Cookie-authenticated mutations и public auth endpoints проверяют exact
+  Origin/Referer. `SameSite=None` запрещён startup gate вне local-like среды;
+  обычный same-origin browser flow остаётся `Lax`.
+- Login, founder enrollment и setup-password используют общий pre-Argon2
+  admission. Локальный single-process backend использует bounded process
+  counters; atomic Redis script обеспечивает общий per-IP/global/concurrency
+  budget для нескольких workers и fail-closed при недоступном Redis (DEC-105).
+- Forwarded client IP учитывается только если direct peer входит в явно
+  настроенный trusted proxy CIDR. В остальных случаях заголовок игнорируется.
+- Фоновая задача удаляет истёкшие sessions, setup-token hashes и
+  founder-invite hashes. Session `last_seen_at` обновляется не чаще одного раза
+  за настроенный интервал, а не на каждый authenticated request.
+- Smoke разделён на public liveness, real authenticated session,
+  authenticated workspace reads и Playwright desktop/mobile E2E. Browser gate
+  не сохраняет screenshots, video или traces с данными компании и проверяет
+  reload, четыре primary zones, console и overflow (DEC-104).
+- Активные README/runbook приведены к навигации
+  «Сейчас / Компания / Спросить / Настройки»; историческая five-zone проверка
+  больше не считается текущим acceptance.
 
 ## Проверено 2026-07-29
 
-- Frontend: `npm test` — **316 passed**.
+- Frontend: `npm test` — **317 passed**.
 - Frontend: `npm run typecheck` — успешно.
-- Frontend: `npm run lint` — успешно, **91 files**, 0 warnings.
+- Frontend: `npm run lint` — успешно, **95 files**, 0 warnings.
 - Frontend: `npm run build` — успешно, **16 routes**.
 - Frontend dependencies: full и production audit — **0 vulnerabilities**.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
-- Backend: `uv run mypy app` — успешно, **98 source files**.
-- Backend: guarded full pytest — **770 passed**, одно внешнее
+- Backend: `uv run mypy app` — успешно, **99 source files**.
+- Backend: guarded full pytest — **781 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Alembic: единственная head `b2c3d4e5f6a7`, применена к отдельной test БД;
   `alembic check` не обнаружил расхождений metadata/schema.
@@ -144,7 +175,7 @@ ledger; тексты источников и evidence не копируются.
   application import; локальная `ckdos_test` создана отдельно от рабочей БД.
 - Local runtime перезапущен штатным supervisor: `make local-doctor` полностью
   зелёный, backend `8765` и web `3000` принадлежат текущему FounderOS;
-  `make local-smoke` проверил login `200`, health `200` и ожидаемый
+  прежний `make local-smoke` проверил только login `200`, health `200` и ожидаемый
   unauthenticated session probe `401`.
 
 Authenticated browser QA не засчитан: локальный URL теперь открывается во
@@ -155,8 +186,9 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Закрыть medium-priority runtime/operations и public-auth findings аудита.
-2. Провести authenticated browser QA и один
+1. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
+   gate; process counters не являются distributed telemetry.
+2. Провести новые authenticated session/workspace/browser gates и один
    founder-approved read-only GitHub App read.
 
 ## Неподвижные границы

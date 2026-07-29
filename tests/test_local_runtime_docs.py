@@ -12,7 +12,10 @@ REQUIRED_COMMANDS = (
     "make local-doctor",
     "make local-backup",
     "make local-stop",
-    "make local-smoke",
+    "make local-liveness-smoke",
+    "make local-session-smoke",
+    "make local-workspace-smoke",
+    "make local-browser-smoke",
 )
 
 FORBIDDEN_ACTIVE_RUNBOOK_STRINGS = (
@@ -64,7 +67,7 @@ def test_local_runtime_runbook_documents_one_command_operator_path() -> None:
         "postgres",
         "backup",
         "restore",
-        "bounded local smoke",
+        "public liveness gate",
         "provider writes",
         "llm",
     ):

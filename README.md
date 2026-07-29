@@ -18,7 +18,7 @@ Read in this order (control trio = what / where / why):
 
 - Backend: FastAPI, SQLAlchemy async, Alembic, Postgres, Redis, Pydantic.
 - Frontend: guided Next.js product shell under [`web/`](web/README.md). The
-  primary zones are «Сегодня / Компания / Решения / Источники / Настройки»;
+  primary zones are «Сейчас / Компания / Спросить / Настройки»;
   the legacy local/operator static UI has been removed and must not return.
 - Current implemented foundations include evidence-backed ingestion/extraction,
   workspace-scoped Company Brain and Company World, workspace/GitHub/action
@@ -27,8 +27,10 @@ Read in this order (control trio = what / where / why):
   link creates the founder, company workspace, owner membership, and revocable
   browser session atomically. Email+password auth uses Argon2id hashes, an
   httpOnly first-party cookie via the same-origin proxy, a durable per-email DB
-  throttle, and production per-IP/global/concurrency admission before Argon2;
-  only hashes of invite/setup/session bearer tokens are stored. An
+  throttle, and shared pre-Argon2 admission for login/enrollment/password setup.
+  The local single-process backend uses bounded memory counters; an atomic
+  Redis backend covers approved multi-worker topology. Only hashes of
+  invite/setup/session bearer tokens are stored. An
   already-issued session for a disabled account is revoked on its next
   validation. The operator API key remains
   for server/CI/admin tooling. See the local full-stack path below.
@@ -77,10 +79,14 @@ Existing founders return through `/login`; an
 empty local database opens the private first-founder enrollment path without
 printing its bearer token.
 
-Run `make local-smoke` for the bounded local acceptance check. Before risky
-data/schema work, run `make local-stop` and then `make local-backup`; it proves a
-database restore and verifies the raw-storage archive. `make local-stop` never
-deletes the database volume, raw storage, or `.local/`. See
+Run `make local-liveness-smoke` for the public liveness gate. Authenticated
+session, workspace and browser gates are deliberately separate:
+`make local-session-smoke`, `make local-workspace-smoke`, and
+`make local-browser-smoke`; they require the documented credential environment
+names and never print their values. Before risky data/schema work, run
+`make local-stop` and then `make local-backup`; it proves a database restore and
+verifies the raw-storage archive. `make local-stop` never deletes the database
+volume, raw storage, or `.local/`. See
 [`docs/operations/local-runtime.md`](docs/operations/local-runtime.md) for the
 complete runbook and manual troubleshooting fallback.
 

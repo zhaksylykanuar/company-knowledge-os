@@ -4,6 +4,21 @@
 
 ### Added
 
+- Added database-backed `/health/ready`, operator-only low-cardinality runtime
+  counters, structured JSON request events and server-generated correlation
+  IDs (DEC-104).
+- Added explicit browser Origin/Referer enforcement for cookie mutations,
+  backend and Next.js security headers, production HSTS, and local-only
+  Swagger/ReDoc/OpenAPI.
+- Added one shared pre-Argon2 admission boundary for login, founder enrollment
+  and teammate password setup. It supports an atomic Redis backend for workers,
+  fail-closed Redis errors and trusted-proxy client address resolution
+  (DEC-105).
+- Added bounded background cleanup for expired sessions, account setup token
+  hashes and founder invite hashes.
+- Added separate public-liveness, authenticated-session, authenticated-workspace
+  and Playwright desktop/mobile browser smoke gates. Playwright stores no
+  screenshots, video or traces containing company UI.
 - Added enforceable Python static typing to the guarded backend checker and CI.
   The configured `mypy app` gate now passes all 98 application source files.
 - Added pinned Biome frontend linting for Next/React correctness,
@@ -39,6 +54,13 @@
 
 ### Changed
 
+- Session validation now writes `last_seen_at` only after a configured minimum
+  interval instead of on every authenticated request.
+- Non-local startup now rejects `SameSite=None`; the product keeps its
+  first-party Lax/Strict cookie boundary.
+- Active README and local-runtime guidance now use the actual
+  «Сейчас / Компания / Спросить / Настройки» navigation and no longer count the
+  superseded five-zone browser run as current acceptance.
 - Replaced the frontend's fake lint alias to TypeScript typecheck with a
   separate zero-warning Biome gate (DEC-103). React hook dependencies, dialog
   accessibility, unstable list keys and unsafe control-character parsing found

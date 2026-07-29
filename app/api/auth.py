@@ -224,3 +224,9 @@ def enforce_fail_closed_auth(config: object) -> None:
             "environment but no API key is configured. Set API_AUTH_KEY or "
             "FOUNDEROS_API_KEYS before deploying."
         )
+    if getattr(config, "session_cookie_samesite", "lax") == "none":
+        raise FailClosedAuthError(
+            "Refusing to start: FOUNDEROS_SESSION_COOKIE_SAMESITE=none is "
+            "incompatible with the first-party FounderOS session boundary. "
+            "Use lax or strict."
+        )

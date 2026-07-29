@@ -6,7 +6,10 @@ import asyncio
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
+from fastapi import Request
 from httpx import ASGITransport, AsyncClient
+from redis.exceptions import RedisError
 from sqlalchemy import delete, select, update
 
 from app.api import auth_routes
@@ -21,7 +24,12 @@ from app.db.identity_models import (
 )
 from app.main import app
 from app.services.identity_service import get_user_by_email, normalize_email
-from app.services.login_rate_limit_service import login_admission_controller
+from app.services import login_rate_limit_service
+from app.services.login_rate_limit_service import (
+    LoginAdmissionUnavailable,
+    acquire_login_admission,
+    login_admission_controller,
+)
 from app.services.login_throttle_service import reset_cleanup_schedule_for_tests
 from scripts.create_admin_user import provision_admin_user
 
@@ -61,7 +69,9 @@ async def _cleanup(email: str) -> None:
 
 async def _login(client: AsyncClient, email: str, password: str):
     return await client.post(
-        "/api/v1/auth/login", json={"email": email, "password": password}
+        "/api/v1/auth/login",
+        headers={"Origin": "http://127.0.0.1:3000"},
+        json={"email": email, "password": password},
     )
 
 
@@ -245,6 +255,150 @@ def test_production_admission_enforces_global_and_concurrency_budgets(
         assert login_admission_controller.acquire("client-c") is None
     finally:
         login_admission_controller.reset()
+
+
+async def test_every_public_token_endpoint_uses_pre_hash_admission(
+    monkeypatch,
+) -> None:
+    calls = 0
+
+    async def reject_admission(_client_key: str | None):
+        nonlocal calls
+        calls += 1
+        return None
+
+    monkeypatch.setattr(settings, "app_env", "production")
+    monkeypatch.setattr(
+        settings,
+        "cors_allowed_origins",
+        "http://127.0.0.1:3000",
+    )
+    monkeypatch.setattr(
+        auth_routes,
+        "acquire_login_admission",
+        reject_admission,
+    )
+    origin = {"Origin": "http://127.0.0.1:3000"}
+    async with _client() as client:
+        login = await client.post(
+            "/api/v1/auth/login",
+            headers=origin,
+            json={"email": "admission@example.test", "password": "password"},
+        )
+        enroll = await client.post(
+            "/api/v1/auth/enroll",
+            headers=origin,
+            json={
+                "token": "invite",
+                "email": "admission@example.test",
+                "password": "password",
+                "workspace_name": "Admission",
+                "workspace_slug": "admission",
+            },
+        )
+        setup = await client.post(
+            "/api/v1/auth/setup-password",
+            headers=origin,
+            json={"token": "setup", "new_password": "password"},
+        )
+
+    assert [login.status_code, enroll.status_code, setup.status_code] == [
+        429,
+        429,
+        429,
+    ]
+    assert calls == 3
+
+
+def test_client_ip_uses_forwarding_only_from_an_explicit_trusted_proxy(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings, "trust_proxy_headers", True)
+    monkeypatch.setattr(settings, "trusted_proxy_cidrs", "10.0.0.0/8")
+    headers = [(b"x-forwarded-for", b"203.0.113.8, 10.0.0.5")]
+
+    trusted = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/auth/login",
+            "headers": headers,
+            "client": ("10.0.0.5", 1234),
+        }
+    )
+    untrusted = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api/v1/auth/login",
+            "headers": headers,
+            "client": ("192.0.2.4", 1234),
+        }
+    )
+
+    assert auth_routes._client_ip(trusted) == "203.0.113.8"
+    assert auth_routes._client_ip(untrusted) == "192.0.2.4"
+
+    monkeypatch.setattr(settings, "trust_proxy_headers", False)
+    assert auth_routes._client_ip(trusted) == "10.0.0.5"
+
+
+async def test_redis_admission_hashes_client_identity_and_releases_atomically(
+    monkeypatch,
+) -> None:
+    raw_client = "203.0.113.9"
+    calls: list[tuple[object, ...]] = []
+
+    class FakeRedisClient:
+        closed = False
+
+        async def eval(self, *args: object) -> int:
+            calls.append(args)
+            return 1
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    fake_client = FakeRedisClient()
+
+    class FakeRedis:
+        @staticmethod
+        def from_url(*_args: object, **_kwargs: object) -> FakeRedisClient:
+            return fake_client
+
+    monkeypatch.setattr(login_rate_limit_service, "Redis", FakeRedis)
+    monkeypatch.setattr(settings, "login_rate_limit_backend", "redis")
+
+    admission = await acquire_login_admission(raw_client)
+    assert admission is not None
+    acquire_call_blob = repr(calls[0])
+    assert raw_client not in acquire_call_blob
+
+    await login_rate_limit_service.release_login_admission(admission)
+    assert len(calls) == 2
+    assert fake_client.closed is True
+
+
+async def test_redis_admission_fails_closed_when_shared_store_is_unavailable(
+    monkeypatch,
+) -> None:
+    class FailingRedisClient:
+        async def eval(self, *_args: object) -> int:
+            raise RedisError("unavailable")
+
+        async def aclose(self) -> None:
+            return None
+
+    class FailingRedis:
+        @staticmethod
+        def from_url(*_args: object, **_kwargs: object) -> FailingRedisClient:
+            return FailingRedisClient()
+
+    monkeypatch.setattr(login_rate_limit_service, "Redis", FailingRedis)
+    monkeypatch.setattr(settings, "login_rate_limit_backend", "redis")
+
+    with pytest.raises(LoginAdmissionUnavailable):
+        await acquire_login_admission("203.0.113.10")
 
 
 async def test_failure_recording_removes_stale_throttle_rows() -> None:

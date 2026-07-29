@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 
 from httpx import ASGITransport, AsyncClient
@@ -60,15 +61,19 @@ def test_request_logging_middleware_logs_sanitized_line() -> None:
     assert status in {200, 204}
     records = [r for r in captured if r.name == REQUEST_LOGGER_NAME]
     assert records, "expected at least one request log line"
-    messages = " ".join(record.getMessage() for record in records)
-    # The request line carries method, path, status, and duration.
-    assert "method=GET" in messages
-    assert "path=/health" in messages
-    assert "status=" in messages
-    assert "duration_ms=" in messages
+    events = [json.loads(record.getMessage()) for record in records]
+    event = events[-1]
+    # The structured event carries only bounded request metadata.
+    assert event["event"] == "request_complete"
+    assert event["method"] == "GET"
+    assert event["path"] == "/health"
+    assert event["status"] == 200
+    assert isinstance(event["duration_ms"], float)
+    assert len(event["request_id"]) == 32
     # Sanitization: query values are never logged.
-    assert "SUPER_SECRET_VALUE" not in messages
-    assert "token=" not in messages
+    blob = " ".join(record.getMessage() for record in records)
+    assert "SUPER_SECRET_VALUE" not in blob
+    assert "token=" not in blob
 
 
 def test_middleware_passes_through_non_http_scopes() -> None:

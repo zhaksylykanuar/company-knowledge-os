@@ -75,20 +75,25 @@ async def validate_session(session: AsyncSession, raw_token: str | None) -> User
     )
     if row is None:
         return None
+    now = _now()
     if row.revoked_at is not None:
         return None
-    if row.expires_at <= _now():
+    if row.expires_at <= now:
         return None
     user = await session.get(User, row.user_id)
     if user is None or user.status != USER_STATUS_ACTIVE:
         # Disabling an account must invalidate already-issued sessions, not
         # only block the next password login. Persist revocation so subsequent
         # requests remain denied without repeating user resolution.
-        row.revoked_at = _now()
+        row.revoked_at = now
         await session.flush()
         return None
-    row.last_seen_at = _now()
-    await session.flush()
+    last_seen_cutoff = now - timedelta(
+        seconds=settings.session_last_seen_interval_seconds
+    )
+    if row.last_seen_at is None or row.last_seen_at <= last_seen_cutoff:
+        row.last_seen_at = now
+        await session.flush()
     return user
 
 

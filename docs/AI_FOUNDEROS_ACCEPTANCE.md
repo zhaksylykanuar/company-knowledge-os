@@ -125,6 +125,16 @@
   typecheck.
 - [x] `npm run build`
 - [x] `npm audit --omit=dev --audit-level=moderate`
+- [x] Public liveness and database readiness are separate probes; readiness
+  fails with 503 when PostgreSQL is unavailable.
+- [x] Browser mutations enforce exact Origin/Referer, hosted security headers
+  are present, and OpenAPI/Swagger/ReDoc are local-only.
+- [x] Login, enrollment and setup-password share pre-Argon2 admission with an
+  atomic Redis option and trusted-proxy address policy.
+- [x] Expired auth artifacts are cleaned and session activity writes are
+  interval-bounded.
+- [x] Smoke commands are separated into liveness, session, workspace and
+  desktop/mobile browser E2E contracts.
 - [x] Workspace-owned canonical/document relations use composite PostgreSQL
   foreign keys; negative tests reject every covered cross-workspace commit.
 - [ ] Public multi-tenant mode enforces the full RLS gate from DEC-102.

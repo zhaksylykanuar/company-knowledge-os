@@ -13,7 +13,7 @@ make local
 
 Open `http://127.0.0.1:3000`. `make local` starts/reuses local PostgreSQL,
 applies migrations, and launches FastAPI plus Next.js with the required
-same-origin proxy. Use `make local-smoke`, `make local-backup`, and
+same-origin proxy. Use `make local-liveness-smoke`, `make local-backup`, and
 `make local-stop` for acceptance, backup, and shutdown. See
 [`../docs/operations/local-runtime.md`](../docs/operations/local-runtime.md).
 
@@ -41,6 +41,19 @@ npm run lint
 
 These commands are enforced by repository CI. They do not require provider
 credentials or live backend/provider calls.
+
+Authenticated browser smoke is a separate operator gate:
+
+```bash
+npm run e2e:install
+FOUNDEROS_E2E_LOGIN_EMAIL='<test-account-email>' \
+FOUNDEROS_E2E_LOGIN_PASSWORD='<test-account-password>' \
+npm run e2e
+```
+
+It uses desktop and mobile Chromium against the running loopback product,
+persists no screenshots/video/traces, and fails on console warnings/errors or
+horizontal overflow.
 
 ## Environment
 
@@ -92,11 +105,12 @@ The app uses invite-only founder enrollment and email+password server sessions:
 - Public password fields are bounded before hashing: login accepts 1–256
   characters; founder enrollment, setup-password, and change-password require
   8–256 characters.
-- The backend admits login work by per-IP/global request windows and a
-  concurrency cap before Argon2, in addition to the durable per-email DB
-  lockout. This admission state is process-local and matches the single-process
-  loopback runtime. Any future multi-worker/public topology requires a shared
-  edge/Redis limiter and a new security verification. Disabled users' existing
+- The backend admits login, founder enrollment, and password setup through
+  per-IP/global request windows and a concurrency cap before Argon2, in addition
+  to the durable per-email DB lockout. The process backend matches the
+  single-process loopback runtime; an atomic Redis backend is available for an
+  approved multi-worker topology. Forwarded client IPs are ignored unless the
+  direct proxy belongs to an explicit trusted CIDR. Disabled users' existing
   sessions are revoked when next validated.
 
 The browser sends no operator API key and no owner email; the operator API key is
@@ -104,19 +118,15 @@ for server/CI/admin tooling only. The frontend never calls GitHub, Jira, Gmail,
 Drive, or other providers directly. Do not commit secrets, API keys, provider
 tokens, or local environment files.
 
-Primary navigation is «Штаб / Мир / Миссии»; «Радары / Настройки» remain
-backstage controls. Provider routes live under «Радары»; `/dashboard` shows one
-deterministic next move and three signals. Mission/profile disclosure resolves
-only exact current-snapshot entities. A proposed mission may be approved or
-rejected locally in its compact modal only after exact proposal/version checks;
-the audit-backed receipt explicitly performs no external write and remains
-visible if the Headquarters refresh fails. External preview/execute stays a
-separate human-gated path. Confirmed employee/customer drawer renderers are
-fail-closed, but the production Headquarters mission projection does not yet
-populate their relation IDs; do not claim that profile path end-to-end. Shared shell/status copy is in
-`web/lib/messages.ts`; computed setup copy is colocated with the Headquarters
-modal and the zero-workspace recovery page. The UI is Russian. Source
-setup/import/sync and action review/execution require
+Primary navigation is «Сейчас / Компания / Спросить / Настройки».
+`/dashboard` shows one evidence-backed current priority and only a bounded
+number of signals; deeper details open on demand. Company memory and profiles
+live under «Компания», the deterministic snapshot-bound assistant lives under
+«Спросить», and every provider/API diagnostic remains under «Настройки».
+Provider-first routes and the old «Штаб / Мир / Миссии / Радары» shell are
+removed and must not return. Shared shell/status copy is in
+`web/lib/messages.ts`; the UI is Russian. Source setup/import/sync and action
+review/execution require
 owner/admin; briefing generation, local action creation, and Company World
 resolution require member+; viewer keeps evidence-backed read access only.
 
@@ -127,5 +137,5 @@ auth, invite-only founder enrollment, computed onboarding inside Headquarters,
 and the spatial durable Company World are in place. Onboarding readiness and its
 next action come from the unified server snapshot, not browser fan-out. The first
 real GitHub App read and any external action remain separate, human-approved
-operations after `make local-smoke`; email delivery and password reset remain
-deferred.
+operations after the explicit workspace/browser gates; email delivery and
+password reset remain deferred.

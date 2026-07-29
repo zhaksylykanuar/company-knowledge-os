@@ -8,6 +8,7 @@ generic 401 that never reveals whether the email exists.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from uuid import UUID
 
@@ -36,7 +37,12 @@ from app.services.login_throttle_service import (
     record_failure as record_login_failure,
     reset as reset_login_throttle,
 )
-from app.services.login_rate_limit_service import acquire_login_admission
+from app.services.login_rate_limit_service import (
+    AdmissionLease,
+    LoginAdmissionUnavailable,
+    acquire_login_admission,
+    release_login_admission,
+)
 from app.services.password_service import hash_password, verify_password
 from app.services.session_service import (
     create_session,
@@ -48,6 +54,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 GENERIC_LOGIN_FAILURE = "invalid email or password"
 LOGIN_LOCKED_FAILURE = "too many failed login attempts; try again later"
+AUTH_ADMISSION_UNAVAILABLE = "authentication is temporarily unavailable"
 WRONG_CURRENT_PASSWORD = "current password is incorrect"
 _EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _WORKSPACE_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -119,8 +126,72 @@ class FounderEnrollmentRequest(BaseModel):
         return normalized
 
 
+def _trusted_proxy_networks() -> tuple[
+    ipaddress.IPv4Network | ipaddress.IPv6Network,
+    ...,
+]:
+    raw = settings.trusted_proxy_cidrs
+    if not raw:
+        return ()
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for candidate in raw.replace("\n", ",").split(","):
+        stripped = candidate.strip()
+        if not stripped:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(stripped, strict=False))
+        except ValueError:
+            continue
+    return tuple(networks)
+
+
 def _client_ip(request: Request) -> str | None:
-    return request.client.host if request.client is not None else None
+    direct_host = request.client.host if request.client is not None else None
+    if direct_host is None:
+        return None
+    try:
+        direct_ip = ipaddress.ip_address(direct_host)
+    except ValueError:
+        return direct_host[:64] if len(direct_host) <= 64 else None
+
+    if not settings.trust_proxy_headers:
+        return direct_ip.compressed
+    networks = _trusted_proxy_networks()
+    if not networks or not any(direct_ip in network for network in networks):
+        return direct_ip.compressed
+
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if not forwarded_for:
+        return direct_ip.compressed
+    candidate = forwarded_for.split(",", 1)[0].strip()
+    try:
+        return ipaddress.ip_address(candidate).compressed
+    except ValueError:
+        return direct_ip.compressed
+
+
+async def _acquire_public_auth_admission(
+    request: Request,
+) -> AdmissionLease | None:
+    if is_local_like_env(settings):
+        return None
+    try:
+        admission = await acquire_login_admission(_client_ip(request))
+    except LoginAdmissionUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=AUTH_ADMISSION_UNAVAILABLE,
+            headers={"Retry-After": "5"},
+        ) from exc
+    if admission is None:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=LOGIN_LOCKED_FAILURE,
+            headers={
+                "Retry-After": str(settings.login_rate_limit_window_seconds)
+            },
+        )
+    return admission
 
 
 def _session_user_agent(request: Request) -> str | None:
@@ -182,17 +253,7 @@ async def _workspaces_payload(user_id: UUID) -> list[dict]:
 
 @router.post("/login")
 async def login(payload: LoginRequest, request: Request, response: Response) -> dict:
-    admission = None
-    if not is_local_like_env(settings):
-        admission = acquire_login_admission(_client_ip(request))
-        if admission is None:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=LOGIN_LOCKED_FAILURE,
-                headers={
-                    "Retry-After": str(settings.login_rate_limit_window_seconds)
-                },
-            )
+    admission = await _acquire_public_auth_admission(request)
 
     try:
         async with AsyncSessionLocal() as session:
@@ -236,8 +297,7 @@ async def login(payload: LoginRequest, request: Request, response: Response) -> 
             user_payload = _user_payload(user)
             await session.commit()
     finally:
-        if admission is not None:
-            admission.release()
+        await release_login_admission(admission)
 
     _set_session_cookie(response, raw_token)
     return {"status": "ok", "user": user_payload}
@@ -251,51 +311,55 @@ async def enroll_founder(
 ) -> dict:
     """Consume an operator-issued invite and create the first founder workspace."""
 
-    async with AsyncSessionLocal() as session:
-        try:
-            enrollment = await consume_founder_invite(
-                session,
-                raw_token=payload.token,
-                email=payload.email,
-                name=payload.name,
-                plaintext_password=payload.password,
-                workspace_name=payload.workspace_name,
-                workspace_slug=payload.workspace_slug,
-            )
-            raw_session_token, _session_row = await create_session(
-                session,
-                enrollment.user.id,
-                user_agent=_session_user_agent(request),
-                ip_address=_client_ip(request),
-            )
-            user_payload = _user_payload(enrollment.user)
-            workspace_payload = {
-                "id": str(enrollment.workspace.id),
-                "name": enrollment.workspace.name,
-                "slug": enrollment.workspace.slug,
-                "role": enrollment.membership.role,
-            }
-            await session.commit()
-        except InvalidFounderInviteError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=INVALID_FOUNDER_INVITE,
-            ) from exc
-        except FounderEnrollmentConflictError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=FOUNDER_ENROLLMENT_CONFLICT,
-            ) from exc
-        except IntegrityError as exc:
-            await session.rollback()
-            if _integrity_constraint_name(exc) in _ENROLLMENT_CONFLICT_CONSTRAINTS:
+    admission = await _acquire_public_auth_admission(request)
+    try:
+        async with AsyncSessionLocal() as session:
+            try:
+                enrollment = await consume_founder_invite(
+                    session,
+                    raw_token=payload.token,
+                    email=payload.email,
+                    name=payload.name,
+                    plaintext_password=payload.password,
+                    workspace_name=payload.workspace_name,
+                    workspace_slug=payload.workspace_slug,
+                )
+                raw_session_token, _session_row = await create_session(
+                    session,
+                    enrollment.user.id,
+                    user_agent=_session_user_agent(request),
+                    ip_address=_client_ip(request),
+                )
+                user_payload = _user_payload(enrollment.user)
+                workspace_payload = {
+                    "id": str(enrollment.workspace.id),
+                    "name": enrollment.workspace.name,
+                    "slug": enrollment.workspace.slug,
+                    "role": enrollment.membership.role,
+                }
+                await session.commit()
+            except InvalidFounderInviteError as exc:
+                await session.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=INVALID_FOUNDER_INVITE,
+                ) from exc
+            except FounderEnrollmentConflictError as exc:
+                await session.rollback()
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=FOUNDER_ENROLLMENT_CONFLICT,
                 ) from exc
-            raise
+            except IntegrityError as exc:
+                await session.rollback()
+                if _integrity_constraint_name(exc) in _ENROLLMENT_CONFLICT_CONSTRAINTS:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=FOUNDER_ENROLLMENT_CONFLICT,
+                    ) from exc
+                raise
+    finally:
+        await release_login_admission(admission)
 
     _set_session_cookie(response, raw_session_token)
     return {"status": "ok", "user": user_payload, "workspace": workspace_payload}
@@ -330,27 +394,31 @@ async def setup_password(
     request: Request,
     response: Response,
 ) -> dict:
-    async with AsyncSessionLocal() as session:
-        try:
-            user = await complete_account_setup_token(
-                session,
-                raw_token=payload.token,
-                plaintext_password=payload.new_password,
-            )
-            raw_token, _session_row = await create_session(
-                session,
-                user.id,
-                user_agent=_session_user_agent(request),
-                ip_address=_client_ip(request),
-            )
-            user_payload = _user_payload(user)
-            await session.commit()
-        except AccountSetupTokenError as exc:
-            await session.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
+    admission = await _acquire_public_auth_admission(request)
+    try:
+        async with AsyncSessionLocal() as session:
+            try:
+                user = await complete_account_setup_token(
+                    session,
+                    raw_token=payload.token,
+                    plaintext_password=payload.new_password,
+                )
+                raw_token, _session_row = await create_session(
+                    session,
+                    user.id,
+                    user_agent=_session_user_agent(request),
+                    ip_address=_client_ip(request),
+                )
+                user_payload = _user_payload(user)
+                await session.commit()
+            except AccountSetupTokenError as exc:
+                await session.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=str(exc),
+                ) from exc
+    finally:
+        await release_login_admission(admission)
 
     _set_session_cookie(response, raw_token)
     return {"status": "ok", "user": user_payload}
