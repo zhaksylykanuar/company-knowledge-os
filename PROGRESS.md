@@ -22,8 +22,9 @@ server kill switch. Memory Control v1 реализован для FounderOS-auth
 v1 реализован: ключи сервисов принимаются только workspace UI, а `.env.local`
 оставлен только для bootstrap/deployment. Repository Intelligence RI-001
 реализован как strict validation-only contract, а RI-002 как canonical
-workspace-scoped L0 projection на synthetic DB fixtures; изменения не
-опубликованы.**
+workspace-scoped L0 projection. RI-003 exact-SHA checkout manager реализован на
+synthetic repositories с external ephemeral path и no-execution boundary;
+изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -57,6 +58,13 @@ ledger; тексты источников и evidence не копируются.
   filesystem discovery, SourceEvent или legacy portfolio fallback. Purpose/type
   остаётся insufficient evidence без allowlisted canonical candidate; archived
   finding требует matching evidence (DEC-116).
+- Реализован RI-003 safe checkout manager без provider portfolio read,
+  migration/persistence/API/UI/LLM и без target execution. Он принимает только
+  full exact SHA-1, требует standalone synthetic Git repository вне FounderOS,
+  запрещает linked worktree/symlink/external alternates, использует minimal
+  credential-free Git environment с denied protocols, bounded tree/blob reads,
+  read-only materialization и verified cleanup на success/failure/cancel
+  (DEC-117).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -286,6 +294,14 @@ ledger; тексты источников и evidence не копируются.
 
 ## Проверено 2026-07-30
 
+- Repository Intelligence RI-003 focused checkout suite — **28 passed**:
+  exact historical SHA, external path, no hooks/target execution, symlink,
+  linked-worktree, gitlink, alternates, portable collision, file/disk/path/output
+  bounds, sanitized timeout/failure и cleanup после success/exception/cancel.
+- Backend после RI-003: guarded `make backend-check` — **867 passed**;
+  `uv run ruff check .`, `uv run mypy app` (**107 source files**), frozen sync,
+  `pip-audit`, Alembic upgrade/check и tracked secret scan успешно; одно внешнее
+  Starlette/httpx deprecation-предупреждение.
 - Repository Intelligence RI-001 + RI-002 focused suites — **47 passed**:
   canonical synthetic frontend/backend/infrastructure L0, cross-workspace
   isolation, missing/tombstoned/mismatched evidence, unsafe URL removal,
@@ -347,8 +363,9 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. После отдельного approval начать RI-003: safe exact-SHA checkout manager
-   вне FounderOS tree, без target execution, secrets и default network.
+1. После отдельного approval начать RI-004: bounded static collectors только на
+   synthetic frontend/backend/infrastructure fixtures, без выполнения target
+   code.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.

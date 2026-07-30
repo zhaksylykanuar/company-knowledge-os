@@ -20,6 +20,14 @@
   cross-workspace isolation, missing/tombstoned/mismatched evidence, unsafe URL
   removal, deterministic output and zero database mutation. No filesystem
   discovery, provider call, checkout, migration, UI or LLM path was added.
+- Added RI-003 exact-SHA checkout management (DEC-117) with an external
+  `founderos-ri-data` runtime boundary, minimal credential-free git
+  environment, protocol denial, bounded tree/blob output and read-only
+  materialization.
+- Added synthetic checkout tests for historical SHA selection, path and git
+  metadata boundaries, symlink/gitlink/alternates rejection, file/disk/path
+  limits, sanitized timeout/failure output, no hook or target execution and
+  cleanup on success, exception and cancellation.
 
 ### Changed
 

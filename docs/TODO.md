@@ -6,11 +6,11 @@
 
 ## Сейчас — Repository Intelligence
 
-1. После отдельного approval выполнить **RI-003** safe checkout manager.
-   Checkout не может жить внутри FounderOS tree, выполнять target code или
-   читать credentials.
-2. Затем реализовать RI-004 static collectors только на synthetic repositories,
+1. После отдельного approval реализовать **RI-004** static collectors только на
+   synthetic repositories,
    без выполнения fixture code.
+2. Затем выполнить RI-005 directional relationship candidates и graph
+   validation без migration.
 
 RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
 fixtures, object-shaped evidence, finite confidence, human-only resolution,
@@ -19,6 +19,9 @@ persistence, UI, provider/LLM call или чтения company repositories (DEC
 RI-002 завершён: workspace-scoped canonical L0 читает только `Repository` +
 active identity-matching `SourceRecord`, сохраняет unknown без evidence и не
 использует filesystem/provider fallback (DEC-116).
+RI-003 завершён: exact-SHA checkout использует внешний ephemeral runtime path,
+не выполняет target code, не наследует credentials/network и удаляет run на
+каждом exit (DEC-117).
 Durable storage и migrations остаются RI-006 и требуют отдельного branch/PR
 approval.
 

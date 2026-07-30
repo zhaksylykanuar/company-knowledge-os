@@ -3711,6 +3711,38 @@ database, including cross-workspace, tombstone, identity mismatch, unsafe URL,
 unknown-state, deterministic and no-mutation tests. The next bounded slice is
 RI-003 safe checkout management, which still requires separate approval.
 
+## DEC-117 - Repository Checkouts Are Exact, External, Read-Only And Ephemeral
+
+Decision (2026-07-30): RI-003 materializes an approved full lowercase SHA-1
+from a synthetic local standalone Git repository into
+`FOUNDEROS_REPOSITORY_INTELLIGENCE_DATA_PATH`. The setting defaults to the
+`founderos-ri-data` sibling of the FounderOS repository and must resolve outside
+the FounderOS tree and outside the source repository. The source must itself be
+outside FounderOS, cannot be a symlink, linked worktree or subdirectory, and its
+git metadata cannot use symlinks, include files or external alternates.
+
+The manager does not call `clone`, `fetch`, `checkout` or `worktree`. It uses
+only trusted git object-reading commands with a minimal credential-free
+environment, terminal prompting disabled and protocols denied. It resolves the
+exact commit, validates a bounded `ls-tree` manifest and materializes allowed
+regular blobs with `cat-file`. Symlinks, gitlinks, unsupported objects, `.git`
+paths, traversal, portable case/Unicode collisions and file-directory
+collisions fail closed. Target repository files and hooks are never executed.
+
+Checkout policy bounds total wall time, git command output, file count, total
+bytes, per-file bytes, path bytes and path depth. Materialized files and
+directories become read-only. Each run gets one private external directory,
+and cleanup is verified and attempted on success, validation failure, consumer
+exception and cancellation. Errors are sanitized and never return git stderr,
+source paths or file content.
+
+RI-003 does not add a migration, persistence model, API, UI, provider portfolio
+read, network dependency, scanner, LLM call or real company-repository access.
+It is proved only with locally created synthetic repositories, including exact
+historical SHA, path, bound, timeout, output, failure, cancellation, cleanup,
+symlink, gitlink, alternates and no-execution tests. The next bounded slice is
+RI-004 static collectors and still requires separate approval.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

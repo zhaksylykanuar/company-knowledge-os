@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — полное руководство по подготовке и запуску
 
-Статус: RI-001 и RI-002 реализованы; следующий approval-gated этап — RI-003
+Статус: RI-001–RI-003 реализованы; следующий approval-gated этап — RI-004
 Дата подготовки: 2026-07-30
 Основной проект: `company-knowledge-os`
 Подробный архитектурный план:
@@ -168,7 +168,7 @@ RI-001:
   implemented and verified on synthetic fixtures
 
 next slice:
-  RI-003 after separate approval
+  RI-004 after separate approval
 ```
 
 Это снимок состояния, а не вечная константа. Перед каждым новым тикетом агент
@@ -968,7 +968,9 @@ SourceEvent/legacy catalog и provider API.
 
 ### RI-003 — Safe checkout manager
 
-Создать:
+Статус: **завершён 2026-07-30** (DEC-117).
+
+Реализовано:
 
 - отдельный runtime data setting;
 - запрет checkout внутри FounderOS;
@@ -988,7 +990,7 @@ SourceEvent/legacy catalog и provider API.
 FOUNDEROS_REPOSITORY_INTELLIGENCE_DATA_PATH
 ```
 
-Окончательное имя фиксируется в `docs/DECISIONS.md`.
+Имя зафиксировано в DEC-117.
 
 Реальный `.env.local` агент не меняет.
 
@@ -1592,32 +1594,33 @@ npm run build
 ## 26. Готовый промпт следующему агенту
 
 ```text
-Goal: Implement RI-003 — safe Repository Intelligence checkout manager.
+Goal: Implement RI-004 — static Repository Intelligence collectors.
 
 Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
 
 Constraints:
-- Only RI-003.
+- Only RI-004.
 - Use only synthetic repository fixtures.
-- Add a dedicated runtime data path outside the FounderOS repository tree.
-- Materialize only an exact approved SHA.
+- Reuse the implemented RI-003 external exact-SHA checkout manager.
+- Inspect only bounded static files from synthetic frontend/backend/infrastructure checkouts.
 - Do not execute target repository commands or expose FounderOS credentials.
-- Bound path, time, disk and output and clean up on every exit.
+- Bound files, bytes, depth and output and sanitize every retained field.
 - No migration, persistence model, UI, portfolio provider read or LLM call.
 - Do not touch .env.local, .local, credentials, company data or existing connections.
 - Update PROGRESS.md, docs/TODO.md, and docs/CHANGELOG.md.
 - Nothing may be pushed.
 
 Done when:
-- Synthetic path, exact-SHA, cleanup, timeout and failure tests pass.
-- Checkout cannot resolve inside the FounderOS repository tree.
-- No fixture code is executed.
+- Synthetic manifests, entrypoints, dependencies, interfaces, deployment,
+  tests/CI and documentation collectors produce deterministic validated output.
+- Pathological fixtures remain bounded.
+- No target code is executed.
 - git diff --check passes.
 - Staged and tracked secret scans pass.
 - uv run ruff check . passes.
 - Guarded make backend-check passes against an explicit test-marked PostgreSQL URL, or DB-backed checks are honestly reported blocked.
-- A scoped local RI-003 commit is created.
-- Report the result and wait for approval before RI-004.
+- A scoped local RI-004 commit is created.
+- Report the result and wait for approval before RI-005.
 ```
 
 ## 27. Краткий финальный checklist
@@ -1631,7 +1634,9 @@ Done when:
 - [x] зафиксировать DEC-115;
 - [x] реализовать RI-002 только на synthetic canonical rows;
 - [x] зафиксировать DEC-116;
-- [ ] начать RI-003 только после отдельного approval.
+- [x] реализовать RI-003 только на synthetic local repositories;
+- [x] зафиксировать DEC-117;
+- [ ] начать RI-004 только после отдельного approval.
 
 ### Во время подготовки
 

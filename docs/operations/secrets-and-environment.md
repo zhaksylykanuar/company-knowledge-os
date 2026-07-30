@@ -14,6 +14,7 @@ There are two different classes of configuration:
 | OpenAI API key, model, reasoning level, output budget and policy acknowledgement | `Settings → AI` | Workspace-owned product configuration; the key is encrypted in PostgreSQL |
 | GitHub App, GitHub fallback token, Jira API token, Gmail access token and Google Drive access token | `Settings → Integrations` | Workspace-owned connector configuration; secrets are encrypted in PostgreSQL |
 | Database and Redis locations, raw-storage path, public URLs and CORS | `.env.local` locally or deployment configuration when hosted | FounderOS needs these before the database and UI can start |
+| Repository Intelligence runtime path and checkout resource limits | `.env.local` locally or deployment configuration when hosted | The data path must resolve outside the FounderOS tree; these are execution-safety controls, not provider credentials |
 | `FOUNDEROS_SECRET_ENCRYPTION_KEY` | `.env.local` locally or an infrastructure secret manager when hosted | This root key is required to decrypt workspace credentials; storing it inside the encrypted database would be circular |
 | Recovery key file and off-device backup target | Founder-controlled infrastructure outside the repository | FounderOS must be recoverable even when the application machine or database is lost |
 | Emergency kill switches, worker concurrency and timeouts | Runtime environment | These are deployment controls, not workspace credentials |

@@ -21,6 +21,10 @@ def _default_local_workspace_path() -> str:
     return str(Path(__file__).resolve().parents[2] / ".local")
 
 
+def _default_repository_intelligence_data_path() -> str:
+    return str(Path(__file__).resolve().parents[3] / "founderos-ri-data")
+
+
 def _split_csv_config(value: str | None) -> list[str]:
     if value is None:
         return []
@@ -102,6 +106,68 @@ class Settings(BaseSettings):
     founderos_local_workspace_path: str = Field(
         default_factory=_default_local_workspace_path,
         validation_alias=AliasChoices("FOUNDEROS_LOCAL_WORKSPACE_PATH"),
+    )
+    repository_intelligence_data_path: str = Field(
+        default_factory=_default_repository_intelligence_data_path,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_DATA_PATH"
+        ),
+    )
+    repository_intelligence_checkout_timeout_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        le=300,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_TIMEOUT_SECONDS"
+        ),
+    )
+    repository_intelligence_checkout_max_files: int = Field(
+        default=20_000,
+        ge=1,
+        le=200_000,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_FILES"
+        ),
+    )
+    repository_intelligence_checkout_max_bytes: int = Field(
+        default=512 * 1024 * 1024,
+        ge=1024,
+        le=10 * 1024 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_BYTES"
+        ),
+    )
+    repository_intelligence_checkout_max_file_bytes: int = Field(
+        default=64 * 1024 * 1024,
+        ge=1,
+        le=1024 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_FILE_BYTES"
+        ),
+    )
+    repository_intelligence_checkout_max_command_output_bytes: int = Field(
+        default=8 * 1024 * 1024,
+        ge=1024,
+        le=128 * 1024 * 1024,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_COMMAND_OUTPUT_BYTES"
+        ),
+    )
+    repository_intelligence_checkout_max_path_bytes: int = Field(
+        default=1024,
+        ge=64,
+        le=4096,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_PATH_BYTES"
+        ),
+    )
+    repository_intelligence_checkout_max_depth: int = Field(
+        default=64,
+        ge=1,
+        le=256,
+        validation_alias=AliasChoices(
+            "FOUNDEROS_REPOSITORY_INTELLIGENCE_CHECKOUT_MAX_DEPTH"
+        ),
     )
 
     database_url: str = "postgresql+asyncpg://ckdos:ckdos_dev_password@localhost:5432/ckdos"

@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001 and RI-002 implemented; RI-003 is the next approval-gated slice
+Status: RI-001–RI-003 implemented; RI-004 is the next approval-gated slice
 Prepared: 2026-07-30
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
@@ -10,8 +10,9 @@ rest of FounderOS.
 Implementation update (2026-07-30): strict `repository_intelligence.v1`,
 synthetic L0/L1/L2 fixtures and contract tests are implemented under DEC-115.
 Canonical workspace-scoped synthetic L0 is implemented under DEC-116. No
-persistence model, migration, provider read, checkout, target execution, UI or
-LLM path exists yet. Preparation status remains `preparing`.
+persistence model, migration, provider portfolio read, target execution, UI or
+LLM path exists yet. Synthetic-only external exact-SHA checkout is implemented
+under DEC-117. Preparation status remains `preparing`.
 
 ## 1. Decision Summary
 
@@ -1461,6 +1462,8 @@ Done when: Focused tests, ruff, and guarded backend-check green.
 
 ### RI-003 — Safe checkout manager
 
+Status: implemented and verified on synthetic local repositories (DEC-117).
+
 ```text
 Goal: Materialize an exact repository SHA in an isolated temporary directory.
 Context: RI plan Phase 2.
@@ -1571,9 +1574,10 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: **RI-003 — safe checkout manager**. It must materialize
-an exact approved SHA outside the FounderOS tree, perform no target execution,
-expose no credentials and clean up on every exit.
+Recommended next task: **RI-004 — static collectors**. Inspect only bounded
+synthetic checkout contents for manifests, entrypoints, interfaces,
+dependencies, deployment clues, tests and documentation. Do not execute target
+code.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1581,16 +1585,16 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Implement RI-003 for FounderOS Repository Intelligence.
+Goal: Implement RI-004 for FounderOS Repository Intelligence.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
 docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
 what every repository does and the evidence-backed directional relationships
 between repositories.
-Constraints: Synthetic checkout fixtures only; new runtime data path outside
-the FounderOS tree; no target command execution, secrets, provider portfolio
-read, migration, UI or LLM mutation. Bound path, disk, time and output; cleanup
-on success, failure and cancellation. Preserve unrelated working-tree changes.
-Done when: path/SHA/cleanup/timeout/failure tests pass, no company repository is
-read or executed, and uv run ruff check . plus guarded make backend-check are
-green.
+Constraints: Static-only collectors over synthetic RI-003 checkouts; bounded
+files/bytes/depth/output; sanitized evidence for every fact; no target command
+execution, company repository read, provider call, migration, UI or LLM
+mutation. Preserve unrelated working-tree changes.
+Done when: synthetic frontend/backend/infrastructure fixtures produce
+deterministic schema-valid collector output, pathological paths stay bounded,
+and uv run ruff check . plus guarded make backend-check are green.
 ```
