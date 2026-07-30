@@ -6,17 +6,19 @@
 
 ## Сейчас — Repository Intelligence
 
-1. После отдельного approval выполнить **RI-002**: read-only
-   workspace-scoped L0 projection на synthetic canonical `Repository` и
-   `SourceRecord`; no provider call, no filesystem snapshot as product truth,
-   unknown при отсутствии evidence.
-2. Затем отдельно согласовать RI-003 safe checkout manager. Checkout не может
-   жить внутри FounderOS tree, выполнять target code или читать credentials.
+1. После отдельного approval выполнить **RI-003** safe checkout manager.
+   Checkout не может жить внутри FounderOS tree, выполнять target code или
+   читать credentials.
+2. Затем реализовать RI-004 static collectors только на synthetic repositories,
+   без выполнения fixture code.
 
 RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
 fixtures, object-shaped evidence, finite confidence, human-only resolution,
 directional relationships и contradiction validation реализованы без migration,
 persistence, UI, provider/LLM call или чтения company repositories (DEC-115).
+RI-002 завершён: workspace-scoped canonical L0 читает только `Repository` +
+active identity-matching `SourceRecord`, сохраняет unknown без evidence и не
+использует filesystem/provider fallback (DEC-116).
 Durable storage и migrations остаются RI-006 и требуют отдельного branch/PR
 approval.
 

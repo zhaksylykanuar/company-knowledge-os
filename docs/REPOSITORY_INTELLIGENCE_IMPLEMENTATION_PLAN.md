@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001 contract/fixtures implemented; RI-002 is the next approved slice
+Status: RI-001 and RI-002 implemented; RI-003 is the next approval-gated slice
 Prepared: 2026-07-30
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
@@ -9,8 +9,9 @@ rest of FounderOS.
 
 Implementation update (2026-07-30): strict `repository_intelligence.v1`,
 synthetic L0/L1/L2 fixtures and contract tests are implemented under DEC-115.
-No persistence, migration, provider read, checkout, target execution, UI or LLM
-path exists yet. Preparation status remains `preparing`.
+Canonical workspace-scoped synthetic L0 is implemented under DEC-116. No
+persistence model, migration, provider read, checkout, target execution, UI or
+LLM path exists yet. Preparation status remains `preparing`.
 
 ## 1. Decision Summary
 
@@ -1444,11 +1445,12 @@ evidence (accept); non-finite / out-of-range `confidence`; unknown status;
 analyzer output using a human-only status (reject); unknown / inverse-mismatched
 relationship type; and a preserved contradiction (both claims retained).
 
-Next-stage note: after RI-001, the next ticket is **RI-002 — canonical
-workspace-scoped L0 projection**. Durable storage and migrations are **RI-006**,
-not RI-002.
+Sequencing note: RI-002 followed RI-001 and is now complete. Durable storage
+and migrations remain **RI-006**, not part of the L0 projection.
 
 ### RI-002 — Canonical L0 projection
+
+Status: implemented and verified on synthetic canonical rows (DEC-116).
 
 ```text
 Goal: Replace filesystem-first product audit reads with workspace-scoped canonical L0.
@@ -1569,9 +1571,9 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: **RI-002 — canonical workspace-scoped L0 projection**.
-Use only synthetic canonical `Repository` and `SourceRecord` data. It remains
-read-only and performs no provider call.
+Recommended next task: **RI-003 — safe checkout manager**. It must materialize
+an exact approved SHA outside the FounderOS tree, perform no target execution,
+expose no credentials and clean up on every exit.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1579,16 +1581,16 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Implement RI-002 for FounderOS Repository Intelligence.
+Goal: Implement RI-003 for FounderOS Repository Intelligence.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
 docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
 what every repository does and the evidence-backed directional relationships
 between repositories.
-Constraints: Read-only L0 projection from synthetic canonical Repository and
-SourceRecord rows; no migration, filesystem snapshot as product truth, provider
-call, LLM mutation, checkout or target repository execution. Preserve unrelated
-working-tree changes.
-Done when: synthetic workspace-scoped L0 results validate against
-repository_intelligence.v1, missing evidence stays unknown, focused tests pass,
-and uv run ruff check . plus guarded make backend-check are green.
+Constraints: Synthetic checkout fixtures only; new runtime data path outside
+the FounderOS tree; no target command execution, secrets, provider portfolio
+read, migration, UI or LLM mutation. Bound path, disk, time and output; cleanup
+on success, failure and cancellation. Preserve unrelated working-tree changes.
+Done when: path/SHA/cleanup/timeout/failure tests pass, no company repository is
+read or executed, and uv run ruff check . plus guarded make backend-check are
+green.
 ```

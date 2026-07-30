@@ -21,8 +21,9 @@ server kill switch. Memory Control v1 реализован для FounderOS-auth
 документов с destructive correction/forgetting. Provider Credential Boundary
 v1 реализован: ключи сервисов принимаются только workspace UI, а `.env.local`
 оставлен только для bootstrap/deployment. Repository Intelligence RI-001
-реализован как strict validation-only contract на synthetic fixtures; изменения
-не опубликованы.**
+реализован как strict validation-only contract, а RI-002 как canonical
+workspace-scoped L0 projection на synthetic DB fixtures; изменения не
+опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -49,6 +50,13 @@ ledger; тексты источников и evidence не копируются.
   сохранение evidence-backed contradictions. Добавлены только synthetic
   frontend/backend/infrastructure fixtures; company repositories не читались,
   не клонировались и не выполнялись (DEC-115).
+- Реализован RI-002 canonical L0 без migration/API/UI/provider/checkout/LLM:
+  projection читает только `Repository` и active identity-matching
+  `SourceRecord` внутри exact workspace, использует SourceRecord UUID как
+  evidence, честно возвращает unavailable SHA/unknown и не использует
+  filesystem discovery, SourceEvent или legacy portfolio fallback. Purpose/type
+  остаётся insufficient evidence без allowlisted canonical candidate; archived
+  finding требует matching evidence (DEC-116).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -278,6 +286,15 @@ ledger; тексты источников и evidence не копируются.
 
 ## Проверено 2026-07-30
 
+- Repository Intelligence RI-001 + RI-002 focused suites — **47 passed**:
+  canonical synthetic frontend/backend/infrastructure L0, cross-workspace
+  isolation, missing/tombstoned/mismatched evidence, unsafe URL removal,
+  deterministic read-only execution и отсутствие filesystem/provider
+  зависимости.
+- Backend после RI-002: guarded `make backend-check` — **839 passed**;
+  `uv run ruff check .`, `uv run mypy app` (**106 source files**), frozen sync,
+  `pip-audit`, Alembic upgrade/check и tracked secret scan успешно; одно внешнее
+  Starlette/httpx deprecation-предупреждение.
 - Repository Intelligence RI-001: focused contract suite — **38 passed**;
   synthetic L0/L1/L2, strict evidence, SHA/workspace/status/relationship bounds,
   contradiction preservation, finite confidence и sanitized raw-JSON error
@@ -330,9 +347,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. После отдельного approval начать RI-002: read-only workspace-scoped L0
-   projection только на synthetic canonical `Repository`/`SourceRecord`;
-   persistence и migrations остаются RI-006.
+1. После отдельного approval начать RI-003: safe exact-SHA checkout manager
+   вне FounderOS tree, без target execution, secrets и default network.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.

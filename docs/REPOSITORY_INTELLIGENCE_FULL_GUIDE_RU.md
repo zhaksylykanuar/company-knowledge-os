@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — полное руководство по подготовке и запуску
 
-Статус: RI-001 реализован; следующий approval-gated этап — RI-002
+Статус: RI-001 и RI-002 реализованы; следующий approval-gated этап — RI-003
 Дата подготовки: 2026-07-30
 Основной проект: `company-knowledge-os`
 Подробный архитектурный план:
@@ -168,7 +168,7 @@ RI-001:
   implemented and verified on synthetic fixtures
 
 next slice:
-  RI-002 after separate approval
+  RI-003 after separate approval
 ```
 
 Это снимок состояния, а не вечная константа. Перед каждым новым тикетом агент
@@ -955,13 +955,16 @@ contradiction и invalid fixtures. Не создано:
 
 ### RI-002 — Canonical synthetic L0
 
-Создать read-only L0 projection на:
+Статус: **завершён 2026-07-30** (DEC-116).
+
+Реализован read-only L0 projection на:
 
 - synthetic `Repository`;
 - synthetic `SourceRecord`;
 - dedicated test DB.
 
-Не читать реальные connected repositories.
+Он не читает реальные connected repositories, filesystem discovery,
+SourceEvent/legacy catalog и provider API.
 
 ### RI-003 — Safe checkout manager
 
@@ -1589,30 +1592,32 @@ npm run build
 ## 26. Готовый промпт следующему агенту
 
 ```text
-Goal: Implement RI-002 — canonical synthetic L0 Repository Intelligence.
+Goal: Implement RI-003 — safe Repository Intelligence checkout manager.
 
 Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
 
 Constraints:
-- Only RI-002.
-- Reuse the implemented repository_intelligence.v1 contract.
-- Read only synthetic canonical Repository and SourceRecord rows in a dedicated test database.
-- Preserve workspace isolation, stable repository identity, evidence and explicit unknown states.
-- No migration, persistence model, filesystem snapshot as product truth, UI, checkout implementation, provider calls, LLM calls, or target repository reads.
+- Only RI-003.
+- Use only synthetic repository fixtures.
+- Add a dedicated runtime data path outside the FounderOS repository tree.
+- Materialize only an exact approved SHA.
+- Do not execute target repository commands or expose FounderOS credentials.
+- Bound path, time, disk and output and clean up on every exit.
+- No migration, persistence model, UI, portfolio provider read or LLM call.
 - Do not touch .env.local, .local, credentials, company data or existing connections.
 - Update PROGRESS.md, docs/TODO.md, and docs/CHANGELOG.md.
 - Nothing may be pushed.
 
 Done when:
-- Synthetic canonical frontend/backend/infrastructure rows produce schema-valid workspace-scoped L0 results.
-- Missing evidence returns unknown or insufficient_evidence instead of a guess.
-- The existing filesystem-first repo audit is not promoted to product truth.
+- Synthetic path, exact-SHA, cleanup, timeout and failure tests pass.
+- Checkout cannot resolve inside the FounderOS repository tree.
+- No fixture code is executed.
 - git diff --check passes.
 - Staged and tracked secret scans pass.
 - uv run ruff check . passes.
 - Guarded make backend-check passes against an explicit test-marked PostgreSQL URL, or DB-backed checks are honestly reported blocked.
-- A scoped local RI-002 commit is created.
-- Report the result and wait for approval before RI-003.
+- A scoped local RI-003 commit is created.
+- Report the result and wait for approval before RI-004.
 ```
 
 ## 27. Краткий финальный checklist
@@ -1624,7 +1629,9 @@ Done when:
 - [x] сохранить RI handoff docs;
 - [x] реализовать RI-001 только на synthetic fixtures;
 - [x] зафиксировать DEC-115;
-- [ ] начать RI-002 только после отдельного approval.
+- [x] реализовать RI-002 только на synthetic canonical rows;
+- [x] зафиксировать DEC-116;
+- [ ] начать RI-003 только после отдельного approval.
 
 ### Во время подготовки
 

@@ -3679,6 +3679,38 @@ migration, API or UI. The next bounded slice is RI-002: a read-only,
 workspace-scoped L0 projection from synthetic canonical Repository and
 SourceRecord data. Durable storage remains RI-006.
 
+## DEC-116 - Repository Intelligence L0 Reads Canonical Workspace Rows Only
+
+Decision (2026-07-30): RI-002 is a read-only projection over canonical
+`Repository` rows and active repository `SourceRecord` rows for one explicit
+workspace. The SQL join includes workspace, provider, external ID, record type
+and active-state predicates. A workspace-scoped RI read never falls back to
+filesystem discovery, retained legacy `SourceEvent`, the static repository
+portfolio or a provider call. An empty canonical workspace returns an empty
+result rather than unrelated compatibility data.
+
+L0 validates the joined SourceRecord again before using it as evidence:
+`normalized_repository.external_id` and `full_name` must match the canonical
+Repository identity exactly. Tombstoned, malformed or identity-mismatched
+records are ignored. Evidence uses the SourceRecord UUID through the RI-001
+`evidence_ref.v1` contract. Unsafe or credential-bearing URLs are removed rather
+than copied into the result.
+
+The current canonical Repository model has no exact commit SHA, so every RI-002
+result uses `target_status=unavailable` and explicitly records exact SHA as an
+unknown. Repository purpose is not inferred from a name. It remains
+`insufficient_evidence` unless identity-matching canonical SourceRecord metadata
+contains an allowlisted `repository_type_candidate`; that candidate is labelled
+`inferred`, never confirmed. The only L0 lifecycle finding currently emitted is
+an archived-repository fact, and it requires matching canonical evidence.
+
+RI-002 makes no database write and adds no migration, API, UI, checkout,
+provider network path, LLM call or target execution. It is verified only with
+synthetic frontend, backend and infrastructure rows in the dedicated test
+database, including cross-workspace, tombstone, identity mismatch, unsafe URL,
+unknown-state, deterministic and no-mutation tests. The next bounded slice is
+RI-003 safe checkout management, which still requires separate approval.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

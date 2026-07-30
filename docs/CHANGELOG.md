@@ -12,6 +12,14 @@
   fixtures plus invalid contract fixtures and focused tests. This slice adds no
   persistence, migration, UI, provider/LLM call, repository checkout or company
   repository read/execution.
+- Added RI-002 canonical L0 projection (DEC-116): exact workspace-scoped
+  Repository/active SourceRecord joins, SourceRecord-backed evidence, explicit
+  unavailable-SHA and unknown states, bounded repository-type candidates and
+  the first evidence-backed archived-repository finding.
+- Added synthetic database tests for frontend/backend/infrastructure L0,
+  cross-workspace isolation, missing/tombstoned/mismatched evidence, unsafe URL
+  removal, deterministic output and zero database mutation. No filesystem
+  discovery, provider call, checkout, migration, UI or LLM path was added.
 
 ### Changed
 
