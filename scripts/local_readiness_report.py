@@ -14,7 +14,6 @@ responses, or internal IDs.
 
 Usage:
     uv run python scripts/local_readiness_report.py [--json]
-        [--repos-file .local/repos.json]
 """
 
 from __future__ import annotations
@@ -30,16 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.services.github_connection_service import (  # noqa: E402
-    GITHUB_APP_CONNECTION_METHOD,
-    github_app_config_status,
-    github_app_real_read_run_readiness,
-)
 from app.services.mvp_completion_audit import run_mvp_completion_audit  # noqa: E402
-from scripts.github_app_real_read_run_preflight import (  # noqa: E402
-    DEFAULT_REPOS_FILE,
-    _count_local_repositories,
-)
 
 
 def _run_git(root: Path, args: list[str]) -> str | None:
@@ -74,47 +64,13 @@ def _git_state(root: Path) -> dict[str, Any]:
     }
 
 
-def _github_real_read_preflight(repos_file: Path) -> dict[str, Any]:
-    local_repository_count = _count_local_repositories(repos_file)
-    connection_status = {
-        "has_connection_record": False,
-        "connection_method": GITHUB_APP_CONNECTION_METHOD,
-        "status": None,
-    }
-    readiness = github_app_real_read_run_readiness(
-        connection_status=connection_status,
-        local_repository_count=local_repository_count,
-    )
-    app_config = github_app_config_status()
-    return {
-        "offline": True,
-        "provider_read_started": False,
-        "provider_writes_enabled": False,
-        "requires_human_approval": True,
-        "app_env_configured": app_config["configured"],
-        "app_missing_env": list(app_config["missing_env"]),
-        "local_repository_count": local_repository_count,
-        "installation_connection_checked_offline": False,
-        "readiness": readiness,
-    }
-
-
 def build_local_readiness_report(
     *,
     root: Path | str | None = None,
-    repos_file: Path | str | None = None,
 ) -> dict[str, Any]:
     resolved_root = Path(root).resolve() if root is not None else ROOT
-    resolved_repos_file = (
-        Path(repos_file)
-        if repos_file is not None
-        else resolved_root / DEFAULT_REPOS_FILE
-    )
-    if not resolved_repos_file.is_absolute():
-        resolved_repos_file = resolved_root / resolved_repos_file
 
     mvp_audit = run_mvp_completion_audit(root=resolved_root).to_dict()
-    github_preflight = _github_real_read_preflight(resolved_repos_file)
     git_state = _git_state(resolved_root)
     return {
         "check": "local_runtime_readiness",
@@ -123,8 +79,8 @@ def build_local_readiness_report(
         "provider_writes": False,
         "local_runtime_started": False,
         "external_write_started": False,
-        "env_configuration_loaded": True,
-        "secret_presence_checked": True,
+        "env_configuration_loaded": False,
+        "secret_presence_checked": False,
         "secret_values_emitted": False,
         "referenced_credential_files_read": False,
         "git": git_state,
@@ -142,13 +98,18 @@ def build_local_readiness_report(
             "summary": mvp_audit["summary"],
             "human_gated_next_steps": mvp_audit["human_gated_next_steps"],
         },
-        "github_real_read_preflight": github_preflight,
+        "provider_configuration": {
+            "source_of_truth": "workspace_settings_ui",
+            "checked_offline": False,
+            "provider_calls_started": False,
+            "next_step": "Open Settings → Integrations and use the in-product checks.",
+        },
         "recommended_handoff_order": [
             "Review the exact local git snapshot before changing runtime state.",
             "Start and verify the local stack through docs/operations/local-runtime.md.",
             "Run read-only local smoke via make local-smoke.",
-            "Configure GitHub App credentials and installation connection.",
-            "Run one explicit scoped GitHub App read sync after approval.",
+            "Configure and verify provider connections in Settings → Integrations.",
+            "Run one explicit scoped provider read after approval.",
             "Run docs/deploy/external-action-result-smoke.md for one approved external action result.",
         ],
     }
@@ -157,8 +118,6 @@ def build_local_readiness_report(
 def _print_human(report: dict[str, Any]) -> None:
     git_state = report["git"]
     mvp = report["mvp_audit"]
-    github = report["github_real_read_preflight"]
-    github_readiness = github["readiness"]
     print("FounderOS local runtime readiness (offline, read-only)")
     print(f"  branch: {git_state['branch_line']}")
     print(f"  commit: {git_state['commit']}")
@@ -170,12 +129,7 @@ def _print_human(report: dict[str, Any]) -> None:
     )
     print(f"  runtime acceptance assessed: {mvp['runtime_acceptance_assessed']}")
     print(f"  full MVP complete: {mvp['fully_complete']}")
-    print(f"  GitHub real-read status: {github_readiness['status']}")
-    if github["app_missing_env"]:
-        print(f"  missing GitHub App env names: {', '.join(github['app_missing_env'])}")
-    print(f"  local repository surface count: {github['local_repository_count']}")
-    if github_readiness["blockers"]:
-        print(f"  GitHub real-read blockers: {', '.join(github_readiness['blockers'])}")
+    print("  provider settings: check in Settings → Integrations")
     print("  recommended readiness order:")
     for index, step in enumerate(report["recommended_handoff_order"], start=1):
         print(f"    {index}. {step}")
@@ -185,14 +139,9 @@ def _print_human(report: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="Emit JSON output.")
-    parser.add_argument(
-        "--repos-file",
-        default=DEFAULT_REPOS_FILE,
-        help="Path to the offline local repository surface JSON file.",
-    )
     args = parser.parse_args()
 
-    report = build_local_readiness_report(repos_file=args.repos_file)
+    report = build_local_readiness_report()
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:

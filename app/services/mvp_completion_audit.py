@@ -118,7 +118,7 @@ _MVP_REQUIREMENT_ITEMS: tuple[AuditItem, ...] = (
         requirement="GitHub connector",
         category="mvp_requirement",
         evidence=(
-            EvidenceCheck("app/api/github.py", "/connections/app-installation"),
+            EvidenceCheck("app/api/github.py", "/app-setup/manifest"),
             EvidenceCheck("web/app/settings/integrations/github/page.tsx"),
         ),
     ),
@@ -329,7 +329,7 @@ _MAIN_FLOW_ITEMS: tuple[AuditItem, ...] = (
         requirement="Connect GitHub",
         category="main_flow",
         evidence=(
-            EvidenceCheck("app/api/github.py", "/connections/app-installation"),
+            EvidenceCheck("app/api/github.py", "/app-setup/manifest"),
         ),
         human_gated=True,
         human_note=(

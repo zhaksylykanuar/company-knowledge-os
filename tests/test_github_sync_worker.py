@@ -25,6 +25,7 @@ from app.services.github_app_live_sync_service import (
     GitHubAppProviderContext,
     GitHubRepositoryBatch,
 )
+from app.services.github_app_credential_service import GitHubAppSigningCredential
 from app.services.github_sync_job_service import (
     request_github_sync_job_cancellation,
 )
@@ -183,7 +184,10 @@ def _prepared(
         include_pull_requests=False,
         issue_states=("open", "closed"),
         pull_request_states=("open", "closed", "merged"),
-        credential=None,
+        credential=GitHubAppSigningCredential(
+            app_id="123",
+            private_key_pem="test-signing-key",
+        ),
     )
 
 

@@ -34,8 +34,10 @@ Command Center documentation is not part of the active set.
 | What should be built next? | [`../PROGRESS.md`](../PROGRESS.md), then [`TODO.md`](TODO.md) |
 | How is the AI-first product reset verified? | [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
+| How should FounderOS learn what every repository does and how repositories relate? | [`REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md`](REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md) |
 | How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
 | How do we recover after loss of the FounderOS machine? | [`operations/disaster-recovery.md`](operations/disaster-recovery.md) |
+| Where do secrets and runtime settings belong? | [`operations/secrets-and-environment.md`](operations/secrets-and-environment.md) |
 | How are connector credentials saved and verified in the product? | [`integrations-control-center.md`](integrations-control-center.md) |
 | How do we prove a bounded provider read or external action? | [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) and [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) |
 
@@ -48,7 +50,10 @@ Command Center documentation is not part of the active set.
 - [`operations/disaster-recovery.md`](operations/disaster-recovery.md) -
   encrypted independent copy, restore drills, recovery objectives, retention,
   and explicit human-operated boundaries.
-- [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook; managed `/settings/integrations/github` setup is primary and legacy env/manual preflight is compatibility-only.
+- [`operations/secrets-and-environment.md`](operations/secrets-and-environment.md) -
+  the single `.env.local` bootstrap boundary and the encrypted, UI-only
+  provider credential lifecycle.
+- [`deploy/github-app-first-real-read-run.md`](deploy/github-app-first-real-read-run.md) - human-approved first-read runbook through the managed `/settings/integrations/github` flow.
 - [`deploy/external-action-result-smoke.md`](deploy/external-action-result-smoke.md) - manual, human-approved, one-action write smoke for proving the final "Approve Action Proposal -> See External Action Result" MVP step after local acceptance and read-only provider proof.
 - `make local-readiness` is the sanitized repository-evidence report;
   `make release-handoff` and `scripts/private_beta_release_handoff.py` remain

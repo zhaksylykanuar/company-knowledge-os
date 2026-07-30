@@ -537,8 +537,8 @@ export const M = {
     realReadStatusDescription: "Можно ли запускать отдельный human-approved scoped read.",
     realReadReady: "Готово",
     realReadBlocked: "Заблокировано",
-    realReadEnvTitle: "GitHub App env",
-    realReadEnvDescription: "Показываются только имена отсутствующих env-полей, без значений секретов.",
+    realReadEnvTitle: "GitHub App",
+    realReadEnvDescription: "Подключение создаётся и проверяется только внутри FounderOS.",
     realReadInstallationTitle: "Installation connection",
     realReadInstallationDescription:
       "Workspace должен иметь connected GitHub App installation record.",
@@ -546,13 +546,13 @@ export const M = {
     realReadRepoSurfaceDescription:
       "Нужен минимум один локальный repo target перед scoped read sync.",
     realReadBlockersTitle: "Блокеры",
-    realReadBlockerEnv: "GitHub App env incomplete",
+    realReadBlockerEnv: "GitHub App не подключён",
     realReadBlockerConnectionMissing: "Installation connection missing",
     realReadBlockerConnectionNotConnected: "Installation connection not connected",
     realReadBlockerReposEmpty: "Local repository surface empty",
     realReadBoundary:
       "Даже когда статус готов, запуск остаётся отдельным explicit action по одному выбранному репозиторию.",
-    missingEnvTitle: "Не хватает server-side env-полей",
+    missingEnvTitle: "Настройка GitHub App не завершена",
     openSetup: "Подключить GitHub App",
     openSetupSettings: "Открыть настройки GitHub App",
     liveSyncTitle: "Живая read-only синхронизация",
@@ -1386,14 +1386,14 @@ export const T = {
     return `Прочитано: репозиториев — ${repos}, задач — ${issues}, пулреквестов — ${prs}. Статус: ${statusLabel}.`;
   },
   githubRealReadNextStep: (
-    appEnvConfigured: boolean,
+    appConfigured: boolean,
     hasAppInstallationConnection: boolean,
     installationConnected: boolean,
     localRepositorySurfaceAvailable: boolean,
     ready: boolean
   ) => {
-    if (!appEnvConfigured) {
-      return "Следующий шаг: настроить server-side GitHub App env (app id, slug/setup url, private key) до real read.";
+    if (!appConfigured) {
+      return "Следующий шаг: подключить GitHub App в настройках FounderOS.";
     }
     if (!hasAppInstallationConnection) {
       return "Следующий шаг: записать workspace-scoped GitHub App installation connection до real read.";

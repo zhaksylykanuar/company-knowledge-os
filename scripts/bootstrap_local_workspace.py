@@ -334,16 +334,7 @@ def bootstrap_local_workspace(
         paths.env_local_path.read_text(encoding="utf-8") if paths.env_local_path.exists() else ""
     )
     validate_managed_block_structure(existing_text)
-    base_env_path = paths.repo_root / ".env"
-    base_env_values = (
-        parse_env_values(base_env_path.read_text(encoding="utf-8"))
-        if base_env_path.exists()
-        else {}
-    )
-    # Match Settings' effective file order: .env.local overrides .env. This is
-    # essential for promoting the legacy API_AUTH_KEY that may live only in
-    # .env into a stable dedicated encryption key on first bootstrap.
-    existing_values = {**base_env_values, **parse_env_values(existing_text)}
+    existing_values = parse_env_values(existing_text)
     old_vault_path = existing_values.get("FOUNDEROS_OBSIDIAN_VAULT_PATH")
     managed_values = managed_env_values(existing_values, paths)
     new_env_text = update_env_local_text(existing_text, managed_values)

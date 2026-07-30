@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
@@ -15,7 +12,7 @@ from app.db.identity_models import Membership, User, UserSession, Workspace
 from app.main import app
 from app.services.identity_service import get_user_by_email
 from app.services.password_service import verify_password
-from scripts.create_admin_user import provision_admin_user
+from tests.identity_factory import provision_test_owner
 
 OLD_PASSWORD = "old-founder-pw"
 NEW_PASSWORD = "new-founder-pw"
@@ -27,7 +24,7 @@ def _client() -> AsyncClient:
 
 async def _provision(email: str, password: str) -> dict:
     async with AsyncSessionLocal() as session:
-        result = await provision_admin_user(
+        result = await provision_test_owner(
             session, email=email, password=password, name="Founder"
         )
         await session.commit()
@@ -80,24 +77,6 @@ async def test_provision_admin_creates_user_workspace_membership_idempotently() 
         assert verify_password("pw-1", user.password_hash) is False
     finally:
         await _cleanup(email)
-
-
-def test_create_admin_user_script_runs_from_repo_root_without_pythonpath() -> None:
-    env = os.environ.copy()
-    env.pop("FOUNDEROS_ADMIN_EMAIL", None)
-    env.pop("FOUNDEROS_ADMIN_PASSWORD", None)
-
-    result = subprocess.run(
-        [sys.executable, "scripts/create_admin_user.py"],
-        check=False,
-        capture_output=True,
-        env=env,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert "FOUNDEROS_ADMIN_EMAIL and FOUNDEROS_ADMIN_PASSWORD" in result.stdout
-    assert "ModuleNotFoundError" not in result.stderr
 
 
 async def test_change_password_rejects_wrong_current_and_accepts_correct() -> None:

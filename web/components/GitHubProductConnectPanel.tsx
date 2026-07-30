@@ -42,7 +42,7 @@ type RepositorySyncStatus = {
   state: LiveSyncState;
 };
 type GitHubRealReadReadiness = {
-  appEnvConfigured: boolean;
+  appConfigured: boolean;
   blockers: string[];
   hasAppInstallationConnection: boolean;
   installationConnected: boolean;
@@ -536,7 +536,6 @@ export function GitHubProductConnectPanelView({
         <GitHubSafetyDetails
           connectionStatus={connectionStatus}
           repositories={repositories}
-          selfServiceSetupEnabled={selfServiceSetupEnabled}
         />
       </section>
     );
@@ -702,7 +701,6 @@ export function GitHubProductConnectPanelView({
       <GitHubSafetyDetails
         connectionStatus={connectionStatus}
         repositories={repositories}
-        selfServiceSetupEnabled={selfServiceSetupEnabled}
       />
     </section>
   );
@@ -723,12 +721,10 @@ function GitHubMark() {
 
 function GitHubSafetyDetails({
   connectionStatus,
-  repositories,
-  selfServiceSetupEnabled
+  repositories
 }: {
   connectionStatus: GitHubConnectionStatusResponse;
   repositories: GitHubRepositoryListResponse | null;
-  selfServiceSetupEnabled: boolean;
 }) {
   const warnings = [
     ...connectionStatus.warnings,
@@ -761,17 +757,6 @@ function GitHubSafetyDetails({
             <dd>{repositories?.source ?? M.common.unknown}</dd>
           </div>
         </dl>
-        {!selfServiceSetupEnabled &&
-        connectionStatus.app.missing_env.length > 0 ? (
-          <div className="github-source__technical-note">
-            <strong>{M.githubProductConnect.missingEnvTitle}</strong>
-            <ul>
-              {connectionStatus.app.missing_env.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
         {warnings.length > 0 ? (
           <div className="github-source__technical-note">
             <strong>{M.common.warnings}</strong>
@@ -937,7 +922,7 @@ function summarizeGitHubRealReadReadiness(
   connectionStatus: GitHubConnectionStatusResponse,
   repositories: GitHubRepositoryListResponse | null
 ): GitHubRealReadReadiness {
-  const appEnvConfigured = connectionStatus.app.configured;
+  const appConfigured = connectionStatus.app.configured;
   const hasAppInstallationConnection = Boolean(
     connectionStatus.connection_id &&
       connectionStatus.has_connection_record &&
@@ -949,8 +934,8 @@ function summarizeGitHubRealReadReadiness(
   const localRepositorySurfaceAvailable = localRepositoryCount > 0;
 
   const blockers: string[] = [];
-  if (!appEnvConfigured) {
-    blockers.push("github_app_env_incomplete");
+  if (!appConfigured) {
+    blockers.push("github_app_not_configured");
   }
   if (!hasAppInstallationConnection) {
     blockers.push("github_app_installation_connection_missing");
@@ -963,14 +948,14 @@ function summarizeGitHubRealReadReadiness(
 
   const ready = blockers.length === 0;
   return {
-    appEnvConfigured,
+    appConfigured,
     blockers,
     hasAppInstallationConnection,
     installationConnected,
     localRepositoryCount,
     localRepositorySurfaceAvailable,
     nextStep: T.githubRealReadNextStep(
-      appEnvConfigured,
+      appConfigured,
       hasAppInstallationConnection,
       installationConnected,
       localRepositorySurfaceAvailable,

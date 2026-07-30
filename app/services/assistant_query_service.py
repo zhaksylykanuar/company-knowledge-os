@@ -1,9 +1,9 @@
 """Bounded read-only assistant over the exact Headquarters snapshot.
 
-The default path is deterministic. When the explicit LLM gate and server-side
-key are present, a strict provider path reasons only over sanitized evidence
-facts and is rejected unless every section resolves to the current snapshot.
-Neither path persists chat or invokes a mutation service.
+The default path is deterministic. When the explicit LLM gate and a verified
+workspace AI configuration are present, a strict provider path reasons only
+over sanitized evidence facts and is rejected unless every section resolves to
+the current snapshot. Neither path persists chat or invokes a mutation service.
 """
 
 from __future__ import annotations

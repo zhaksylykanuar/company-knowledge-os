@@ -91,8 +91,7 @@ The app uses invite-only founder enrollment and email+password server sessions:
   (`POST /api/v1/auth/change-password`), not an operator-key/owner-email config
   page. `make local` opens returning login or performs the private first-founder
   browser handoff. `scripts/create_founder_invite.py` is a manual fallback and
-  `scripts/create_admin_user.py` remains a local/operator recovery path (see the
-  root README).
+  there is no password-through-env recovery path.
 - Teammate setup uses the same fragment-only `/setup-password#token=...`
   contract. An owner/admin never chooses the teammate's password: a brand-new
   account gets one setup link in the response, while `initial_password` is

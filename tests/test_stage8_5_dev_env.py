@@ -18,10 +18,8 @@ from app.services.browser_config import (
 # External secrets that must NEVER reach the browser dev config. Sentinel
 # values (deliberately NOT key-shaped, so the staged-secret scan stays quiet).
 _SECRET_FIELDS = {
-    "openai_api_key": "LEAKED-OPENAI-VALUE-must-not-surface",
     "api_auth_key": "LEAKED-API-AUTH-VALUE-must-not-surface",
     "secret_encryption_key": "LEAKED-ENCRYPTION-VALUE-must-not-surface",
-    "github_app_webhook_secret": "LEAKED-GITHUB-SECRET-value",
 }
 _FORBIDDEN = (
     "leaked-openai",

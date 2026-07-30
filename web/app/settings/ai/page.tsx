@@ -146,7 +146,7 @@ export default function AISettingsPage() {
       <PageHeader
         eyebrow="Настройки · AI"
         title="Второе мнение"
-        description="Подключите модель, проверьте доступ и управляйте тем, когда данные компании могут покинуть FounderOS."
+        description="Ключ OpenAI хранится только в настройках компании: сохраните его, отдельно проверьте доступ и управляйте передачей данных."
       />
 
       {status === "loading" ? <p className="state loading">Загружаю настройки…</p> : null}

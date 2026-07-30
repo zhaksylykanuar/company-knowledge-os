@@ -2544,12 +2544,6 @@ async def test_session_auth_path_does_not_read_secrets_or_call_provider_clients(
     monkeypatch.setattr(settings, "enable_llm", True)
     monkeypatch.setattr(settings, "enable_real_connectors", True)
     monkeypatch.setattr(settings, "enable_write_actions", True)
-    monkeypatch.setattr(settings, "openai_api_key", f"openai-secret-{marker}")
-    monkeypatch.setattr(
-        settings,
-        "github_app_private_key",
-        SecretStr(f"github-private-key-{marker}"),
-    )
     monkeypatch.setattr(
         settings,
         "secret_encryption_key",

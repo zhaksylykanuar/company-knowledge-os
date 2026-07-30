@@ -36,59 +36,22 @@ def test_api_auth_config_defaults_are_non_breaking() -> None:
     assert Settings.model_fields["api_auth_enabled"].default is False
     assert Settings.model_fields["api_auth_key"].default is None
     assert Settings.model_fields["api_auth_header_name"].default == "X-FounderOS-API-Key"
-    assert Settings.model_fields["openai_api_key"].default is None
-    assert Settings.model_fields["github_app_id"].default is None
-    assert Settings.model_fields["github_app_private_key"].default is None
-    assert Settings.model_fields["github_app_webhook_secret"].default is None
 
 
-def test_settings_accepts_github_app_env_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FOUNDEROS_GITHUB_APP_ID", "12345")
-    monkeypatch.setenv("FOUNDEROS_GITHUB_APP_SLUG", "founderos-test")
-    monkeypatch.setenv("FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH", "/tmp/github-app.pem")
-    monkeypatch.setenv("FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET", "test-webhook-secret")
-    monkeypatch.setenv(
-        "FOUNDEROS_GITHUB_APP_SETUP_URL",
-        "https://github.com/apps/founderos-test/installations/new",
-    )
-
-    config = Settings(_env_file=None)
-
-    assert config.github_app_id == "12345"
-    assert config.github_app_slug == "founderos-test"
-    assert config.github_app_private_key_path == "/tmp/github-app.pem"
-    assert isinstance(config.github_app_webhook_secret, SecretStr)
-    assert (
-        config.github_app_webhook_secret.get_secret_value()
-        == "test-webhook-secret"
-    )
-    assert (
-        config.github_app_setup_url
-        == "https://github.com/apps/founderos-test/installations/new"
-    )
-
-
-def test_settings_accepts_fos_openai_api_key_alias(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.setenv("FOS_OPENAI_API_KEY", "test-fos-openai-key")
-
-    config = Settings(_env_file=None)
-
-    assert isinstance(config.openai_api_key, SecretStr)
-    assert config.openai_api_key.get_secret_value() == "test-fos-openai-key"
-    assert "test-fos-openai-key" not in repr(config)
-
-
-def test_settings_prefers_standard_openai_api_key_alias(
+def test_provider_credentials_are_not_runtime_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
-    monkeypatch.setenv("FOS_OPENAI_API_KEY", "test-fos-openai-key")
+    monkeypatch.setenv("FOUNDEROS_GITHUB_APP_ID", "12345")
+    monkeypatch.setenv("FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET", "test-webhook-secret")
 
     config = Settings(_env_file=None)
 
-    assert isinstance(config.openai_api_key, SecretStr)
-    assert config.openai_api_key.get_secret_value() == "test-openai-key"
+    assert "openai_api_key" not in Settings.model_fields
+    assert "github_app_id" not in Settings.model_fields
+    assert "github_app_webhook_secret" not in Settings.model_fields
+    assert "test-openai-key" not in repr(config)
+    assert "test-webhook-secret" not in repr(config)
 
 
 def test_dependency_allows_when_auth_disabled() -> None:

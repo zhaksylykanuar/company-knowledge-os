@@ -44,7 +44,7 @@ Read in this order (control trio = what / where / why):
   state are protected; temporary OAuth/installation tokens are not persisted.
   Connected owners/admins can revise the repository subset through the same UI
   without interrupting the saved selection before an atomic save; managed
-  connections never fall back to legacy env authorization when their durable
+  connections never fall back to environment authorization when their durable
   credential/installation relation is missing.
   Mocked synced-evidence isolation for Company Brain/Briefings and safe
   rate-limit/error observability are covered. Real GitHub completion and the
@@ -83,6 +83,12 @@ one-time invite handoff intentionally use the exact IPv4 loopback address.
 Existing founders return through `/login`; an
 empty local database opens the private first-founder enrollment path without
 printing its bearer token.
+
+The only local runtime file is `.env.local` at the repository root. It is
+generated/maintained by the local bootstrap and is not committed. OpenAI,
+GitHub, Jira, Gmail and Drive credentials do not belong there: enter and verify
+them in `/settings/ai` or `/settings/integrations`. See
+[`docs/operations/secrets-and-environment.md`](docs/operations/secrets-and-environment.md).
 
 Run `make local-liveness-smoke` for the public liveness gate. Authenticated
 session, workspace and browser gates are deliberately separate:
@@ -127,21 +133,6 @@ the same generic response:
 UV_NO_SYNC=1 uv run python scripts/revoke_founder_invite.py \
   --invite-id <invite-uuid>
 ```
-
-For local recovery or an existing installation, the legacy idempotent operator
-command remains available. It bypasses the guided invite screen and should not
-be treated as the normal product onboarding path:
-
-```bash
-FOUNDEROS_ADMIN_EMAIL=founder@example.com \
-FOUNDEROS_ADMIN_PASSWORD='<chosen-password>' \
-UV_NO_SYNC=1 uv run python scripts/create_admin_user.py
-```
-
-Optional recovery values: `FOUNDEROS_ADMIN_NAME`,
-`FOUNDEROS_ADMIN_WORKSPACE_NAME`, `FOUNDEROS_ADMIN_WORKSPACE_SLUG`. Existing
-founders return through `/login`; accounts with several companies must choose
-the company explicitly.
 
 The operator API key and the `/api/v1/workspaces/bootstrap` endpoint remain for
 machine/CI/admin tooling only; they are not part of the founder browser login.
@@ -189,19 +180,6 @@ This writes `.local/discovery/github/local-repos-current/raw/repos.json` and
 provider calls, stores no tokens/secrets, and keeps provider writes disabled by
 default.
 
-For a local logged-in workspace, promote that same organization repo snapshot
-into canonical repository rows so the GitHub integration can use it before
-falling back to retained source events or legacy seed data:
-
-```bash
-uv run python scripts/ingest_local_org_repositories.py \
-  --owner-email founder@example.com
-```
-
-If `--org` is omitted, the script reads the non-secret
-`FOS_GITHUB_TARGET_ORG` value from the environment, `.env.local`, then `.env`.
-It is idempotent, offline-only, and never reads or prints GitHub tokens.
-
 ## Human-gated external operations
 
 The first real GitHub App read and the final external-action-result smoke remain
@@ -210,21 +188,24 @@ separate human-approved gates. Normal GitHub setup now starts in
 explicit repository-scoped action and does not require a terminal env toggle.
 Local startup itself never starts a provider read, external write, or LLM
 execution. Asking FounderOS uses the deterministic exact-snapshot path unless
-the LLM feature gate, server-only key and provider-data-policy acknowledgement
-are all configured. Even then the path is read-only, sends only bounded
+the LLM feature gate and a checked workspace AI configuration with explicit
+provider-data-policy acknowledgement are all active. Even then the path is
+read-only, sends only bounded
 normalized facts, requests `store=false` and falls back locally on any provider
-or evidence-validation failure. Env/manual GitHub setup remains a compatibility
-path, not the normal onboarding flow.
+or evidence-validation failure. Provider credentials and GitHub App setup are
+workspace-owned product settings with no environment fallback.
 See
 [`docs/deploy/github-app-first-real-read-run.md`](docs/deploy/github-app-first-real-read-run.md)
 and
 [`docs/deploy/external-action-result-smoke.md`](docs/deploy/external-action-result-smoke.md).
 
-Use `.env.example` only as a placeholder template. Never commit real env files,
-provider credentials, API keys, encrypted secrets, raw storage, local database
-archives, or operator outputs. Moving to local operation also does not authorize
-stopping or deleting an older hosted service; restore proof and a separate
-explicit human approval are required for every external retirement phase.
+Use `.env.example` only as a bootstrap/deployment placeholder reference. The
+application loads `.env.local`, not a second `.env` file. Never commit local env
+files, provider credentials, API keys, encrypted secrets, raw storage, local
+database archives, or operator outputs. Moving to local operation also does not
+authorize stopping or deleting an older hosted service; restore proof and a
+separate explicit human approval are required for every external retirement
+phase.
 
 ## Development & CI
 

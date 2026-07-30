@@ -12,7 +12,6 @@ from pydantic import SecretStr
 from sqlalchemy import delete, func, select
 
 from app.api.auth import settings
-from app.core.config import Settings
 from app.db.base import AsyncSessionLocal
 from app.db.briefing_models import Briefing, BriefingItem
 from app.db.canonical_models import EvidenceRef, PullRequest, Repository, SourceRecord, Task
@@ -40,6 +39,7 @@ from app.services.github_app_token_service import (
 )
 from app.services.github_repository_client import GitHubRepositoryClientError
 from app.services.github_sync_worker_service import process_one_github_sync_job
+from app.services.secret_encryption import encrypt_secret
 from app.services.session_service import create_session
 
 
@@ -201,61 +201,44 @@ async def _cleanup_fixture(marker: str) -> None:
         await session.commit()
 
 
-async def _create_app_connection(
+async def _create_unverified_app_connection(
     workspace_id: str,
-    marker: str,
-    *,
-    operator_verified: bool = True,
 ) -> dict:
-    async with _async_client() as client:
-        response = await client.post(
-            f"/api/v1/workspaces/{workspace_id}/github/connections/app-installation",
-            headers=_headers(),
-            params={"owner_email": _bootstrap_payload(marker)["owner_email"]},
-            json={
+    async with AsyncSessionLocal() as session:
+        connection = IntegrationConnection(
+            workspace_id=UUID(workspace_id),
+            provider="github",
+            status="connected",
+            display_name="Unverified GitHub App",
+            external_account_id="github_app_installation:98765",
+            scopes=["github_app_installation"],
+            provider_metadata={
+                "connection_method": "github_app_installation",
                 "installation_id": "98765",
-                "account_login": "qtwin-io",
-                "repository_selection": "selected",
+                "installation_verified": False,
+                "provider_reads_enabled": False,
+                "provider_writes_enabled": False,
                 "selected_repositories": [
                     {"full_name": "qtwin-io/company-knowledge-os"}
                 ],
             },
         )
-    assert response.status_code == 200, response.text
-    connection = response.json()["connection"]
-    if operator_verified:
-        async with AsyncSessionLocal() as session:
-            stored = await session.get(
-                IntegrationConnection,
-                UUID(connection["id"]),
-            )
-            assert stored is not None
-            stored.provider_metadata = {
-                **stored.provider_metadata,
-                "installation_verified": True,
-            }
-            await session.commit()
-    return connection
+        session.add(connection)
+        await session.commit()
+        return {"id": str(connection.id)}
 
 
 async def _create_managed_app_connection(workspace_id: str, marker: str) -> dict:
-    connection = await _create_app_connection(
-        workspace_id,
-        marker,
-        operator_verified=False,
-    )
     workspace_uuid = UUID(workspace_id)
     async with AsyncSessionLocal() as session:
-        stored = await session.get(IntegrationConnection, UUID(connection["id"]))
-        assert stored is not None
         credential = GitHubAppCredential(
             workspace_id=workspace_uuid,
             app_id=f"managed-{marker}",
             app_slug=f"founderos-managed-{marker}",
             app_name="FounderOS managed test app",
             client_id=f"client-{marker}",
-            encrypted_private_key="encrypted-managed-private-key",
-            encrypted_client_secret="encrypted-managed-client-secret",
+            encrypted_private_key=encrypt_secret("managed-test-private-key"),
+            encrypted_client_secret=encrypt_secret("managed-test-client-secret"),
             callback_url="http://127.0.0.1:3000/api/v1/github/app-setup/oauth/callback",
             source="manifest",
             status=GITHUB_APP_CREDENTIAL_STATUS_ACTIVE,
@@ -263,18 +246,33 @@ async def _create_managed_app_connection(workspace_id: str, marker: str) -> dict
         )
         session.add(credential)
         await session.flush()
-        stored.provider_metadata = {
-            **stored.provider_metadata,
-            "installation_verified": True,
-            "provider_reads_enabled": True,
-            "provider_writes_enabled": False,
-            "created_via": "founderos_self_service",
-        }
+        connection = IntegrationConnection(
+            workspace_id=workspace_uuid,
+            provider="github",
+            status="connected",
+            display_name="GitHub App: qtwin-io",
+            external_account_id="github_app_installation:98765",
+            scopes=["github_app_installation", "read_only"],
+            provider_metadata={
+                "connection_method": "github_app_installation",
+                "installation_id": "98765",
+                "installation_verified": True,
+                "provider_reads_enabled": True,
+                "provider_writes_enabled": False,
+                "installation_access_token_persisted": False,
+                "selected_repositories": [
+                    {"full_name": "qtwin-io/company-knowledge-os"}
+                ],
+                "created_via": "founderos_self_service",
+            },
+        )
+        session.add(connection)
+        await session.flush()
         session.add(
             GitHubAppInstallation(
                 workspace_id=workspace_uuid,
                 credential_id=credential.id,
-                connection_id=stored.id,
+                connection_id=connection.id,
                 installation_id="98765",
                 account_login="qtwin-io",
                 repository_selection="selected",
@@ -284,31 +282,26 @@ async def _create_managed_app_connection(workspace_id: str, marker: str) -> dict
             )
         )
         await session.commit()
-    return connection
+    return {"id": str(connection.id)}
 
 
 def _install_mock_provider(
     monkeypatch,
     *,
     installed: bool = True,
-    expect_managed_credential: bool = False,
 ) -> dict[str, int]:
     calls = {"token": 0, "repositories": 0, "issues": 0, "pull_requests": 0}
 
     async def fake_mint_installation_access_token(
         *,
         installation_id: str,
-        credential: GitHubAppSigningCredential | None = None,
+        credential: GitHubAppSigningCredential,
         client: AsyncClient | None = None,
     ) -> GitHubInstallationAccessToken:
         assert client is not None
         assert installation_id == "98765"
-        if expect_managed_credential:
-            assert credential is not None
-            assert credential.app_id == "managed-test-app"
-            assert credential.private_key_pem == "managed-test-private-key"
-        else:
-            assert credential is None
+        assert credential.app_id.startswith("managed-")
+        assert credential.private_key_pem == "managed-test-private-key"
         calls["token"] += 1
         return GitHubInstallationAccessToken(
             token="jit-installation-token",
@@ -468,14 +461,13 @@ def test_build_github_app_jwt_uses_app_id_without_exposing_private_key() -> None
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
-    config = Settings(
-        github_app_id="12345",
-        github_app_private_key=SecretStr(private_key_pem),
-        _env_file=None,
+    credential = GitHubAppSigningCredential(
+        app_id="12345",
+        private_key_pem=private_key_pem,
     )
 
     token = build_github_app_jwt(
-        config=config,
+        credential=credential,
         now=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
     )
 
@@ -559,11 +551,7 @@ async def test_unverified_legacy_app_connection_cannot_start_provider_reads(
     try:
         created = await _bootstrap_workspace(marker)
         workspace_id = created["workspace"]["id"]
-        connection = await _create_app_connection(
-            workspace_id,
-            marker,
-            operator_verified=False,
-        )
+        connection = await _create_unverified_app_connection(workspace_id)
 
         async with _async_client() as client:
             response = await client.post(
@@ -612,10 +600,7 @@ async def test_verified_managed_app_can_read_with_global_connector_gate_disabled
         created = await _bootstrap_workspace(marker)
         workspace_id = created["workspace"]["id"]
         connection = await _create_managed_app_connection(workspace_id, marker)
-        calls = _install_mock_provider(
-            monkeypatch,
-            expect_managed_credential=True,
-        )
+        calls = _install_mock_provider(monkeypatch)
         monkeypatch.setattr(settings, "enable_real_connectors", False)
 
         async with _async_client() as client:
@@ -800,7 +785,7 @@ async def test_github_app_live_sync_reads_and_persists_without_token_storage_or_
     try:
         created = await _bootstrap_workspace(marker)
         workspace_id = created["workspace"]["id"]
-        connection = await _create_app_connection(workspace_id, marker)
+        connection = await _create_managed_app_connection(workspace_id, marker)
         calls = _install_mock_provider(monkeypatch)
 
         async with _async_client() as client:
@@ -882,7 +867,7 @@ async def test_github_app_synced_data_feeds_brain_and_briefing_with_workspace_is
         workspace_b = created_b["workspace"]["id"]
         owner_a = _bootstrap_payload(marker)["owner_email"]
         owner_b = _bootstrap_payload(marker, suffix="-b")["owner_email"]
-        connection = await _create_app_connection(workspace_a, marker)
+        connection = await _create_managed_app_connection(workspace_a, marker)
         _install_mock_provider(monkeypatch)
 
         async with _async_client() as client:
@@ -995,7 +980,10 @@ async def test_github_app_live_sync_is_workspace_scoped_before_provider_reads(
     try:
         created = await _bootstrap_workspace(marker)
         other = await _bootstrap_workspace(other_marker)
-        connection = await _create_app_connection(created["workspace"]["id"], marker)
+        connection = await _create_managed_app_connection(
+            created["workspace"]["id"],
+            marker,
+        )
 
         async with _async_client() as client:
             response = await client.post(
@@ -1036,7 +1024,7 @@ async def test_member_and_viewer_cannot_run_github_app_live_sync(
     try:
         created = await _bootstrap_workspace(marker)
         workspace_id = created["workspace"]["id"]
-        connection = await _create_app_connection(workspace_id, marker)
+        connection = await _create_managed_app_connection(workspace_id, marker)
 
         for role in (MEMBERSHIP_ROLE_MEMBER, MEMBERSHIP_ROLE_VIEWER):
             user_email = await _add_workspace_user(
@@ -1072,7 +1060,7 @@ async def test_github_app_live_sync_rejects_repository_outside_installation(
     try:
         created = await _bootstrap_workspace(marker)
         workspace_id = created["workspace"]["id"]
-        connection = await _create_app_connection(workspace_id, marker)
+        connection = await _create_managed_app_connection(workspace_id, marker)
         calls = _install_mock_provider(monkeypatch, installed=False)
 
         async with _async_client() as client:
@@ -1112,9 +1100,13 @@ async def test_github_app_live_sync_surfaces_sanitized_rate_limit_detail(
     await _cleanup_fixture(marker)
 
     async def fake_mint_installation_access_token(
-        *, installation_id: str, client: AsyncClient | None = None
+        *,
+        installation_id: str,
+        credential: GitHubAppSigningCredential,
+        client: AsyncClient | None = None,
     ) -> GitHubInstallationAccessToken:
         assert installation_id == "98765"
+        assert credential.app_id.startswith("managed-")
         assert client is not None
         return GitHubInstallationAccessToken(token="jit-installation-token")
 
@@ -1147,7 +1139,7 @@ async def test_github_app_live_sync_surfaces_sanitized_rate_limit_detail(
     try:
         created = await _bootstrap_workspace(marker)
         workspace_id = created["workspace"]["id"]
-        connection = await _create_app_connection(workspace_id, marker)
+        connection = await _create_managed_app_connection(workspace_id, marker)
 
         async with _async_client() as client:
             response = await client.post(
@@ -1200,7 +1192,7 @@ async def test_github_app_live_sync_rejects_invalid_state_before_provider_reads(
     try:
         created = await _bootstrap_workspace(marker)
         workspace_id = created["workspace"]["id"]
-        connection = await _create_app_connection(workspace_id, marker)
+        connection = await _create_managed_app_connection(workspace_id, marker)
 
         async with _async_client() as client:
             response = await client.post(

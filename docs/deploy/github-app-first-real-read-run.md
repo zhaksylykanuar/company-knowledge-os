@@ -31,7 +31,8 @@ explicitly.
    UV_NO_SYNC=1 uv run alembic check
    ```
 
-   The expected single head for this flow is `d9a0b1c2d3e4`.
+   The expected single head for this flow is the current repository head shown
+   by the final two commands; do not hard-code an older revision.
 3. Sign in to FounderOS as the workspace owner or admin. The existing local
    application encryption key must remain available; do not print it.
 4. Be ready to choose either a personal GitHub account or the exact GitHub
@@ -97,9 +98,9 @@ The backend rechecks all of the following before token mint or network access:
 - the requested `owner/repo` belongs to the saved FounderOS subset; and
 - the repository is still returned by the live GitHub installation inventory.
 
-For this managed browser-session action, the legacy
-`FOUNDEROS_ENABLE_REAL_CONNECTORS` env gate is not required. Operator/CI calls
-remain behind that kill switch. No background read starts after setup.
+For this managed browser-session action,
+`FOUNDEROS_ENABLE_REAL_CONNECTORS` is not required. Operator/CI calls remain
+behind that emergency kill switch. No background read starts after setup.
 
 ## Step 4 - Verify canonical results
 
@@ -125,18 +126,6 @@ tests or a connected status alone are not evidence of a real provider read.
 - To stop reading, do nothing. There is no schedule or webhook. `make local-stop`
   stops the local product without deleting its state.
 
-## Legacy compatibility path
-
-The following path is retained only for older operator workflows:
-
-- env names such as `FOUNDEROS_GITHUB_APP_ID`,
-  `FOUNDEROS_GITHUB_APP_SLUG`, and
-  `FOUNDEROS_GITHUB_APP_PRIVATE_KEY`/`..._PATH`;
-- `scripts/github_app_real_read_run_preflight.py`;
-- the manual `POST .../connections/app-installation`; and
-- the global `FOUNDEROS_ENABLE_REAL_CONNECTORS` gate.
-
-The offline preflight sees only env configuration and cannot attest managed
-database credentials. A new manual installation POST is deliberately recorded
-as unverified/read-disabled and cannot start live reads by itself. Do not use the
-legacy path as the normal founder onboarding flow.
+There is no environment or manual-record compatibility path. App credentials
+must come from the managed product flow, and a live read requires the resulting
+verified workspace credential and installation relation.

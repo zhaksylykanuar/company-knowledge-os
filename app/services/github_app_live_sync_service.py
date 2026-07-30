@@ -34,7 +34,6 @@ from app.services.github_app_credential_service import (
 )
 from app.services.github_connection_service import (
     GITHUB_APP_CONNECTION_METHOD,
-    GITHUB_APP_MANAGED_CONNECTION_SOURCE,
 )
 from app.services.github_issue_client import GitHubIssueClientError
 from app.services.github_pull_request_client import GitHubPullRequestClientError
@@ -47,9 +46,6 @@ GITHUB_APP_LIVE_SYNC_CONNECTION_NOT_FOUND = "github connection not found"
 GITHUB_APP_LIVE_SYNC_CONNECTION_NOT_CONNECTED = "github connection is not connected"
 GITHUB_APP_LIVE_SYNC_CONNECTION_NOT_APP_INSTALLATION = (
     "github app installation connection required"
-)
-GITHUB_APP_LIVE_SYNC_INSTALLATION_ID_MISSING = (
-    "github app installation_id is missing"
 )
 GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED = (
     "github app installation is not provider-verified"
@@ -102,7 +98,7 @@ class GitHubAppLiveSyncInput:
 @dataclass(frozen=True)
 class _GitHubAppLiveReadAuthorization:
     installation_id: str
-    credential: GitHubAppSigningCredential | None
+    credential: GitHubAppSigningCredential
     managed_explicit_read: bool
     selected_repositories: frozenset[str] | None
 
@@ -117,7 +113,7 @@ class GitHubAppLiveSyncPrepared:
     include_pull_requests: bool
     issue_states: tuple[str, ...]
     pull_request_states: tuple[str, ...]
-    credential: GitHubAppSigningCredential | None = field(repr=False)
+    credential: GitHubAppSigningCredential = field(repr=False)
 
 
 @dataclass(frozen=True, repr=False)
@@ -309,15 +305,11 @@ async def open_github_app_provider_context(
     client: httpx.AsyncClient,
 ) -> GitHubAppProviderContext:
     try:
-        token_kwargs: dict[str, Any] = {
-            "installation_id": prepared.installation_id,
-            "client": client,
-        }
-        if prepared.credential is not None:
-            token_kwargs["credential"] = prepared.credential
         installation_token = (
             await github_app_token_service.mint_installation_access_token(
-                **token_kwargs
+                installation_id=prepared.installation_id,
+                credential=prepared.credential,
+                client=client,
             )
         )
     except (GitHubAppTokenError, SecretEncryptionError) as exc:
@@ -486,21 +478,8 @@ async def _resolve_live_read_authorization(
         )
     )
     if managed_credential is None:
-        if metadata.get("created_via") == GITHUB_APP_MANAGED_CONNECTION_SOURCE:
-            raise GitHubAppLiveSyncConflictError(
-                GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED
-            )
-        # Compatibility/operator path only. New legacy POST records explicitly
-        # set installation_verified=false, so they cannot silently become live.
-        if metadata.get("installation_verified") is not True:
-            raise GitHubAppLiveSyncConflictError(
-                GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED
-            )
-        return _GitHubAppLiveReadAuthorization(
-            installation_id=_installation_id(connection),
-            credential=None,
-            managed_explicit_read=False,
-            selected_repositories=None,
+        raise GitHubAppLiveSyncConflictError(
+            GITHUB_APP_LIVE_SYNC_INSTALLATION_NOT_VERIFIED
         )
 
     installation = await session.scalar(
@@ -559,19 +538,6 @@ def _selected_repository_names(metadata: Mapping[str, Any]) -> frozenset[str]:
         if full_name is not None:
             normalized.add(full_name.casefold())
     return frozenset(normalized)
-
-
-def _installation_id(connection: IntegrationConnection) -> str:
-    if not isinstance(connection.provider_metadata, Mapping):
-        raise GitHubAppLiveSyncConflictError(
-            GITHUB_APP_LIVE_SYNC_INSTALLATION_ID_MISSING
-        )
-    raw_installation_id = connection.provider_metadata.get("installation_id")
-    if not isinstance(raw_installation_id, str) or not raw_installation_id.strip():
-        raise GitHubAppLiveSyncConflictError(
-            GITHUB_APP_LIVE_SYNC_INSTALLATION_ID_MISSING
-        )
-    return raw_installation_id.strip()[:100]
 
 
 def _installation_repository_map(

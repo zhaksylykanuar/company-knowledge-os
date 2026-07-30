@@ -219,12 +219,10 @@ def test_bootstrap_rejects_interpolating_secret_before_any_write(
     assert secret_value not in captured.err
 
 
-@pytest.mark.parametrize("env_filename", [".env", ".env.local"])
-def test_bootstrap_promotes_legacy_api_auth_key_for_existing_ciphertext(
+def test_bootstrap_promotes_local_api_auth_key_for_existing_ciphertext(
     tmp_path: Path,
-    env_filename: str,
 ) -> None:
-    (tmp_path / env_filename).write_text(
+    (tmp_path / ".env.local").write_text(
         "API_AUTH_KEY=legacy-local-key\n",
         encoding="utf-8",
     )

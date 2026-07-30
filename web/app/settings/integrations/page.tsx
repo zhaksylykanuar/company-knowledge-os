@@ -209,7 +209,7 @@ export default function IntegrationsSettingsPage() {
       <PageHeader
         eyebrow="Настройки"
         title="Подключения"
-        description="Выберите источник, сохраните доступ и проверьте, что FounderOS действительно может читать данные."
+        description="Ключи источников вводятся только здесь: FounderOS зашифрует доступ, а отдельная проверка подтвердит чтение."
       />
       <IntegrationsControlCenterView
         actionError={actionError}

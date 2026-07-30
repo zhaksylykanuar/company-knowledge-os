@@ -1145,7 +1145,7 @@ export type GitHubAppConfigStatus = {
   webhook_secret_configured: boolean;
   setup_url: string | null;
   callback_url: string | null;
-  missing_env: string[];
+  missing_requirements: string[];
   installation_tokens_persisted: boolean;
   provider_writes_enabled: boolean;
 };
@@ -1162,7 +1162,7 @@ export type GitHubAppSetupPhase =
   | "failed"
   | "cancelled";
 
-export type GitHubAppCredentialSource = "managed" | "environment" | "none";
+export type GitHubAppCredentialSource = "managed" | "none";
 
 export type GitHubAppSetupRepositoryRead = {
   id: string;

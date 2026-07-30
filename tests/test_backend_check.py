@@ -27,7 +27,10 @@ print(json.dumps({
     "database_is_product_file": settings.database_url.endswith("/product_database"),
     "dotenv_disabled": Settings.model_config.get("env_file") is None,
     "llm_enabled": settings.enable_llm,
-    "openai_secret_present": settings.openai_api_key is not None,
+    "provider_credentials_in_runtime_settings": any(
+        name in Settings.model_fields
+        for name in ("openai_api_key", "github_app_private_key")
+    ),
     "real_connectors_enabled": settings.enable_real_connectors,
     "write_actions_enabled": settings.enable_write_actions,
 }))
@@ -366,7 +369,7 @@ def test_checker_environment_disables_dotenv_before_settings_import(
         "database_is_product_file": False,
         "dotenv_disabled": True,
         "llm_enabled": False,
-        "openai_secret_present": False,
+        "provider_credentials_in_runtime_settings": False,
         "real_connectors_enabled": False,
         "write_actions_enabled": False,
     }
@@ -384,7 +387,7 @@ def test_settings_preserve_normal_dotenv_loading_without_disable_flag(
         "database_is_product_file": True,
         "dotenv_disabled": False,
         "llm_enabled": True,
-        "openai_secret_present": True,
+        "provider_credentials_in_runtime_settings": False,
         "real_connectors_enabled": True,
         "write_actions_enabled": True,
     }

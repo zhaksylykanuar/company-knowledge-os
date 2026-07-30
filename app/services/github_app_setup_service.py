@@ -12,7 +12,6 @@ from typing import Any
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
-from pydantic import SecretStr
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -172,17 +171,6 @@ async def get_github_app_setup_status(
     )
     selected_repositories = _selected_repositories(connection)
     credential_status = redact_github_app_credential(credential)
-    if credential is None and _legacy_env_app_configured():
-        credential_status.update(
-            {
-                "configured": True,
-                "credential_source": "environment",
-                "app_id_configured": True,
-                "app_slug": _safe_text(settings.github_app_slug, 120),
-                "app_name": None,
-                "private_key_configured": True,
-            }
-        )
 
     return {
         "phase": phase,
@@ -1386,20 +1374,6 @@ def _safe_error_code(value: Any, fallback: str) -> str:
 
 def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
-
-
-def _legacy_env_app_configured() -> bool:
-    private_key = settings.github_app_private_key
-    if isinstance(private_key, SecretStr):
-        private_key = private_key.get_secret_value()
-    return bool(
-        _safe_text(settings.github_app_id, 100)
-        and _safe_text(settings.github_app_slug, 120)
-        and (
-            _safe_text(private_key, 16384)
-            or _safe_text(settings.github_app_private_key_path, 1000)
-        )
-    )
 
 
 def _fail_setup(setup: GitHubAppSetupSession, error_code: str) -> None:

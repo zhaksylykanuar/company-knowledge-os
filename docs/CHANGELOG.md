@@ -1,5 +1,30 @@
 # FounderOS Changelog
 
+## 2026-07-30
+
+### Changed
+
+- Added a proposal/handoff for future Repository Intelligence: determining what
+  each repository does, mapping directional evidence-backed relationships
+  between repositories, staged L0/L1/L2 analysis, durable fact/finding
+  reconciliation, FounderOS integration, and an agent-ready ticket sequence.
+- Made workspace Settings the only credential source for OpenAI, GitHub, Jira,
+  Gmail and Google Drive (DEC-114). Provider credentials no longer have
+  environment fallbacks.
+- Reduced local dotenv loading to the single untracked root `.env.local`;
+  `.env.example` now documents bootstrap/deployment controls only.
+- GitHub App token minting now requires the encrypted workspace-managed
+  credential. Removed the environment GitHub App path, manual installation-row
+  endpoint and obsolete offline env-presence preflight.
+- Removed the password-through-env admin provisioning script and the legacy
+  local organization repository promotion script. Founder creation remains
+  invite-only and GitHub setup remains product-managed.
+- Replaced GitHub status `missing_env` details with a product-level setup
+  requirement and removed deployment variable names from the interface.
+- Added the secrets/environment source-of-truth document covering UI-managed
+  provider credentials, bootstrap-only runtime settings and current OAuth/KMS
+  gaps.
+
 ## 2026-07-29
 
 ### Added

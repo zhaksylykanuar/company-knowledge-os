@@ -6,21 +6,24 @@
 
 ## Сейчас — завершение FounderOS 2.0 reset
 
-1. Подключить approved external error-reporting/tracing sink без payloads и
+1. Заново внести нужные provider credentials только через
+   `Настройки → AI` и `Настройки → Подключения`, выполнить отдельные
+   read-only проверки и не возвращать environment fallbacks.
+2. Подключить approved external error-reporting/tracing sink без payloads и
    завершить fail-closed hosted topology/RLS gate. Локальные structured logs,
    request IDs, counters и database readiness уже реализованы.
-2. Провести разрешённые authenticated session/workspace и desktop/mobile
+3. Провести разрешённые authenticated session/workspace и desktop/mobile
    browser gates и проверить
    overflow, console и основные состояния.
-3. Подтвердить один read-only GitHub App read из рабочей организации с видимым
+4. Подтвердить один read-only GitHub App read из рабочей организации с видимым
    canonical результатом.
-4. Настроить реальное независимое backup-хранилище и отдельное хранение ключа,
+5. Настроить реальное независимое backup-хранилище и отдельное хранение ключа,
    выполнить первый encrypted export и полный restore drill. Механизм и
    runbook реализованы, но same-machine тест не является внешним proof.
-5. В приватном GitHub проверить visibility, branch protection и private
+6. В приватном GitHub проверить visibility, branch protection и private
    security-reporting channel; файлы LICENSE/SECURITY/CONTRIBUTING/CODEOWNERS
    уже добавлены локально.
-6. Продолжать снижать ratchet для Headquarters, ActionProposalsPanel и global
+7. Продолжать снижать ratchet для Headquarters, ActionProposalsPanel и global
    CSS только bounded slices с characterization конкретного поведения; broad
    refactor запрещён DEC-110.
 

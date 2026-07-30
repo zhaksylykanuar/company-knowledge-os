@@ -4,16 +4,11 @@ from base64 import urlsafe_b64encode
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
-from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
-from pydantic import SecretStr
-
-from app.core.config import Settings, settings
-
 GITHUB_API_BASE_URL = "https://api.github.com"
 GITHUB_API_VERSION = "2022-11-28"
 GITHUB_APP_JWT_LIFETIME_SECONDS = 540
@@ -43,8 +38,7 @@ class GitHubAppSigningCredential(Protocol):
 async def mint_installation_access_token(
     *,
     installation_id: str,
-    credential: GitHubAppSigningCredential | None = None,
-    config: Settings = settings,
+    credential: GitHubAppSigningCredential,
     client: httpx.AsyncClient | None = None,
 ) -> GitHubInstallationAccessToken:
     """Mint a short-lived GitHub App installation access token just-in-time.
@@ -54,7 +48,7 @@ async def mint_installation_access_token(
     """
 
     normalized_installation_id = _safe_installation_id(installation_id)
-    app_jwt = build_github_app_jwt(credential=credential, config=config)
+    app_jwt = build_github_app_jwt(credential=credential)
     url = (
         f"{GITHUB_API_BASE_URL}/app/installations/"
         f"{normalized_installation_id}/access_tokens"
@@ -93,14 +87,11 @@ async def mint_installation_access_token(
 
 def build_github_app_jwt(
     *,
-    credential: GitHubAppSigningCredential | None = None,
-    config: Settings = settings,
+    credential: GitHubAppSigningCredential,
     now: datetime | None = None,
 ) -> str:
-    app_id = _safe_app_id(
-        credential.app_id if credential is not None else config.github_app_id
-    )
-    private_key = _load_private_key(config, credential=credential)
+    app_id = _safe_app_id(credential.app_id)
+    private_key = _load_private_key(credential)
     issued_at = int(
         ((now or datetime.now(timezone.utc)) - timedelta(seconds=GITHUB_APP_JWT_BACKDATE_SECONDS)).timestamp()
     )
@@ -123,33 +114,11 @@ def build_github_app_jwt(
 
 
 def _load_private_key(
-    config: Settings,
-    *,
-    credential: GitHubAppSigningCredential | None = None,
+    credential: GitHubAppSigningCredential,
 ) -> Any:
-    private_key_pem = (
-        credential.private_key_pem
-        if credential is not None
-        else _secret_value(config.github_app_private_key)
-    )
-    if (
-        private_key_pem is None
-        and credential is None
-        and config.github_app_private_key_path
-    ):
-        try:
-            private_key_pem = Path(config.github_app_private_key_path).read_text(
-                encoding="utf-8"
-            )
-        except OSError as exc:
-            raise GitHubAppTokenError(
-                "github app private key path could not be read"
-            ) from exc
-    if private_key_pem is None:
-        raise GitHubAppTokenError(
-            "FOUNDEROS_GITHUB_APP_PRIVATE_KEY or "
-            "FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH is required"
-        )
+    private_key_pem = credential.private_key_pem.strip()
+    if not private_key_pem:
+        raise GitHubAppTokenError("github app signing credential is unavailable")
     try:
         return serialization.load_pem_private_key(
             private_key_pem.encode("utf-8"),
@@ -161,7 +130,7 @@ def _load_private_key(
 
 def _safe_app_id(value: str | None) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise GitHubAppTokenError("FOUNDEROS_GITHUB_APP_ID is required")
+        raise GitHubAppTokenError("github app signing credential is unavailable")
     return value.strip()[:100]
 
 
@@ -169,15 +138,6 @@ def _safe_installation_id(value: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise GitHubAppTokenError("github app installation_id is required")
     return value.strip()[:100]
-
-
-def _secret_value(value: SecretStr | str | None) -> str | None:
-    if isinstance(value, SecretStr):
-        value = value.get_secret_value()
-    if not isinstance(value, str):
-        return None
-    stripped = value.strip()
-    return stripped or None
 
 
 def _base64url_json(value: dict[str, Any]) -> str:

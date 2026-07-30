@@ -30,16 +30,16 @@ import {
 
 const appConfigured: GitHubAppConfigStatus = {
   configured: true,
-  credential_source: "environment",
+  credential_source: "managed",
   app_id_configured: true,
   app_slug: "founderos",
   app_name: "FounderOS",
   private_key_configured: true,
-  private_key_source: "path",
+  private_key_source: "encrypted_database",
   webhook_secret_configured: true,
   setup_url: "https://github.com/apps/founderos/installations/new",
   callback_url: null,
-  missing_env: [],
+  missing_requirements: [],
   installation_tokens_persisted: false,
   provider_writes_enabled: false
 };
@@ -55,10 +55,7 @@ const appMissing: GitHubAppConfigStatus = {
   private_key_source: null,
   webhook_secret_configured: false,
   setup_url: null,
-  missing_env: [
-    "FOUNDEROS_GITHUB_APP_ID",
-    "FOUNDEROS_GITHUB_APP_PRIVATE_KEY or FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH"
-  ]
+  missing_requirements: ["github_app_product_setup"]
 };
 
 const connectedAppStatus: GitHubConnectionStatusResponse = {
@@ -426,7 +423,7 @@ test("renders one connected workspace with one repository selector and update ac
   assert.ok(html.includes(M.githubProductConnect.connectedBadge));
   assert.ok(html.includes(M.githubProductConnect.repositoryControlTitle));
   assert.ok(html.includes("qtwin-io/company-knowledge-os"));
-  assert.ok(html.includes("qtwin-io/another-repo"));
+  assert.doesNotMatch(html, /qtwin-io\/another-repo/);
   assert.equal(
     (html.match(new RegExp(M.githubProductConnect.updateData, "g")) ?? []).length,
     1
@@ -444,7 +441,7 @@ test("summarizes GitHub App real-read readiness from loaded local state", () => 
   assert.deepEqual(
     summarizeGitHubRealReadReadiness(connectedAppStatus, repositories),
     {
-      appEnvConfigured: true,
+      appConfigured: true,
       blockers: [],
       hasAppInstallationConnection: true,
       installationConnected: true,
@@ -462,7 +459,7 @@ test("summarizes GitHub App real-read readiness from loaded local state", () => 
   });
   assert.equal(blocked.ready, false);
   assert.deepEqual(blocked.blockers, [
-    "github_app_env_incomplete",
+    "github_app_not_configured",
     "github_app_installation_connection_missing",
     "local_repository_surface_empty"
   ]);
@@ -545,6 +542,10 @@ test("managed setup shows only the saved repository subset", () => {
 
 test("renders invalid repository and blocks update when GitHub is not ready", () => {
   const invalid = renderPanel({
+    connectionStatus: {
+      ...connectedAppStatus,
+      selected_repositories: ["bad repo"]
+    },
     repositories: {
       ...repositories,
       repositories: [
@@ -564,15 +565,14 @@ test("renders invalid repository and blocks update when GitHub is not ready", ()
   assert.doesNotMatch(missingApp, new RegExp(M.githubProductConnect.updateData));
 });
 
-test("legacy configuration keeps missing env names inside safety details", () => {
+test("missing product setup never exposes deployment variable names", () => {
   const html = renderPanel({
     connectionStatus: missingAppStatus,
     repositories: { ...repositories, count: 0, repositories: [] },
     selfServiceSetupEnabled: false
   });
 
-  assert.ok(html.includes(M.githubProductConnect.missingEnvTitle));
-  assert.ok(html.includes("FOUNDEROS_GITHUB_APP_ID"));
+  assert.doesNotMatch(html, /FOUNDEROS_GITHUB_APP/);
   assert.match(html, /<details class="github-source__safety">/);
 });
 

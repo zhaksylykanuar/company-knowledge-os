@@ -109,8 +109,9 @@ export-only.
 
 ## Runtime Configuration
 
-The UI never reads `.env` and never writes environment variables. Runtime gates
-remain process configuration:
+Provider credentials have no environment fallback. The UI never reads
+`.env.local` and never writes environment variables. Runtime gates remain
+process configuration:
 
 | Variable | Purpose |
 |---|---|

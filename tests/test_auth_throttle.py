@@ -31,7 +31,7 @@ from app.services.login_rate_limit_service import (
     login_admission_controller,
 )
 from app.services.login_throttle_service import reset_cleanup_schedule_for_tests
-from scripts.create_admin_user import provision_admin_user
+from tests.identity_factory import provision_test_owner
 
 PASSWORD = "throttle-correct-pw"
 
@@ -42,7 +42,7 @@ def _client() -> AsyncClient:
 
 async def _provision(email: str) -> None:
     async with AsyncSessionLocal() as session:
-        await provision_admin_user(session, email=email, password=PASSWORD, name="F")
+        await provision_test_owner(session, email=email, password=PASSWORD, name="F")
         await session.commit()
 
 

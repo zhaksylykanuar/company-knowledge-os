@@ -319,25 +319,9 @@ async def resolve_assistant_runtime_configuration(
                 )
             )
 
-    if not settings.assistant_llm_data_policy_acknowledged:
-        return AssistantRuntimeResolution(
-            configuration=None,
-            warning="ai_data_policy_not_acknowledged",
-        )
-    env_api_key = _env_api_key()
-    if env_api_key is None:
-        return AssistantRuntimeResolution(
-            configuration=None,
-            warning="ai_not_configured",
-        )
     return AssistantRuntimeResolution(
-        configuration=AssistantRuntimeConfiguration(
-            api_key=env_api_key,
-            model=settings.assistant_llm_model,
-            reasoning_effort=settings.assistant_llm_reasoning_effort,
-            max_output_tokens=settings.assistant_llm_max_output_tokens,
-            timeout_seconds=settings.assistant_llm_timeout_seconds,
-        )
+        configuration=None,
+        warning="ai_not_configured",
     )
 
 
@@ -483,15 +467,6 @@ def _output_budget(value: int) -> int:
     if isinstance(value, bool) or not 400 <= value <= 4_000:
         raise AISettingsError("AI output budget must be between 400 and 4000")
     return value
-
-
-def _env_api_key() -> str | None:
-    configured = settings.openai_api_key
-    if configured is None:
-        return None
-    get_secret_value = getattr(configured, "get_secret_value", None)
-    raw = get_secret_value() if callable(get_secret_value) else configured
-    return raw if isinstance(raw, str) and raw else None
 
 
 def _safety_identifier(workspace_id: UUID, user_id: UUID) -> str:

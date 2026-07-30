@@ -11,10 +11,10 @@ DOTENV_DISABLE_ENV = "FOUNDEROS_DISABLE_DOTENV"
 TRUE_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
-def _settings_env_files() -> tuple[str, str] | None:
+def _settings_env_files() -> str | None:
     if os.environ.get(DOTENV_DISABLE_ENV, "").strip().casefold() in TRUE_ENV_VALUES:
         return None
-    return ".env", ".env.local"
+    return ".env.local"
 
 
 def _default_local_workspace_path() -> str:
@@ -158,41 +158,6 @@ class Settings(BaseSettings):
         ge=1,
         le=300,
         validation_alias=AliasChoices("FOUNDEROS_GITHUB_SYNC_JOB_RETRY_BASE_SECONDS"),
-    )
-    # --- GitHub App product-connect foundation ---
-    # Values below describe the app installation path. Secret values are never
-    # returned to the browser; status payloads expose only configured/missing
-    # booleans and safe setup/callback URLs.
-    github_app_id: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_ID", "GITHUB_APP_ID"),
-    )
-    github_app_slug: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_SLUG", "GITHUB_APP_SLUG"),
-    )
-    github_app_private_key: SecretStr | str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_PRIVATE_KEY"),
-    )
-    github_app_private_key_path: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_PRIVATE_KEY_PATH"),
-    )
-    github_app_webhook_secret: SecretStr | str | None = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "FOUNDEROS_GITHUB_APP_WEBHOOK_SECRET",
-            "GITHUB_WEBHOOK_SECRET",
-        ),
-    )
-    github_app_setup_url: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_SETUP_URL"),
-    )
-    github_app_callback_url: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("FOUNDEROS_GITHUB_APP_CALLBACK_URL"),
     )
     enable_obsidian_export: bool = True
     require_approval_for_writes: bool = True
@@ -380,37 +345,11 @@ class Settings(BaseSettings):
         le=60,
         validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_QUERY_TIMEOUT_SECONDS"),
     )
-    assistant_llm_model: str = Field(
-        default="gpt-5.6",
-        min_length=1,
-        max_length=80,
-        validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_LLM_MODEL"),
-    )
-    assistant_llm_reasoning_effort: Literal["low", "medium", "high"] = Field(
-        default="medium",
-        validation_alias=AliasChoices(
-            "FOUNDEROS_ASSISTANT_LLM_REASONING_EFFORT"
-        ),
-    )
     assistant_llm_timeout_seconds: float = Field(
         default=15.0,
         gt=0,
         le=45,
         validation_alias=AliasChoices("FOUNDEROS_ASSISTANT_LLM_TIMEOUT_SECONDS"),
-    )
-    assistant_llm_max_output_tokens: int = Field(
-        default=1_200,
-        ge=400,
-        le=4_000,
-        validation_alias=AliasChoices(
-            "FOUNDEROS_ASSISTANT_LLM_MAX_OUTPUT_TOKENS"
-        ),
-    )
-    assistant_llm_data_policy_acknowledged: bool = Field(
-        default=False,
-        validation_alias=AliasChoices(
-            "FOUNDEROS_ASSISTANT_LLM_DATA_POLICY_ACKNOWLEDGED"
-        ),
     )
 
     cors_allowed_origins: str | None = Field(
@@ -428,20 +367,13 @@ class Settings(BaseSettings):
         ),
     )
 
-    openai_api_key: SecretStr | None = Field(
-        default=None,
-        validation_alias=AliasChoices("OPENAI_API_KEY", "FOS_OPENAI_API_KEY"),
-    )
-
     obsidian_vault_path: str = "./obsidian_vault"
 
     model_config = SettingsConfigDict(
-        # Priority (highest first): real env vars > .env.local > .env > defaults.
-        # pydantic-settings loads listed files in order, later overriding
-        # earlier; a missing file is skipped. The backend checker sets
-        # FOUNDEROS_DISABLE_DOTENV in the process environment before this
-        # module is imported, disabling both files for its isolated commands.
-        # .env.local stays out of git during normal runtime loading.
+        # Priority (highest first): real env vars > .env.local > defaults.
+        # `.env.local` is the single canonical local runtime file and stays out
+        # of git. The backend checker sets FOUNDEROS_DISABLE_DOTENV before this
+        # module is imported, disabling the file for isolated commands.
         env_file=_settings_env_files(),
         extra="ignore",
         populate_by_name=True,

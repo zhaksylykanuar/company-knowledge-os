@@ -1257,6 +1257,10 @@ Consequences:
   adds a gate, not a new write or automation path.
 - Provider writes, auto-deploy, and LLM remain out of scope for this path.
 
+Superseded (2026-07-30) by DEC-114: the env-presence function and companion CLI
+were removed. Current readiness is verified against the managed workspace
+credential and installation state inside the product.
+
 ## DEC-055 - Teammate Provisioning Uses Local One-Time Setup Links
 
 Decision (2026-07-03, hardened 2026-07-13): the first
@@ -2063,9 +2067,9 @@ Security and identity rules:
   a now-disabled user persists revocation before returning unauthenticated.
 - Login, teammate setup, and founder enrollment sanitize session User-Agent
   metadata to printable text and cap it at 512 characters.
-- The legacy idempotent `scripts/create_admin_user.py` remains an operator
-  recovery path, not the normal founder experience. Email delivery, public
-  registration, password reset, and SSO are not implied by this slice.
+- The former `scripts/create_admin_user.py` recovery path was removed by
+  DEC-114. Founder creation uses the invite-only interface; email delivery,
+  public registration, password reset, and SSO are not implied by this slice.
 - An account with no workspace is routed to an honest recovery screen. With one
   workspace the context is unambiguous; with several, the user must choose one.
   A browser-persisted choice is accepted only while it still belongs to the
@@ -2357,12 +2361,9 @@ Security and persistence rules:
   `FOUNDEROS_ENABLE_REAL_CONNECTORS` gate because the managed setup and current
   click provide the scoped consent. Operator/CI calls remain behind the global
   gate. There is no background or bulk sync.
-- Existing env/manual endpoints remain compatibility-only. A newly recorded
-  manual installation is unverified and read-disabled until an older trusted
-  operator flow explicitly supplies verified metadata; it cannot silently
-  become live-ready. A connection marked as created by managed self-service
-  never falls back to legacy env credentials: missing/inactive managed
-  credential or installation relation disables verified status and live reads.
+- The environment/manual compatibility path described in the original
+  decision was removed by DEC-114. Missing or inactive managed credentials now
+  disable verified status and live reads without fallback.
 
 Schema consequence: migration `c5d6e7f8a9b0` adds encrypted workspace App
 credentials, verified installation facts, and one resumable setup session per
@@ -3556,11 +3557,10 @@ The generative assistant may use workspace settings only when the server
 `ENABLE_LLM` emergency kill switch is open, the workspace explicitly enables
 AI, the current provider policy was acknowledged, an encrypted key exists and
 the latest check passed. A saved workspace row is authoritative and never
-silently falls back to an environment credential. Environment model/key/policy
-settings remain a compatibility fallback only for workspaces with no product
-configuration row. Removing the credential clears the encrypted value, policy
-acknowledgement and check receipt and disables AI; it does not remove canonical
-company memory or evidence.
+silently falls back to an environment credential. The original compatibility
+fallback for a workspace without a row was removed by DEC-114. Removing the
+credential clears the encrypted value, policy acknowledgement and check receipt
+and disables AI; it does not remove canonical company memory or evidence.
 
 The check validates network authorization plus the same strict response and
 evidence contract used by `assistant.v2`; it does not prove commercial quota,
@@ -3593,6 +3593,45 @@ them. Provider-backed GitHub/Jira/Gmail/Drive records are not supported by this
 operation. Their canonical evidence and provider source cannot be called
 forgotten until a separate dependency-aware cascade, reconciliation behavior
 and provider-side deletion boundary are designed and tested.
+
+## DEC-114 - Provider Credentials Are Workspace-Owned And UI-Only
+
+Decision (2026-07-30): provider credentials are product data, not deployment
+configuration. OpenAI, GitHub, Jira, Gmail and Google Drive credentials may be
+created, replaced, checked and removed only through authenticated workspace
+Settings. They are encrypted before PostgreSQL persistence, are never returned
+to the browser, and have no environment fallback.
+
+The OpenAI environment key/model/policy defaults and the GitHub App
+id/slug/private-key/webhook environment path are removed. GitHub token minting
+requires an active decrypted workspace credential. The manual GitHub App
+installation-record endpoint and its offline env-presence preflight are
+removed; the verified self-service manifest/install/OAuth/repository-selection
+flow is the only GitHub App onboarding path. The legacy local organization
+snapshot promotion script and password-through-env admin creation script are
+also removed because they bypass the product-owned identity or connector
+lifecycle.
+
+`.env.local` is the only dotenv file loaded by the local runtime. It is reserved
+for prerequisites that must exist before the UI can run: database/Redis
+topology, raw-storage paths, the master credential-encryption key, recovery
+material references, public origins, process controls, kill switches and
+bounded worker/timeout settings. `.env.example` is a placeholder-only
+bootstrap/deployment reference. Hosted operation must move root encryption and
+recovery material to an infrastructure secret manager or KMS boundary; putting
+the key inside the encrypted database would be circular.
+
+`ENABLE_LLM` and connector/write flags remain emergency runtime gates. They can
+disable capability but cannot supply a provider credential or override
+workspace model/policy settings. If workspace AI is absent, disabled,
+unacknowledged, missing a key or not successfully checked, the assistant remains
+deterministic. If a managed GitHub credential or installation relation is
+missing, live reads fail closed.
+
+This boundary deliberately does not claim that every secret can be entered in
+the browser. Database credentials, the master encryption key, cookie/operator
+bootstrap material and disaster-recovery keys cannot depend on the database/UI
+they are required to start or recover.
 
 ## ASK - Open Questions For The Human (not decided)
 

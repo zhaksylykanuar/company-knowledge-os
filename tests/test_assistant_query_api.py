@@ -21,6 +21,10 @@ from app.db.identity_models import (
     Workspace,
 )
 from app.main import app
+from app.services.ai_settings_service import (
+    AssistantRuntimeConfiguration,
+    AssistantRuntimeResolution,
+)
 from app.services.assistant_query_service import (
     AssistantFlightKey,
     AssistantQueryController,
@@ -52,6 +56,24 @@ def _client() -> AsyncClient:
     return AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
+    )
+
+
+async def _verified_ai_runtime(
+    *,
+    warning: str | None = None,
+    **_kwargs,
+) -> AssistantRuntimeResolution:
+    if warning is not None:
+        return AssistantRuntimeResolution(configuration=None, warning=warning)
+    return AssistantRuntimeResolution(
+        configuration=AssistantRuntimeConfiguration(
+            api_key="test-openai-key",
+            model="gpt-5.6",
+            reasoning_effort="medium",
+            max_output_tokens=1_000,
+            timeout_seconds=15.0,
+        )
     )
 
 
@@ -360,9 +382,12 @@ async def test_enabled_llm_uses_only_exact_snapshot_facts_and_validated_citation
 
     monkeypatch.setattr(assistant_service, "read_workspace_headquarters", read_snapshot)
     monkeypatch.setattr(assistant_service, "generate_assistant_reasoning", generate)
+    monkeypatch.setattr(
+        assistant_service,
+        "resolve_assistant_runtime_configuration",
+        _verified_ai_runtime,
+    )
     monkeypatch.setattr(settings, "enable_llm", True)
-    monkeypatch.setattr(settings, "assistant_llm_data_policy_acknowledged", True)
-    monkeypatch.setattr(settings, "openai_api_key", "test-openai-key")
 
     result = await query_workspace_assistant(
         workspace_id=workspace_id,
@@ -398,9 +423,12 @@ async def test_llm_failure_falls_back_without_leaking_provider_detail(
 
     monkeypatch.setattr(assistant_service, "read_workspace_headquarters", read_snapshot)
     monkeypatch.setattr(assistant_service, "generate_assistant_reasoning", unavailable)
+    monkeypatch.setattr(
+        assistant_service,
+        "resolve_assistant_runtime_configuration",
+        _verified_ai_runtime,
+    )
     monkeypatch.setattr(settings, "enable_llm", True)
-    monkeypatch.setattr(settings, "assistant_llm_data_policy_acknowledged", True)
-    monkeypatch.setattr(settings, "openai_api_key", "test-openai-key")
 
     result = await query_workspace_assistant(
         workspace_id=UUID(snapshot["workspace"]["id"]),
@@ -432,9 +460,18 @@ async def test_llm_requires_explicit_provider_data_policy_acknowledgement(
         "generate_assistant_reasoning",
         forbidden_provider,
     )
+
+    async def unacknowledged(**_kwargs):
+        return await _verified_ai_runtime(
+            warning="ai_data_policy_not_acknowledged"
+        )
+
+    monkeypatch.setattr(
+        assistant_service,
+        "resolve_assistant_runtime_configuration",
+        unacknowledged,
+    )
     monkeypatch.setattr(settings, "enable_llm", True)
-    monkeypatch.setattr(settings, "assistant_llm_data_policy_acknowledged", False)
-    monkeypatch.setattr(settings, "openai_api_key", "test-openai-key")
 
     result = await query_workspace_assistant(
         workspace_id=UUID(snapshot["workspace"]["id"]),

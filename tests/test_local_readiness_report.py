@@ -16,16 +16,18 @@ def test_local_readiness_reports_current_repo_without_side_effects() -> None:
     assert report["provider_writes"] is False
     assert report["local_runtime_started"] is False
     assert report["external_write_started"] is False
-    assert report["env_configuration_loaded"] is True
-    assert report["secret_presence_checked"] is True
+    assert report["env_configuration_loaded"] is False
+    assert report["secret_presence_checked"] is False
     assert report["secret_values_emitted"] is False
     assert report["referenced_credential_files_read"] is False
     assert report["mvp_audit"]["local_scope_complete"] is True
     assert report["mvp_audit"]["repository_evidence_complete"] is True
     assert report["mvp_audit"]["runtime_acceptance_assessed"] is False
     assert report["mvp_audit"]["fully_complete"] is False
-    assert report["github_real_read_preflight"]["provider_read_started"] is False
-    assert report["github_real_read_preflight"]["requires_human_approval"] is True
+    assert report["provider_configuration"]["source_of_truth"] == (
+        "workspace_settings_ui"
+    )
+    assert report["provider_configuration"]["provider_calls_started"] is False
     assert "docs/deploy/external-action-result-smoke.md" in " ".join(
         report["recommended_handoff_order"]
     )
@@ -61,14 +63,10 @@ def test_local_readiness_json_contains_no_secret_values() -> None:
 def test_local_readiness_handles_non_git_tree(tmp_path: Path) -> None:
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "conftest.py").write_text("", encoding="utf-8")
-    repos_file = tmp_path / "repos.json"
-    repos_file.write_text("[]", encoding="utf-8")
-
-    report = build_local_readiness_report(root=tmp_path, repos_file=repos_file)
+    report = build_local_readiness_report(root=tmp_path)
 
     assert report["git"]["branch_line"] is None
     assert report["git"]["commit"] is None
     assert report["git"]["ahead_count"] is None
     assert report["git"]["dirty"] is False
     assert report["mvp_audit"]["local_scope_complete"] is False
-    assert report["github_real_read_preflight"]["local_repository_count"] == 0

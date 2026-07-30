@@ -18,7 +18,9 @@ Controls, Private Repository Governance и Maintainability Ratchets также
 Headquarters snapshot со strict schema и evidence critic. Workspace AI/privacy
 control реализован с encrypted key lifecycle, explicit synthetic check и
 server kill switch. Memory Control v1 реализован для FounderOS-authored
-документов с destructive correction/forgetting; изменения не опубликованы.**
+документов с destructive correction/forgetting. Provider Credential Boundary
+v1 реализован: ключи сервисов принимаются только workspace UI, а `.env.local`
+оставлен только для bootstrap/deployment; изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -36,6 +38,13 @@ ledger; тексты источников и evidence не копируются.
 
 ## Что изменено
 
+- Подготовлен proposal/handoff
+  `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
+  Repository Intelligence: назначение и обязанности каждого репозитория,
+  directional evidence-backed связи между репозиториями, L0/L1/L2 аудит,
+  durable runs/facts/findings, reconciliation, cross-source интеграция и
+  безопасный staged rollout. Это план, а не реализованное поведение; следующий
+  рекомендуемый slice в нём — strict contract/fixtures без миграции.
 - Заменён legacy playbook и удалён старый Living Command Center ledger.
 - Удалены runtime `/demo`, synthetic demo code, старые Today/Living HQ модели,
   мини-карта и их тесты.
@@ -53,6 +62,15 @@ ledger; тексты источников и evidence не копируются.
   key, выбрать allowlisted model/reasoning/output budget, подтвердить текущую
   provider policy, включить AI, отдельно проверить соединение и удалить ключ.
   Viewer видит только безопасный статус.
+- OpenAI и GitHub App больше не читают credentials/model/policy из env.
+  GitHub token mint требует managed workspace credential; статус не показывает
+  имена deployment variables.
+- `.env.local` стал единственным dotenv-файлом runtime. `.env.example` содержит
+  только bootstrap/deployment placeholders; provider secrets вводятся в
+  `/settings/ai` и `/settings/integrations`.
+- Удалены manual GitHub installation-record endpoint, offline env-preflight,
+  password-through-env admin recovery и legacy local-org promotion script.
+  Founder enrollment и GitHub App setup остаются product-managed.
 - Добавлен `/settings/memory`: content-free preview показывает exact
   `updated_at` и число версий. Owner/admin может исправить внутренний документ
   с удалением всех прежних версий или забыть документ вместе со всей историей.
@@ -242,7 +260,7 @@ ledger; тексты источников и evidence не копируются.
   encrypted backups остаются до штатной retention rotation. Provider-backed
   records не имеют ложной кнопки удаления: evidence-safe cascade ещё предстоит.
 
-## Проверено 2026-07-29
+## Проверено 2026-07-30
 
 - Frontend: `npm test` — **325 passed**.
 - Frontend: `npm run typecheck` — успешно.
@@ -254,13 +272,17 @@ ledger; тексты источников и evidence не копируются.
 - Backend: guarded `make backend-check` equivalent — успешно.
 - Backend: `uv run ruff check .` — успешно.
 - Backend: `uv run mypy app` — успешно, **102 source files**.
-- Backend: guarded full pytest — **811 passed**, одно внешнее
+- Backend: guarded full pytest — **792 passed**, одно внешнее
   deprecation-предупреждение Starlette/httpx.
 - Assistant v2: strict provider/evidence, fallback, privacy-gate и UI contract
   входят в полный backend/frontend gate; настоящий OpenAI call не выполнялся.
 - AI settings: encrypted-at-rest secret, no-secret response, RBAC/isolation,
   DB readiness constraint, no-company-data check, stale-result rejection и
-  no-env-fallback покрыты тестами; настоящий OpenAI call не выполнялся.
+  отсутствие env-fallback даже без workspace row покрыты тестами; настоящий
+  OpenAI call не выполнялся.
+- GitHub App: environment/manual setup path удалён; тесты доказывают, что
+  live read требует verified managed workspace credential и installation
+  relation.
 - Memory Control: exact preview, correction purge, full active document/version
   deletion, concurrency conflict, RBAC, workspace isolation и private/no-store
   response покрыты тестами; product data не использовались.
@@ -284,20 +306,24 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Настроить физически независимое storage и отдельное хранение recovery key,
-   затем выполнить первый настоящий encrypted export и full restore drill.
+1. Заново внести OpenAI и нужные connector credentials через
+   `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
+   read-only проверки.
 2. Провести один явно разрешённый credentialed AI smoke из `/settings/ai`
    после проверки provider retention policy и оценить latency/cost.
-3. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
-   gate; process counters не являются distributed telemetry.
-4. Провести новые authenticated session/workspace/browser gates и один
+3. Провести новые authenticated session/workspace/browser gates и один
    founder-approved read-only GitHub App read.
-5. Расширить Memory Control на provider-backed records только после exact
+4. Настроить физически независимое storage и отдельное хранение recovery key,
+   затем выполнить первый настоящий encrypted export и full restore drill.
+5. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
+   gate; process counters не являются distributed telemetry.
+6. Расширить Memory Control на provider-backed records только после exact
    dependency preview, evidence-safe cascade и provider-side deletion contract.
 
 ## Неподвижные границы
 
-- Секреты и `.env` значения не попадают в git, UI, логи или документацию.
+- Provider secrets вводятся в UI один раз, шифруются до persistence и не
+  возвращаются; `.env.local` values не попадают в git, UI, логи или документацию.
 - Raw storage и Postgres остаются источником истины; Obsidian — только export.
 - Значимые утверждения и ActionProposal требуют `evidence_refs`.
 - LLM не изменяет production data и не выполняет внешние действия напрямую.

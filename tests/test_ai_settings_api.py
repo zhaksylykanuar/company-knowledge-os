@@ -386,12 +386,6 @@ async def test_workspace_configuration_never_falls_back_to_environment_key(
 ) -> None:
     marker = uuid4().hex[:10]
     _set_auth(monkeypatch)
-    monkeypatch.setattr(
-        settings,
-        "openai_api_key",
-        SecretStr("test-environment-fallback-key"),
-    )
-    monkeypatch.setattr(settings, "assistant_llm_data_policy_acknowledged", True)
     await _cleanup(marker)
     try:
         owner, workspace, _viewer = await _seed_workspace(marker)
@@ -417,6 +411,26 @@ async def test_workspace_configuration_never_falls_back_to_environment_key(
 
         assert resolution.configuration is None
         assert resolution.warning == "ai_not_verified"
+    finally:
+        await _cleanup(marker)
+
+
+async def test_missing_workspace_ai_configuration_stays_deterministic(
+    monkeypatch,
+) -> None:
+    marker = uuid4().hex[:10]
+    _set_auth(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "ignored-environment-key")
+    await _cleanup(marker)
+    try:
+        _owner, workspace, _viewer = await _seed_workspace(marker)
+
+        resolution = await resolve_assistant_runtime_configuration(
+            workspace_id=workspace.id
+        )
+
+        assert resolution.configuration is None
+        assert resolution.warning == "ai_not_configured"
     finally:
         await _cleanup(marker)
 
