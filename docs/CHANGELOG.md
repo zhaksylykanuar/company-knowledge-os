@@ -8,6 +8,10 @@
   each repository does, mapping directional evidence-backed relationships
   between repositories, staged L0/L1/L2 analysis, durable fact/finding
   reconciliation, FounderOS integration, and an agent-ready ticket sequence.
+- Added a complete Russian Repository Intelligence operational guide covering
+  worktree/runtime directory layout, reusable FounderOS contracts, RI-001–RI-009
+  preparation on synthetic fixtures, the zero-company-data readiness gate, and
+  the separately approved 20+ repository portfolio run.
 - Made workspace Settings the only credential source for OpenAI, GitHub, Jira,
   Gmail and Google Drive (DEC-114). Provider credentials no longer have
   environment fallbacks.

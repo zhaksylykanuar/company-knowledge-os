@@ -45,6 +45,11 @@ ledger; тексты источников и evidence не копируются.
   durable runs/facts/findings, reconciliation, cross-source интеграция и
   безопасный staged rollout. Это план, а не реализованное поведение; следующий
   рекомендуемый slice в нём — strict contract/fixtures без миграции.
+- Добавлен полный русскоязычный operational handoff
+  `docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md`: какие папки создать, какие
+  существующие FounderOS contracts переиспользовать, как пройти RI-001–RI-009
+  только на synthetic fixtures, доказать readiness без чтения company repos и
+  затем отдельно запустить read-only portfolio run по 20+ репозиториям.
 - Заменён legacy playbook и удалён старый Living Command Center ledger.
 - Удалены runtime `/demo`, synthetic demo code, старые Today/Living HQ модели,
   мини-карта и их тесты.

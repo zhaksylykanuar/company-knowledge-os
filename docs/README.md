@@ -35,6 +35,7 @@ Command Center documentation is not part of the active set.
 | How is the AI-first product reset verified? | [`AI_FOUNDEROS_ACCEPTANCE.md`](AI_FOUNDEROS_ACCEPTANCE.md) |
 | What is intentionally deferred? | [`POST_MVP.md`](POST_MVP.md) |
 | How should FounderOS learn what every repository does and how repositories relate? | [`REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md`](REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md) |
+| How should Repository Intelligence be prepared and launched operationally? | [`REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md`](REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md) |
 | How do we run, verify, back up, and stop FounderOS? | [`operations/local-runtime.md`](operations/local-runtime.md) |
 | How do we recover after loss of the FounderOS machine? | [`operations/disaster-recovery.md`](operations/disaster-recovery.md) |
 | Where do secrets and runtime settings belong? | [`operations/secrets-and-environment.md`](operations/secrets-and-environment.md) |
