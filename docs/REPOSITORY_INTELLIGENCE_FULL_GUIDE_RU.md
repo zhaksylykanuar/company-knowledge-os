@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — полное руководство по подготовке и запуску
 
-Статус: актуальный handoff и operational guide
+Статус: RI-001 реализован; следующий approval-gated этап — RI-002
 Дата подготовки: 2026-07-30
 Основной проект: `company-knowledge-os`
 Подробный архитектурный план:
@@ -153,28 +153,25 @@ PostgreSQL + approved raw storage
 
 Markdown, PDF и Obsidian остаются rebuildable exports.
 
-## 4. Текущее состояние перед началом
+## 4. Текущее состояние
 
 Проверенное состояние на 2026-07-30:
 
 ```text
 current directory:
-  /Users/anuarzh/Developer/personal/company-knowledge-os
+  /Users/anuarzh/Developer/personal/company-knowledge-os-ri-prep
 
 current branch:
-  codex/living-hq-ux-reset
+  codex/repository-intelligence-prep
 
-verified HEAD:
-  f9e2a7c
+RI-001:
+  implemented and verified on synthetic fixtures
 
-unrelated modified file:
-  web/next-env.d.ts
-
-untracked plan:
-  docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md
+next slice:
+  RI-002 after separate approval
 ```
 
-Это снимок состояния, а не вечная константа. Перед созданием worktree агент
+Это снимок состояния, а не вечная константа. Перед каждым новым тикетом агент
 обязан снова выполнить:
 
 ```bash
@@ -183,13 +180,6 @@ git branch --show-current
 git rev-parse --short HEAD
 git log -1 --oneline
 ```
-
-`web/next-env.d.ts` нельзя:
-
-- изменять;
-- сбрасывать;
-- переносить;
-- включать в RI commits.
 
 Запрещены:
 
@@ -937,7 +927,9 @@ docs/CHANGELOG.md
 
 ### RI-001 — Contracts and fixtures
 
-Создать:
+Статус: **завершён 2026-07-30** (DEC-115).
+
+Реализовано:
 
 - versioned contracts;
 - trusted envelope;
@@ -952,7 +944,8 @@ docs/CHANGELOG.md
 - contract tests;
 - decision entry.
 
-Не создавать:
+Проверено на synthetic frontend L0, backend L1, infrastructure L2,
+contradiction и invalid fixtures. Не создано:
 
 - migrations;
 - persistence;
@@ -1593,46 +1586,45 @@ npm run build
 - большие artifacts хранятся в raw storage;
 - Product/Component пока является confirmed candidate relation.
 
-## 26. Готовый промпт другому агенту
+## 26. Готовый промпт следующему агенту
 
 ```text
-Goal: Implement RI-001 — strict Repository Intelligence contracts and synthetic fixtures.
+Goal: Implement RI-002 — canonical synthetic L0 Repository Intelligence.
 
 Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
 
 Constraints:
-- Only RI-001.
-- First commit the implementation plan and this guide if they remain untracked.
-- Define trusted FounderOS envelope and untrusted analyzer result.
-- Implement all RI-001 binding requirements.
-- Use only synthetic fixtures.
-- No migrations, persistence, UI, checkout implementation, provider calls, LLM calls, or target repository reads.
-- Do not touch web/next-env.d.ts, .env.local, .local, credentials, company data, or existing connections.
-- Add the mandatory architecture entry to docs/DECISIONS.md.
+- Only RI-002.
+- Reuse the implemented repository_intelligence.v1 contract.
+- Read only synthetic canonical Repository and SourceRecord rows in a dedicated test database.
+- Preserve workspace isolation, stable repository identity, evidence and explicit unknown states.
+- No migration, persistence model, filesystem snapshot as product truth, UI, checkout implementation, provider calls, LLM calls, or target repository reads.
+- Do not touch .env.local, .local, credentials, company data or existing connections.
 - Update PROGRESS.md, docs/TODO.md, and docs/CHANGELOG.md.
 - Nothing may be pushed.
 
 Done when:
-- Contract and fixture tests cover valid/invalid SHA, workspace scope, evidence, finite confidence, human-only statuses, relationships, bounds, and contradictions.
+- Synthetic canonical frontend/backend/infrastructure rows produce schema-valid workspace-scoped L0 results.
+- Missing evidence returns unknown or insufficient_evidence instead of a guess.
+- The existing filesystem-first repo audit is not promoted to product truth.
 - git diff --check passes.
 - Staged and tracked secret scans pass.
 - uv run ruff check . passes.
 - Guarded make backend-check passes against an explicit test-marked PostgreSQL URL, or DB-backed checks are honestly reported blocked.
-- A scoped local RI-001 commit is created.
-- Report the result and wait for approval before RI-002.
+- A scoped local RI-002 commit is created.
+- Report the result and wait for approval before RI-003.
 ```
 
 ## 27. Краткий финальный checklist
 
 ### Сейчас
 
-- [ ] повторно проверить Git state;
-- [ ] выбрать approved base commit;
-- [ ] создать `company-knowledge-os-ri-prep`;
-- [ ] перенести только RI docs;
-- [ ] сохранить docs локальным commit;
-- [ ] не трогать `web/next-env.d.ts`;
-- [ ] начать RI-001.
+- [x] проверить Git state и approved base;
+- [x] создать `company-knowledge-os-ri-prep`;
+- [x] сохранить RI handoff docs;
+- [x] реализовать RI-001 только на synthetic fixtures;
+- [x] зафиксировать DEC-115;
+- [ ] начать RI-002 только после отдельного approval.
 
 ### Во время подготовки
 

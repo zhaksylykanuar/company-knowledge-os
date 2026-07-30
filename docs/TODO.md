@@ -4,6 +4,22 @@
 `../founderOS_MASTER_PLAYBOOK.md`. Проверяемый переход:
 `AI_FOUNDEROS_ACCEPTANCE.md`.
 
+## Сейчас — Repository Intelligence
+
+1. После отдельного approval выполнить **RI-002**: read-only
+   workspace-scoped L0 projection на synthetic canonical `Repository` и
+   `SourceRecord`; no provider call, no filesystem snapshot as product truth,
+   unknown при отсутствии evidence.
+2. Затем отдельно согласовать RI-003 safe checkout manager. Checkout не может
+   жить внутри FounderOS tree, выполнять target code или читать credentials.
+
+RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
+fixtures, object-shaped evidence, finite confidence, human-only resolution,
+directional relationships и contradiction validation реализованы без migration,
+persistence, UI, provider/LLM call или чтения company repositories (DEC-115).
+Durable storage и migrations остаются RI-006 и требуют отдельного branch/PR
+approval.
+
 ## Сейчас — завершение FounderOS 2.0 reset
 
 1. Заново внести нужные provider credentials только через

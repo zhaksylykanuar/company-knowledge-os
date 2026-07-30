@@ -1,0 +1,185 @@
+{
+  "schema_version": "repository_intelligence.v1",
+  "workspace_id": "11111111-1111-4111-8111-111111111111",
+  "repository_id": "22222222-2222-4222-8222-222222222222",
+  "repository": {
+    "provider": "github",
+    "external_id": "synthetic-backend-101",
+    "full_name": "synthetic-company/orders-service",
+    "default_branch": "main",
+    "source_url": "https://github.example/synthetic-company/orders-service"
+  },
+  "audit_level": "L1",
+  "analysis_target": {
+    "target_status": "exact",
+    "commit_algorithm": "sha1",
+    "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+    "metadata_snapshot_id": null
+  },
+  "profile": "backend_service",
+  "policy_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "engine_version": "ri-contract-test-1",
+  "result": {
+    "schema_version": "repository_analyzer_result.v1",
+    "purpose": {
+      "workspace_id": "11111111-1111-4111-8111-111111111111",
+      "status": "observed",
+      "confidence": 0.96,
+      "evidence_refs": [
+        {
+          "kind": "repository_manifest",
+          "source": "github",
+          "ref": "synthetic-company/orders-service@0123456789abcdef0123456789abcdef01234567:pyproject.toml"
+        }
+      ],
+      "contradicting_evidence_refs": [],
+      "human_resolution": {
+        "status": "pending",
+        "resolved_by_user_id": null,
+        "resolved_at": null
+      },
+      "reconciliation_status": "current",
+      "claim_id": "purpose.primary",
+      "summary": "Synthetic backend service for order processing.",
+      "operational_summary": "Exposes an order API and records events for a synthetic frontend.",
+      "repository_type": "backend_service"
+    },
+    "responsibilities": [
+      {
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "status": "observed",
+        "confidence": 0.93,
+        "evidence_refs": [
+          {
+            "kind": "repository_symbol",
+            "source": "github",
+            "ref": "synthetic-company/orders-service@0123456789abcdef0123456789abcdef01234567:app/api/orders.py:1"
+          }
+        ],
+        "contradicting_evidence_refs": [],
+        "human_resolution": {
+          "status": "pending",
+          "resolved_by_user_id": null,
+          "resolved_at": null
+        },
+        "reconciliation_status": "current",
+        "claim_id": "responsibility.orders",
+        "claim_type": "owns",
+        "summary": "Owns the synthetic order API.",
+        "details": [
+          "Creates and reads synthetic orders."
+        ]
+      }
+    ],
+    "interfaces_provided": [
+      {
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "status": "observed",
+        "confidence": 0.91,
+        "evidence_refs": [
+          {
+            "kind": "repository_file",
+            "source": "github",
+            "ref": "synthetic-company/orders-service@0123456789abcdef0123456789abcdef01234567:openapi.json"
+          }
+        ],
+        "contradicting_evidence_refs": [],
+        "human_resolution": {
+          "status": "pending",
+          "resolved_by_user_id": null,
+          "resolved_at": null
+        },
+        "reconciliation_status": "current",
+        "claim_id": "interface.orders-api",
+        "claim_type": "http_api",
+        "summary": "Provides a synthetic HTTP order API.",
+        "details": []
+      }
+    ],
+    "dependencies_consumed": [],
+    "deployment_units": [],
+    "ownership_candidates": [],
+    "relationship_candidates": [
+      {
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "status": "observed",
+        "confidence": 0.9,
+        "evidence_refs": [
+          {
+            "kind": "repository_dependency",
+            "source": "github",
+            "ref": "synthetic-company/orders-service@0123456789abcdef0123456789abcdef01234567:package-contract.json"
+          }
+        ],
+        "contradicting_evidence_refs": [],
+        "human_resolution": {
+          "status": "pending",
+          "resolved_by_user_id": null,
+          "resolved_at": null
+        },
+        "reconciliation_status": "current",
+        "relationship_id": "relationship.calls-catalog",
+        "from_repository": {
+          "workspace_id": "11111111-1111-4111-8111-111111111111",
+          "repository_id": "22222222-2222-4222-8222-222222222222",
+          "provider": "github",
+          "external_id": "synthetic-backend-101",
+          "full_name": "synthetic-company/orders-service",
+          "resolution_status": "canonical"
+        },
+        "to_repository": {
+          "workspace_id": "11111111-1111-4111-8111-111111111111",
+          "repository_id": null,
+          "provider": "github",
+          "external_id": "synthetic-catalog-202",
+          "full_name": "synthetic-company/catalog-service",
+          "resolution_status": "candidate"
+        },
+        "relationship_type": "calls_api_of",
+        "summary": "Calls the synthetic catalog service."
+      }
+    ],
+    "findings": [
+      {
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "status": "observed",
+        "confidence": 0.88,
+        "evidence_refs": [
+          {
+            "kind": "repository_workflow",
+            "source": "github",
+            "ref": "synthetic-company/orders-service@0123456789abcdef0123456789abcdef01234567:.github/workflows/ci.yml"
+          }
+        ],
+        "contradicting_evidence_refs": [],
+        "human_resolution": {
+          "status": "pending",
+          "resolved_by_user_id": null,
+          "resolved_at": null
+        },
+        "reconciliation_status": "current",
+        "finding_id": "finding.missing-typecheck",
+        "rule_id": "ri.ci.typecheck",
+        "category": "quality",
+        "severity": "medium",
+        "lifecycle_status": "new",
+        "title": "Synthetic CI omits type checking",
+        "summary": "The synthetic workflow runs tests but has no type-check step.",
+        "recommended_next_step": "Add a type-check command to the synthetic workflow."
+      }
+    ],
+    "contradictions": [],
+    "unknowns": [
+      {
+        "unknown_id": "unknown.owner",
+        "workspace_id": "11111111-1111-4111-8111-111111111111",
+        "question": "Who owns the synthetic service?",
+        "status": "insufficient_evidence",
+        "evidence_refs": []
+      }
+    ],
+    "limitations": [
+      "Static synthetic analysis only; repository code was not executed."
+    ]
+  }
+}

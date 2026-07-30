@@ -2,6 +2,17 @@
 
 ## 2026-07-30
 
+### Added
+
+- Added RI-001 strict `repository_intelligence.v1` contracts (DEC-115), with a
+  FounderOS-owned workspace/repository envelope, level-dependent SHA rules,
+  object-shaped evidence, finite confidence, human-only resolution provenance,
+  directional relationship validation and preserved contradiction links.
+- Added synthetic frontend L0, backend L1, infrastructure L2 and contradiction
+  fixtures plus invalid contract fixtures and focused tests. This slice adds no
+  persistence, migration, UI, provider/LLM call, repository checkout or company
+  repository read/execution.
+
 ### Changed
 
 - Added a proposal/handoff for future Repository Intelligence: determining what

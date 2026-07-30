@@ -1,0 +1,54 @@
+{
+  "schema_version": "repository_intelligence.v1",
+  "workspace_id": "11111111-1111-4111-8111-111111111111",
+  "repository_id": "33333333-3333-4333-8333-333333333333",
+  "repository": {
+    "provider": "github",
+    "external_id": "invalid-legacy-evidence",
+    "full_name": "synthetic-company/invalid-evidence",
+    "default_branch": "main",
+    "source_url": null
+  },
+  "audit_level": "L0",
+  "analysis_target": {
+    "target_status": "unavailable",
+    "commit_algorithm": null,
+    "commit_sha": null,
+    "metadata_snapshot_id": "synthetic"
+  },
+  "profile": "backend_service",
+  "policy_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "engine_version": "ri-contract-test-1",
+  "result": {
+    "schema_version": "repository_analyzer_result.v1",
+    "purpose": {
+      "workspace_id": "11111111-1111-4111-8111-111111111111",
+      "status": "observed",
+      "confidence": 0.7,
+      "evidence_refs": [
+        "github_discovery_snapshot:synthetic"
+      ],
+      "contradicting_evidence_refs": [],
+      "human_resolution": {
+        "status": "pending",
+        "resolved_by_user_id": null,
+        "resolved_at": null
+      },
+      "reconciliation_status": "current",
+      "claim_id": "purpose.primary",
+      "summary": "This must be rejected.",
+      "operational_summary": null,
+      "repository_type": "backend_service"
+    },
+    "responsibilities": [],
+    "interfaces_provided": [],
+    "dependencies_consumed": [],
+    "deployment_units": [],
+    "ownership_candidates": [],
+    "relationship_candidates": [],
+    "findings": [],
+    "contradictions": [],
+    "unknowns": [],
+    "limitations": []
+  }
+}

@@ -20,7 +20,9 @@ control реализован с encrypted key lifecycle, explicit synthetic chec
 server kill switch. Memory Control v1 реализован для FounderOS-authored
 документов с destructive correction/forgetting. Provider Credential Boundary
 v1 реализован: ключи сервисов принимаются только workspace UI, а `.env.local`
-оставлен только для bootstrap/deployment; изменения не опубликованы.**
+оставлен только для bootstrap/deployment. Repository Intelligence RI-001
+реализован как strict validation-only contract на synthetic fixtures; изменения
+не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -38,6 +40,15 @@ ledger; тексты источников и evidence не копируются.
 
 ## Что изменено
 
+- Реализован RI-001 Repository Intelligence без migration/persistence/UI:
+  `repository_intelligence.v1` отделяет trusted FounderOS envelope от
+  untrusted analyzer result, требует workspace + stable repository identity,
+  моделирует unavailable L0 SHA и exact L1/L2 SHA, использует object-shaped
+  `evidence_ref.v1`, finite confidence, human-only resolution provenance,
+  закрытые relationship/finding taxonomies, deterministic symmetric edges и
+  сохранение evidence-backed contradictions. Добавлены только synthetic
+  frontend/backend/infrastructure fixtures; company repositories не читались,
+  не клонировались и не выполнялись (DEC-115).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -267,6 +278,14 @@ ledger; тексты источников и evidence не копируются.
 
 ## Проверено 2026-07-30
 
+- Repository Intelligence RI-001: focused contract suite — **38 passed**;
+  synthetic L0/L1/L2, strict evidence, SHA/workspace/status/relationship bounds,
+  contradiction preservation, finite confidence и sanitized raw-JSON error
+  покрыты без company data, provider/LLM calls, checkout или execution.
+- Backend после RI-001: guarded `make backend-check` — **830 passed**;
+  `uv run ruff check .`, `uv run mypy app` (**105 source files**), frozen sync,
+  `pip-audit`, Alembic upgrade/check и tracked secret scan успешно; одно внешнее
+  Starlette/httpx deprecation-предупреждение.
 - Frontend: `npm test` — **325 passed**.
 - Frontend: `npm run typecheck` — успешно.
 - Frontend: `npm run lint` — успешно, **99 files**, 0 warnings.
@@ -311,18 +330,21 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. Заново внести OpenAI и нужные connector credentials через
+1. После отдельного approval начать RI-002: read-only workspace-scoped L0
+   projection только на synthetic canonical `Repository`/`SourceRecord`;
+   persistence и migrations остаются RI-006.
+2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
-2. Провести один явно разрешённый credentialed AI smoke из `/settings/ai`
+3. Провести один явно разрешённый credentialed AI smoke из `/settings/ai`
    после проверки provider retention policy и оценить latency/cost.
-3. Провести новые authenticated session/workspace/browser gates и один
+4. Провести новые authenticated session/workspace/browser gates и один
    founder-approved read-only GitHub App read.
-4. Настроить физически независимое storage и отдельное хранение recovery key,
+5. Настроить физически независимое storage и отдельное хранение recovery key,
    затем выполнить первый настоящий encrypted export и full restore drill.
-5. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
+6. Добавить внешний error-reporting/tracing sink и полный hosted topology/RLS
    gate; process counters не являются distributed telemetry.
-6. Расширить Memory Control на provider-backed records только после exact
+7. Расширить Memory Control на provider-backed records только после exact
    dependency preview, evidence-safe cascade и provider-side deletion contract.
 
 ## Неподвижные границы

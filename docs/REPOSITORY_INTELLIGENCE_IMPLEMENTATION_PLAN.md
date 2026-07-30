@@ -1,11 +1,16 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: proposed implementation plan, not implemented
+Status: RI-001 contract/fixtures implemented; RI-002 is the next approved slice
 Prepared: 2026-07-30
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
 relate to one another, what risks exist, and how that evidence connects to the
 rest of FounderOS.
+
+Implementation update (2026-07-30): strict `repository_intelligence.v1`,
+synthetic L0/L1/L2 fixtures and contract tests are implemented under DEC-115.
+No persistence, migration, provider read, checkout, target execution, UI or LLM
+path exists yet. Preparation status remains `preparing`.
 
 ## 1. Decision Summary
 
@@ -1349,6 +1354,8 @@ Keep task prompts short and refer to `AGENTS.md`.
 
 ### RI-001 — Contract and fixtures
 
+Status: implemented and verified on synthetic fixtures (DEC-115).
+
 ```text
 Goal: Define strict repository_intelligence.v1 and fixtures.
 Context: docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md.
@@ -1356,10 +1363,10 @@ Constraints: No persistence or provider writes; bounded schema; evidence require
 Done when: Valid/invalid contract tests pass; ruff and guarded backend-check green.
 ```
 
-#### RI-001 binding requirements and edge cases (verified against current code)
+#### RI-001 binding requirements and edge cases
 
-These are mandatory acceptance criteria for RI-001. Each item was checked
-against the current implementation on 2026-07-30; re-verify before coding.
+These are the implemented RI-001 acceptance criteria. They remain binding for
+later Repository Intelligence slices.
 
 1. **Workspace scope is in the contract, not only in persistence.** Every
    top-level payload carries `workspace_id`, and every fact, relationship, and
@@ -1562,9 +1569,9 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended first task: **RI-001 — Contract and fixtures**. It has no migration,
-no external write, and creates the validation boundary required by all later
-phases.
+Recommended next task: **RI-002 — canonical workspace-scoped L0 projection**.
+Use only synthetic canonical `Repository` and `SourceRecord` data. It remains
+read-only and performs no provider call.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1572,14 +1579,16 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Start RI-001 for FounderOS Repository Intelligence.
+Goal: Implement RI-002 for FounderOS Repository Intelligence.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
 docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
 what every repository does and the evidence-backed directional relationships
 between repositories.
-Constraints: Contract/fixtures only; no migration, provider write, LLM mutation,
-or target repository execution. Preserve unrelated working-tree changes.
-Done when: strict repository_intelligence.v1 valid/invalid fixtures and focused
-tests pass, followed by uv run ruff check . and guarded make backend-check with
-explicit APP_ENV=test and test-marked FOUNDEROS_TEST_DATABASE_URL.
+Constraints: Read-only L0 projection from synthetic canonical Repository and
+SourceRecord rows; no migration, filesystem snapshot as product truth, provider
+call, LLM mutation, checkout or target repository execution. Preserve unrelated
+working-tree changes.
+Done when: synthetic workspace-scoped L0 results validate against
+repository_intelligence.v1, missing evidence stays unknown, focused tests pass,
+and uv run ruff check . plus guarded make backend-check are green.
 ```

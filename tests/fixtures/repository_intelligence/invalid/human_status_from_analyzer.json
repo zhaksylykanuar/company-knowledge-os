@@ -1,0 +1,58 @@
+{
+  "schema_version": "repository_intelligence.v1",
+  "workspace_id": "11111111-1111-4111-8111-111111111111",
+  "repository_id": "44444444-4444-4444-8444-444444444444",
+  "repository": {
+    "provider": "github",
+    "external_id": "invalid-human-status",
+    "full_name": "synthetic-company/invalid-human-status",
+    "default_branch": "main",
+    "source_url": null
+  },
+  "audit_level": "L1",
+  "analysis_target": {
+    "target_status": "exact",
+    "commit_algorithm": "sha1",
+    "commit_sha": "0123456789abcdef0123456789abcdef01234567",
+    "metadata_snapshot_id": null
+  },
+  "profile": "backend_service",
+  "policy_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "engine_version": "ri-contract-test-1",
+  "result": {
+    "schema_version": "repository_analyzer_result.v1",
+    "purpose": {
+      "workspace_id": "11111111-1111-4111-8111-111111111111",
+      "status": "confirmed",
+      "confidence": 1.0,
+      "evidence_refs": [
+        {
+          "kind": "repository_metadata",
+          "source": "github",
+          "ref": "synthetic"
+        }
+      ],
+      "contradicting_evidence_refs": [],
+      "human_resolution": {
+        "status": "pending",
+        "resolved_by_user_id": null,
+        "resolved_at": null
+      },
+      "reconciliation_status": "current",
+      "claim_id": "purpose.primary",
+      "summary": "Analyzer must not confirm this.",
+      "operational_summary": null,
+      "repository_type": "backend_service"
+    },
+    "responsibilities": [],
+    "interfaces_provided": [],
+    "dependencies_consumed": [],
+    "deployment_units": [],
+    "ownership_candidates": [],
+    "relationship_candidates": [],
+    "findings": [],
+    "contradictions": [],
+    "unknowns": [],
+    "limitations": []
+  }
+}

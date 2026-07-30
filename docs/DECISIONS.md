@@ -3633,6 +3633,52 @@ the browser. Database credentials, the master encryption key, cookie/operator
 bootstrap material and disaster-recovery keys cannot depend on the database/UI
 they are required to start or recover.
 
+## DEC-115 - Repository Intelligence Begins With One Strict Synthetic Contract
+
+Decision (2026-07-30): Repository Intelligence v1 begins with a validation-only
+boundary before any repository checkout, provider read, database migration,
+runtime worker, UI, LLM analysis or external action. The versioned
+`repository_intelligence.v1` payload separates a trusted FounderOS envelope
+from the untrusted analyzer result. FounderOS supplies `workspace_id`,
+`repository_id`, stable provider identity, audit level, analysis target,
+profile, policy hash and engine version; an analyzer cannot choose tenancy,
+canonical persistence identity, human decisions, reconciliation state or
+actions.
+
+Repository identity requires GitHub provider, stable provider `external_id` and
+current `full_name`; owner/name alone is not identity. L0 may explicitly report
+an unavailable commit target because current canonical Repository rows do not
+store a SHA. L1 and L2 require an exact lowercase full SHA-1. Analyzer claims
+use only `observed`, `inferred` or `insufficient_evidence`. Human
+`confirmed`/`rejected` outcomes require a separate actor-and-timestamp contract,
+and stale state belongs only to future reconciliation. Analyzer findings may
+start only as `new` or `insufficient_evidence`; persisted lifecycle values such
+as open, resolved, regressed, accepted risk and false positive are not analyzer
+authority.
+
+Repository Intelligence reuses the existing object-shaped
+`evidence_ref.v1` validation rather than promoting legacy repo-audit
+`list[str]` evidence or creating a fourth evidence format. Observed and inferred
+facts, relationships and findings require evidence; an explicit
+`insufficient_evidence` result may remain empty. Confidence is finite and
+bounded to `[0.0, 1.0]`. Every model rejects unknown fields, strings and
+collections are bounded, and the complete serialized payload is capped at
+64 KiB.
+
+Relationships use canonical directional types without a free-form direction
+field. Self-edges, cross-workspace edges, unknown or inverse-view relationship
+types and duplicate normalized edges fail closed. Symmetric edge endpoints are
+normalized deterministically. Unresolved targets remain candidates without a
+canonical repository UUID. Contradictions preserve both evidence-backed claims
+through stable claim references; dangling, self or duplicate contradiction
+pairs are rejected rather than silently repaired.
+
+RI-001 is proven only with repository-owned synthetic L0/L1/L2 fixtures. It
+does not read, clone or execute any company repository and adds no persistence,
+migration, API or UI. The next bounded slice is RI-002: a read-only,
+workspace-scoped L0 projection from synthetic canonical Repository and
+SourceRecord data. Durable storage remains RI-006.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:
