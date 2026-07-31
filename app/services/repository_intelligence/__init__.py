@@ -21,6 +21,17 @@ from app.services.repository_intelligence.collectors import (
 from app.services.repository_intelligence.l0 import (
     build_workspace_repository_intelligence_l0,
 )
+from app.services.repository_intelligence.relationships import (
+    RepositoryPortfolioEntryV1,
+    RepositoryPortfolioV1,
+    RepositoryRelationshipAnalysisV1,
+    RepositoryRelationshipPolicy,
+    RepositoryRelationshipSignalV1,
+    build_repository_relationship_analysis,
+    is_relationship_fact_type,
+    relationship_signals_from_static_collection,
+    validate_repository_relationship_analysis_json,
+)
 
 __all__ = [
     "HumanResolutionV1",
@@ -28,12 +39,21 @@ __all__ = [
     "RepositoryCheckoutPolicy",
     "RepositoryCheckoutRequest",
     "RepositoryIntelligenceV1",
+    "RepositoryPortfolioEntryV1",
+    "RepositoryPortfolioV1",
+    "RepositoryRelationshipAnalysisV1",
+    "RepositoryRelationshipPolicy",
+    "RepositoryRelationshipSignalV1",
     "RepositoryStaticCollectionV1",
     "RepositoryStaticCollectorPolicy",
     "RepositoryStaticFactV1",
     "build_workspace_repository_intelligence_l0",
+    "build_repository_relationship_analysis",
     "collect_repository_static_facts",
+    "is_relationship_fact_type",
     "materialize_repository_checkout",
+    "relationship_signals_from_static_collection",
+    "validate_repository_relationship_analysis_json",
     "validate_repository_static_collection_json",
     "validate_repository_intelligence_json",
 ]

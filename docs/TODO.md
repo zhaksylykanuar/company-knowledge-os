@@ -6,9 +6,8 @@
 
 ## Сейчас — Repository Intelligence
 
-1. После отдельного approval реализовать **RI-005** directional relationship
-   candidates и graph validation только на synthetic RI-004 outputs, без
-   migration.
+1. После отдельного approval начать **RI-006** persistence ADR, storage/retention
+   decisions и reviewed migration в отдельной branch/PR workflow.
 
 RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
 fixtures, object-shaped evidence, finite confidence, human-only resolution,
@@ -24,8 +23,12 @@ RI-004 завершён: bounded deterministic collector читает тольк
 checkout, извлекает sanitized manifests/entrypoints/dependencies/interfaces/
 deployment/tests/CI/documentation/migrations с evidence на каждый факт и не
 выполняет target code (DEC-118).
-Durable storage и migrations остаются RI-006 и требуют отдельного branch/PR
-approval.
+RI-005 завершён: trusted synthetic portfolio + RI-004 facts строят directional
+observed/inferred candidates, unresolved targets, inverse views, symmetric
+normalization, cycle/orphan findings и fail-closed contradiction review без
+company read или persistence (DEC-119).
+Durable storage и migrations остаются RI-006 и требуют отдельного approval,
+branch/PR и reviewed migration.
 
 ## Сейчас — завершение FounderOS 2.0 reset
 

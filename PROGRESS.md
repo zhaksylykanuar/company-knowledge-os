@@ -23,8 +23,10 @@ v1 реализован: ключи сервисов принимаются то
 оставлен только для bootstrap/deployment. Repository Intelligence RI-001
 реализован как strict validation-only contract, RI-002 как canonical
 workspace-scoped L0 projection, RI-003 как exact-SHA checkout manager, а RI-004
-как bounded static collectors над synthetic checkouts. Target code не
-выполняется; изменения не опубликованы.**
+как bounded static collectors над synthetic checkouts. RI-005 строит
+directional evidence-backed relationship candidates и bounded graph validation
+только из synthetic RI-004 outputs. Target code не выполняется; изменения не
+опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -74,6 +76,16 @@ ledger; тексты источников и evidence не копируются.
   values. Synthetic frontend/backend/infrastructure и pathological fixtures
   покрывают determinism, bounds, evidence projection и no-execution boundary
   (DEC-118).
+- Реализован RI-005 relationship analysis без provider/company read,
+  migration/persistence/API/UI/LLM и без target execution. Trusted synthetic
+  portfolio manifest разрешает stable identities и явные package/API/event/
+  deploy selectors; RI-004 relationship-bearing facts становятся observed или
+  inferred directional candidates с evidence на каждый edge. Unresolved targets
+  остаются candidate references, symmetric edges нормализуются и объединяют
+  evidence, inverse views не создают второй durable edge, а bounded graph pass
+  находит cycles и orphans. Name similarity сама по себе не создаёт связь;
+  opposing directional claims fail closed для отдельного contradiction review
+  (DEC-119).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -372,8 +384,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. После отдельного approval начать RI-005: directional relationship candidates
-   и graph validation только на synthetic RI-004 outputs, без migration.
+1. После отдельного approval начать RI-006 persistence ADR и reviewed migration
+   в отдельной branch/PR workflow; до approval не создавать таблицы или jobs.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
@@ -388,11 +400,11 @@ console warnings/errors не обнаружены. Это не заменяет 
 7. Расширить Memory Control на provider-backed records только после exact
    dependency preview, evidence-safe cascade и provider-side deletion contract.
 
-Последняя проверка RI-004 (2026-07-31):
+Последняя проверка RI-005 (2026-07-31):
 
-- focused Repository Intelligence suite — **72 passed**;
+- focused RI contract/checkout/collector/relationship suite — **80 passed**;
 - `uv run ruff check .` — успешно;
-- guarded `make backend-check` — **873 passed**, Ruff, mypy (**108 source
+- guarded `make backend-check` — **881 passed**, Ruff, mypy (**109 source
   files**), frozen sync, `pip-audit`, Alembic upgrade/check и tracked secret
   scan успешно; одно внешнее Starlette/httpx deprecation-предупреждение.
 

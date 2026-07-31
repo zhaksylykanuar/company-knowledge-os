@@ -17,6 +17,17 @@
   tests proving deterministic output, bounded files/items, evidence on every
   fact, cleanup and zero target-code execution. No persistence, migration, UI,
   provider/company repository read, network operation or LLM path was added.
+- Added RI-005 directional relationship candidates and bounded portfolio graph
+  validation (DEC-119) over strict synthetic RI-004 facts and a trusted
+  workspace-scoped portfolio manifest.
+- Added observed/inferred edge status, evidence merging, unresolved candidate
+  targets, deterministic symmetric normalization, inverse views, cycle/orphan
+  findings, selector ambiguity rejection and fail-closed opposing-direction
+  contradiction review. Repository-name similarity alone creates no edge.
+- Added synthetic package/API/event/deploy, unresolved, symmetric, cycle,
+  orphan, contradiction, workspace/isolation and pathological bound tests. No
+  migration, persistence, UI, provider/company repository read, target
+  execution or LLM path was added.
 
 ## 2026-07-30
 

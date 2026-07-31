@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001–RI-004 implemented; RI-005 is the next approval-gated slice
+Status: RI-001–RI-005 implemented; RI-006 is the next approval-gated slice
 Prepared: 2026-07-31
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
@@ -13,7 +13,8 @@ Canonical workspace-scoped synthetic L0 is implemented under DEC-116. No
 persistence model, migration, provider portfolio read, target execution, UI or
 LLM path exists yet. Synthetic-only external exact-SHA checkout is implemented
 under DEC-117. Bounded deterministic static collectors are implemented under
-DEC-118. Preparation status remains `preparing`.
+DEC-118. Directional relationship candidates and bounded graph validation are
+implemented under DEC-119. Preparation status remains `preparing`.
 
 ## 1. Decision Summary
 
@@ -1486,6 +1487,10 @@ Done when: Synthetic fixtures produce validated deterministic output and checks 
 
 ### RI-005 — Relationship candidates
 
+Status: implemented and verified on synthetic package/API/event/deploy,
+unresolved, symmetric, cycle, orphan, contradiction and pathological fixtures
+(DEC-119).
+
 ```text
 Goal: Build directional evidence-backed repository relationship candidates.
 Context: RI plan section 6.
@@ -1578,9 +1583,10 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: **RI-005 — relationship candidates**. Consume only
-synthetic RI-004 facts to produce directional evidence-backed candidates and
-graph validation. Do not read company repositories or add persistence.
+Recommended next task: **RI-006 — persistence ADR and migration**. Resolve the
+explicit storage, job, evidence, contradiction, coverage and retention
+questions first, then use the required branch/PR workflow for any reviewed
+migration. Do not start persistence without separate approval.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1588,17 +1594,17 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Implement RI-005 for FounderOS Repository Intelligence.
+Goal: Implement RI-006 for FounderOS Repository Intelligence.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
 docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
 what every repository does and the evidence-backed directional relationships
 between repositories.
-Constraints: Relationship candidates only over synthetic RI-004 outputs;
-directional types, observed/inferred distinction, evidence on every edge,
-unresolved targets and graph validation; no company repository read, provider
-call, migration, UI, persistence or LLM mutation. Preserve unrelated
-working-tree changes.
-Done when: package/API/event/deploy synthetic edges and graph contradiction
-fixtures produce deterministic schema-valid output, and uv run ruff check .
-plus guarded make backend-check are green.
+Constraints: Decide persistence, job, artifact, retention, evidence,
+contradiction and complete-coverage contracts before code; branch/PR required;
+same-workspace foreign keys and idempotent reconciliation; synthetic test
+database only; no company repository read, provider call, UI or LLM mutation.
+Preserve unrelated working-tree changes.
+Done when: approved ADR, reviewed migration, workspace isolation, retry,
+partial-run, idempotency, reconciliation and deletion/retention checks pass,
+and uv run ruff check . plus guarded make backend-check are green.
 ```

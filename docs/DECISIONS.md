@@ -3775,6 +3775,44 @@ UI, provider/company repository read, relationship inference, LLM call or
 target execution. RI-005 directional relationship candidates remain a separate
 approval-gated slice.
 
+## DEC-119 - Repository Relationships Are Directional Candidates Before Persistence
+
+Decision (2026-07-31): RI-005 consumes only strict synthetic RI-004 collections
+and a trusted workspace-scoped `repository_portfolio.v1` manifest. The manifest
+supplies canonical repository IDs plus explicit unique selectors for packages,
+APIs, events, images, deployment targets, tests and documentation. Repository
+name similarity, shared language, shared framework or same organization never
+creates an edge by itself.
+
+Only explicit relationship-bearing facts or strict evidence-backed signals may
+create `RepositoryRelationshipV1` candidates. Machine-readable clues remain
+`observed`; weaker explicitly supplied clues remain `inferred`; both keep
+human resolution pending. Every edge requires object-shaped evidence. A target
+that does not resolve uniquely remains an unresolved candidate reference and
+cannot claim a canonical repository UUID. Ambiguous selectors, cross-workspace
+inputs, self-edges and evidence-free signals fail closed.
+
+Directional relationship types retain one canonical durable direction.
+Inverse wording is a deterministic view, not a second edge. Symmetric types
+normalize endpoint order and merge evidence deterministically. Duplicate edges
+are collapsed only after exact stable-identity normalization. Opposing
+directional candidates between the same repositories are not silently accepted
+or selected; RI-005 fails closed and requires a later explicit contradiction
+review.
+
+The graph pass is bounded by repository, signal, edge, evidence, cycle depth,
+finding and serialized-output limits. It reports strongly connected components
+as cycles, repositories with no candidate edges as orphans, and unresolved
+targets as findings. These are analyzer outputs, not persisted lifecycle state
+or human confirmation.
+
+RI-005 is verified only with synthetic package, API, event, deployment,
+unresolved, symmetric, cycle, orphan, ambiguity, workspace and pathological
+fixtures. It performs no repository read, target execution, provider call,
+network operation, persistence, migration, API, UI or LLM call. RI-006
+persistence remains separately approval-gated and requires a branch/PR plus
+reviewed migration.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

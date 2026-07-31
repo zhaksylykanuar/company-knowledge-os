@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — полное руководство по подготовке и запуску
 
-Статус: RI-001–RI-004 реализованы; следующий approval-gated этап — RI-005
+Статус: RI-001–RI-005 реализованы; следующий approval-gated этап — RI-006
 Дата подготовки: 2026-07-31
 Основной проект: `company-knowledge-os`
 Подробный архитектурный план:
@@ -176,8 +176,11 @@ RI-003:
 RI-004:
   implemented and verified on bounded synthetic static fixtures
 
+RI-005:
+  implemented and verified on synthetic relationship/graph fixtures
+
 next slice:
-  RI-005 after separate approval
+  RI-006 after separate approval
 ```
 
 Это снимок состояния, а не вечная константа. Перед каждым новым тикетом агент
@@ -1036,6 +1039,8 @@ dependency versions, script commands или environment values.
 
 ### RI-005 — Relationship candidates
 
+Статус: **завершён 2026-07-31** (DEC-119).
+
 Создать:
 
 - directed edges;
@@ -1046,6 +1051,13 @@ dependency versions, script commands или environment values.
 - orphan detection;
 - graph validation;
 - contradiction fixtures.
+
+Реализованный relationship pass использует только strict synthetic RI-004
+facts и trusted portfolio manifest. Он сохраняет canonical direction,
+object-shaped evidence и observed/inferred distinction, не подтверждает edges
+за человека, оставляет unresolved targets кандидатами, нормализует symmetric
+edges, строит inverse views и bounded cycle/orphan findings. Name similarity
+сама по себе связь не создаёт.
 
 ### RI-006 — Persistence and migrations
 
@@ -1610,33 +1622,34 @@ npm run build
 ## 26. Готовый промпт следующему агенту
 
 ```text
-Goal: Implement RI-005 — Repository Intelligence relationship candidates.
+Goal: Implement RI-006 — Repository Intelligence persistence ADR and migration.
 
 Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
 
 Constraints:
-- Only RI-005.
-- Use only synthetic RI-004 collector outputs.
-- Build directional observed/inferred relationship candidates with evidence,
-  unresolved targets and graph validation.
-- Do not read or execute target repositories or expose FounderOS credentials.
-- Bound items and output and sanitize every retained field.
-- No migration, persistence model, UI, portfolio provider read or LLM call.
+- Only RI-006 after separate approval.
+- Resolve storage, job, artifact, retention, evidence, contradiction and
+  complete-coverage decisions before code.
+- Use the required branch/PR workflow and a reviewed migration.
+- Same-workspace foreign keys, idempotency, partial-run safety and
+  reconciliation must fail closed.
+- Synthetic test database only; no company repository read or target execution.
+- No UI, portfolio provider read or LLM call.
 - Do not touch .env.local, .local, credentials, company data or existing connections.
 - Update PROGRESS.md, docs/TODO.md, and docs/CHANGELOG.md.
 - Nothing may be pushed.
 
 Done when:
-- Synthetic package/API/event/deploy relationships produce deterministic
-  schema-valid candidates.
-- Inverse, symmetric, unresolved-target, cycle, orphan and contradiction
-  fixtures remain bounded and evidence-backed.
+- The approved ADR and reviewed migration define jobs, runs, facts,
+  relationships, findings, evidence, contradictions and retention.
+- Workspace isolation, retry, partial-run, idempotency, reconciliation and
+  deletion/retention fixtures pass.
 - git diff --check passes.
 - Staged and tracked secret scans pass.
 - uv run ruff check . passes.
 - Guarded make backend-check passes against an explicit test-marked PostgreSQL URL, or DB-backed checks are honestly reported blocked.
-- A scoped local RI-005 commit is created.
-- Report the result and wait for approval before RI-006.
+- A scoped local RI-006 commit is created on the approved branch.
+- Report the result and wait for approval before RI-007.
 ```
 
 ## 27. Краткий финальный checklist
@@ -1654,7 +1667,9 @@ Done when:
 - [x] зафиксировать DEC-117;
 - [x] реализовать RI-004 только на synthetic local repositories;
 - [x] зафиксировать DEC-118;
-- [ ] начать RI-005 только после отдельного approval.
+- [x] реализовать RI-005 только на synthetic outputs;
+- [x] зафиксировать DEC-119;
+- [ ] начать RI-006 только после отдельного approval.
 
 ### Во время подготовки
 
