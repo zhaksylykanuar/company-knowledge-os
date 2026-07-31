@@ -1,18 +1,19 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001–RI-003 implemented; RI-004 is the next approval-gated slice
-Prepared: 2026-07-30
+Status: RI-001–RI-004 implemented; RI-005 is the next approval-gated slice
+Prepared: 2026-07-31
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
 relate to one another, what risks exist, and how that evidence connects to the
 rest of FounderOS.
 
-Implementation update (2026-07-30): strict `repository_intelligence.v1`,
+Implementation update (2026-07-31): strict `repository_intelligence.v1`,
 synthetic L0/L1/L2 fixtures and contract tests are implemented under DEC-115.
 Canonical workspace-scoped synthetic L0 is implemented under DEC-116. No
 persistence model, migration, provider portfolio read, target execution, UI or
 LLM path exists yet. Synthetic-only external exact-SHA checkout is implemented
-under DEC-117. Preparation status remains `preparing`.
+under DEC-117. Bounded deterministic static collectors are implemented under
+DEC-118. Preparation status remains `preparing`.
 
 ## 1. Decision Summary
 
@@ -1473,6 +1474,9 @@ Done when: Path, SHA, cleanup, timeout, and failure tests pass.
 
 ### RI-004 — Static collectors
 
+Status: implemented and verified on synthetic frontend/backend/infrastructure
+and pathological repositories (DEC-118).
+
 ```text
 Goal: Extract manifests, entrypoints, interfaces, dependencies, deploy clues, and tests.
 Context: Three synthetic fixture repositories (frontend/backend/infra) and RI schema.
@@ -1574,10 +1578,9 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: **RI-004 — static collectors**. Inspect only bounded
-synthetic checkout contents for manifests, entrypoints, interfaces,
-dependencies, deployment clues, tests and documentation. Do not execute target
-code.
+Recommended next task: **RI-005 — relationship candidates**. Consume only
+synthetic RI-004 facts to produce directional evidence-backed candidates and
+graph validation. Do not read company repositories or add persistence.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1585,16 +1588,17 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Implement RI-004 for FounderOS Repository Intelligence.
+Goal: Implement RI-005 for FounderOS Repository Intelligence.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
 docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
 what every repository does and the evidence-backed directional relationships
 between repositories.
-Constraints: Static-only collectors over synthetic RI-003 checkouts; bounded
-files/bytes/depth/output; sanitized evidence for every fact; no target command
-execution, company repository read, provider call, migration, UI or LLM
-mutation. Preserve unrelated working-tree changes.
-Done when: synthetic frontend/backend/infrastructure fixtures produce
-deterministic schema-valid collector output, pathological paths stay bounded,
-and uv run ruff check . plus guarded make backend-check are green.
+Constraints: Relationship candidates only over synthetic RI-004 outputs;
+directional types, observed/inferred distinction, evidence on every edge,
+unresolved targets and graph validation; no company repository read, provider
+call, migration, UI, persistence or LLM mutation. Preserve unrelated
+working-tree changes.
+Done when: package/API/event/deploy synthetic edges and graph contradiction
+fixtures produce deterministic schema-valid output, and uv run ruff check .
+plus guarded make backend-check are green.
 ```

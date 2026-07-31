@@ -21,10 +21,10 @@ server kill switch. Memory Control v1 реализован для FounderOS-auth
 документов с destructive correction/forgetting. Provider Credential Boundary
 v1 реализован: ключи сервисов принимаются только workspace UI, а `.env.local`
 оставлен только для bootstrap/deployment. Repository Intelligence RI-001
-реализован как strict validation-only contract, а RI-002 как canonical
-workspace-scoped L0 projection. RI-003 exact-SHA checkout manager реализован на
-synthetic repositories с external ephemeral path и no-execution boundary;
-изменения не опубликованы.**
+реализован как strict validation-only contract, RI-002 как canonical
+workspace-scoped L0 projection, RI-003 как exact-SHA checkout manager, а RI-004
+как bounded static collectors над synthetic checkouts. Target code не
+выполняется; изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -65,6 +65,15 @@ ledger; тексты источников и evidence не копируются.
   credential-free Git environment с denied protocols, bounded tree/blob reads,
   read-only materialization и verified cleanup на success/failure/cancel
   (DEC-117).
+- Реализован RI-004 static collection без provider/company read,
+  migration/persistence/API/UI/LLM и без target execution. Bounded deterministic
+  collector читает только RI-003 exact-SHA checkout, распознаёт manifests,
+  entrypoints, package dependencies, HTTP/schema interfaces, deployment,
+  tests/CI, documentation и migrations/data objects, сохраняет только
+  sanitized identifiers/paths и object-shaped evidence, а не file bodies или
+  values. Synthetic frontend/backend/infrastructure и pathological fixtures
+  покрывают determinism, bounds, evidence projection и no-execution boundary
+  (DEC-118).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -363,9 +372,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. После отдельного approval начать RI-004: bounded static collectors только на
-   synthetic frontend/backend/infrastructure fixtures, без выполнения target
-   code.
+1. После отдельного approval начать RI-005: directional relationship candidates
+   и graph validation только на synthetic RI-004 outputs, без migration.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
@@ -379,6 +387,14 @@ console warnings/errors не обнаружены. Это не заменяет 
    gate; process counters не являются distributed telemetry.
 7. Расширить Memory Control на provider-backed records только после exact
    dependency preview, evidence-safe cascade и provider-side deletion contract.
+
+Последняя проверка RI-004 (2026-07-31):
+
+- focused Repository Intelligence suite — **72 passed**;
+- `uv run ruff check .` — успешно;
+- guarded `make backend-check` — **873 passed**, Ruff, mypy (**108 source
+  files**), frozen sync, `pip-audit`, Alembic upgrade/check и tracked secret
+  scan успешно; одно внешнее Starlette/httpx deprecation-предупреждение.
 
 ## Неподвижные границы
 

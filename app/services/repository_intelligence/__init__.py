@@ -11,6 +11,13 @@ from app.services.repository_intelligence.checkout import (
     RepositoryCheckoutRequest,
     materialize_repository_checkout,
 )
+from app.services.repository_intelligence.collectors import (
+    RepositoryStaticCollectionV1,
+    RepositoryStaticCollectorPolicy,
+    RepositoryStaticFactV1,
+    collect_repository_static_facts,
+    validate_repository_static_collection_json,
+)
 from app.services.repository_intelligence.l0 import (
     build_workspace_repository_intelligence_l0,
 )
@@ -21,7 +28,12 @@ __all__ = [
     "RepositoryCheckoutPolicy",
     "RepositoryCheckoutRequest",
     "RepositoryIntelligenceV1",
+    "RepositoryStaticCollectionV1",
+    "RepositoryStaticCollectorPolicy",
+    "RepositoryStaticFactV1",
     "build_workspace_repository_intelligence_l0",
+    "collect_repository_static_facts",
     "materialize_repository_checkout",
+    "validate_repository_static_collection_json",
     "validate_repository_intelligence_json",
 ]

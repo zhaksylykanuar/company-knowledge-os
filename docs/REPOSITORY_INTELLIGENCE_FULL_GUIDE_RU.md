@@ -1,7 +1,7 @@
 # FounderOS Repository Intelligence — полное руководство по подготовке и запуску
 
-Статус: RI-001–RI-003 реализованы; следующий approval-gated этап — RI-004
-Дата подготовки: 2026-07-30
+Статус: RI-001–RI-004 реализованы; следующий approval-gated этап — RI-005
+Дата подготовки: 2026-07-31
 Основной проект: `company-knowledge-os`
 Подробный архитектурный план:
 [`REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md`](REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md)
@@ -155,7 +155,7 @@ Markdown, PDF и Obsidian остаются rebuildable exports.
 
 ## 4. Текущее состояние
 
-Проверенное состояние на 2026-07-30:
+Проверенное состояние на 2026-07-31:
 
 ```text
 current directory:
@@ -167,8 +167,17 @@ current branch:
 RI-001:
   implemented and verified on synthetic fixtures
 
+RI-002:
+  implemented and verified on synthetic canonical rows
+
+RI-003:
+  implemented and verified on synthetic exact-SHA checkouts
+
+RI-004:
+  implemented and verified on bounded synthetic static fixtures
+
 next slice:
-  RI-004 after separate approval
+  RI-005 after separate approval
 ```
 
 Это снимок состояния, а не вечная константа. Перед каждым новым тикетом агент
@@ -996,6 +1005,8 @@ FOUNDEROS_REPOSITORY_INTELLIGENCE_DATA_PATH
 
 ### RI-004 — Static collectors
 
+Статус: **завершён 2026-07-31** (DEC-118).
+
 Только synthetic fixtures:
 
 - frontend;
@@ -1017,6 +1028,11 @@ Collectors:
 - migrations/data ownership.
 
 Fixture code не выполнять.
+
+Реализованный collector читает только bounded read-only RI-003 checkout,
+возвращает deterministic `repository_static_collection.v1`, сохраняет
+sanitized identifiers/paths и object-shaped evidence, но не file bodies,
+dependency versions, script commands или environment values.
 
 ### RI-005 — Relationship candidates
 
@@ -1594,33 +1610,33 @@ npm run build
 ## 26. Готовый промпт следующему агенту
 
 ```text
-Goal: Implement RI-004 — static Repository Intelligence collectors.
+Goal: Implement RI-005 — Repository Intelligence relationship candidates.
 
 Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
 
 Constraints:
-- Only RI-004.
-- Use only synthetic repository fixtures.
-- Reuse the implemented RI-003 external exact-SHA checkout manager.
-- Inspect only bounded static files from synthetic frontend/backend/infrastructure checkouts.
-- Do not execute target repository commands or expose FounderOS credentials.
-- Bound files, bytes, depth and output and sanitize every retained field.
+- Only RI-005.
+- Use only synthetic RI-004 collector outputs.
+- Build directional observed/inferred relationship candidates with evidence,
+  unresolved targets and graph validation.
+- Do not read or execute target repositories or expose FounderOS credentials.
+- Bound items and output and sanitize every retained field.
 - No migration, persistence model, UI, portfolio provider read or LLM call.
 - Do not touch .env.local, .local, credentials, company data or existing connections.
 - Update PROGRESS.md, docs/TODO.md, and docs/CHANGELOG.md.
 - Nothing may be pushed.
 
 Done when:
-- Synthetic manifests, entrypoints, dependencies, interfaces, deployment,
-  tests/CI and documentation collectors produce deterministic validated output.
-- Pathological fixtures remain bounded.
-- No target code is executed.
+- Synthetic package/API/event/deploy relationships produce deterministic
+  schema-valid candidates.
+- Inverse, symmetric, unresolved-target, cycle, orphan and contradiction
+  fixtures remain bounded and evidence-backed.
 - git diff --check passes.
 - Staged and tracked secret scans pass.
 - uv run ruff check . passes.
 - Guarded make backend-check passes against an explicit test-marked PostgreSQL URL, or DB-backed checks are honestly reported blocked.
-- A scoped local RI-004 commit is created.
-- Report the result and wait for approval before RI-005.
+- A scoped local RI-005 commit is created.
+- Report the result and wait for approval before RI-006.
 ```
 
 ## 27. Краткий финальный checklist
@@ -1636,7 +1652,9 @@ Done when:
 - [x] зафиксировать DEC-116;
 - [x] реализовать RI-003 только на synthetic local repositories;
 - [x] зафиксировать DEC-117;
-- [ ] начать RI-004 только после отдельного approval.
+- [x] реализовать RI-004 только на synthetic local repositories;
+- [x] зафиксировать DEC-118;
+- [ ] начать RI-005 только после отдельного approval.
 
 ### Во время подготовки
 

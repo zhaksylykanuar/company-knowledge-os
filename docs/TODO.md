@@ -6,11 +6,9 @@
 
 ## Сейчас — Repository Intelligence
 
-1. После отдельного approval реализовать **RI-004** static collectors только на
-   synthetic repositories,
-   без выполнения fixture code.
-2. Затем выполнить RI-005 directional relationship candidates и graph
-   validation без migration.
+1. После отдельного approval реализовать **RI-005** directional relationship
+   candidates и graph validation только на synthetic RI-004 outputs, без
+   migration.
 
 RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
 fixtures, object-shaped evidence, finite confidence, human-only resolution,
@@ -22,6 +20,10 @@ active identity-matching `SourceRecord`, сохраняет unknown без evide
 RI-003 завершён: exact-SHA checkout использует внешний ephemeral runtime path,
 не выполняет target code, не наследует credentials/network и удаляет run на
 каждом exit (DEC-117).
+RI-004 завершён: bounded deterministic collector читает только synthetic RI-003
+checkout, извлекает sanitized manifests/entrypoints/dependencies/interfaces/
+deployment/tests/CI/documentation/migrations с evidence на каждый факт и не
+выполняет target code (DEC-118).
 Durable storage и migrations остаются RI-006 и требуют отдельного branch/PR
 approval.
 

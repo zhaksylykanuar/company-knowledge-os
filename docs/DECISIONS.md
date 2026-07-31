@@ -3743,6 +3743,38 @@ historical SHA, path, bound, timeout, output, failure, cancellation, cleanup,
 symlink, gitlink, alternates and no-execution tests. The next bounded slice is
 RI-004 static collectors and still requires separate approval.
 
+## DEC-118 - Static Repository Facts Are Bounded, Sanitized And Non-Executable
+
+Decision (2026-07-31): RI-004 reads only a materialized RI-003 exact-SHA
+checkout that declares read-only files, no target execution and no network use.
+It performs deterministic static inspection for recognized manifests,
+entrypoints, dependencies, HTTP/schema interfaces, deployment definitions,
+tests/CI, documentation and migrations/data objects. It never imports source
+modules, invokes a target command, loads a provider credential, follows a link,
+persists a result or emits a source-file body.
+
+The collector validates its policy, checkout boundary and immutable
+file-count/byte manifest before inspection. File count, total bytes, per-file
+bytes, path bytes, path depth, wall time, dependencies per manifest and items
+per output category are explicit fail-closed bounds. Only recognized bounded
+UTF-8 files are parsed. Oversized recognized files may be recorded as skipped;
+invalid recognized JSON/TOML manifests fail with sanitized errors rather than
+being repaired or copied.
+
+Output uses strict `repository_static_collection.v1`. Each fact contains a
+stable category/type, sanitized identifier or relative path and one
+object-shaped `evidence_ref.v1` selector bound to repository identity, exact
+SHA and path. File bodies, dependency versions, script commands, environment
+values and infrastructure contents are not retained. Facts can be projected
+into the existing strict RI-001 `RepositoryClaimV1` boundary, and stable sorted
+JSON proves deterministic output.
+
+RI-004 is verified only with local synthetic frontend, backend, infrastructure
+and pathological repositories. It adds no migration, persistence model, API,
+UI, provider/company repository read, relationship inference, LLM call or
+target execution. RI-005 directional relationship candidates remain a separate
+approval-gated slice.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

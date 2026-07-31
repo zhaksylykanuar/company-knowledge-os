@@ -1,5 +1,23 @@
 # FounderOS Changelog
 
+## 2026-07-31
+
+### Added
+
+- Added RI-004 bounded static collectors (DEC-118) over read-only synthetic
+  RI-003 exact-SHA checkouts. The deterministic validated result covers
+  manifests, entrypoints, package dependencies, HTTP/schema interfaces,
+  deployment definitions, tests/CI, documentation and migration/data-object
+  clues.
+- Added evidence-backed projection into the existing RI-001 claim contract,
+  strict output/resource bounds, checkout-manifest verification, sanitized
+  errors and stable JSON serialization without retaining source bodies or
+  configuration values.
+- Added synthetic frontend, backend, infrastructure and pathological collector
+  tests proving deterministic output, bounded files/items, evidence on every
+  fact, cleanup and zero target-code execution. No persistence, migration, UI,
+  provider/company repository read, network operation or LLM path was added.
+
 ## 2026-07-30
 
 ### Added
