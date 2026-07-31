@@ -34,6 +34,13 @@ EXPECTED_ALEMBIC_TABLES = {
     "company_memory_events",
     "company_memory_event_streams",
     "company_memory_checkpoints",
+    "repository_analysis_jobs",
+    "repository_audit_runs",
+    "repository_facts",
+    "repository_relationships",
+    "repository_audit_findings",
+    "repository_contradictions",
+    "repository_evidence_links",
 }
 
 EXPECTED_ALEMBIC_MODEL_MODULES = {
@@ -45,6 +52,7 @@ EXPECTED_ALEMBIC_MODEL_MODULES = {
     "app.db.memory_models",
     "app.db.models",
     "app.db.event_models",
+    "app.db.repository_intelligence_models",
 }
 
 

@@ -25,8 +25,10 @@ v1 реализован: ключи сервисов принимаются то
 workspace-scoped L0 projection, RI-003 как exact-SHA checkout manager, а RI-004
 как bounded static collectors над synthetic checkouts. RI-005 строит
 directional evidence-backed relationship candidates и bounded graph validation
-только из synthetic RI-004 outputs. Target code не выполняется; изменения не
-опубликованы.**
+только из synthetic RI-004 outputs. RI-006 добавляет durable jobs/runs/facts/
+relationships/findings/contradictions, canonical evidence links,
+complete-coverage reconciliation и явный retention/deletion contract на
+отдельной branch. Target code не выполняется; изменения не опубликованы.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -86,6 +88,18 @@ ledger; тексты источников и evidence не копируются.
   находит cycles и orphans. Name similarity сама по себе не создаёт связь;
   opposing directional claims fail closed для отдельного contradiction review
   (DEC-119).
+- Реализован RI-006 persistence без provider/company read, API/UI/LLM и без
+  target execution. Отдельная `codex/repository-intelligence-persistence`
+  branch добавляет PostgreSQL jobs, immutable run headers, reconciled facts,
+  directional relationships, durable findings, preserved contradictions и
+  canonical `EvidenceRef` links с composite workspace/repository/run FKs.
+  Owner/admin enqueue/delete boundary, idempotency hash, leases, retry,
+  cancellation, partial-run fail-closed reconciliation, finding regression и
+  human accepted-risk preservation покрыты synthetic DB tests. Каждый run
+  создаёт один sanitized internal `SourceRecord` manifest; bounded artifacts
+  хранятся только как raw-storage refs на 30 дней, checkout удаляется на exit,
+  canonical rows живут до явного repository/workspace deletion. Downgrade
+  блокируется при непустых RI tables (DEC-120).
 - Подготовлен proposal/handoff
   `docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md` для будущего
   Repository Intelligence: назначение и обязанности каждого репозитория,
@@ -384,8 +398,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. После отдельного approval начать RI-006 persistence ADR и reviewed migration
-   в отдельной branch/PR workflow; до approval не создавать таблицы или jobs.
+1. После review/merge RI-006 и отдельного approval начать RI-007 portfolio/detail
+   UI и read APIs; до этого не добавлять product UI поверх новых таблиц.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
@@ -400,23 +414,24 @@ console warnings/errors не обнаружены. Это не заменяет 
 7. Расширить Memory Control на provider-backed records только после exact
    dependency preview, evidence-safe cascade и provider-side deletion contract.
 
-Последняя проверка RI-005 (2026-07-31):
+Последняя focused проверка RI-006 (2026-07-31):
 
-- Security review for parent PR #35 (2026-08-02) hardened fixed-origin GitHub
+- Parent PR #35 merged into `main` on 2026-08-02 after fixed-origin GitHub
   requests, keyed one-time setup-state verification, status-only bootstrap CLI
   output, versioned HKDF-derived secret encryption and exact frontend error
-  matching (DEC-121); focused security suite — **51 backend + 326 frontend
-  passed**.
-- CI harness backport (2026-08-02) фиксирует canonical
-  `http://127.0.0.1:3000` с non-credentialed CORS одинаково для direct pytest
-  и `make backend-check`; production CORS defaults не изменены.
-- focused RI contract/checkout/collector/relationship suite — **80 passed**;
+  matching passed CodeQL review (DEC-121).
+- CI harness фиксирует canonical `http://127.0.0.1:3000` с non-credentialed
+  CORS одинаково для direct pytest и `make backend-check`; production CORS
+  defaults не изменены.
+- focused RI contract/checkout/collector/relationship/persistence suite —
+  **93 passed**;
 - `uv run ruff check .` — успешно;
-- guarded `make backend-check` — **885 passed**, Ruff, mypy (**109 source
-  files**), frozen sync, `pip-audit`, Alembic upgrade/check и tracked secret
-  scan успешно; одно внешнее Starlette/httpx deprecation-предупреждение.
-- `make frontend-check` — **326 passed**, production build, typecheck и lint
-  успешно.
+- `uv run mypy app` — успешно, **111 source files**;
+- Alembic `upgrade`, guarded empty-table `downgrade`, повторный `upgrade` и
+  `alembic check` — успешно, единственная head `11c7b724c929`.
+- guarded `make backend-check` — **892 passed**, frozen sync, Ruff, mypy,
+  `pip-audit`, Alembic upgrade/check и tracked secret scan успешно; одно
+  внешнее Starlette/httpx deprecation-предупреждение.
 
 ## Неподвижные границы
 

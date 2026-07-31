@@ -26,6 +26,7 @@ import app.db.integration_models  # noqa: F401,E402
 import app.db.memory_models  # noqa: F401,E402
 import app.db.models  # noqa: F401,E402
 import app.db.event_models  # noqa: F401,E402
+import app.db.repository_intelligence_models  # noqa: F401,E402
 
 target_metadata = Base.metadata
 

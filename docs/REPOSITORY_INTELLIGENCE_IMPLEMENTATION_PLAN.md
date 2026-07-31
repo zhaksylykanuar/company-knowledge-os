@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — Implementation Handoff
 
-Status: RI-001–RI-005 implemented; RI-006 is the next approval-gated slice
+Status: RI-001–RI-006 implemented; RI-007 is the next approval-gated slice
 Prepared: 2026-07-31
 Target repository: `company-knowledge-os`
 Primary outcome: understand what every company repository does, how repositories
@@ -9,12 +9,15 @@ rest of FounderOS.
 
 Implementation update (2026-07-31): strict `repository_intelligence.v1`,
 synthetic L0/L1/L2 fixtures and contract tests are implemented under DEC-115.
-Canonical workspace-scoped synthetic L0 is implemented under DEC-116. No
-persistence model, migration, provider portfolio read, target execution, UI or
-LLM path exists yet. Synthetic-only external exact-SHA checkout is implemented
+Canonical workspace-scoped synthetic L0 is implemented under DEC-116.
+Synthetic-only external exact-SHA checkout is implemented
 under DEC-117. Bounded deterministic static collectors are implemented under
 DEC-118. Directional relationship candidates and bounded graph validation are
-implemented under DEC-119. Preparation status remains `preparing`.
+implemented under DEC-119. Durable jobs/runs/facts/edges/findings/
+contradictions, canonical evidence links and complete-only reconciliation are
+implemented under DEC-120 and migration `11c7b724c929`. No provider portfolio
+read, target execution, UI or LLM path exists yet. Preparation status remains
+`preparing`.
 
 ## 1. Decision Summary
 
@@ -1500,6 +1503,10 @@ Done when: Package/API/event/deploy edge fixtures and contradiction tests pass.
 
 ### RI-006 — Persistence ADR and migration
 
+Status: implemented and verified on synthetic PostgreSQL data in the dedicated
+`codex/repository-intelligence-persistence` branch (DEC-120,
+`11c7b724c929`).
+
 ```text
 Goal: Persist runs, facts, relationships, and finding lifecycle.
 Context: RI plan sections 9-11 and existing canonical models.
@@ -1583,10 +1590,9 @@ Before changes:
 5. Restate the selected ticket, relevant files, assumptions, and short plan.
 6. Wait for human approval before non-trivial implementation.
 
-Recommended next task: **RI-006 — persistence ADR and migration**. Resolve the
-explicit storage, job, evidence, contradiction, coverage and retention
-questions first, then use the required branch/PR workflow for any reviewed
-migration. Do not start persistence without separate approval.
+Recommended next task: **RI-007 — portfolio/detail read APIs and UI**, but only
+after RI-006 human review/merge and separate approval. Read only the new
+workspace-scoped persistence boundary; do not start a provider portfolio run.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
@@ -1594,17 +1600,16 @@ repository commands.
 ## 21. Compact Handoff Prompt
 
 ```text
-Goal: Implement RI-006 for FounderOS Repository Intelligence.
+Goal: Implement RI-007 for FounderOS Repository Intelligence.
 Context: Read AGENTS.md, CLAUDE.md, docs/README.md, and
 docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md. FounderOS must understand
 what every repository does and the evidence-backed directional relationships
 between repositories.
-Constraints: Decide persistence, job, artifact, retention, evidence,
-contradiction and complete-coverage contracts before code; branch/PR required;
-same-workspace foreign keys and idempotent reconciliation; synthetic test
-database only; no company repository read, provider call, UI or LLM mutation.
-Preserve unrelated working-tree changes.
-Done when: approved ADR, reviewed migration, workspace isolation, retry,
-partial-run, idempotency, reconciliation and deletion/retention checks pass,
-and uv run ruff check . plus guarded make backend-check are green.
+Constraints: Use only workspace-scoped RI-006 read models; progressive
+disclosure, evidence drawer, observed/inferred distinction and unknowns; no
+company repository read, provider portfolio run, migration, external action or
+LLM mutation. Preserve unrelated working-tree changes.
+Done when: portfolio/detail/history/graph APIs and UI pass focused backend/UI
+tests, typecheck, lint, build, accessibility/browser checks, uv run ruff check .
+and guarded make backend-check.
 ```

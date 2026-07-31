@@ -3813,6 +3813,67 @@ network operation, persistence, migration, API, UI or LLM call. RI-006
 persistence remains separately approval-gated and requires a branch/PR plus
 reviewed migration.
 
+## DEC-120 - Repository Intelligence Persistence Is Coverage-Gated And Workspace-Safe
+
+Decision (2026-07-31): RI-006 runs on the dedicated
+`codex/repository-intelligence-persistence` branch and adds review-ready migration
+`11c7b724c929`. It persists separate `RepositoryAnalysisJob`,
+`RepositoryAuditRun`, `RepositoryFact`, directional
+`RepositoryRelationship`, `RepositoryAuditFinding`,
+`RepositoryContradiction` and `RepositoryEvidenceLink` rows. PostgreSQL and the
+approved raw-storage boundary remain sources of truth; no graph database,
+full checkout, source body or unbounded scanner payload is stored in PostgreSQL.
+
+Each run creates exactly one sanitized internal `SourceRecord` manifest plus a
+bounded artifact manifest. Large sanitized artifacts belong in approved raw
+storage and PostgreSQL stores only opaque
+`repository-intelligence/...` references, SHA-256, type and byte size. Checkout
+retention is zero after the RI-003 context exits. Artifact refs expire after
+30 days and are cleared only after external deletion succeeds. Jobs, run
+headers, facts, relationships, findings, contradictions, canonical evidence
+and human decisions remain workspace-canonical until explicit
+repository/workspace deletion or a later approved retention change. Backups
+remain subject to the existing backup retention boundary.
+
+Jobs are a dedicated `RepositoryAnalysisJob`, not reused `SyncJob`, because
+their exact SHA/profile/policy/engine identity and retries are independent of a
+provider connection. Owner/admin membership is required to enqueue or delete;
+workers use bounded leases, sanitized error codes, retry limits and
+cancellation. The idempotency key is workspace-scoped and bound to a request
+hash. One job accepts one immutable result; replay is allowed only when result,
+coverage and artifact hashes match exactly. A new job may intentionally
+reanalyze the same SHA/policy/engine and creates a new historical run.
+
+One run is `complete` only when its audit-level coverage set contains every
+required check and no required check failed or was skipped. L0 requires
+canonical metadata. L1 requires manifests, entrypoints, dependencies,
+interfaces, deployment, tests/CI, documentation, migrations and relationships.
+L2 additionally requires the separately approved isolated-execution check.
+Only a succeeded complete run may reconcile absence. Partial, failed and
+cancelled runs never stale facts/edges or resolve findings/contradictions.
+
+Complete reconciliation matches stable fingerprints, updates `last_seen`,
+stales absent facts and relationships, resolves absent findings and
+contradictions, marks reappearing resolved findings `regressed`, and preserves
+human `accepted_risk`/`false_positive` plus fact/relationship
+confirmed/rejected provenance. Policy/profile/engine are part of the
+reconciliation cohort, so a rule-engine change cannot masquerade as a code
+fix.
+
+Repository Intelligence reuses the canonical `EvidenceRef` table. RI-006 adds
+nullable strict object-shape metadata (`evidence_key`, kind, source and
+selector) without changing legacy rows, and links facts/edges/findings/
+contradictions through same-workspace composite FKs. Analyzer evidence without
+an existing evidence UUID is materialized against that run's sanitized internal
+SourceRecord; cross-workspace evidence is rejected. The migration downgrade
+locks all RI tables and refuses non-empty state instead of silently deleting
+durable intelligence.
+
+RI-006 is verified only with synthetic PostgreSQL data. It adds no company
+repository read, target execution, provider/network call, API, UI, portfolio
+run or LLM call. RI-007 read APIs and UI remain separately approval-gated after
+review/merge of this branch.
+
 ## DEC-121 - Setup Tokens And Provider Requests Stay Server-Bound
 
 Decision (2026-08-02): one-time GitHub App manifest, installation and OAuth
