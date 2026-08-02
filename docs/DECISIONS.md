@@ -3908,8 +3908,8 @@ These changes resolve the critical/high CodeQL findings discovered while
 preparing the accumulated FounderOS reset and RI-001–RI-005 branch for merge.
 They do not enable provider reads, change production CORS defaults, begin
 RI-006/RI-007 behavior or weaken existing encryption and workspace boundaries.
-DEC-120 remains reserved for the already-implemented RI-006 persistence
-decision on the stacked PR #34 branch.
+DEC-120 records the RI-006 persistence decision merged through PR #34 on
+2026-08-02.
 
 ## ASK - Open Questions For The Human (not decided)
 

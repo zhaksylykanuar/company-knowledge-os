@@ -6,8 +6,8 @@
 
 ## Сейчас — Repository Intelligence
 
-1. Провести human review/merge отдельной RI-006 branch и только после отдельного
-   approval начать **RI-007** portfolio/detail read APIs и UI.
+1. RI-001–RI-006 merged в `main` через PR #35 и PR #34. До отдельного approval
+   не начинать **RI-007** portfolio/detail read APIs и UI.
 
 RI-001 завершён: strict `repository_intelligence.v1`, synthetic L0/L1/L2
 fixtures, object-shaped evidence, finite confidence, human-only resolution,
@@ -27,10 +27,10 @@ RI-005 завершён: trusted synthetic portfolio + RI-004 facts строят
 observed/inferred candidates, unresolved targets, inverse views, symmetric
 normalization, cycle/orphan findings и fail-closed contradiction review без
 company read или persistence (DEC-119).
-RI-006 завершён на отдельной branch: review-ready migration, jobs/runs/facts/
-relationships/findings/contradictions, canonical evidence links, complete-only
+RI-006 merged в `main` 2026-08-02: migration, jobs/runs/facts/relationships/
+findings/contradictions, canonical evidence links, complete-only
 reconciliation, retry/cancel/idempotency, 30-day artifact refs и explicit
-deletion реализованы только на synthetic DB data (DEC-120).
+deletion реализованы и проверены только на synthetic DB data (DEC-120).
 
 ## Сейчас — завершение FounderOS 2.0 reset
 

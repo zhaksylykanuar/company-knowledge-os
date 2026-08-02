@@ -183,7 +183,7 @@ RI-006:
   implemented and verified on synthetic PostgreSQL data
 
 next slice:
-  RI-007 after RI-006 review/merge and separate approval
+  RI-007 after separate approval; RI-006 merged 2026-08-02
 ```
 
 Это снимок состояния, а не вечная константа. Перед каждым новым тикетом агент
@@ -1064,7 +1064,7 @@ edges, строит inverse views и bounded cycle/orphan findings. Name similar
 
 ### RI-006 — Persistence and migrations
 
-Статус: **завершён 2026-07-31** на отдельной branch (DEC-120, migration
+Статус: **merged в `main` 2026-08-02** через PR #34 (DEC-120, migration
 `11c7b724c929`).
 
 Создать:
@@ -1644,7 +1644,7 @@ Goal: Implement RI-007 — Repository Intelligence portfolio/detail read APIs an
 Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
 
 Constraints:
-- Only RI-007 after RI-006 review/merge and separate approval.
+- Only RI-007 after separate approval; RI-006 is already merged.
 - Read only workspace-scoped RI-006 persistence.
 - Progressive disclosure, evidence drawer, unknowns and observed/inferred
   distinction.

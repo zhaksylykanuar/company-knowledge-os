@@ -10,7 +10,7 @@
 GitHub Source Reconciliation v1, universal pytest database guard и Atomic
 External Execution v1, Strict Action Evidence v1 и Database Workspace
 Isolation v1, Python Static Typing Gate и Frontend Biome Gate реализованы
-локально в ветке `codex/living-hq-ux-reset`. Runtime Readiness,
+и merged в `main` через PR #35. Runtime Readiness,
 Browser Security Baseline, Shared Public Auth Admission, Reproducible
 Dependency Gate, Durable GitHub Provider Jobs, Encrypted Off-device Recovery
 Controls, Private Repository Governance и Maintainability Ratchets также
@@ -28,7 +28,8 @@ directional evidence-backed relationship candidates и bounded graph validation
 только из synthetic RI-004 outputs. RI-006 добавляет durable jobs/runs/facts/
 relationships/findings/contradictions, canonical evidence links,
 complete-coverage reconciliation и явный retention/deletion contract на
-отдельной branch. Target code не выполняется; изменения не опубликованы.**
+synthetic PostgreSQL data. Parent PR #35 и RI-006 PR #34 merged в `main`
+2026-08-02; target code не выполнялся, company repositories не читались.**
 
 FounderOS теперь определяется как AI-партнёр и второе мнение с доказуемой
 памятью компании. Основной интерфейс сокращён до четырёх зон:
@@ -398,8 +399,8 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 ## Следующий рекомендуемый шаг
 
-1. После review/merge RI-006 и отдельного approval начать RI-007 portfolio/detail
-   UI и read APIs; до этого не добавлять product UI поверх новых таблиц.
+1. Дождаться отдельного approval на RI-007 portfolio/detail UI и read APIs;
+   до этого не добавлять product UI поверх RI-006 tables.
 2. Заново внести OpenAI и нужные connector credentials через
    `/settings/ai` и `/settings/integrations`, затем выполнить отдельные
    read-only проверки.
@@ -414,9 +415,10 @@ console warnings/errors не обнаружены. Это не заменяет 
 7. Расширить Memory Control на provider-backed records только после exact
    dependency preview, evidence-safe cascade и provider-side deletion contract.
 
-Последняя focused проверка RI-006 (2026-07-31):
+Merge/verification RI-006 (2026-08-02):
 
-- Parent PR #35 merged into `main` on 2026-08-02 after fixed-origin GitHub
+- Parent PR #35 и RI-006 PR #34 merged into `main` on 2026-08-02 after
+  fixed-origin GitHub
   requests, keyed one-time setup-state verification, status-only bootstrap CLI
   output, versioned HKDF-derived secret encryption and exact frontend error
   matching passed CodeQL review (DEC-121).
@@ -433,7 +435,7 @@ console warnings/errors не обнаружены. Это не заменяет 
   `pip-audit`, Alembic upgrade/check и tracked secret scan успешно; одно
   внешнее Starlette/httpx deprecation-предупреждение.
 - `make frontend-check` — **326 passed**, production build, typecheck и lint
-  успешно на rebuilt RI-006 branch поверх merged parent PR #35.
+  успешно на rebuilt RI-006 branch перед merge PR #34.
 
 ## Неподвижные границы
 

@@ -2,6 +2,14 @@
 
 ## 2026-08-02
 
+### Added
+
+- Merged the accumulated FounderOS 2.0 reset and Repository Intelligence
+  RI-001–RI-005 through PR #35, then rebuilt RI-006 as an isolated diff and
+  merged its durable PostgreSQL persistence boundary through PR #34.
+- `main` now contains RI-001–RI-006. RI-007 remains separately approval-gated
+  and was not started.
+
 ### Security
 
 - Pinned GitHub App manifest conversion and installation verification requests

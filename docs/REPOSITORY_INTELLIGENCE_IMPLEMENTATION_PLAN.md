@@ -1591,8 +1591,9 @@ Before changes:
 6. Wait for human approval before non-trivial implementation.
 
 Recommended next task: **RI-007 — portfolio/detail read APIs and UI**, but only
-after RI-006 human review/merge and separate approval. Read only the new
-workspace-scoped persistence boundary; do not start a provider portfolio run.
+after separate approval. RI-006 merged into `main` on 2026-08-02; read only its
+workspace-scoped persistence boundary and do not start a provider portfolio
+run.
 
 Do not start with the UI, database migration, an LLM prompt, or executable
 repository commands.
