@@ -22,6 +22,7 @@ from app.db.identity_models import (
     Workspace,
 )
 from app.db.repository_intelligence_models import (
+    REPOSITORY_ANALYSIS_JOB_STATUS_CANCELLED,
     REPOSITORY_ANALYSIS_JOB_STATUS_QUEUED,
     REPOSITORY_ANALYSIS_JOB_STATUS_RUNNING,
     REPOSITORY_ANALYSIS_JOB_STATUS_SUCCEEDED,
@@ -66,6 +67,13 @@ MIGRATION_PATH = (
     / "versions"
     / "11c7b724c929_add_repository_intelligence_persistence.py"
 )
+
+# Tests inject one synthetic run clock safely after the insert wall clock.
+# Newly enqueued jobs use the database clock for ``next_attempt_at``, so each
+# initial claim explicitly aligns that field before exercising claim behavior.
+_TEST_EPOCH = datetime.now(timezone.utc).replace(
+    hour=0, minute=0, second=0, microsecond=0
+) + timedelta(days=1)
 
 
 def _migration_module():
@@ -315,12 +323,14 @@ async def _enqueue_claim_persist(
             request=_request(payload, idempotency_key=idempotency_key),
             requested_by_user_id=owner.id,
         )
+        claim_time = completed_at - timedelta(minutes=1)
+        job.next_attempt_at = claim_time
         claimed = await claim_repository_analysis_job(
             session,
             workspace_id=payload.workspace_id,
             job_id=job.id,
             worker_id=f"worker-{idempotency_key}"[:64],
-            now=completed_at - timedelta(minutes=1),
+            now=claim_time,
         )
         assert claimed is not None
         run = await persist_repository_intelligence_result(
@@ -348,7 +358,7 @@ async def test_job_enqueuing_is_idempotent_rbac_scoped_and_retryable() -> None:
             target=target,
             commit_sha="1" * 40,
         )
-        now = datetime(2026, 7, 31, 10, 0, tzinfo=timezone.utc)
+        now = _TEST_EPOCH + timedelta(hours=10)
         async with AsyncSessionLocal() as session:
             with pytest.raises(
                 RepositoryIntelligenceStateError,
@@ -393,6 +403,7 @@ async def test_job_enqueuing_is_idempotent_rbac_scoped_and_retryable() -> None:
                     requested_by_user_id=owner.id,
                 )
 
+            first.next_attempt_at = now
             claimed = await claim_repository_analysis_job(
                 session,
                 workspace_id=workspace.id,
@@ -459,20 +470,23 @@ async def test_job_cancellation_requires_admin_and_blocks_late_result() -> None:
             target=target,
             commit_sha="0" * 40,
         )
-        now = datetime(2026, 7, 31, 10, 30, tzinfo=timezone.utc)
+        now = _TEST_EPOCH + timedelta(hours=10, minutes=30)
         async with AsyncSessionLocal() as session:
             job = await enqueue_repository_analysis_job(
                 session,
                 request=_request(payload, idempotency_key="cancel-running"),
                 requested_by_user_id=owner.id,
             )
-            await claim_repository_analysis_job(
+            job.next_attempt_at = now
+            claimed = await claim_repository_analysis_job(
                 session,
                 workspace_id=workspace.id,
                 job_id=job.id,
                 worker_id="cancel-worker",
                 now=now,
             )
+            assert claimed is not None
+            assert claimed.status == REPOSITORY_ANALYSIS_JOB_STATUS_RUNNING
             with pytest.raises(
                 RepositoryIntelligenceStateError,
                 match="owner or admin",
@@ -505,6 +519,8 @@ async def test_job_cancellation_requires_admin_and_blocks_late_result() -> None:
                     started_at=now,
                     completed_at=now + timedelta(seconds=30),
                 )
+            assert job.status == REPOSITORY_ANALYSIS_JOB_STATUS_CANCELLED
+            assert job.lease_owner is None
             await session.rollback()
     finally:
         await _cleanup(marker)
@@ -524,20 +540,23 @@ async def test_complete_run_persists_source_record_evidence_and_replays() -> Non
             include_relationship=True,
             include_finding=False,
         )
-        completed = datetime(2026, 7, 31, 11, 0, tzinfo=timezone.utc)
+        completed = _TEST_EPOCH + timedelta(hours=11)
         async with AsyncSessionLocal() as session:
             job = await enqueue_repository_analysis_job(
                 session,
                 request=_request(payload, idempotency_key="complete-run"),
                 requested_by_user_id=owner.id,
             )
-            await claim_repository_analysis_job(
+            claim_time = completed - timedelta(minutes=1)
+            job.next_attempt_at = claim_time
+            claimed = await claim_repository_analysis_job(
                 session,
                 workspace_id=workspace.id,
                 job_id=job.id,
                 worker_id="complete-worker",
-                now=completed - timedelta(minutes=1),
+                now=claim_time,
             )
+            assert claimed is not None
             run = await persist_repository_intelligence_result(
                 session,
                 job_id=job.id,
@@ -625,7 +644,7 @@ async def test_same_target_can_have_multiple_job_runs_but_replay_conflicts_fail(
             target=target,
             commit_sha="c" * 40,
         )
-        completed = datetime(2026, 7, 31, 11, 30, tzinfo=timezone.utc)
+        completed = _TEST_EPOCH + timedelta(hours=11, minutes=30)
         _first_job, first_run = await _enqueue_claim_persist(
             owner=owner,
             payload=payload,
@@ -660,13 +679,16 @@ async def test_same_target_can_have_multiple_job_runs_but_replay_conflicts_fail(
                 request=_request(payload, idempotency_key="replay-conflict"),
                 requested_by_user_id=owner.id,
             )
-            await claim_repository_analysis_job(
+            claim_time = completed + timedelta(minutes=2)
+            job.next_attempt_at = claim_time
+            claimed = await claim_repository_analysis_job(
                 session,
                 workspace_id=workspace.id,
                 job_id=job.id,
                 worker_id="replay-worker",
-                now=completed + timedelta(minutes=2),
+                now=claim_time,
             )
+            assert claimed is not None
             await persist_repository_intelligence_result(
                 session,
                 job_id=job.id,
@@ -730,7 +752,7 @@ async def test_partial_run_never_resolves_prior_records_and_complete_run_does() 
             include_relationship=False,
             include_finding=False,
         )
-        first_time = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
+        first_time = _TEST_EPOCH + timedelta(hours=12)
         await _enqueue_claim_persist(
             owner=owner,
             payload=first_payload,
@@ -832,7 +854,7 @@ async def test_resolved_finding_regresses_and_accepted_risk_is_preserved() -> No
             commit_sha="7" * 40,
             include_finding=False,
         )
-        base_time = datetime(2026, 7, 31, 13, 0, tzinfo=timezone.utc)
+        base_time = _TEST_EPOCH + timedelta(hours=13)
         await _enqueue_claim_persist(
             owner=owner,
             payload=with_finding,
@@ -923,7 +945,7 @@ async def test_workspace_composite_fks_reject_cross_workspace_rows() -> None:
             payload=payload,
             idempotency_key="workspace-isolation",
             coverage=_complete_coverage(),
-            completed_at=datetime(2026, 7, 31, 14, 0, tzinfo=timezone.utc),
+            completed_at=_TEST_EPOCH + timedelta(hours=14),
         )
         del job_id
         async with AsyncSessionLocal() as session:
@@ -978,7 +1000,7 @@ async def test_artifact_retention_and_repository_deletion_are_explicit() -> None
             target=target,
             commit_sha="b" * 40,
         )
-        completed = datetime(2026, 7, 31, 15, 0, tzinfo=timezone.utc)
+        completed = _TEST_EPOCH + timedelta(hours=15)
         _job_id, run_id = await _enqueue_claim_persist(
             owner=owner,
             payload=payload,

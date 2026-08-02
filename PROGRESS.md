@@ -429,9 +429,11 @@ console warnings/errors не обнаружены. Это не заменяет 
 - `uv run mypy app` — успешно, **111 source files**;
 - Alembic `upgrade`, guarded empty-table `downgrade`, повторный `upgrade` и
   `alembic check` — успешно, единственная head `11c7b724c929`.
-- guarded `make backend-check` — **892 passed**, frozen sync, Ruff, mypy,
+- guarded `make backend-check` — **896 passed**, frozen sync, Ruff, mypy,
   `pip-audit`, Alembic upgrade/check и tracked secret scan успешно; одно
   внешнее Starlette/httpx deprecation-предупреждение.
+- `make frontend-check` — **326 passed**, production build, typecheck и lint
+  успешно на rebuilt RI-006 branch поверх merged parent PR #35.
 
 ## Неподвижные границы
 
