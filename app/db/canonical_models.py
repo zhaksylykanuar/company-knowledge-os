@@ -187,6 +187,31 @@ class EvidenceRef(Base):
         Index("ix_evidence_refs_workspace_id", "workspace_id"),
         Index("ix_evidence_refs_source_record_id", "source_record_id"),
         Index("ix_evidence_refs_entity_id", "entity_id"),
+        UniqueConstraint(
+            "workspace_id",
+            "id",
+            name="uq_evidence_refs_workspace_id_id",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "evidence_key",
+            name="uq_evidence_refs_workspace_evidence_key",
+        ),
+        CheckConstraint(
+            "evidence_kind is null or evidence_kind in ("
+            "'repository_metadata','repository_file','repository_manifest',"
+            "'repository_symbol','repository_workflow','repository_dependency',"
+            "'repository_deployment','repository_test_result',"
+            "'repository_scanner_result','github_pull_request','github_issue',"
+            "'jira_issue','document'"
+            ")",
+            name="ck_evidence_refs_kind",
+        ),
+        CheckConstraint(
+            "evidence_source is null or evidence_source in "
+            "('github','jira','gmail','drive','internal')",
+            name="ck_evidence_refs_source",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -200,6 +225,10 @@ class EvidenceRef(Base):
         PG_UUID(as_uuid=True),
     )
     entity_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    evidence_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evidence_kind: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    evidence_source: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    selector: Mapped[str | None] = mapped_column(String(500), nullable=True)
     quote: Mapped[str | None] = mapped_column(Text, nullable=True)
     field_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)

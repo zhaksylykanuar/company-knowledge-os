@@ -47,6 +47,23 @@
   orphan, contradiction, workspace/isolation and pathological bound tests. No
   migration, persistence, UI, provider/company repository read, target
   execution or LLM path was added.
+- Added RI-006 durable Repository Intelligence persistence (DEC-120) on a
+  dedicated branch: analysis jobs, immutable audit runs, reconciled facts and
+  relationships, finding lifecycle, contradictions and canonical evidence
+  links with same-workspace composite foreign keys.
+- Added owner/admin enqueue and deletion boundaries, idempotent request/result
+  hashes, leases, bounded retries, cancellation, complete-coverage-only
+  reconciliation, finding regression, preserved accepted-risk/false-positive
+  decisions and fail-closed partial runs.
+- Added one sanitized internal `SourceRecord` manifest per run, raw-storage
+  artifact references with 30-day retention receipts, explicit artifact
+  deletion confirmation, repository-scoped durable deletion and a downgrade
+  guard that refuses non-empty RI tables.
+- Added synthetic database tests for retry/resume, cancellation, replay,
+  partial/complete reconciliation, regressions, human-decision preservation,
+  cross-workspace FK denial, retention/deletion and migration contracts. No
+  company repository read, target execution, provider call, UI or LLM path was
+  added.
 
 ## 2026-07-30
 

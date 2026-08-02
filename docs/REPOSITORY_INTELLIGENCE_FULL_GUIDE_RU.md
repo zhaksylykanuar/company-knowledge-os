@@ -1,6 +1,6 @@
 # FounderOS Repository Intelligence — полное руководство по подготовке и запуску
 
-Статус: RI-001–RI-005 реализованы; следующий approval-gated этап — RI-006
+Статус: RI-001–RI-006 реализованы; следующий approval-gated этап — RI-007
 Дата подготовки: 2026-07-31
 Основной проект: `company-knowledge-os`
 Подробный архитектурный план:
@@ -179,8 +179,11 @@ RI-004:
 RI-005:
   implemented and verified on synthetic relationship/graph fixtures
 
+RI-006:
+  implemented and verified on synthetic PostgreSQL data
+
 next slice:
-  RI-006 after separate approval
+  RI-007 after RI-006 review/merge and separate approval
 ```
 
 Это снимок состояния, а не вечная константа. Перед каждым новым тикетом агент
@@ -1061,7 +1064,8 @@ edges, строит inverse views и bounded cycle/orphan findings. Name similar
 
 ### RI-006 — Persistence and migrations
 
-Требует отдельного подтверждения, ветки/PR workflow и reviewed migration.
+Статус: **завершён 2026-07-31** на отдельной branch (DEC-120, migration
+`11c7b724c929`).
 
 Создать:
 
@@ -1080,6 +1084,18 @@ edges, строит inverse views и bounded cycle/orphan findings. Name similar
 - retention/deletion contract.
 
 Только test database и synthetic data.
+
+Реализовано:
+
+- отдельный `RepositoryAnalysisJob` с owner/admin enqueue, idempotency,
+  lease/retry/cancel;
+- immutable run header + один sanitized internal `SourceRecord` manifest;
+- facts, directional relationships, findings, contradictions;
+- canonical `EvidenceRef` links с same-workspace FK;
+- reconciliation только после complete coverage;
+- regression и сохранение human decisions;
+- 30-day retention для raw artifact refs и explicit deletion confirmation;
+- repository-scoped deletion и downgrade refusal для непустых RI tables.
 
 ### RI-007 — Read models and UI
 
@@ -1227,7 +1243,7 @@ evidence
    - полный private source;
    - secret matches.
 
-Решение фиксируется до RI-006.
+Решение зафиксировано в DEC-120.
 
 ## 15. Repository Intelligence Prepared
 
@@ -1594,9 +1610,9 @@ npm run build
 
 Если PostgreSQL недоступен, DB-backed gate честно отмечается как blocked.
 
-## 25. Решения до RI-006
+## 25. Решения RI-006
 
-Обязательно зафиксировать:
+Зафиксировано DEC-120:
 
 1. один SourceRecord на run или manifest + raw artifacts;
 2. новая job table или reuse `SyncJob`;
@@ -1609,47 +1625,46 @@ npm run build
 9. Product/Component сейчас или после первого portfolio run;
 10. L2 network policy.
 
-Рекомендуемые defaults:
-
-- один sanitized `SourceRecord` на run;
-- отдельный `RepositoryAnalysisJob` с reuse worker patterns;
+- один sanitized `SourceRecord` manifest на run;
+- отдельный `RepositoryAnalysisJob`;
 - checkout удаляется сразу;
 - network выключен;
-- L2 выключен для первого portfolio run;
-- большие artifacts хранятся в raw storage;
-- Product/Component пока является confirmed candidate relation.
+- L2 выключен до отдельного approval;
+- большие artifacts хранятся в approved raw storage, refs — 30 дней;
+- canonical rows — до explicit repository/workspace deletion;
+- canonical `EvidenceRef` links и отдельная contradiction table;
+- complete coverage зависит от audit level;
+- Product/Component пока остаётся confirmed candidate relation.
 
 ## 26. Готовый промпт следующему агенту
 
 ```text
-Goal: Implement RI-006 — Repository Intelligence persistence ADR and migration.
+Goal: Implement RI-007 — Repository Intelligence portfolio/detail read APIs and UI.
 
 Context: Work only in the separate company-knowledge-os-ri-prep worktree. Read AGENTS.md, CLAUDE.md, docs/README.md, docs/REPOSITORY_INTELLIGENCE_IMPLEMENTATION_PLAN.md, and docs/REPOSITORY_INTELLIGENCE_FULL_GUIDE_RU.md. The hard gate prohibits reading, cloning, or executing any company repository during preparation.
 
 Constraints:
-- Only RI-006 after separate approval.
-- Resolve storage, job, artifact, retention, evidence, contradiction and
-  complete-coverage decisions before code.
-- Use the required branch/PR workflow and a reviewed migration.
-- Same-workspace foreign keys, idempotency, partial-run safety and
-  reconciliation must fail closed.
-- Synthetic test database only; no company repository read or target execution.
-- No UI, portfolio provider read or LLM call.
+- Only RI-007 after RI-006 review/merge and separate approval.
+- Read only workspace-scoped RI-006 persistence.
+- Progressive disclosure, evidence drawer, unknowns and observed/inferred
+  distinction.
+- No company repository read, portfolio provider run, migration, external
+  action or LLM mutation.
 - Do not touch .env.local, .local, credentials, company data or existing connections.
 - Update PROGRESS.md, docs/TODO.md, and docs/CHANGELOG.md.
 - Nothing may be pushed.
 
 Done when:
-- The approved ADR and reviewed migration define jobs, runs, facts,
-  relationships, findings, evidence, contradictions and retention.
-- Workspace isolation, retry, partial-run, idempotency, reconciliation and
-  deletion/retention fixtures pass.
+- Repository Portfolio, Repository Detail, audit history, directional graph and
+  evidence states have bounded read APIs and UI.
+- Focused backend/UI tests, typecheck, lint, build and browser/accessibility
+  checks pass.
 - git diff --check passes.
 - Staged and tracked secret scans pass.
 - uv run ruff check . passes.
 - Guarded make backend-check passes against an explicit test-marked PostgreSQL URL, or DB-backed checks are honestly reported blocked.
-- A scoped local RI-006 commit is created on the approved branch.
-- Report the result and wait for approval before RI-007.
+- A scoped local RI-007 commit is created.
+- Report the result and wait for approval before RI-008.
 ```
 
 ## 27. Краткий финальный checklist
@@ -1669,7 +1684,9 @@ Done when:
 - [x] зафиксировать DEC-118;
 - [x] реализовать RI-005 только на synthetic outputs;
 - [x] зафиксировать DEC-119;
-- [ ] начать RI-006 только после отдельного approval.
+- [x] реализовать RI-006 только на synthetic PostgreSQL data;
+- [x] зафиксировать DEC-120;
+- [ ] после review/merge начать RI-007 только после отдельного approval.
 
 ### Во время подготовки
 
