@@ -196,7 +196,7 @@ async def test_ai_key_is_encrypted_and_never_returned(
             )
             assert configuration is not None
             assert configuration.encrypted_api_key is not None
-            assert configuration.encrypted_api_key.startswith("fernet:v1:")
+            assert configuration.encrypted_api_key.startswith("fernet:v2:")
             assert decrypt_secret(configuration.encrypted_api_key) == TEST_AI_KEY
             assert TEST_AI_KEY not in repr(configuration)
     finally:

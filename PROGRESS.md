@@ -404,14 +404,15 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 - Security review for parent PR #35 (2026-08-02) hardened fixed-origin GitHub
   requests, keyed one-time setup-state verification, status-only bootstrap CLI
-  output and exact frontend error matching (DEC-121); focused security suite —
-  **44 backend + 326 frontend passed**.
+  output, versioned HKDF-derived secret encryption and exact frontend error
+  matching (DEC-121); focused security suite — **51 backend + 326 frontend
+  passed**.
 - CI harness backport (2026-08-02) фиксирует canonical
   `http://127.0.0.1:3000` с non-credentialed CORS одинаково для direct pytest
   и `make backend-check`; production CORS defaults не изменены.
 - focused RI contract/checkout/collector/relationship suite — **80 passed**;
 - `uv run ruff check .` — успешно;
-- guarded `make backend-check` — **884 passed**, Ruff, mypy (**109 source
+- guarded `make backend-check` — **885 passed**, Ruff, mypy (**109 source
   files**), frozen sync, `pip-audit`, Alembic upgrade/check и tracked secret
   scan успешно; одно внешнее Starlette/httpx deprecation-предупреждение.
 - `make frontend-check` — **326 passed**, production build, typecheck и lint

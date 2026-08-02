@@ -377,11 +377,19 @@ test("offers an in-platform repository refresh when GitHub returns no repositori
   assert.ok(html.includes(M.githubAppSetup.repositoriesEmptyTitle));
   assert.ok(html.includes(M.githubAppSetup.refreshRepositories));
   assert.ok(html.includes(M.githubAppSetup.openRepositoryAccess));
-  assert.ok(
-    html.includes(
-      "https://github.com/organizations/qtwin-io/settings/installations/123"
-    )
-  );
+  const hrefs = Array.from(html.matchAll(/href="([^"]+)"/g), (match) => match[1]);
+  const repositoryAccess = hrefs
+    .map((href) => new URL(href))
+    .find(
+      (url) =>
+        url.protocol === "https:" &&
+        url.hostname === "github.com" &&
+        url.pathname ===
+          "/organizations/qtwin-io/settings/installations/123" &&
+        url.search === "" &&
+        url.hash === ""
+    );
+  assert.ok(repositoryAccess);
   assert.doesNotMatch(html, new RegExp(M.githubAppSetup.install));
 });
 

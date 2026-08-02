@@ -7,10 +7,12 @@
 - Pinned GitHub App manifest conversion and installation verification requests
   to a fixed `https://api.github.com` client origin, with validated path
   segments instead of constructing absolute request URLs from callback input.
-- Replaced unkeyed GitHub App setup-state hashes with domain-separated HMAC
+- Replaced unkeyed GitHub App setup-state hashes with domain-separated keyed
   digests derived from the existing fail-closed server encryption-key boundary.
   Database state remains a 64-character one-time verifier and cannot be
   recomputed without server key material.
+- New encrypted secrets now use an HKDF-derived `fernet:v2` key; existing
+  `fernet:v1` ciphertext remains decryptable for compatibility.
 - Reduced local-workspace bootstrap CLI output to a status-only receipt so
   filesystem paths and environment-derived values never reach terminal logs.
 - Replaced Jira hostname substring error classification with exact backend

@@ -797,7 +797,7 @@ async def test_installation_callback_stores_hashed_oauth_state_and_encrypted_pkc
         assert len(setup.state_hash) == 64
         assert setup.state_hash != prepared.oauth_state
         assert setup.encrypted_pkce_verifier is not None
-        assert setup.encrypted_pkce_verifier.startswith("fernet:v1:")
+        assert setup.encrypted_pkce_verifier.startswith("fernet:v2:")
         verifier = decrypt_secret(setup.encrypted_pkce_verifier)
         assert 43 <= len(verifier) <= 128
         assert verifier not in prepared.authorization_url

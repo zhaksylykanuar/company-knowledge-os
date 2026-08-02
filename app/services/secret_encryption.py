@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from base64 import urlsafe_b64encode
-from hashlib import sha256
-from hmac import digest as hmac_digest
+from hashlib import blake2b, sha256
 from typing import Protocol
 
 from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from pydantic import SecretStr
 
 from app.core.config import settings
 
-ENCRYPTED_SECRET_PREFIX = "fernet:v1:"
+ENCRYPTED_SECRET_PREFIX = "fernet:v2:"
+LEGACY_ENCRYPTED_SECRET_PREFIX = "fernet:v1:"
 
 # APP_ENV values where reusing the API auth key as encryption-key material is
 # tolerated as a clearly-marked developer convenience. Mirrors the auth
@@ -38,11 +40,16 @@ def encrypt_secret(value: str, *, config: SecretEncryptionConfig = settings) -> 
 
 
 def decrypt_secret(value: str, *, config: SecretEncryptionConfig = settings) -> str:
-    if not value.startswith(ENCRYPTED_SECRET_PREFIX):
+    if value.startswith(ENCRYPTED_SECRET_PREFIX):
+        encrypted = value.removeprefix(ENCRYPTED_SECRET_PREFIX)
+        fernet = _fernet(config)
+    elif value.startswith(LEGACY_ENCRYPTED_SECRET_PREFIX):
+        encrypted = value.removeprefix(LEGACY_ENCRYPTED_SECRET_PREFIX)
+        fernet = _legacy_fernet(config)
+    else:
         raise SecretEncryptionError("unsupported encrypted secret format")
-    encrypted = value.removeprefix(ENCRYPTED_SECRET_PREFIX)
     try:
-        return _fernet(config).decrypt(encrypted.encode("utf-8")).decode("utf-8")
+        return fernet.decrypt(encrypted.encode("utf-8")).decode("utf-8")
     except InvalidToken as exc:
         raise SecretEncryptionError("encrypted secret could not be decrypted") from exc
 
@@ -64,16 +71,43 @@ def keyed_secret_digest(
         or not purpose.isascii()
     ):
         raise SecretEncryptionError("digest purpose is invalid")
-    key_material = _configured_key_material(config).encode("utf-8")
-    domain_key = hmac_digest(
-        key_material,
-        f"founderos-keyed-digest-v1:{purpose}".encode("ascii"),
-        "sha256",
+    domain_key = _hkdf_key(
+        config,
+        purpose=f"keyed-digest-v1:{purpose}",
     )
-    return hmac_digest(domain_key, value.encode("utf-8"), "sha256").hex()
+    return blake2b(
+        value.encode("utf-8"),
+        key=domain_key,
+        digest_size=32,
+        person=b"fos-digest-v1",
+    ).hexdigest()
 
 
 def _fernet(config: SecretEncryptionConfig) -> Fernet:
+    return Fernet(
+        urlsafe_b64encode(
+            _hkdf_key(config, purpose="fernet-v2"),
+        )
+    )
+
+
+def _hkdf_key(
+    config: SecretEncryptionConfig,
+    *,
+    purpose: str,
+) -> bytes:
+    key_material = _configured_key_material(config).encode("utf-8")
+    return HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"founderos-hkdf-v1",
+        info=f"founderos:{purpose}".encode("ascii"),
+    ).derive(key_material)
+
+
+def _legacy_fernet(config: SecretEncryptionConfig) -> Fernet:
+    """Read existing fernet:v1 values created before the HKDF v2 boundary."""
+
     key_material = _configured_key_material(config)
     digest = sha256(f"founderos-fernet-v1:{key_material}".encode("utf-8")).digest()
     return Fernet(urlsafe_b64encode(digest))

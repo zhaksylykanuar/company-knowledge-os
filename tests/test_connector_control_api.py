@@ -200,7 +200,7 @@ async def test_configuration_is_encrypted_and_control_center_never_returns_secre
             assert connection is not None
             assert connection.status == INTEGRATION_CONNECTION_STATUS_DISABLED
             assert connection.encrypted_access_token is not None
-            assert connection.encrypted_access_token.startswith("fernet:v1:")
+            assert connection.encrypted_access_token.startswith("fernet:v2:")
             assert decrypt_secret(connection.encrypted_access_token) == TEST_TOKEN
             assert TEST_TOKEN not in str(connection.provider_metadata)
             assert connection.provider_metadata["created_via"] == "settings_integrations"

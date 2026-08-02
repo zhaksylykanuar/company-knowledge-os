@@ -3824,6 +3824,11 @@ preserving the existing 64-character indexed database contract. Missing server
 key material fails the setup flow closed rather than falling back to an
 unkeyed digest.
 
+New encrypted provider secrets use a versioned `fernet:v2` envelope whose key
+is derived with HKDF and domain separation. Existing `fernet:v1` ciphertext is
+read-only compatible so credential migration is non-destructive; all new writes
+use v2.
+
 GitHub App provider requests use an HTTP client whose origin is fixed to
 `https://api.github.com`. Callback-derived manifest codes and installation IDs
 must pass strict shape validation and are encoded only as relative path
