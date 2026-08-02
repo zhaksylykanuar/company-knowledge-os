@@ -402,6 +402,9 @@ console warnings/errors не обнаружены. Это не заменяет 
 
 Последняя проверка RI-005 (2026-07-31):
 
+- CI harness backport (2026-08-02) фиксирует canonical
+  `http://127.0.0.1:3000` с non-credentialed CORS одинаково для direct pytest
+  и `make backend-check`; production CORS defaults не изменены.
 - focused RI contract/checkout/collector/relationship suite — **80 passed**;
 - `uv run ruff check .` — успешно;
 - guarded `make backend-check` — **881 passed**, Ruff, mypy (**109 source

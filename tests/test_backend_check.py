@@ -98,6 +98,10 @@ def test_pytest_guard_installs_only_the_validated_test_target(tmp_path: Path) ->
         "ENABLE_WRITE_ACTIONS": "true",
         "FOUNDEROS_DISABLE_DOTENV": "false",
         "FOUNDEROS_ENABLE_REAL_CONNECTORS": "true",
+        "FOUNDEROS_CORS_ALLOW_CREDENTIALS": "true",
+        "FOUNDEROS_CORS_ALLOWED_ORIGINS": "https://ambient-product.example.test",
+        "CORS_ALLOW_CREDENTIALS": "true",
+        "CORS_ORIGINS": "https://legacy-product.example.test",
     }
 
     result = backend_check.apply_pytest_database_guard(
@@ -112,6 +116,14 @@ def test_pytest_guard_installs_only_the_validated_test_target(tmp_path: Path) ->
     assert environment["ENABLE_WRITE_ACTIONS"] == "false"
     assert environment["FOUNDEROS_DISABLE_DOTENV"] == "true"
     assert environment["FOUNDEROS_ENABLE_REAL_CONNECTORS"] == "false"
+    assert environment["FOUNDEROS_CORS_ALLOW_CREDENTIALS"] == (
+        backend_check.TEST_CORS_ALLOW_CREDENTIALS
+    )
+    assert environment["FOUNDEROS_CORS_ALLOWED_ORIGINS"] == (
+        backend_check.TEST_CORS_ALLOWED_ORIGINS
+    )
+    assert "CORS_ALLOW_CREDENTIALS" not in environment
+    assert "CORS_ORIGINS" not in environment
 
 
 def test_pytest_guard_rejects_product_dotenv_even_with_ambient_test_alias(
@@ -294,8 +306,10 @@ def test_backend_check_runs_exact_gates_in_sanitized_test_environment(
         "ENABLE_LLM": "true",
         "ENABLE_WRITE_ACTIONS": "true",
         "FOUNDEROS_ENABLE_REAL_CONNECTORS": "true",
+        "FOUNDEROS_CORS_ALLOW_CREDENTIALS": "true",
         "FOUNDEROS_CORS_ALLOWED_ORIGINS": "https://product.example.test",
         "FOUNDEROS_DISABLE_DOTENV": "false",
+        "CORS_ALLOW_CREDENTIALS": "true",
         "CORS_ORIGINS": "https://legacy-product.example.test",
         "FOUNDEROS_SECRET_ENCRYPTION_KEY": "ambient-product-secret",
         "GITHUB_TOKEN": "ambient-provider-token",
@@ -327,10 +341,14 @@ def test_backend_check_runs_exact_gates_in_sanitized_test_environment(
         assert child_environment["ENABLE_LLM"] == "false"
         assert child_environment["ENABLE_WRITE_ACTIONS"] == "false"
         assert child_environment["FOUNDEROS_ENABLE_REAL_CONNECTORS"] == "false"
+        assert child_environment["FOUNDEROS_CORS_ALLOW_CREDENTIALS"] == (
+            backend_check.TEST_CORS_ALLOW_CREDENTIALS
+        )
         assert child_environment["FOUNDEROS_CORS_ALLOWED_ORIGINS"] == (
             backend_check.TEST_CORS_ALLOWED_ORIGINS
         )
         assert child_environment["FOUNDEROS_DISABLE_DOTENV"] == "true"
+        assert "CORS_ALLOW_CREDENTIALS" not in child_environment
         assert "CORS_ORIGINS" not in child_environment
         assert child_environment["UV_NO_SYNC"] == "1"
         assert child_environment[backend_check.TEST_DATABASE_ENV] == TEST_URL

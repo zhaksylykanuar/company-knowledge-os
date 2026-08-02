@@ -24,6 +24,7 @@ TEST_DATABASE_ENV = "FOUNDEROS_TEST_DATABASE_URL"
 PYTEST_APP_ENV = "test"
 DEFAULT_POSTGRES_PORT = 5432
 TEST_CORS_ALLOWED_ORIGINS = "http://127.0.0.1:3000"
+TEST_CORS_ALLOW_CREDENTIALS = "false"
 TEST_DATABASE_MARKER = re.compile(
     r"(?:^|[_-])(?:test|tests|testing|pytest)(?:$|[_-])",
     re.IGNORECASE,
@@ -332,7 +333,8 @@ def apply_pytest_database_guard(
     ``tests/conftest.py`` calls this function before importing anything from
     ``app``. The explicit test target is compared with product dotenv targets,
     then installed as the only runtime database target while provider, LLM, and
-    write capabilities remain disabled.
+    write capabilities remain disabled. Browser-origin settings are pinned to
+    the canonical non-credentialed test frontend.
     """
 
     target_environment = os.environ if environ is None else environ
@@ -347,12 +349,16 @@ def apply_pytest_database_guard(
         environ=target_environment,
         allow_ambient_test_target=True,
     )
+    target_environment.pop("CORS_ORIGINS", None)
+    target_environment.pop("CORS_ALLOW_CREDENTIALS", None)
     target_environment.update(
         {
             "APP_ENV": PYTEST_APP_ENV,
             "DATABASE_URL": test_url,
             "ENABLE_LLM": "false",
             "ENABLE_WRITE_ACTIONS": "false",
+            "FOUNDEROS_CORS_ALLOW_CREDENTIALS": TEST_CORS_ALLOW_CREDENTIALS,
+            "FOUNDEROS_CORS_ALLOWED_ORIGINS": TEST_CORS_ALLOWED_ORIGINS,
             "FOUNDEROS_DISABLE_DOTENV": "true",
             "FOUNDEROS_ENABLE_REAL_CONNECTORS": "false",
         }
@@ -446,6 +452,7 @@ def _child_environment(*, environ: Mapping[str, str], test_url: str) -> dict[str
             "DATABASE_URL": test_url,
             "ENABLE_LLM": "false",
             "ENABLE_WRITE_ACTIONS": "false",
+            "FOUNDEROS_CORS_ALLOW_CREDENTIALS": TEST_CORS_ALLOW_CREDENTIALS,
             "FOUNDEROS_CORS_ALLOWED_ORIGINS": TEST_CORS_ALLOWED_ORIGINS,
             "FOUNDEROS_DISABLE_DOTENV": "true",
             "FOUNDEROS_ENABLE_REAL_CONNECTORS": "false",
