@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 import json
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
@@ -348,6 +347,78 @@ def test_github_app_permissions_require_both_read_capabilities() -> None:
             github_app_setup_provider.ensure_read_only_permissions(permissions)
 
 
+async def test_provider_requests_use_fixed_github_origin_and_validated_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[tuple[str, str, str]] = []
+
+    class RejectingResponse:
+        is_success = False
+
+    class RecordingClient:
+        def __init__(self, *, base_url: str, timeout: float) -> None:
+            requests.append(("CLIENT", base_url, str(timeout)))
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, path: str, **_kwargs):
+            requests.append(("POST", path, ""))
+            return RejectingResponse()
+
+        async def get(self, path: str, **_kwargs):
+            requests.append(("GET", path, ""))
+            return RejectingResponse()
+
+    monkeypatch.setattr(
+        github_app_setup_provider.httpx,
+        "AsyncClient",
+        RecordingClient,
+    )
+    monkeypatch.setattr(
+        github_app_setup_provider,
+        "build_github_app_jwt",
+        lambda **_kwargs: "test-jwt",
+    )
+
+    with pytest.raises(
+        github_app_setup_provider.GitHubAppSetupProviderError,
+        match="manifest_exchange_rejected",
+    ):
+        await github_app_setup_provider.exchange_manifest_code("safe-code")
+    with pytest.raises(
+        github_app_setup_provider.GitHubAppSetupProviderError,
+        match="installation_verification_rejected",
+    ):
+        await github_app_setup_provider.get_app_installation(
+            credential=GitHubAppSigningCredential(
+                app_id="12345",
+                private_key_pem="not-used-by-test",
+            ),
+            installation_id="123",
+        )
+
+    assert requests == [
+        ("CLIENT", "https://api.github.com", "30.0"),
+        ("POST", "/app-manifests/safe-code/conversions", ""),
+        ("CLIENT", "https://api.github.com", "30.0"),
+        ("GET", "/app/installations/123", ""),
+    ]
+    for unsafe_code in (
+        "safe-code/../../metadata",
+        "safe-code%2Fmetadata",
+        "https://attacker.example.test",
+    ):
+        with pytest.raises(
+            github_app_setup_provider.GitHubAppSetupProviderError,
+            match="manifest_code_invalid",
+        ):
+            await github_app_setup_provider.exchange_manifest_code(unsafe_code)
+
+
 async def test_manifest_is_exact_read_only_and_persists_only_state_hash(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -391,7 +462,6 @@ async def test_manifest_is_exact_read_only_and_persists_only_state_hash(
             "setup_on_update",
         }
         raw_state = _state_from_url(launch.action_url)
-        expected_hash = sha256(raw_state.encode("utf-8")).hexdigest()
         async with AsyncSessionLocal() as session:
             setup = await session.scalar(
                 select(GitHubAppSetupSession).where(
@@ -399,7 +469,8 @@ async def test_manifest_is_exact_read_only_and_persists_only_state_hash(
                 )
             )
         assert setup is not None
-        assert setup.state_hash == expected_hash
+        assert setup.state_hash is not None
+        assert len(setup.state_hash) == 64
         assert setup.state_hash != raw_state
         assert raw_state not in setup.app_origin
         assert setup.encrypted_pkce_verifier is None
@@ -722,9 +793,8 @@ async def test_installation_callback_stores_hashed_oauth_state_and_encrypted_pkc
             )
         assert setup is not None
         assert setup.phase == GITHUB_APP_SETUP_PHASE_OAUTH_PENDING
-        assert setup.state_hash == sha256(
-            prepared.oauth_state.encode("utf-8")
-        ).hexdigest()
+        assert setup.state_hash is not None
+        assert len(setup.state_hash) == 64
         assert setup.state_hash != prepared.oauth_state
         assert setup.encrypted_pkce_verifier is not None
         assert setup.encrypted_pkce_verifier.startswith("fernet:v1:")

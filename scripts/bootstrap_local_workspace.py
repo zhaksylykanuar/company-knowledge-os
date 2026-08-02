@@ -389,8 +389,16 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    result = bootstrap_local_workspace(apply=bool(args.apply))
-    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    apply = bool(args.apply)
+    bootstrap_local_workspace(apply=apply)
+    print(
+        json.dumps(
+            {"status": "applied" if apply else "dry_run"},
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0
 
 

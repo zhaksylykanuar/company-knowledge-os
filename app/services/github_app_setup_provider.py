@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import re
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from cryptography.hazmat.primitives import serialization
@@ -68,10 +69,16 @@ class GitHubOAuthToken:
 
 async def exchange_manifest_code(code: str) -> GitHubManifestConversion:
     safe_code = _safe_code(code, error_code="manifest_code_invalid")
+    conversion_path = (
+        f"/app-manifests/{quote(safe_code, safe='')}/conversions"
+    )
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            base_url=GITHUB_API_BASE_URL,
+            timeout=30.0,
+        ) as client:
             response = await client.post(
-                f"{GITHUB_API_BASE_URL}/app-manifests/{safe_code}/conversions",
+                conversion_path,
                 headers=_json_headers(),
             )
     except httpx.HTTPError as exc:
@@ -122,11 +129,17 @@ async def get_app_installation(
     normalized_id = _required_identifier(
         installation_id, "installation_id_invalid"
     )
+    installation_path = (
+        f"/app/installations/{quote(normalized_id, safe='')}"
+    )
     try:
         jwt = build_github_app_jwt(credential=credential)
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            base_url=GITHUB_API_BASE_URL,
+            timeout=30.0,
+        ) as client:
             response = await client.get(
-                f"{GITHUB_API_BASE_URL}/app/installations/{normalized_id}",
+                installation_path,
                 headers=_json_headers(jwt),
             )
     except (GitHubAppTokenError, httpx.HTTPError) as exc:

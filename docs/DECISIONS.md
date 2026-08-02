@@ -3813,6 +3813,38 @@ network operation, persistence, migration, API, UI or LLM call. RI-006
 persistence remains separately approval-gated and requires a branch/PR plus
 reviewed migration.
 
+## DEC-121 - Setup Tokens And Provider Requests Stay Server-Bound
+
+Decision (2026-08-02): one-time GitHub App manifest, installation and OAuth
+state is persisted only as a domain-separated keyed digest derived from the
+existing fail-closed secret-encryption key boundary. A raw SHA digest is not a
+password hash, but it still permits offline verification of a stolen one-time
+state candidate; keyed verification removes that unnecessary capability while
+preserving the existing 64-character indexed database contract. Missing server
+key material fails the setup flow closed rather than falling back to an
+unkeyed digest.
+
+GitHub App provider requests use an HTTP client whose origin is fixed to
+`https://api.github.com`. Callback-derived manifest codes and installation IDs
+must pass strict shape validation and are encoded only as relative path
+segments. User-controlled input cannot select a request scheme, host, port or
+absolute URL. Provider response and permission validation remain unchanged.
+
+Operator-visible bootstrap output is a status-only receipt. Detailed migration
+inventory remains available to in-process callers and the private
+`migration-log.json`, but absolute local paths, environment-derived values and
+secret-shaped material are never serialized to stdout. Frontend connector
+errors are classified by exact backend error contracts, not by hostname
+substrings, and URL expectations in tests do not use unanchored regular
+expressions.
+
+These changes resolve the critical/high CodeQL findings discovered while
+preparing the accumulated FounderOS reset and RI-001–RI-005 branch for merge.
+They do not enable provider reads, change production CORS defaults, begin
+RI-006/RI-007 behavior or weaken existing encryption and workspace boundaries.
+DEC-120 remains reserved for the already-implemented RI-006 persistence
+decision on the stacked PR #34 branch.
+
 ## ASK - Open Questions For The Human (not decided)
 
 These are genuinely ambiguous and are NOT resolved by the playbook alone:

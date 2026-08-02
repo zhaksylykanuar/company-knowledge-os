@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import Settings
+import scripts.bootstrap_local_workspace as bootstrap_module
 from scripts.bootstrap_local_workspace import (
     LOCAL_DIRS,
     MANAGED_END,
@@ -66,6 +67,34 @@ def test_bootstrap_preserves_existing_secrets_and_masks_output(tmp_path: Path) -
     assert secret_value not in json.dumps(result)
     assert result["env_updates"]["FOUNDEROS_DEV_API_KEY"] == "***redacted***"
     assert result["env_updates"]["FOUNDEROS_SECRET_ENCRYPTION_KEY"] == "***redacted***"
+
+
+def test_bootstrap_cli_prints_only_public_status(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    private_marker = "private-path-and-secret-marker"
+
+    def fake_bootstrap(*, apply: bool) -> dict[str, object]:
+        assert apply is True
+        return {
+            "status": "applied",
+            "repo_root": f"/private/{private_marker}",
+            "env_updates": {"SECRET": private_marker},
+        }
+
+    monkeypatch.setattr(
+        bootstrap_module,
+        "bootstrap_local_workspace",
+        fake_bootstrap,
+    )
+
+    assert bootstrap_module.main(["--apply"]) == 0
+    captured = capsys.readouterr()
+
+    assert json.loads(captured.out) == {"status": "applied"}
+    assert private_marker not in captured.out
+    assert captured.err == ""
 
 
 def test_bootstrap_is_idempotent(tmp_path: Path) -> None:

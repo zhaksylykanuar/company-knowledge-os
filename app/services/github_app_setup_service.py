@@ -62,6 +62,7 @@ from app.services.secret_encryption import (
     SecretEncryptionError,
     decrypt_secret,
     encrypt_secret,
+    keyed_secret_digest,
 )
 
 
@@ -1389,7 +1390,15 @@ def _new_state() -> str:
 def _hash_state(value: str) -> str:
     if not isinstance(value, str) or not value or len(value) > 1024:
         raise GitHubAppSetupError("github_app_setup_state_invalid")
-    return sha256(value.encode("utf-8")).hexdigest()
+    try:
+        return keyed_secret_digest(
+            value,
+            purpose="github-app-setup-state-v1",
+        )
+    except SecretEncryptionError as exc:
+        raise GitHubAppSetupError(
+            "github_app_secret_storage_unavailable"
+        ) from exc
 
 
 def _new_pkce_verifier() -> str:

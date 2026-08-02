@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from base64 import urlsafe_b64encode
 from hashlib import sha256
+from hmac import digest as hmac_digest
 from typing import Protocol
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -44,6 +45,32 @@ def decrypt_secret(value: str, *, config: SecretEncryptionConfig = settings) -> 
         return _fernet(config).decrypt(encrypted.encode("utf-8")).decode("utf-8")
     except InvalidToken as exc:
         raise SecretEncryptionError("encrypted secret could not be decrypted") from exc
+
+
+def keyed_secret_digest(
+    value: str,
+    *,
+    purpose: str,
+    config: SecretEncryptionConfig = settings,
+) -> str:
+    """Return a domain-separated digest that requires server key material."""
+
+    if not isinstance(value, str) or not value or len(value) > 4096:
+        raise SecretEncryptionError("digest value is invalid")
+    if (
+        not isinstance(purpose, str)
+        or not purpose
+        or len(purpose) > 80
+        or not purpose.isascii()
+    ):
+        raise SecretEncryptionError("digest purpose is invalid")
+    key_material = _configured_key_material(config).encode("utf-8")
+    domain_key = hmac_digest(
+        key_material,
+        f"founderos-keyed-digest-v1:{purpose}".encode("ascii"),
+        "sha256",
+    )
+    return hmac_digest(domain_key, value.encode("utf-8"), "sha256").hex()
 
 
 def _fernet(config: SecretEncryptionConfig) -> Fernet:

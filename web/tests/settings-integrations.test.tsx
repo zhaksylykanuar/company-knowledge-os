@@ -4,6 +4,7 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  connectorActionError,
   connectorDisconnectSuccessMessage,
   IntegrationsControlCenterView
 } from "../app/settings/integrations/page";
@@ -225,5 +226,20 @@ test("reports the actual GitHub credential lifecycle after removal", () => {
   assert.equal(
     connectorDisconnectSuccessMessage("jira", false),
     "Подключение удалено. Уже загруженные данные сохранены."
+  );
+});
+
+test("maps Jira URL errors by exact backend contract, not hostname substrings", () => {
+  assert.equal(
+    connectorActionError(
+      new Error("Jira URL must be an HTTPS *.atlassian.net site without a path")
+    ),
+    "Укажите адрес Jira Cloud вида https://company.atlassian.net."
+  );
+  assert.equal(
+    connectorActionError(
+      new Error("request failed for evil-atlassian.net.example")
+    ),
+    "Запрос не удался."
   );
 });

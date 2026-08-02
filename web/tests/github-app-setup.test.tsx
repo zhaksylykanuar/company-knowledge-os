@@ -377,9 +377,10 @@ test("offers an in-platform repository refresh when GitHub returns no repositori
   assert.ok(html.includes(M.githubAppSetup.repositoriesEmptyTitle));
   assert.ok(html.includes(M.githubAppSetup.refreshRepositories));
   assert.ok(html.includes(M.githubAppSetup.openRepositoryAccess));
-  assert.match(
-    html,
-    /https:\/\/github\.com\/organizations\/qtwin-io\/settings\/installations\/123/
+  assert.ok(
+    html.includes(
+      "https://github.com/organizations/qtwin-io/settings/installations/123"
+    )
   );
   assert.doesNotMatch(html, new RegExp(M.githubAppSetup.install));
 });

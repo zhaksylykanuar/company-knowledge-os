@@ -15,6 +15,7 @@ from app.services.secret_encryption import (
     SecretEncryptionError,
     decrypt_secret,
     encrypt_secret,
+    keyed_secret_digest,
 )
 
 
@@ -65,3 +66,32 @@ def test_local_dev_may_reuse_api_auth_key_fallback() -> None:
 
     encrypted = encrypt_secret("provider-token-value", config=config)
     assert decrypt_secret(encrypted, config=config) == "provider-token-value"
+
+
+def test_keyed_digest_is_deterministic_and_domain_separated() -> None:
+    config = _config(
+        app_env="production",
+        secret_encryption_key="dedicated-encryption-key",
+        api_auth_key=None,
+    )
+
+    first = keyed_secret_digest(
+        "opaque-one-time-state",
+        purpose="setup-state-v1",
+        config=config,
+    )
+    replay = keyed_secret_digest(
+        "opaque-one-time-state",
+        purpose="setup-state-v1",
+        config=config,
+    )
+    other_purpose = keyed_secret_digest(
+        "opaque-one-time-state",
+        purpose="other-state-v1",
+        config=config,
+    )
+
+    assert first == replay
+    assert len(first) == 64
+    assert first != "opaque-one-time-state"
+    assert first != other_purpose

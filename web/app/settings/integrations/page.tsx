@@ -57,6 +57,30 @@ export function connectorDisconnectSuccessMessage(
   return "Подключение удалено. Уже загруженные данные сохранены.";
 }
 
+export function connectorActionError(caught: unknown): string {
+  const message = caught instanceof Error ? caught.message : "";
+  if (message.includes("insufficient workspace role")) {
+    return "Недостаточно прав для изменения подключения.";
+  }
+  if (message.includes("secure connector credential storage")) {
+    return "Безопасное хранилище недоступно. Проверьте настройки сервера.";
+  }
+  if (
+    message === "Jira Cloud site URL is required" ||
+    message === "invalid Jira Cloud site URL" ||
+    message === "Jira URL must be an HTTPS *.atlassian.net site without a path"
+  ) {
+    return "Укажите адрес Jira Cloud вида https://company.atlassian.net.";
+  }
+  if (message.includes("account email")) {
+    return "Укажите email аккаунта Atlassian.";
+  }
+  if (message.includes("credential")) {
+    return "Проверьте token и повторите.";
+  }
+  return M.common.requestFailed;
+}
+
 export default function IntegrationsSettingsPage() {
   const session = useSession();
   const workspaceId = session?.workspaceId ?? null;
@@ -839,24 +863,4 @@ function readStepDescription(connector: ConnectorControl): string {
     return "Один безопасный запрос покажет, работает ли доступ.";
   }
   return "Станет доступна после сохранения подключения.";
-}
-
-function connectorActionError(caught: unknown): string {
-  const message = caught instanceof Error ? caught.message : "";
-  if (message.includes("insufficient workspace role")) {
-    return "Недостаточно прав для изменения подключения.";
-  }
-  if (message.includes("secure connector credential storage")) {
-    return "Безопасное хранилище недоступно. Проверьте настройки сервера.";
-  }
-  if (message.includes("atlassian.net")) {
-    return "Укажите адрес Jira Cloud вида https://company.atlassian.net.";
-  }
-  if (message.includes("account email")) {
-    return "Укажите email аккаунта Atlassian.";
-  }
-  if (message.includes("credential")) {
-    return "Проверьте token и повторите.";
-  }
-  return M.common.requestFailed;
 }
